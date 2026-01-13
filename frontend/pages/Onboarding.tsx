@@ -36,14 +36,30 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
         return null;
     };
     
+    // Get company name from registration if available
+    const getRegistrationCompany = () => {
+        try {
+            const company = sessionStorage.getItem('nebulaa_registration_company');
+            if (company) {
+                // Clear it after reading so it's only used once
+                sessionStorage.removeItem('nebulaa_registration_company');
+                return company;
+            }
+        } catch (e) {
+            console.error('Failed to get registration company:', e);
+        }
+        return '';
+    };
+    
     const savedState = getSavedState();
+    const registrationCompany = getRegistrationCompany();
     
     const [step, setStep] = useState(savedState?.step || 1);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
     const [formData, setFormData] = useState<BusinessProfile>(savedState?.formData || {
-        name: '',
+        name: registrationCompany || '',
         website: '',
         industry: '',
         niche: '',
@@ -170,18 +186,31 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
             const result = await apiService.analyzeWebsite(formData.website);
             
             if (result.success && result.data) {
-                // Auto-fill form with analyzed data
+                // Auto-fill form with analyzed data including businessType and businessLocation
                 setFormData(prev => ({
                     ...prev,
                     name: result.data.companyName || prev.name,
                     industry: result.data.industry || prev.industry,
                     niche: result.data.niche || prev.niche,
+                    businessType: result.data.businessType || prev.businessType,
+                    businessLocation: result.data.businessLocation || prev.businessLocation,
                     description: result.data.description || prev.description,
                     targetAudience: result.data.targetAudience || prev.targetAudience,
                     brandVoice: result.data.brandVoice || prev.brandVoice,
                     marketingGoals: result.data.suggestedGoals?.length > 0 ? result.data.suggestedGoals : prev.marketingGoals
                 }));
+                
+                // Store the full analysis for use throughout the app
+                if (result.data) {
+                    sessionStorage.setItem('nebulaa_website_analysis', JSON.stringify({
+                        ...result.data,
+                        analyzedAt: new Date().toISOString(),
+                        websiteUrl: result.url
+                    }));
+                }
+                
                 setWebsiteStatus('analyzed');
+                setNotification({ type: 'success', message: 'Website analyzed! Fields have been auto-filled.' });
             } else if (result.validUrl === false) {
                 setWebsiteStatus('invalid');
                 setWebsiteError(result.error || 'Invalid URL');

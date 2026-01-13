@@ -71,6 +71,10 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
 
       if (response.token && response.user) {
         // Token is already saved by apiService
+        // If registering, store company name for onboarding
+        if (!isLogin && companyName) {
+          sessionStorage.setItem('nebulaa_registration_company', companyName);
+        }
         onLoginSuccess(response.user);
         navigate('/dashboard');
       } else {

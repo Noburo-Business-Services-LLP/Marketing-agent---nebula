@@ -494,7 +494,7 @@ router.post('/quick-analyze', protect, async (req, res) => {
     ].join('\n').substring(0, 10000);
     
     // Use Gemini to analyze the website content
-    const analysisPrompt = `Analyze this website content and extract key business information. Return ONLY valid JSON.
+    const analysisPrompt = `Analyze this website content and extract comprehensive business information. Return ONLY valid JSON.
 
 Website: ${validUrl.origin}
 Content: ${textContent}
@@ -503,14 +503,20 @@ Return this exact JSON structure:
 {
   "companyName": "detected company name",
   "industry": "one of: Ecommerce, SaaS, Service, Content, Other",
-  "niche": "specific niche or focus area",
+  "niche": "specific niche or focus area (e.g., 'Sustainable Fashion', 'B2B Marketing Software')",
+  "businessType": "one of: B2B, B2C, Both - determine based on target customers",
+  "businessLocation": "city, state/region, country - try to detect from contact info, address, or content hints",
   "description": "brief 1-2 sentence description of what they do",
-  "targetAudience": "who their customers/users are",
+  "targetAudience": "detailed description of who their customers/users are",
   "brandVoice": "one of: Professional, Friendly, Playful, Bold, Minimal",
-  "suggestedGoals": ["array of 2-3 marketing goals that would suit this business"],
+  "suggestedGoals": ["array of 2-3 specific marketing goals that would suit this business"],
   "keyProducts": ["main products or services offered"],
+  "competitorHints": ["any competitor names or similar businesses mentioned or implied"],
+  "socialMediaHints": ["any social media URLs or handles found"],
   "confidence": 0.8
-}`;
+}
+
+Important: For businessLocation, look for addresses, phone numbers with area codes, "Contact Us" info, or any location mentions. If not found, make a reasonable guess based on the domain (.co.uk = UK, .com.au = Australia, etc.) or leave as empty string.`;
 
     const analysis = await generateWithLLM({
       provider: 'gemini',
@@ -523,11 +529,15 @@ Return this exact JSON structure:
       companyName: validUrl.hostname.replace('www.', '').split('.')[0],
       industry: '',
       niche: '',
+      businessType: '',
+      businessLocation: '',
       description: '',
       targetAudience: '',
       brandVoice: 'Professional',
       suggestedGoals: [],
       keyProducts: [],
+      competitorHints: [],
+      socialMediaHints: [],
       confidence: 0.5
     };
     

@@ -15,6 +15,51 @@ const setToken = (token: string): void => localStorage.setItem('authToken', toke
 // Helper to remove auth token
 const removeToken = (): void => localStorage.removeItem('authToken');
 
+// Helper to get stored website analysis context (from onboarding)
+export const getWebsiteAnalysisContext = (): {
+  companyName?: string;
+  industry?: string;
+  niche?: string;
+  businessType?: string;
+  businessLocation?: string;
+  description?: string;
+  targetAudience?: string;
+  brandVoice?: string;
+  keyProducts?: string[];
+  competitorHints?: string[];
+  analyzedAt?: string;
+  websiteUrl?: string;
+} | null => {
+  try {
+    const stored = sessionStorage.getItem('nebulaa_website_analysis');
+    if (stored) {
+      return JSON.parse(stored);
+    }
+  } catch (e) {
+    console.error('Failed to get website analysis context:', e);
+  }
+  return null;
+};
+
+// Helper to get business context string for AI prompts
+export const getBusinessContextForAI = (): string => {
+  const context = getWebsiteAnalysisContext();
+  if (!context) return '';
+  
+  return `
+Business Context:
+- Company: ${context.companyName || 'Unknown'}
+- Industry: ${context.industry || 'Unknown'}
+- Niche: ${context.niche || 'General'}
+- Business Type: ${context.businessType || 'B2B/B2C'}
+- Location: ${context.businessLocation || 'Global'}
+- Description: ${context.description || 'No description'}
+- Target Audience: ${context.targetAudience || 'General audience'}
+- Brand Voice: ${context.brandVoice || 'Professional'}
+- Key Products/Services: ${context.keyProducts?.join(', ') || 'Various'}
+`.trim();
+};
+
 // Generic API call function with real backend integration
 async function apiCall<T>(
   endpoint: string, 
