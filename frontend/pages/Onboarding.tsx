@@ -656,14 +656,14 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                 </div>
 
                                 {/* Competitors Section */}
-                                <div className="mt-6 pt-6 border-t border-[#ededed]/10">
+                                <div className="mt-6 pt-6 border-t border-slate-700/50">
                                     <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>
                                         Your Competitors <span className={`text-xs font-normal ${theme === 'dark' ? 'text-[#ededed]/50' : 'text-gray-400'}`}>(optional)</span>
                                     </label>
                                     <p className={`text-xs mb-3 ${theme === 'dark' ? 'text-[#ededed]/50' : 'text-gray-500'}`}>
                                         Add specific competitors you'd like to track, or skip this — our AI will automatically discover competitors based on your business and location.
                                     </p>
-                                    <div className={`mb-3 p-3 rounded-lg flex items-start gap-2 ${theme === 'dark' ? 'bg-[#ffcc29]/10 border border-[#ffcc29]/20' : 'bg-yellow-50 border border-yellow-200'}`}>
+                                    <div className={`mb-3 p-3 rounded-lg flex items-start gap-2 ${theme === 'dark' ? 'bg-[#ffcc29]/10 border border-slate-700/50' : 'bg-yellow-50 border border-yellow-200'}`}>
                                         <span className="text-[#ffcc29] text-lg">✨</span>
                                         <p className={`text-xs ${theme === 'dark' ? 'text-[#ededed]/70' : 'text-gray-600'}`}>
                                             <strong>AI-Powered Discovery:</strong> We'll automatically find and track your top competitors in {formData.businessLocation || 'your location'} based on your industry and target audience.
@@ -812,7 +812,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                         )}
                     </div>
 
-                    <div className={`pt-6 mt-4 border-t flex justify-between items-center ${theme === 'dark' ? 'border-[#ededed]/10' : 'border-gray-200'}`}>
+                    <div className={`pt-6 mt-4 border-t flex justify-between items-center ${theme === 'dark' ? 'border-slate-700/50' : 'border-gray-200'}`}>
                         {step === 4 ? (
                             <>
                                 <button 

@@ -232,12 +232,12 @@ const NotificationBell: React.FC = () => {
       {isOpen && (
         <div className={`absolute right-0 mt-2 w-80 max-h-96 overflow-hidden rounded-xl shadow-xl border z-50 ${
           isDarkMode 
-            ? 'bg-[#0d1117] border-[#ffcc29]/20' 
+            ? 'bg-[#0d1117] border-slate-700/50' 
             : 'bg-white border-gray-200'
         }`}>
           {/* Header */}
           <div className={`px-4 py-3 border-b flex items-center justify-between ${
-            isDarkMode ? 'border-[#ededed]/10' : 'border-gray-100'
+            isDarkMode ? 'border-slate-700/50' : 'border-gray-100'
           }`}>
             <h3 className={`font-bold ${theme.text}`}>Notifications</h3>
             <div className="flex items-center gap-2">

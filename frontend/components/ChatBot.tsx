@@ -236,7 +236,7 @@ const ChatBot: React.FC = () => {
       }`}
     >
       {/* Chat Window */}
-      <div className={`${theme.bgCard} rounded-2xl shadow-2xl border ${isDarkMode ? 'border-[#ffcc29]/20' : 'border-slate-200'} overflow-hidden flex flex-col animate-in slide-in-from-bottom-4 duration-300 max-h-[500px]`}>
+      <div className={`${theme.bgCard} rounded-2xl shadow-2xl border ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'} overflow-hidden flex flex-col animate-in slide-in-from-bottom-4 duration-300 max-h-[500px]`}>
         {/* Header - Sticky */}
         <div className="bg-[#ffcc29] px-4 py-3 flex items-center justify-between sticky top-0 z-10 shrink-0">
           <div className="flex items-center gap-3">
@@ -280,7 +280,7 @@ const ChatBot: React.FC = () => {
                     className={`max-w-[80%] px-4 py-2.5 rounded-2xl text-sm ${
                       message.role === 'user'
                         ? 'bg-[#ffcc29] text-[#070A12] font-medium rounded-br-md'
-                        : `${theme.bgCard} ${theme.text} shadow-sm border ${isDarkMode ? 'border-[#ffcc29]/20' : 'border-[#ededed]'} rounded-bl-md`
+                        : `${theme.bgCard} ${theme.text} shadow-sm border ${isDarkMode ? 'border-slate-700/50' : 'border-[#ededed]'} rounded-bl-md`
                     }`}
                   >
                     {message.content}
@@ -291,7 +291,7 @@ const ChatBot: React.FC = () => {
               {/* Loading indicator */}
               {isLoading && (
                 <div className="flex justify-start">
-                  <div className={`${theme.bgCard} px-4 py-3 rounded-2xl rounded-bl-md shadow-sm border ${isDarkMode ? 'border-[#ffcc29]/20' : 'border-[#ededed]'}`}>
+                  <div className={`${theme.bgCard} px-4 py-3 rounded-2xl rounded-bl-md shadow-sm border ${isDarkMode ? 'border-slate-700/50' : 'border-[#ededed]'}`}>
                     <div className="flex items-center gap-1">
                       <div className="w-2 h-2 bg-[#ffcc29] rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
                       <div className="w-2 h-2 bg-[#ffcc29] rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
@@ -306,7 +306,7 @@ const ChatBot: React.FC = () => {
 
             {/* Suggestions - show only if few messages */}
             {messages.length <= 2 && suggestions.length > 0 && (
-              <div className={`px-4 py-2 ${theme.bgCard} border-t ${isDarkMode ? 'border-[#ffcc29]/20' : 'border-[#ededed]'}`}>
+              <div className={`px-4 py-2 ${theme.bgCard} border-t ${isDarkMode ? 'border-slate-700/50' : 'border-[#ededed]'}`}>
                 <p className={`text-xs mb-2 ${theme.textMuted}`}>Suggested questions:</p>
                 <div className="flex flex-wrap gap-1.5">
                   {suggestions.slice(0, 3).map((suggestion, index) => (
@@ -323,7 +323,7 @@ const ChatBot: React.FC = () => {
             )}
 
             {/* Input */}
-            <div className={`p-3 ${theme.bgCard} border-t ${isDarkMode ? 'border-[#ffcc29]/20' : 'border-[#ededed]'}`}>
+            <div className={`p-3 ${theme.bgCard} border-t ${isDarkMode ? 'border-slate-700/50' : 'border-[#ededed]'}`}>
               <div className="flex items-center gap-2">
                 <input
                   ref={inputRef}
@@ -333,7 +333,7 @@ const ChatBot: React.FC = () => {
                   onKeyPress={handleKeyPress}
                   placeholder="Ask me anything..."
                   disabled={isLoading}
-                  className={`flex-1 px-4 py-2.5 ${isDarkMode ? 'bg-[#070A12] text-[#ededed] placeholder-[#ededed]/50 border border-[#ffcc29]/20' : 'bg-[#f5f5f5] text-[#070A12] placeholder-gray-400 border border-gray-200'} rounded-full text-sm outline-none focus:ring-2 focus:ring-[#ffcc29] transition-all disabled:opacity-50`}
+                  className={`flex-1 px-4 py-2.5 ${isDarkMode ? 'bg-[#070A12] text-[#ededed] placeholder-[#ededed]/50 border border-slate-700/50' : 'bg-[#f5f5f5] text-[#070A12] placeholder-gray-400 border border-gray-200'} rounded-full text-sm outline-none focus:ring-2 focus:ring-[#ffcc29] transition-all disabled:opacity-50`}
                 />
                 <button
                   onClick={() => sendMessage()}

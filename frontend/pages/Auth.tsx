@@ -100,7 +100,7 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
 
       <div className={`rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col animate-in zoom-in-95 duration-300 ${
         theme === 'dark' 
-          ? 'bg-[#0d1117] border border-[#ffcc29]/20' 
+          ? 'bg-[#0d1117] border border-slate-700/50' 
           : 'bg-white border border-gray-200'
       }`}>
         
@@ -201,7 +201,7 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
                 {!isLogin && (
                     <div className={`p-3 rounded-lg text-xs animate-in fade-in ${
                       theme === 'dark' 
-                        ? 'bg-[#070A12] border border-[#ffcc29]/20' 
+                        ? 'bg-[#070A12] border border-slate-700/50' 
                         : 'bg-gray-50 border border-gray-200'
                     }`}>
                         <p className="font-semibold text-[#ffcc29] mb-2 flex items-center gap-1">

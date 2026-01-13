@@ -246,13 +246,13 @@ const SectionButtons: React.FC<{
           }}
           className={`group relative w-6 h-6 rounded-full flex items-center justify-center transition-all duration-300 text-xs font-bold shadow-sm cursor-pointer ${
             isDark 
-              ? 'bg-gradient-to-br from-[#ffcc29]/30 to-pink-400/20 hover:from-[#ffcc29]/40 hover:to-pink-400/30 text-white border border-purple-300/30 hover:border-purple-300/50 hover:scale-110' 
-              : 'bg-gradient-to-br from-[#ffcc29]/10 to-pink-100 hover:from-[#ffcc29]/20 hover:to-pink-200 text-[#ffcc29] border border-purple-200/50 hover:border-purple-300 hover:scale-110 hover:shadow-md'
+              ? 'bg-gradient-to-br from-slate-700 to-slate-800 hover:from-slate-600 hover:to-slate-700 text-[#ffcc29] border border-slate-600 hover:border-slate-500 hover:scale-110' 
+              : 'bg-gradient-to-br from-amber-50 to-amber-100 hover:from-amber-100 hover:to-amber-200 text-amber-600 border border-amber-200/50 hover:border-amber-300 hover:scale-110 hover:shadow-md'
           }`}
           title="Click to discuss with Daddy"
         >
           <span className="relative z-10">d</span>
-          <div className={`absolute inset-0 rounded-full transition-opacity duration-300 ${isDark ? 'bg-[#ffcc29]/10' : 'bg-[#ffcc29]/10'} opacity-0 group-hover:opacity-100`}></div>
+          <div className={`absolute inset-0 rounded-full transition-opacity duration-300 ${isDark ? 'bg-slate-600/20' : 'bg-amber-200/30'} opacity-0 group-hover:opacity-100`}></div>
           {loadingSynopsis && (
             <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-[#ffcc29] animate-spin"></div>
           )}
@@ -928,7 +928,7 @@ const Dashboard: React.FC = () => {
               }
             </p>
         </div>
-        <div className={`${theme.bgCard} border ${isDarkMode ? 'border-[#ffcc29]/20' : 'border-slate-200'} rounded-lg px-4 py-2 text-sm font-medium ${theme.textSecondary} flex items-center gap-2 shadow-sm hover:border-slate-300 transition-colors cursor-pointer`}>
+        <div className={`${theme.bgCard} border ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'} rounded-lg px-4 py-2 text-sm font-medium ${theme.textSecondary} flex items-center gap-2 shadow-sm hover:border-slate-300 transition-colors cursor-pointer`}>
             Last 7 Days
             <ChevronRight className={`w-4 h-4 rotate-90 ${theme.textMuted}`} />
         </div>
@@ -937,7 +937,7 @@ const Dashboard: React.FC = () => {
       {/* Stats Row - Two Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         {/* Active Campaigns Card */}
-        <div className={`${theme.bgCard} rounded-2xl border ${isDarkMode ? 'border-[#ffcc29]/20 hover:border-[#ffcc29]/40' : 'border-[#ededed] hover:border-slate-200'} p-5 transition-all duration-200`}>
+        <div className={`${theme.bgCard} rounded-2xl border ${isDarkMode ? 'border-slate-700/50 hover:border-slate-600' : 'border-[#ededed] hover:border-slate-200'} p-5 transition-all duration-200`}>
             <div className="flex justify-between items-start mb-4">
                 <span className={`font-medium text-xs uppercase tracking-wider ${theme.textSecondary}`}>Active Campaigns</span>
                 <div className="flex items-center gap-2">
@@ -953,7 +953,7 @@ const Dashboard: React.FC = () => {
             {(data?.overview?.activeCampaigns || 0) === 0 && (
               <p className={`text-xs mb-3 ${theme.textMuted}`}>No active campaigns yet</p>
             )}
-            <div className={`flex justify-between items-center pt-3 border-t ${isDarkMode ? 'border-[#ededed]/10' : 'border-[#f5f5f5]'}`}>
+            <div className={`flex justify-between items-center pt-3 border-t ${isDarkMode ? 'border-slate-700/50' : 'border-[#f5f5f5]'}`}>
                 {(data?.overview?.activeCampaigns || 0) > 0 ? (
                   <>
                     <span className={`text-xs font-semibold px-2.5 py-1 rounded-full flex items-center gap-1 ${isDarkMode ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-50 text-emerald-600'}`}>
@@ -973,7 +973,7 @@ const Dashboard: React.FC = () => {
         </div>
 
         {/* Budget Spent Card - Interactive Graph */}
-        <div className={`${theme.bgCard} rounded-2xl border ${isDarkMode ? 'border-[#ffcc29]/20 hover:border-[#ffcc29]/40' : 'border-[#ededed] hover:border-slate-200'} p-5 transition-all duration-200`}>
+        <div className={`${theme.bgCard} rounded-2xl border ${isDarkMode ? 'border-slate-700/50 hover:border-slate-600' : 'border-[#ededed] hover:border-slate-200'} p-5 transition-all duration-200`}>
             <div className="flex justify-between items-start mb-3">
                 <span className={`font-medium text-xs uppercase tracking-wider ${theme.textSecondary}`}>Budget Spent</span>
                 <div className="flex items-center gap-2">
@@ -1076,7 +1076,7 @@ const Dashboard: React.FC = () => {
       </div>
 
       {/* Social Profiles Card - Full Width Detailed */}
-      <div className={`${theme.bgCard} rounded-2xl border ${isDarkMode ? 'border-[#ffcc29]/20 hover:border-[#ffcc29]/40' : 'border-[#ededed] hover:border-slate-200'} p-6 transition-all duration-200`}>
+      <div className={`${theme.bgCard} rounded-2xl border ${isDarkMode ? 'border-slate-700/50 hover:border-slate-600' : 'border-[#ededed] hover:border-slate-200'} p-6 transition-all duration-200`}>
           <div className="flex justify-between items-center mb-5">
               <div className="flex items-center gap-3">
                   <span className={`font-semibold text-sm uppercase tracking-wider ${theme.text}`}>Social Profiles</span>
@@ -1191,7 +1191,7 @@ const Dashboard: React.FC = () => {
                     return (
                       <div 
                         key={idx}
-                        className={`p-4 rounded-xl border ${isDarkMode ? 'bg-[#161b22] border-[#30363d] hover:border-[#ffcc29]/40' : 'bg-white border-slate-200 hover:border-slate-300'} transition-all duration-200 hover:shadow-lg cursor-pointer`}
+                        className={`p-4 rounded-xl border ${isDarkMode ? 'bg-[#161b22] border-[#30363d] hover:border-slate-600' : 'bg-white border-slate-200 hover:border-slate-300'} transition-all duration-200 hover:shadow-lg cursor-pointer`}
                       >
                         {/* Platform Header */}
                         <div className="flex items-center gap-3 mb-4">
@@ -1253,7 +1253,7 @@ const Dashboard: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* Competitor Radar - Enhanced with Stats Bar and Better Layout */}
-        <div className={`${theme.bgCard} rounded-2xl border ${isDarkMode ? 'border-[#ffcc29]/20 hover:border-[#ffcc29]/40' : 'border-[#ededed] hover:border-slate-200'} p-6 transition-all duration-200 min-h-[420px] flex flex-col`}>
+        <div className={`${theme.bgCard} rounded-2xl border ${isDarkMode ? 'border-slate-700/50 hover:border-slate-600' : 'border-[#ededed] hover:border-slate-200'} p-6 transition-all duration-200 min-h-[420px] flex flex-col`}>
             <div className="flex justify-between items-center mb-4">
                 <div className="flex items-center gap-2">
                     <h2 className={`text-sm font-semibold ${theme.text}`}>Competitor Radar</h2>
@@ -1296,7 +1296,7 @@ const Dashboard: React.FC = () => {
             </div>
             
             {(!data?.competitorActivity || data.competitorActivity.length === 0) ? (
-              <div className={`${isDarkMode ? 'bg-[#0d1117] border-[#ffcc29]/20' : 'bg-[#f5f5f5] border-[#ededed]'} border rounded-xl p-8 text-center`}>
+              <div className={`${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-[#f5f5f5] border-[#ededed]'} border rounded-xl p-8 text-center`}>
                 <div className={`w-12 h-12 ${isDarkMode ? 'bg-[#070A12]' : 'bg-[#ededed]'} rounded-full flex items-center justify-center mx-auto mb-3`}>
                   <Activity className={`w-6 h-6 ${theme.textMuted}`} />
                 </div>
@@ -1337,7 +1337,7 @@ const Dashboard: React.FC = () => {
                 <div className="flex-1 min-w-0 flex">
                     {currentCompetitor && (
                         <div 
-                          className={`${isDarkMode ? 'bg-[#0d1117] border-[#ffcc29]/20' : 'bg-[#f5f5f5] border-[#ededed]'} border rounded-xl p-5 relative min-h-[280px] flex flex-col w-full ${currentCompetitor.postUrl ? 'cursor-pointer hover:border-[#ffcc29]/30 hover:shadow-md transition-all' : ''}`}
+                          className={`${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-[#f5f5f5] border-[#ededed]'} border rounded-xl p-5 relative min-h-[280px] flex flex-col w-full ${currentCompetitor.postUrl ? 'cursor-pointer hover:border-[#ffcc29]/30 hover:shadow-md transition-all' : ''}`}
                           onClick={() => currentCompetitor.postUrl && window.open(currentCompetitor.postUrl, '_blank')}
                         >
                             {currentCompetitor.postUrl && (
@@ -1347,7 +1347,7 @@ const Dashboard: React.FC = () => {
                               </div>
                             )}
                             <div className="flex items-center gap-3 mb-3">
-                                <div className={`w-11 h-11 rounded-full ${isDarkMode ? 'bg-[#070A12]' : 'bg-white'} shadow-sm flex items-center justify-center text-sm font-bold ${theme.text} border ${isDarkMode ? 'border-[#ffcc29]/20' : 'border-[#ededed]'}`}>
+                                <div className={`w-11 h-11 rounded-full ${isDarkMode ? 'bg-[#070A12]' : 'bg-white'} shadow-sm flex items-center justify-center text-sm font-bold ${theme.text} border ${isDarkMode ? 'border-slate-700/50' : 'border-[#ededed]'}`}>
                                     {currentCompetitor.competitorLogo || currentCompetitor.competitorName?.charAt(0) || 'C'}
                                 </div>
                                 <div>
@@ -1435,7 +1435,7 @@ const Dashboard: React.FC = () => {
         </div>
 
         {/* Strategic Advisor - AI Content Suggestions */}
-        <div className={`${theme.bgCard} rounded-2xl border ${isDarkMode ? 'border-[#ffcc29]/20 hover:border-[#ffcc29]/40' : 'border-[#ededed] hover:border-slate-200'} p-6 transition-all duration-200 flex flex-col`}>
+        <div className={`${theme.bgCard} rounded-2xl border ${isDarkMode ? 'border-slate-700/50 hover:border-slate-600' : 'border-[#ededed] hover:border-slate-200'} p-6 transition-all duration-200 flex flex-col`}>
             <div className="flex justify-between items-center mb-4">
                 <div className="flex items-center gap-2">
                     <Lightbulb className="w-5 h-5 text-[#ffcc29]" />
@@ -1450,7 +1450,7 @@ const Dashboard: React.FC = () => {
             
             {/* Business context indicator */}
             {data?.businessContext?.name && (
-              <div className={`mb-4 px-3 py-2 ${isDarkMode ? 'bg-[#ffcc29]/10 border-[#ffcc29]/20' : 'bg-[#ffcc29]/10 border-[#ffcc29]/20'} border rounded-lg`}>
+              <div className={`mb-4 px-3 py-2 ${isDarkMode ? 'bg-[#ffcc29]/10 border-slate-700/50' : 'bg-[#ffcc29]/10 border-slate-700/50'} border rounded-lg`}>
                 <p className="text-[10px] text-[#ffcc29] uppercase tracking-wider mb-0.5">Content Strategy for</p>
                 <p className={`text-xs ${theme.text} font-medium`}>
                   {data.businessContext.name} • {data.businessContext.industry}
@@ -1516,7 +1516,7 @@ const Dashboard: React.FC = () => {
                       };
                       
                       return (
-                        <div key={suggestion.id} className={`p-3 ${isDarkMode ? 'bg-[#0d1117] border-[#ffcc29]/20 hover:border-[#ffcc29]/40' : 'bg-[#f5f5f5] border-[#ededed] hover:border-slate-300'} border rounded-xl transition-all`}>
+                        <div key={suggestion.id} className={`p-3 ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50 hover:border-slate-600' : 'bg-[#f5f5f5] border-[#ededed] hover:border-slate-300'} border rounded-xl transition-all`}>
                             <div className="flex items-start justify-between gap-2 mb-2">
                                 <div className="flex items-center gap-2">
                                     {categoryIcons[suggestion.category] || <Sparkles className="w-4 h-4 text-[#ffcc29]" />}
@@ -1626,11 +1626,11 @@ const Dashboard: React.FC = () => {
       {showPostCreator && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => !generatingPost && !scheduling && setShowPostCreator(false)}>
           <div 
-            className={`${isDarkMode ? 'bg-[#0d1117] border-[#ffcc29]/20' : 'bg-white border-slate-200'} border rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden`}
+            className={`${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-slate-200'} border rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden`}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className={`px-6 py-4 border-b ${isDarkMode ? 'border-[#ffcc29]/20 bg-gradient-to-r from-[#0d1117] to-[#161b22]' : 'border-slate-100 bg-gradient-to-r from-white to-slate-50'}`}>
+            <div className={`px-6 py-4 border-b ${isDarkMode ? 'border-slate-700/50 bg-gradient-to-r from-[#0d1117] to-[#161b22]' : 'border-slate-100 bg-gradient-to-r from-white to-slate-50'}`}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-gradient-to-r from-[#ffcc29] to-orange-500 flex items-center justify-center">
@@ -1688,7 +1688,7 @@ const Dashboard: React.FC = () => {
                           value={imageRefinementPrompt}
                           onChange={(e) => setImageRefinementPrompt(e.target.value)}
                           placeholder="e.g. make it more vibrant, add text overlay..."
-                          className={`flex-1 px-3 py-2 text-sm rounded-lg border ${isDarkMode ? 'bg-[#0d1117] border-[#ffcc29]/20 text-white' : 'bg-white border-slate-200'}`}
+                          className={`flex-1 px-3 py-2 text-sm rounded-lg border ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50 text-white' : 'bg-white border-slate-200'}`}
                         />
                         <button
                           onClick={handleRefineImage}
@@ -1814,7 +1814,7 @@ const Dashboard: React.FC = () => {
                         value={postCaption}
                         onChange={(e) => setPostCaption(e.target.value)}
                         rows={6}
-                        className={`w-full px-3 py-2 text-sm rounded-lg border resize-none ${isDarkMode ? 'bg-[#0d1117] border-[#ffcc29]/20 text-white' : 'bg-white border-slate-200'}`}
+                        className={`w-full px-3 py-2 text-sm rounded-lg border resize-none ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50 text-white' : 'bg-white border-slate-200'}`}
                       />
                     </div>
                     
@@ -1838,13 +1838,13 @@ const Dashboard: React.FC = () => {
                           type="date"
                           value={scheduleDate}
                           onChange={(e) => setScheduleDate(e.target.value)}
-                          className={`px-3 py-2 text-sm rounded-lg border ${isDarkMode ? 'bg-[#0d1117] border-[#ffcc29]/20 text-white' : 'bg-white border-slate-200'}`}
+                          className={`px-3 py-2 text-sm rounded-lg border ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50 text-white' : 'bg-white border-slate-200'}`}
                         />
                         <input
                           type="time"
                           value={scheduleTime}
                           onChange={(e) => setScheduleTime(e.target.value)}
-                          className={`px-3 py-2 text-sm rounded-lg border ${isDarkMode ? 'bg-[#0d1117] border-[#ffcc29]/20 text-white' : 'bg-white border-slate-200'}`}
+                          className={`px-3 py-2 text-sm rounded-lg border ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50 text-white' : 'bg-white border-slate-200'}`}
                         />
                       </div>
                       {generatedPost.bestPostTimes && generatedPost.bestPostTimes[selectedPlatform] && (
@@ -1864,7 +1864,7 @@ const Dashboard: React.FC = () => {
 
             {/* Footer */}
             {!generatingPost && generatedPost && (
-              <div className={`px-6 py-4 border-t ${isDarkMode ? 'border-[#ffcc29]/20' : 'border-slate-100'} flex justify-end gap-3`}>
+              <div className={`px-6 py-4 border-t ${isDarkMode ? 'border-slate-700/50' : 'border-slate-100'} flex justify-end gap-3`}>
                 <button
                   onClick={() => setShowPostCreator(false)}
                   className={`px-4 py-2 text-sm font-medium rounded-lg ${isDarkMode ? 'bg-[#161b22] text-white hover:bg-[#21262d]' : 'bg-slate-100 hover:bg-slate-200'}`}
@@ -1894,11 +1894,11 @@ const Dashboard: React.FC = () => {
       {showRivalPostModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => !rivalPostLoading && setShowRivalPostModal(false)}>
           <div 
-            className={`${isDarkMode ? 'bg-[#0d1117] border-[#ffcc29]/20' : 'bg-white border-slate-200'} border rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden`}
+            className={`${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-slate-200'} border rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden`}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className={`px-6 py-4 border-b ${isDarkMode ? 'border-[#ffcc29]/20 bg-gradient-to-r from-[#0d1117] to-[#161b22]' : 'border-slate-100 bg-gradient-to-r from-white to-slate-50'}`}>
+            <div className={`px-6 py-4 border-b ${isDarkMode ? 'border-slate-700/50 bg-gradient-to-r from-[#0d1117] to-[#161b22]' : 'border-slate-100 bg-gradient-to-r from-white to-slate-50'}`}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-gradient-to-r from-[#ffcc29] to-[#ffa500] flex items-center justify-center">
@@ -1975,7 +1975,7 @@ const Dashboard: React.FC = () => {
                     </div>
 
                     {/* Image Display */}
-                    <div className="relative rounded-xl overflow-hidden border border-[#ffcc29]/20">
+                    <div className="relative rounded-xl overflow-hidden border border-slate-700/50">
                       <img 
                         src={getCurrentImageUrl()} 
                         alt="Post image" 
@@ -2006,7 +2006,7 @@ const Dashboard: React.FC = () => {
                             value={customImagePrompt}
                             onChange={(e) => setCustomImagePrompt(e.target.value)}
                             placeholder="Describe the image you want..."
-                            className={`flex-1 px-3 py-2 rounded-lg text-sm ${isDarkMode ? 'bg-[#0d1117] border-[#ffcc29]/20 text-white placeholder-gray-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'} border focus:ring-2 focus:ring-[#ffcc29]/50 focus:border-[#ffcc29] transition-all`}
+                            className={`flex-1 px-3 py-2 rounded-lg text-sm ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50 text-white placeholder-gray-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'} border focus:ring-2 focus:ring-[#ffcc29]/50 focus:border-[#ffcc29] transition-all`}
                             onKeyDown={(e) => {
                               if (e.key === 'Enter' && !regeneratingImage) {
                                 handleRegenerateImage();
@@ -2081,7 +2081,7 @@ const Dashboard: React.FC = () => {
                     <textarea
                       value={editedCaption}
                       onChange={(e) => setEditedCaption(e.target.value)}
-                      className={`w-full p-4 rounded-xl ${isDarkMode ? 'bg-[#161b22] border-[#ffcc29]/20 text-white' : 'bg-slate-50 border-slate-200 text-slate-800'} border focus:ring-2 focus:ring-[#ffcc29]/50 focus:border-[#ffcc29] transition-all resize-none`}
+                      className={`w-full p-4 rounded-xl ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white' : 'bg-slate-50 border-slate-200 text-slate-800'} border focus:ring-2 focus:ring-[#ffcc29]/50 focus:border-[#ffcc29] transition-all resize-none`}
                       rows={4}
                     />
                   </div>
@@ -2095,7 +2095,7 @@ const Dashboard: React.FC = () => {
                       type="text"
                       value={editedHashtags}
                       onChange={(e) => setEditedHashtags(e.target.value)}
-                      className={`w-full p-3 rounded-xl ${isDarkMode ? 'bg-[#161b22] border-[#ffcc29]/20 text-white' : 'bg-slate-50 border-slate-200 text-slate-800'} border focus:ring-2 focus:ring-[#ffcc29]/50 focus:border-[#ffcc29] transition-all`}
+                      className={`w-full p-3 rounded-xl ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white' : 'bg-slate-50 border-slate-200 text-slate-800'} border focus:ring-2 focus:ring-[#ffcc29]/50 focus:border-[#ffcc29] transition-all`}
                       placeholder="#trending #viral #marketing"
                     />
                     <p className={`text-xs ${theme.textMuted} mt-1`}>
@@ -2108,7 +2108,7 @@ const Dashboard: React.FC = () => {
 
             {/* Footer Actions */}
             {rivalPost && !rivalPostLoading && (
-              <div className={`px-6 py-4 border-t ${isDarkMode ? 'border-[#ffcc29]/20 bg-[#0d1117]' : 'border-slate-100 bg-white'}`}>
+              <div className={`px-6 py-4 border-t ${isDarkMode ? 'border-slate-700/50 bg-[#0d1117]' : 'border-slate-100 bg-white'}`}>
                 <div className="flex items-center justify-between gap-3">
                   <button
                     onClick={() => setShowRivalPostModal(false)}
@@ -2767,11 +2767,11 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
     };
 
     return (
-        <div className={`${theme.bgCard} rounded-2xl border ${isDarkMode ? 'border-[#ffcc29]/20 hover:border-[#ffcc29]/40' : 'border-[#ededed] hover:border-slate-200'} overflow-hidden transition-all duration-200`}>
+        <div className={`${theme.bgCard} rounded-2xl border ${isDarkMode ? 'border-slate-700/50 hover:border-slate-600' : 'border-[#ededed] hover:border-slate-200'} overflow-hidden transition-all duration-200`}>
             {/* Reminder Toast Notification */}
             {showReminderToast && pendingReminders.length > 0 && (
               <div className="fixed top-4 right-4 z-50 animate-in slide-in-from-top-2 duration-300">
-                <div className={`${theme.bgCard} rounded-xl shadow-2xl border ${isDarkMode ? 'border-[#ffcc29]/20' : 'border-slate-200'} p-4 max-w-sm`}>
+                <div className={`${theme.bgCard} rounded-xl shadow-2xl border ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'} p-4 max-w-sm`}>
                   <div className="flex items-start gap-3">
                     <div className={`p-2 ${isDarkMode ? 'bg-amber-900/30' : 'bg-amber-100'} rounded-lg`}>
                       <BellRing className={`w-5 h-5 ${isDarkMode ? 'text-amber-400' : 'text-amber-600'}`} />
@@ -2805,7 +2805,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
             )}
             
             {/* Header */}
-            <div className={`flex items-center justify-between p-5 border-b ${isDarkMode ? 'border-[#ffcc29]/20' : 'border-[#ededed]'}`}>
+            <div className={`flex items-center justify-between p-5 border-b ${isDarkMode ? 'border-slate-700/50' : 'border-[#ededed]'}`}>
                 <div className="flex items-center gap-4">
                     <button 
                         onClick={handleToday}
@@ -2959,7 +2959,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                           key={d} 
                           onClick={() => handleSlotClick(date, 9)}
                           className={`h-24 p-1.5 border ${isDarkMode ? 'border-[#ffcc29]/10' : 'border-[#ededed]'} rounded-lg ${isDarkMode ? 'hover:bg-[#ffcc29]/10' : 'hover:bg-[#ffcc29]/5'} cursor-pointer transition-colors ${
-                            today ? `${isDarkMode ? 'bg-[#ffcc29]/20 border-[#ffcc29]/40' : 'bg-[#ffcc29]/10 border-indigo-200'}` : ''
+                            today ? `${isDarkMode ? 'bg-[#ffcc29]/20 border-slate-600' : 'bg-[#ffcc29]/10 border-indigo-200'}` : ''
                           }`}
                         >
                           <span className={`text-sm font-medium ${
@@ -3012,7 +3012,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
               // Day View
               <div className="flex overflow-hidden" style={{ height: '500px' }}>
                 {/* Time Column */}
-                <div className={`flex-shrink-0 w-20 border-r ${isDarkMode ? 'border-[#ffcc29]/20 bg-[#0d1117]' : 'border-slate-200 bg-[#f5f5f5]'}`}>
+                <div className={`flex-shrink-0 w-20 border-r ${isDarkMode ? 'border-slate-700/50 bg-[#0d1117]' : 'border-slate-200 bg-[#f5f5f5]'}`}>
                   {timeSlots.map(hour => (
                     <div key={hour} className={`h-14 border-b ${isDarkMode ? 'border-[#ffcc29]/10' : 'border-[#ededed]'} pr-3 flex items-start justify-end pt-0`}>
                       <span className={`text-xs ${theme.textMuted} -mt-2`}>
@@ -3111,8 +3111,8 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
               // Week View (default)
               <div className="flex overflow-hidden" style={{ height: '500px' }}>
                 {/* Time Column */}
-                <div className={`flex-shrink-0 w-16 border-r ${isDarkMode ? 'border-[#ffcc29]/20 bg-[#0d1117]' : 'border-slate-200 bg-[#f5f5f5]'}`}>
-                    <div className={`h-16 border-b ${isDarkMode ? 'border-[#ffcc29]/20' : 'border-slate-200'}`}></div>
+                <div className={`flex-shrink-0 w-16 border-r ${isDarkMode ? 'border-slate-700/50 bg-[#0d1117]' : 'border-slate-200 bg-[#f5f5f5]'}`}>
+                    <div className={`h-16 border-b ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'}`}></div>
                     {timeSlots.map(hour => (
                         <div key={hour} className={`h-12 border-b ${isDarkMode ? 'border-[#ffcc29]/10' : 'border-[#ededed]'} pr-2 flex items-start justify-end pt-0`}>
                             <span className={`text-xs ${theme.textMuted} -mt-2`}>
@@ -3125,7 +3125,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                 {/* Days Grid */}
                 <div className="flex-1 overflow-y-auto">
                     {/* Day Headers */}
-                    <div className={`flex border-b ${isDarkMode ? 'border-[#ffcc29]/20' : 'border-slate-200'} ${theme.bgCard} sticky top-0 z-10`}>
+                    <div className={`flex border-b ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'} ${theme.bgCard} sticky top-0 z-10`}>
                         {weekDays.map((day, idx) => {
                             const dayName = day.toLocaleDateString('en-US', { weekday: 'short' });
                             const dayNum = day.getDate();
@@ -3300,9 +3300,9 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
             {/* Schedule Modal - Enhanced with all campaign details */}
             {showScheduleModal && selectedSlot && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => setShowScheduleModal(false)}>
-                    <div className={`${isDarkMode ? 'bg-[#0d1117] border-[#ffcc29]/20' : 'bg-white border-slate-200'} border rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200`} onClick={e => e.stopPropagation()}>
+                    <div className={`${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-slate-200'} border rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200`} onClick={e => e.stopPropagation()}>
                         {/* Header */}
-                        <div className={`sticky top-0 z-10 ${isDarkMode ? 'bg-[#0d1117] border-[#ffcc29]/20' : 'bg-white border-slate-200'} border-b px-6 py-4`}>
+                        <div className={`sticky top-0 z-10 ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-slate-200'} border-b px-6 py-4`}>
                             <div className="flex justify-between items-center">
                                 <div>
                                     <h3 className={`text-lg font-bold ${theme.text}`}>{isEditMode ? 'Edit Campaign' : 'Schedule New Event'}</h3>
@@ -3362,7 +3362,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                     newDate.setHours(selectedSlot.hour, selectedSlot.minute, 0, 0);
                                     setSelectedSlot({ date: newDate, hour: selectedSlot.hour, minute: selectedSlot.minute });
                                   }}
-                                  className={`w-full mt-1 px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#0d1117] border-[#ffcc29]/20 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
+                                  className={`w-full mt-1 px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
                                 />
                               </div>
                               <div>
@@ -3389,7 +3389,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                       newDate.setHours(hour24, selectedSlot.minute, 0, 0);
                                       setSelectedSlot({ date: newDate, hour: hour24, minute: selectedSlot.minute });
                                     }}
-                                    className={`w-14 px-2 py-2.5 border rounded-lg text-sm text-center focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#0d1117] border-[#ffcc29]/20 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
+                                    className={`w-14 px-2 py-2.5 border rounded-lg text-sm text-center focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
                                   />
                                   <span className={`flex items-center ${theme.text}`}>:</span>
                                   {/* Minute input */}
@@ -3406,7 +3406,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                       newDate.setHours(selectedSlot.hour, minute, 0, 0);
                                       setSelectedSlot({ date: newDate, hour: selectedSlot.hour, minute });
                                     }}
-                                    className={`w-14 px-2 py-2.5 border rounded-lg text-sm text-center focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#0d1117] border-[#ffcc29]/20 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
+                                    className={`w-14 px-2 py-2.5 border rounded-lg text-sm text-center focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
                                   />
                                   {/* AM/PM dropdown */}
                                   <select
@@ -3426,7 +3426,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                         setSelectedSlot({ date: newDate, hour: newHour, minute: selectedSlot.minute });
                                       }
                                     }}
-                                    className={`w-16 px-1 py-2.5 border rounded-lg text-sm text-center focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#0d1117] border-[#ffcc29]/20 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
+                                    className={`w-16 px-1 py-2.5 border rounded-lg text-sm text-center focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
                                   >
                                     <option value="AM">AM</option>
                                     <option value="PM">PM</option>
@@ -3446,7 +3446,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                               value={scheduleForm.title}
                               onChange={(e) => setScheduleForm(prev => ({ ...prev, title: e.target.value }))}
                               placeholder={scheduleForm.type === 'reminder' ? 'e.g., Review analytics report' : 'e.g., Holiday Sale Campaign'}
-                              className={`w-full mt-2 px-4 py-3 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#161b22] border-[#ffcc29]/20 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
+                              className={`w-full mt-2 px-4 py-3 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
                             />
                           </div>
                           
@@ -3460,7 +3460,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                               onChange={(e) => setScheduleForm(prev => ({ ...prev, description: e.target.value }))}
                               placeholder={scheduleForm.type === 'reminder' ? 'Add any notes or details...' : 'Write your post caption here... Include emojis, mentions, and your message'}
                               rows={3}
-                              className={`w-full mt-2 px-4 py-3 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] resize-none ${isDarkMode ? 'bg-[#161b22] border-[#ffcc29]/20 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
+                              className={`w-full mt-2 px-4 py-3 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] resize-none ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
                             />
                           </div>
                           
@@ -3474,7 +3474,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                   <select
                                     value={scheduleForm.platform}
                                     onChange={(e) => setScheduleForm(prev => ({ ...prev, platform: e.target.value }))}
-                                    className={`w-full mt-2 px-4 py-3 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#161b22] border-[#ffcc29]/20 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
+                                    className={`w-full mt-2 px-4 py-3 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
                                   >
                                     <option value="instagram">📸 Instagram</option>
                                     <option value="facebook">📘 Facebook</option>
@@ -3488,7 +3488,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                   <select
                                     value={scheduleForm.contentType}
                                     onChange={(e) => setScheduleForm(prev => ({ ...prev, contentType: e.target.value as any }))}
-                                    className={`w-full mt-2 px-4 py-3 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#161b22] border-[#ffcc29]/20 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
+                                    className={`w-full mt-2 px-4 py-3 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
                                   >
                                     <option value="image">🖼️ Image Post</option>
                                     <option value="video">🎬 Video</option>
@@ -3506,7 +3506,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                   <select
                                     value={scheduleForm.objective}
                                     onChange={(e) => setScheduleForm(prev => ({ ...prev, objective: e.target.value as any }))}
-                                    className={`w-full mt-2 px-4 py-3 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#161b22] border-[#ffcc29]/20 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
+                                    className={`w-full mt-2 px-4 py-3 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
                                   >
                                     <option value="awareness">🌟 Brand Awareness</option>
                                     <option value="engagement">💬 Engagement</option>
@@ -3520,7 +3520,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                   <select
                                     value={scheduleForm.priority}
                                     onChange={(e) => setScheduleForm(prev => ({ ...prev, priority: e.target.value as any }))}
-                                    className={`w-full mt-2 px-4 py-3 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#161b22] border-[#ffcc29]/20 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
+                                    className={`w-full mt-2 px-4 py-3 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
                                   >
                                     <option value="low">🟢 Low</option>
                                     <option value="medium">🟡 Medium</option>
@@ -3537,7 +3537,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                   value={scheduleForm.hashtags}
                                   onChange={(e) => setScheduleForm(prev => ({ ...prev, hashtags: e.target.value }))}
                                   placeholder="#marketing, #socialmedia, #business"
-                                  className={`w-full mt-2 px-4 py-3 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#161b22] border-[#ffcc29]/20 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
+                                  className={`w-full mt-2 px-4 py-3 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
                                 />
                                 <p className={`text-[10px] mt-1 ${theme.textMuted}`}>Separate hashtags with commas</p>
                               </div>
@@ -3548,7 +3548,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                 <select
                                   value={scheduleForm.callToAction}
                                   onChange={(e) => setScheduleForm(prev => ({ ...prev, callToAction: e.target.value }))}
-                                  className={`w-full mt-2 px-4 py-3 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#161b22] border-[#ffcc29]/20 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
+                                  className={`w-full mt-2 px-4 py-3 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
                                 >
                                   <option value="">None</option>
                                   <option value="learn_more">Learn More</option>
@@ -3573,7 +3573,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                       value={scheduleForm.budget}
                                       onChange={(e) => setScheduleForm(prev => ({ ...prev, budget: e.target.value }))}
                                       placeholder="0.00"
-                                      className={`w-full pl-8 pr-4 py-3 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#161b22] border-[#ffcc29]/20 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
+                                      className={`w-full pl-8 pr-4 py-3 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
                                     />
                                   </div>
                                 </div>
@@ -3584,7 +3584,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                     value={scheduleForm.targetAudience}
                                     onChange={(e) => setScheduleForm(prev => ({ ...prev, targetAudience: e.target.value }))}
                                     placeholder="e.g., 18-35, Females"
-                                    className={`w-full mt-2 px-4 py-3 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#161b22] border-[#ffcc29]/20 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
+                                    className={`w-full mt-2 px-4 py-3 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
                                   />
                                 </div>
                               </div>
@@ -3597,7 +3597,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                   onChange={(e) => setScheduleForm(prev => ({ ...prev, notes: e.target.value }))}
                                   placeholder="Any internal notes or reminders for this campaign..."
                                   rows={2}
-                                  className={`w-full mt-2 px-4 py-3 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] resize-none ${isDarkMode ? 'bg-[#161b22] border-[#ffcc29]/20 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
+                                  className={`w-full mt-2 px-4 py-3 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] resize-none ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
                                 />
                               </div>
                             </>
@@ -3610,7 +3610,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                               <select
                                 value={scheduleForm.reminderOffset}
                                 onChange={(e) => setScheduleForm(prev => ({ ...prev, reminderOffset: parseInt(e.target.value) }))}
-                                className={`w-full mt-2 px-4 py-3 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#161b22] border-[#ffcc29]/20 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
+                                className={`w-full mt-2 px-4 py-3 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
                               >
                                 <option value={5}>5 minutes before</option>
                                 <option value={15}>15 minutes before</option>
@@ -3623,7 +3623,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                         </div>
                         
                         {/* Footer with actions */}
-                        <div className={`sticky bottom-0 ${isDarkMode ? 'bg-[#0d1117] border-[#ffcc29]/20' : 'bg-white border-slate-200'} border-t px-6 py-4`}>
+                        <div className={`sticky bottom-0 ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-slate-200'} border-t px-6 py-4`}>
                             <div className="flex gap-3">
                                 <button 
                                   onClick={isEditMode ? handleUpdateCampaign : handleCreateEvent}
@@ -3635,7 +3635,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                 </button>
                                 <button 
                                   onClick={() => { setShowScheduleModal(false); setIsEditMode(false); setEditingCampaign(null); }} 
-                                  className={`px-5 py-3 border ${isDarkMode ? 'border-[#ffcc29]/20 text-slate-400 hover:bg-[#161b22]' : 'border-slate-200 text-slate-600 hover:bg-slate-50'} text-sm font-semibold rounded-xl transition-colors`}
+                                  className={`px-5 py-3 border ${isDarkMode ? 'border-slate-700/50 text-slate-400 hover:bg-[#161b22]' : 'border-slate-200 text-slate-600 hover:bg-slate-50'} text-sm font-semibold rounded-xl transition-colors`}
                                 >
                                     Cancel
                                 </button>
@@ -3848,7 +3848,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
             {/* Holiday/Event Modal */}
             {selectedHoliday && !showEventPostCreator && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => setSelectedHoliday(null)}>
-                    <div className={`${isDarkMode ? 'bg-[#0d1117] border-[#ffcc29]/20' : 'bg-white'} border rounded-xl shadow-xl max-w-md w-full p-6 animate-in zoom-in-95 duration-200`} onClick={e => e.stopPropagation()}>
+                    <div className={`${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white'} border rounded-xl shadow-xl max-w-md w-full p-6 animate-in zoom-in-95 duration-200`} onClick={e => e.stopPropagation()}>
                         <div className="flex justify-between items-start mb-4">
                             <div>
                                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${
@@ -3937,9 +3937,9 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
             {/* Event Post Creator Modal */}
             {showEventPostCreator && selectedHoliday && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => { setShowEventPostCreator(false); setSelectedHoliday(null); }}>
-                    <div className={`${isDarkMode ? 'bg-[#0d1117] border-[#ffcc29]/20' : 'bg-white'} border rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200`} onClick={e => e.stopPropagation()}>
+                    <div className={`${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white'} border rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200`} onClick={e => e.stopPropagation()}>
                         {/* Header */}
-                        <div className={`sticky top-0 z-10 ${isDarkMode ? 'bg-[#0d1117] border-[#ffcc29]/20' : 'bg-white border-slate-200'} border-b px-6 py-4 flex justify-between items-center`}>
+                        <div className={`sticky top-0 z-10 ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-slate-200'} border-b px-6 py-4 flex justify-between items-center`}>
                             <div className="flex items-center gap-3">
                                 <span className="text-3xl">{selectedHoliday.emoji}</span>
                                 <div>
@@ -3989,7 +3989,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                                     value={eventImageRefinementPrompt}
                                                     onChange={(e) => setEventImageRefinementPrompt(e.target.value)}
                                                     placeholder="E.g., Add more festive colors, include brand logo..."
-                                                    className={`flex-1 px-3 py-2 text-sm rounded-lg ${isDarkMode ? 'bg-[#0d1117] text-white border-[#ffcc29]/20' : 'bg-white text-slate-900 border-slate-200'} border focus:outline-none focus:ring-2 focus:ring-[#ffcc29]`}
+                                                    className={`flex-1 px-3 py-2 text-sm rounded-lg ${isDarkMode ? 'bg-[#0d1117] text-white border-slate-700/50' : 'bg-white text-slate-900 border-slate-200'} border focus:outline-none focus:ring-2 focus:ring-[#ffcc29]`}
                                                 />
                                                 <button 
                                                     onClick={async () => {
@@ -4048,7 +4048,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                                 value={eventPostCaption}
                                                 onChange={(e) => setEventPostCaption(e.target.value)}
                                                 rows={8}
-                                                className={`w-full px-4 py-3 rounded-lg text-sm ${isDarkMode ? 'bg-[#161b22] text-white border-[#ffcc29]/20' : 'bg-slate-50 text-slate-900 border-slate-200'} border focus:outline-none focus:ring-2 focus:ring-[#ffcc29] resize-none`}
+                                                className={`w-full px-4 py-3 rounded-lg text-sm ${isDarkMode ? 'bg-[#161b22] text-white border-slate-700/50' : 'bg-slate-50 text-slate-900 border-slate-200'} border focus:outline-none focus:ring-2 focus:ring-[#ffcc29] resize-none`}
                                             />
                                         </div>
                                         
@@ -4106,7 +4106,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                                     type="date"
                                                     value={eventScheduleDate}
                                                     onChange={(e) => setEventScheduleDate(e.target.value)}
-                                                    className={`w-full px-3 py-2 text-sm rounded-lg ${isDarkMode ? 'bg-[#161b22] text-white border-[#ffcc29]/20' : 'bg-slate-50 text-slate-900 border-slate-200'} border focus:outline-none focus:ring-2 focus:ring-[#ffcc29]`}
+                                                    className={`w-full px-3 py-2 text-sm rounded-lg ${isDarkMode ? 'bg-[#161b22] text-white border-slate-700/50' : 'bg-slate-50 text-slate-900 border-slate-200'} border focus:outline-none focus:ring-2 focus:ring-[#ffcc29]`}
                                                 />
                                             </div>
                                             <div>
@@ -4115,7 +4115,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                                     type="time"
                                                     value={eventScheduleTime}
                                                     onChange={(e) => setEventScheduleTime(e.target.value)}
-                                                    className={`w-full px-3 py-2 text-sm rounded-lg ${isDarkMode ? 'bg-[#161b22] text-white border-[#ffcc29]/20' : 'bg-slate-50 text-slate-900 border-slate-200'} border focus:outline-none focus:ring-2 focus:ring-[#ffcc29]`}
+                                                    className={`w-full px-3 py-2 text-sm rounded-lg ${isDarkMode ? 'bg-[#161b22] text-white border-slate-700/50' : 'bg-slate-50 text-slate-900 border-slate-200'} border focus:outline-none focus:ring-2 focus:ring-[#ffcc29]`}
                                                 />
                                             </div>
                                         </div>
@@ -4161,7 +4161,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                             }
                                         }}
                                         disabled={eventScheduling}
-                                        className={`flex-1 py-3 ${isDarkMode ? 'bg-[#161b22] hover:bg-[#1f2937] text-white border-[#ffcc29]/20' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'} border font-semibold rounded-lg transition-colors flex items-center justify-center gap-2`}
+                                        className={`flex-1 py-3 ${isDarkMode ? 'bg-[#161b22] hover:bg-[#1f2937] text-white border-slate-700/50' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'} border font-semibold rounded-lg transition-colors flex items-center justify-center gap-2`}
                                     >
                                         <FileText className="w-4 h-4" />
                                         Save as Draft

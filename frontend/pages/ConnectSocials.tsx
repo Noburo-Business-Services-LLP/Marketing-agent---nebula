@@ -239,7 +239,7 @@ const ConnectSocials: React.FC = () => {
               <div key={social.platform} className={`rounded-xl p-5 shadow-sm border transition-all duration-200 relative overflow-hidden group ${theme.bgCard} ${
                 social.connected 
                   ? isDarkMode ? 'border-green-500/30 ring-1 ring-green-500/20' : 'border-green-200 ring-1 ring-green-100' 
-                  : isDarkMode ? 'border-[#ffcc29]/20 hover:border-[#ffcc29]/40 hover:shadow-md' : 'border-slate-200 hover:border-[#ffcc29]/30 hover:shadow-md'
+                  : isDarkMode ? 'border-slate-700/50 hover:border-slate-600 hover:shadow-md' : 'border-slate-200 hover:border-[#ffcc29]/30 hover:shadow-md'
               }`}>
                   {social.connected && (
                       <div className="absolute top-0 right-0 bg-green-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-bl-lg">
@@ -288,7 +288,7 @@ const ConnectSocials: React.FC = () => {
                                 onClick={() => handleDisconnect(social.platform)}
                                 className={`px-3 py-2 text-xs font-bold rounded-lg transition-colors ${
                                   isDarkMode 
-                                    ? 'bg-[#0f1419] border border-[#ffcc29]/20 text-slate-400 hover:text-red-400 hover:border-red-400/30' 
+                                    ? 'bg-[#0f1419] border border-slate-700/50 text-slate-400 hover:text-red-400 hover:border-red-400/30' 
                                     : 'bg-white border border-slate-200 text-slate-400 hover:text-red-500 hover:border-red-200'
                                 }`}
                              >
@@ -321,7 +321,7 @@ const ConnectSocials: React.FC = () => {
               <div className={`w-full max-w-md rounded-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 flex flex-col max-h-[90vh] ${theme.bgCard}`}>
                   {/* Fake Browser Header */}
                   <div className={`border-b p-3 flex items-center gap-2 flex-shrink-0 ${
-                    isDarkMode ? 'bg-[#0d1117] border-[#ffcc29]/20' : 'bg-slate-100 border-slate-200'
+                    isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-slate-100 border-slate-200'
                   }`}>
                       <div className="flex gap-1.5">
                           <div className="w-3 h-3 rounded-full bg-red-400"></div>
@@ -329,7 +329,7 @@ const ConnectSocials: React.FC = () => {
                           <div className="w-3 h-3 rounded-full bg-green-400"></div>
                       </div>
                       <div className={`flex-1 border rounded text-[10px] px-2 py-1 text-center truncate mx-4 flex items-center justify-center gap-1 ${
-                        isDarkMode ? 'bg-[#0f1419] border-[#ffcc29]/20 text-slate-400' : 'bg-white border-slate-200 text-slate-500'
+                        isDarkMode ? 'bg-[#0f1419] border-slate-700/50 text-slate-400' : 'bg-white border-slate-200 text-slate-500'
                       }`}>
                           <div className="w-2 h-2 rounded-full bg-green-500"></div>
                           https://api.{connectingPlatform?.toLowerCase()}.com/oauth/v2/authorize
@@ -364,14 +364,14 @@ const ConnectSocials: React.FC = () => {
                               </div>
 
                               <div className={`text-left p-4 rounded-lg border text-sm ${
-                                isDarkMode ? 'bg-[#0d1117] border-[#ffcc29]/20' : 'bg-slate-50 border-slate-200'
+                                isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-slate-50 border-slate-200'
                               }`}>
                                   <label className={`block text-xs font-bold uppercase mb-1 ${theme.textSecondary}`}>Enter {connectingPlatform} Username</label>
                                   <input 
                                     type="text" 
                                     autoFocus
                                     className={`w-full p-2 border rounded focus:ring-2 focus:ring-[#ffcc29] outline-none ${
-                                      isDarkMode ? 'bg-[#0f1419] border-[#ffcc29]/20 text-white' : 'bg-white border-slate-300 text-slate-900'
+                                      isDarkMode ? 'bg-[#0f1419] border-slate-700/50 text-white' : 'bg-white border-slate-300 text-slate-900'
                                     }`}
                                     placeholder="e.g. gravity_official"
                                     value={usernameInput}
@@ -390,7 +390,7 @@ const ConnectSocials: React.FC = () => {
                                   <button 
                                     onClick={() => setShowFakeAuthWindow(false)}
                                     className={`w-full border font-bold py-3 rounded-lg transition-colors ${
-                                      isDarkMode ? 'bg-[#0f1419] border-[#ffcc29]/20 text-slate-400 hover:bg-slate-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                                      isDarkMode ? 'bg-[#0f1419] border-slate-700/50 text-slate-400 hover:bg-slate-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
                                     }`}
                                   >
                                       Cancel

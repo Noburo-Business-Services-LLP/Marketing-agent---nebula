@@ -320,7 +320,7 @@ const Competitors: React.FC = () => {
       {/* Location Modal */}
       {showLocationModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className={`${theme.bgCard} rounded-2xl p-6 max-w-md w-full shadow-2xl border ${isDarkMode ? 'border-[#ffcc29]/20' : 'border-slate-200'}`}>
+          <div className={`${theme.bgCard} rounded-2xl p-6 max-w-md w-full shadow-2xl border ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'}`}>
             <h3 className={`text-xl font-bold mb-4 ${theme.text}`}>🔍 Find Competitors</h3>
             <p className={`${theme.textSecondary} mb-4 text-sm`}>
               Enter your business location to discover competitors in your area.
@@ -331,14 +331,14 @@ const Competitors: React.FC = () => {
               value={location}
               onChange={(e) => setLocation(e.target.value)}
               className={`w-full px-4 py-3 border rounded-lg text-sm outline-none focus:border-[#ffcc29] mb-4 ${
-                isDarkMode ? 'bg-[#070A12] border-[#ffcc29]/20 text-[#ededed] placeholder-[#ededed]/50' : 'border-slate-300 text-[#070A12]'
+                isDarkMode ? 'bg-[#070A12] border-slate-700/50 text-[#ededed] placeholder-[#ededed]/50' : 'border-slate-300 text-[#070A12]'
               }`}
             />
             <div className="flex gap-3">
               <button
                 onClick={() => setShowLocationModal(false)}
                 className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium border ${
-                  isDarkMode ? 'border-[#ffcc29]/20 text-[#ededed] hover:bg-[#ffcc29]/10' : 'border-slate-200 text-slate-600 hover:bg-slate-100'
+                  isDarkMode ? 'border-slate-700/50 text-[#ededed] hover:bg-[#ffcc29]/10' : 'border-slate-200 text-slate-600 hover:bg-slate-100'
                 }`}
               >
                 Cancel
@@ -381,7 +381,7 @@ const Competitors: React.FC = () => {
               onClick={() => setSelectedFilter(f)}
               className={`px-3 py-1.5 text-xs font-medium rounded border ${f === selectedFilter 
                 ? 'bg-[#ffcc29]/10 border-[#ffcc29]/30 text-[#ffcc29]' 
-                : `${theme.bgCard} ${isDarkMode ? 'border-[#ffcc29]/20 text-[#ededed]/70 hover:bg-[#ffcc29]/10' : 'border-slate-200 text-slate-600 hover:bg-[#f5f5f5]'}`}`}
+                : `${theme.bgCard} ${isDarkMode ? 'border-slate-700/50 text-[#ededed]/70 hover:bg-[#ffcc29]/10' : 'border-slate-200 text-slate-600 hover:bg-[#f5f5f5]'}`}`}
             >
               {f}
             </button>
@@ -403,7 +403,7 @@ const Competitors: React.FC = () => {
         </div>
       )}
 
-      <div className={`${theme.bgCard} p-6 rounded-xl border ${isDarkMode ? 'border-[#ffcc29]/20' : 'border-slate-200'} mb-8`}>
+      <div className={`${theme.bgCard} p-6 rounded-xl border ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'} mb-8`}>
           <div className="flex justify-between items-center mb-6">
               <h2 className={`text-lg font-bold ${theme.text}`}>Competitor Activity Feed</h2>
               <div className="flex items-center gap-3">
@@ -414,7 +414,7 @@ const Competitors: React.FC = () => {
                       placeholder="Filter by keyword..." 
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      className={`w-full pl-9 pr-8 py-2 border rounded-lg text-sm outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#070A12] border-[#ffcc29]/20 text-[#ededed] placeholder-[#ededed]/50' : 'border-slate-300 text-[#070A12]'}`}
+                      className={`w-full pl-9 pr-8 py-2 border rounded-lg text-sm outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#070A12] border-slate-700/50 text-[#ededed] placeholder-[#ededed]/50' : 'border-slate-300 text-[#070A12]'}`}
                   />
                   <RotateCw 
                     className={`absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 cursor-pointer hover:text-[#ffcc29] ${theme.textMuted} ${loading ? 'animate-spin' : ''}`}
@@ -441,7 +441,7 @@ const Competitors: React.FC = () => {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredPosts.map(post => (
-                    <div key={post.id} className={`${theme.bgCard} border ${isDarkMode ? 'border-[#ffcc29]/20 hover:border-[#ffcc29]/40' : 'border-[#ededed] hover:shadow-md'} rounded-xl p-5 transition-all`}>
+                    <div key={post.id} className={`${theme.bgCard} border ${isDarkMode ? 'border-slate-700/50 hover:border-slate-600' : 'border-[#ededed] hover:shadow-md'} rounded-xl p-5 transition-all`}>
                         <div className="flex justify-between items-start mb-4">
                             <div className="flex items-center gap-3">
                                 <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold ${
@@ -481,7 +481,7 @@ const Competitors: React.FC = () => {
                           Create Rival Post
                         </button>
 
-                        <div className={`flex justify-between items-center pt-4 border-t ${isDarkMode ? 'border-[#ededed]/10' : 'border-[#f5f5f5]'}`}>
+                        <div className={`flex justify-between items-center pt-4 border-t ${isDarkMode ? 'border-slate-700/50' : 'border-[#f5f5f5]'}`}>
                             <div className="flex gap-4">
                                 <span className={`flex items-center gap-1 text-xs font-medium ${theme.textSecondary}`}>
                                     <Heart className="w-3 h-3 text-red-400 fill-red-400" /> {(post.likes || 0).toLocaleString()}
@@ -522,7 +522,7 @@ const Competitors: React.FC = () => {
 
       {/* Discovered Competitors Section */}
       {competitors.length > 0 && (
-        <div className={`${theme.bgCard} p-6 rounded-xl border ${isDarkMode ? 'border-[#ffcc29]/20' : 'border-slate-200'} mb-8`}>
+        <div className={`${theme.bgCard} p-6 rounded-xl border ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'} mb-8`}>
           <div className="flex justify-between items-center mb-4">
             <h2 className={`text-lg font-bold ${theme.text} flex items-center gap-2`}>
               <Users className="w-5 h-5 text-[#ffcc29]" />
@@ -541,7 +541,7 @@ const Competitors: React.FC = () => {
             {competitors.map(comp => (
               <div 
                 key={comp._id} 
-                className={`flex items-center gap-3 px-4 py-3 rounded-lg border ${isDarkMode ? 'bg-[#070A12] border-[#ffcc29]/20' : 'bg-slate-50 border-slate-200'}`}
+                className={`flex items-center gap-3 px-4 py-3 rounded-lg border ${isDarkMode ? 'bg-[#070A12] border-slate-700/50' : 'bg-slate-50 border-slate-200'}`}
               >
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold ${isDarkMode ? 'bg-[#ffcc29]/20 text-[#ffcc29]' : 'bg-[#ffcc29]/20 text-amber-700'}`}>
                   {comp.name.charAt(0)}
@@ -570,10 +570,10 @@ const Competitors: React.FC = () => {
       {showIgnoredModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setShowIgnoredModal(false)}>
           <div 
-            className={`${isDarkMode ? 'bg-[#0d1117] border-[#ffcc29]/20' : 'bg-white border-slate-200'} border rounded-2xl shadow-2xl w-full max-w-md max-h-[80vh] overflow-hidden`}
+            className={`${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-slate-200'} border rounded-2xl shadow-2xl w-full max-w-md max-h-[80vh] overflow-hidden`}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className={`px-6 py-4 border-b ${isDarkMode ? 'border-[#ffcc29]/20' : 'border-slate-100'}`}>
+            <div className={`px-6 py-4 border-b ${isDarkMode ? 'border-slate-700/50' : 'border-slate-100'}`}>
               <div className="flex items-center justify-between">
                 <h3 className={`text-lg font-bold ${theme.text}`}>Ignored Competitors</h3>
                 <button onClick={() => setShowIgnoredModal(false)} className={`p-1 rounded hover:bg-[#ededed]/10`}>
@@ -617,11 +617,11 @@ const Competitors: React.FC = () => {
       {showRivalPostModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => !rivalPostLoading && setShowRivalPostModal(false)}>
           <div 
-            className={`${isDarkMode ? 'bg-[#0d1117] border-[#ffcc29]/20' : 'bg-white border-slate-200'} border rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden`}
+            className={`${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-slate-200'} border rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden`}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className={`px-6 py-4 border-b ${isDarkMode ? 'border-[#ffcc29]/20 bg-gradient-to-r from-[#0d1117] to-[#161b22]' : 'border-slate-100 bg-gradient-to-r from-white to-slate-50'}`}>
+            <div className={`px-6 py-4 border-b ${isDarkMode ? 'border-slate-700/50 bg-gradient-to-r from-[#0d1117] to-[#161b22]' : 'border-slate-100 bg-gradient-to-r from-white to-slate-50'}`}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-gradient-to-r from-[#ffcc29] to-[#ffa500] flex items-center justify-center">
@@ -676,7 +676,7 @@ const Competitors: React.FC = () => {
                     <p className={`text-xs font-medium ${theme.textMuted} mb-2 flex items-center gap-1.5`}>
                       <Sparkles className="w-3.5 h-3.5 text-[#ffcc29]" /> AI Generated Image
                     </p>
-                    <div className="relative rounded-xl overflow-hidden border border-[#ffcc29]/20">
+                    <div className="relative rounded-xl overflow-hidden border border-slate-700/50">
                       <img 
                         src={rivalPost.imageUrl} 
                         alt="Generated rival post" 
@@ -707,7 +707,7 @@ const Competitors: React.FC = () => {
                     <textarea
                       value={editedCaption}
                       onChange={(e) => setEditedCaption(e.target.value)}
-                      className={`w-full p-4 rounded-xl ${isDarkMode ? 'bg-[#161b22] border-[#ffcc29]/20 text-white' : 'bg-slate-50 border-slate-200 text-slate-800'} border focus:ring-2 focus:ring-[#ffcc29]/50 focus:border-[#ffcc29] transition-all resize-none`}
+                      className={`w-full p-4 rounded-xl ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white' : 'bg-slate-50 border-slate-200 text-slate-800'} border focus:ring-2 focus:ring-[#ffcc29]/50 focus:border-[#ffcc29] transition-all resize-none`}
                       rows={4}
                     />
                   </div>
@@ -721,7 +721,7 @@ const Competitors: React.FC = () => {
                       type="text"
                       value={editedHashtags}
                       onChange={(e) => setEditedHashtags(e.target.value)}
-                      className={`w-full p-3 rounded-xl ${isDarkMode ? 'bg-[#161b22] border-[#ffcc29]/20 text-white' : 'bg-slate-50 border-slate-200 text-slate-800'} border focus:ring-2 focus:ring-[#ffcc29]/50 focus:border-[#ffcc29] transition-all`}
+                      className={`w-full p-3 rounded-xl ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white' : 'bg-slate-50 border-slate-200 text-slate-800'} border focus:ring-2 focus:ring-[#ffcc29]/50 focus:border-[#ffcc29] transition-all`}
                       placeholder="#trending #viral #marketing"
                     />
                     <p className={`text-xs ${theme.textMuted} mt-1`}>
@@ -734,7 +734,7 @@ const Competitors: React.FC = () => {
 
             {/* Footer Actions */}
             {rivalPost && !rivalPostLoading && (
-              <div className={`px-6 py-4 border-t ${isDarkMode ? 'border-[#ffcc29]/20 bg-[#0d1117]' : 'border-slate-100 bg-white'}`}>
+              <div className={`px-6 py-4 border-t ${isDarkMode ? 'border-slate-700/50 bg-[#0d1117]' : 'border-slate-100 bg-white'}`}>
                 <div className="flex items-center justify-between gap-3">
                   <button
                     onClick={() => setShowRivalPostModal(false)}

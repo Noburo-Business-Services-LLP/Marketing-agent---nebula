@@ -78,7 +78,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
 
       {/* Sidebar */}
       <aside 
-        className={`fixed inset-y-0 left-0 z-30 w-64 ${isDarkMode ? 'bg-[#0d1117] border-[#ffcc29]/20' : 'bg-[#ffcc29]'} border-r transform transition-transform duration-300 ease-in-out md:translate-x-0 md:static md:inset-auto ${
+        className={`fixed inset-y-0 left-0 z-30 w-64 ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-[#ffcc29]'} border-r transform transition-transform duration-300 ease-in-out md:translate-x-0 md:static md:inset-auto ${
           isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -126,7 +126,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
                 </nav>
             </div>
 
-            <div className={`mt-auto p-6 border-t ${isDarkMode ? 'border-[#ffcc29]/20' : 'border-[#070A12]/20'}`}>
+            <div className={`mt-auto p-6 border-t ${isDarkMode ? 'border-slate-700/50' : 'border-[#070A12]/20'}`}>
                 {/* Theme Toggle */}
                 <button
                   onClick={toggleTheme}
@@ -176,7 +176,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
       {/* Main Content */}
       <div className={`flex-1 flex flex-col min-w-0 overflow-hidden ${isDarkMode ? 'bg-[#070A12]' : 'bg-gray-100'}`}>
         {/* Mobile Header */}
-        <header className={`md:hidden ${isDarkMode ? 'bg-[#0d1117] border-[#ffcc29]/20' : 'bg-[#ffcc29]'} border-b p-4 flex items-center justify-between sticky top-0 z-10`}>
+        <header className={`md:hidden ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-[#ffcc29]'} border-b p-4 flex items-center justify-between sticky top-0 z-10`}>
           <button 
             onClick={() => setSidebarOpen(true)}
             className={isDarkMode ? 'text-[#ededed] hover:text-[#ffcc29]' : 'text-[#070A12]'}
@@ -193,7 +193,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
         </header>
 
         {/* Desktop Header with Notifications */}
-        <header className={`hidden md:flex ${isDarkMode ? 'bg-[#0d1117] border-[#ffcc29]/20' : 'bg-white border-gray-200'} border-b px-8 py-3 items-center justify-end gap-4`}>
+        <header className={`hidden md:flex ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-gray-200'} border-b px-8 py-3 items-center justify-end gap-4`}>
           <NotificationBell />
         </header>
 

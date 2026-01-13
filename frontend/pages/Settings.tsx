@@ -164,7 +164,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
           {/* Sidebar Tabs */}
           <div className="w-full md:w-64 flex-shrink-0">
              <div className={`rounded-xl shadow-sm border p-2 space-y-1 ${theme.bgCard} ${
-               isDarkMode ? 'border-[#ffcc29]/20' : 'border-slate-200'
+               isDarkMode ? 'border-slate-700/50' : 'border-slate-200'
              }`}>
                 {['Profile', 'Integrations', 'Notifications', 'Security', 'Billing'].map(tab => (
                     <button
@@ -185,7 +185,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
           {/* Content */}
           <div className="flex-1">
               <div className={`rounded-xl shadow-sm border p-8 ${theme.bgCard} ${
-                isDarkMode ? 'border-[#ffcc29]/20' : 'border-slate-200'
+                isDarkMode ? 'border-slate-700/50' : 'border-slate-200'
               }`}>
                   {activeTab === 'Profile' && (
                       <div className="animate-in fade-in duration-300">
@@ -203,7 +203,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                           errors.firstName 
                                             ? 'border-red-300 focus:ring-red-200' 
                                             : isDarkMode 
-                                              ? 'bg-[#0d1117] border-[#ffcc29]/20 text-white focus:ring-[#ffcc29]/30' 
+                                              ? 'bg-[#0d1117] border-slate-700/50 text-white focus:ring-[#ffcc29]/30' 
                                               : 'bg-white border-slate-300 text-slate-900 focus:ring-[#ffcc29]'
                                         }`}
                                       />
@@ -219,7 +219,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                           errors.lastName 
                                             ? 'border-red-300 focus:ring-red-200' 
                                             : isDarkMode 
-                                              ? 'bg-[#0d1117] border-[#ffcc29]/20 text-white focus:ring-[#ffcc29]/30' 
+                                              ? 'bg-[#0d1117] border-slate-700/50 text-white focus:ring-[#ffcc29]/30' 
                                               : 'bg-white border-slate-300 text-slate-900 focus:ring-[#ffcc29]'
                                         }`}
                                       />
@@ -236,7 +236,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                         onChange={e => handleChange('companyName', e.target.value)}
                                         className={`w-full p-3 border rounded-lg outline-none focus:ring-2 transition-all ${
                                           isDarkMode 
-                                            ? 'bg-[#0d1117] border-[#ffcc29]/20 text-white focus:ring-[#ffcc29]/30' 
+                                            ? 'bg-[#0d1117] border-slate-700/50 text-white focus:ring-[#ffcc29]/30' 
                                             : 'bg-white border-slate-300 text-slate-900 focus:ring-[#ffcc29]'
                                         }`}
                                       />
@@ -249,7 +249,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                         onChange={e => handleChange('industry', e.target.value)}
                                         className={`w-full p-3 border rounded-lg outline-none focus:ring-2 transition-all ${
                                           isDarkMode 
-                                            ? 'bg-[#0d1117] border-[#ffcc29]/20 text-white focus:ring-[#ffcc29]/30' 
+                                            ? 'bg-[#0d1117] border-slate-700/50 text-white focus:ring-[#ffcc29]/30' 
                                             : 'bg-white border-slate-300 text-slate-900 focus:ring-[#ffcc29]'
                                         }`}
                                       />
@@ -266,7 +266,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                       errors.email 
                                         ? 'border-red-300 focus:ring-red-200' 
                                         : isDarkMode 
-                                          ? 'bg-[#0d1117] border-[#ffcc29]/20 text-white focus:ring-[#ffcc29]/30' 
+                                          ? 'bg-[#0d1117] border-slate-700/50 text-white focus:ring-[#ffcc29]/30' 
                                           : 'bg-white border-slate-300 text-slate-900 focus:ring-[#ffcc29]'
                                     }`}
                                   />
@@ -274,10 +274,10 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                               </div>
                           </div>
 
-                          <div className={`border-t pt-8 mb-8 ${isDarkMode ? 'border-[#ffcc29]/20' : 'border-slate-200'}`}>
+                          <div className={`border-t pt-8 mb-8 ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'}`}>
                               <h3 className={`text-lg font-bold mb-6 ${theme.text}`}>Preferences</h3>
                               <div className={`flex items-center justify-between p-4 rounded-lg border ${
-                                isDarkMode ? 'bg-[#0d1117] border-[#ffcc29]/20' : 'bg-slate-50 border-slate-200'
+                                isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-slate-50 border-slate-200'
                               }`}>
                                   <div>
                                       <p className={`font-bold ${theme.text}`}>Email Notifications</p>
@@ -339,7 +339,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                           passwordErrors.currentPassword 
                                             ? 'border-red-300 focus:ring-red-200' 
                                             : isDarkMode 
-                                              ? 'bg-[#0d1117] border-[#ffcc29]/20 text-white focus:ring-[#ffcc29]/30' 
+                                              ? 'bg-[#0d1117] border-slate-700/50 text-white focus:ring-[#ffcc29]/30' 
                                               : 'bg-white border-slate-300 text-slate-900 focus:ring-[#ffcc29]'
                                         }`}
                                       />
@@ -365,7 +365,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                           passwordErrors.newPassword 
                                             ? 'border-red-300 focus:ring-red-200' 
                                             : isDarkMode 
-                                              ? 'bg-[#0d1117] border-[#ffcc29]/20 text-white focus:ring-[#ffcc29]/30' 
+                                              ? 'bg-[#0d1117] border-slate-700/50 text-white focus:ring-[#ffcc29]/30' 
                                               : 'bg-white border-slate-300 text-slate-900 focus:ring-[#ffcc29]'
                                         }`}
                                       />
@@ -392,7 +392,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                           passwordErrors.confirmPassword 
                                             ? 'border-red-300 focus:ring-red-200' 
                                             : isDarkMode 
-                                              ? 'bg-[#0d1117] border-[#ffcc29]/20 text-white focus:ring-[#ffcc29]/30' 
+                                              ? 'bg-[#0d1117] border-slate-700/50 text-white focus:ring-[#ffcc29]/30' 
                                               : 'bg-white border-slate-300 text-slate-900 focus:ring-[#ffcc29]'
                                         }`}
                                       />
@@ -468,7 +468,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
 
                           <div className="space-y-4">
                             {/* Ayrshare */}
-                            <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-[#0d1117] border-[#ffcc29]/20' : 'bg-white border-slate-200'}`}>
+                            <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-slate-200'}`}>
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-3">
                                   <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm">A</div>
@@ -493,7 +493,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                             </div>
 
                             {/* Apify */}
-                            <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-[#0d1117] border-[#ffcc29]/20' : 'bg-white border-slate-200'}`}>
+                            <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-slate-200'}`}>
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-3">
                                   <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-green-500 to-teal-600 flex items-center justify-center text-white font-bold text-sm">AP</div>
@@ -518,7 +518,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                             </div>
 
                             {/* SearchAPI */}
-                            <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-[#0d1117] border-[#ffcc29]/20' : 'bg-white border-slate-200'}`}>
+                            <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-slate-200'}`}>
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-3">
                                   <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center text-white font-bold text-sm">S</div>
@@ -543,7 +543,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                             </div>
 
                             {/* Gemini AI */}
-                            <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-[#0d1117] border-[#ffcc29]/20' : 'bg-white border-slate-200'}`}>
+                            <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-slate-200'}`}>
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-3">
                                   <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center text-white font-bold text-sm">G</div>
@@ -569,7 +569,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
 
                   {(activeTab === 'Notifications' || activeTab === 'Billing') && (
                       <div className={`text-center py-12 rounded-lg border border-dashed ${
-                        isDarkMode ? 'bg-[#0d1117] border-[#ffcc29]/20 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-400'
+                        isDarkMode ? 'bg-[#0d1117] border-slate-700/50 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-400'
                       }`}>
                           <p>Advanced settings for {activeTab} coming soon.</p>
                       </div>
