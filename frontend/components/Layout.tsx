@@ -11,8 +11,7 @@ import {
   Link2,
   Sparkles,
   Sun,
-  Moon,
-  Send
+  Moon
 } from 'lucide-react';
 import { User } from '../types';
 import NotificationBell from './NotificationBell';
@@ -55,7 +54,6 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
   const navItems = [
     { path: '/', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/campaigns', label: 'Campaigns', icon: Megaphone },
-    { path: '/reachouts', label: 'Reachouts', icon: Send },
     { path: '/competitors', label: 'Competitors', icon: Users },
     { path: '/influencers', label: 'Influencers', icon: Sparkles },
     { path: '/connect-socials', label: 'Connect Socials', icon: Link2 },

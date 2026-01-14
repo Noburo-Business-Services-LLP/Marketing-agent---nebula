@@ -47,8 +47,7 @@ const contentRoutes = require('./routes/content');
 const campaignBuilderRoutes = require('./routes/campaignBuilder');
 const analyticsRoutes = require('./routes/analytics');
 
-// Reachouts CRM routes
-const reachoutsRoutes = require('./routes/reachouts');
+// Reachouts CRM routes - REMOVED
 
 // Notification routes
 const notificationRoutes = require('./routes/notifications');
@@ -108,8 +107,7 @@ app.use('/api/content', contentRoutes);
 app.use('/api/campaign-builder', campaignBuilderRoutes);
 app.use('/api/analytics', analyticsRoutes);
 
-// Routes - Reachouts CRM
-app.use('/api/reachouts', reachoutsRoutes);
+// Routes - Reachouts CRM - REMOVED
 
 // Routes - Notifications
 app.use('/api/notifications', notificationRoutes);
@@ -205,16 +203,6 @@ const startServer = async () => {
     });
     console.log('✅ MongoDB connected successfully');
     mongoConnected = true;
-    
-    // Warm up the Lead model to ensure indexes are synced
-    try {
-      const Lead = require('./models/Lead');
-      await Lead.ensureIndexes();
-      const count = await Lead.countDocuments({});
-      console.log(`✅ Lead model ready (${count} leads in database)`);
-    } catch (warmupError) {
-      console.warn('⚠️  Lead model warmup failed:', warmupError.message);
-    }
 
     // Start notification scheduler for campaign reminders
     try {
