@@ -17,7 +17,7 @@ const influencerSchema = new mongoose.Schema({
   },
   platform: {
     type: String,
-    enum: ['instagram', 'youtube', 'twitter', 'linkedin', 'facebook', 'tiktok'],
+    enum: ['instagram', 'youtube', 'twitter', 'linkedin', 'facebook', 'tiktok', 'x'],
     default: 'instagram'
   },
   profileImage: String,
@@ -28,6 +28,15 @@ const influencerSchema = new mongoose.Schema({
     enum: ['nano', 'micro', 'mid-tier', 'macro', 'mega', 'celebrity'],
     default: 'micro'
   },
+  tier: {
+    type: String,
+    enum: ['nano', 'micro', 'macro', 'mega'],
+    default: 'micro'
+  },
+  location: String, // Influencer's location (city, state, country)
+  contentType: String, // Type of content they create
+  audienceType: String, // Their audience demographics
+  estimatedCost: String, // Estimated cost per post (e.g., "₹50,000 - ₹1,00,000")
   niche: [String],
   followerCount: {
     type: Number,

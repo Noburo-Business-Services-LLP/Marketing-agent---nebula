@@ -14,6 +14,8 @@ const platformIcons: Record<string, React.ReactNode> = {
   twitter: <Twitter className="w-4 h-4 text-blue-400" />,
   linkedin: <span className="text-sm font-bold text-blue-600">in</span>,
   facebook: <span className="text-sm font-bold text-blue-700">f</span>,
+  x: <Twitter className="w-4 h-4 text-slate-800" />,
+  tiktok: <span className="text-sm font-bold text-black">TT</span>,
 };
 
 const platformColors: Record<string, string> = {
@@ -22,6 +24,25 @@ const platformColors: Record<string, string> = {
   twitter: 'from-blue-400 to-blue-500',
   linkedin: 'from-blue-600 to-blue-700',
   facebook: 'from-blue-600 to-blue-800',
+  x: 'from-slate-800 to-slate-900',
+  tiktok: 'from-black to-pink-500',
+};
+
+// Tier badge colors
+const tierColors: Record<string, { bg: string; text: string; border: string }> = {
+  mega: { bg: 'bg-purple-100', text: 'text-purple-700', border: 'border-purple-200' },
+  macro: { bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-200' },
+  micro: { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-200' },
+  nano: { bg: 'bg-orange-100', text: 'text-orange-700', border: 'border-orange-200' },
+  'mid-tier': { bg: 'bg-cyan-100', text: 'text-cyan-700', border: 'border-cyan-200' },
+};
+
+const tierColorsDark: Record<string, { bg: string; text: string; border: string }> = {
+  mega: { bg: 'bg-purple-900/30', text: 'text-purple-400', border: 'border-purple-500/30' },
+  macro: { bg: 'bg-blue-900/30', text: 'text-blue-400', border: 'border-blue-500/30' },
+  micro: { bg: 'bg-green-900/30', text: 'text-green-400', border: 'border-green-500/30' },
+  nano: { bg: 'bg-orange-900/30', text: 'text-orange-400', border: 'border-orange-500/30' },
+  'mid-tier': { bg: 'bg-cyan-900/30', text: 'text-cyan-400', border: 'border-cyan-500/30' },
 };
 
 type SortOption = 'relevance' | 'followers' | 'engagement' | 'recent' | 'trending';
@@ -35,6 +56,7 @@ const Influencers: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedNiche, setSelectedNiche] = useState<string>('all');
   const [selectedPlatform, setSelectedPlatform] = useState<string>('all');
+  const [selectedTier, setSelectedTier] = useState<string>('all');
   const [sortBy, setSortBy] = useState<SortOption>('relevance');
   const [recalculatingId, setRecalculatingId] = useState<string | null>(null);
   const [discoveryMessage, setDiscoveryMessage] = useState<string>('');
@@ -59,20 +81,24 @@ const Influencers: React.FC = () => {
 
   const discoverNewInfluencers = async (forceRefresh = false) => {
     setDiscovering(true);
-    setDiscoveryMessage('🔍 Finding Instagram influencers for your business...');
+    setDiscoveryMessage('🔍 Finding influencers across Instagram, YouTube, Facebook & more...');
     try {
       const res = await apiService.discoverInfluencers({
-        platforms: ['instagram'],
+        platforms: ['instagram', 'youtube', 'facebook', 'twitter', 'linkedin'],
         limit: 15,
         forceRefresh
       });
       
       if (res.success && res.influencers) {
         setInfluencers(res.influencers);
-        setDiscoveryMessage(res.message || `✅ Found ${res.discovered || res.influencers.length} Instagram influencers!`);
+        const breakdown = res.breakdown || {};
+        setDiscoveryMessage(
+          `✅ Found ${res.discovered || res.influencers.length} influencers! ` +
+          `(${breakdown.mega || 0} Mega, ${breakdown.macro || 0} Macro, ${breakdown.micro || 0} Micro)`
+        );
         
-        // Clear message after 3 seconds
-        setTimeout(() => setDiscoveryMessage(''), 3000);
+        // Clear message after 5 seconds
+        setTimeout(() => setDiscoveryMessage(''), 5000);
       } else {
         setDiscoveryMessage(res.message || '⚠️ No influencers found. Please complete your onboarding first.');
         setTimeout(() => setDiscoveryMessage(''), 5000);
@@ -109,6 +135,7 @@ const Influencers: React.FC = () => {
   // Get all unique niches for filter
   const allNiches: string[] = Array.from(new Set(influencers.flatMap(inf => inf.niche || [])));
   const allPlatforms: string[] = Array.from(new Set(influencers.map(inf => inf.platform).filter(Boolean))) as string[];
+  const allTiers: string[] = ['mega', 'macro', 'micro', 'nano'];
 
   // Filter influencers
   const filteredInfluencers = influencers.filter(inf => {
@@ -119,8 +146,9 @@ const Influencers: React.FC = () => {
     
     const matchesNiche = selectedNiche === 'all' || inf.niche?.includes(selectedNiche);
     const matchesPlatform = selectedPlatform === 'all' || inf.platform === selectedPlatform;
+    const matchesTier = selectedTier === 'all' || inf.type === selectedTier || inf.tier === selectedTier;
     
-    return matchesSearch && matchesNiche && matchesPlatform;
+    return matchesSearch && matchesNiche && matchesPlatform && matchesTier;
   });
 
   // Sort influencers
@@ -219,6 +247,23 @@ const Influencers: React.FC = () => {
             {allPlatforms.map(platform => (
               <option key={platform} value={platform}>{platform.charAt(0).toUpperCase() + platform.slice(1)}</option>
             ))}
+          </select>
+
+          {/* Tier Filter */}
+          <select
+            value={selectedTier}
+            onChange={(e) => setSelectedTier(e.target.value)}
+            className={`px-3 py-2 border rounded-lg text-sm outline-none focus:border-[#ffcc29] ${
+              isDarkMode 
+                ? 'bg-[#0f1419] border-slate-700/50 text-white' 
+                : 'bg-white border-slate-300 text-slate-900'
+            }`}
+          >
+            <option value="all">All Tiers</option>
+            <option value="mega">🔥 Mega (1M+)</option>
+            <option value="macro">⭐ Macro (100K-1M)</option>
+            <option value="micro">💎 Micro (10K-100K)</option>
+            <option value="nano">🌱 Nano (&lt;10K)</option>
           </select>
 
           {/* Niche Filter */}
@@ -440,11 +485,16 @@ const Influencers: React.FC = () => {
                 <div className="mt-8 mb-4">
                   <div className="flex items-center gap-2 mb-1">
                     <h3 className={`font-bold text-base ${theme.text} truncate`}>{inf.name}</h3>
-                    <span className={`text-[9px] px-1.5 py-0.5 rounded uppercase font-bold tracking-wide ${
-                      isDarkMode ? 'bg-[#ffcc29]/20 text-[#ffcc29]' : 'bg-slate-100 text-slate-600'
-                    }`}>
-                      {inf.type}
-                    </span>
+                    {(() => {
+                      const tier = inf.tier || inf.type || 'micro';
+                      const colors = isDarkMode ? tierColorsDark[tier] || tierColorsDark.micro : tierColors[tier] || tierColors.micro;
+                      const emoji = tier === 'mega' ? '🔥' : tier === 'macro' ? '⭐' : tier === 'micro' ? '💎' : '🌱';
+                      return (
+                        <span className={`text-[9px] px-1.5 py-0.5 rounded uppercase font-bold tracking-wide border ${colors.bg} ${colors.text} ${colors.border}`}>
+                          {emoji} {tier}
+                        </span>
+                      );
+                    })()}
                   </div>
                   <p className="text-[#ffcc29] font-medium text-sm mb-1">{inf.handle}</p>
                   <p className={`text-xs capitalize line-clamp-1 ${theme.textSecondary}`}>

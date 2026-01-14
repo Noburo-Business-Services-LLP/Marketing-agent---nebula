@@ -114,13 +114,18 @@ export interface Competitor {
 export interface Influencer {
   _id: string;
   name: string;
-  platform: 'instagram' | 'linkedin' | 'youtube' | 'twitter' | 'facebook';
+  platform: 'instagram' | 'linkedin' | 'youtube' | 'twitter' | 'facebook' | 'x' | 'tiktok';
   handle: string;
   followerCount: number;
   reach: number;
   engagementRate: number;
   niche: string[];
   type: 'nano' | 'micro' | 'mid-tier' | 'macro' | 'mega' | 'celebrity' | 'Nano' | 'Micro' | 'Mid-Tier' | 'Macro' | 'Mega';
+  tier?: 'nano' | 'micro' | 'macro' | 'mega'; // New tier field
+  location?: string; // Influencer's location
+  contentType?: string; // Type of content they create
+  audienceType?: string; // Their audience demographics
+  estimatedCost?: string; // Estimated cost per post
   aiMatchScore: {
     score: number;
     reason: string;

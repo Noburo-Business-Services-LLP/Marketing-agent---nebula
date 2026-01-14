@@ -189,8 +189,9 @@ router.post('/:id/favorite', protect, async (req, res) => {
 
 /**
  * POST /api/influencers/discover
- * Discover Instagram influencers using Gemini AI based on business context from onboarding
- * Returns real, verifiable Instagram accounts relevant to the user's business
+ * Discover influencers across ALL platforms using Gemini AI based on business context
+ * Returns real, verifiable accounts from Instagram, YouTube, Facebook, Twitter, LinkedIn
+ * Categorized as MEGA (5), MACRO (5), MICRO (5) = 15 total influencers
  */
 router.post('/discover', protect, async (req, res) => {
   try {
@@ -198,28 +199,33 @@ router.post('/discover', protect, async (req, res) => {
     const user = await User.findById(userId);
     const { limit = 15, forceRefresh = false } = req.body;
 
-    console.log('🚀 Starting Instagram influencer discovery for user:', userId);
+    console.log('🚀 Starting multi-platform influencer discovery for user:', userId);
 
     // Get OnboardingContext for comprehensive business data
     const onboardingContext = await OnboardingContext.findOne({ userId });
     const brandProfile = await BrandProfile.findOne({ userId });
     const bp = user?.businessProfile || {};
     
-    // Build comprehensive business context
+    // Build comprehensive business context with LOCATION PRIORITY
     const businessContext = {
       companyName: onboardingContext?.company?.name || bp.name || user?.firstName + "'s Business",
       industry: onboardingContext?.company?.industry || bp.industry || 'General Business',
       description: onboardingContext?.company?.description || bp.niche || '',
       targetCustomer: onboardingContext?.targetCustomer?.description || bp.targetAudience || '',
       businessLocation: onboardingContext?.geography?.businessLocation || bp.businessLocation || 'India',
+      businessCity: onboardingContext?.geography?.city || bp.city || '',
+      businessState: onboardingContext?.geography?.state || bp.state || '',
+      businessCountry: onboardingContext?.geography?.country || bp.country || 'India',
       regions: onboardingContext?.geography?.regions || [],
       countries: onboardingContext?.geography?.countries || [],
+      targetLanguages: onboardingContext?.geography?.languages || ['English', 'Hindi'],
       valueProposition: onboardingContext?.valueProposition?.main || '',
       keyBenefits: onboardingContext?.valueProposition?.keyBenefits || [],
       primaryGoal: onboardingContext?.primaryGoal || 'awareness'
     };
 
     console.log('📋 Business context:', JSON.stringify(businessContext, null, 2));
+    console.log('📍 Location priority:', businessContext.businessLocation, businessContext.businessCity, businessContext.businessState);
 
     if (!businessContext.industry || businessContext.industry === 'General Business') {
       return res.status(400).json({
@@ -232,11 +238,10 @@ router.post('/discover', protect, async (req, res) => {
     if (!forceRefresh) {
       const recentInfluencers = await Influencer.find({
         userId,
-        platform: 'instagram',
         createdAt: { $gte: new Date(Date.now() - 6 * 60 * 60 * 1000) }
       }).sort({ 'aiMatchScore.score': -1 });
 
-      if (recentInfluencers.length >= 5) {
+      if (recentInfluencers.length >= 10) {
         console.log('📦 Returning cached influencers');
         return res.json({
           success: true,
@@ -247,68 +252,78 @@ router.post('/discover', protect, async (req, res) => {
       }
     }
 
-    // Use Gemini AI to suggest real Instagram influencers
-    console.log('🤖 Asking Gemini AI for relevant Instagram influencers...');
-    let influencers = await discoverInfluencersWithGemini(businessContext, limit);
+    // Use Gemini AI to discover influencers across ALL platforms
+    console.log('🤖 Asking Gemini AI for multi-platform influencers...');
+    let influencers = await discoverMultiPlatformInfluencers(businessContext);
 
-    // Fallback influencers if Gemini returns empty
+    // Fallback if Gemini returns empty
     if (!influencers || influencers.length === 0) {
       console.log('⚠️ Gemini returned no results, using fallback influencers...');
-      influencers = getFallbackInfluencers(businessContext.industry);
+      influencers = getFallbackInfluencers(businessContext.industry, businessContext.businessLocation);
     }
 
-    // If still no influencers, return a helpful message but with sample data
-    if (!influencers || influencers.length === 0) {
-      influencers = getGenericInfluencers();
-    }
+    console.log(`✅ Found ${influencers.length} influencers across all platforms`);
 
-    console.log(`✅ Found ${influencers.length} Instagram influencers`);
-
-    // Save influencers to database
-    const influencersToSave = influencers.map(inf => ({
-      userId,
-      name: inf.name,
-      handle: inf.handle.startsWith('@') ? inf.handle : `@${inf.handle}`,
-      platform: 'instagram',
-      profileImage: `https://ui-avatars.com/api/?name=${encodeURIComponent(inf.name)}&background=ffcc29&color=000`,
-      profileUrl: `https://instagram.com/${inf.handle.replace('@', '')}`,
-      bio: inf.bio || '',
-      type: categorizeInfluencer(inf.followerCount),
-      niche: inf.niche || [businessContext.industry],
-      followerCount: inf.followerCount || 0,
-      reach: Math.floor((inf.followerCount || 0) * 0.35),
-      engagementRate: inf.engagementRate || 3.5,
-      isVerified: inf.isVerified || false,
-      aiMatchScore: {
-        score: inf.relevanceScore || 80,
-        reason: inf.relevanceReason || 'AI-matched influencer for your business',
-        factors: [
-          { name: 'Content Match', score: Math.round((inf.relevanceScore || 80) * 0.35), max: 35 },
-          { name: 'Audience Alignment', score: Math.round((inf.relevanceScore || 80) * 0.25), max: 25 },
-          { name: 'Engagement', score: Math.round((inf.relevanceScore || 80) * 0.20), max: 20 },
-          { name: 'Reach', score: Math.round((inf.relevanceScore || 80) * 0.15), max: 15 },
-          { name: 'Brand Safety', score: 5, max: 5 }
-        ],
-        calculatedAt: new Date()
-      },
-      priceRange: estimatePriceRange(inf.followerCount),
-      status: 'discovered',
-      scrapedFromSocial: false,
-      scrapedAt: new Date()
-    }));
+    // Categorize and save influencers
+    const influencersToSave = influencers.map(inf => {
+      const tier = inf.tier || categorizeInfluencerTier(inf.followerCount);
+      return {
+        userId,
+        name: inf.name,
+        handle: inf.handle.startsWith('@') ? inf.handle : `@${inf.handle}`,
+        platform: inf.platform || 'instagram',
+        profileImage: inf.profileImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(inf.name)}&background=${getPlatformColor(inf.platform)}&color=fff`,
+        profileUrl: getProfileUrl(inf.platform, inf.handle),
+        bio: inf.bio || '',
+        type: tier,
+        tier: tier, // mega, macro, micro
+        location: inf.location || businessContext.businessLocation,
+        niche: Array.isArray(inf.niche) ? inf.niche : [inf.niche || businessContext.industry],
+        followerCount: inf.followerCount || 0,
+        reach: inf.reach || Math.floor((inf.followerCount || 0) * 0.35),
+        engagementRate: inf.engagementRate || 3.5,
+        isVerified: inf.isVerified || false,
+        contentType: inf.contentType || '',
+        audienceType: inf.audienceType || '',
+        aiMatchScore: {
+          score: inf.relevanceScore || 80,
+          reason: inf.relevanceReason || 'AI-matched influencer for your business',
+          factors: [
+            { name: 'Content', score: Math.round((inf.relevanceScore || 80) * 0.35), max: 35 },
+            { name: 'Audience', score: Math.round((inf.relevanceScore || 80) * 0.25), max: 25 },
+            { name: 'Engagement', score: Math.round((inf.relevanceScore || 80) * 0.20), max: 20 },
+            { name: 'Reach', score: Math.round((inf.relevanceScore || 80) * 0.15), max: 15 }
+          ],
+          calculatedAt: new Date()
+        },
+        priceRange: estimatePriceRange(inf.followerCount),
+        estimatedCost: inf.estimatedCost || '',
+        status: 'discovered',
+        scrapedFromSocial: false,
+        scrapedAt: new Date()
+      };
+    });
 
     // Remove old influencers and save new ones
-    await Influencer.deleteMany({ userId, platform: 'instagram' });
+    await Influencer.deleteMany({ userId });
     await Influencer.insertMany(influencersToSave);
 
-    // Fetch and return all influencers
-    const allInfluencers = await Influencer.find({ userId }).sort({ 'aiMatchScore.score': -1 });
+    // Fetch and return all influencers sorted by tier then score
+    const allInfluencers = await Influencer.find({ userId }).sort({ 
+      type: 1, // mega first, then macro, then micro
+      'aiMatchScore.score': -1 
+    });
 
     res.json({
       success: true,
       influencers: allInfluencers,
       discovered: influencersToSave.length,
-      message: `Found ${influencersToSave.length} Instagram influencers for ${businessContext.companyName}`
+      message: `Found ${influencersToSave.length} influencers for ${businessContext.companyName}`,
+      breakdown: {
+        mega: influencersToSave.filter(i => i.tier === 'mega').length,
+        macro: influencersToSave.filter(i => i.tier === 'macro').length,
+        micro: influencersToSave.filter(i => i.tier === 'micro').length
+      }
     });
 
   } catch (error) {
@@ -322,157 +337,177 @@ router.post('/discover', protect, async (req, res) => {
 });
 
 /**
- * Use Gemini AI to discover real Instagram influencers based on business context
+ * Get platform-specific profile URL
  */
-async function discoverInfluencersWithGemini(businessContext, limit = 15) {
-  // Industry-specific influencer categories to help guide the AI
-  const industryInfluencerMap = {
-    'real estate': {
-      categories: ['Interior Designers', 'Architects', 'Home Tour Creators', 'Real Estate Agents', 'Luxury Lifestyle', 'Home Decor'],
-      examples: 'Gauri Khan (@gauaborickhula), Sussanne Khan (@suzkr), Shabnam Gupta (@peacocklife), Vinita Chaitanya (@vinita_chaitanya)'
-    },
-    'construction': {
-      categories: ['Civil Engineers', 'Architecture Firms', 'Construction Vloggers', 'Building Materials Reviewers', 'Site Engineers'],
-      examples: 'Real estate and construction focused accounts'
-    },
-    'technology': {
-      categories: ['Tech Reviewers', 'Startup Founders', 'Coding Educators', 'AI/ML Experts', 'Product Designers', 'Tech News'],
-      examples: 'Marques Brownlee (@mkbhd), Technical Guruji (@technicalguruji), Ranveer Allahbadia (@beerbiceps)'
-    },
-    'fashion': {
-      categories: ['Fashion Bloggers', 'Style Influencers', 'Sustainable Fashion', 'Street Style', 'Luxury Fashion', 'Plus Size Fashion'],
-      examples: 'Komal Pandey (@komalpandeyofficial), Masoom Minawala (@masoomminawala), Kritika Khurana (@thatbohogirl)'
-    },
-    'food': {
-      categories: ['Food Bloggers', 'Chefs', 'Restaurant Reviewers', 'Home Cooks', 'Food Photographers', 'Street Food'],
-      examples: 'Ranveer Brar (@ranveer.brar), Kunal Kapur (@chaboref.kunalkapur), Shivesh Bhatia (@shivesh17)'
-    },
-    'fitness': {
-      categories: ['Personal Trainers', 'Yoga Instructors', 'Nutritionists', 'Bodybuilders', 'CrossFit Athletes', 'Wellness Coaches'],
-      examples: 'Sahil Khan (@sahaborilkhan), Yasmin Karachiwala (@yasminkarachiwala), Ranveer Allahbadia (@beerbiceps)'
-    },
-    'beauty': {
-      categories: ['Makeup Artists', 'Skincare Experts', 'Hair Stylists', 'Beauty Reviewers', 'Dermatologists'],
-      examples: 'Shreya Jain (@shreyajain), Prakriti Singh (@praboraktisinformal), Jovita George (@jovitageorge)'
-    },
-    'travel': {
-      categories: ['Travel Bloggers', 'Adventure Travelers', 'Luxury Travel', 'Budget Travel', 'Solo Travelers', 'Couple Travelers'],
-      examples: 'Shenaz Treasury (@shenaztreasury), Larissa D\'Sa (@larissa_wlc), Bruised Passports (@bruisedpassports)'
-    },
-    'education': {
-      categories: ['Educators', 'Study Motivation', 'Career Coaches', 'Exam Preparation', 'Skill Development'],
-      examples: 'Ankur Warikoo (@waaborikoo), Ranveer Allahbadia (@beerbiceps), Sandeep Maheshwari'
-    },
-    'finance': {
-      categories: ['Finance Educators', 'Stock Market Analysts', 'Personal Finance', 'Crypto Experts', 'Business Coaches'],
-      examples: 'Ankur Warikoo (@warikoo), Pranjal Kamra (@pranjal_kamra), Rachana Ranade (@ca_rachanaranade)'
-    },
-    'automotive': {
-      categories: ['Car Reviewers', 'Bike Vloggers', 'Auto Journalists', 'Luxury Car Enthusiasts', 'EV Experts'],
-      examples: 'Faisal Khan (@faboraisalkhan), Autocar India (@autoaborarindia)'
-    },
-    'parenting': {
-      categories: ['Mom Bloggers', 'Dad Bloggers', 'Parenting Experts', 'Child Development', 'Family Vloggers'],
-      examples: 'Neha Dhupia (@neaborahadhupia), Mira Rajput (@maborairakapoor)'
-    },
-    'entertainment': {
-      categories: ['Comedians', 'Content Creators', 'Actors', 'Musicians', 'Dance Creators'],
-      examples: 'Bhuvan Bam (@bhuvan.bam22), Ashish Chanchlani (@ashaborishchanchlani), Prajakta Koli (@mostlysane)'
-    },
-    'default': {
-      categories: ['Lifestyle Influencers', 'Content Creators', 'Industry Experts', 'Thought Leaders', 'Brand Ambassadors'],
-      examples: 'Popular influencers in your industry vertical'
-    }
-  };
+function getProfileUrl(platform, handle) {
+  const cleanHandle = handle.replace('@', '');
+  switch (platform?.toLowerCase()) {
+    case 'instagram': return `https://instagram.com/${cleanHandle}`;
+    case 'youtube': return `https://youtube.com/@${cleanHandle}`;
+    case 'twitter': 
+    case 'x': return `https://twitter.com/${cleanHandle}`;
+    case 'facebook': return `https://facebook.com/${cleanHandle}`;
+    case 'linkedin': return `https://linkedin.com/in/${cleanHandle}`;
+    case 'tiktok': return `https://tiktok.com/@${cleanHandle}`;
+    default: return `https://instagram.com/${cleanHandle}`;
+  }
+}
 
-  const industryKey = Object.keys(industryInfluencerMap).find(key => 
-    businessContext.industry.toLowerCase().includes(key)
-  ) || 'default';
-  
-  const industryInfo = industryInfluencerMap[industryKey];
+/**
+ * Get platform color for avatar
+ */
+function getPlatformColor(platform) {
+  switch (platform?.toLowerCase()) {
+    case 'instagram': return 'E4405F';
+    case 'youtube': return 'FF0000';
+    case 'twitter': 
+    case 'x': return '1DA1F2';
+    case 'facebook': return '1877F2';
+    case 'linkedin': return '0A66C2';
+    case 'tiktok': return '000000';
+    default: return 'ffcc29';
+  }
+}
 
-  const prompt = `You are an expert influencer marketing consultant with deep knowledge of Instagram influencers worldwide. Your task is to find REAL, VERIFIED influencers who would be perfect partners for a business.
+/**
+ * Categorize influencer tier by follower count
+ */
+function categorizeInfluencerTier(followerCount) {
+  if (!followerCount) return 'micro';
+  if (followerCount >= 1000000) return 'mega';
+  if (followerCount >= 100000) return 'macro';
+  return 'micro';
+}
 
-⚠️ CRITICAL: The business is located in ${businessContext.businessLocation}. You MUST prioritize influencers who:
-1. Are based in or primarily target audiences in ${businessContext.businessLocation}
-2. Create content relevant to ${businessContext.businessLocation} audience
-3. Have followers predominantly from ${businessContext.businessLocation} region
+/**
+ * Discover influencers across MULTIPLE platforms using Gemini AI
+ * Returns exactly 15 influencers: 5 MEGA, 5 MACRO, 5 MICRO
+ */
+async function discoverMultiPlatformInfluencers(businessContext) {
+  const location = businessContext.businessLocation || 'India';
+  const city = businessContext.businessCity || '';
+  const state = businessContext.businessState || '';
+  const country = businessContext.businessCountry || 'India';
 
-BUSINESS CONTEXT:
+  // Build location context string
+  let locationContext = country;
+  if (state) locationContext = `${state}, ${country}`;
+  if (city) locationContext = `${city}, ${state || country}`;
+
+  const prompt = `You are an expert influencer marketing consultant with REAL-TIME knowledge of social media influencers worldwide. Your task is to find REAL, VERIFIED influencers across multiple platforms.
+
+🎯 BUSINESS PROFILE:
 - Company: ${businessContext.companyName}
 - Industry: ${businessContext.industry}
-- Description: ${businessContext.description || 'A growing business in this industry'}
+- Description: ${businessContext.description || 'A growing business'}
 - Target Customer: ${businessContext.targetCustomer || 'Urban consumers aged 18-45'}
-- Business Location: ${businessContext.businessLocation}
-- Target Regions: ${businessContext.regions?.join(', ') || businessContext.businessLocation}
 - Value Proposition: ${businessContext.valueProposition || 'Quality products/services'}
-- Primary Marketing Goal: ${businessContext.primaryGoal || 'brand awareness'}
+- Primary Marketing Goal: ${businessContext.primaryGoal}
 
-INFLUENCER CATEGORIES TO FIND FOR ${businessContext.industry.toUpperCase()}:
-${industryInfo.categories.map((cat, i) => `${i + 1}. ${cat}`).join('\n')}
+📍 CRITICAL LOCATION REQUIREMENTS:
+- Business Location: ${locationContext}
+- Country: ${country}
+- State/Region: ${state || 'Not specified'}
+- City: ${city || 'Not specified'}
 
-EXAMPLE INFLUENCERS IN THIS SPACE:
-${industryInfo.examples}
+🌍 LOCATION-BASED INFLUENCER RULES:
+${country.toLowerCase().includes('india') ? `
+- MUST prioritize PAN-INDIAN influencers who have national reach
+- Include REGIONAL influencers if state/city is specified:
+  ${state ? `* Include influencers popular in ${state} who create content in local language` : ''}
+  ${city ? `* Include local ${city}-based influencers with strong local following` : ''}
+- Mix of Hindi, English, and regional language content creators
+- Focus on influencers who resonate with Indian audience sensibilities
+` : `
+- MUST prioritize influencers based in or targeting ${country}
+- Include influencers who create content relevant to ${locationContext} audience
+- Mix of local celebrities and national-level influencers from ${country}
+`}
 
-YOUR TASK:
-Find ${limit} REAL Instagram influencers who would be ideal brand partners. You MUST include:
+📱 PLATFORMS TO INCLUDE (distribute across all):
+1. Instagram - Visual content, lifestyle, fashion, food
+2. YouTube - Long-form content, tutorials, reviews, vlogs
+3. Facebook - Community, older demographics, local businesses
+4. Twitter/X - News, opinions, tech, business, politics
+5. LinkedIn - B2B, professional services, corporate
 
-📊 INFLUENCER MIX (REQUIRED):
-- 2-3 MEGA influencers (1M+ followers) - Celebrity-level reach in ${businessContext.businessLocation}
-- 4-5 MACRO influencers (100K-1M followers) - High visibility in ${businessContext.businessLocation}
-- 5-6 MICRO influencers (10K-100K followers) - High engagement, niche audiences in ${businessContext.businessLocation}
-- 2-3 NANO influencers (5K-10K followers) - Ultra-targeted, authentic local influencers
-
-🌍 LOCATION PRIORITY:
-- AT LEAST 80% of influencers MUST be based in or primarily serve ${businessContext.businessLocation}
-- Focus on influencers who create content in local languages or for local audiences
-- Include influencers popular in the specific region/city mentioned
+📊 REQUIRED INFLUENCER BREAKDOWN (EXACTLY 15 TOTAL):
+🔥 5 MEGA Influencers (1M+ followers):
+   - Celebrity-level reach
+   - Household names in ${country}
+   - Mix of platforms (2 Instagram, 1 YouTube, 1 Twitter, 1 Facebook/LinkedIn)
+   
+⭐ 5 MACRO Influencers (100K - 1M followers):
+   - High visibility, established creators
+   - Strong niche authority in ${businessContext.industry}
+   - Mix of platforms (2 Instagram, 2 YouTube, 1 other)
+   
+💎 5 MICRO Influencers (10K - 100K followers):
+   - High engagement rates (5%+)
+   - Niche-focused, authentic content
+   - May include regional/local influencers from ${locationContext}
+   - Mix of platforms
 
 🎯 SELECTION CRITERIA:
-✅ REAL accounts that exist on Instagram right now
-✅ Active posting (posted within last 30 days)
+✅ REAL accounts that exist RIGHT NOW (January 2026)
+✅ Active creators who posted within last 30 days
 ✅ Content relevant to ${businessContext.industry}
-✅ Audience demographics match target customer in ${businessContext.businessLocation}
-✅ Good engagement rates (3%+ for smaller accounts, 1%+ for larger)
-✅ Brand-safe content (professional, no controversies)
-✅ MUST have significant audience from ${businessContext.businessLocation}
+✅ Audience from ${country} (primary) and ${locationContext} (if specified)
+✅ Good engagement rates (3%+ for larger, 5%+ for smaller accounts)
+✅ Brand-safe, professional content
+✅ Verifiable with real followers and engagement
 
-Return EXACTLY ${limit} influencers in this JSON format:
+Return EXACTLY this JSON format:
 {
   "influencers": [
     {
       "name": "Full Real Name",
-      "handle": "exact_instagram_username",
-      "bio": "Their actual bio or content focus description",
+      "handle": "exact_username_on_platform",
+      "platform": "instagram|youtube|twitter|facebook|linkedin",
+      "bio": "Brief description of what they do",
       "niche": ["primary_niche", "secondary_niche"],
-      "location": "City/Country where they are based",
-      "followerCount": 500000,
-      "engagementRate": 4.5,
+      "location": "${locationContext}",
+      "tier": "mega|macro|micro",
+      "followerCount": 1500000,
+      "reach": 500000,
+      "engagementRate": 4.2,
       "isVerified": true,
-      "contentType": "What kind of content they create",
-      "audienceType": "Who follows them (demographics)",
-      "relevanceScore": 92,
-      "relevanceReason": "Specific reason why this influencer matches the business needs",
-      "estimatedCost": "$500-1000 per post"
+      "contentType": "Type of content they create",
+      "audienceType": "Their audience demographics",
+      "relevanceScore": 88,
+      "relevanceReason": "Why they match this business",
+      "estimatedCost": "₹50,000 - ₹1,00,000 per post"
     }
   ]
 }
 
-⚠️ CRITICAL REQUIREMENTS:
-1. You MUST return exactly ${limit} influencers - never fewer
-2. Every influencer MUST be a real person/account that exists on Instagram
-3. Include a diverse mix of follower counts as specified above
-4. AT LEAST 80% must be from or popular in ${businessContext.businessLocation}
-5. If the business is in India, prioritize Indian influencers; if USA, prioritize American influencers, etc.
-6. NEVER return an empty list or say "no influencers found"
-7. Match the local market, culture, and language preferences of ${businessContext.businessLocation}`;
+⚠️ CRITICAL RULES:
+1. Return EXACTLY 15 influencers - 5 mega, 5 macro, 5 micro
+2. Every influencer MUST be REAL and verifiable
+3. Distribute across platforms (not all Instagram)
+4. AT LEAST 80% must be from ${country}
+5. Include regional influencers if city/state is specified
+6. Use local currency for estimatedCost (₹ for India, $ for USA, etc.)
+7. Provide REAL follower counts based on current data
+8. Never return fake or made-up influencers`;
 
   try {
-    const response = await callGemini(prompt, { maxTokens: 3000, skipCache: true });
+    const response = await callGemini(prompt, { maxTokens: 4000, skipCache: true });
     const result = parseGeminiJSON(response);
     
     if (result && result.influencers && Array.isArray(result.influencers)) {
-      console.log(`🎯 Gemini returned ${result.influencers.length} influencers`);
+      console.log(`🎯 Gemini returned ${result.influencers.length} influencers across platforms`);
+      
+      // Log breakdown by tier and platform
+      const byTier = { mega: 0, macro: 0, micro: 0 };
+      const byPlatform = {};
+      result.influencers.forEach(inf => {
+        byTier[inf.tier || categorizeInfluencerTier(inf.followerCount)]++;
+        byPlatform[inf.platform] = (byPlatform[inf.platform] || 0) + 1;
+      });
+      console.log('📊 By Tier:', byTier);
+      console.log('📱 By Platform:', byPlatform);
+      
       return result.influencers;
     }
     
@@ -482,6 +517,46 @@ Return EXACTLY ${limit} influencers in this JSON format:
     console.error('Gemini influencer discovery error:', error.message);
     return [];
   }
+}
+
+/**
+ * Get fallback influencers based on industry and location
+ */
+function getFallbackInfluencers(industry, location = 'India') {
+  const isIndia = location.toLowerCase().includes('india');
+  
+  // Indian fallback influencers by industry
+  const indianInfluencers = {
+    'technology': [
+      { name: 'Technical Guruji', handle: 'technicalguruji', platform: 'youtube', followerCount: 23000000, tier: 'mega', niche: ['Technology', 'Gadgets'], isVerified: true },
+      { name: 'Marques Brownlee', handle: 'mkbhd', platform: 'youtube', followerCount: 18000000, tier: 'mega', niche: ['Tech Reviews'], isVerified: true },
+      { name: 'Trakin Tech', handle: 'traaborkintech', platform: 'youtube', followerCount: 12000000, tier: 'mega', niche: ['Technology'], isVerified: true }
+    ],
+    'fashion': [
+      { name: 'Komal Pandey', handle: 'komalpandeyofficial', platform: 'instagram', followerCount: 2000000, tier: 'mega', niche: ['Fashion', 'Lifestyle'], isVerified: true },
+      { name: 'Masoom Minawala', handle: 'masoomminawala', platform: 'instagram', followerCount: 1500000, tier: 'mega', niche: ['Fashion', 'Luxury'], isVerified: true }
+    ],
+    'fitness': [
+      { name: 'Ranveer Allahbadia', handle: 'beerbiceps', platform: 'instagram', followerCount: 4500000, tier: 'mega', niche: ['Fitness', 'Business', 'Lifestyle'], isVerified: true },
+      { name: 'Sahil Khan', handle: 'sahilkhan', platform: 'instagram', followerCount: 3000000, tier: 'mega', niche: ['Fitness', 'Bodybuilding'], isVerified: true }
+    ],
+    'entertainment': [
+      { name: 'Bhuvan Bam', handle: 'bhuvan.bam22', platform: 'instagram', followerCount: 17000000, tier: 'mega', niche: ['Comedy', 'Entertainment'], isVerified: true },
+      { name: 'Ashish Chanchlani', handle: 'ashaborishchanchlani', platform: 'instagram', followerCount: 30000000, tier: 'mega', niche: ['Comedy'], isVerified: true }
+    ],
+    'business': [
+      { name: 'Ankur Warikoo', handle: 'warikoo', platform: 'instagram', followerCount: 3500000, tier: 'mega', niche: ['Business', 'Entrepreneurship'], isVerified: true },
+      { name: 'Raj Shamani', handle: 'rajshamani', platform: 'instagram', followerCount: 2800000, tier: 'mega', niche: ['Business', 'Motivation'], isVerified: true }
+    ],
+    'default': [
+      { name: 'Ranveer Allahbadia', handle: 'beerbiceps', platform: 'instagram', followerCount: 4500000, tier: 'mega', niche: ['Business', 'Lifestyle'], isVerified: true },
+      { name: 'Bhuvan Bam', handle: 'bhuvan.bam22', platform: 'instagram', followerCount: 17000000, tier: 'mega', niche: ['Entertainment', 'Comedy'], isVerified: true },
+      { name: 'Ankur Warikoo', handle: 'warikoo', platform: 'linkedin', followerCount: 2000000, tier: 'mega', niche: ['Business'], isVerified: true }
+    ]
+  };
+
+  const key = Object.keys(indianInfluencers).find(k => industry.toLowerCase().includes(k)) || 'default';
+  return isIndia ? indianInfluencers[key] : indianInfluencers['default'];
 }
 
 /**
