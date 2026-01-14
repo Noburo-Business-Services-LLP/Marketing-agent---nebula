@@ -171,27 +171,7 @@ router.get('/:platform/auth', protect, async (req, res) => {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
-    // For YouTube, always use Google OAuth if configured (direct OAuth)
-    if (platformLower === 'youtube' && isOAuthConfigured('youtube')) {
-      const state = generateStateToken(req.user._id.toString(), platform);
-      const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
-      authUrl.searchParams.set('client_id', GOOGLE_CLIENT_ID);
-      authUrl.searchParams.set('redirect_uri', GOOGLE_REDIRECT_URI);
-      authUrl.searchParams.set('response_type', 'code');
-      authUrl.searchParams.set('scope', YOUTUBE_SCOPES);
-      authUrl.searchParams.set('access_type', 'offline');
-      authUrl.searchParams.set('prompt', 'consent');
-      authUrl.searchParams.set('state', state);
-      
-      return res.json({
-        success: true,
-        configured: true,
-        authUrl: authUrl.toString(),
-        method: 'direct_oauth'
-      });
-    }
-    
-    // For all other platforms, use Ayrshare JWT/SSO flow (Business Plan approach)
+    // Use Ayrshare JWT/SSO flow for ALL platforms (Business Plan approach)
     // Step 1: Check if user has an Ayrshare profile, if not create one
     let profileKey = user.ayrshare?.profileKey;
     
