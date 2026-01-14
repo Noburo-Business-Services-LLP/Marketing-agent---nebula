@@ -408,7 +408,8 @@ export const apiService = {
     onError: (error: string) => void
   ): (() => void) => {
     const token = localStorage.getItem('token');
-    const baseUrl = (window as any).__API_BASE_URL__ || 'http://localhost:5000/api';
+    // Use relative URL in production, localhost in development
+    const baseUrl = (window as any).__API_BASE_URL__ || (window.location.hostname !== 'localhost' ? '/api' : 'http://localhost:5000/api');
     const url = `${baseUrl}/dashboard/campaign-suggestions-stream?count=${count}${forceRefresh ? '&refresh=true' : ''}`;
     
     const eventSource = new EventSource(url + `&token=${token}`);

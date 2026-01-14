@@ -63,23 +63,33 @@ const allowedOrigins = [
   'http://localhost:5173',
   'http://127.0.0.1:3000',
   'http://127.0.0.1:5173',
-  'https://marketing-agent-nebula.onrender.com'
+  'https://marketing-agent-nebula.onrender.com',
+  'https://www.marketing-agent-nebula.onrender.com'
 ];
+
+// In production on Render, trust proxy for proper HTTPS handling
+if (process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+}
 
 app.use(cors({
   origin: function(origin, callback) {
-    // Allow requests with no origin (mobile apps, Postman, same-origin)
+    // Allow requests with no origin (mobile apps, Postman, same-origin requests)
     if (!origin) return callback(null, true);
+    
+    // Check if origin is in allowed list
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
-    } else {
-      // Allow all origins in production for flexibility
+    } else if (process.env.NODE_ENV === 'production') {
+      // In production, be more permissive for Render deployment
       callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
     }
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));

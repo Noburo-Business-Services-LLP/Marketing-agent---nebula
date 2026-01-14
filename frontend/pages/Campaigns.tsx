@@ -1371,8 +1371,11 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
       setIsGenerating(true);
       setGeneratedPosts([]);
       
+      // Use relative URL in production, localhost in development
+      const apiBaseUrl = window.location.hostname !== 'localhost' ? '/api' : 'http://localhost:5000/api';
+      
       try {
-        const response = await fetch('http://localhost:5000/api/campaigns/generate-campaign-posts', {
+        const response = await fetch(`${apiBaseUrl}/campaigns/generate-campaign-posts`, {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
@@ -2254,9 +2257,11 @@ const EditSuggestionModal: React.FC<EditSuggestionModalProps> = ({ suggestion, o
 
     const handleRegenerateCaption = async () => {
         setIsRegenerating(true);
+        // Use relative URL in production, localhost in development
+        const apiBaseUrl = window.location.hostname !== 'localhost' ? '/api' : 'http://localhost:5000/api';
         try {
             // Call the chat API to regenerate caption
-            const response = await fetch('http://localhost:5000/api/chat/message', {
+            const response = await fetch(`${apiBaseUrl}/chat/message`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
