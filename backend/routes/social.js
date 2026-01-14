@@ -261,9 +261,14 @@ router.get('/:platform/auth', protect, async (req, res) => {
     // Step 2: Generate JWT URL for SSO to social linking page
     const redirectUrl = `${FRONTEND_URL}/connect-socials?${platformLower}=connected`;
     
+    // Map platform to Ayrshare's expected format for allowedSocial
+    const ayrshareplatform = AYRSHARE_PLATFORM_MAP[platformLower] || platformLower;
+    
     const jwtResult = await generateAyrshareJWT(profileKey, {
       redirect: redirectUrl,
-      logout: false // Don't force logout for faster UX
+      logout: false, // Don't force logout for faster UX
+      // Only show the specific platform the user clicked on
+      allowedSocial: [ayrshareplatform]
     });
     
     if (!jwtResult.success) {
@@ -275,17 +280,9 @@ router.get('/:platform/auth', protect, async (req, res) => {
       });
     }
     
-    // The JWT URL includes the domain and jwt token, user will be redirected to Ayrshare's social linking page
-    // After linking, they'll be redirected back to our app via the redirect URL
-    const ayrshareplatform = AYRSHARE_PLATFORM_MAP[platformLower] || platformLower;
-    
-    // Add platform-specific network parameter to pre-select the platform
+    // The JWT URL uses domain + privateKey for Business Plan SSO
+    // User will be redirected directly to the social platform's OAuth page
     let authUrl = jwtResult.url;
-    if (authUrl.includes('?')) {
-      authUrl += `&network=${ayrshareplatform}`;
-    } else {
-      authUrl += `?network=${ayrshareplatform}`;
-    }
     
     console.log(`Generated Ayrshare JWT URL for ${platform}:`, authUrl.slice(0, 80) + '...');
     

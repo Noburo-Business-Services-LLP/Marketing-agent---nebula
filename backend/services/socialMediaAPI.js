@@ -288,13 +288,21 @@ async function createAyrshareProfile(title, options = {}) {
  * Generate JWT for Ayrshare Single Sign-On
  * This creates a secure URL that redirects users to Ayrshare's social linking page
  * @param {string} profileKey - The user's Ayrshare Profile Key
- * @param {object} options - Optional settings (redirect URL, logout, domain)
+ * @param {object} options - Optional settings (redirect URL, logout, allowedSocial)
  * @returns {Promise<{success: boolean, url?: string, error?: string}>}
  */
 async function generateAyrshareJWT(profileKey, options = {}) {
+  const domain = process.env.AYRSHARE_DOMAIN;
+  const privateKey = process.env.AYRSHARE_PRIVATE_KEY;
+  
   if (!AYRSHARE_API_KEY) {
     console.warn('Ayrshare API key not configured');
     return { success: false, error: 'API not configured' };
+  }
+
+  if (!domain || !privateKey) {
+    console.warn('Ayrshare domain or private key not configured');
+    return { success: false, error: 'Ayrshare Business Plan credentials not configured (domain/privateKey)' };
   }
 
   if (!profileKey) {
@@ -302,11 +310,26 @@ async function generateAyrshareJWT(profileKey, options = {}) {
   }
 
   try {
+    // Build request body for Business Plan JWT SSO
     const body = {
-      profileKey: profileKey,
-      ...(options.redirect && { redirect: options.redirect }),
-      ...(options.logout && { logout: true })
+      domain: domain,
+      privateKey: privateKey,
+      profileKey: profileKey
     };
+    
+    // Add optional parameters
+    if (options.redirect) {
+      body.redirect = options.redirect;
+    }
+    if (options.logout) {
+      body.logout = true;
+    }
+    // Filter to only show specific social platforms
+    if (options.allowedSocial && Array.isArray(options.allowedSocial)) {
+      body.allowedSocial = options.allowedSocial;
+    }
+
+    console.log('Generating Ayrshare JWT for profileKey:', profileKey, 'domain:', domain);
 
     const response = await makeRequest('https://api.ayrshare.com/api/profiles/generateJWT', {
       method: 'POST',
@@ -317,7 +340,7 @@ async function generateAyrshareJWT(profileKey, options = {}) {
       body: body
     });
 
-    console.log('Ayrshare generate JWT response:', response.status);
+    console.log('Ayrshare generate JWT response:', response.status, response.data);
 
     if (response.status === 200 && response.data?.url) {
       return {
@@ -327,7 +350,7 @@ async function generateAyrshareJWT(profileKey, options = {}) {
     } else {
       return {
         success: false,
-        error: response.data?.message || 'Failed to generate JWT URL'
+        error: response.data?.message || response.data?.error || 'Failed to generate JWT URL'
       };
     }
   } catch (error) {
