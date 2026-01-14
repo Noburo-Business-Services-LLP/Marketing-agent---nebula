@@ -262,7 +262,25 @@ router.post('/discover', protect, async (req, res) => {
       influencers = getFallbackInfluencers(businessContext.industry, businessContext.businessLocation);
     }
 
-    console.log(`✅ Found ${influencers.length} influencers across all platforms`);
+    // DEDUPLICATE influencers by handle (case-insensitive)
+    const seenHandles = new Set();
+    const seenNames = new Set();
+    influencers = influencers.filter(inf => {
+      const handleLower = (inf.handle || '').toLowerCase().replace('@', '');
+      const nameLower = (inf.name || '').toLowerCase().trim();
+      
+      // Skip if we've seen this handle or name before
+      if (seenHandles.has(handleLower) || seenNames.has(nameLower)) {
+        console.log(`🔄 Removing duplicate influencer: ${inf.name} (@${handleLower})`);
+        return false;
+      }
+      
+      seenHandles.add(handleLower);
+      seenNames.add(nameLower);
+      return true;
+    });
+
+    console.log(`✅ Found ${influencers.length} unique influencers across all platforms`);
 
     // Categorize and save influencers
     const influencersToSave = influencers.map(inf => {
@@ -482,14 +500,16 @@ Return EXACTLY this JSON format:
 }
 
 ⚠️ CRITICAL RULES:
-1. Return EXACTLY 15 influencers - 5 mega, 5 macro, 5 micro
-2. Every influencer MUST be REAL and verifiable
-3. Distribute across platforms (not all Instagram)
-4. AT LEAST 80% must be from ${country}
-5. Include regional influencers if city/state is specified
-6. Use local currency for estimatedCost (₹ for India, $ for USA, etc.)
-7. Provide REAL follower counts based on current data
-8. Never return fake or made-up influencers`;
+1. Return EXACTLY 15 UNIQUE influencers - 5 mega, 5 macro, 5 micro
+2. ⛔ ABSOLUTELY NO DUPLICATES - Each influencer must be a DIFFERENT person
+3. Every influencer MUST be REAL and verifiable
+4. Distribute across platforms (not all Instagram)
+5. AT LEAST 80% must be from ${country}
+6. Include regional influencers if city/state is specified
+7. Use local currency for estimatedCost (₹ for India, $ for USA, etc.)
+8. 📊 FOLLOWER COUNTS MUST BE ACCURATE - Use your knowledge of their actual current follower counts as of January 2026. Do NOT guess or use round numbers.
+9. Never return fake or made-up influencers
+10. Each person should appear ONLY ONCE - do not repeat the same person across different platforms`;
 
   try {
     const response = await callGemini(prompt, { maxTokens: 4000, skipCache: true });
