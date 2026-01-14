@@ -501,13 +501,18 @@ Return EXACTLY this JSON format:
 
 ⚠️ CRITICAL RULES:
 1. Return EXACTLY 15 UNIQUE influencers - 5 mega, 5 macro, 5 micro
-2. ⛔ ABSOLUTELY NO DUPLICATES - Each influencer must be a DIFFERENT person
-3. Every influencer MUST be REAL and verifiable
+2. ⛔ ABSOLUTELY NO DUPLICATES - Each of the 15 influencers MUST BE A COMPLETELY DIFFERENT PERSON
+   - DO NOT repeat the same person with different handles
+   - DO NOT include the same person who has accounts on multiple platforms
+   - Each influencer name must be unique
+3. Every influencer MUST be REAL and verifiable  
 4. Distribute across platforms (not all Instagram)
 5. AT LEAST 80% must be from ${country}
 6. Include regional influencers if city/state is specified
 7. Use local currency for estimatedCost (₹ for India, $ for USA, etc.)
 8. 📊 FOLLOWER COUNTS MUST BE ACCURATE - Use your knowledge of their actual current follower counts as of January 2026. Do NOT guess or use round numbers.
+
+🚨 BEFORE RETURNING: Double-check that all 15 names are UNIQUE individuals. If you have duplicates, replace them with different influencers.
 9. Never return fake or made-up influencers
 10. Each person should appear ONLY ONCE - do not repeat the same person across different platforms`;
 
@@ -540,43 +545,62 @@ Return EXACTLY this JSON format:
 }
 
 /**
- * Get fallback influencers based on industry and location
+ * Get fallback influencers based on industry and location - ALL UNIQUE
  */
 function getFallbackInfluencers(industry, location = 'India') {
   const isIndia = location.toLowerCase().includes('india');
   
-  // Indian fallback influencers by industry
-  const indianInfluencers = {
-    'technology': [
-      { name: 'Technical Guruji', handle: 'technicalguruji', platform: 'youtube', followerCount: 23000000, tier: 'mega', niche: ['Technology', 'Gadgets'], isVerified: true },
-      { name: 'Marques Brownlee', handle: 'mkbhd', platform: 'youtube', followerCount: 18000000, tier: 'mega', niche: ['Tech Reviews'], isVerified: true },
-      { name: 'Trakin Tech', handle: 'traaborkintech', platform: 'youtube', followerCount: 12000000, tier: 'mega', niche: ['Technology'], isVerified: true }
-    ],
-    'fashion': [
-      { name: 'Komal Pandey', handle: 'komalpandeyofficial', platform: 'instagram', followerCount: 2000000, tier: 'mega', niche: ['Fashion', 'Lifestyle'], isVerified: true },
-      { name: 'Masoom Minawala', handle: 'masoomminawala', platform: 'instagram', followerCount: 1500000, tier: 'mega', niche: ['Fashion', 'Luxury'], isVerified: true }
-    ],
-    'fitness': [
-      { name: 'Ranveer Allahbadia', handle: 'beerbiceps', platform: 'instagram', followerCount: 4500000, tier: 'mega', niche: ['Fitness', 'Business', 'Lifestyle'], isVerified: true },
-      { name: 'Sahil Khan', handle: 'sahilkhan', platform: 'instagram', followerCount: 3000000, tier: 'mega', niche: ['Fitness', 'Bodybuilding'], isVerified: true }
-    ],
-    'entertainment': [
-      { name: 'Bhuvan Bam', handle: 'bhuvan.bam22', platform: 'instagram', followerCount: 17000000, tier: 'mega', niche: ['Comedy', 'Entertainment'], isVerified: true },
-      { name: 'Ashish Chanchlani', handle: 'ashaborishchanchlani', platform: 'instagram', followerCount: 30000000, tier: 'mega', niche: ['Comedy'], isVerified: true }
-    ],
-    'business': [
-      { name: 'Ankur Warikoo', handle: 'warikoo', platform: 'instagram', followerCount: 3500000, tier: 'mega', niche: ['Business', 'Entrepreneurship'], isVerified: true },
-      { name: 'Raj Shamani', handle: 'rajshamani', platform: 'instagram', followerCount: 2800000, tier: 'mega', niche: ['Business', 'Motivation'], isVerified: true }
-    ],
-    'default': [
-      { name: 'Ranveer Allahbadia', handle: 'beerbiceps', platform: 'instagram', followerCount: 4500000, tier: 'mega', niche: ['Business', 'Lifestyle'], isVerified: true },
-      { name: 'Bhuvan Bam', handle: 'bhuvan.bam22', platform: 'instagram', followerCount: 17000000, tier: 'mega', niche: ['Entertainment', 'Comedy'], isVerified: true },
-      { name: 'Ankur Warikoo', handle: 'warikoo', platform: 'linkedin', followerCount: 2000000, tier: 'mega', niche: ['Business'], isVerified: true }
-    ]
-  };
+  // Comprehensive list of UNIQUE Indian influencers across different industries
+  // Each influencer appears ONLY ONCE
+  const allIndianInfluencers = [
+    // MEGA Influencers (1M+)
+    { name: 'Virat Kohli', handle: 'virat.kohli', platform: 'instagram', followerCount: 270000000, tier: 'mega', niche: ['Sports', 'Cricket', 'Fitness'], isVerified: true, location: 'India', engagementRate: 1.2 },
+    { name: 'Priyanka Chopra', handle: 'priyankachopra', platform: 'instagram', followerCount: 91000000, tier: 'mega', niche: ['Entertainment', 'Fashion', 'Lifestyle'], isVerified: true, location: 'India', engagementRate: 0.8 },
+    { name: 'Narendra Modi', handle: 'naaborendramodi', platform: 'instagram', followerCount: 91000000, tier: 'mega', niche: ['Politics', 'Leadership'], isVerified: true, location: 'India', engagementRate: 2.1 },
+    { name: 'Deepika Padukone', handle: 'deepikapadukone', platform: 'instagram', followerCount: 78000000, tier: 'mega', niche: ['Entertainment', 'Fashion'], isVerified: true, location: 'India', engagementRate: 1.0 },
+    { name: 'Shraddha Kapoor', handle: 'shraddhakapoor', platform: 'instagram', followerCount: 82000000, tier: 'mega', niche: ['Entertainment', 'Lifestyle'], isVerified: true, location: 'India', engagementRate: 1.5 },
+    
+    // MACRO Influencers (100K - 1M)
+    { name: 'Tanmay Bhat', handle: 'tanmaybhat', platform: 'instagram', followerCount: 4200000, tier: 'macro', niche: ['Comedy', 'Gaming', 'Tech'], isVerified: true, location: 'Mumbai, India', engagementRate: 4.5 },
+    { name: 'Kusha Kapila', handle: 'kushakapila', platform: 'instagram', followerCount: 3800000, tier: 'macro', niche: ['Comedy', 'Fashion'], isVerified: true, location: 'Delhi, India', engagementRate: 3.8 },
+    { name: 'Dolly Singh', handle: 'dollysingh', platform: 'instagram', followerCount: 1500000, tier: 'macro', niche: ['Comedy', 'Entertainment'], isVerified: true, location: 'Mumbai, India', engagementRate: 5.2 },
+    { name: 'Prajakta Koli', handle: 'mostlysane', platform: 'youtube', followerCount: 7200000, tier: 'macro', niche: ['Comedy', 'Entertainment'], isVerified: true, location: 'Mumbai, India', engagementRate: 4.0 },
+    { name: 'Dhruv Rathee', handle: 'dhruvrathee', platform: 'youtube', followerCount: 22000000, tier: 'mega', niche: ['Education', 'Politics', 'Travel'], isVerified: true, location: 'Germany/India', engagementRate: 3.5 },
+    
+    // MICRO Influencers (10K - 100K) - High engagement
+    { name: 'Saloni Gaur', handle: 'salonayyy', platform: 'instagram', followerCount: 850000, tier: 'micro', niche: ['Comedy', 'Mimicry'], isVerified: true, location: 'Delhi, India', engagementRate: 6.5 },
+    { name: 'Niharika NM', handle: 'niaborharika_nm', platform: 'instagram', followerCount: 1200000, tier: 'micro', niche: ['Comedy', 'Entertainment'], isVerified: true, location: 'Bangalore, India', engagementRate: 7.2 },
+    { name: 'Sejal Kumar', handle: 'sejalkumar1195', platform: 'youtube', followerCount: 1500000, tier: 'micro', niche: ['Fashion', 'Lifestyle', 'Vlogs'], isVerified: true, location: 'Delhi, India', engagementRate: 5.8 },
+    { name: 'Mithila Palkar', handle: 'maborithilapalkar', platform: 'instagram', followerCount: 3200000, tier: 'macro', niche: ['Entertainment', 'Acting'], isVerified: true, location: 'Mumbai, India', engagementRate: 4.2 },
+    { name: 'Yashraj Mukhate', handle: 'yashrajmukhate', platform: 'instagram', followerCount: 4500000, tier: 'macro', niche: ['Music', 'Comedy', 'Viral'], isVerified: true, location: 'Aurangabad, India', engagementRate: 8.5 }
+  ];
 
-  const key = Object.keys(indianInfluencers).find(k => industry.toLowerCase().includes(k)) || 'default';
-  return isIndia ? indianInfluencers[key] : indianInfluencers['default'];
+  // Filter by industry relevance if possible, otherwise return diverse mix
+  const industryLower = industry.toLowerCase();
+  let filtered = allIndianInfluencers;
+  
+  // Try to match industry
+  if (industryLower.includes('tech') || industryLower.includes('software')) {
+    filtered = allIndianInfluencers.filter(i => 
+      i.niche.some(n => n.toLowerCase().includes('tech') || n.toLowerCase().includes('gaming'))
+    );
+  } else if (industryLower.includes('fashion') || industryLower.includes('beauty')) {
+    filtered = allIndianInfluencers.filter(i => 
+      i.niche.some(n => n.toLowerCase().includes('fashion') || n.toLowerCase().includes('lifestyle'))
+    );
+  } else if (industryLower.includes('fitness') || industryLower.includes('health')) {
+    filtered = allIndianInfluencers.filter(i => 
+      i.niche.some(n => n.toLowerCase().includes('fitness') || n.toLowerCase().includes('sports'))
+    );
+  }
+  
+  // If no matches or too few, return all
+  if (filtered.length < 5) {
+    filtered = allIndianInfluencers;
+  }
+  
+  // Ensure no duplicates and return max 15
+  return filtered.slice(0, 15);
 }
 
 /**
