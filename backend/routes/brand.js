@@ -512,72 +512,120 @@ router.post('/quick-analyze', protect, async (req, res) => {
       console.log('⚠️ Not enough content scraped, will rely more on URL inference');
     }
     
-    // Use Gemini to deeply analyze the website content and discover competitors
-    const analysisPrompt = `You are a senior market analyst and competitive intelligence expert. Analyze this website thoroughly and extract comprehensive business intelligence. Return ONLY valid JSON.
+    // Use Gemini to deeply analyze the website content and discover PRECISE competitors
+    const analysisPrompt = `You are a senior market research analyst at McKinsey with 15 years of experience in competitive intelligence. Your job is to DEEPLY understand this business and find their EXACT competitors.
 
 🌐 WEBSITE TO ANALYZE:
 URL: ${validUrl.origin}
 Domain: ${validUrl.hostname}
 
-📄 SCRAPED CONTENT:
+📄 SCRAPED WEBSITE CONTENT:
 ${textContent}
 
-🎯 YOUR TASK:
-1. Deeply understand what this business does
-2. Identify their exact industry and niche
-3. Understand their target customers
-4. Discover who their direct competitors would be
-5. Identify their brand personality and voice
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🧠 STEP 1: DEEP BUSINESS ANALYSIS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Read the content carefully and understand:
+- What EXACTLY does this business do? (not generic, be specific)
+- What is their PRIMARY business model? (courses, accelerator, marketplace, agency, etc.)
+- Who EXACTLY are their customers? (students, startups, enterprises, consumers?)
+- What specific PROBLEM do they solve?
+- What is their PRICING model? (free, paid, subscription, equity?)
+- What GEOGRAPHY do they serve? (local, regional, national, global?)
 
-Return this exact JSON structure:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎯 STEP 2: PRECISE NICHE IDENTIFICATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DON'T just say "Edtech" or "SaaS". Be HYPER-SPECIFIC:
+- If they teach coding → "Coding Bootcamp" not "Edtech"
+- If they do startup acceleration → "Startup Accelerator & Incubator" not "Edtech"
+- If they sell fashion → "Sustainable Women's Fashion" not "Ecommerce"
+- If they do MBA courses → "Executive MBA Programs" not "Education"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔥 STEP 3: FIND EXACT COMPETITORS (MOST IMPORTANT!)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Find competitors who do THE SAME THING, not just same industry.
+
+⚠️ CRITICAL EXAMPLES:
+- If business is "Startup Accelerator" → Competitors are: T-Hub, NSRCEL, Antler, Y Combinator, Venture Catalysts, 100x.VC, Headstart
+- If business is "Startup Accelerator" → Competitors are NOT: upGrad, Unacademy, BYJU'S (these are general edtech, WRONG!)
+- If business is "Coding Bootcamp" → Competitors are: Masai School, Scaler, Newton School, Coding Ninjas
+- If business is "Online MBA" → Competitors are: upGrad, Great Learning, Emeritus, Jaro Education
+- If business is "K-12 Tutoring" → Competitors are: BYJU'S, Vedantu, Physics Wallah, Unacademy
+
+🔍 COMPETITOR CATEGORIES TO FIND:
+1. REGIONAL (same city/state): 2-3 local competitors
+2. NATIONAL (same country): 3-4 major national players
+3. GLOBAL (aspirational): 1-2 global leaders in the space
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 RETURN THIS JSON STRUCTURE:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 {
-  "companyName": "detected company name (properly capitalized)",
-  "industry": "specific industry category (e.g., 'Edtech', 'Fashion Ecommerce', 'B2B SaaS', 'Healthcare', 'Real Estate', 'FinTech', 'FoodTech', 'Marketing Agency', 'Education', 'Technology', 'Retail', etc.)",
-  "niche": "very specific niche or focus area (e.g., 'Online MBA Programs', 'Sustainable Fashion for Gen-Z', 'AI-powered Marketing Tools', 'Kids Coding Education')",
-  "businessType": "one of: B2B, B2C, Both - determine based on target customers",
-  "businessLocation": "city, state/country - extract from contact info, address, phone codes, or domain hints (.in = India, .co.uk = UK, etc.)",
-  "description": "detailed 2-3 sentence description of exactly what they do and their value proposition",
-  "targetAudience": "detailed description: demographics, pain points, what they're looking for (e.g., 'Working professionals aged 25-40 looking to upskill in business management without leaving their jobs')",
-  "brandVoice": ["array of 2-3 voice traits: Professional, Friendly, Playful, Bold, Minimal, Educational, Inspirational, Authoritative, Casual, Innovative"],
-  "suggestedGoals": ["array of 3-4 specific marketing goals that suit this business"],
-  "keyProducts": ["array of main products or services they offer"],
+  "companyName": "Company Name (properly capitalized)",
+  "industry": "Broad industry (Edtech, FinTech, SaaS, etc.)",
+  "niche": "HYPER-SPECIFIC niche (e.g., 'Startup Accelerator & Entrepreneurship Bootcamp', 'AI-Powered Coding Education', 'Premium Women's Workwear')",
+  "businessModel": "How they make money (courses, equity, subscription, ads, marketplace fees, etc.)",
+  "businessType": "B2B, B2C, or Both",
+  "businessLocation": "City, State, Country",
+  "description": "2-3 sentence description of EXACTLY what they do",
+  "targetAudience": "SPECIFIC audience with demographics and pain points",
+  "brandVoice": ["2-3 voice traits"],
+  "suggestedGoals": ["3-4 specific marketing goals"],
+  "keyProducts": ["List of main products/services with specifics"],
   "competitors": [
     {
-      "name": "Direct competitor 1 (famous brand in same space)",
-      "reason": "Why they're a competitor",
-      "instagram": "@handle if known",
-      "website": "website if known"
+      "name": "Regional Competitor 1",
+      "type": "regional",
+      "reason": "Why they compete (be specific)",
+      "instagram": "@handle",
+      "twitter": "@handle",
+      "website": "https://..."
     },
     {
-      "name": "Direct competitor 2",
-      "reason": "Why they're a competitor"
+      "name": "Regional Competitor 2",
+      "type": "regional",
+      "reason": "Why they compete",
+      "instagram": "@handle"
     },
     {
-      "name": "Direct competitor 3",
-      "reason": "Why they're a competitor"
+      "name": "National Competitor 1 (market leader)",
+      "type": "national",
+      "reason": "Why they compete",
+      "instagram": "@handle"
     },
     {
-      "name": "Aspirational competitor (bigger brand in space)",
-      "reason": "Why they're a competitor"
+      "name": "National Competitor 2",
+      "type": "national",
+      "reason": "Why they compete",
+      "instagram": "@handle"
     },
     {
-      "name": "Emerging competitor (startup in space)",
-      "reason": "Why they're a competitor"
+      "name": "National Competitor 3",
+      "type": "national",
+      "reason": "Why they compete",
+      "instagram": "@handle"
+    },
+    {
+      "name": "Global Leader (aspirational)",
+      "type": "global",
+      "reason": "Why they're aspirational",
+      "instagram": "@handle"
     }
   ],
-  "socialMediaHints": ["any social media URLs or handles found on the site"],
-  "uniqueSellingPoints": ["what makes this business unique"],
-  "confidence": 0.85
+  "socialMediaHints": ["any social handles found on site"],
+  "uniqueSellingPoints": ["what makes them unique"],
+  "confidence": 0.9
 }
 
-⚠️ COMPETITOR REQUIREMENTS:
-- Find 5+ REAL, FAMOUS competitors that operate in the same space
-- Include a mix of: direct competitors, market leaders, and emerging players
-- For Edtech in India: consider BYJU'S, Unacademy, upGrad, Simplilearn, Great Learning, Physics Wallah, Emeritus
-- For any industry: prioritize well-known brands with active social media presence
-- Be specific to the niche (e.g., for MBA programs, don't list general coding bootcamps)
+⚠️ FINAL CHECK BEFORE RESPONDING:
+- Are competitors doing THE SAME THING as this business? (not just same industry)
+- Did you include regional + national + global mix?
+- Are all competitors REAL companies that exist?
+- Do competitors have active social media presence?
 
-Important: Be thorough. This analysis will be used to set up their entire marketing strategy.`;
+Return ONLY valid JSON, no other text.`;
 
     const analysis = await generateWithLLM({
       provider: 'gemini',

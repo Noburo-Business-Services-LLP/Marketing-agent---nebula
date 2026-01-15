@@ -118,49 +118,105 @@ function parseGeminiJSON(text) {
 }
 
 /**
- * Auto-discover competitors using Gemini AI based on user's business context
+ * Auto-discover competitors using Gemini AI based on user's SPECIFIC business context
+ * This function is much smarter about finding NICHE-SPECIFIC competitors
  */
 async function autoDiscoverCompetitorsForUser(userId, businessContext) {
-  console.log('🔍 Auto-discovering competitors for new user...');
+  console.log('🔍 Auto-discovering NICHE-SPECIFIC competitors for user...');
+  console.log('📋 Business context:', JSON.stringify(businessContext, null, 2));
   
-  const prompt = `You are a market research expert. Find REAL competitors for this business.
+  const prompt = `You are a senior competitive intelligence analyst at McKinsey. Your job is to find EXACT competitors for this business - not just same industry, but same NICHE.
 
-⚠️ CRITICAL: The business is located in ${businessContext.location}. You MUST find competitors that:
-1. Operate in or target customers in ${businessContext.location}
-2. Are direct competitors in the same geographical market
-3. Have presence in ${businessContext.location} region
-
-BUSINESS CONTEXT:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 BUSINESS TO ANALYZE:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 - Company: ${businessContext.companyName}
 - Industry: ${businessContext.industry}
-- Description: ${businessContext.description}
+- Niche/Description: ${businessContext.description}
 - Target Customer: ${businessContext.targetCustomer}
-- Business Location: ${businessContext.location}
+- Location: ${businessContext.location}
 
-REQUIREMENTS:
-1. Find 5-6 REAL competitors that operate in ${businessContext.location}
-2. These must be ACTUAL businesses with social media presence in ${businessContext.location}
-3. Focus on direct competitors in the same industry AND same geographical market
-4. Include their REAL Instagram handles (verified to exist)
-5. Mix of large and smaller competitors from ${businessContext.location}
-6. AT LEAST 80% of competitors must be based in or primarily serve ${businessContext.location}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎯 STEP 1: UNDERSTAND THE EXACT BUSINESS MODEL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Based on the description, identify:
+- Is this a STARTUP ACCELERATOR/INCUBATOR? → Competitors: T-Hub, NSRCEL, Antler, Y Combinator, Venture Catalysts
+- Is this a CODING BOOTCAMP? → Competitors: Masai School, Scaler, Newton School
+- Is this GENERAL EDTECH (courses)? → Competitors: upGrad, Unacademy, BYJU'S
+- Is this K-12 TUTORING? → Competitors: BYJU'S, Vedantu, Physics Wallah
+- Is this STARTUP EDUCATION + BOOTCAMP? → Competitors: Headstart, IIT Incubation Cells, Zone Startups
 
-Return ONLY valid JSON:
+⚠️ CRITICAL: DO NOT confuse business models!
+- "Startup accelerator" ≠ "Online courses platform"
+- "Entrepreneurship bootcamp" ≠ "Career upskilling"
+- Find competitors who do THE EXACT SAME THING
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔥 STEP 2: FIND COMPETITORS BY GEOGRAPHY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Location: ${businessContext.location}
+
+Find this mix:
+- 2 REGIONAL competitors (same city/state as ${businessContext.location})
+- 3 NATIONAL competitors (major players in the country)
+- 1-2 GLOBAL competitors (aspirational/world leaders)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 RETURN THIS JSON:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 {
   "competitors": [
     {
-      "name": "Company Name",
-      "instagram": "@instagram_handle",
+      "name": "Regional Competitor 1",
+      "instagram": "@actual_instagram_handle",
       "twitter": "@twitter_handle",
       "website": "https://website.com",
-      "description": "Brief description of what they do",
-      "location": "City/Region where they operate",
-      "estimatedFollowers": 50000
+      "description": "What they do (be specific)",
+      "location": "City, State",
+      "type": "regional",
+      "estimatedFollowers": 10000
+    },
+    {
+      "name": "Regional Competitor 2",
+      "instagram": "@handle",
+      "description": "What they do",
+      "location": "City, State",
+      "type": "regional"
+    },
+    {
+      "name": "National Leader 1",
+      "instagram": "@handle",
+      "description": "What they do",
+      "type": "national"
+    },
+    {
+      "name": "National Player 2",
+      "instagram": "@handle",
+      "description": "What they do",
+      "type": "national"
+    },
+    {
+      "name": "National Player 3",
+      "instagram": "@handle",
+      "description": "What they do",
+      "type": "national"
+    },
+    {
+      "name": "Global Leader",
+      "instagram": "@handle",
+      "description": "Why they're aspirational",
+      "type": "global"
     }
   ]
 }
 
-IMPORTANT: Only include businesses that are REAL and operate in ${businessContext.location}.`;
+⚠️ VERIFICATION CHECKLIST:
+☐ All competitors do THE SAME THING as this business?
+☐ Instagram handles are REAL and VERIFIED?
+☐ Mix of regional + national + global?
+☐ All are REAL companies that exist?
+
+Return ONLY valid JSON.`;
 
   try {
     const result = await generateWithLLM({ provider: 'gemini', prompt, taskType: 'analysis' });
@@ -171,7 +227,7 @@ IMPORTANT: Only include businesses that are REAL and operate in ${businessContex
     const parsed = parseGeminiJSON(responseText);
 
     if (parsed && parsed.competitors && Array.isArray(parsed.competitors)) {
-      console.log(`✅ Auto-discovered ${parsed.competitors.length} competitors`);
+      console.log(`✅ Auto-discovered ${parsed.competitors.length} NICHE-SPECIFIC competitors`);
       
       // Save competitors to database
       const savedCompetitors = [];
@@ -184,12 +240,12 @@ IMPORTANT: Only include businesses that are REAL and operate in ${businessContex
             description: comp.description || '',
             industry: businessContext.industry,
             socialHandles: {
-              instagram: comp.instagram || '',
-              twitter: comp.twitter || '',
+              instagram: (comp.instagram || '').replace('@', ''),
+              twitter: (comp.twitter || '').replace('@', ''),
               facebook: comp.facebook || '',
               linkedin: comp.linkedin || ''
             },
-            location: businessContext.location,
+            location: comp.location || businessContext.location,
             isActive: true,
             isAutoDiscovered: true,
             posts: [],
@@ -200,6 +256,7 @@ IMPORTANT: Only include businesses that are REAL and operate in ${businessContex
           });
           await competitor.save();
           savedCompetitors.push(competitor);
+          console.log(`✅ Saved competitor: ${comp.name} (${comp.type || 'unknown'})`);
         } catch (saveError) {
           console.error('Error saving competitor:', comp.name, saveError.message);
         }
