@@ -556,6 +556,244 @@ async function fetchRSS(feedUrl) {
 }
 
 /**
+ * Enhanced website scraping using Apify Website Content Crawler
+ * This handles JavaScript-rendered sites that basic HTTP can't scrape
+ */
+async function scrapeWebsiteWithApify(url, options = {}) {
+  const APIFY_API_KEY = process.env.APIFY_API_KEY;
+  
+  if (!APIFY_API_KEY) {
+    console.log('⚠️ Apify API key not configured, falling back to basic scraper');
+    return null;
+  }
+
+  console.log(`🔧 Using Apify Website Content Crawler for: ${url}`);
+
+  try {
+    // Use Apify's Website Content Crawler actor
+    const startResponse = await new Promise((resolve, reject) => {
+      const postData = JSON.stringify({
+        startUrls: [{ url }],
+        maxCrawlPages: 5,
+        maxCrawlDepth: 1,
+        crawlerType: 'cheerio', // Fast HTML parsing
+        includeUrlGlobs: [],
+        excludeUrlGlobs: [],
+        keepUrlFragments: false,
+        removeElementsCssSelector: 'nav, footer, script, style, noscript, iframe',
+        proxyConfiguration: { useApifyProxy: true },
+        maxRequestRetries: 2,
+        requestTimeoutSecs: 30
+      });
+
+      const reqOptions = {
+        hostname: 'api.apify.com',
+        port: 443,
+        path: `/v2/acts/apify~website-content-crawler/runs?token=${APIFY_API_KEY}`,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(postData)
+        },
+        timeout: 10000
+      };
+
+      const req = https.request(reqOptions, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
+          try {
+            resolve({ status: res.statusCode, data: JSON.parse(data) });
+          } catch (e) {
+            resolve({ status: res.statusCode, data: data });
+          }
+        });
+      });
+
+      req.on('error', reject);
+      req.on('timeout', () => {
+        req.destroy();
+        reject(new Error('Request timeout'));
+      });
+
+      req.write(postData);
+      req.end();
+    });
+
+    if (startResponse.status !== 201) {
+      console.log('❌ Failed to start Apify actor:', startResponse.data);
+      return null;
+    }
+
+    const runId = startResponse.data?.data?.id;
+    if (!runId) {
+      console.log('❌ No run ID returned from Apify');
+      return null;
+    }
+
+    console.log(`⏳ Apify run started: ${runId}`);
+
+    // Poll for completion (max 60 seconds)
+    const maxWait = options.maxWait || 60000;
+    const pollInterval = 3000;
+    let elapsed = 0;
+
+    while (elapsed < maxWait) {
+      await new Promise(resolve => setTimeout(resolve, pollInterval));
+      elapsed += pollInterval;
+
+      const statusResponse = await new Promise((resolve, reject) => {
+        const req = https.request({
+          hostname: 'api.apify.com',
+          port: 443,
+          path: `/v2/actor-runs/${runId}?token=${APIFY_API_KEY}`,
+          method: 'GET',
+          timeout: 10000
+        }, (res) => {
+          let data = '';
+          res.on('data', chunk => data += chunk);
+          res.on('end', () => {
+            try {
+              resolve({ status: res.statusCode, data: JSON.parse(data) });
+            } catch (e) {
+              resolve({ status: res.statusCode, data: data });
+            }
+          });
+        });
+        req.on('error', reject);
+        req.on('timeout', () => {
+          req.destroy();
+          reject(new Error('Request timeout'));
+        });
+        req.end();
+      });
+
+      const status = statusResponse.data?.data?.status;
+      console.log(`⏳ Apify run status: ${status} (${elapsed}ms elapsed)`);
+
+      if (status === 'SUCCEEDED') {
+        const datasetId = statusResponse.data?.data?.defaultDatasetId;
+        if (datasetId) {
+          const resultsResponse = await new Promise((resolve, reject) => {
+            const req = https.request({
+              hostname: 'api.apify.com',
+              port: 443,
+              path: `/v2/datasets/${datasetId}/items?token=${APIFY_API_KEY}`,
+              method: 'GET',
+              timeout: 15000
+            }, (res) => {
+              let data = '';
+              res.on('data', chunk => data += chunk);
+              res.on('end', () => {
+                try {
+                  resolve({ status: res.statusCode, data: JSON.parse(data) });
+                } catch (e) {
+                  resolve({ status: res.statusCode, data: data });
+                }
+              });
+            });
+            req.on('error', reject);
+            req.on('timeout', () => {
+              req.destroy();
+              reject(new Error('Request timeout'));
+            });
+            req.end();
+          });
+
+          const items = resultsResponse.data || [];
+          console.log(`✅ Apify returned ${items.length} pages`);
+
+          if (items.length > 0) {
+            // Combine all scraped content
+            const combinedContent = {
+              title: items[0]?.metadata?.title || '',
+              description: items[0]?.metadata?.description || '',
+              text: items.map(item => item.text || '').join('\n\n').substring(0, 50000),
+              headings: items.flatMap(item => {
+                const headings = [];
+                if (item.metadata?.title) headings.push({ level: 1, text: item.metadata.title });
+                return headings;
+              }),
+              links: items.flatMap(item => {
+                try {
+                  return (item.metadata?.canonicalUrl ? [{ href: item.metadata.canonicalUrl }] : []);
+                } catch (e) {
+                  return [];
+                }
+              }),
+              paragraphs: items.map(item => item.text?.substring(0, 500)).filter(Boolean),
+              keywords: [],
+              fullText: items.map(item => item.text || '').join('\n\n').substring(0, 50000),
+              wordCount: items.reduce((sum, item) => sum + (item.text?.split(/\s+/).length || 0), 0)
+            };
+
+            const sourceId = registerDataSource(url, 'apify_crawler', combinedContent);
+
+            return {
+              success: true,
+              data: combinedContent.fullText,
+              parsed: combinedContent,
+              cached: false,
+              url,
+              sourceId,
+              fetchedAt: new Date().toISOString(),
+              source: 'apify'
+            };
+          }
+        }
+        return null;
+      } else if (status === 'FAILED' || status === 'ABORTED' || status === 'TIMED-OUT') {
+        console.log(`❌ Apify run ${status}`);
+        return null;
+      }
+    }
+
+    console.log('❌ Apify run timeout');
+    return null;
+  } catch (error) {
+    console.error('❌ Apify scrape error:', error.message);
+    return null;
+  }
+}
+
+/**
+ * Deep website scrape with Apify fallback
+ * First tries basic HTTP scraping, then falls back to Apify for JS-rendered sites
+ */
+async function deepScrapeWebsite(url, options = {}) {
+  console.log(`🌐 Deep scraping website: ${url}`);
+
+  // First try basic scraping
+  const basicResult = await scrapeWebsite(url, options);
+
+  // Check if we got meaningful content
+  const hasGoodContent = basicResult.success && 
+    basicResult.parsed && 
+    (basicResult.parsed.text?.length > 500 || 
+     basicResult.parsed.description?.length > 50 ||
+     basicResult.parsed.paragraphs?.length > 3);
+
+  if (hasGoodContent) {
+    console.log(`✅ Basic scraping successful, got ${basicResult.parsed.text?.length || 0} chars`);
+    return { ...basicResult, source: 'basic' };
+  }
+
+  console.log(`⚠️ Basic scraping got insufficient content (${basicResult.parsed?.text?.length || 0} chars), trying Apify...`);
+
+  // Try Apify for JS-rendered sites
+  const apifyResult = await scrapeWebsiteWithApify(url, options);
+  
+  if (apifyResult && apifyResult.success) {
+    console.log(`✅ Apify scraping successful, got ${apifyResult.parsed?.text?.length || 0} chars`);
+    return apifyResult;
+  }
+
+  // Return basic result even if not great
+  console.log(`⚠️ Returning basic result as fallback`);
+  return { ...basicResult, source: 'basic' };
+}
+
+/**
  * Clear cache
  */
 function clearCache(url = null) {
@@ -587,6 +825,8 @@ module.exports = {
   scrape,
   scrapeWebsite,
   scrapeWebsitePages,
+  deepScrapeWebsite,
+  scrapeWebsiteWithApify,
   parseHTML,
   searchNews,
   fetchRSS,

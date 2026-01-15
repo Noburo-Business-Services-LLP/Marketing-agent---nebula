@@ -9,7 +9,7 @@ const { protect } = require('../middleware/auth');
 const BrandProfile = require('../models/BrandProfile');
 const ScrapeJob = require('../models/ScrapeJob');
 const Insight = require('../models/Insight');
-const { scrapeWebsite, scrapeWebsitePages, searchNews } = require('../services/scraper');
+const { scrapeWebsite, scrapeWebsitePages, searchNews, deepScrapeWebsite } = require('../services/scraper');
 const { analyzeBrand, generateWithLLM } = require('../services/llmRouter');
 
 /**
@@ -444,7 +444,7 @@ router.delete('/:id', protect, async (req, res) => {
 
 /**
  * POST /api/brand/quick-analyze
- * Quick website analysis for onboarding - scrapes and returns company info
+ * Quick website analysis for onboarding - scrapes and returns company info with competitor discovery
  */
 router.post('/quick-analyze', protect, async (req, res) => {
   try {
@@ -472,15 +472,17 @@ router.post('/quick-analyze', protect, async (req, res) => {
     
     console.log(`📡 Quick analyzing website: ${validUrl.origin}`);
     
-    // Scrape the main page (force fresh for better results)
-    const scrapedResult = await scrapeWebsite(validUrl.origin, { forceRefresh: true });
-    console.log('🔍 Scrape result:', JSON.stringify({
+    // Use deep scraping with Apify fallback for JS-rendered sites
+    console.log('🔧 Using deep scraper with Apify fallback...');
+    const scrapedResult = await deepScrapeWebsite(validUrl.origin, { forceRefresh: true });
+    console.log('🔍 Deep scrape result:', JSON.stringify({
       success: scrapedResult.success,
+      source: scrapedResult.source,
       cached: scrapedResult.cached,
       hasParsed: !!scrapedResult.parsed,
       parsedTitle: scrapedResult.parsed?.title,
       parsedDescription: scrapedResult.parsed?.description?.substring(0, 100),
-      textLength: scrapedResult.parsed?.text?.length || 0
+      textLength: scrapedResult.parsed?.text?.length || scrapedResult.parsed?.fullText?.length || 0
     }));
     
     if (!scrapedResult || !scrapedResult.success) {
@@ -498,8 +500,8 @@ router.post('/quick-analyze', protect, async (req, res) => {
       parsed.title || '',
       parsed.description || '',
       parsed.headings?.map(h => h.text).join(' ') || '',
-      parsed.text?.substring(0, 5000) || ''
-    ].join('\n').substring(0, 10000);
+      parsed.text?.substring(0, 8000) || parsed.fullText?.substring(0, 8000) || ''
+    ].join('\n').substring(0, 15000);
     
     console.log('📝 Scraped content length:', textContent.length);
     console.log('📝 Content preview:', textContent.substring(0, 500));
@@ -510,30 +512,72 @@ router.post('/quick-analyze', protect, async (req, res) => {
       console.log('⚠️ Not enough content scraped, will rely more on URL inference');
     }
     
-    // Use Gemini to analyze the website content
-    const analysisPrompt = `Analyze this website content and extract comprehensive business information. Return ONLY valid JSON.
+    // Use Gemini to deeply analyze the website content and discover competitors
+    const analysisPrompt = `You are a senior market analyst and competitive intelligence expert. Analyze this website thoroughly and extract comprehensive business intelligence. Return ONLY valid JSON.
 
-Website: ${validUrl.origin}
-Content: ${textContent}
+🌐 WEBSITE TO ANALYZE:
+URL: ${validUrl.origin}
+Domain: ${validUrl.hostname}
+
+📄 SCRAPED CONTENT:
+${textContent}
+
+🎯 YOUR TASK:
+1. Deeply understand what this business does
+2. Identify their exact industry and niche
+3. Understand their target customers
+4. Discover who their direct competitors would be
+5. Identify their brand personality and voice
 
 Return this exact JSON structure:
 {
-  "companyName": "detected company name",
-  "industry": "one of: Ecommerce, SaaS, Service, Content, Other",
-  "niche": "specific niche or focus area (e.g., 'Sustainable Fashion', 'B2B Marketing Software')",
+  "companyName": "detected company name (properly capitalized)",
+  "industry": "specific industry category (e.g., 'Edtech', 'Fashion Ecommerce', 'B2B SaaS', 'Healthcare', 'Real Estate', 'FinTech', 'FoodTech', 'Marketing Agency', 'Education', 'Technology', 'Retail', etc.)",
+  "niche": "very specific niche or focus area (e.g., 'Online MBA Programs', 'Sustainable Fashion for Gen-Z', 'AI-powered Marketing Tools', 'Kids Coding Education')",
   "businessType": "one of: B2B, B2C, Both - determine based on target customers",
-  "businessLocation": "city, state/region, country - try to detect from contact info, address, or content hints",
-  "description": "brief 1-2 sentence description of what they do",
-  "targetAudience": "detailed description of who their customers/users are",
-  "brandVoice": "one of: Professional, Friendly, Playful, Bold, Minimal",
-  "suggestedGoals": ["array of 2-3 specific marketing goals that would suit this business"],
-  "keyProducts": ["main products or services offered"],
-  "competitorHints": ["any competitor names or similar businesses mentioned or implied"],
-  "socialMediaHints": ["any social media URLs or handles found"],
-  "confidence": 0.8
+  "businessLocation": "city, state/country - extract from contact info, address, phone codes, or domain hints (.in = India, .co.uk = UK, etc.)",
+  "description": "detailed 2-3 sentence description of exactly what they do and their value proposition",
+  "targetAudience": "detailed description: demographics, pain points, what they're looking for (e.g., 'Working professionals aged 25-40 looking to upskill in business management without leaving their jobs')",
+  "brandVoice": ["array of 2-3 voice traits: Professional, Friendly, Playful, Bold, Minimal, Educational, Inspirational, Authoritative, Casual, Innovative"],
+  "suggestedGoals": ["array of 3-4 specific marketing goals that suit this business"],
+  "keyProducts": ["array of main products or services they offer"],
+  "competitors": [
+    {
+      "name": "Direct competitor 1 (famous brand in same space)",
+      "reason": "Why they're a competitor",
+      "instagram": "@handle if known",
+      "website": "website if known"
+    },
+    {
+      "name": "Direct competitor 2",
+      "reason": "Why they're a competitor"
+    },
+    {
+      "name": "Direct competitor 3",
+      "reason": "Why they're a competitor"
+    },
+    {
+      "name": "Aspirational competitor (bigger brand in space)",
+      "reason": "Why they're a competitor"
+    },
+    {
+      "name": "Emerging competitor (startup in space)",
+      "reason": "Why they're a competitor"
+    }
+  ],
+  "socialMediaHints": ["any social media URLs or handles found on the site"],
+  "uniqueSellingPoints": ["what makes this business unique"],
+  "confidence": 0.85
 }
 
-Important: For businessLocation, look for addresses, phone numbers with area codes, "Contact Us" info, or any location mentions. If not found, make a reasonable guess based on the domain (.co.uk = UK, .com.au = Australia, etc.) or leave as empty string.`;
+⚠️ COMPETITOR REQUIREMENTS:
+- Find 5+ REAL, FAMOUS competitors that operate in the same space
+- Include a mix of: direct competitors, market leaders, and emerging players
+- For Edtech in India: consider BYJU'S, Unacademy, upGrad, Simplilearn, Great Learning, Physics Wallah, Emeritus
+- For any industry: prioritize well-known brands with active social media presence
+- Be specific to the niche (e.g., for MBA programs, don't list general coding bootcamps)
+
+Important: Be thorough. This analysis will be used to set up their entire marketing strategy.`;
 
     const analysis = await generateWithLLM({
       provider: 'gemini',
@@ -550,11 +594,12 @@ Important: For businessLocation, look for addresses, phone numbers with area cod
       businessLocation: '',
       description: '',
       targetAudience: '',
-      brandVoice: 'Professional',
+      brandVoice: ['Professional'],
       suggestedGoals: [],
       keyProducts: [],
-      competitorHints: [],
+      competitors: [],
       socialMediaHints: [],
+      uniqueSellingPoints: [],
       confidence: 0.5
     };
     
@@ -591,11 +636,63 @@ Important: For businessLocation, look for addresses, phone numbers with area cod
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');
     
+    // Save discovered competitors to database for Competitor Radar
+    const userId = req.user.userId || req.user.id;
+    if (extractedData.competitors && extractedData.competitors.length > 0) {
+      console.log(`💾 Saving ${extractedData.competitors.length} discovered competitors to database...`);
+      
+      try {
+        const Competitor = require('../models/Competitor');
+        
+        // Delete old auto-discovered competitors for this user
+        await Competitor.deleteMany({ userId, isAutoDiscovered: true });
+        
+        // Save new competitors
+        for (const comp of extractedData.competitors) {
+          try {
+            const competitor = new Competitor({
+              userId,
+              name: comp.name,
+              website: comp.website || '',
+              description: comp.reason || '',
+              industry: extractedData.industry || '',
+              socialHandles: {
+                instagram: comp.instagram?.replace('@', '') || '',
+                twitter: comp.twitter?.replace('@', '') || '',
+                facebook: comp.facebook || '',
+                linkedin: comp.linkedin || ''
+              },
+              location: extractedData.businessLocation || '',
+              isActive: true,
+              isAutoDiscovered: true,
+              posts: [],
+              metrics: {
+                followers: 0,
+                lastFetched: new Date()
+              }
+            });
+            await competitor.save();
+            console.log(`✅ Saved competitor: ${comp.name}`);
+          } catch (saveError) {
+            console.error(`⚠️ Error saving competitor ${comp.name}:`, saveError.message);
+          }
+        }
+        
+        console.log('✅ Competitors saved successfully');
+      } catch (dbError) {
+        console.error('⚠️ Error saving competitors to database:', dbError.message);
+      }
+    }
+    
+    // Also convert competitors array to the format expected by frontend
+    extractedData.competitorHints = extractedData.competitors?.map(c => c.name) || [];
+    
     res.json({
       success: true,
       validUrl: true,
       accessible: true,
       url: validUrl.origin,
+      scrapeSource: scrapedResult.source || 'basic',
       data: extractedData
     });
     
