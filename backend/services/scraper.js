@@ -253,16 +253,20 @@ async function scrape(url, options = {}) {
     return { success: true, data: cached, cached: true, url };
   }
   
-  // Check robots.txt
-  const allowCheck = await isAllowed(url);
-  if (!allowCheck.allowed) {
-    logScrape(url, false, false, Date.now() - startTime, new Error(allowCheck.reason));
-    return { 
-      success: false, 
-      error: allowCheck.reason, 
-      errorType: 'robots_blocked',
-      url 
-    };
+  // Check robots.txt (SKIP if ignoreRobots is true - for user's own websites)
+  if (!options.ignoreRobots) {
+    const allowCheck = await isAllowed(url);
+    if (!allowCheck.allowed) {
+      logScrape(url, false, false, Date.now() - startTime, new Error(allowCheck.reason));
+      return { 
+        success: false, 
+        error: allowCheck.reason, 
+        errorType: 'robots_blocked',
+        url 
+      };
+    }
+  } else {
+    console.log('🔓 Bypassing robots.txt check (user analyzing own website)');
   }
   
   const parsedUrl = new URL(url);
@@ -271,8 +275,8 @@ async function scrape(url, options = {}) {
   let lastError;
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
-      // Rate limit
-      await rateLimitDomain(domain, allowCheck.crawlDelay);
+      // Rate limit (shorter delay when ignoring robots)
+      await rateLimitDomain(domain, options.ignoreRobots ? 0 : 0);
       
       const data = await fetchUrl(url, options);
       
@@ -757,40 +761,73 @@ async function scrapeWebsiteWithApify(url, options = {}) {
 }
 
 /**
- * Deep website scrape with Apify fallback
- * First tries basic HTTP scraping, then falls back to Apify for JS-rendered sites
+ * Deep website scrape for user's own websites
+ * Bypasses robots.txt since users are analyzing their own sites
+ * Tries multiple pages to get comprehensive content
  */
 async function deepScrapeWebsite(url, options = {}) {
   console.log(`🌐 Deep scraping website: ${url}`);
 
-  // First try basic scraping
-  const basicResult = await scrapeWebsite(url, options);
+  // ALWAYS bypass robots.txt for quick-analyze (user's own website)
+  const scrapeOptions = { ...options, ignoreRobots: true };
+
+  // First try basic scraping on the main page
+  const basicResult = await scrapeWebsite(url, scrapeOptions);
 
   // Check if we got meaningful content
   const hasGoodContent = basicResult.success && 
     basicResult.parsed && 
-    (basicResult.parsed.text?.length > 500 || 
+    (basicResult.parsed.fullText?.length > 500 || 
+     basicResult.parsed.text?.length > 500 || 
      basicResult.parsed.description?.length > 50 ||
      basicResult.parsed.paragraphs?.length > 3);
 
   if (hasGoodContent) {
-    console.log(`✅ Basic scraping successful, got ${basicResult.parsed.text?.length || 0} chars`);
+    console.log(`✅ Basic scraping successful, got ${basicResult.parsed.fullText?.length || basicResult.parsed.text?.length || 0} chars`);
     return { ...basicResult, source: 'basic' };
   }
 
-  console.log(`⚠️ Basic scraping got insufficient content (${basicResult.parsed?.text?.length || 0} chars), trying Apify...`);
+  console.log(`⚠️ Main page had insufficient content, trying additional pages...`);
 
-  // Try Apify for JS-rendered sites
-  const apifyResult = await scrapeWebsiteWithApify(url, options);
-  
-  if (apifyResult && apifyResult.success) {
-    console.log(`✅ Apify scraping successful, got ${apifyResult.parsed?.text?.length || 0} chars`);
-    return apifyResult;
+  // Try scraping additional pages for more content
+  const additionalPages = ['/about', '/about-us', '/services', '/products', '/company'];
+  let combinedContent = basicResult.parsed || {};
+  let additionalText = '';
+
+  for (const page of additionalPages) {
+    try {
+      const pageUrl = new URL(page, url).toString();
+      console.log(`📄 Trying: ${pageUrl}`);
+      const pageResult = await scrapeWebsite(pageUrl, scrapeOptions);
+      
+      if (pageResult.success && pageResult.parsed) {
+        additionalText += ' ' + (pageResult.parsed.fullText || pageResult.parsed.text || '');
+        if (pageResult.parsed.description && !combinedContent.description) {
+          combinedContent.description = pageResult.parsed.description;
+        }
+        // Add headings
+        if (pageResult.parsed.headings) {
+          combinedContent.headings = [...(combinedContent.headings || []), ...pageResult.parsed.headings];
+        }
+      }
+    } catch (e) {
+      // Ignore errors for additional pages
+    }
   }
 
-  // Return basic result even if not great
-  console.log(`⚠️ Returning basic result as fallback`);
-  return { ...basicResult, source: 'basic' };
+  // Combine all content
+  combinedContent.fullText = ((combinedContent.fullText || combinedContent.text || '') + additionalText).substring(0, 50000);
+  combinedContent.text = combinedContent.fullText;
+
+  console.log(`✅ Combined scraping got ${combinedContent.fullText?.length || 0} chars total`);
+
+  return {
+    success: true,
+    parsed: combinedContent,
+    cached: false,
+    url,
+    source: 'multi-page'
+  };
 }
 
 /**
