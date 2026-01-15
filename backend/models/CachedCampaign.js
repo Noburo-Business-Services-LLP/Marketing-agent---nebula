@@ -115,28 +115,41 @@ cachedCampaignSchema.statics.saveCampaigns = async function(userId, businessProf
   );
   
   // Save new campaigns
-  const docs = campaigns.map(camp => ({
-    userId,
-    businessProfileHash,
-    campaignId: camp.id || camp.campaignId,
-    name: camp.name || camp.title,
-    tagline: camp.tagline,
-    objective: camp.objective?.toLowerCase() || 'awareness',
-    platform: camp.platforms?.[0] || camp.platform || 'instagram',
-    platforms: camp.platforms || [camp.platform || 'instagram'],
-    description: camp.description,
-    caption: camp.caption,
-    hashtags: camp.hashtags || [],
-    imageUrl: camp.imageUrl,
-    imageSearchQuery: camp.imageSearchQuery,
-    bestPostTime: camp.bestPostTime,
-    estimatedReach: camp.expectedReach || camp.estimatedReach,
-    duration: camp.duration,
-    estimatedBudget: camp.estimatedBudget,
-    contentIdeas: camp.contentIdeas || [],
-    generatedAt: new Date(),
-    expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
-  }));
+  const validObjectives = ['awareness', 'engagement', 'traffic', 'sales', 'conversion', 'trust', 'authority'];
+  
+  const docs = campaigns.map(camp => {
+    // Sanitize objective - AI sometimes returns "awareness|engagement|sales" instead of single value
+    let objective = (camp.objective || 'awareness').toLowerCase().trim();
+    if (objective.includes('|')) {
+      objective = objective.split('|')[0].trim(); // Take first one
+    }
+    if (!validObjectives.includes(objective)) {
+      objective = 'awareness'; // Default fallback
+    }
+    
+    return {
+      userId,
+      businessProfileHash,
+      campaignId: camp.id || camp.campaignId,
+      name: camp.name || camp.title,
+      tagline: camp.tagline,
+      objective,
+      platform: camp.platforms?.[0] || camp.platform || 'instagram',
+      platforms: camp.platforms || [camp.platform || 'instagram'],
+      description: camp.description,
+      caption: camp.caption,
+      hashtags: camp.hashtags || [],
+      imageUrl: camp.imageUrl,
+      imageSearchQuery: camp.imageSearchQuery,
+      bestPostTime: camp.bestPostTime,
+      estimatedReach: camp.expectedReach || camp.estimatedReach,
+      duration: camp.duration,
+      estimatedBudget: camp.estimatedBudget,
+      contentIdeas: camp.contentIdeas || [],
+      generatedAt: new Date(),
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
+    };
+  });
   
   return this.insertMany(docs);
 };

@@ -230,13 +230,27 @@ const Campaigns: React.FC = () => {
     }
   }, [activeTab]);
 
-  // Save campaigns to localStorage whenever they change
+  // Save campaigns to localStorage whenever they change (without base64 images to avoid quota issues)
   useEffect(() => {
     if (suggestedCampaigns.length > 0) {
-      localStorage.setItem('nebula_suggested_campaigns', JSON.stringify({
-        campaigns: suggestedCampaigns,
-        timestamp: Date.now()
-      }));
+      try {
+        // Strip base64 images to avoid localStorage quota exceeded
+        const campaignsForCache = suggestedCampaigns.map(campaign => ({
+          ...campaign,
+          // Replace base64 images with placeholder - they'll be regenerated on next load
+          imageUrl: campaign.imageUrl?.startsWith('data:') 
+            ? 'https://images.unsplash.com/photo-1559136555-9303baea8ebd?w=800&h=600&fit=crop' 
+            : campaign.imageUrl
+        }));
+        localStorage.setItem('nebula_suggested_campaigns', JSON.stringify({
+          campaigns: campaignsForCache,
+          timestamp: Date.now()
+        }));
+      } catch (e) {
+        console.warn('Failed to cache campaigns to localStorage:', e);
+        // Clear cache if quota exceeded
+        localStorage.removeItem('nebula_suggested_campaigns');
+      }
     }
   }, [suggestedCampaigns]);
 
