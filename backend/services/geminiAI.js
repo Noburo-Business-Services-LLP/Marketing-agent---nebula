@@ -6,20 +6,19 @@
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 // Using available Gemini models with fallbacks - prioritize lite models for lower quota usage
 const GEMINI_MODELS = [
-  'gemini-2.0-flash-lite',  // Lower quota usage
+  'gemini-2.0-flash-lite',  // Lower quota usage, fastest
   'gemini-2.0-flash',       // Primary model
-  'gemini-2.5-flash',       // Latest model
 ];
 
 // Simple in-memory cache for API responses
 const responseCache = new Map();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache
-const API_TIMEOUT = 15000; // 15 second timeout for API calls (increased for complex generation)
-const EXTENDED_TIMEOUT = 30000; // 30 second timeout for heavy content generation
+const API_TIMEOUT = 30000; // 30 second timeout for API calls
+const EXTENDED_TIMEOUT = 60000; // 60 second timeout for heavy content generation
 
 // Rate limit tracking
 let lastApiCall = 0;
-const MIN_DELAY_BETWEEN_CALLS = 500; // 500ms minimum between API calls
+const MIN_DELAY_BETWEEN_CALLS = 300; // 300ms minimum between API calls
 
 // Cache cleanup - run every 10 minutes
 setInterval(() => {
