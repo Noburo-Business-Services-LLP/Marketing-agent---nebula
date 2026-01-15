@@ -13,8 +13,8 @@ const GEMINI_MODELS = [
 // Simple in-memory cache for API responses
 const responseCache = new Map();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache
-const API_TIMEOUT = 30000; // 30 second timeout for API calls
-const EXTENDED_TIMEOUT = 60000; // 60 second timeout for heavy content generation
+const API_TIMEOUT = 60000; // 60 second timeout for API calls
+const EXTENDED_TIMEOUT = 90000; // 90 second timeout for heavy content generation
 
 // Rate limit tracking
 let lastApiCall = 0;
