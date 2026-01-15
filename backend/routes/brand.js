@@ -705,13 +705,14 @@ Return ONLY valid JSON, no other text.`;
     
     // Save discovered competitors to database for Competitor Radar
     const userId = req.user.userId || req.user.id;
-    if (extractedData.competitors && extractedData.competitors.length > 0) {
+    if (extractedData.competitors && extractedData.competitors.length >= 6) {
       console.log(`💾 Saving ${extractedData.competitors.length} discovered competitors to database...`);
       
       try {
         const Competitor = require('../models/Competitor');
         
-        // Delete old auto-discovered competitors for this user
+        // Only delete old auto-discovered competitors if we have at least 6 new ones
+        // This prevents data loss if AI returns fewer competitors
         await Competitor.deleteMany({ userId, isAutoDiscovered: true });
         
         // Save new competitors
@@ -721,15 +722,16 @@ Return ONLY valid JSON, no other text.`;
               userId,
               name: comp.name,
               website: comp.website || '',
-              description: comp.reason || '',
+              description: comp.reason || comp.description || '',
               industry: extractedData.industry || '',
+              competitorType: comp.type || 'unknown', // regional, national, or global
               socialHandles: {
                 instagram: comp.instagram?.replace('@', '') || '',
                 twitter: comp.twitter?.replace('@', '') || '',
                 facebook: comp.facebook || '',
                 linkedin: comp.linkedin || ''
               },
-              location: extractedData.businessLocation || '',
+              location: comp.location || extractedData.businessLocation || '',
               isActive: true,
               isAutoDiscovered: true,
               posts: [],
@@ -739,7 +741,7 @@ Return ONLY valid JSON, no other text.`;
               }
             });
             await competitor.save();
-            console.log(`✅ Saved competitor: ${comp.name}`);
+            console.log(`✅ Saved competitor: ${comp.name} (${comp.type || 'unknown'})`);
           } catch (saveError) {
             console.error(`⚠️ Error saving competitor ${comp.name}:`, saveError.message);
           }
@@ -748,6 +750,48 @@ Return ONLY valid JSON, no other text.`;
         console.log('✅ Competitors saved successfully');
       } catch (dbError) {
         console.error('⚠️ Error saving competitors to database:', dbError.message);
+      }
+    } else if (extractedData.competitors && extractedData.competitors.length > 0 && extractedData.competitors.length < 6) {
+      // AI returned fewer than 6 competitors - log warning but still save what we have
+      console.log(`⚠️ AI returned only ${extractedData.competitors.length} competitors (expected 8). Saving anyway...`);
+      
+      try {
+        const Competitor = require('../models/Competitor');
+        
+        // Save these competitors without deleting old ones (merge approach)
+        for (const comp of extractedData.competitors) {
+          try {
+            // Check if competitor already exists
+            const existing = await Competitor.findOne({ userId, name: comp.name });
+            if (!existing) {
+              const competitor = new Competitor({
+                userId,
+                name: comp.name,
+                website: comp.website || '',
+                description: comp.reason || comp.description || '',
+                industry: extractedData.industry || '',
+                competitorType: comp.type || 'unknown',
+                socialHandles: {
+                  instagram: comp.instagram?.replace('@', '') || '',
+                  twitter: comp.twitter?.replace('@', '') || '',
+                  facebook: comp.facebook || '',
+                  linkedin: comp.linkedin || ''
+                },
+                location: comp.location || extractedData.businessLocation || '',
+                isActive: true,
+                isAutoDiscovered: true,
+                posts: [],
+                metrics: { followers: 0, lastFetched: new Date() }
+              });
+              await competitor.save();
+              console.log(`✅ Added competitor: ${comp.name} (${comp.type || 'unknown'})`);
+            }
+          } catch (saveError) {
+            console.error(`⚠️ Error saving competitor ${comp.name}:`, saveError.message);
+          }
+        }
+      } catch (dbError) {
+        console.error('⚠️ Error saving competitors:', dbError.message);
       }
     }
     
