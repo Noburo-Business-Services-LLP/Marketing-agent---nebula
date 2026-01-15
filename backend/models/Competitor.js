@@ -76,6 +76,11 @@ const competitorSchema = new mongoose.Schema({
   isIgnored: {
     type: Boolean,
     default: false
+  },
+  competitorType: {
+    type: String,
+    enum: ['regional', 'national', 'global', 'unknown'],
+    default: 'unknown'
   }
 }, {
   timestamps: true
