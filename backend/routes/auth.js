@@ -2,8 +2,138 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const User = require('../models/User');
 const { generateToken, protect } = require('../middleware/auth');
+const Competitor = require('../models/Competitor');
+const { generateWithLLM } = require('../services/llmRouter');
 
 const router = express.Router();
+
+/**
+ * BACKGROUND COMPETITOR DISCOVERY
+ * Triggered automatically after onboarding completion
+ */
+async function triggerCompetitorDiscovery(userId, contextData) {
+  console.log('🔍 ===========================================');
+  console.log('🔍 BACKGROUND COMPETITOR DISCOVERY STARTED');
+  console.log('🔍 User:', userId);
+  console.log('🔍 ===========================================');
+  
+  try {
+    const businessContext = {
+      companyName: contextData.company?.name || 'Your Business',
+      industry: contextData.company?.industry || 'General',
+      description: contextData.company?.description || '',
+      targetCustomer: contextData.targetCustomer?.description || '',
+      location: contextData.geography?.businessLocation || contextData.geography?.regions?.[0] || 'Global'
+    };
+
+    console.log('📋 Business:', businessContext.companyName);
+    console.log('📋 Industry:', businessContext.industry);
+    console.log('📋 Location:', businessContext.location);
+
+    if (!businessContext.industry || businessContext.industry === 'General') {
+      console.log('⚠️ No industry specified, skipping competitor discovery');
+      return;
+    }
+
+    // Delete existing auto-discovered competitors
+    await Competitor.deleteMany({ userId, isAutoDiscovered: true });
+
+    const prompt = `You are a market research expert. Find competitors for this business.
+
+BUSINESS:
+- Company: ${businessContext.companyName}
+- Industry: ${businessContext.industry}
+- Description: ${businessContext.description || 'Not provided'}
+- Target Customer: ${businessContext.targetCustomer || 'Not specified'}
+- Location: ${businessContext.location}
+
+FIND 15 REAL COMPETITORS that offer similar products/services.
+
+Include this mix:
+- 4 LOCAL competitors (same region as ${businessContext.location})
+- 5 NATIONAL competitors (major players in the country)
+- 3 GLOBAL competitors (international leaders)
+- 3 STARTUPS (emerging players)
+
+RETURN THIS JSON:
+{
+  "competitors": [
+    {
+      "name": "Company Name",
+      "website": "https://company.com",
+      "instagram": "companyhandle",
+      "twitter": "companyhandle",
+      "description": "What they do",
+      "location": "City, Country",
+      "competitorType": "local|national|global|startup",
+      "estimatedFollowers": 10000
+    }
+  ]
+}
+
+All 15 competitors must be REAL companies. Return only valid JSON.`;
+
+    const result = await generateWithLLM({ provider: 'gemini', prompt, taskType: 'analysis' });
+    const responseText = typeof result === 'string' ? result : (result?.text || result?.content || '');
+    
+    // Parse JSON from response
+    let parsed;
+    try {
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        parsed = JSON.parse(jsonMatch[0]);
+      }
+    } catch (e) {
+      console.error('Failed to parse Gemini response:', e.message);
+      return;
+    }
+
+    if (!parsed?.competitors?.length) {
+      console.log('⚠️ No competitors found in Gemini response');
+      return;
+    }
+
+    console.log(`✅ Found ${parsed.competitors.length} competitors`);
+
+    // Save competitors
+    let savedCount = 0;
+    for (const comp of parsed.competitors) {
+      if (!comp.name || comp.name.length < 2) continue;
+      
+      try {
+        await Competitor.create({
+          userId,
+          name: comp.name,
+          website: comp.website || '',
+          description: comp.description || '',
+          industry: businessContext.industry,
+          socialHandles: {
+            instagram: (comp.instagram || '').replace('@', ''),
+            twitter: (comp.twitter || '').replace('@', ''),
+            facebook: '',
+            linkedin: comp.linkedin || ''
+          },
+          location: comp.location || businessContext.location,
+          isActive: true,
+          isAutoDiscovered: true,
+          posts: [],
+          metrics: { followers: comp.estimatedFollowers || 0, lastFetched: new Date() },
+          competitorType: comp.competitorType || 'national'
+        });
+        savedCount++;
+      } catch (e) {
+        // Ignore duplicate errors
+      }
+    }
+
+    console.log(`🎯 Saved ${savedCount} competitors for user ${userId}`);
+    console.log('🔍 ===========================================');
+    console.log('🔍 BACKGROUND COMPETITOR DISCOVERY COMPLETE');
+    console.log('🔍 ===========================================');
+  } catch (error) {
+    console.error('❌ Background competitor discovery error:', error.message);
+  }
+}
 
 // Validation middleware
 const handleValidationErrors = (req, res, next) => {
@@ -367,6 +497,13 @@ router.put('/complete-onboarding', protect, async (req, res) => {
       );
       
       console.log('✅ OnboardingContext saved for AI outreach');
+      
+      // TRIGGER COMPETITOR DISCOVERY after onboarding
+      console.log('🚀 Triggering competitor discovery after onboarding...');
+      triggerCompetitorDiscovery(req.user._id, contextData).catch(err => 
+        console.error('Background competitor discovery error:', err.message)
+      );
+      
     } catch (contextError) {
       console.error('Failed to save OnboardingContext:', contextError);
       // Don't fail the whole request, just log

@@ -58,51 +58,36 @@ try {
 
 /**
  * POST /api/competitors/auto-discover
- * Automatically discover competitors using DUAL-AGENT ARCHITECTURE:
- * 1. MAKER AGENT: Deep research to find 10+ competitors
- * 2. CHECKER AGENT: Validates each competitor is real and relevant
+ * Discover 12-15 competitors using AI - SIMPLE AND RELIABLE
  */
 router.post('/auto-discover', protect, async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
     const user = await User.findById(userId);
-    const { location, forceRefresh = false } = req.body;
+    const { forceRefresh = false } = req.body;
 
-    console.log('🔍 Auto-discovering competitors for user:', userId);
-    console.log('🏗️ Using DUAL-AGENT architecture: Maker + Checker');
+    console.log('🔍 ===========================================');
+    console.log('🔍 AUTO-DISCOVER COMPETITORS');
+    console.log('🔍 User:', userId);
+    console.log('🔍 ===========================================');
 
     // Get business context from OnboardingContext
     const onboardingContext = await OnboardingContext.findOne({ userId });
     const bp = user?.businessProfile || {};
 
-    // STEP 1: If we have a website, scrape it to get ACCURATE business details
-    let scrapedBusinessInfo = null;
+    // Build business context
     const websiteUrl = onboardingContext?.company?.website || bp.website;
     
-    if (websiteUrl) {
-      console.log('🌐 Scraping website for accurate business info:', websiteUrl);
-      try {
-        scrapedBusinessInfo = await scrapeBusinessFromWebsite(websiteUrl);
-        console.log('📋 Scraped business info:', JSON.stringify(scrapedBusinessInfo, null, 2));
-      } catch (scrapeError) {
-        console.error('Website scrape failed:', scrapeError.message);
-      }
-    }
-
-    // Build business context - PREFER scraped data over user-entered data
     const businessContext = {
-      companyName: scrapedBusinessInfo?.name || onboardingContext?.company?.name || bp.name || 'Your Business',
-      industry: scrapedBusinessInfo?.industry || onboardingContext?.company?.industry || bp.industry || 'General',
-      description: scrapedBusinessInfo?.description || onboardingContext?.company?.description || bp.niche || '',
-      targetCustomer: scrapedBusinessInfo?.targetCustomer || onboardingContext?.targetCustomer?.description || bp.targetAudience || '',
-      // Location: PREFER scraped location, then use provided location, then onboarding
-      location: scrapedBusinessInfo?.location || location || onboardingContext?.geography?.businessLocation || onboardingContext?.geography?.regions?.[0] || onboardingContext?.geography?.countries?.[0] || 'India',
-      website: websiteUrl || '',
-      products: scrapedBusinessInfo?.products || [],
-      keywords: scrapedBusinessInfo?.keywords || []
+      companyName: onboardingContext?.company?.name || bp.name || bp.companyName || 'Your Business',
+      industry: onboardingContext?.company?.industry || bp.industry || 'General',
+      description: onboardingContext?.company?.description || bp.niche || bp.description || '',
+      targetCustomer: onboardingContext?.targetCustomer?.description || bp.targetAudience || '',
+      location: onboardingContext?.geography?.businessLocation || onboardingContext?.geography?.regions?.[0] || bp.businessLocation || 'Global',
+      website: websiteUrl || ''
     };
 
-    console.log('📋 Business context for competitor discovery:', JSON.stringify(businessContext, null, 2));
+    console.log('📋 Business Context:', JSON.stringify(businessContext, null, 2));
 
     if (!businessContext.industry || businessContext.industry === 'General') {
       return res.status(400).json({
@@ -111,62 +96,98 @@ router.post('/auto-discover', protect, async (req, res) => {
       });
     }
 
-    // Check for existing auto-discovered competitors (unless force refresh)
+    // Check for recent cached competitors (unless force refresh)
     if (!forceRefresh) {
       const existingCompetitors = await Competitor.find({
         userId,
         isAutoDiscovered: true,
-        createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } // Last 24 hours
+        createdAt: { $gte: new Date(Date.now() - 12 * 60 * 60 * 1000) } // Last 12 hours
       });
 
-      if (existingCompetitors.length >= 8) {
-        console.log('📦 Returning cached auto-discovered competitors');
+      if (existingCompetitors.length >= 10) {
+        console.log('📦 Returning cached competitors:', existingCompetitors.length);
         const posts = await getCompetitorPosts(existingCompetitors);
         return res.json({
           success: true,
           competitors: existingCompetitors,
           posts,
           cached: true,
-          message: `Found ${existingCompetitors.length} competitors in your area`
+          message: `Found ${existingCompetitors.length} competitors`
         });
       }
     }
 
-    // ============================================
-    // DUAL-AGENT ARCHITECTURE
-    // ============================================
+    // Delete old auto-discovered competitors
+    const deleted = await Competitor.deleteMany({ userId, isAutoDiscovered: true });
+    console.log(`🗑️ Deleted ${deleted.deletedCount} old competitors`);
+
+    // SIMPLE, RELIABLE competitor discovery prompt
+    const prompt = `You are a market research expert. Find competitors for this business.
+
+BUSINESS:
+- Company: ${businessContext.companyName}
+- Industry: ${businessContext.industry}
+- Description: ${businessContext.description || 'Not provided'}
+- Target Customer: ${businessContext.targetCustomer || 'Not specified'}
+- Location: ${businessContext.location}
+- Website: ${businessContext.website || 'Not provided'}
+
+FIND 15 REAL COMPETITORS that offer similar products/services.
+
+Include this mix:
+- 4 LOCAL competitors (same region as ${businessContext.location})
+- 5 NATIONAL competitors (major players in the country)
+- 3 GLOBAL competitors (international leaders)
+- 3 STARTUPS (emerging players)
+
+For each competitor, provide:
+- Real company name
+- Real website URL
+- Real Instagram handle (without @)
+- Real Twitter handle (without @)
+- Brief description
+- Their location
+- Type (local/national/global/startup)
+
+RETURN THIS JSON:
+{
+  "competitors": [
+    {
+      "name": "Company Name",
+      "website": "https://company.com",
+      "instagram": "companyhandle",
+      "twitter": "companyhandle",
+      "description": "What they do",
+      "location": "City, Country",
+      "competitorType": "local|national|global|startup",
+      "estimatedFollowers": 10000
+    }
+  ]
+}
+
+IMPORTANT: All 15 competitors must be REAL companies that exist. Return only valid JSON.`;
+
+    console.log('📤 Calling Gemini for competitor discovery...');
     
-    // AGENT 1: MAKER - Deep research to find competitors
-    console.log('🤖 AGENT 1 (MAKER): Deep research for competitors...');
-    const makerResults = await makerAgentDiscoverCompetitors(businessContext);
-    console.log(`📊 Maker Agent found ${makerResults.length} potential competitors`);
+    const response = await callGemini(prompt, { maxTokens: 4000, skipCache: true });
+    const parsed = parseGeminiJSON(response);
 
-    // AGENT 2: CHECKER - Validate each competitor
-    console.log('🔍 AGENT 2 (CHECKER): Validating competitors...');
-    const validatedCompetitors = await checkerAgentValidateCompetitors(makerResults, businessContext);
-    console.log(`✅ Checker Agent validated ${validatedCompetitors.length} competitors`);
-
-    // Fallback if we still don't have enough
-    let competitors = validatedCompetitors;
-    if (competitors.length < 10) {
-      console.log('⚠️ Not enough validated competitors, adding AI-powered fallbacks...');
-      const fallbackCompetitors = await getFallbackCompetitors(businessContext.industry, businessContext.location);
-      
-      // Only add fallbacks that aren't already in our list
-      const existingNames = new Set(competitors.map(c => c.name.toLowerCase()));
-      const newFallbacks = fallbackCompetitors.filter(fc => !existingNames.has(fc.name.toLowerCase()));
-      
-      competitors = [...competitors, ...newFallbacks].slice(0, 12);
+    if (!parsed || !parsed.competitors || !Array.isArray(parsed.competitors)) {
+      console.error('❌ Failed to parse Gemini response');
+      console.log('Raw response:', response?.substring(0, 500));
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to discover competitors. Please try again.'
+      });
     }
 
-    console.log(`🎯 Final competitor count: ${competitors.length}`);
+    console.log(`✅ Gemini returned ${parsed.competitors.length} competitors`);
 
-    // Delete old auto-discovered competitors
-    await Competitor.deleteMany({ userId, isAutoDiscovered: true });
-
-    // Save new competitors
+    // Save competitors to database
     const savedCompetitors = [];
-    for (const comp of competitors) {
+    for (const comp of parsed.competitors) {
+      if (!comp.name || comp.name.length < 2) continue;
+
       try {
         const competitor = new Competitor({
           userId,
@@ -175,9 +196,9 @@ router.post('/auto-discover', protect, async (req, res) => {
           description: comp.description || '',
           industry: businessContext.industry,
           socialHandles: {
-            instagram: comp.instagram || '',
-            twitter: comp.twitter || '',
-            facebook: comp.facebook || '',
+            instagram: (comp.instagram || '').replace('@', ''),
+            twitter: (comp.twitter || '').replace('@', ''),
+            facebook: (comp.facebook || '').replace('@', ''),
             linkedin: comp.linkedin || ''
           },
           location: comp.location || businessContext.location,
@@ -188,36 +209,33 @@ router.post('/auto-discover', protect, async (req, res) => {
             followers: comp.estimatedFollowers || 0,
             lastFetched: new Date()
           },
-          validatedByChecker: comp.validated || false,
-          competitorType: comp.competitorType || 'direct'
+          competitorType: comp.competitorType || 'national'
         });
         await competitor.save();
         savedCompetitors.push(competitor);
+        console.log(`✅ Saved: ${comp.name}`);
       } catch (saveError) {
-        console.error('Error saving competitor:', comp.name, saveError.message);
+        console.error(`❌ Error saving ${comp.name}:`, saveError.message);
       }
     }
 
-    // Fetch posts for the new competitors
-    console.log('📥 Fetching posts for discovered competitors...');
-    const posts = await fetchPostsForCompetitors(savedCompetitors);
+    console.log(`🎯 Total competitors saved: ${savedCompetitors.length}`);
+
+    // Fetch posts for competitors (in background, don't wait)
+    fetchPostsForCompetitors(savedCompetitors).catch(err => 
+      console.error('Background post fetch error:', err.message)
+    );
 
     res.json({
       success: true,
       competitors: savedCompetitors,
-      posts,
+      posts: [],
       discovered: savedCompetitors.length,
-      validated: validatedCompetitors.length,
-      message: `Discovered ${savedCompetitors.length} competitors in ${businessContext.location}`,
-      agentStats: {
-        makerFound: makerResults.length,
-        checkerValidated: validatedCompetitors.length,
-        finalCount: savedCompetitors.length
-      }
+      message: `Discovered ${savedCompetitors.length} competitors for ${businessContext.companyName}`
     });
 
   } catch (error) {
-    console.error('Competitor auto-discovery error:', error);
+    console.error('❌ Competitor auto-discovery error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to discover competitors',
@@ -226,291 +244,8 @@ router.post('/auto-discover', protect, async (req, res) => {
   }
 });
 
-/**
- * Scrape a website to extract accurate business information
- * This helps get the CORRECT location and industry
- */
-async function scrapeBusinessFromWebsite(websiteUrl) {
-  try {
-    const scrapedData = await scrapeWebsite(websiteUrl);
-    if (!scrapedData || !scrapedData.content) {
-      return null;
-    }
-
-    // Use Gemini to analyze the scraped content
-    const prompt = `Analyze this website content and extract business information.
-
-WEBSITE CONTENT:
-${scrapedData.content.substring(0, 8000)}
-
-Extract and return ONLY this JSON (no other text):
-{
-  "name": "Company name",
-  "industry": "Specific industry (e.g., 'Social Media Management SaaS', 'E-commerce', 'FinTech')",
-  "description": "What the company does in 2-3 sentences",
-  "location": "Where the company is headquartered (City, Country)",
-  "targetCustomer": "Who they sell to",
-  "products": ["List of main products/services"],
-  "keywords": ["Relevant industry keywords for competitor search"]
-}
-
-Be SPECIFIC about the industry and location. If it's a SaaS company, mention "SaaS". 
-If location is not clear, return "Global" or the most likely location based on context.`;
-
-    const response = await callGemini(prompt, { maxTokens: 1000, skipCache: true });
-    const result = parseGeminiJSON(response);
-    
-    console.log('🌐 Extracted business info from website:', result);
-    return result;
-  } catch (error) {
-    console.error('Error scraping website for business info:', error.message);
-    return null;
-  }
-}
-
-/**
- * MAKER AGENT: Deep research to find 10+ competitors
- * Does comprehensive market research to identify ALL potential competitors
- */
-async function makerAgentDiscoverCompetitors(businessContext) {
-  const prompt = `You are a SENIOR MARKET RESEARCH ANALYST at McKinsey & Company.
-Your task is to conduct DEEP MARKET RESEARCH to find ALL competitors for a business.
-
-═══════════════════════════════════════════════════════════════
-📋 BUSINESS TO ANALYZE:
-═══════════════════════════════════════════════════════════════
-• Company Name: ${businessContext.companyName}
-• Website: ${businessContext.website || 'Not provided'}
-• Industry: ${businessContext.industry}
-• Description: ${businessContext.description || 'Not provided'}
-• Target Customer: ${businessContext.targetCustomer || 'Not specified'}
-• Location: ${businessContext.location}
-• Products/Services: ${(businessContext.products || []).join(', ') || 'Not specified'}
-• Keywords: ${(businessContext.keywords || []).join(', ') || 'Not specified'}
-
-═══════════════════════════════════════════════════════════════
-🔍 DEEP RESEARCH INSTRUCTIONS:
-═══════════════════════════════════════════════════════════════
-
-Think step by step:
-
-1. **UNDERSTAND THE BUSINESS**: What exactly does ${businessContext.companyName} do? 
-   - What problem do they solve?
-   - Who are their customers?
-   - What is their business model?
-
-2. **IDENTIFY COMPETITOR CATEGORIES**:
-   - Direct competitors (same product, same market)
-   - Indirect competitors (different product, same need)
-   - Substitute products/services
-   - Global players with local presence
-   - Local/regional players
-
-3. **RESEARCH EACH CATEGORY**: For ${businessContext.industry} in ${businessContext.location}:
-   - Who are the market leaders?
-   - Who are the well-funded startups?
-   - Who are the established players?
-   - Who are the emerging disruptors?
-
-4. **FIND 12-15 COMPETITORS**: You MUST find at least 12 different competitors.
-
-═══════════════════════════════════════════════════════════════
-📊 COMPETITOR REQUIREMENTS:
-═══════════════════════════════════════════════════════════════
-
-MUST INCLUDE (at least 12 total):
-- 3-4 Market Leaders (everyone knows them)
-- 3-4 Direct Competitors (same space)
-- 2-3 Indirect Competitors (adjacent space)
-- 2-3 Well-funded Startups (Series A+)
-- 2 Global Players (if applicable)
-
-EACH COMPETITOR MUST HAVE:
-- Real company that exists
-- Active social media presence
-- Verifiable website
-- Clear relevance to ${businessContext.companyName}
-
-═══════════════════════════════════════════════════════════════
-📱 SOCIAL MEDIA REQUIREMENTS:
-═══════════════════════════════════════════════════════════════
-
-For EACH competitor, provide their REAL social handles:
-- Instagram: @handle (must be real, verified if possible)
-- Twitter/X: @handle (must be real)
-- LinkedIn: company page URL
-- Website: https://... (official website)
-
-DO NOT make up handles. Only include handles you're confident exist.
-
-═══════════════════════════════════════════════════════════════
-📋 RETURN FORMAT (JSON only):
-═══════════════════════════════════════════════════════════════
-{
-  "analysis": {
-    "businessType": "What type of business ${businessContext.companyName} is",
-    "mainProducts": ["List of their products/services"],
-    "targetMarket": "Who they target",
-    "competitorCategories": ["Categories of competitors identified"]
-  },
-  "competitors": [
-    {
-      "name": "Competitor Name",
-      "website": "https://competitor.com",
-      "instagram": "@handle",
-      "twitter": "@handle",
-      "linkedin": "https://linkedin.com/company/...",
-      "description": "What they do and why they compete with ${businessContext.companyName}",
-      "location": "Headquarters location",
-      "estimatedFollowers": 50000,
-      "competitorType": "market_leader|direct|indirect|startup|global",
-      "whyCompetitor": "Specific reason why they're a competitor",
-      "strength": "Their main competitive advantage"
-    }
-  ]
-}
-
-Remember: Find AT LEAST 12 competitors. More is better. Be thorough!`;
-
-  try {
-    const response = await callGemini(prompt, { maxTokens: 5000, skipCache: true });
-    const result = parseGeminiJSON(response);
-
-    if (result && result.competitors && Array.isArray(result.competitors)) {
-      console.log(`🤖 MAKER AGENT: Found ${result.competitors.length} competitors`);
-      if (result.analysis) {
-        console.log('📊 Business Analysis:', JSON.stringify(result.analysis, null, 2));
-      }
-      return result.competitors;
-    }
-
-    console.error('MAKER AGENT: Invalid response format');
-    return [];
-  } catch (error) {
-    console.error('MAKER AGENT error:', error.message);
-    return [];
-  }
-}
-
-/**
- * CHECKER AGENT: Validates each competitor found by Maker Agent
- * Ensures competitors are real, relevant, and have accurate data
- */
-async function checkerAgentValidateCompetitors(competitors, businessContext) {
-  if (!competitors || competitors.length === 0) {
-    return [];
-  }
-
-  // Format competitors for validation
-  const competitorList = competitors.map((c, i) => 
-    `${i + 1}. ${c.name} - ${c.description || 'No description'} - Website: ${c.website || 'None'} - Instagram: ${c.instagram || 'None'}`
-  ).join('\n');
-
-  const prompt = `You are a QUALITY ASSURANCE ANALYST verifying competitor research.
-
-═══════════════════════════════════════════════════════════════
-📋 ORIGINAL BUSINESS:
-═══════════════════════════════════════════════════════════════
-• Company: ${businessContext.companyName}
-• Industry: ${businessContext.industry}
-• Description: ${businessContext.description || 'Not provided'}
-• Location: ${businessContext.location}
-
-═══════════════════════════════════════════════════════════════
-📊 COMPETITORS TO VALIDATE:
-═══════════════════════════════════════════════════════════════
-${competitorList}
-
-═══════════════════════════════════════════════════════════════
-🔍 VALIDATION CRITERIA:
-═══════════════════════════════════════════════════════════════
-
-For EACH competitor, check:
-
-✅ VALID if ALL of these are true:
-1. It's a REAL company that exists (not made up)
-2. It's genuinely a competitor to ${businessContext.companyName}
-3. It operates in the same or adjacent market
-4. The social handles appear correct
-5. It makes business sense as a competitor
-
-❌ INVALID if ANY of these are true:
-1. Company doesn't seem to exist
-2. Not actually a competitor (different industry)
-3. Wrong social handles
-4. Duplicate of another entry
-5. Too generic (like "Local Business")
-
-═══════════════════════════════════════════════════════════════
-📋 RETURN FORMAT (JSON only):
-═══════════════════════════════════════════════════════════════
-{
-  "validatedCompetitors": [
-    {
-      "name": "Competitor Name",
-      "valid": true,
-      "confidence": 95,
-      "validationNote": "Why this is a valid competitor",
-      "correctedInstagram": "@correct_handle",
-      "correctedTwitter": "@correct_handle",
-      "website": "https://...",
-      "description": "Updated description if needed",
-      "location": "Corrected location",
-      "competitorType": "market_leader|direct|indirect|startup|global"
-    }
-  ],
-  "rejectedCompetitors": [
-    {
-      "name": "Rejected Company",
-      "reason": "Why it was rejected"
-    }
-  ]
-}
-
-Be strict! Only approve competitors you're confident are real and relevant.
-But also be comprehensive - we need at least 10 validated competitors.`;
-
-  try {
-    const response = await callGemini(prompt, { maxTokens: 4000, skipCache: true });
-    const result = parseGeminiJSON(response);
-
-    if (result && result.validatedCompetitors && Array.isArray(result.validatedCompetitors)) {
-      console.log(`🔍 CHECKER AGENT: Validated ${result.validatedCompetitors.length} competitors`);
-      
-      if (result.rejectedCompetitors && result.rejectedCompetitors.length > 0) {
-        console.log(`❌ CHECKER AGENT: Rejected ${result.rejectedCompetitors.length} competitors:`);
-        result.rejectedCompetitors.forEach(r => console.log(`   - ${r.name}: ${r.reason}`));
-      }
-
-      // Map validated competitors back to the expected format
-      return result.validatedCompetitors
-        .filter(c => c.valid !== false && c.confidence >= 70)
-        .map(c => ({
-          name: c.name,
-          website: c.website || '',
-          instagram: c.correctedInstagram || c.instagram || '',
-          twitter: c.correctedTwitter || c.twitter || '',
-          description: c.description || '',
-          location: c.location || businessContext.location,
-          competitorType: c.competitorType || 'direct',
-          validated: true,
-          confidence: c.confidence
-        }));
-    }
-
-    // If validation fails, return original with basic filtering
-    console.warn('CHECKER AGENT: Could not parse validation response, using basic filter');
-    return competitors.filter(c => c.name && c.name.length > 2);
-  } catch (error) {
-    console.error('CHECKER AGENT error:', error.message);
-    // Return original competitors if checker fails
-    return competitors;
-  }
-}
-
-// NOTE: discoverCompetitorsWithGemini() was removed - it was dead code with hardcoded data
-// The dual-agent system (makerAgentDiscoverCompetitors + checkerAgentValidateCompetitors) 
-// now handles all competitor discovery using pure AI research
+// NOTE: scrapeBusinessFromWebsite, makerAgentDiscoverCompetitors, and checkerAgentValidateCompetitors
+// have been replaced by the simpler single-prompt discovery in /auto-discover route
 
 /**
  * Check if text is primarily English (Latin characters)
@@ -1516,59 +1251,6 @@ function formatTimeAgo(date) {
   if (diffHours < 24) return `${diffHours}h ago`;
   if (diffDays < 7) return `${diffDays}d ago`;
   return past.toLocaleDateString();
-}
-
-/**
- * Get fallback competitors using AI when main discovery returns few results
- * Uses Gemini to dynamically find competitors instead of hardcoded lists
- */
-async function getFallbackCompetitors(industry, location) {
-  console.log(`🔄 Fetching AI-powered fallback competitors for ${industry} in ${location}...`);
-  
-  const prompt = `You are a market research expert. Find 10 REAL, FAMOUS competitors in the "${industry}" industry.
-
-REQUIREMENTS:
-- Focus on companies operating in or serving ${location}
-- Only include REAL companies that definitely exist
-- Include a mix of: market leaders, direct competitors, and emerging players
-- Each must have active social media presence
-
-Return ONLY this JSON (no other text):
-{
-  "competitors": [
-    {
-      "name": "Company Name",
-      "website": "https://website.com",
-      "instagram": "@handle",
-      "twitter": "@handle",
-      "description": "Brief description",
-      "location": "${location}",
-      "estimatedFollowers": 100000,
-      "competitorType": "market_leader|direct|emerging"
-    }
-  ]
-}
-
-Find exactly 10 competitors. Be accurate - only include companies you're certain exist.`;
-
-  try {
-    const response = await callGemini(prompt, { maxTokens: 2000, skipCache: true });
-    const result = parseGeminiJSON(response);
-
-    if (result && result.competitors && Array.isArray(result.competitors)) {
-      console.log(`✅ AI fallback found ${result.competitors.length} competitors`);
-      return result.competitors.map(comp => ({
-        ...comp,
-        whyCompetitor: `AI-discovered ${comp.competitorType} competitor in ${industry}`
-      }));
-    }
-  } catch (error) {
-    console.error('AI fallback error:', error.message);
-  }
-
-  // Ultimate fallback - return empty array, let the main system handle it
-  console.warn('⚠️ AI fallback failed, returning empty array');
-  return [];
 }
 
 module.exports = router;

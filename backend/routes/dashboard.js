@@ -118,170 +118,139 @@ function parseGeminiJSON(text) {
 }
 
 /**
- * Auto-discover competitors using Gemini AI based on user's SPECIFIC business context
- * This function is much smarter about finding NICHE-SPECIFIC competitors
+ * ROBUST COMPETITOR DISCOVERY - Find 12-15 REAL competitors
+ * Uses a simple, reliable prompt that consistently returns good results
  */
 async function autoDiscoverCompetitorsForUser(userId, businessContext) {
-  console.log('🔍 Auto-discovering NICHE-SPECIFIC competitors for user...');
-  console.log('📋 Business context:', JSON.stringify(businessContext, null, 2));
+  console.log('🔍 ===========================================');
+  console.log('🔍 STARTING COMPETITOR DISCOVERY');
+  console.log('🔍 ===========================================');
+  console.log('📋 Business:', businessContext.companyName);
+  console.log('📋 Industry:', businessContext.industry);
+  console.log('📋 Location:', businessContext.location);
+  console.log('📋 Description:', businessContext.description);
   
-  const prompt = `You are a senior competitive intelligence analyst at McKinsey. Your job is to find EXACT competitors for this business - not just same industry, but same NICHE.
+  // Delete any existing auto-discovered competitors first
+  try {
+    const deleted = await Competitor.deleteMany({ userId, isAutoDiscovered: true });
+    console.log(`🗑️ Deleted ${deleted.deletedCount} old auto-discovered competitors`);
+  } catch (e) {
+    console.error('Could not delete old competitors:', e.message);
+  }
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📊 BUSINESS TO ANALYZE:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-- Company: ${businessContext.companyName}
+  const prompt = `You are a market research expert. Find competitors for this business.
+
+BUSINESS INFO:
+- Name: ${businessContext.companyName}
 - Industry: ${businessContext.industry}
-- Niche/Description: ${businessContext.description}
-- Target Customer: ${businessContext.targetCustomer}
+- What they do: ${businessContext.description || 'Not specified'}
+- Target customers: ${businessContext.targetCustomer || 'Not specified'}
 - Location: ${businessContext.location}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🎯 STEP 1: UNDERSTAND THE EXACT BUSINESS MODEL
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Based on the description, identify:
-- Is this a STARTUP ACCELERATOR/INCUBATOR? → Competitors: T-Hub, NSRCEL, Antler, Y Combinator, Venture Catalysts
-- Is this a CODING BOOTCAMP? → Competitors: Masai School, Scaler, Newton School
-- Is this GENERAL EDTECH (courses)? → Competitors: upGrad, Unacademy, BYJU'S
-- Is this K-12 TUTORING? → Competitors: BYJU'S, Vedantu, Physics Wallah
-- Is this STARTUP EDUCATION + BOOTCAMP? → Competitors: Headstart, IIT Incubation Cells, Zone Startups
+YOUR TASK: Find 15 REAL competitors that offer similar products/services.
 
-⚠️ CRITICAL: DO NOT confuse business models!
-- "Startup accelerator" ≠ "Online courses platform"
-- "Entrepreneurship bootcamp" ≠ "Career upskilling"
-- Find competitors who do THE EXACT SAME THING
+REQUIREMENTS:
+1. All competitors must be REAL companies that actually exist
+2. Include a mix of:
+   - 3 LOCAL competitors (same city/region as ${businessContext.location})
+   - 6 NATIONAL competitors (same country, major players)
+   - 3 GLOBAL competitors (international leaders in this space)
+   - 3 EMERGING competitors (startups/new players)
+3. Each competitor must have an active online presence
+4. Only include companies you are CERTAIN exist
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🔥 STEP 2: FIND COMPETITORS BY GEOGRAPHY
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Location: ${businessContext.location}
-
-Find this mix:
-🚨🚨🚨 MANDATORY: RETURN EXACTLY 8 COMPETITORS 🚨🚨🚨
-- 2 REGIONAL competitors (same city/state as ${businessContext.location})
-- 4 NATIONAL competitors (major players in the country)
-- 2 GLOBAL competitors (aspirational/world leaders)
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📋 RETURN THIS JSON (EXACTLY 8 COMPETITORS):
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+RETURN EXACTLY THIS JSON FORMAT:
 {
   "competitors": [
     {
-      "name": "Regional Competitor 1",
-      "instagram": "@actual_instagram_handle",
-      "twitter": "@twitter_handle",
-      "website": "https://website.com",
-      "description": "What they do (be specific)",
-      "location": "City, State",
-      "type": "regional",
-      "estimatedFollowers": 10000
-    },
-    {
-      "name": "Regional Competitor 2",
-      "instagram": "@handle",
-      "description": "What they do",
-      "location": "City, State",
-      "type": "regional"
-    },
-    {
-      "name": "National Leader 1",
-      "instagram": "@handle",
-      "description": "What they do",
-      "type": "national"
-    },
-    {
-      "name": "National Player 2",
-      "instagram": "@handle",
-      "description": "What they do",
-      "type": "national"
-    },
-    {
-      "name": "National Player 3",
-      "instagram": "@handle",
-      "description": "What they do",
-      "type": "national"
-    },
-    {
-      "name": "National Player 4",
-      "instagram": "@handle",
-      "description": "What they do",
-      "type": "national"
-    },
-    {
-      "name": "Global Leader 1",
-      "instagram": "@handle",
-      "description": "Why they're aspirational",
-      "type": "global"
-    },
-    {
-      "name": "Global Leader 2",
-      "instagram": "@handle",
-      "description": "Why they're aspirational",
-      "type": "global"
+      "name": "Company Name",
+      "website": "https://example.com",
+      "instagram": "handle_without_at",
+      "twitter": "handle_without_at",
+      "linkedin": "https://linkedin.com/company/name",
+      "description": "What this company does and why they compete with ${businessContext.companyName}",
+      "location": "City, Country",
+      "competitorType": "local|national|global|emerging",
+      "estimatedFollowers": 50000
     }
   ]
 }
 
-⚠️ VERIFICATION CHECKLIST:
-☐ You returned EXACTLY 8 competitors?
-☐ All competitors do THE SAME THING as this business?
-☐ Instagram handles are REAL and VERIFIED?
-☐ Mix of 2 regional + 4 national + 2 global?
-☐ All are REAL companies that exist?
-
-Return ONLY valid JSON.`;
+IMPORTANT: Return EXACTLY 15 competitors. Be accurate with company names and social handles.`;
 
   try {
+    console.log('📤 Sending competitor discovery prompt to Gemini...');
     const result = await generateWithLLM({ provider: 'gemini', prompt, taskType: 'analysis' });
-    // generateWithLLM returns raw text when no jsonSchema is provided
+    
     const responseText = typeof result === 'string' ? result : (result?.text || result?.content || JSON.stringify(result));
-    console.log('Gemini response type:', typeof result, 'First 200 chars:', String(responseText).substring(0, 200));
+    console.log('📥 Gemini response received, length:', responseText?.length || 0);
     
     const parsed = parseGeminiJSON(responseText);
 
-    if (parsed && parsed.competitors && Array.isArray(parsed.competitors)) {
-      console.log(`✅ Auto-discovered ${parsed.competitors.length} NICHE-SPECIFIC competitors`);
-      
-      // Save competitors to database
-      const savedCompetitors = [];
-      for (const comp of parsed.competitors) {
-        try {
-          const competitor = new Competitor({
-            userId,
-            name: comp.name,
-            website: comp.website || '',
-            description: comp.description || '',
-            industry: businessContext.industry,
-            socialHandles: {
-              instagram: (comp.instagram || '').replace('@', ''),
-              twitter: (comp.twitter || '').replace('@', ''),
-              facebook: comp.facebook || '',
-              linkedin: comp.linkedin || ''
-            },
-            location: comp.location || businessContext.location,
-            isActive: true,
-            isAutoDiscovered: true,
-            posts: [],
-            metrics: {
-              followers: comp.estimatedFollowers || 0,
-              lastFetched: new Date()
-            }
-          });
-          await competitor.save();
-          savedCompetitors.push(competitor);
-          console.log(`✅ Saved competitor: ${comp.name} (${comp.type || 'unknown'})`);
-        } catch (saveError) {
-          console.error('Error saving competitor:', comp.name, saveError.message);
-        }
-      }
-      
-      return savedCompetitors;
+    if (!parsed || !parsed.competitors || !Array.isArray(parsed.competitors)) {
+      console.error('❌ Failed to parse Gemini response');
+      console.log('Raw response:', responseText?.substring(0, 500));
+      return [];
     }
 
-    return [];
+    console.log(`✅ Parsed ${parsed.competitors.length} competitors from Gemini`);
+    
+    // Save competitors to database
+    const savedCompetitors = [];
+    for (const comp of parsed.competitors) {
+      if (!comp.name || comp.name.length < 2) {
+        console.log('⚠️ Skipping invalid competitor:', comp);
+        continue;
+      }
+      
+      try {
+        // Check if competitor already exists
+        const existing = await Competitor.findOne({ userId, name: comp.name });
+        if (existing) {
+          console.log(`⏭️ Competitor already exists: ${comp.name}`);
+          savedCompetitors.push(existing);
+          continue;
+        }
+        
+        const competitor = new Competitor({
+          userId,
+          name: comp.name,
+          website: comp.website || '',
+          description: comp.description || '',
+          industry: businessContext.industry,
+          socialHandles: {
+            instagram: (comp.instagram || '').replace('@', ''),
+            twitter: (comp.twitter || '').replace('@', ''),
+            facebook: (comp.facebook || '').replace('@', ''),
+            linkedin: comp.linkedin || ''
+          },
+          location: comp.location || businessContext.location,
+          isActive: true,
+          isAutoDiscovered: true,
+          posts: [],
+          metrics: {
+            followers: comp.estimatedFollowers || 0,
+            lastFetched: new Date()
+          },
+          competitorType: comp.competitorType || 'national'
+        });
+        
+        await competitor.save();
+        savedCompetitors.push(competitor);
+        console.log(`✅ Saved: ${comp.name} (${comp.competitorType || 'unknown'})`);
+      } catch (saveError) {
+        console.error(`❌ Error saving ${comp.name}:`, saveError.message);
+      }
+    }
+    
+    console.log('🔍 ===========================================');
+    console.log(`🔍 DISCOVERY COMPLETE: ${savedCompetitors.length} competitors saved`);
+    console.log('🔍 ===========================================');
+    
+    return savedCompetitors;
   } catch (error) {
-    console.error('Auto-discover error:', error.message);
+    console.error('❌ Auto-discover error:', error.message);
+    console.error(error.stack);
     return [];
   }
 }
