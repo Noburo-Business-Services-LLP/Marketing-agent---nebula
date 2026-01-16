@@ -25,12 +25,12 @@ const influencerSchema = new mongoose.Schema({
   bio: String,
   type: {
     type: String,
-    enum: ['nano', 'micro', 'mid-tier', 'macro', 'mega', 'celebrity'],
+    enum: ['nano', 'micro', 'mid-tier', 'macro', 'mega', 'celebrity', 'regional', 'national'],
     default: 'micro'
   },
   tier: {
     type: String,
-    enum: ['nano', 'micro', 'macro', 'mega'],
+    enum: ['nano', 'micro', 'macro', 'mega', 'regional', 'national'],
     default: 'micro'
   },
   location: String, // Influencer's location (city, state, country)
