@@ -149,8 +149,8 @@ router.post('/auto-discover', protect, async (req, res) => {
     // Fallback if we still don't have enough
     let competitors = validatedCompetitors;
     if (competitors.length < 10) {
-      console.log('⚠️ Not enough validated competitors, adding industry fallbacks...');
-      const fallbackCompetitors = getFallbackCompetitors(businessContext.industry, businessContext.location);
+      console.log('⚠️ Not enough validated competitors, adding AI-powered fallbacks...');
+      const fallbackCompetitors = await getFallbackCompetitors(businessContext.industry, businessContext.location);
       
       // Only add fallbacks that aren't already in our list
       const existingNames = new Set(competitors.map(c => c.name.toLowerCase()));
@@ -508,211 +508,9 @@ But also be comprehensive - we need at least 10 validated competitors.`;
   }
 }
 
-/**
- * Use Gemini AI to discover real competitors based on business context
- * Enhanced to focus on famous, well-known brands only
- */
-async function discoverCompetitorsWithGemini(businessContext) {
-  // Curated list of FAMOUS, WELL-KNOWN brands by industry
-  const famousBrandsByIndustry = {
-    'real estate': {
-      india: ['Sobha Limited', 'Prestige Group', 'Brigade Group', 'Godrej Properties', 'DLF', 'Lodha Group', 'Mahindra Lifespaces', 'Puravankara', 'Oberoi Realty', 'Embassy Group', 'Tata Housing', 'Shapoorji Pallonji Real Estate'],
-      global: ['CBRE', 'JLL', 'Cushman & Wakefield', 'Colliers', 'Knight Frank']
-    },
-    'construction': {
-      india: ['L&T Construction', 'Shapoorji Pallonji', 'Tata Projects', 'GMR Group', 'NCC Limited', 'Dilip Buildcon', 'JMC Projects', 'Afcons Infrastructure'],
-      global: ['Bechtel', 'Skanska', 'AECOM', 'Fluor Corporation']
-    },
-    'technology': {
-      india: ['TCS', 'Infosys', 'Wipro', 'HCL Technologies', 'Tech Mahindra', 'Zoho', 'Freshworks', 'Razorpay', 'PhonePe', 'Paytm', 'Ola', 'Zomato'],
-      global: ['Google', 'Microsoft', 'Amazon', 'Apple', 'Meta', 'Salesforce', 'Adobe', 'IBM', 'Oracle', 'SAP']
-    },
-    'e-commerce': {
-      india: ['Amazon India', 'Flipkart', 'Myntra', 'Nykaa', 'Meesho', 'Snapdeal', 'Ajio', 'Tata CLiQ', 'JioMart', 'BigBasket', 'Blinkit', 'Zepto'],
-      global: ['Amazon', 'Alibaba', 'eBay', 'Walmart', 'Shopify stores']
-    },
-    'food': {
-      india: ['Zomato', 'Swiggy', 'Dominos India', 'McDonalds India', 'Starbucks India', 'Haldirams', 'Barbeque Nation', 'Pizza Hut India', 'KFC India', 'Burger King India', 'Subway India', 'Cafe Coffee Day'],
-      global: ['McDonalds', 'Starbucks', 'KFC', 'Subway', 'Pizza Hut', 'Dominos', 'Dunkin', 'Chipotle']
-    },
-    'fashion': {
-      india: ['Myntra', 'Ajio', 'FabIndia', 'Westside', 'Pantaloons', 'Raymond', 'Allen Solly', 'Van Heusen', 'Peter England', 'Manyavar', 'W for Woman', 'Biba'],
-      global: ['Zara', 'H&M', 'Uniqlo', 'Nike', 'Adidas', 'Puma', 'Levis', 'Gap', 'Forever 21']
-    },
-    'healthcare': {
-      india: ['Apollo Hospitals', 'Fortis Healthcare', 'Max Healthcare', 'Manipal Hospitals', 'Narayana Health', 'AIIMS', 'Medanta', 'Kokilaben Hospital', 'Aster DM Healthcare'],
-      global: ['Mayo Clinic', 'Cleveland Clinic', 'Johns Hopkins', 'Kaiser Permanente']
-    },
-    'education': {
-      india: ['BYJU\'S', 'Unacademy', 'Vedantu', 'upGrad', 'Physics Wallah', 'Simplilearn', 'Great Learning', 'Emeritus', 'Extramarks', 'Toppr'],
-      global: ['Coursera', 'Udemy', 'LinkedIn Learning', 'Khan Academy', 'edX']
-    },
-    'automotive': {
-      india: ['Maruti Suzuki', 'Hyundai India', 'Tata Motors', 'Mahindra', 'Honda Cars India', 'Toyota Kirloskar', 'Kia India', 'MG Motor India', 'Skoda India', 'Volkswagen India'],
-      global: ['Toyota', 'BMW', 'Mercedes-Benz', 'Audi', 'Honda', 'Ford', 'Tesla', 'Volkswagen']
-    },
-    'finance': {
-      india: ['HDFC Bank', 'ICICI Bank', 'SBI', 'Kotak Mahindra', 'Axis Bank', 'Bajaj Finserv', 'Zerodha', 'Groww', 'Paytm Money', 'PhonePe', 'CRED', 'Policybazaar'],
-      global: ['JPMorgan', 'Goldman Sachs', 'Visa', 'Mastercard', 'PayPal', 'Stripe']
-    },
-    'hospitality': {
-      india: ['Taj Hotels', 'Oberoi Hotels', 'ITC Hotels', 'The Leela', 'Lemon Tree Hotels', 'OYO Rooms', 'Radisson India', 'Hyatt India', 'Marriott India'],
-      global: ['Marriott', 'Hilton', 'Hyatt', 'InterContinental', 'Four Seasons', 'Ritz-Carlton']
-    },
-    'fitness': {
-      india: ['Cult.fit', 'Gold\'s Gym India', 'Anytime Fitness India', 'HealthifyMe', 'Fittr', 'Decathlon India', 'Nike India', 'Puma India'],
-      global: ['Nike', 'Adidas', 'Under Armour', 'Peloton', 'Planet Fitness', 'Equinox']
-    },
-    'beauty': {
-      india: ['Lakme', 'VLCC', 'Nykaa', 'Sugar Cosmetics', 'Mamaearth', 'WOW Skin Science', 'Forest Essentials', 'Kama Ayurveda', 'MyGlamm'],
-      global: ['L\'Oreal', 'Maybelline', 'MAC', 'Estee Lauder', 'Clinique', 'Sephora', 'Ulta Beauty']
-    },
-    'interior design': {
-      india: ['Livspace', 'HomeLane', 'Design Cafe', 'Urban Ladder', 'Pepperfry', 'IKEA India', 'Godrej Interio', 'Asian Paints Beautiful Homes'],
-      global: ['IKEA', 'Wayfair', 'West Elm', 'Pottery Barn', 'Restoration Hardware']
-    },
-    'marketing': {
-      india: ['WATConsult', 'Dentsu India', 'Ogilvy India', 'Leo Burnett India', 'BBDO India', 'Madison World', 'Havas India', 'FCB India', 'McCann India'],
-      global: ['Ogilvy', 'WPP', 'Publicis', 'Dentsu', 'Interpublic', 'Omnicom']
-    },
-    'retail': {
-      india: ['Reliance Retail', 'D-Mart', 'Big Bazaar', 'Spencer\'s', 'More Supermarket', 'Vishal Mega Mart', 'V-Mart', 'Trent (Westside)', 'Shoppers Stop'],
-      global: ['Walmart', 'Costco', 'Target', 'Carrefour', 'Tesco', 'IKEA']
-    },
-    'logistics': {
-      india: ['Delhivery', 'Blue Dart', 'DTDC', 'Ecom Express', 'Shadowfax', 'XpressBees', 'Gati', 'Safexpress', 'TCI Express'],
-      global: ['FedEx', 'UPS', 'DHL', 'Maersk', 'DB Schenker']
-    },
-    'insurance': {
-      india: ['LIC', 'HDFC Life', 'ICICI Prudential', 'SBI Life', 'Max Life', 'Bajaj Allianz', 'Tata AIA', 'Policybazaar', 'Digit Insurance', 'Acko'],
-      global: ['Allianz', 'AXA', 'MetLife', 'Prudential', 'AIG']
-    },
-    'pharma': {
-      india: ['Sun Pharma', 'Cipla', 'Dr. Reddy\'s', 'Lupin', 'Aurobindo Pharma', 'Biocon', 'Cadila Healthcare', 'Divis Labs', 'Torrent Pharma'],
-      global: ['Pfizer', 'Johnson & Johnson', 'Novartis', 'Roche', 'Merck', 'GSK', 'AstraZeneca']
-    },
-    'media': {
-      india: ['Times of India', 'Hindustan Times', 'NDTV', 'Zee Media', 'India Today', 'Republic TV', 'ABP News', 'Aaj Tak', 'The Hindu'],
-      global: ['BBC', 'CNN', 'Reuters', 'Bloomberg', 'New York Times', 'Washington Post']
-    },
-    'telecom': {
-      india: ['Jio', 'Airtel', 'Vi (Vodafone Idea)', 'BSNL', 'Tata Communications'],
-      global: ['AT&T', 'Verizon', 'T-Mobile', 'Vodafone', 'China Mobile']
-    }
-  };
-
-  // Find the matching industry
-  const industryKey = Object.keys(famousBrandsByIndustry).find(key => 
-    businessContext.industry.toLowerCase().includes(key)
-  );
-
-  const industryBrands = industryKey ? famousBrandsByIndustry[industryKey] : null;
-  const brandExamples = industryBrands 
-    ? `Indian brands: ${industryBrands.india.slice(0, 8).join(', ')}\nGlobal brands: ${industryBrands.global.slice(0, 5).join(', ')}`
-    : 'Major national and international brands in the industry';
-
-  const prompt = `You are a senior market research analyst at a top consulting firm (like McKinsey, BCG, or Bain). 
-Your expertise is identifying the most FAMOUS, WELL-ESTABLISHED competitors for businesses.
-
-⚠️ CRITICAL LOCATION CONTEXT: The business is located in ${businessContext.location}
-You MUST prioritize competitors that operate in or serve customers in ${businessContext.location}!
-
-🎯 RESEARCH TASK:
-First, mentally research "${businessContext.companyName}" - understand what they do based on:
-- Company Name: ${businessContext.companyName}
-- Industry: ${businessContext.industry}
-- Description: ${businessContext.description || 'Not provided'}
-- Target Customer: ${businessContext.targetCustomer || 'General market'}
-- Business Location: ${businessContext.location}
-
-📊 COMPETITOR REQUIREMENTS:
-Find 10-12 FAMOUS, WELL-KNOWN competitors that operate in ${businessContext.location}. These must be:
-
-✅ MUST INCLUDE:
-1. **Household name brands in ${businessContext.location}** - Companies that people in ${businessContext.location} would recognize
-2. **Publicly traded companies** or **well-funded startups** (Series B+) with presence in ${businessContext.location}
-3. **Companies with verified social media** (blue tick preferred)
-4. **Companies with Wikipedia pages** or major press coverage
-5. **Market leaders** in the ${businessContext.industry} space in ${businessContext.location}
-
-❌ MUST EXCLUDE:
-- Companies that DON'T operate in ${businessContext.location}
-- Unknown local businesses without brand recognition
-- Companies with non-English names or content (unless local to ${businessContext.location})
-- Religious or political organizations
-- Companies without professional social media presence
-- Businesses that appear spammy or unprofessional
-- Any company you're not 100% confident exists
-
-🏆 FAMOUS BRANDS IN ${businessContext.industry.toUpperCase()} (use these as reference):
-${brandExamples}
-
-📋 COMPETITOR MIX (must include all categories, ALL from ${businessContext.location} market):
-1. **Market Leaders (3-4)**: Top companies everyone in ${businessContext.location} knows
-2. **Direct Competitors (3-4)**: Similar-sized companies in same space in ${businessContext.location}
-3. **Aspirational Brands (2-3)**: Premium/global brands with strong ${businessContext.location} presence
-4. **Emerging Players (2-3)**: Well-funded startups disrupting the space in ${businessContext.location}
-
-Return ONLY this JSON (no other text):
-{
-  "competitors": [
-    {
-      "name": "Famous Brand Name",
-      "instagram": "@verified_handle",
-      "twitter": "@verified_handle", 
-      "website": "https://official-website.com",
-      "description": "Brief description of what they do",
-      "location": "${businessContext.location}",
-      "estimatedFollowers": 100000,
-      "competitorType": "market_leader|direct|aspirational|emerging",
-      "famousFor": "What they're known for in ${businessContext.location}"
-    }
-  ]
-}
-
-⚠️ QUALITY CHECK: Only include competitors that operate in ${businessContext.location}. 
-At least 80% must be ${businessContext.location}-based or have major presence there.
-If in doubt, use the reference brands I provided above. Never return less than 10 competitors.`;
-
-  try {
-    const response = await callGemini(prompt, { maxTokens: 3000, skipCache: true });
-    const result = parseGeminiJSON(response);
-
-    if (result && result.competitors && Array.isArray(result.competitors)) {
-      // Filter out any suspicious competitors
-      const validCompetitors = result.competitors.filter(comp => {
-        // Must have a name
-        if (!comp.name || comp.name.length < 2) return false;
-        
-        // Filter out non-English names (basic check)
-        const hasNonLatinChars = /[^\x00-\x7F]/.test(comp.name);
-        if (hasNonLatinChars) {
-          console.log(`⚠️ Filtered out non-English competitor: ${comp.name}`);
-          return false;
-        }
-        
-        // Filter out suspicious patterns
-        const suspiciousPatterns = ['islamic', 'halal', 'mosque', 'church', 'temple', 'religious', 'political', 'party'];
-        const nameLower = comp.name.toLowerCase();
-        if (suspiciousPatterns.some(pattern => nameLower.includes(pattern))) {
-          console.log(`⚠️ Filtered out suspicious competitor: ${comp.name}`);
-          return false;
-        }
-        
-        return true;
-      });
-
-      console.log(`🎯 Gemini found ${result.competitors.length} competitors, ${validCompetitors.length} passed validation`);
-      return validCompetitors;
-    }
-
-    console.error('Invalid Gemini response format for competitors');
-    return [];
-  } catch (error) {
-    console.error('Gemini competitor discovery error:', error.message);
-    return [];
-  }
-}
+// NOTE: discoverCompetitorsWithGemini() was removed - it was dead code with hardcoded data
+// The dual-agent system (makerAgentDiscoverCompetitors + checkerAgentValidateCompetitors) 
+// now handles all competitor discovery using pure AI research
 
 /**
  * Check if text is primarily English (Latin characters)
@@ -1721,215 +1519,56 @@ function formatTimeAgo(date) {
 }
 
 /**
- * Get fallback competitors based on industry when Gemini fails or returns few results
- * CURATED LIST OF FAMOUS, VERIFIED BRANDS ONLY
+ * Get fallback competitors using AI when main discovery returns few results
+ * Uses Gemini to dynamically find competitors instead of hardcoded lists
  */
-function getFallbackCompetitors(industry, location) {
-  const industryFallbacks = {
-    'real estate': [
-      { name: 'Sobha Limited', instagram: '@sobhadevelopers', twitter: '@SobhaLtd', website: 'https://www.sobha.com', description: 'Premium real estate developer known for luxury apartments and villas', estimatedFollowers: 85000, competitorType: 'direct' },
-      { name: 'Prestige Group', instagram: '@prestigegroup', twitter: '@PrestigeGroup', website: 'https://www.prestigeconstructions.com', description: 'Leading real estate developer in South India', estimatedFollowers: 120000, competitorType: 'direct' },
-      { name: 'Brigade Group', instagram: '@brigadegroup', twitter: '@BrigadeGroup', website: 'https://www.brigadegroup.com', description: 'Major property developer with commercial and residential projects', estimatedFollowers: 95000, competitorType: 'direct' },
-      { name: 'Godrej Properties', instagram: '@godrejproperties', twitter: '@GodrejProp', website: 'https://www.godrejproperties.com', description: 'Part of Godrej Group, premium residential developer', estimatedFollowers: 150000, competitorType: 'aspirational' },
-      { name: 'DLF Limited', instagram: '@dlflimited', twitter: '@DLF_India', website: 'https://www.dlf.in', description: "India's largest real estate developer", estimatedFollowers: 180000, competitorType: 'aspirational' },
-      { name: 'Lodha Group', instagram: '@lodhagroup', twitter: '@LodhaGroup', website: 'https://www.lodhagroup.com', description: 'Premium luxury real estate developer', estimatedFollowers: 130000, competitorType: 'direct' },
-      { name: 'Mahindra Lifespaces', instagram: '@mahindralifespaces', twitter: '@MahindraLSpc', website: 'https://www.mahindralifespaces.com', description: 'Sustainable urban development company', estimatedFollowers: 75000, competitorType: 'direct' },
-      { name: 'Puravankara', instagram: '@puravankara', twitter: '@puravankara', website: 'https://www.puravankara.com', description: 'South India focused real estate developer', estimatedFollowers: 60000, competitorType: 'direct' },
-      { name: 'Oberoi Realty', instagram: '@oberoirealty', twitter: '@OberoiRealty', website: 'https://www.oberoirealty.com', description: 'Luxury real estate developer in Mumbai', estimatedFollowers: 50000, competitorType: 'aspirational' },
-      { name: 'Embassy Group', instagram: '@embassygroup', twitter: '@EmbassyGroup', website: 'https://www.embassygroup.in', description: 'Commercial and residential real estate developer', estimatedFollowers: 45000, competitorType: 'direct' }
-    ],
-    'technology': [
-      { name: 'TCS', instagram: '@taborata_consultancy_services', twitter: '@TCS', website: 'https://www.tcs.com', description: 'Largest IT services company in India', estimatedFollowers: 500000, competitorType: 'aspirational' },
-      { name: 'Infosys', instagram: '@infosys', twitter: '@Infosys', website: 'https://www.infosys.com', description: 'Global IT consulting and services', estimatedFollowers: 450000, competitorType: 'aspirational' },
-      { name: 'Wipro', instagram: '@wipro', twitter: '@Wipro', website: 'https://www.wipro.com', description: 'IT services and consulting company', estimatedFollowers: 350000, competitorType: 'aspirational' },
-      { name: 'HCL Technologies', instagram: '@hcltech', twitter: '@hcltech', website: 'https://www.hcltech.com', description: 'Global technology company', estimatedFollowers: 280000, competitorType: 'direct' },
-      { name: 'Tech Mahindra', instagram: '@techmahindra', twitter: '@Tech_Mahindra', website: 'https://www.techmahindra.com', description: 'IT services and BPO company', estimatedFollowers: 250000, competitorType: 'direct' },
-      { name: 'Zoho', instagram: '@zoho', twitter: '@Zoho', website: 'https://www.zoho.com', description: 'Cloud software and SaaS company', estimatedFollowers: 200000, competitorType: 'direct' },
-      { name: 'Freshworks', instagram: '@freshworks', twitter: '@FreshworksInc', website: 'https://www.freshworks.com', description: 'SaaS company for customer engagement', estimatedFollowers: 80000, competitorType: 'direct' },
-      { name: 'Razorpay', instagram: '@razorpay', twitter: '@Razorpay', website: 'https://razorpay.com', description: 'Fintech payments company', estimatedFollowers: 150000, competitorType: 'indirect' },
-      { name: 'PhonePe', instagram: '@phonepe', twitter: '@PhonePe', website: 'https://www.phonepe.com', description: 'Digital payments platform', estimatedFollowers: 300000, competitorType: 'indirect' },
-      { name: 'Paytm', instagram: '@paytm', twitter: '@Paytm', website: 'https://www.paytm.com', description: 'Digital payments and fintech', estimatedFollowers: 400000, competitorType: 'indirect' }
-    ],
-    'fashion': [
-      { name: 'Myntra', instagram: '@myntra', twitter: '@myntra', website: 'https://www.myntra.com', description: 'Leading fashion e-commerce platform', estimatedFollowers: 2500000, competitorType: 'aspirational' },
-      { name: 'Ajio', instagram: '@ajiolife', twitter: '@AjioLife', website: 'https://www.ajio.com', description: 'Fashion and lifestyle e-commerce', estimatedFollowers: 800000, competitorType: 'direct' },
-      { name: 'FabIndia', instagram: '@fabindiaofficial', twitter: '@FabIndia', website: 'https://www.fabindia.com', description: 'Ethnic and sustainable fashion brand', estimatedFollowers: 650000, competitorType: 'direct' },
-      { name: 'Westside', instagram: '@westsidestores', twitter: '@WestsideStores', website: 'https://www.westside.com', description: 'Tata-owned fashion retail chain', estimatedFollowers: 400000, competitorType: 'direct' },
-      { name: 'Pantaloons', instagram: '@pantaloonsindia', twitter: '@pantaloons', website: 'https://www.pantaloons.com', description: 'Value fashion retail brand', estimatedFollowers: 550000, competitorType: 'direct' },
-      { name: 'Zara India', instagram: '@zaraofficial', twitter: '@ZARA', website: 'https://www.zara.com/in', description: 'International fast fashion brand', estimatedFollowers: 1500000, competitorType: 'aspirational' },
-      { name: 'H&M India', instagram: '@hmindia', twitter: '@hmindia', website: 'https://www.hm.com/in', description: 'Global fashion retailer in India', estimatedFollowers: 1200000, competitorType: 'aspirational' },
-      { name: 'Bewakoof', instagram: '@bewakoof', twitter: '@bewakoof', website: 'https://www.bewakoof.com', description: 'Youth-focused D2C fashion brand', estimatedFollowers: 2000000, competitorType: 'direct' },
-      { name: 'Manyavar', instagram: '@manyavar', twitter: '@Manyavar', website: 'https://www.manyavar.com', description: 'Ethnic menswear brand', estimatedFollowers: 500000, competitorType: 'direct' },
-      { name: 'Allen Solly', instagram: '@allensolly', twitter: '@AllenSolly', website: 'https://www.allensolly.com', description: 'Premium casual wear brand', estimatedFollowers: 300000, competitorType: 'direct' }
-    ],
-    'food': [
-      { name: 'Zomato', instagram: '@zomato', twitter: '@zomato', website: 'https://www.zomato.com', description: 'Food delivery and restaurant discovery platform', estimatedFollowers: 3500000, competitorType: 'aspirational' },
-      { name: 'Swiggy', instagram: '@swiggyindia', twitter: '@SwiggyIndia', website: 'https://www.swiggy.com', description: 'Food delivery platform', estimatedFollowers: 2800000, competitorType: 'aspirational' },
-      { name: "Domino's India", instagram: '@dominos_india', twitter: '@dominos_india', website: 'https://www.dominos.co.in', description: 'Pizza delivery chain', estimatedFollowers: 500000, competitorType: 'direct' },
-      { name: "McDonald's India", instagram: '@mcdonaldsindia', twitter: '@McDonaldsIndia', website: 'https://www.mcdonaldsindia.com', description: 'Fast food restaurant chain', estimatedFollowers: 800000, competitorType: 'direct' },
-      { name: 'Haldirams', instagram: '@haldirams_nagpur', twitter: '@Haldirams_India', website: 'https://www.haldirams.com', description: 'Indian snacks and sweets brand', estimatedFollowers: 450000, competitorType: 'direct' },
-      { name: 'Barbeque Nation', instagram: '@barbequenation', twitter: '@BBQNation', website: 'https://www.barbequenation.com', description: 'Casual dining restaurant chain', estimatedFollowers: 350000, competitorType: 'direct' },
-      { name: 'Starbucks India', instagram: '@starbucksindia', twitter: '@StarbucksIndia', website: 'https://www.starbucks.in', description: 'Premium coffee chain', estimatedFollowers: 600000, competitorType: 'aspirational' },
-      { name: 'KFC India', instagram: '@kfc_india', twitter: '@KFCIndia', website: 'https://www.kfc.co.in', description: 'Fried chicken fast food chain', estimatedFollowers: 400000, competitorType: 'direct' },
-      { name: 'Pizza Hut India', instagram: '@pizzahutindia', twitter: '@PizzaHutIndia', website: 'https://www.pizzahut.co.in', description: 'Pizza restaurant chain', estimatedFollowers: 300000, competitorType: 'direct' },
-      { name: 'Burger King India', instagram: '@burgerkingindia', twitter: '@BurgerKingIndia', website: 'https://www.burgerking.in', description: 'Fast food burger chain', estimatedFollowers: 350000, competitorType: 'direct' }
-    ],
-    'fitness': [
-      { name: 'Cult.fit', instagram: '@cultfitofficial', twitter: '@CultFit', website: 'https://www.cult.fit', description: 'Health and fitness platform', estimatedFollowers: 750000, competitorType: 'aspirational' },
-      { name: "Gold's Gym India", instagram: '@goldsgymindaboria', twitter: '@GoldsGymIndia', website: 'https://www.goldsgym.in', description: 'Premium gym chain', estimatedFollowers: 200000, competitorType: 'direct' },
-      { name: 'Anytime Fitness India', instagram: '@anytimefitness_india', twitter: '@AFIndia', website: 'https://www.anytimefitness.co.in', description: '24-hour gym chain', estimatedFollowers: 120000, competitorType: 'direct' },
-      { name: 'HealthifyMe', instagram: '@healthifymeofficial', twitter: '@HealthifyMe', website: 'https://www.healthifyme.com', description: 'Calorie tracking and nutrition app', estimatedFollowers: 450000, competitorType: 'indirect' },
-      { name: 'Fittr', instagram: '@fittrwithsquats', twitter: '@fittr', website: 'https://www.fittr.com', description: 'Online fitness coaching platform', estimatedFollowers: 600000, competitorType: 'direct' },
-      { name: 'Decathlon India', instagram: '@decathlonindia', twitter: '@DecathlonIn', website: 'https://www.decathlon.in', description: 'Sports equipment retailer', estimatedFollowers: 900000, competitorType: 'indirect' },
-      { name: 'Nike India', instagram: '@nikeindia', twitter: '@Nike', website: 'https://www.nike.com/in', description: 'Global sportswear brand', estimatedFollowers: 1500000, competitorType: 'aspirational' },
-      { name: 'Puma India', instagram: '@pumaindia', twitter: '@PUMAIndia', website: 'https://in.puma.com', description: 'Sports and lifestyle brand', estimatedFollowers: 800000, competitorType: 'aspirational' },
-      { name: 'Adidas India', instagram: '@adidasindia', twitter: '@adidasindia', website: 'https://www.adidas.co.in', description: 'Global sportswear brand', estimatedFollowers: 700000, competitorType: 'aspirational' },
-      { name: 'Under Armour India', instagram: '@underarmourin', twitter: '@UnderArmour', website: 'https://www.underarmour.in', description: 'Performance sportswear brand', estimatedFollowers: 200000, competitorType: 'direct' }
-    ],
-    'healthcare': [
-      { name: 'Apollo Hospitals', instagram: '@apollohospitals', twitter: '@HospitalsApollo', website: 'https://www.apollohospitals.com', description: 'Largest hospital chain in India', estimatedFollowers: 500000, competitorType: 'aspirational' },
-      { name: 'Fortis Healthcare', instagram: '@fortis_healthcare', twitter: '@fortishealthcare', website: 'https://www.fortishealthcare.com', description: 'Multi-specialty hospital chain', estimatedFollowers: 250000, competitorType: 'direct' },
-      { name: 'Max Healthcare', instagram: '@maxhealthcare', twitter: '@MaxHealthcare', website: 'https://www.maxhealthcare.in', description: 'Premium hospital chain', estimatedFollowers: 200000, competitorType: 'direct' },
-      { name: 'Manipal Hospitals', instagram: '@manipalhospitals', twitter: '@ManipalHealth', website: 'https://www.manipalhospitals.com', description: 'Multi-specialty hospital network', estimatedFollowers: 150000, competitorType: 'direct' },
-      { name: 'Narayana Health', instagram: '@narayanahealth', twitter: '@NarayanaHealth', website: 'https://www.narayanahealth.org', description: 'Affordable healthcare provider', estimatedFollowers: 100000, competitorType: 'direct' },
-      { name: 'Medanta', instagram: '@medanta', twitter: '@Medanta', website: 'https://www.medanta.org', description: 'Multi super-specialty hospital', estimatedFollowers: 120000, competitorType: 'direct' },
-      { name: 'Practo', instagram: '@practo', twitter: '@Practo', website: 'https://www.practo.com', description: 'Healthcare technology platform', estimatedFollowers: 300000, competitorType: 'indirect' },
-      { name: '1mg', instagram: '@1mgofficial', twitter: '@1mgOfficial', website: 'https://www.1mg.com', description: 'Online pharmacy and healthcare', estimatedFollowers: 200000, competitorType: 'indirect' },
-      { name: 'PharmEasy', instagram: '@pharmeasyofficial', twitter: '@PharmEasy', website: 'https://www.pharmeasy.in', description: 'Online pharmacy platform', estimatedFollowers: 250000, competitorType: 'indirect' },
-      { name: 'Netmeds', instagram: '@netmeds', twitter: '@netmeds', website: 'https://www.netmeds.com', description: 'Online pharmacy', estimatedFollowers: 150000, competitorType: 'indirect' }
-    ],
-    'education': [
-      { name: "BYJU'S", instagram: '@byjuslearning', twitter: '@byjus', website: 'https://byjus.com', description: 'EdTech unicorn for K-12 learning', estimatedFollowers: 2000000, competitorType: 'aspirational' },
-      { name: 'Unacademy', instagram: '@unacademy', twitter: '@Unacademy', website: 'https://unacademy.com', description: 'Online learning platform for competitive exams', estimatedFollowers: 1500000, competitorType: 'direct' },
-      { name: 'Vedantu', instagram: '@vedantu', twitter: '@vedantu', website: 'https://www.vedantu.com', description: 'Live online tutoring platform', estimatedFollowers: 800000, competitorType: 'direct' },
-      { name: 'upGrad', instagram: '@upgradedu', twitter: '@upGrad', website: 'https://www.upgrad.com', description: 'Online higher education platform', estimatedFollowers: 400000, competitorType: 'direct' },
-      { name: 'Physics Wallah', instagram: '@physicswallah', twitter: '@PW_physicswala', website: 'https://www.pw.live', description: 'Affordable exam preparation platform', estimatedFollowers: 3000000, competitorType: 'direct' },
-      { name: 'Simplilearn', instagram: '@simplilearn', twitter: '@simplilearn', website: 'https://www.simplilearn.com', description: 'Professional certification courses', estimatedFollowers: 300000, competitorType: 'direct' },
-      { name: 'Great Learning', instagram: '@greatlearning', twitter: '@greatlearning', website: 'https://www.greatlearning.in', description: 'Professional and higher education', estimatedFollowers: 250000, competitorType: 'direct' },
-      { name: 'Coursera', instagram: '@coursera', twitter: '@coursera', website: 'https://www.coursera.org', description: 'Global online learning platform', estimatedFollowers: 1500000, competitorType: 'aspirational' },
-      { name: 'Udemy', instagram: '@udemy', twitter: '@udemy', website: 'https://www.udemy.com', description: 'Online course marketplace', estimatedFollowers: 1200000, competitorType: 'aspirational' },
-      { name: 'Khan Academy', instagram: '@khanacademy', twitter: '@khanacademy', website: 'https://www.khanacademy.org', description: 'Free online education', estimatedFollowers: 800000, competitorType: 'aspirational' }
-    ],
-    'finance': [
-      { name: 'HDFC Bank', instagram: '@hdfcbank', twitter: '@HDFCBank', website: 'https://www.hdfcbank.com', description: 'Largest private sector bank in India', estimatedFollowers: 800000, competitorType: 'aspirational' },
-      { name: 'ICICI Bank', instagram: '@icicibank', twitter: '@ICICIBank', website: 'https://www.icicibank.com', description: 'Major private sector bank', estimatedFollowers: 600000, competitorType: 'aspirational' },
-      { name: 'Kotak Mahindra Bank', instagram: '@kotak_mahindra_bank', twitter: '@KotakBankLtd', website: 'https://www.kotak.com', description: 'Private sector bank', estimatedFollowers: 400000, competitorType: 'direct' },
-      { name: 'Axis Bank', instagram: '@axisbank', twitter: '@AxisBank', website: 'https://www.axisbank.com', description: 'Private sector bank', estimatedFollowers: 350000, competitorType: 'direct' },
-      { name: 'Bajaj Finserv', instagram: '@bajajfinserv', twitter: '@BajajFinserv', website: 'https://www.bajajfinserv.in', description: 'Financial services company', estimatedFollowers: 300000, competitorType: 'direct' },
-      { name: 'Zerodha', instagram: '@zerodha', twitter: '@zerodha', website: 'https://zerodha.com', description: 'Discount stock broker', estimatedFollowers: 500000, competitorType: 'direct' },
-      { name: 'Groww', instagram: '@groww', twitter: '@GrowwApp', website: 'https://groww.in', description: 'Investment platform', estimatedFollowers: 600000, competitorType: 'direct' },
-      { name: 'CRED', instagram: '@cred_club', twitter: '@CRED_club', website: 'https://cred.club', description: 'Credit card bill payment app', estimatedFollowers: 400000, competitorType: 'indirect' },
-      { name: 'Policybazaar', instagram: '@policybazaar', twitter: '@PolicybazaarIn', website: 'https://www.policybazaar.com', description: 'Insurance comparison platform', estimatedFollowers: 250000, competitorType: 'indirect' },
-      { name: 'Paytm Money', instagram: '@paytmmoney', twitter: '@PaytmMoney', website: 'https://www.paytmmoney.com', description: 'Investment and trading platform', estimatedFollowers: 200000, competitorType: 'direct' }
-    ],
-    // SaaS and Social Media Management Tools
-    'saas': [
-      { name: 'Hootsuite', instagram: '@hootsuite', twitter: '@hootsuite', website: 'https://www.hootsuite.com', description: 'Social media management platform', estimatedFollowers: 400000, competitorType: 'market_leader' },
-      { name: 'Buffer', instagram: '@buffer', twitter: '@buffer', website: 'https://buffer.com', description: 'Social media scheduling and analytics', estimatedFollowers: 200000, competitorType: 'direct' },
-      { name: 'Sprout Social', instagram: '@spraboroutsocial', twitter: '@SproutSocial', website: 'https://sproutsocial.com', description: 'Social media management suite', estimatedFollowers: 150000, competitorType: 'direct' },
-      { name: 'Later', instagram: '@latermedia', twitter: '@latermedia', website: 'https://later.com', description: 'Visual social media planner', estimatedFollowers: 300000, competitorType: 'direct' },
-      { name: 'Sprinklr', instagram: '@sprinklr', twitter: '@Sprinklr', website: 'https://www.sprinklr.com', description: 'Enterprise social media management', estimatedFollowers: 80000, competitorType: 'market_leader' },
-      { name: 'HubSpot', instagram: '@hubspot', twitter: '@HubSpot', website: 'https://www.hubspot.com', description: 'Marketing and CRM platform', estimatedFollowers: 500000, competitorType: 'market_leader' },
-      { name: 'Zoho Social', instagram: '@zoho', twitter: '@Zoho', website: 'https://www.zoho.com/social', description: 'Social media management tool', estimatedFollowers: 200000, competitorType: 'direct' },
-      { name: 'Agorapulse', instagram: '@agorapulse', twitter: '@Agorapulse', website: 'https://www.agorapulse.com', description: 'Social media management tool', estimatedFollowers: 50000, competitorType: 'direct' },
-      { name: 'Sendible', instagram: '@sendible', twitter: '@Sendible', website: 'https://www.sendible.com', description: 'Social media management for agencies', estimatedFollowers: 30000, competitorType: 'direct' },
-      { name: 'Loomly', instagram: '@loomly', twitter: '@laboroomly', website: 'https://www.loomly.com', description: 'Brand success platform', estimatedFollowers: 20000, competitorType: 'direct' },
-      { name: 'CoSchedule', instagram: '@coschedule', twitter: '@CoSchedule', website: 'https://coschedule.com', description: 'Marketing calendar and scheduling', estimatedFollowers: 40000, competitorType: 'direct' },
-      { name: 'SocialBee', instagram: '@socialbee', twitter: '@SocialBeeHQ', website: 'https://socialbee.com', description: 'Social media management tool', estimatedFollowers: 25000, competitorType: 'direct' }
-    ],
-    'social media': [
-      { name: 'Hootsuite', instagram: '@hootsuite', twitter: '@hootsuite', website: 'https://www.hootsuite.com', description: 'Social media management platform', estimatedFollowers: 400000, competitorType: 'market_leader' },
-      { name: 'Buffer', instagram: '@buffer', twitter: '@buffer', website: 'https://buffer.com', description: 'Social media scheduling and analytics', estimatedFollowers: 200000, competitorType: 'direct' },
-      { name: 'Sprout Social', instagram: '@sproutsocial', twitter: '@SproutSocial', website: 'https://sproutsocial.com', description: 'Social media management suite', estimatedFollowers: 150000, competitorType: 'direct' },
-      { name: 'Later', instagram: '@latermedia', twitter: '@latermedia', website: 'https://later.com', description: 'Visual social media planner', estimatedFollowers: 300000, competitorType: 'direct' },
-      { name: 'Sprinklr', instagram: '@sprinklr', twitter: '@Sprinklr', website: 'https://www.sprinklr.com', description: 'Enterprise social media management', estimatedFollowers: 80000, competitorType: 'market_leader' },
-      { name: 'HubSpot', instagram: '@hubspot', twitter: '@HubSpot', website: 'https://www.hubspot.com', description: 'Marketing and CRM platform', estimatedFollowers: 500000, competitorType: 'market_leader' },
-      { name: 'Zoho Social', instagram: '@zoho', twitter: '@Zoho', website: 'https://www.zoho.com/social', description: 'Social media management tool', estimatedFollowers: 200000, competitorType: 'direct' },
-      { name: 'Canva', instagram: '@canva', twitter: '@canva', website: 'https://www.canva.com', description: 'Design and content creation platform', estimatedFollowers: 2000000, competitorType: 'indirect' },
-      { name: 'Adobe Express', instagram: '@adobe', twitter: '@Adobe', website: 'https://www.adobe.com/express', description: 'Quick content creation tool', estimatedFollowers: 1500000, competitorType: 'indirect' },
-      { name: 'Notion', instagram: '@notionhq', twitter: '@NotionHQ', website: 'https://www.notion.so', description: 'Workspace and collaboration tool', estimatedFollowers: 500000, competitorType: 'indirect' },
-      { name: 'Monday.com', instagram: '@mondaydotcom', twitter: '@mondaydotcom', website: 'https://monday.com', description: 'Work management platform', estimatedFollowers: 300000, competitorType: 'indirect' },
-      { name: 'Asana', instagram: '@asana', twitter: '@asana', website: 'https://asana.com', description: 'Project management tool', estimatedFollowers: 200000, competitorType: 'indirect' }
-    ],
-    'marketing': [
-      { name: 'HubSpot', instagram: '@hubspot', twitter: '@HubSpot', website: 'https://www.hubspot.com', description: 'Inbound marketing and CRM', estimatedFollowers: 500000, competitorType: 'market_leader' },
-      { name: 'Mailchimp', instagram: '@mailchimp', twitter: '@Mailchimp', website: 'https://mailchimp.com', description: 'Email marketing platform', estimatedFollowers: 400000, competitorType: 'market_leader' },
-      { name: 'Hootsuite', instagram: '@hootsuite', twitter: '@hootsuite', website: 'https://www.hootsuite.com', description: 'Social media management platform', estimatedFollowers: 400000, competitorType: 'direct' },
-      { name: 'Semrush', instagram: '@semrush', twitter: '@semrush', website: 'https://www.semrush.com', description: 'SEO and marketing analytics', estimatedFollowers: 200000, competitorType: 'direct' },
-      { name: 'Ahrefs', instagram: '@aaborhrefs', twitter: '@ahrefs', website: 'https://ahrefs.com', description: 'SEO tools and analytics', estimatedFollowers: 100000, competitorType: 'direct' },
-      { name: 'Moz', instagram: '@maboroz', twitter: '@Moz', website: 'https://moz.com', description: 'SEO software and tools', estimatedFollowers: 80000, competitorType: 'direct' },
-      { name: 'Canva', instagram: '@canva', twitter: '@canva', website: 'https://www.canva.com', description: 'Design platform for marketers', estimatedFollowers: 2000000, competitorType: 'indirect' },
-      { name: 'Salesforce Marketing Cloud', instagram: '@salesforce', twitter: '@salesforce', website: 'https://www.salesforce.com/products/marketing-cloud', description: 'Enterprise marketing automation', estimatedFollowers: 800000, competitorType: 'market_leader' },
-      { name: 'ActiveCampaign', instagram: '@activecampaign', twitter: '@ActiveCampaign', website: 'https://www.activecampaign.com', description: 'Marketing automation platform', estimatedFollowers: 100000, competitorType: 'direct' },
-      { name: 'Klaviyo', instagram: '@klaviyo', twitter: '@klaviyo', website: 'https://www.klaviyo.com', description: 'Email marketing for e-commerce', estimatedFollowers: 80000, competitorType: 'direct' },
-      { name: 'Intercom', instagram: '@intercom', twitter: '@intercom', website: 'https://www.intercom.com', description: 'Customer messaging platform', estimatedFollowers: 100000, competitorType: 'indirect' },
-      { name: 'Drift', instagram: '@drift', twitter: '@drift', website: 'https://www.drift.com', description: 'Conversational marketing platform', estimatedFollowers: 50000, competitorType: 'indirect' }
-    ],
-    'startup': [
-      { name: 'Y Combinator Companies', instagram: '@ycombinator', twitter: '@ycombinator', website: 'https://www.ycombinator.com', description: 'Top startup accelerator', estimatedFollowers: 800000, competitorType: 'market_leader' },
-      { name: 'Techstars', instagram: '@techstars', twitter: '@techstars', website: 'https://www.techstars.com', description: 'Global startup accelerator', estimatedFollowers: 300000, competitorType: 'direct' },
-      { name: '500 Startups', instagram: '@500global', twitter: '@500Global', website: 'https://500.co', description: 'Venture capital and accelerator', estimatedFollowers: 200000, competitorType: 'direct' },
-      { name: 'AngelList', instagram: '@angellist', twitter: '@angellist', website: 'https://angel.co', description: 'Startup funding platform', estimatedFollowers: 150000, competitorType: 'indirect' },
-      { name: 'Product Hunt', instagram: '@productaborhunt', twitter: '@ProductHunt', website: 'https://www.producthunt.com', description: 'Product discovery platform', estimatedFollowers: 200000, competitorType: 'indirect' },
-      { name: 'Crunchbase', instagram: '@crunchbase', twitter: '@crunchbase', website: 'https://www.crunchbase.com', description: 'Startup and funding database', estimatedFollowers: 100000, competitorType: 'indirect' },
-      { name: 'TiE', instagram: '@tie_global', twitter: '@TiEGlobal', website: 'https://tie.org', description: 'Global entrepreneur network', estimatedFollowers: 50000, competitorType: 'direct' },
-      { name: 'Nasscom', instagram: '@nasscom', twitter: '@nassaborcom', website: 'https://nasscom.in', description: 'Indian IT industry association', estimatedFollowers: 80000, competitorType: 'direct' },
-      { name: 'Indian Angel Network', instagram: '@indianangelnetwork', twitter: '@IAN_network', website: 'https://www.indianangelnetwork.com', description: 'Angel investor network', estimatedFollowers: 30000, competitorType: 'direct' },
-      { name: 'Sequoia India', instagram: '@sequoiaindiaaborsa', twitter: '@sequoia_india', website: 'https://www.sequoiacap.com', description: 'Venture capital firm', estimatedFollowers: 50000, competitorType: 'indirect' }
-    ]
-  };
-
-  // Find matching industry - check multiple keywords
-  let industryKey = Object.keys(industryFallbacks).find(key => 
-    industry.toLowerCase().includes(key)
-  );
+async function getFallbackCompetitors(industry, location) {
+  console.log(`🔄 Fetching AI-powered fallback competitors for ${industry} in ${location}...`);
   
-  // Additional keyword matching for SaaS/Social Media tools
-  if (!industryKey) {
-    const industryLower = industry.toLowerCase();
-    if (industryLower.includes('social') || industryLower.includes('management') || industryLower.includes('scheduling')) {
-      industryKey = 'social media';
-    } else if (industryLower.includes('saas') || industryLower.includes('software') || industryLower.includes('platform')) {
-      industryKey = 'saas';
-    } else if (industryLower.includes('market') || industryLower.includes('advertis') || industryLower.includes('agency')) {
-      industryKey = 'marketing';
-    } else if (industryLower.includes('startup') || industryLower.includes('accelerator') || industryLower.includes('incubator')) {
-      industryKey = 'startup';
+  const prompt = `You are a market research expert. Find 10 REAL, FAMOUS competitors in the "${industry}" industry.
+
+REQUIREMENTS:
+- Focus on companies operating in or serving ${location}
+- Only include REAL companies that definitely exist
+- Include a mix of: market leaders, direct competitors, and emerging players
+- Each must have active social media presence
+
+Return ONLY this JSON (no other text):
+{
+  "competitors": [
+    {
+      "name": "Company Name",
+      "website": "https://website.com",
+      "instagram": "@handle",
+      "twitter": "@handle",
+      "description": "Brief description",
+      "location": "${location}",
+      "estimatedFollowers": 100000,
+      "competitorType": "market_leader|direct|emerging"
     }
-  }
-
-  let fallbacks = industryKey ? industryFallbacks[industryKey] : getGenericCompetitors();
-  
-  // Clean up handles
-  return fallbacks.map(comp => ({
-    ...comp,
-    instagram: (comp.instagram || '').replace(/abor/g, ''),
-    twitter: (comp.twitter || '').replace(/abor/g, ''),
-    whyCompetitor: `Leading ${comp.competitorType} player in the ${industry} industry`
-  }));
+  ]
 }
 
-/**
- * Get generic competitors as ultimate fallback - Major Indian Conglomerates
- */
-function getGenericCompetitors() {
-  return [
-    { name: 'Reliance Industries', instagram: '@relianceindustries', twitter: '@RIL_Updates', website: 'https://www.ril.com', description: 'Largest conglomerate in India', estimatedFollowers: 500000, competitorType: 'aspirational' },
-    { name: 'Tata Group', instagram: '@tatagroup', twitter: '@TataCompanies', website: 'https://www.tata.com', description: 'Diversified business conglomerate', estimatedFollowers: 600000, competitorType: 'aspirational' },
-    { name: 'Mahindra Group', instagram: '@mahindrarise', twitter: '@MahindraRise', website: 'https://www.mahindra.com', description: 'Diversified business group', estimatedFollowers: 400000, competitorType: 'aspirational' },
-    { name: 'Aditya Birla Group', instagram: '@adityabirlagrp', twitter: '@AdityaBirlaGrp', website: 'https://www.adityabirla.com', description: 'Global conglomerate', estimatedFollowers: 200000, competitorType: 'aspirational' },
-    { name: 'Godrej Group', instagram: '@godrejgroup', twitter: '@GodrejGroup', website: 'https://www.godrejgroup.com', description: 'Diversified business group', estimatedFollowers: 180000, competitorType: 'aspirational' },
-    { name: 'ITC Limited', instagram: '@itcltd', twitter: '@ITCCorpCom', website: 'https://www.itcportal.com', description: 'FMCG and hospitality conglomerate', estimatedFollowers: 350000, competitorType: 'aspirational' },
-    { name: 'Hindustan Unilever', instagram: '@hulindia', twitter: '@HUL_News', website: 'https://www.hul.co.in', description: 'FMCG company', estimatedFollowers: 150000, competitorType: 'aspirational' },
-    { name: 'Bajaj Group', instagram: '@bajajgroup', twitter: '@BajajAuto', website: 'https://www.bajajgroup.org', description: 'Diversified business group', estimatedFollowers: 250000, competitorType: 'aspirational' },
-    { name: 'Larsen & Toubro', instagram: '@lofficialindia', twitter: '@LnTofficial', website: 'https://www.larsentoubro.com', description: 'Engineering and construction conglomerate', estimatedFollowers: 200000, competitorType: 'aspirational' },
-    { name: 'Adani Group', instagram: '@adaboranigroup', twitter: '@AdaniOnline', website: 'https://www.adani.com', description: 'Infrastructure and energy conglomerate', estimatedFollowers: 300000, competitorType: 'aspirational' }
-  ].map(comp => ({
-    ...comp,
-    instagram: (comp.instagram || '').replace(/abor/g, ''),
-    twitter: (comp.twitter || '').replace(/abor/g, ''),
-    whyCompetitor: 'Major business conglomerate in India'
-  }));
+Find exactly 10 competitors. Be accurate - only include companies you're certain exist.`;
+
+  try {
+    const response = await callGemini(prompt, { maxTokens: 2000, skipCache: true });
+    const result = parseGeminiJSON(response);
+
+    if (result && result.competitors && Array.isArray(result.competitors)) {
+      console.log(`✅ AI fallback found ${result.competitors.length} competitors`);
+      return result.competitors.map(comp => ({
+        ...comp,
+        whyCompetitor: `AI-discovered ${comp.competitorType} competitor in ${industry}`
+      }));
+    }
+  } catch (error) {
+    console.error('AI fallback error:', error.message);
+  }
+
+  // Ultimate fallback - return empty array, let the main system handle it
+  console.warn('⚠️ AI fallback failed, returning empty array');
+  return [];
 }
 
 module.exports = router;
