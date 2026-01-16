@@ -11,6 +11,7 @@ const User = require('../models/User');
 const BrandProfile = require('../models/BrandProfile');
 const OnboardingContext = require('../models/OnboardingContext');
 const { callGemini, parseGeminiJSON, calculateInfluencerMatchScore } = require('../services/geminiAI');
+const { getAllRelevantInfluencers, getInfluencersByNiche, getRegionalInfluencers } = require('../data/realInfluencers');
 
 /**
  * GET /api/influencers
@@ -444,206 +445,159 @@ function categorizeInfluencerTier(followerCount) {
 }
 
 /**
- * Discover influencers across MULTIPLE platforms using Gemini AI
- * Returns exactly 15 UNIQUE influencers: 5 MEGA, 5 MACRO, 5 MICRO
- * All influencers must be relevant to the business and located in the business region
+ * Discover influencers from CURATED DATABASE of REAL, VERIFIED profiles
+ * Returns 15 UNIQUE influencers: 5 REGIONAL, 5 NATIONAL, 5 MICRO
+ * All influencers are REAL accounts that actually exist
  */
 async function discoverMultiPlatformInfluencers(businessContext) {
   const location = businessContext.businessLocation || 'India';
   const city = businessContext.businessCity || '';
   const state = businessContext.businessState || '';
   const country = businessContext.businessCountry || 'India';
+  const industry = businessContext.industry || 'startup';
 
-  // Build location context string
-  let locationContext = country;
-  if (state) locationContext = `${state}, ${country}`;
-  if (city) locationContext = `${city}, ${state || country}`;
+  console.log(`📚 Using curated database for industry: ${industry}, location: ${state || city || location}`);
 
-  // Determine niche-specific influencer types
-  const industry = (businessContext.industry || '').toLowerCase();
-  const description = (businessContext.description || '').toLowerCase();
+  // Get influencers from our curated REAL database
+  const nicheInfluencers = getInfluencersByNiche(industry);
+  const regionalInfluencers = getRegionalInfluencers(state || city || location);
   
-  // Identify the exact niche for better influencer matching
-  let nicheSpecificGuidance = '';
-  let excludeNiches = [];
-  
-  if (industry.includes('startup') || industry.includes('accelerator') || industry.includes('incubator') || 
-      description.includes('startup') || description.includes('entrepreneur')) {
-    nicheSpecificGuidance = `
-🎯 NICHE: STARTUP & ENTREPRENEURSHIP
-Find influencers who talk about:
-- Startups, entrepreneurship, business building
-- Venture capital, funding, investor relations
-- Business strategy, growth hacking
-- Founder stories, startup journeys
+  console.log(`📊 Found ${nicheInfluencers.length} niche influencers, ${regionalInfluencers.length} regional influencers`);
 
-EXAMPLE RELEVANT INFLUENCERS (use as reference):
-- Startup founders who share their journey
-- VC partners who give business advice
-- Business coaches and mentors
-- Tech entrepreneurs, solopreneurs
-- LinkedIn thought leaders on startups`;
-    excludeNiches = ['Comedy', 'Fashion', 'Beauty', 'Food', 'Travel', 'Gaming', 'Music', 'Dance', 'Lifestyle', 'Entertainment', 'Movies', 'TV Shows', 'Cooking', 'Fitness', 'Sports'];
-  } else if (industry.includes('education') || industry.includes('edtech') || industry.includes('learning')) {
-    nicheSpecificGuidance = `
-🎯 NICHE: EDUCATION & LEARNING
-Find influencers who talk about:
-- Education, teaching, learning methods
-- Online courses, skill development
-- Career guidance, exam preparation
-- Study tips, educational content`;
-    excludeNiches = ['Comedy', 'Fashion', 'Beauty', 'Food', 'Travel', 'Gaming', 'Music', 'Dance'];
-  } else if (industry.includes('tech') || industry.includes('software') || industry.includes('saas')) {
-    nicheSpecificGuidance = `
-🎯 NICHE: TECHNOLOGY & SOFTWARE
-Find influencers who talk about:
-- Technology, software, coding
-- SaaS, product reviews, tech news
-- Developer content, programming tutorials
-- AI, machine learning, data science`;
-    excludeNiches = ['Fashion', 'Beauty', 'Food', 'Cooking', 'Dance', 'Movies'];
+  // Combine and categorize
+  const allInfluencers = [...nicheInfluencers, ...regionalInfluencers];
+  
+  // Deduplicate by handle+platform
+  const seen = new Set();
+  const uniqueInfluencers = allInfluencers.filter(inf => {
+    const key = `${inf.handle.toLowerCase()}-${inf.platform.toLowerCase()}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  console.log(`✅ After deduplication: ${uniqueInfluencers.length} unique influencers`);
+
+  // Now use Gemini to RANK these real influencers for the specific business
+  const rankedInfluencers = await rankInfluencersForBusiness(uniqueInfluencers, businessContext);
+  
+  // Take top 15, ensuring variety in tiers
+  const regional = rankedInfluencers.filter(i => i.tier === 'regional').slice(0, 5);
+  const national = rankedInfluencers.filter(i => i.tier === 'national').slice(0, 5);
+  const micro = rankedInfluencers.filter(i => i.tier === 'micro').slice(0, 5);
+  
+  // Fill remaining slots if needed
+  const selected = [...regional, ...national, ...micro];
+  const remaining = rankedInfluencers.filter(i => !selected.includes(i)).slice(0, 15 - selected.length);
+  
+  const finalList = [...selected, ...remaining].slice(0, 15);
+  
+  console.log(`🎯 Selected ${finalList.length} influencers: ${regional.length} regional, ${national.length} national, ${micro.length} micro`);
+  
+  return finalList;
+}
+
+/**
+ * Use Gemini to RANK real influencers for a specific business
+ * Does NOT ask Gemini to generate new influencers - only ranks existing ones
+ */
+async function rankInfluencersForBusiness(influencers, businessContext) {
+  if (!influencers || influencers.length === 0) {
+    return [];
   }
 
-  const prompt = `You are an expert influencer marketing consultant specializing in ${businessContext.industry}. 
+  // Create a simplified list for ranking
+  const influencerList = influencers.map((inf, idx) => ({
+    id: idx,
+    name: inf.name,
+    platform: inf.platform,
+    niche: Array.isArray(inf.niche) ? inf.niche.join(', ') : inf.niche,
+    followers: inf.followerCount,
+    location: inf.location,
+    bio: inf.bio
+  }));
 
-🚨🚨🚨 CRITICAL: READ THIS CAREFULLY 🚨🚨🚨
+  const prompt = `You are an influencer marketing expert. Rank these REAL influencers for a business.
 
-═══════════════════════════════════════════════════════════════
-📋 BUSINESS DETAILS:
-═══════════════════════════════════════════════════════════════
-• Company: ${businessContext.companyName}
-• Industry/Niche: ${businessContext.industry}
-• Description: ${businessContext.description || 'Not provided'}
-• Target Customer: ${businessContext.targetCustomer || 'General consumers'}
-• Marketing Goal: ${businessContext.primaryGoal || 'Brand awareness'}
-${nicheSpecificGuidance}
+BUSINESS:
+- Company: ${businessContext.companyName}
+- Industry: ${businessContext.industry}
+- Description: ${businessContext.description || 'Not provided'}
+- Target: ${businessContext.targetCustomer || 'General'}
+- Location: ${businessContext.businessLocation || 'India'}
 
-═══════════════════════════════════════════════════════════════
-📍 LOCATION - PRIORITIZE REGIONAL INFLUENCERS:
-═══════════════════════════════════════════════════════════════
-• Business Location: ${locationContext}
-• City: ${city || 'Not specified'}
-• State/Region: ${state || 'Not specified'}
-• Country: ${country}
+INFLUENCERS TO RANK (these are REAL people, just rank them):
+${JSON.stringify(influencerList, null, 2)}
 
-REGIONAL DISTRIBUTION (MANDATORY):
-- 5 influencers: REGIONAL (from ${state || city || locationContext} specifically)
-- 5 influencers: NATIONAL (famous across ${country} but relevant to niche)
-- 5 influencers: LOCAL MICRO (10K-100K followers, high engagement, hyper-local)
-
-${city || state ? `🔴 PRIORITY: At least 5 influencers MUST be from ${city || state} or create content for ${city || state} audience.` : ''}
-
-═══════════════════════════════════════════════════════════════
-🚫 STRICT NICHE REQUIREMENTS - DO NOT IGNORE:
-═══════════════════════════════════════════════════════════════
-
-✅ ONLY include influencers whose PRIMARY content is about: ${businessContext.industry}
-❌ DO NOT include influencers from these niches: ${excludeNiches.join(', ')}
-
-${excludeNiches.length > 0 ? `
-🚫 BANNED CATEGORIES (NEVER include these):
-${excludeNiches.map(n => `- NO ${n} influencers`).join('\n')}
-
-For example, if business is "Startup Accelerator":
-❌ DO NOT include: Prajakta Koli (Comedy), Neha Kakkar (Music), Bhuvan Bam (Comedy), CarryMinati (Gaming)
-✅ DO include: Ankur Warikoo (Business), Varun Mayya (Startups), Raj Shamani (Entrepreneurship), Nithin Kamath (FinTech)
-` : ''}
-
-═══════════════════════════════════════════════════════════════
-🎯 INFLUENCER TIERS (exactly 15 total):
-═══════════════════════════════════════════════════════════════
-
-1. REGIONAL NICHE EXPERTS (5 influencers):
-   - Based in ${state || city || locationContext}
-   - 50K-500K followers
-   - MUST be in ${businessContext.industry} niche
-   - High local influence
-
-2. NATIONAL THOUGHT LEADERS (5 influencers):
-   - Famous across ${country}
-   - 500K-5M followers  
-   - MUST talk about ${businessContext.industry} topics
-   - Respected in the industry
-
-3. MICRO INFLUENCERS (5 influencers):
-   - 10K-100K followers
-   - Very high engagement (4%+)
-   - Hyper-focused on ${businessContext.industry}
-   - Often reply to comments, authentic
-
-═══════════════════════════════════════════════════════════════
-📱 PLATFORM MIX:
-═══════════════════════════════════════════════════════════════
-- Instagram: 4-5 (visual content creators)
-- YouTube: 4-5 (long-form educators)
-- LinkedIn: 3-4 (professional thought leaders)
-- Twitter/X: 2-3 (industry voices)
-
-═══════════════════════════════════════════════════════════════
-📊 RETURN FORMAT (JSON):
-═══════════════════════════════════════════════════════════════
+Return ONLY valid JSON with ranked IDs and scores:
 {
-  "influencers": [
-    {
-      "name": "Full Real Name",
-      "handle": "exact_username",
-      "platform": "instagram|youtube|twitter|linkedin|facebook",
-      "bio": "What they do - must be relevant to ${businessContext.industry}",
-      "niche": ["${businessContext.industry}", "related_subniche"],
-      "location": "City, State",
-      "tier": "regional|national|micro",
-      "followerCount": 150000,
-      "reach": 50000,
-      "engagementRate": 4.2,
-      "isVerified": true,
-      "contentType": "Type of content they create",
-      "audienceType": "Who follows them",
-      "relevanceScore": 90,
-      "relevanceReason": "Why they're perfect for ${businessContext.companyName}",
-      "estimatedCost": "₹25,000 - ₹75,000 per post"
-    }
+  "rankings": [
+    { "id": 0, "score": 95, "reason": "Why this influencer is perfect" },
+    { "id": 2, "score": 88, "reason": "Why this influencer is relevant" }
   ]
 }
 
-🔴 FINAL VALIDATION BEFORE RESPONDING:
-□ All 15 are in ${businessContext.industry} niche? (NOT comedy, lifestyle, entertainment)
-□ At least 5 are from ${state || city || locationContext}?
-□ No duplicate names?
-□ Mix of platforms (not all Instagram)?
-□ All are REAL, currently active influencers?`;
+Rules:
+- Only return IDs from the list above
+- Score 80+ = highly relevant
+- Score 60-79 = moderately relevant
+- Score below 60 = not very relevant
+- Order by score descending`;
 
   try {
-    const response = await callGemini(prompt, { maxTokens: 4000, skipCache: true });
+    const response = await callGemini(prompt, { maxTokens: 2000, skipCache: true });
     const result = parseGeminiJSON(response);
     
-    if (result && result.influencers && Array.isArray(result.influencers)) {
-      console.log(`🎯 Gemini returned ${result.influencers.length} influencers across platforms`);
+    if (result && result.rankings && Array.isArray(result.rankings)) {
+      console.log(`📊 Gemini ranked ${result.rankings.length} influencers`);
       
-      // Log breakdown by tier and platform
-      const byTier = { mega: 0, macro: 0, micro: 0 };
-      const byPlatform = {};
-      result.influencers.forEach(inf => {
-        byTier[inf.tier || categorizeInfluencerTier(inf.followerCount)]++;
-        byPlatform[inf.platform] = (byPlatform[inf.platform] || 0) + 1;
-      });
-      console.log('📊 By Tier:', byTier);
-      console.log('📱 By Platform:', byPlatform);
+      // Map rankings back to influencer objects
+      const rankedInfluencers = result.rankings
+        .filter(r => r.id >= 0 && r.id < influencers.length)
+        .map(r => ({
+          ...influencers[r.id],
+          relevanceScore: r.score || 80,
+          relevanceReason: r.reason || 'AI-matched for your business'
+        }))
+        .sort((a, b) => b.relevanceScore - a.relevanceScore);
       
-      return result.influencers;
+      return rankedInfluencers;
     }
-    
-    console.error('Invalid Gemini response format');
-    return [];
   } catch (error) {
-    console.error('Gemini influencer discovery error:', error.message);
-    return [];
+    console.error('Gemini ranking error:', error.message);
   }
+
+  // Fallback: return influencers with default scores
+  return influencers.map(inf => ({
+    ...inf,
+    relevanceScore: 75,
+    relevanceReason: 'Matched based on niche and location'
+  }));
 }
 
 /**
  * Get fallback influencers based on industry and location - ALL UNIQUE
  */
 function getFallbackInfluencers(industry, location = 'India') {
+  // Use the curated database as fallback
+  const nicheInfluencers = getInfluencersByNiche(industry);
+  const regionalInfluencers = getRegionalInfluencers(location);
+  
+  const combined = [...nicheInfluencers, ...regionalInfluencers];
+  const seen = new Set();
+  
+  return combined.filter(inf => {
+    const key = `${inf.handle}-${inf.platform}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, 15);
+}
+
+/**
+ * Legacy fallback influencers (keeping for backwards compatibility)
+ */
+function getLegacyFallbackInfluencers(industry, location = 'India') {
   const isIndia = location.toLowerCase().includes('india');
   
   // Comprehensive list of UNIQUE Indian influencers across different industries
