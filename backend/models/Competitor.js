@@ -79,7 +79,7 @@ const competitorSchema = new mongoose.Schema({
   },
   competitorType: {
     type: String,
-    enum: ['regional', 'national', 'global', 'unknown'],
+    enum: ['local', 'regional', 'national', 'global', 'startup', 'emerging', 'direct', 'indirect', 'market_leader', 'unknown'],
     default: 'unknown'
   }
 }, {

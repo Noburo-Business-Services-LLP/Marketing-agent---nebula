@@ -4,10 +4,9 @@
  */
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
-// Using available Gemini models with fallbacks - prioritize lite models for lower quota usage
+// Using Gemini 3 Pro Preview for all text generation
 const GEMINI_MODELS = [
-  'gemini-2.0-flash-lite',  // Lower quota usage, fastest
-  'gemini-2.0-flash',       // Primary model
+  'gemini-3-pro-preview',  // Gemini 3 Pro - Best quality
 ];
 
 // Simple in-memory cache for API responses
@@ -538,47 +537,36 @@ Make the image specific to ${brandContext.companyName || 'the brand'}'s actual b
   console.log('Generating brand-specific image for:', campaignTitle);
   
   try {
-    // Try Imagen 4 first (best quality)
-    console.log('🎨 Attempting Imagen 4 Fast...');
-    const imagenModels = [
-      'imagen-4.0-fast-generate-001',  // Fast + Good quality
-      'imagen-4.0-generate-001',        // Standard quality
-    ];
-    
-    for (const model of imagenModels) {
-      try {
-        const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict?key=${GEMINI_API_KEY}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              instances: [{ prompt }],
-              parameters: {
-                sampleCount: 1,
-                aspectRatio: platform === 'youtube' ? '16:9' : '1:1',
-                safetyFilterLevel: 'block_few',
-                personGeneration: 'allow_adult'
-              }
-            })
+    // Use Imagen 4 Ultra (best quality)
+    console.log('🎨 Generating with Imagen 4 Ultra...');
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-ultra-generate-001:predict?key=${GEMINI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          instances: [{ prompt }],
+          parameters: {
+            sampleCount: 1,
+            aspectRatio: platform === 'youtube' ? '16:9' : '1:1',
+            safetyFilterLevel: 'block_few',
+            personGeneration: 'allow_adult'
           }
-        );
-
-        const data = await response.json();
-        
-        if (data.predictions && data.predictions[0]?.bytesBase64Encoded) {
-          console.log(`✅ ${model} generated image successfully`);
-          return `data:image/png;base64,${data.predictions[0].bytesBase64Encoded}`;
-        }
-        
-        console.log(`${model} response:`, JSON.stringify(data).substring(0, 200));
-      } catch (modelError) {
-        console.log(`${model} failed:`, modelError.message);
+        })
       }
+    );
+
+    const data = await response.json();
+    
+    if (data.predictions && data.predictions[0]?.bytesBase64Encoded) {
+      console.log('✅ Imagen 4 Ultra generated image successfully');
+      return `data:image/png;base64,${data.predictions[0].bytesBase64Encoded}`;
     }
     
-    // Fallback to Gemini native image generation
-    return await generateImageWithGeminiFlash(campaignTitle, campaignDescription, industry, objective, platform, brandContext);
+    console.log('Imagen 4 Ultra response:', JSON.stringify(data).substring(0, 200));
+    
+    // Fallback to stock image
+    return getRelevantStockImage(campaignTitle, industry, objective, platform);
     
   } catch (error) {
     console.error('Gemini Imagen error:', error.message);
@@ -587,7 +575,7 @@ Make the image specific to ${brandContext.companyName || 'the brand'}'s actual b
 }
 
 /**
- * Generate image using Gemini 2.0 Flash with image generation capability
+ * Generate image using Imagen 4 Ultra (fallback function)
  */
 async function generateImageWithGeminiFlash(campaignTitle, campaignDescription, industry, objective, platform, brandContext = {}) {
   // Build brand-aware prompt
@@ -596,50 +584,39 @@ async function generateImageWithGeminiFlash(campaignTitle, campaignDescription, 
   
   const prompt = `Generate a stunning, professional social media image ${brandInfo} campaign called "${campaignTitle}". The image should be perfect for ${platform}, with modern design, vibrant and eye-catching visuals that represent the brand's products/services${targetInfo}. No text in the image. High-quality commercial photography style.`;
   
-  // Try multiple Gemini native image generation models
-  const imageModels = [
-    'gemini-2.5-flash-image',              // Gemini 2.5 native image
-    'gemini-3-pro-image-preview',          // Gemini 3 Pro image (best)
-    'gemini-2.0-flash-exp-image-generation' // Gemini 2.0 fallback
-  ];
-  
-  for (const model of imageModels) {
-    try {
-      console.log(`🎨 Trying ${model} for image generation...`);
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{
-              parts: [{ text: `Generate an image: ${prompt}` }]
-            }],
-            generationConfig: {
-              responseModalities: ['IMAGE', 'TEXT']
-            }
-          })
-        }
-      );
-
-      const data = await response.json();
-      
-      const parts = data.candidates?.[0]?.content?.parts || [];
-      for (const part of parts) {
-        if (part.inlineData?.mimeType?.startsWith('image/')) {
-          console.log(`✅ ${model} generated image successfully`);
-          return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
-        }
+  try {
+    console.log('🎨 Generating with Imagen 4 Ultra (fallback)...');
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-ultra-generate-001:predict?key=${GEMINI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          instances: [{ prompt: prompt }],
+          parameters: {
+            sampleCount: 1,
+            aspectRatio: platform === 'instagram' ? '1:1' : '16:9',
+            safetyFilterLevel: 'block_few',
+            personGeneration: 'allow_adult'
+          }
+        })
       }
-      
-      console.log(`${model} response:`, JSON.stringify(data).substring(0, 200));
-    } catch (error) {
-      console.log(`${model} failed:`, error.message);
+    );
+
+    const data = await response.json();
+    
+    if (data.predictions?.[0]?.bytesBase64Encoded) {
+      console.log('✅ Imagen 4 Ultra generated image successfully');
+      return `data:image/png;base64,${data.predictions[0].bytesBase64Encoded}`;
     }
+    
+    console.log('Imagen 4 Ultra response:', JSON.stringify(data).substring(0, 200));
+  } catch (error) {
+    console.log('Imagen 4 Ultra failed:', error.message);
   }
   
-  // All models failed, use stock image
-  console.log('⚠️ All Gemini image models failed, using stock image');
+  // Fallback to stock image
+  console.log('⚠️ Image generation failed, using stock image');
   return getRelevantStockImage(campaignTitle, industry, objective, platform);
 }
 
@@ -750,10 +727,10 @@ async function generateImageFromCustomPrompt(customPrompt, platform = 'instagram
 Style requirements: High resolution, suitable for ${platform} social media, professional photography or digital art quality, visually appealing, no text or watermarks in the image.`;
 
   try {
-    // Try Gemini Imagen 3 first - this is the best for image generation
-    console.log('Trying Gemini Imagen 3...');
+    // Use Imagen 4 Ultra for best quality image generation
+    console.log('🎨 Generating with Imagen 4 Ultra...');
     const imagenResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-ultra-generate-001:predict?key=${GEMINI_API_KEY}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -772,49 +749,14 @@ Style requirements: High resolution, suitable for ${platform} social media, prof
     const imagenData = await imagenResponse.json();
     
     if (imagenData.predictions && imagenData.predictions[0]?.bytesBase64Encoded) {
-      console.log('✅ Gemini Imagen 3 generated image from custom prompt successfully');
+      console.log('✅ Imagen 4 Ultra generated image from custom prompt successfully');
       return `data:image/png;base64,${imagenData.predictions[0].bytesBase64Encoded}`;
     }
     
-    console.log('Imagen 3 did not return image, trying Gemini Flash...', JSON.stringify(imagenData).substring(0, 200));
+    console.log('Imagen 4 Ultra did not return image:', JSON.stringify(imagenData).substring(0, 200));
     
   } catch (error) {
-    console.error('Imagen 3 error:', error.message);
-  }
-
-  // Try Gemini 2.0 Flash with image generation
-  try {
-    console.log('Trying Gemini 2.0 Flash Experimental...');
-    const flashResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{
-            parts: [{ text: `Generate an image: ${enhancedPrompt}` }]
-          }],
-          generationConfig: {
-            responseModalities: ['IMAGE', 'TEXT']
-          }
-        })
-      }
-    );
-
-    const flashData = await flashResponse.json();
-    
-    const parts = flashData.candidates?.[0]?.content?.parts || [];
-    for (const part of parts) {
-      if (part.inlineData?.mimeType?.startsWith('image/')) {
-        console.log('✅ Gemini Flash generated image from custom prompt successfully');
-        return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
-      }
-    }
-    
-    console.log('Gemini Flash did not return image:', JSON.stringify(flashData).substring(0, 300));
-    
-  } catch (error) {
-    console.error('Gemini Flash error:', error.message);
+    console.error('Imagen 4 Ultra error:', error.message);
   }
 
   // Last resort: Use Unsplash API with search based on prompt keywords
