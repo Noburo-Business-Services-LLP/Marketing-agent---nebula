@@ -109,7 +109,7 @@ async function callGemini(prompt, options = {}) {
             }],
             generationConfig: {
               temperature: options.temperature || 0.7,
-              maxOutputTokens: options.maxTokens || 1024, // Reduced for faster responses
+              maxOutputTokens: options.maxTokens || 8192, // Increased default for longer responses
               topP: 0.9
             }
           })
@@ -165,7 +165,7 @@ async function callGemini(prompt, options = {}) {
 }
 
 /**
- * Parse JSON from Gemini response (handles markdown code blocks)
+ * Parse JSON from Gemini response (handles markdown code blocks and truncated JSON)
  */
 function parseGeminiJSON(text) {
   let cleaned = text.trim();
@@ -178,12 +178,53 @@ function parseGeminiJSON(text) {
   if (cleaned.endsWith('```')) {
     cleaned = cleaned.slice(0, -3);
   }
+  cleaned = cleaned.trim();
+  
   try {
-    return JSON.parse(cleaned.trim());
+    return JSON.parse(cleaned);
   } catch (err) {
-    console.error('Failed to parse Gemini JSON:', err, '\nRaw response:', cleaned);
-    // Return a fallback object or null to avoid crashing the backend
-    return { error: 'Invalid Gemini JSON', raw: cleaned };
+    console.error('Failed to parse Gemini JSON:', err.message);
+    
+    // Try to repair truncated JSON
+    let repaired = cleaned;
+    
+    // Check if JSON is truncated (common with token limits)
+    if (err.message.includes('Unterminated string') || err.message.includes('Unexpected end')) {
+      console.log('Attempting to repair truncated JSON...');
+      
+      // Find the last complete object in an array
+      const lastCompleteIndex = repaired.lastIndexOf('},');
+      if (lastCompleteIndex > 0) {
+        // Cut at last complete object and close the array/object
+        repaired = repaired.substring(0, lastCompleteIndex + 1);
+        
+        // Count open brackets to close properly
+        const openBraces = (repaired.match(/{/g) || []).length;
+        const closeBraces = (repaired.match(/}/g) || []).length;
+        const openBrackets = (repaired.match(/\[/g) || []).length;
+        const closeBrackets = (repaired.match(/]/g) || []).length;
+        
+        // Add missing closing brackets
+        for (let i = 0; i < openBrackets - closeBrackets; i++) {
+          repaired += ']';
+        }
+        for (let i = 0; i < openBraces - closeBraces; i++) {
+          repaired += '}';
+        }
+        
+        try {
+          const parsed = JSON.parse(repaired);
+          console.log('✅ Successfully repaired truncated JSON');
+          return parsed;
+        } catch (repairErr) {
+          console.error('Repair attempt failed:', repairErr.message);
+        }
+      }
+    }
+    
+    console.error('Raw response (first 500 chars):', cleaned.substring(0, 500));
+    // Return a fallback object to avoid crashing the backend
+    return { error: 'Invalid Gemini JSON', campaigns: [], raw: cleaned.substring(0, 200) };
   }
 }
 
@@ -280,7 +321,8 @@ Return ONLY valid JSON (no markdown, no code blocks):
 Generate ${count} diverse campaigns covering different objectives (awareness, engagement, sales, etc.) and platforms (instagram, facebook, linkedin, twitter/X, youtube). Make every campaign UNIQUE and SPECIFIC to ${companyName}.`;
 
   try {
-    const response = await callGemini(prompt, { temperature: 0.8, maxTokens: 4096 });
+    // Use higher token limit for generating multiple campaigns
+    const response = await callGemini(prompt, { temperature: 0.8, maxTokens: 16384, timeout: EXTENDED_TIMEOUT });
     const parsed = parseGeminiJSON(response);
     
     // Build rich brand context for image generation
@@ -563,7 +605,42 @@ Make the image specific to ${brandContext.companyName || 'the brand'}'s actual b
       return `data:image/png;base64,${data.predictions[0].bytesBase64Encoded}`;
     }
     
-    console.log('Imagen 4 Ultra response:', JSON.stringify(data).substring(0, 200));
+    // Log the error for debugging
+    if (data.error) {
+      console.error('Imagen 4 Ultra API error:', data.error.message || JSON.stringify(data.error));
+    } else {
+      console.log('Imagen 4 Ultra response (no predictions):', JSON.stringify(data).substring(0, 300));
+    }
+    
+    // Try Gemini 2.0 Flash Image Generation as fallback
+    console.log('🎨 Trying Gemini 2.0 Flash Image Generation...');
+    const flashImageResponse = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp-image-generation:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: `Generate an image: ${prompt}` }] }],
+          generationConfig: {
+            responseModalities: ['image', 'text'],
+            responseMimeType: 'image/png'
+          }
+        })
+      }
+    );
+
+    const flashData = await flashImageResponse.json();
+    
+    if (flashData.candidates?.[0]?.content?.parts) {
+      for (const part of flashData.candidates[0].content.parts) {
+        if (part.inlineData?.mimeType?.startsWith('image/')) {
+          console.log('✅ Gemini 2.0 Flash generated image successfully');
+          return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+        }
+      }
+    }
+    
+    console.log('Gemini Flash Image response:', JSON.stringify(flashData).substring(0, 200));
     
     // Fallback to stock image
     return getRelevantStockImage(campaignTitle, industry, objective, platform);

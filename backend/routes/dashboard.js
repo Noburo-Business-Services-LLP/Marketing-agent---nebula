@@ -180,7 +180,12 @@ IMPORTANT: Return EXACTLY 15 competitors. Be accurate with company names and soc
 
   try {
     console.log('📤 Sending competitor discovery prompt to Gemini...');
-    const result = await generateWithLLM({ provider: 'gemini', prompt, taskType: 'analysis' });
+    const result = await generateWithLLM({ 
+      provider: 'gemini', 
+      prompt, 
+      taskType: 'analysis',
+      maxTokens: 8192  // Increased for 15 competitors
+    });
     
     const responseText = typeof result === 'string' ? result : (result?.text || result?.content || JSON.stringify(result));
     console.log('📥 Gemini response received, length:', responseText?.length || 0);
