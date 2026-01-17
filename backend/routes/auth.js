@@ -5,6 +5,16 @@ const { generateToken, protect } = require('../middleware/auth');
 const Competitor = require('../models/Competitor');
 const { generateWithLLM } = require('../services/llmRouter');
 
+// Import post generation function
+let generateCompetitorPosts;
+try {
+  const fetcher = require('../services/socialMediaFetcher');
+  generateCompetitorPosts = fetcher.generateCompetitorPosts;
+} catch (e) {
+  console.warn('socialMediaFetcher not available, posts will be empty');
+  generateCompetitorPosts = async () => [];
+}
+
 const router = express.Router();
 
 /**
@@ -122,13 +132,15 @@ All 15 competitors must be REAL companies. Return only valid JSON.`;
 
     console.log(`✅ Found ${parsed.competitors.length} competitors`);
 
-    // Save competitors
+    // Save competitors and generate posts for each
     let savedCount = 0;
+    const savedCompetitors = [];
+    
     for (const comp of parsed.competitors) {
       if (!comp.name || comp.name.length < 2) continue;
       
       try {
-        await Competitor.create({
+        const competitor = await Competitor.create({
           userId,
           name: comp.name,
           website: comp.website || '',
@@ -148,14 +160,47 @@ All 15 competitors must be REAL companies. Return only valid JSON.`;
           competitorType: comp.competitorType || 'national'
         });
         savedCount++;
+        savedCompetitors.push(competitor);
+        console.log(`✅ Saved competitor: ${comp.name}`);
       } catch (e) {
         // Ignore duplicate errors
       }
     }
 
     console.log(`🎯 Saved ${savedCount} competitors for user ${userId}`);
+    
+    // Generate posts for all saved competitors in the background
+    console.log('📝 Generating posts for all competitors...');
+    
+    // Process in batches of 5 to avoid API rate limits
+    const batchSize = 5;
+    for (let i = 0; i < savedCompetitors.length; i += batchSize) {
+      const batch = savedCompetitors.slice(i, i + batchSize);
+      
+      await Promise.all(batch.map(async (competitor) => {
+        try {
+          const posts = await generateCompetitorPosts(competitor, { industry: businessContext.industry });
+          
+          if (posts && posts.length > 0) {
+            competitor.posts = posts;
+            competitor.metrics.lastFetched = new Date();
+            await competitor.save();
+            console.log(`📝 Generated ${posts.length} posts for ${competitor.name}`);
+          }
+        } catch (postError) {
+          console.error(`Failed to generate posts for ${competitor.name}:`, postError.message);
+        }
+      }));
+      
+      // Small delay between batches to avoid rate limiting
+      if (i + batchSize < savedCompetitors.length) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+    
     console.log('🔍 ===========================================');
     console.log('🔍 BACKGROUND COMPETITOR DISCOVERY COMPLETE');
+    console.log(`🔍 ${savedCount} competitors with posts generated`);
     console.log('🔍 ===========================================');
   } catch (error) {
     console.error('❌ Background competitor discovery error:', error.message);
