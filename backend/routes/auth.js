@@ -5,13 +5,23 @@ const { generateToken, protect } = require('../middleware/auth');
 const Competitor = require('../models/Competitor');
 const { generateWithLLM } = require('../services/llmRouter');
 
-// Import post generation function
-let generateCompetitorPosts;
+// Import REAL post fetching functions from Apify
+let scrapeInstagramProfile, scrapeTwitterProfile, generateCompetitorPosts;
+try {
+  const socialAPI = require('../services/socialMediaAPI');
+  scrapeInstagramProfile = socialAPI.scrapeInstagramProfile;
+  scrapeTwitterProfile = socialAPI.scrapeTwitterProfile;
+} catch (e) {
+  console.warn('socialMediaAPI not available');
+  scrapeInstagramProfile = async () => ({ success: false });
+  scrapeTwitterProfile = async () => ({ success: false });
+}
+
+// Fallback to AI-generated posts if Apify fails
 try {
   const fetcher = require('../services/socialMediaFetcher');
   generateCompetitorPosts = fetcher.generateCompetitorPosts;
 } catch (e) {
-  console.warn('socialMediaFetcher not available, posts will be empty');
   generateCompetitorPosts = async () => [];
 }
 
@@ -169,38 +179,104 @@ All 15 competitors must be REAL companies. Return only valid JSON.`;
 
     console.log(`🎯 Saved ${savedCount} competitors for user ${userId}`);
     
-    // Generate posts for all saved competitors in the background
-    console.log('📝 Generating posts for all competitors...');
+    // Fetch REAL posts for all saved competitors using Apify
+    console.log('📸 Fetching REAL posts for all competitors via Apify...');
     
-    // Process in batches of 5 to avoid API rate limits
-    const batchSize = 5;
+    // Process in batches of 3 to avoid API rate limits (Apify has limits)
+    const batchSize = 3;
     for (let i = 0; i < savedCompetitors.length; i += batchSize) {
       const batch = savedCompetitors.slice(i, i + batchSize);
       
       await Promise.all(batch.map(async (competitor) => {
         try {
-          const posts = await generateCompetitorPosts(competitor, { industry: businessContext.industry });
+          const instagramHandle = competitor.socialHandles?.instagram;
+          const twitterHandle = competitor.socialHandles?.twitter;
+          
+          let posts = [];
+          
+          // Try to fetch REAL Instagram posts first
+          if (instagramHandle) {
+            console.log(`📸 Fetching real Instagram posts for ${competitor.name} (@${instagramHandle})...`);
+            const realData = await scrapeInstagramProfile(instagramHandle);
+            
+            if (realData && realData.success !== false && realData.recentPosts) {
+              posts = realData.recentPosts.map(post => ({
+                platform: 'instagram',
+                content: post.caption || post.text || '',
+                likes: post.likes || post.likesCount || 0,
+                comments: post.comments || post.commentsCount || 0,
+                shares: post.shares || 0,
+                imageUrl: post.imageUrl || post.displayUrl || post.thumbnailUrl || null,
+                postUrl: post.url || `https://instagram.com/p/${post.shortCode || post.id || ''}`,
+                postedAt: new Date(post.timestamp * 1000 || post.takenAtTimestamp * 1000 || Date.now()),
+                fetchedAt: new Date(),
+                isRealData: true
+              }));
+              
+              // Update follower count if available
+              if (realData.followersCount) {
+                competitor.metrics.followers = realData.followersCount;
+              }
+              
+              console.log(`✅ Fetched ${posts.length} REAL posts for ${competitor.name}`);
+            }
+          }
+          
+          // Try Twitter if no Instagram posts
+          if (posts.length === 0 && twitterHandle) {
+            console.log(`🐦 Fetching real Twitter posts for ${competitor.name} (@${twitterHandle})...`);
+            const twitterData = await scrapeTwitterProfile(twitterHandle);
+            
+            if (twitterData && twitterData.success !== false && twitterData.tweets) {
+              posts = twitterData.tweets.slice(0, 10).map(tweet => ({
+                platform: 'twitter',
+                content: tweet.text || tweet.full_text || '',
+                likes: tweet.likes || tweet.favorite_count || 0,
+                comments: tweet.replies || tweet.reply_count || 0,
+                shares: tweet.retweets || tweet.retweet_count || 0,
+                postUrl: tweet.url || `https://twitter.com/${twitterHandle}/status/${tweet.id}`,
+                postedAt: new Date(tweet.created_at || Date.now()),
+                fetchedAt: new Date(),
+                isRealData: true
+              }));
+              console.log(`✅ Fetched ${posts.length} REAL tweets for ${competitor.name}`);
+            }
+          }
+          
+          // Fallback to AI-generated posts if real scraping fails
+          if (posts.length === 0) {
+            console.log(`⚠️ No real data for ${competitor.name}, using AI fallback...`);
+            posts = await generateCompetitorPosts(competitor, { industry: businessContext.industry });
+          }
           
           if (posts && posts.length > 0) {
             competitor.posts = posts;
             competitor.metrics.lastFetched = new Date();
             await competitor.save();
-            console.log(`📝 Generated ${posts.length} posts for ${competitor.name}`);
+            console.log(`📝 Saved ${posts.length} posts for ${competitor.name}`);
           }
         } catch (postError) {
-          console.error(`Failed to generate posts for ${competitor.name}:`, postError.message);
+          console.error(`Failed to fetch posts for ${competitor.name}:`, postError.message);
+          // Try AI fallback on error
+          try {
+            const aiPosts = await generateCompetitorPosts(competitor, { industry: businessContext.industry });
+            if (aiPosts && aiPosts.length > 0) {
+              competitor.posts = aiPosts;
+              await competitor.save();
+            }
+          } catch (e) {}
         }
       }));
       
-      // Small delay between batches to avoid rate limiting
+      // Delay between batches to respect Apify rate limits
       if (i + batchSize < savedCompetitors.length) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise(resolve => setTimeout(resolve, 2000));
       }
     }
     
     console.log('🔍 ===========================================');
     console.log('🔍 BACKGROUND COMPETITOR DISCOVERY COMPLETE');
-    console.log(`🔍 ${savedCount} competitors with posts generated`);
+    console.log(`🔍 ${savedCount} competitors with REAL posts fetched`);
     console.log('🔍 ===========================================');
   } catch (error) {
     console.error('❌ Background competitor discovery error:', error.message);
