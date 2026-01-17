@@ -189,36 +189,44 @@ All 15 competitors must be REAL companies. Return only valid JSON.`;
           }
           
           console.log(`📸 Fetching real Instagram posts for ${competitor.name} (@${instagramHandle})...`);
-          const realData = await scrapeInstagramProfile(instagramHandle);
+          const result = await scrapeInstagramProfile(instagramHandle);
           
-          if (realData && realData.success !== false && realData.recentPosts && realData.recentPosts.length > 0) {
-            const posts = realData.recentPosts.map(post => ({
-              platform: 'instagram',
-              content: post.caption || post.text || '',
-              likes: post.likes || post.likesCount || 0,
-              comments: post.comments || post.commentsCount || 0,
-              shares: post.shares || 0,
-              imageUrl: post.imageUrl || post.displayUrl || post.thumbnailUrl || null,
-              postUrl: post.url || `https://instagram.com/p/${post.shortCode || post.id || ''}`,
-              postedAt: new Date(post.timestamp * 1000 || post.takenAtTimestamp * 1000 || Date.now()),
-              fetchedAt: new Date(),
-              isRealData: true
-            }));
+          // Apify returns { success: true, data: [profile] } where profile has latestPosts
+          if (result && result.success && result.data && result.data.length > 0) {
+            const profile = result.data[0];
+            const latestPosts = profile.latestPosts || profile.posts || [];
             
-            // Update follower count if available
-            if (realData.followersCount) {
-              competitor.metrics.followers = realData.followersCount;
+            if (latestPosts.length > 0) {
+              const posts = latestPosts.slice(0, 10).map(post => ({
+                platform: 'instagram',
+                content: post.caption || post.text || post.description || '',
+                likes: post.likesCount || post.likes || 0,
+                comments: post.commentsCount || post.comments || 0,
+                shares: post.shares || 0,
+                imageUrl: post.displayUrl || post.imageUrl || post.thumbnailUrl || null,
+                postUrl: post.url || `https://instagram.com/p/${post.shortCode || post.id || ''}`,
+                postedAt: new Date(post.timestamp * 1000 || post.takenAtTimestamp * 1000 || Date.now()),
+                fetchedAt: new Date(),
+                isRealData: true
+              }));
+              
+              // Update follower count if available
+              if (profile.followersCount || profile.followers) {
+                competitor.metrics.followers = profile.followersCount || profile.followers;
+              }
+              
+              competitor.posts = posts;
+              competitor.metrics.lastFetched = new Date();
+              await competitor.save();
+              console.log(`✅ Saved ${posts.length} REAL Instagram posts for ${competitor.name}`);
+            } else {
+              console.log(`⚠️ Profile found but no posts for ${competitor.name} (@${instagramHandle})`);
             }
-            
-            competitor.posts = posts;
-            competitor.metrics.lastFetched = new Date();
-            await competitor.save();
-            console.log(`✅ Saved ${posts.length} REAL Instagram posts for ${competitor.name}`);
           } else {
-            console.log(`⚠️ No Instagram data returned for ${competitor.name} - will have no posts`);
+            console.log(`⚠️ Apify returned no data for ${competitor.name} (@${instagramHandle}) - error: ${result?.error || 'unknown'}`);
           }
         } catch (postError) {
-          console.error(`Failed to fetch Instagram posts for ${competitor.name}:`, postError.message);
+          console.error(`❌ Failed to fetch Instagram posts for ${competitor.name}:`, postError.message);
           // NO AI FALLBACK - just log the error and continue
         }
       }));

@@ -285,49 +285,59 @@ async function fetchPostsForCompetitors(competitors) {
         console.log(`📸 Fetching REAL Instagram posts for ${competitor.name} (@${instagramHandle})...`);
         const result = await scrapeInstagramProfile(instagramHandle);
         
-        if (result && result.recentPosts && result.recentPosts.length > 0) {
-          // Filter to only English posts
-          const englishPosts = result.recentPosts.filter(post => 
-            isEnglishContent(post.caption || post.text || '')
-          );
+        // Apify returns { success: true, data: [profile] } where profile has latestPosts
+        if (result && result.success && result.data && result.data.length > 0) {
+          const profile = result.data[0];
+          const latestPosts = profile.latestPosts || profile.posts || [];
           
-          // Map posts with timestamps
-          const mappedPosts = englishPosts.map(post => {
-            const timestamp = new Date(post.timestamp || post.takenAtTimestamp * 1000 || post.date || Date.now()).getTime();
-            return {
-              competitorId: competitor._id,
-              competitorName: competitor.name,
-              platform: 'instagram',
-              content: post.caption || post.text || '',
-              likes: post.likes || post.likesCount || 0,
-              comments: post.comments || post.commentsCount || 0,
-              imageUrl: post.imageUrl || post.displayUrl || post.thumbnailUrl || null,
-              postUrl: post.url || post.postUrl || `https://instagram.com/p/${post.shortCode || post.id || ''}`,
-              postedAt: post.timestamp || post.takenAtTimestamp || post.date || new Date(),
-              postedAtTimestamp: timestamp,
-              sentiment: analyzeSentiment(post.caption || ''),
-              isRealData: true
-            };
-          });
+          if (latestPosts.length > 0) {
+            // Filter to only English posts
+            const englishPosts = latestPosts.filter(post => 
+              isEnglishContent(post.caption || post.text || post.description || '')
+            );
           
-          // STRICT 3-MONTH FILTER: Remove any posts older than 3 months
-          const recentPosts = mappedPosts.filter(post => {
-            if (post.postedAtTimestamp < threeMonthsAgo) {
-              console.log(`⚠️ Filtering out old post from ${competitor.name} - posted ${new Date(post.postedAtTimestamp).toLocaleDateString()}`);
-              return false;
-            }
-            return true;
-          });
+            // Map posts with timestamps
+            const mappedPosts = englishPosts.map(post => {
+              const timestamp = new Date(post.timestamp || post.takenAtTimestamp * 1000 || post.date || Date.now()).getTime();
+              return {
+                competitorId: competitor._id,
+                competitorName: competitor.name,
+                platform: 'instagram',
+                content: post.caption || post.text || post.description || '',
+                likes: post.likesCount || post.likes || 0,
+                comments: post.commentsCount || post.comments || 0,
+                imageUrl: post.displayUrl || post.imageUrl || post.thumbnailUrl || null,
+                postUrl: post.url || post.postUrl || `https://instagram.com/p/${post.shortCode || post.id || ''}`,
+                postedAt: post.timestamp || post.takenAtTimestamp || post.date || new Date(),
+                postedAtTimestamp: timestamp,
+                sentiment: analyzeSentiment(post.caption || ''),
+                isRealData: true
+              };
+            });
           
-          const posts = recentPosts.slice(0, 5);
-          console.log(`📅 Kept ${posts.length}/${mappedPosts.length} posts after 3-month filter for ${competitor.name}`);
+            // STRICT 3-MONTH FILTER: Remove any posts older than 3 months
+            const recentPosts = mappedPosts.filter(post => {
+              if (post.postedAtTimestamp < threeMonthsAgo) {
+                console.log(`⚠️ Filtering out old post from ${competitor.name} - posted ${new Date(post.postedAtTimestamp).toLocaleDateString()}`);
+                return false;
+              }
+              return true;
+            });
           
-          // Save posts to competitor
-          competitor.posts = posts;
-          await competitor.save();
+            const posts = recentPosts.slice(0, 5);
+            console.log(`📅 Kept ${posts.length}/${mappedPosts.length} posts after 3-month filter for ${competitor.name}`);
           
-          allPosts.push(...posts);
-          console.log(`✅ Got ${posts.length} REAL recent English posts for ${competitor.name}`);
+            // Save posts to competitor
+            competitor.posts = posts;
+            await competitor.save();
+          
+            allPosts.push(...posts);
+            console.log(`✅ Got ${posts.length} REAL recent English posts for ${competitor.name}`);
+          } else {
+            console.log(`⚠️ Profile found but no posts for ${competitor.name} (@${instagramHandle})`);
+          }
+        } else {
+          console.log(`⚠️ Apify returned no data for ${competitor.name} (@${instagramHandle}) - error: ${result?.error || 'unknown'}`);
         }
       } catch (fetchError) {
         console.error(`Failed to fetch posts for ${competitor.name}:`, fetchError.message);
@@ -483,21 +493,25 @@ router.get('/real/:id', protect, async (req, res) => {
       }
       
       // Update competitor with real data if successful
-      if (realData && !realData.error) {
+      // Apify returns { success: true, data: [profile] } where profile has latestPosts
+      if (realData && realData.success && realData.data && realData.data.length > 0) {
+        const profile = realData.data[0];
+        const latestPosts = profile.latestPosts || profile.posts || [];
+        
         const updateData = {
-          'metrics.realTimeData': realData,
+          'metrics.realTimeData': profile,
           'metrics.lastFetched': new Date()
         };
         
         // If we got posts, add them
-        if (realData.recentPosts && realData.recentPosts.length > 0) {
-          const newPosts = realData.recentPosts.map(post => ({
+        if (latestPosts.length > 0) {
+          const newPosts = latestPosts.map(post => ({
             platform,
-            content: post.caption || post.text || '',
-            likes: post.likes || post.likesCount || 0,
-            comments: post.comments || post.commentsCount || 0,
+            content: post.caption || post.text || post.description || '',
+            likes: post.likesCount || post.likes || 0,
+            comments: post.commentsCount || post.comments || 0,
             shares: post.shares || post.sharesCount || 0,
-            imageUrl: post.imageUrl || post.displayUrl || post.thumbnailUrl || null,
+            imageUrl: post.displayUrl || post.imageUrl || post.thumbnailUrl || null,
             postUrl: post.url || post.postUrl || `https://instagram.com/p/${post.shortCode || post.id || ''}`,
             postedAt: post.timestamp || post.takenAtTimestamp || post.date || new Date(),
             postedAtTimestamp: new Date(post.timestamp || post.takenAtTimestamp * 1000 || post.date || Date.now()).getTime(),
@@ -515,11 +529,11 @@ router.get('/real/:id', protect, async (req, res) => {
         }
         
         // Update follower counts
-        if (realData.followersCount) {
+        if (profile.followersCount || profile.followers) {
           competitor.metrics = competitor.metrics || {};
-          competitor.metrics.followers = realData.followersCount;
-          competitor.metrics.following = realData.followingCount;
-          competitor.metrics.posts = realData.postsCount;
+          competitor.metrics.followers = profile.followersCount || profile.followers;
+          competitor.metrics.following = profile.followingCount || profile.following;
+          competitor.metrics.posts = profile.postsCount || profile.posts?.length;
         }
         
         await competitor.save();
@@ -571,16 +585,20 @@ router.post('/scrape-all', protect, async (req, res) => {
       if (handle) {
         try {
           console.log(`📸 Fetching REAL data for ${competitor.name} (@${handle})...`);
-          const realData = await scrapeInstagramProfile(handle);
+          const result = await scrapeInstagramProfile(handle);
           
-          if (realData && !realData.error && realData.recentPosts) {
+          // Apify returns { success: true, data: [profile] } where profile has latestPosts
+          if (result && result.success && result.data && result.data.length > 0) {
+            const profile = result.data[0];
+            const latestPosts = profile.latestPosts || profile.posts || [];
+            
             // Update competitor with real posts
-            competitor.posts = realData.recentPosts.slice(0, 5).map(post => ({
+            competitor.posts = latestPosts.slice(0, 5).map(post => ({
               platform: 'instagram',
-              content: post.caption || post.text || '',
-              likes: post.likes || post.likesCount || 0,
-              comments: post.comments || post.commentsCount || 0,
-              imageUrl: post.imageUrl || post.displayUrl || null,
+              content: post.caption || post.text || post.description || '',
+              likes: post.likesCount || post.likes || 0,
+              comments: post.commentsCount || post.comments || 0,
+              imageUrl: post.displayUrl || post.imageUrl || null,
               postUrl: post.url || post.postUrl || `https://instagram.com/p/${post.shortCode || ''}`,
               postedAt: post.timestamp || post.takenAtTimestamp || new Date(),
               postedAtTimestamp: new Date(post.timestamp || post.takenAtTimestamp * 1000 || Date.now()).getTime(),
@@ -600,7 +618,7 @@ router.post('/scrape-all', protect, async (req, res) => {
               competitorId: competitor._id,
               name: competitor.name,
               success: false,
-              error: realData?.error || 'No data returned'
+              error: result?.error || 'No data returned'
             });
           }
         } catch (err) {
@@ -1081,40 +1099,52 @@ router.post('/:id/refresh-posts', protect, async (req, res) => {
     
     // Fetch REAL Instagram posts via Apify
     console.log(`📸 Refreshing real Instagram posts for ${competitor.name} (@${instagramHandle})...`);
-    const realData = await scrapeInstagramProfile(instagramHandle);
+    const result = await scrapeInstagramProfile(instagramHandle);
     
-    if (realData && realData.success !== false && realData.recentPosts && realData.recentPosts.length > 0) {
-      const newPosts = realData.recentPosts.map(post => ({
-        platform: 'instagram',
-        content: post.caption || post.text || '',
-        likes: post.likes || post.likesCount || 0,
-        comments: post.comments || post.commentsCount || 0,
-        shares: post.shares || 0,
-        imageUrl: post.imageUrl || post.displayUrl || post.thumbnailUrl || null,
-        postUrl: post.url || `https://instagram.com/p/${post.shortCode || post.id || ''}`,
-        postedAt: new Date(post.timestamp * 1000 || post.takenAtTimestamp * 1000 || Date.now()),
-        fetchedAt: new Date(),
-        isRealData: true
-      }));
+    // Apify returns { success: true, data: [profile] } where profile has latestPosts
+    if (result && result.success && result.data && result.data.length > 0) {
+      const profile = result.data[0];
+      const latestPosts = profile.latestPosts || profile.posts || [];
       
-      // Update follower count if available
-      if (realData.followersCount) {
-        competitor.metrics.followers = realData.followersCount;
+      if (latestPosts.length > 0) {
+        const newPosts = latestPosts.map(post => ({
+          platform: 'instagram',
+          content: post.caption || post.text || post.description || '',
+          likes: post.likesCount || post.likes || 0,
+          comments: post.commentsCount || post.comments || 0,
+          shares: post.shares || 0,
+          imageUrl: post.displayUrl || post.imageUrl || post.thumbnailUrl || null,
+          postUrl: post.url || `https://instagram.com/p/${post.shortCode || post.id || ''}`,
+          postedAt: new Date(post.timestamp * 1000 || post.takenAtTimestamp * 1000 || Date.now()),
+          fetchedAt: new Date(),
+          isRealData: true
+        }));
+      
+        // Update follower count if available
+        if (profile.followersCount || profile.followers) {
+          competitor.metrics.followers = profile.followersCount || profile.followers;
+        }
+      
+        competitor.posts = newPosts;
+        competitor.metrics.lastFetched = new Date();
+        await competitor.save();
+      
+        res.json({
+          success: true,
+          message: `Fetched ${newPosts.length} real Instagram posts`,
+          posts: newPosts
+        });
+      } else {
+        res.json({
+          success: false,
+          message: 'Profile found but no posts available',
+          posts: []
+        });
       }
-      
-      competitor.posts = newPosts;
-      competitor.metrics.lastFetched = new Date();
-      await competitor.save();
-      
-      res.json({
-        success: true,
-        message: `Fetched ${newPosts.length} real Instagram posts`,
-        posts: newPosts
-      });
     } else {
       res.json({
         success: false,
-        message: 'Could not fetch Instagram posts - check if handle is correct',
+        message: `Could not fetch Instagram posts - error: ${result?.error || 'unknown'}`,
         posts: []
       });
     }
