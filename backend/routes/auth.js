@@ -65,14 +65,19 @@ Include this mix:
 - 3 GLOBAL competitors (international leaders)
 - 3 STARTUPS (emerging players)
 
+CRITICAL: For Instagram handles, provide the EXACT official Instagram username that exists. 
+- Do NOT guess handles - only include handles you are certain exist
+- Common patterns: companyname, company_name, company.official, getcompanyname
+- If unsure about Instagram handle, leave it as empty string ""
+
 RETURN THIS JSON:
 {
   "competitors": [
     {
       "name": "Company Name",
       "website": "https://company.com",
-      "instagram": "companyhandle",
-      "twitter": "companyhandle",
+      "instagram": "exacthandle",
+      "twitter": "exacthandle",
       "description": "What they do",
       "location": "City, Country",
       "competitorType": "local|national|global|startup",
@@ -81,7 +86,7 @@ RETURN THIS JSON:
   ]
 }
 
-All 15 competitors must be REAL companies. Return only valid JSON.`;
+All 15 competitors must be REAL companies with VERIFIED Instagram handles. Return only valid JSON.`;
 
     const result = await generateWithLLM({ 
       provider: 'gemini', 
@@ -172,9 +177,10 @@ All 15 competitors must be REAL companies. Return only valid JSON.`;
     // Fetch REAL Instagram posts for all saved competitors using Apify
     // NO AI FALLBACK - Only real data from Instagram
     console.log('📸 Fetching REAL Instagram posts for all competitors via Apify...');
+    console.log(`📸 Total competitors to scrape: ${savedCompetitors.length}`);
     
-    // Process in batches of 3 to avoid API rate limits (Apify has limits)
-    const batchSize = 3;
+    // Process in batches of 5 for faster scraping
+    const batchSize = 5;
     for (let i = 0; i < savedCompetitors.length; i += batchSize) {
       const batch = savedCompetitors.slice(i, i + batchSize);
       
@@ -231,9 +237,10 @@ All 15 competitors must be REAL companies. Return only valid JSON.`;
         }
       }));
       
-      // Delay between batches to respect Apify rate limits
+      // Brief delay between batches
       if (i + batchSize < savedCompetitors.length) {
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        console.log(`📸 Completed batch ${Math.floor(i / batchSize) + 1}, moving to next...`);
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
     }
     
