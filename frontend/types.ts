@@ -47,6 +47,11 @@ export interface Campaign {
   status: 'draft' | 'scheduled' | 'active' | 'paused' | 'completed' | 'archived' | 'posted';
   priority?: 'low' | 'medium' | 'high';
   notes?: string;
+  // Convenience top-level properties (aliases for nested values)
+  description?: string;
+  startDate?: string;
+  endDate?: string;
+  content?: string;
   creative: {
     type: 'text' | 'image' | 'video' | 'carousel' | 'story' | 'reel';
     textContent: string;

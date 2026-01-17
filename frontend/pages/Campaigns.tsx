@@ -1358,7 +1358,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
     
     // Step 2: Target Audience
     const [targetAge, setTargetAge] = useState('18-35');
-    const [targetGender, setTargetGender] = useState('all');
+    const [targetGender, setTargetGender] = useState<'all' | 'male' | 'female'>('all');
     const [targetLocation, setTargetLocation] = useState('');
     const [targetInterests, setTargetInterests] = useState('');
     const [audienceDescription, setAudienceDescription] = useState('');
@@ -1508,7 +1508,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
               startDate: post.suggestedDate,
               postTime: post.suggestedTime
             },
-            budget: { allocated: parseFloat(budget) / postsToSave.length || 0, spent: 0 },
+            budget: { type: 'lifetime' as const, amount: parseFloat(budget) / postsToSave.length || 0, currency: 'USD' },
             targeting: {
               ageRange: parseAgeRange(targetAge),
               gender: targetGender,
@@ -1534,7 +1534,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
             startDate,
             postTime: preferredTimes[0] || '10:00'
           },
-          budget: { allocated: parseFloat(budget) || 0, spent: 0 }
+          budget: { type: 'lifetime' as const, amount: parseFloat(budget) || 0, currency: 'USD' }
         });
         
         onSuccess(campaign);
@@ -1706,7 +1706,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                                     <select 
                                       className={inputClasses} 
                                       value={targetGender} 
-                                      onChange={e => setTargetGender(e.target.value)}
+                                      onChange={e => setTargetGender(e.target.value as 'all' | 'male' | 'female')}
                                     >
                                       <option value="all">All Genders</option>
                                       <option value="male">Male</option>
