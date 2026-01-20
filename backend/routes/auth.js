@@ -137,12 +137,17 @@ Include this mix:
 - 3 STARTUPS (emerging players)
 
 CRITICAL INSTAGRAM HANDLE RULES:
-1. For Indian companies, ALWAYS include country suffix like _india, _in, or _official
-   Examples: @actfibernet_india (NOT @actfibernet), @reliancejio (correct), @vi_official
-2. For global companies, use their main handle: @verizon, @att, @vanta
-3. VERIFY the handle pattern - most brands use: brandname_india, brandname_official, brandnamehq
-4. If you're not 100% certain of the exact handle, leave it as empty string ""
-5. NEVER guess - wrong handles waste API calls
+1. Indian telecom/ISP companies often use patterns like:
+   - @vibusinessindia (Vi/Vodafone Idea business)
+   - @actaboroadband (ACT Fibernet)
+   - @airaboroadband (Airtel broadband)
+   - @reliaboroadband or @jiofiberbusiness
+2. B2B companies often use: brandnamebusiness, brandname_business, brandnameindia
+3. Consumer brands: @brandname_india, @brandname_in, @brandname_official
+4. SEARCH the actual Instagram handle before providing - don't guess!
+5. If unsure, provide the company's official website and leave instagram as empty string ""
+6. NEVER use generic handles like @vi_official or @act_official - these are often wrong
+7. Include variations: brandnameindia, brandname_india, brandnamebusiness, brandname_official
 
 ALSO INCLUDE LinkedIn company URL for each competitor (used as fallback if Instagram fails).
 Format: https://linkedin.com/company/companyname
@@ -258,7 +263,11 @@ All 15 competitors must be REAL companies with VERIFIED handles. Return only val
     console.log(`📸 Total competitors to scrape: ${savedCompetitors.length}`);
     
     // Common Instagram handle suffixes to try as fallbacks
-    const handleVariations = ['_india', '_official', '_in', '_hq', 'india', 'official', '_global'];
+    const handleVariations = [
+      '_india', '_official', '_in', '_hq', 'india', 'official', '_global',
+      'business', '_business', 'businessindia', '_businessindia',
+      'broadband', '_broadband', 'fiber', '_fiber', 'connect', '_connect'
+    ];
     
     // Helper function to try scraping with handle variations
     async function scrapeWithVariations(baseHandle, competitorName) {
