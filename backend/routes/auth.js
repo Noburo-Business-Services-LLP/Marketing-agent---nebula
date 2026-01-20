@@ -262,11 +262,10 @@ All 15 competitors must be REAL companies with VERIFIED handles. Return only val
     console.log('📸 Fetching REAL Instagram posts for all competitors via Apify...');
     console.log(`📸 Total competitors to scrape: ${savedCompetitors.length}`);
     
-    // Common Instagram handle suffixes to try as fallbacks
+    // Common Instagram handle suffixes to try as fallbacks (limited to avoid timeout)
     const handleVariations = [
-      '_india', '_official', '_in', '_hq', 'india', 'official', '_global',
-      'business', '_business', 'businessindia', '_businessindia',
-      'broadband', '_broadband', 'fiber', '_fiber', 'connect', '_connect'
+      '_india', 'india', '_official', 'official', '_in',
+      'business', 'businessindia'
     ];
     
     // Helper function to try scraping with handle variations
@@ -801,15 +800,12 @@ router.put('/complete-onboarding', protect, async (req, res) => {
       
       console.log('✅ OnboardingContext saved for AI outreach');
       
-      // WAIT FOR COMPETITOR DISCOVERY to complete before showing dashboard
-      console.log('🚀 Starting competitor discovery (user will wait)...');
-      try {
-        await triggerCompetitorDiscovery(req.user._id, contextData);
-        console.log('✅ Competitor discovery completed!');
-      } catch (err) {
-        console.error('Competitor discovery error:', err.message);
-        // Continue anyway - don't block user if discovery fails
-      }
+      // START competitor discovery in background (don't wait - would timeout)
+      // Fire and forget - user sees dashboard immediately
+      console.log('🚀 Starting competitor discovery in background...');
+      triggerCompetitorDiscovery(req.user._id, contextData)
+        .then(() => console.log('✅ Competitor discovery completed!'))
+        .catch(err => console.error('Competitor discovery error:', err.message));
       
     } catch (contextError) {
       console.error('Failed to save OnboardingContext:', contextError);
