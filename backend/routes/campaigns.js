@@ -235,6 +235,14 @@ router.post('/:id/publish', protect, async (req, res) => {
     // Get the platforms from request body (user selected) or fall back to campaign platforms
     const platforms = req.body.platforms || campaign.platforms || ['instagram'];
     
+    // Check if this is a scheduled post
+    const scheduledFor = req.body.scheduledFor;
+    const isScheduled = !!scheduledFor;
+    
+    if (isScheduled) {
+      console.log('📅 Scheduling post for:', scheduledFor);
+    }
+    
     // Build the post content
     const postContent = campaign.creative?.textContent || campaign.creative?.caption || campaign.content || campaign.name;
     const mediaUrls = campaign.creative?.imageUrls || [];
@@ -270,35 +278,45 @@ router.post('/:id/publish', protect, async (req, res) => {
       {
         mediaUrls: mediaUrl ? [mediaUrl] : undefined,
         shortenLinks: true,
-        profileKey: profileKey  // Include user's Ayrshare profile key
+        profileKey: profileKey,  // Include user's Ayrshare profile key
+        scheduleDate: scheduledFor  // Schedule for later if provided
       }
     );
     
     console.log('Ayrshare publish result:', result);
     
-    if (result.success || result.id) {
+    if (result.success || result.data?.id || result.id) {
       // Update campaign with post result
-      await Campaign.findByIdAndUpdate(campaign._id, {
-        $set: {
-          status: 'posted',
-          'socialPostId': result.id || result.postIds?.[0],
-          'publishedAt': new Date(),
-          'publishResult': result
-        }
-      });
+      const updateData = {
+        status: isScheduled ? 'scheduled' : 'posted',
+        'socialPostId': result.id || result.data?.id || result.postIds?.[0],
+        'publishResult': result
+      };
+      
+      if (isScheduled) {
+        updateData.scheduledFor = new Date(scheduledFor);
+      } else {
+        updateData.publishedAt = new Date();
+      }
+      
+      await Campaign.findByIdAndUpdate(campaign._id, { $set: updateData });
       
       res.json({
         success: true,
-        message: 'Campaign published to social media!',
-        postId: result.id,
+        message: isScheduled 
+          ? `Campaign scheduled for ${new Date(scheduledFor).toLocaleString()}!` 
+          : 'Campaign published to social media!',
+        postId: result.id || result.data?.id,
         platforms,
+        scheduled: isScheduled,
+        scheduledFor: scheduledFor,
         result
       });
     } else {
       res.status(400).json({
         success: false,
         message: 'Failed to publish to social media',
-        error: result.error || result.message
+        error: result.error || result.message || result.data?.errors?.[0]?.message
       });
     }
   } catch (error) {
