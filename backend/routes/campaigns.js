@@ -222,6 +222,16 @@ router.post('/:id/publish', protect, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Campaign not found' });
     }
     
+    // Get the user's Ayrshare profile key for posting to their connected accounts
+    const user = await User.findById(userId);
+    const profileKey = user?.ayrshare?.profileKey;
+    
+    if (!profileKey) {
+      console.warn('User does not have an Ayrshare profile key');
+    } else {
+      console.log('Found user Ayrshare profileKey:', profileKey.substring(0, 20) + '...');
+    }
+    
     // Get the platforms from request body (user selected) or fall back to campaign platforms
     const platforms = req.body.platforms || campaign.platforms || ['instagram'];
     
@@ -253,13 +263,14 @@ router.post('/:id/publish', protect, async (req, res) => {
       }
     }
     
-    // Post to social media via Ayrshare
+    // Post to social media via Ayrshare with user's profile key
     const result = await postToSocialMedia(
       platforms,
       fullPost,
       {
         mediaUrls: mediaUrl ? [mediaUrl] : undefined,
-        shortenLinks: true
+        shortenLinks: true,
+        profileKey: profileKey  // Include user's Ayrshare profile key
       }
     );
     

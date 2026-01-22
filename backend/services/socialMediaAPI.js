@@ -95,11 +95,20 @@ async function postToSocialMedia(platforms, content, options = {}) {
   }
 
   try {
+    // Build headers - include Profile-Key if provided for user-specific accounts
+    const headers = {
+      'Authorization': `Bearer ${AYRSHARE_API_KEY}`
+    };
+    
+    // If profileKey is provided, add it to headers for user-specific posting
+    if (options.profileKey) {
+      headers['Profile-Key'] = options.profileKey;
+      console.log('Using Profile-Key for posting:', options.profileKey.substring(0, 20) + '...');
+    }
+    
     const response = await makeRequest('https://app.ayrshare.com/api/post', {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${AYRSHARE_API_KEY}`
-      },
+      headers: headers,
       body: {
         post: content,
         platforms: platforms, // ['instagram', 'twitter', 'facebook', 'linkedin']
