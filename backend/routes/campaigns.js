@@ -208,6 +208,7 @@ router.post('/:id/post', protect, async (req, res) => {
 /**
  * POST /api/campaigns/:id/publish
  * Actually publish a campaign to social media using Ayrshare
+ * Accepts optional platforms array in request body to override campaign platforms
  */
 router.post('/:id/publish', protect, async (req, res) => {
   try {
@@ -218,18 +219,23 @@ router.post('/:id/publish', protect, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Campaign not found' });
     }
     
-    // Get the platforms from the campaign
-    const platforms = campaign.platforms || ['instagram'];
+    // Get the platforms from request body (user selected) or fall back to campaign platforms
+    const platforms = req.body.platforms || campaign.platforms || ['instagram'];
     
     // Build the post content
-    const postContent = campaign.creative?.caption || campaign.content || campaign.title;
-    const mediaUrl = campaign.creative?.mediaUrl || null;
-    const hashtags = campaign.creative?.hashtags || [];
+    const postContent = campaign.creative?.textContent || campaign.creative?.caption || campaign.content || campaign.name;
+    const mediaUrls = campaign.creative?.imageUrls || [];
+    const mediaUrl = mediaUrls[0] || campaign.creative?.mediaUrl || null;
+    const hashtags = campaign.creative?.captions?.split(' ').filter(h => h.startsWith('#')) || [];
     
     // Format the full post with hashtags
     const fullPost = hashtags.length > 0 
-      ? `${postContent}\n\n${hashtags.map(h => h.startsWith('#') ? h : `#${h}`).join(' ')}`
+      ? `${postContent}\n\n${hashtags.join(' ')}`
       : postContent;
+    
+    console.log('Publishing to platforms:', platforms);
+    console.log('Post content:', fullPost.substring(0, 100) + '...');
+    console.log('Media URL:', mediaUrl ? 'yes' : 'no');
     
     // Post to social media via Ayrshare
     const result = await postToSocialMedia(
@@ -240,6 +246,8 @@ router.post('/:id/publish', protect, async (req, res) => {
         shortenLinks: true
       }
     );
+    
+    console.log('Ayrshare publish result:', result);
     
     if (result.success || result.id) {
       // Update campaign with post result

@@ -1545,11 +1545,11 @@ export const apiService = {
     return response;
   },
 
-  // Publish a campaign to social media
-  publishCampaign: async (campaignId: string): Promise<any> => {
+  // Publish a campaign to social media with selected platforms
+  publishCampaign: async (campaignId: string, platforms?: string[]): Promise<any> => {
     const response = await apiCall<any>(
       `/campaigns/${campaignId}/publish`,
-      { method: 'POST' },
+      { method: 'POST', body: JSON.stringify({ platforms }) },
       true
     );
     return response;
