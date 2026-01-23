@@ -162,6 +162,46 @@ async function getAyrshareAnalytics(platforms = ['instagram', 'twitter', 'facebo
 }
 
 /**
+ * Get social analytics with user's profile key (for followers, following, posts)
+ * @param {string} profileKey - The user's Ayrshare Profile Key
+ * @param {string[]} platforms - Array of platforms to get analytics for
+ * @returns {Promise<{success: boolean, data?: object, error?: string}>}
+ */
+async function getUserSocialAnalytics(profileKey, platforms = ['instagram', 'facebook', 'twitter', 'linkedin']) {
+  if (!AYRSHARE_API_KEY) {
+    return { success: false, error: 'API not configured' };
+  }
+
+  try {
+    const headers = {
+      'Authorization': `Bearer ${AYRSHARE_API_KEY}`,
+      'Content-Type': 'application/json'
+    };
+    
+    if (profileKey) {
+      headers['Profile-Key'] = profileKey;
+    }
+    
+    // Ayrshare social analytics endpoint uses POST method
+    const response = await makeRequest('https://app.ayrshare.com/api/analytics/social', {
+      method: 'POST',
+      headers: headers,
+      body: JSON.stringify({ platforms })
+    });
+
+    console.log('Ayrshare social analytics response:', response.status, JSON.stringify(response.data).substring(0, 500));
+    
+    return { 
+      success: response.status === 200, 
+      data: response.data 
+    };
+  } catch (error) {
+    console.error('Ayrshare user social analytics error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
  * Get posting history from Ayrshare
  */
 async function getPostHistory() {
@@ -1889,6 +1929,7 @@ module.exports = {
   // Ayrshare functions
   postToSocialMedia,
   getAyrshareAnalytics,
+  getUserSocialAnalytics,
   getPostHistory,
   deletePost,
   getAyrshareProfile,

@@ -167,6 +167,20 @@ export interface SocialConnection {
   profileId?: string;
   lastSync?: string;
   status: 'active' | 'expired' | 'connecting' | 'disconnected';
+  profileUrl?: string;
+  userImage?: string;
+  source?: 'oauth' | 'ayrshare';
+  analytics?: {
+    followers: number;
+    following: number;
+    posts: number;
+    engagement: number;
+  };
+  channelData?: {
+    subscriberCount?: number;
+    videoCount?: number;
+    viewCount?: number;
+  };
 }
 
 export interface Trend {

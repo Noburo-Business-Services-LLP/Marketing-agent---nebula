@@ -282,12 +282,22 @@ const ConnectSocials: React.FC = () => {
                           ) : (
                               <p className="text-xs text-slate-400">Not connected</p>
                           )}
-                          {/* Show YouTube stats if connected */}
-                          {social.platform === 'YouTube' && social.connected && (social as any).channelData && (
+                          {/* Show analytics for connected accounts */}
+                          {social.connected && social.analytics && (
                               <div className="flex gap-2 mt-1.5 text-[10px] text-slate-400">
-                                  <span>{Number((social as any).channelData.subscriberCount).toLocaleString()} subs</span>
+                                  <span>{Number(social.analytics.followers).toLocaleString()} followers</span>
                                   <span>•</span>
-                                  <span>{Number((social as any).channelData.videoCount).toLocaleString()} videos</span>
+                                  <span>{Number(social.analytics.following).toLocaleString()} following</span>
+                                  <span>•</span>
+                                  <span>{Number(social.analytics.posts).toLocaleString()} posts</span>
+                              </div>
+                          )}
+                          {/* Show YouTube stats if connected */}
+                          {social.platform === 'YouTube' && social.connected && social.channelData && (
+                              <div className="flex gap-2 mt-1.5 text-[10px] text-slate-400">
+                                  <span>{Number(social.channelData.subscriberCount).toLocaleString()} subs</span>
+                                  <span>•</span>
+                                  <span>{Number(social.channelData.videoCount).toLocaleString()} videos</span>
                               </div>
                           )}
                       </div>

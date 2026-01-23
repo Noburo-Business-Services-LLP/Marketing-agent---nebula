@@ -7,6 +7,7 @@ const { protect } = require('../middleware/auth');
 const { 
   postToSocialMedia, 
   getAyrshareAnalytics,
+  getUserSocialAnalytics,
   getAPIStatus,
   getAyrshareProfile,
   getAyrshareConnectUrl,
@@ -922,6 +923,7 @@ router.get('/status', protect, async (req, res) => {
     // Get user's Ayrshare connected accounts using their profile key
     let ayrshareAccounts = [];
     let ayrshareDisplayNames = [];
+    let socialAnalytics = {};
     
     if (user.ayrshare?.profileKey) {
       try {
@@ -931,6 +933,19 @@ router.get('/status', protect, async (req, res) => {
           ayrshareAccounts = userProfile.data?.activeSocialAccounts || [];
           ayrshareDisplayNames = userProfile.data?.displayNames || [];
           console.log(`User ${user.email} Ayrshare accounts:`, ayrshareAccounts);
+          
+          // Fetch social analytics for connected platforms
+          if (ayrshareAccounts.length > 0) {
+            try {
+              const analyticsResult = await getUserSocialAnalytics(user.ayrshare.profileKey, ayrshareAccounts);
+              if (analyticsResult.success && analyticsResult.data) {
+                socialAnalytics = analyticsResult.data;
+                console.log('Social analytics fetched:', Object.keys(socialAnalytics));
+              }
+            } catch (analyticsError) {
+              console.log('Could not fetch social analytics:', analyticsError.message);
+            }
+          }
         }
       } catch (e) {
         console.log('Ayrshare user profile check failed:', e.message);
@@ -980,6 +995,44 @@ router.get('/status', protect, async (req, res) => {
       const ayrshareKey = ayrshareMapping[platform];
       if (ayrshareAccounts.includes(ayrshareKey)) {
         const displayInfo = ayrshareDisplayNames.find(d => d.platform === ayrshareKey);
+        
+        // Get analytics for this platform - Ayrshare returns nested structure like { instagram: { analytics: {...} } }
+        const platformData = socialAnalytics[ayrshareKey] || null;
+        const platformAnalytics = platformData?.analytics || null;
+        
+        // Map platform-specific field names to common format
+        let followers = 0, following = 0, posts = 0, engagement = 0;
+        
+        if (platformAnalytics) {
+          switch (ayrshareKey) {
+            case 'instagram':
+              followers = platformAnalytics.followersCount || 0;
+              following = platformAnalytics.followsCount || 0;
+              posts = platformAnalytics.mediaCount || 0;
+              break;
+            case 'facebook':
+              followers = platformAnalytics.followersCount || platformAnalytics.fanCount || 0;
+              following = platformAnalytics.pageFollows || 0;
+              posts = platformAnalytics.mediaCount || 0;
+              break;
+            case 'twitter':
+              followers = platformAnalytics.followersCount || 0;
+              following = platformAnalytics.friendsCount || 0;
+              posts = platformAnalytics.tweetCount || 0;
+              break;
+            case 'linkedin':
+              followers = platformAnalytics.followers?.totalFollowerCount || 0;
+              following = 0; // LinkedIn doesn't expose following count
+              posts = 0; // LinkedIn doesn't expose post count in analytics
+              engagement = platformAnalytics.engagement || 0;
+              break;
+            default:
+              followers = platformAnalytics.followersCount || platformAnalytics.followers || 0;
+              following = platformAnalytics.followingCount || platformAnalytics.followsCount || 0;
+              posts = platformAnalytics.postsCount || platformAnalytics.mediaCount || 0;
+          }
+        }
+        
         return {
           platform,
           connected: true,
@@ -988,7 +1041,13 @@ router.get('/status', protect, async (req, res) => {
           connectedAt: displayInfo?.created || null,
           profileUrl: displayInfo?.profileUrl || null,
           userImage: displayInfo?.userImage || null,
-          source: 'ayrshare'
+          source: 'ayrshare',
+          analytics: platformAnalytics ? {
+            followers,
+            following,
+            posts,
+            engagement
+          } : null
         };
       }
       
