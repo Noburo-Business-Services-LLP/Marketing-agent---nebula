@@ -284,12 +284,21 @@ const ConnectSocials: React.FC = () => {
                           )}
                           {/* Show analytics for connected accounts */}
                           {social.connected && social.analytics && (
-                              <div className="flex gap-2 mt-1.5 text-[10px] text-slate-400">
+                              <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1.5 text-[10px] text-slate-400">
                                   <span>{Number(social.analytics.followers).toLocaleString()} followers</span>
-                                  <span>•</span>
-                                  <span>{Number(social.analytics.following).toLocaleString()} following</span>
-                                  <span>•</span>
-                                  <span>{Number(social.analytics.posts).toLocaleString()} posts</span>
+                                  {/* LinkedIn doesn't provide following/posts count */}
+                                  {social.platform !== 'LinkedIn' && (
+                                    <>
+                                      <span>•</span>
+                                      <span>{Number(social.analytics.following).toLocaleString()} following</span>
+                                    </>
+                                  )}
+                                  {social.platform !== 'LinkedIn' && social.platform !== 'Facebook' && (
+                                    <>
+                                      <span>•</span>
+                                      <span>{Number(social.analytics.posts).toLocaleString()} posts</span>
+                                    </>
+                                  )}
                               </div>
                           )}
                           {/* Show YouTube stats if connected */}
