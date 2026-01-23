@@ -1191,15 +1191,18 @@ const Dashboard: React.FC = () => {
               );
             }
             
-            // Show connected profiles with stats
+            // Show connected profiles with stats - ONLY REAL DATA
             const totalFollowers = profiles.reduce((sum: number, p: any) => sum + (p.followers || 0), 0);
-            const totalGrowth = profiles.reduce((sum: number, p: any) => sum + (p.followersGrowth || 0), 0);
-            const avgEngagement = profiles.reduce((sum: number, p: any) => sum + (p.engagementRate || 0), 0) / profiles.length;
+            // Only count profiles with real engagement data
+            const profilesWithEngagement = profiles.filter((p: any) => p.engagementRate !== null && p.engagementRate !== undefined);
+            const avgEngagement = profilesWithEngagement.length > 0 
+              ? profilesWithEngagement.reduce((sum: number, p: any) => sum + (p.engagementRate || 0), 0) / profilesWithEngagement.length
+              : null;
             
             return (
               <>
-                {/* Summary Stats Row */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                {/* Summary Stats Row - ONLY REAL DATA */}
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
                   <div className={`p-4 rounded-xl ${isDarkMode ? 'bg-[#161b22]' : 'bg-slate-50'}`}>
                     <p className={`text-xs ${theme.textMuted} mb-1`}>Total Followers</p>
                     <p className={`text-2xl font-bold ${theme.text}`}>
@@ -1208,14 +1211,10 @@ const Dashboard: React.FC = () => {
                     </p>
                   </div>
                   <div className={`p-4 rounded-xl ${isDarkMode ? 'bg-[#161b22]' : 'bg-slate-50'}`}>
-                    <p className={`text-xs ${theme.textMuted} mb-1`}>Weekly Growth</p>
-                    <p className={`text-2xl font-bold ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>
-                      +{totalGrowth >= 1000 ? `${(totalGrowth / 1000).toFixed(1)}K` : totalGrowth}
-                    </p>
-                  </div>
-                  <div className={`p-4 rounded-xl ${isDarkMode ? 'bg-[#161b22]' : 'bg-slate-50'}`}>
                     <p className={`text-xs ${theme.textMuted} mb-1`}>Avg Engagement</p>
-                    <p className={`text-2xl font-bold ${theme.text}`}>{avgEngagement.toFixed(1)}%</p>
+                    <p className={`text-2xl font-bold ${theme.text}`}>
+                      {avgEngagement !== null ? `${avgEngagement.toFixed(1)}%` : 'N/A'}
+                    </p>
                   </div>
                   <div className={`p-4 rounded-xl ${isDarkMode ? 'bg-[#161b22]' : 'bg-slate-50'}`}>
                     <p className={`text-xs ${theme.textMuted} mb-1`}>Connected Platforms</p>
@@ -1248,7 +1247,7 @@ const Dashboard: React.FC = () => {
                           </div>
                         </div>
                         
-                        {/* Stats */}
+                        {/* Stats - ONLY REAL DATA */}
                         <div className="space-y-3">
                           <div className="flex justify-between items-center">
                             <span className={`text-xs ${theme.textMuted}`}>Followers</span>
@@ -1256,20 +1255,24 @@ const Dashboard: React.FC = () => {
                               {profile.followers >= 1000 ? `${(profile.followers / 1000).toFixed(1)}K` : profile.followers}
                             </span>
                           </div>
-                          <div className="flex justify-between items-center">
-                            <span className={`text-xs ${theme.textMuted}`}>Growth</span>
-                            <span className={`text-sm font-semibold ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>
-                              +{profile.followersGrowth || 0}
-                            </span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className={`text-xs ${theme.textMuted}`}>Engagement</span>
-                            <span className={`text-sm font-semibold ${theme.text}`}>{profile.engagementRate?.toFixed(1) || 0}%</span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className={`text-xs ${theme.textMuted}`}>Posts</span>
-                            <span className={`text-sm font-semibold ${theme.text}`}>{profile.posts || 0}</span>
-                          </div>
+                          {profile.engagementRate !== null && profile.engagementRate !== undefined && (
+                            <div className="flex justify-between items-center">
+                              <span className={`text-xs ${theme.textMuted}`}>Engagement</span>
+                              <span className={`text-sm font-semibold ${theme.text}`}>{profile.engagementRate.toFixed(1)}%</span>
+                            </div>
+                          )}
+                          {profile.posts > 0 && (
+                            <div className="flex justify-between items-center">
+                              <span className={`text-xs ${theme.textMuted}`}>Posts</span>
+                              <span className={`text-sm font-semibold ${theme.text}`}>{profile.posts}</span>
+                            </div>
+                          )}
+                          {profile.following > 0 && (
+                            <div className="flex justify-between items-center">
+                              <span className={`text-xs ${theme.textMuted}`}>Following</span>
+                              <span className={`text-sm font-semibold ${theme.text}`}>{profile.following}</span>
+                            </div>
+                          )}
                         </div>
                         
                         {/* Status Indicator */}
