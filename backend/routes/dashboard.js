@@ -759,7 +759,7 @@ router.get('/overview', protect, async (req, res) => {
               followers,
               following,
               posts,
-              engagementRate: engagement || (Math.random() * 3 + 2).toFixed(1),
+              engagementRate: parseFloat(engagement) || parseFloat((Math.random() * 3 + 2).toFixed(1)),
               followersGrowth: Math.floor(Math.random() * 100) + 10,
               source: 'ayrshare'
             };
@@ -777,7 +777,7 @@ router.get('/overview', protect, async (req, res) => {
       profileImage: social.channelData?.thumbnailUrl || null,
       followers: social.channelData?.subscriberCount ? parseInt(social.channelData.subscriberCount) : 0,
       posts: social.channelData?.videoCount ? parseInt(social.channelData.videoCount) : 0,
-      engagementRate: (Math.random() * 3 + 2).toFixed(1),
+      engagementRate: parseFloat((Math.random() * 3 + 2).toFixed(1)),
       followersGrowth: Math.floor(Math.random() * 500) + 50,
       connectedAt: social.connectedAt,
       source: 'oauth'
