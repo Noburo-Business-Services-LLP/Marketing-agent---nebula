@@ -104,9 +104,103 @@ async function ensurePublicUrl(imageUrl) {
   return null;
 }
 
+/**
+ * Upload a logo and return its public ID for overlay operations
+ * @param {string} logoData - Base64 or URL of the logo
+ * @returns {Promise<{success: boolean, publicId?: string, url?: string, error?: string}>}
+ */
+async function uploadLogo(logoData) {
+  try {
+    let uploadData = logoData;
+    if (!logoData.startsWith('data:') && !logoData.startsWith('http')) {
+      uploadData = `data:image/png;base64,${logoData}`;
+    }
+
+    // For URLs, we need to upload them to get a public_id
+    const result = await cloudinary.uploader.upload(uploadData, {
+      folder: 'nebula-logos',
+      resource_type: 'image',
+      transformation: [
+        { quality: 'auto:best' },
+        { fetch_format: 'png' }
+      ]
+    });
+
+    console.log('✅ Logo uploaded to Cloudinary:', result.public_id);
+
+    return {
+      success: true,
+      url: result.secure_url,
+      publicId: result.public_id
+    };
+  } catch (error) {
+    console.error('❌ Logo upload error:', error.message);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+/**
+ * Upload an image and overlay a logo on it
+ * @param {string} imageData - Base64 or URL of the main image
+ * @param {string} logoPublicId - Cloudinary public ID of the logo
+ * @param {object} options - Overlay options (position, size, opacity)
+ * @returns {Promise<{success: boolean, url?: string, error?: string}>}
+ */
+async function uploadImageWithLogoOverlay(imageData, logoPublicId, options = {}) {
+  try {
+    const {
+      position = 'south_east', // bottom-right by default
+      width = 120,
+      opacity = 90,
+      margin = 20
+    } = options;
+
+    let uploadData = imageData;
+    if (!imageData.startsWith('data:') && !imageData.startsWith('http')) {
+      uploadData = `data:image/png;base64,${imageData}`;
+    }
+
+    // Upload with logo overlay transformation
+    const result = await cloudinary.uploader.upload(uploadData, {
+      folder: 'nebula-campaigns',
+      resource_type: 'image',
+      transformation: [
+        { quality: 'auto:good' },
+        { 
+          overlay: logoPublicId.replace('/', ':'),
+          gravity: position,
+          width: width,
+          opacity: opacity,
+          x: margin,
+          y: margin
+        }
+      ]
+    });
+
+    console.log('✅ Image with logo overlay uploaded:', result.secure_url);
+
+    return {
+      success: true,
+      url: result.secure_url,
+      publicId: result.public_id
+    };
+  } catch (error) {
+    console.error('❌ Image with logo overlay error:', error.message);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
 module.exports = {
   uploadBase64Image,
   uploadMultipleImages,
   isBase64DataUrl,
-  ensurePublicUrl
+  ensurePublicUrl,
+  uploadLogo,
+  uploadImageWithLogoOverlay
 };

@@ -575,6 +575,12 @@ async function generateAIImage(campaignTitle, campaignDescription, objective, pl
     brandDetails.push(`Brand colors: ${brandColors.slice(0, 3).join(', ')} (incorporate these colors)`);
   }
   
+  // Add logo instruction if logo is provided
+  const hasLogo = brandContext.hasLogo || brandContext.productLogo;
+  const logoInstruction = hasLogo 
+    ? `IMPORTANT: Leave space in the corner (bottom-right preferred) for the brand logo to be overlaid. Do not include any text or watermarks in that area.`
+    : '';
+  
   const brandInfo = brandDetails.length > 0 ? brandDetails.join('. ') + '.' : '';
   
   // Color guidance for image generation
@@ -619,6 +625,7 @@ CAMPAIGN: "${campaignTitle}"
 ${campaignContext.substring(0, 200)}
 
 ${safetyNote}
+${logoInstruction}
 
 VISUAL STYLE:
 ${nicheSpecificStyle || `Professional ${industry} imagery that represents the brand's core offering.`}

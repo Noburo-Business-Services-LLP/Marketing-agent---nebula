@@ -1821,6 +1821,8 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
     const [contentType, setContentType] = useState<'image' | 'video' | 'carousel' | 'story'>('image');
     const [keyMessages, setKeyMessages] = useState('');
     const [callToAction, setCallToAction] = useState('');
+    const [productLogo, setProductLogo] = useState<string | null>(null);
+    const [productLogoName, setProductLogoName] = useState<string>('');
     
     // Step 4: Scheduling Preferences
     const [campaignDuration, setCampaignDuration] = useState<'1week' | '2weeks' | '1month' | '3months'>('2weeks');
@@ -1885,7 +1887,8 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
               tone: contentTone,
               type: contentType,
               keyMessages,
-              callToAction
+              callToAction,
+              productLogo // Pass the product logo to backend for image generation
             },
             scheduling: {
               duration: campaignDuration,
@@ -1937,15 +1940,25 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
       return { min: 18, max: 65 };
     };
 
-    // Save all accepted posts as scheduled campaigns
+    // Save all accepted posts as scheduled campaigns and actually schedule them on Ayrshare
     const handleSaveAndSchedule = async () => {
       setSavingPosts(true);
       
       const postsToSave = generatedPosts.filter(p => p.status !== 'rejected');
       
+      if (postsToSave.length === 0) {
+        alert('Please accept at least one post to schedule.');
+        setSavingPosts(false);
+        return;
+      }
+      
       try {
+        const scheduledCampaigns = [];
+        let hasErrors = false;
+        
         for (const post of postsToSave) {
-          await apiService.createCampaign({
+          // Create the campaign first
+          const { campaign } = await apiService.createCampaign({
             name: `${campaignName} - ${post.platform}`,
             objective: objective as any,
             platforms: [post.platform.toLowerCase()],
@@ -1968,28 +1981,60 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
               interests: targetInterests.split(',').map(i => i.trim())
             }
           });
+          
+          // Now actually schedule on Ayrshare using the publish endpoint
+          // Build the scheduled date/time in ISO format
+          const scheduledDateTime = new Date(`${post.suggestedDate}T${post.suggestedTime}:00`);
+          const scheduledFor = scheduledDateTime.toISOString();
+          
+          try {
+            const publishResult = await apiService.publishCampaign(
+              campaign._id, 
+              [post.platform.toLowerCase()], 
+              scheduledFor
+            );
+            
+            if (publishResult.success) {
+              scheduledCampaigns.push(campaign);
+              console.log(`✅ Scheduled ${post.platform} post for ${scheduledFor}`);
+            } else {
+              console.error(`❌ Failed to schedule ${post.platform} post:`, publishResult.message);
+              hasErrors = true;
+            }
+          } catch (publishError) {
+            console.error(`❌ Error scheduling ${post.platform} post:`, publishError);
+            hasErrors = true;
+          }
         }
         
-        // Create the parent campaign
-        const { campaign } = await apiService.createCampaign({
-          name: campaignName,
-          objective: objective as any,
-          platforms,
-          status: 'active',
-          creative: {
-            type: contentType,
-            textContent: campaignDescription,
-            imageUrls: postsToSave.map(p => p.imageUrl),
-            captions: keyMessages
-          },
-          scheduling: {
-            startDate,
-            postTime: preferredTimes[0] || '10:00'
-          },
-          budget: { type: 'lifetime' as const, amount: parseFloat(budget) || 0, currency: 'USD' }
-        });
-        
-        onSuccess(campaign);
+        if (scheduledCampaigns.length > 0) {
+          // Create a parent campaign to track all scheduled posts
+          const { campaign: parentCampaign } = await apiService.createCampaign({
+            name: campaignName,
+            objective: objective as any,
+            platforms,
+            status: 'active',
+            creative: {
+              type: contentType,
+              textContent: campaignDescription,
+              imageUrls: postsToSave.map(p => p.imageUrl),
+              captions: keyMessages
+            },
+            scheduling: {
+              startDate,
+              postTime: preferredTimes[0] || '10:00'
+            },
+            budget: { type: 'lifetime' as const, amount: parseFloat(budget) || 0, currency: 'USD' }
+          });
+          
+          if (hasErrors) {
+            alert(`${scheduledCampaigns.length} of ${postsToSave.length} posts scheduled successfully. Some posts failed - please check your connected accounts.`);
+          }
+          
+          onSuccess(parentCampaign);
+        } else {
+          alert('Failed to schedule posts. Please make sure you have connected your social accounts.');
+        }
       } catch (error) {
         console.error('Error saving campaign:', error);
         alert('Failed to save campaign. Please try again.');
@@ -2215,8 +2260,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                                       { id: 'instagram', label: 'Instagram', icon: <Instagram className="w-4 h-4" /> },
                                       { id: 'facebook', label: 'Facebook', icon: <Facebook className="w-4 h-4" /> },
                                       { id: 'twitter', label: 'Twitter/X', icon: <Twitter className="w-4 h-4" /> },
-                                      { id: 'linkedin', label: 'LinkedIn', icon: <Linkedin className="w-4 h-4" /> },
-                                      { id: 'youtube', label: 'YouTube', icon: <Youtube className="w-4 h-4" /> }
+                                      { id: 'linkedin', label: 'LinkedIn', icon: <Linkedin className="w-4 h-4" /> }
                                     ].map(p => (
                                       <button
                                         key={p.id}
@@ -2313,6 +2357,64 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                                     ]}
                                   />
                                 </div>
+                                
+                                {/* Product Logo Upload */}
+                                <div>
+                                  <label className={labelClasses}>Product/Brand Logo (Optional)</label>
+                                  <p className={`text-xs mb-2 ${theme.textSecondary}`}>
+                                    Upload your product or brand logo - AI will incorporate it into campaign images
+                                  </p>
+                                  <div className={`border-2 border-dashed rounded-xl p-6 text-center transition-colors ${
+                                    isDarkMode 
+                                      ? 'border-slate-700 hover:border-[#ffcc29]/50' 
+                                      : 'border-slate-300 hover:border-[#ffcc29]/50'
+                                  }`}>
+                                    {productLogo ? (
+                                      <div className="flex items-center justify-center gap-4">
+                                        <img 
+                                          src={productLogo} 
+                                          alt="Product Logo" 
+                                          className="w-20 h-20 object-contain rounded-lg border border-slate-300"
+                                        />
+                                        <div className="text-left">
+                                          <p className={`text-sm font-medium ${theme.text}`}>{productLogoName}</p>
+                                          <button
+                                            onClick={() => { setProductLogo(null); setProductLogoName(''); }}
+                                            className="text-xs text-red-500 hover:text-red-400 mt-1 flex items-center gap-1"
+                                          >
+                                            <X className="w-3 h-3" /> Remove
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <label className="cursor-pointer">
+                                        <input
+                                          type="file"
+                                          accept="image/*"
+                                          className="hidden"
+                                          onChange={(e) => {
+                                            const file = e.target.files?.[0];
+                                            if (file) {
+                                              setProductLogoName(file.name);
+                                              const reader = new FileReader();
+                                              reader.onloadend = () => {
+                                                setProductLogo(reader.result as string);
+                                              };
+                                              reader.readAsDataURL(file);
+                                            }
+                                          }}
+                                        />
+                                        <div className="flex flex-col items-center gap-2">
+                                          <div className="w-12 h-12 rounded-full bg-[#ffcc29]/10 flex items-center justify-center">
+                                            <ImageIcon className="w-6 h-6 text-[#ffcc29]" />
+                                          </div>
+                                          <p className={`text-sm ${theme.text}`}>Click to upload logo</p>
+                                          <p className={`text-xs ${theme.textMuted}`}>PNG, JPG, SVG up to 5MB</p>
+                                        </div>
+                                      </label>
+                                    )}
+                                  </div>
+                                </div>
                             </div>
                         )}
 
@@ -2394,24 +2496,49 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                                 
                                 <div>
                                   <label className={labelClasses}>Preferred Posting Times</label>
-                                  <div className="grid grid-cols-4 gap-2">
-                                    {['09:00', '12:00', '15:00', '18:00', '10:00', '14:00', '17:00', '20:00'].map(time => (
-                                      <button
-                                        key={time}
-                                        onClick={() => setPreferredTimes(prev => 
-                                          prev.includes(time) ? prev.filter(t => t !== time) : [...prev, time]
-                                        )}
-                                        className={`px-3 py-2 rounded-lg border text-sm transition-all ${
-                                          preferredTimes.includes(time)
-                                            ? 'bg-[#ffcc29]/20 border-[#ffcc29] text-[#ffcc29]'
-                                            : isDarkMode
-                                              ? 'border-slate-700 text-slate-400 hover:border-[#ffcc29]/50'
-                                              : 'border-slate-200 text-slate-600 hover:border-[#ffcc29]/50'
-                                        }`}
+                                  <p className={`text-xs mb-2 ${theme.textSecondary}`}>Add custom times when you want posts to go live</p>
+                                  <div className="flex flex-wrap gap-2 mb-3">
+                                    {preferredTimes.map((time, idx) => (
+                                      <div
+                                        key={idx}
+                                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#ffcc29]/20 border border-[#ffcc29] text-[#ffcc29]"
                                       >
-                                        {time}
-                                      </button>
+                                        <Clock className="w-3 h-3" />
+                                        <span className="text-sm font-medium">{time}</span>
+                                        <button
+                                          onClick={() => setPreferredTimes(prev => prev.filter((_, i) => i !== idx))}
+                                          className="ml-1 hover:text-red-400"
+                                        >
+                                          <X className="w-3 h-3" />
+                                        </button>
+                                      </div>
                                     ))}
+                                  </div>
+                                  <div className="flex gap-2">
+                                    <input
+                                      type="time"
+                                      id="customTimeInput"
+                                      className={`${inputClasses} flex-1`}
+                                      onChange={(e) => {
+                                        if (e.target.value && !preferredTimes.includes(e.target.value)) {
+                                          setPreferredTimes(prev => [...prev, e.target.value]);
+                                          e.target.value = '';
+                                        }
+                                      }}
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const input = document.getElementById('customTimeInput') as HTMLInputElement;
+                                        if (input?.value && !preferredTimes.includes(input.value)) {
+                                          setPreferredTimes(prev => [...prev, input.value]);
+                                          input.value = '';
+                                        }
+                                      }}
+                                      className="px-4 py-2 bg-[#ffcc29] text-black rounded-lg font-medium hover:bg-[#e6b825] transition-colors"
+                                    >
+                                      Add Time
+                                    </button>
                                   </div>
                                 </div>
                             </div>

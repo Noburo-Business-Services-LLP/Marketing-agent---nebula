@@ -646,6 +646,7 @@ router.post('/generate-campaign-posts', protect, async (req, res) => {
     }
 
     const platforms = content?.platforms || ['instagram'];
+    const productLogo = content?.productLogo || null; // Base64 or URL of product logo
     const duration = scheduling?.duration || '2weeks';
     const postsPerWeek = scheduling?.postsPerWeek || 3;
     const preferredDays = scheduling?.preferredDays || ['monday', 'wednesday', 'friday'];
@@ -758,8 +759,9 @@ Return ONLY valid JSON (no markdown, no code blocks):
       throw new Error('Invalid response format from AI');
     }
 
-    // Import image generation function
+    // Import image generation function and logo overlay
     const { getRelevantImage } = require('../services/geminiAI');
+    const { uploadLogo, uploadImageWithLogoOverlay, isBase64DataUrl } = require('../services/imageUploader');
 
     // Build rich brand context for image generation
     const brandContext = {
@@ -771,8 +773,21 @@ Return ONLY valid JSON (no markdown, no code blocks):
       usps: bp.uniqueSellingPoints?.join(', ') || bp.valuePropositions?.join(', ') || '',
       niche: bp.niche || '',
       targetAudience: targetAudience?.description || '',
-      brandVoice: bp.brandVoice || content?.tone || 'professional'
+      brandVoice: bp.brandVoice || content?.tone || 'professional',
+      productLogo: productLogo, // Pass the product logo for image generation
+      hasLogo: !!productLogo // Flag to indicate logo is available
     };
+
+    // Upload logo to Cloudinary if provided (for overlay)
+    let logoPublicId = null;
+    if (productLogo) {
+      console.log('📤 Uploading product logo for overlay...');
+      const logoResult = await uploadLogo(productLogo);
+      if (logoResult.success) {
+        logoPublicId = logoResult.publicId;
+        console.log('✅ Logo uploaded, public ID:', logoPublicId);
+      }
+    }
 
     // Helper function for delay (rate limiting for Imagen API - 5 RPM limit)
     const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -804,6 +819,22 @@ Return ONLY valid JSON (no markdown, no code blocks):
           post.platform,
           brandContext
         );
+        
+        // If logo is available, overlay it on the generated image
+        if (logoPublicId && imageUrl) {
+          console.log(`🏷️ Overlaying logo on image ${index + 1}...`);
+          const overlayResult = await uploadImageWithLogoOverlay(imageUrl, logoPublicId, {
+            position: 'south_east',
+            width: 100,
+            opacity: 85,
+            margin: 15
+          });
+          
+          if (overlayResult.success) {
+            imageUrl = overlayResult.url;
+            console.log(`✅ Logo overlay applied to image ${index + 1}`);
+          }
+        }
         
         console.log(`✅ Image ${index + 1}/${postsToProcess.length} generated`);
       } catch (imgError) {
