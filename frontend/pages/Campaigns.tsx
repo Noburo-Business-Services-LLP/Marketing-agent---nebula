@@ -2,8 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { apiService } from '../services/api';
 import { Campaign } from '../types';
-import { Plus, Sparkles, Filter, Loader2, Calendar, BarChart3, Image as ImageIcon, Video, X, ChevronRight, Check, Eye, MousePointer, Archive, Send, Edit3, DollarSign, RefreshCw, Wand2, Instagram, Facebook, Twitter, Linkedin, Youtube, Clock, Heart, MessageCircle, Share2, Zap, Download, FileText, ImageDown, ChevronDown, Trash2, Edit2 } from 'lucide-react';
-import PosterEditor from '../components/PosterEditor';
+import { Plus, Sparkles, Filter, Loader2, Calendar, BarChart3, Image as ImageIcon, Video, X, ChevronRight, Check, Eye, MousePointer, Archive, Send, Edit3, DollarSign, RefreshCw, Wand2, Instagram, Facebook, Twitter, Linkedin, Youtube, Clock, Heart, MessageCircle, Share2, Zap, Download, FileText, ImageDown, ChevronDown, Trash2 } from 'lucide-react';
 import { 
     LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, AreaChart, Area 
 } from 'recharts';
@@ -2947,7 +2946,6 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
     const [isEditing, setIsEditing] = useState(false);
     const [fullPreviewImage, setFullPreviewImage] = useState<string | null>(null);
     const [useAIGeneration, setUseAIGeneration] = useState(false); // Canvas by default, AI optional
-    const [isEditorOpen, setIsEditorOpen] = useState(false);
     
     // Schedule state
     const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(connectedPlatforms.slice(0, 1));
@@ -3464,12 +3462,6 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
                             >
                               <RefreshCw className="w-4 h-4" /> Regenerate
                             </button>
-                            <button
-                              onClick={() => setIsEditorOpen(true)}
-                              className="flex-1 py-2 rounded-lg font-medium flex items-center justify-center gap-2 bg-gradient-to-r from-purple-500 to-blue-500 text-white hover:from-purple-600 hover:to-blue-600"
-                            >
-                              <Edit2 className="w-4 h-4" /> Edit in Editor
-                            </button>
                           </div>
                         </div>
                       )}
@@ -3688,25 +3680,6 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
               onClick={(e) => e.stopPropagation()}
             />
           </div>
-        )}
-
-        {/* Poster Editor Modal */}
-        {isEditorOpen && currentPoster?.generatedImage && (
-          <PosterEditor
-            imageBase64={currentPoster.generatedImage}
-            onClose={() => setIsEditorOpen(false)}
-            onSave={(editedImage) => {
-              // Update the current poster with the edited image
-              setPosters(prev => prev.map((p, idx) => 
-                idx === currentPosterIndex ? { 
-                  ...p, 
-                  generatedImage: editedImage,
-                  imageUrl: null // Will need to re-upload
-                } : p
-              ));
-              setIsEditorOpen(false);
-            }}
-          />
         )}
       </div>
     );
