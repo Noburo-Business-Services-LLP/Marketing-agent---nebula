@@ -2782,103 +2782,101 @@ async function generateTemplatePoster(templateImageBase64, content, options = {}
     }
   }
   
-  // Simple, direct prompt - like how you'd use Gemini directly
-  const prompt = `Look at this poster template image. Create a new poster using the EXACT SAME design, layout, colors, fonts, logos, and structure.
+  // Master Template Prompt - recommended by Gemini AI for best results
+  const prompt = `Act as a professional graphic designer. Using the attached image as a layout and style reference, RECONSTRUCT a new high-fidelity version.
 
-Keep everything exactly the same EXCEPT replace the content with this:
+1. Structural Logic: Maintain the spatial arrangement—place the logos at the top, the main title in the center, and the body text in the provided card area.
 
+2. Visual Identity: Replicate the exact color palette (the official colors shown in the template) and use clean, vector-style rendering.
+
+3. Text Execution: Replace all existing placeholder text with the following data:
 ${content}
 
-Important:
-- Copy the Tamil text in the header EXACTLY as shown - do not change any Tamil characters
-- Keep all logos and emblems exactly as they appear
-- Use the same colors, fonts, and text positioning
-- The new poster should look like it was made from the same template`;
+Render this text in a sharp, bold, modern sans-serif font that matches the template's style.
 
-  // Try native image generation models with correct API format
-  const imageModels = [
-    'gemini-2.0-flash-exp-image-generation'
-  ];
+4. Quality Constraints: Ensure the final output is high resolution, perfectly sharp, with zero blur or noise. All Tamil characters must be rendered with printing-grade clarity - copy them EXACTLY as shown in the template header.
 
-  for (const model of imageModels) {
-    try {
-      console.log(`🎨 Generating template poster with ${model}...`);
-      
-      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
-      
-      // Use the correct format for image generation models
-      const requestBody = {
-        contents: [{
-          parts: [
-            {
-              inlineData: {
-                mimeType: mimeType,
-                data: imageData
-              }
-            },
-            { text: prompt }
-          ]
-        }],
-        generationConfig: {
-          responseModalities: ["Text", "Image"]
-        }
-      };
-      
-      const response = await fetchWithTimeout(`${apiUrl}?key=${GEMINI_API_KEY}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(requestBody)
-      }, 120000);
+5. Preserve Exactly: All logos, emblems, seals, and institutional branding must be reproduced pixel-perfect from the reference image.`;
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        console.error(`Gemini ${model} error:`, data.error?.message || data);
-        continue;
+  // Try native image generation model
+  try {
+    console.log('🎨 Generating template poster with gemini-2.0-flash-exp-image-generation...');
+    
+    const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp-image-generation:generateContent';
+    
+    // Use Gemini's recommended generation config for image models
+    const requestBody = {
+      contents: [{
+        parts: [
+          {
+            inlineData: {
+              mimeType: mimeType,
+              data: imageData
+            }
+          },
+          { text: prompt }
+        ]
+      }],
+      generationConfig: {
+        temperature: 1.0,  // DO NOT LOWER - Image models need 1.0 for creativity
+        responseModalities: ["TEXT", "IMAGE"]  // Allows model to reason in text first
       }
+    };
+    
+    const response = await fetchWithTimeout(`${apiUrl}?key=${GEMINI_API_KEY}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(requestBody)
+    }, 120000);
 
-      // Extract the generated image from response
-      const candidates = data.candidates || [];
-      for (const candidate of candidates) {
-        const parts = candidate.content?.parts || [];
-        for (const part of parts) {
-          if (part.inlineData?.data) {
-            const duration = Date.now() - startTime;
-            console.log(`✅ Template poster generated with ${model} in ${duration}ms`);
-            return {
-              success: true,
-              imageBase64: `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`,
-              model: model
-            };
-          }
-          // Also check for inline_data (snake_case variant)
-          if (part.inline_data?.data) {
-            const duration = Date.now() - startTime;
-            console.log(`✅ Template poster generated with ${model} in ${duration}ms`);
-            return {
-              success: true,
-              imageBase64: `data:${part.inline_data.mime_type || 'image/png'};base64,${part.inline_data.data}`,
-              model: model
-            };
-          }
-        }
-      }
-      
-      // Log if no image was generated
-      const textResponse = data.candidates?.[0]?.content?.parts?.find(p => p.text)?.text;
-      if (textResponse) {
-        console.log(`Model ${model} returned text only:`, textResponse.substring(0, 200));
-      } else {
-        console.log(`Model ${model} returned no usable content`);
-      }
-      continue;
-      
-    } catch (error) {
-      console.error(`Template poster generation with ${model} failed:`, error.message);
-      continue;
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error('Gemini error:', data.error?.message || data);
+      throw new Error(data.error?.message || 'Image generation failed');
     }
+
+    // Extract the generated image from response
+    const candidates = data.candidates || [];
+    for (const candidate of candidates) {
+      const parts = candidate.content?.parts || [];
+      for (const part of parts) {
+        if (part.inlineData?.data) {
+          const duration = Date.now() - startTime;
+          console.log(`✅ Template poster generated in ${duration}ms`);
+          return {
+            success: true,
+            imageBase64: `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`,
+            model: 'gemini-2.0-flash-exp-image-generation'
+          };
+        }
+        // Also check for inline_data (snake_case variant)
+        if (part.inline_data?.data) {
+          const duration = Date.now() - startTime;
+          console.log(`✅ Template poster generated in ${duration}ms`);
+          return {
+            success: true,
+            imageBase64: `data:${part.inline_data.mime_type || 'image/png'};base64,${part.inline_data.data}`,
+            model: 'gemini-2.0-flash-exp-image-generation'
+          };
+        }
+      }
+    }
+    
+    // Log if no image was generated
+    const textResponse = data.candidates?.[0]?.content?.parts?.find(p => p.text)?.text;
+      if (textResponse) {
+        console.log('Model returned text only:', textResponse.substring(0, 200));
+      } else {
+        console.log('Model returned no usable image content');
+      }
+      
+      throw new Error('No image generated by Gemini');
+      
+  } catch (error) {
+    console.error('Template poster generation failed:', error.message);
   }
   
   // Fallback: Use Vertex AI Imagen for pure image generation based on description
@@ -2970,9 +2968,15 @@ async function editTemplatePoster(currentImageBase64, originalContent, editInstr
   }
   
   // Simple, direct prompt for editing
-  const prompt = `Look at this poster image. Make ONLY this change: "${editInstructions}"
+  const prompt = `Act as a professional graphic designer. I'm showing you a poster that needs a specific modification.
 
-Keep everything else exactly the same - the design, colors, fonts, logos, Tamil text, layout, etc. Only change what I specifically asked for.`;
+EDIT REQUEST: "${editInstructions}"
+
+Instructions:
+1. Apply ONLY the requested change above - nothing else
+2. Preserve everything else exactly: logos, Tamil text, colors, fonts, layout, background
+3. The edited poster should look identical to the original except for the specific change requested
+4. Maintain printing-grade quality and sharpness`;
 
   // Build parts - include template if available for better reference
   const parts = [
@@ -2992,16 +2996,16 @@ Keep everything else exactly the same - the design, colors, fonts, logos, Tamil 
         data: templateData
       }
     });
-    parts.push({ text: "This second image is the original template for reference." });
+    parts.push({ text: "This second image is the original template for reference - use it to ensure logos and headers match exactly." });
   }
   
   parts.push({ text: prompt });
 
-  // Try Gemini 2.0 Flash (native image generation) - confirmed working model
+  // Try Gemini 2.0 Flash (native image generation)
   try {
     console.log('🎨 Editing poster with gemini-2.0-flash-exp-image-generation...');
     
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp-image-generation:generateContent`;
+    const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp-image-generation:generateContent';
     
     const response = await fetchWithTimeout(`${apiUrl}?key=${GEMINI_API_KEY}`, {
       method: 'POST',
@@ -3013,7 +3017,8 @@ Keep everything else exactly the same - the design, colors, fonts, logos, Tamil 
           parts: parts
         }],
         generationConfig: {
-          responseModalities: ["Text", "Image"]
+          temperature: 1.0,  // DO NOT LOWER - Image models need 1.0
+          responseModalities: ["TEXT", "IMAGE"]
         }
       })
     }, 120000);
