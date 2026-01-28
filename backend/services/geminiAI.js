@@ -2761,7 +2761,7 @@ Return ONLY valid JSON:
 }
 
 /**
- * Generate a poster from a template image and content using Gemini 3 Pro Image Preview (Nano Banana Pro)
+ * Generate a poster from a template image and content using Gemini Image Generation models
  * This function takes a template image and user-provided content to generate a complete poster
  * @param {string} templateImageBase64 - Base64 encoded template image
  * @param {string} content - The text content to place on the poster
@@ -2770,13 +2770,6 @@ Return ONLY valid JSON:
  */
 async function generateTemplatePoster(templateImageBase64, content, options = {}) {
   const startTime = Date.now();
-  
-  // Model priority: Gemini 3 Pro Image Preview (Nano Banana Pro) > Gemini 2.5 Flash Image > Gemini 2.0 Flash Image Gen
-  const imageModels = [
-    'gemini-3-pro-image-preview',      // Nano Banana Pro - primary
-    'gemini-2.5-flash-image',           // Nano Banana - fallback
-    'gemini-2.0-flash-exp-image-generation'  // Legacy fallback
-  ];
   
   // Extract just the base64 data if it includes the data URL prefix
   let imageData = templateImageBase64;
@@ -2811,7 +2804,13 @@ INSTRUCTIONS:
 8. ${platformHint}
 9. ${styleHint}
 
-Generate a complete, professional poster ready for social media posting. The output should be a polished, publication-ready image.`;
+IMPORTANT: Generate and return a complete, professional poster image ready for social media posting.`;
+
+  // Try native image generation models with correct API format
+  const imageModels = [
+    'gemini-2.0-flash-exp-image-generation',
+    'gemini-2.0-flash-preview-image-generation'
+  ];
 
   for (const model of imageModels) {
     try {
@@ -2819,41 +2818,37 @@ Generate a complete, professional poster ready for social media posting. The out
       
       const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
       
+      // Use the correct format for image generation models
+      const requestBody = {
+        contents: [{
+          parts: [
+            {
+              inlineData: {
+                mimeType: mimeType,
+                data: imageData
+              }
+            },
+            { text: prompt }
+          ]
+        }],
+        generationConfig: {
+          responseModalities: ["Text", "Image"]
+        }
+      };
+      
       const response = await fetchWithTimeout(`${apiUrl}?key=${GEMINI_API_KEY}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          contents: [{
-            parts: [
-              {
-                inline_data: {
-                  mime_type: mimeType,
-                  data: imageData
-                }
-              },
-              { text: prompt }
-            ]
-          }],
-          generationConfig: {
-            temperature: 0.4,
-            maxOutputTokens: 8192,
-            responseModalities: ['image', 'text'],
-            responseMimeType: 'image/png'
-          }
-        })
-      }, 120000); // 2 minute timeout for image generation
+        body: JSON.stringify(requestBody)
+      }, 120000);
 
       const data = await response.json();
 
       if (!response.ok) {
         console.error(`Gemini ${model} error:`, data.error?.message || data);
-        if (data.error?.code === 404) {
-          console.log(`Model ${model} not available, trying next...`);
-          continue;
-        }
-        throw new Error(data.error?.message || 'Image generation failed');
+        continue;
       }
 
       // Extract the generated image from response
@@ -2861,6 +2856,16 @@ Generate a complete, professional poster ready for social media posting. The out
       for (const candidate of candidates) {
         const parts = candidate.content?.parts || [];
         for (const part of parts) {
+          if (part.inlineData?.data) {
+            const duration = Date.now() - startTime;
+            console.log(`✅ Template poster generated with ${model} in ${duration}ms`);
+            return {
+              success: true,
+              imageBase64: `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`,
+              model: model
+            };
+          }
+          // Also check for inline_data (snake_case variant)
           if (part.inline_data?.data) {
             const duration = Date.now() - startTime;
             console.log(`✅ Template poster generated with ${model} in ${duration}ms`);
@@ -2873,19 +2878,64 @@ Generate a complete, professional poster ready for social media posting. The out
         }
       }
       
-      // If no image in response, try text response for debugging
+      // Log if no image was generated
       const textResponse = data.candidates?.[0]?.content?.parts?.find(p => p.text)?.text;
       if (textResponse) {
-        console.log(`Model ${model} returned text instead of image:`, textResponse.substring(0, 200));
+        console.log(`Model ${model} returned text only:`, textResponse.substring(0, 200));
+      } else {
+        console.log(`Model ${model} returned no usable content`);
       }
-      
-      console.log(`No image generated by ${model}, trying next model...`);
       continue;
       
     } catch (error) {
       console.error(`Template poster generation with ${model} failed:`, error.message);
       continue;
     }
+  }
+  
+  // Fallback: Use Vertex AI Imagen for pure image generation based on description
+  try {
+    console.log('🎨 Falling back to Vertex AI Imagen...');
+    const accessToken = await getVertexAccessToken();
+    
+    // Create a detailed prompt describing the desired poster
+    const imagenPrompt = `Professional social media poster with the following content: ${content.substring(0, 500)}. 
+    Style: Modern, clean design with professional typography. 
+    Colors: Blue gradient background with white and yellow text.
+    Layout: Title at top, details in middle, contact information at bottom.
+    High quality, publication ready.`;
+    
+    const vertexUrl = `https://${VERTEX_LOCATION}-aiplatform.googleapis.com/v1/projects/${VERTEX_PROJECT_ID}/locations/${VERTEX_LOCATION}/publishers/google/models/imagen-3.0-generate-001:predict`;
+    
+    const response = await fetchWithTimeout(vertexUrl, {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`
+      },
+      body: JSON.stringify({
+        instances: [{ prompt: imagenPrompt }],
+        parameters: {
+          sampleCount: 1,
+          aspectRatio: options.platform === 'youtube' ? '16:9' : '1:1',
+          safetyFilterLevel: 'block_few'
+        }
+      })
+    }, 90000);
+
+    const data = await response.json();
+    
+    if (data.predictions?.[0]?.bytesBase64Encoded) {
+      console.log('✅ Poster generated with Vertex AI Imagen');
+      return {
+        success: true,
+        imageBase64: `data:image/png;base64,${data.predictions[0].bytesBase64Encoded}`,
+        model: 'imagen-3.0-generate-001',
+        note: 'Generated based on content description (template reference not applied)'
+      };
+    }
+  } catch (imagenError) {
+    console.error('Vertex AI Imagen fallback failed:', imagenError.message);
   }
   
   return {
@@ -2904,12 +2954,6 @@ Generate a complete, professional poster ready for social media posting. The out
  */
 async function editTemplatePoster(currentImageBase64, originalContent, editInstructions, templateImageBase64 = null) {
   const startTime = Date.now();
-  
-  const imageModels = [
-    'gemini-3-pro-image-preview',
-    'gemini-2.5-flash-image',
-    'gemini-2.0-flash-exp-image-generation'
-  ];
   
   // Extract base64 data
   let imageData = currentImageBase64;
@@ -2941,73 +2985,119 @@ INSTRUCTIONS:
 
 Generate the updated poster with the requested modifications.`;
 
-  for (const model of imageModels) {
-    try {
-      console.log(`🎨 Editing poster with ${model}...`);
-      
-      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
-      
-      // Build parts array - include template if available
-      const parts = [
-        {
-          inline_data: {
-            mime_type: mimeType,
-            data: imageData
-          }
-        },
-        { text: prompt }
-      ];
-      
-      const response = await fetchWithTimeout(`${apiUrl}?key=${GEMINI_API_KEY}`, {
+  // Try Gemini 2.0 Flash (native image generation) - confirmed working model
+  try {
+    console.log('🎨 Editing poster with gemini-2.0-flash-exp-image-generation...');
+    
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp-image-generation:generateContent`;
+    
+    const response = await fetchWithTimeout(`${apiUrl}?key=${GEMINI_API_KEY}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            {
+              inlineData: {
+                mimeType: mimeType,
+                data: imageData
+              }
+            },
+            { text: prompt }
+          ]
+        }],
+        generationConfig: {
+          responseModalities: ["Text", "Image"]
+        }
+      })
+    }, 120000);
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error('Gemini edit error:', data.error?.message || data);
+      throw new Error(data.error?.message || 'Image edit failed');
+    }
+
+    // Extract the generated image
+    const candidates = data.candidates || [];
+    for (const candidate of candidates) {
+      const parts = candidate.content?.parts || [];
+      for (const part of parts) {
+        if (part.inlineData?.data) {
+          const duration = Date.now() - startTime;
+          console.log(`✅ Poster edited with gemini-2.0-flash-exp-image-generation in ${duration}ms`);
+          return {
+            success: true,
+            imageBase64: `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`,
+            model: 'gemini-2.0-flash-exp-image-generation'
+          };
+        }
+      }
+    }
+    
+    console.log('No image generated by Gemini, trying Imagen fallback...');
+    
+  } catch (error) {
+    console.error('Gemini poster edit failed:', error.message);
+  }
+  
+  // Fallback to Vertex AI Imagen for generation (without edit context, just regenerate)
+  try {
+    console.log('🎨 Attempting Vertex AI Imagen fallback...');
+    
+    const auth = new GoogleAuth({
+      scopes: ['https://www.googleapis.com/auth/cloud-platform']
+    });
+    const client = await auth.getClient();
+    const accessToken = await client.getAccessToken();
+    
+    // Regenerate with edit instructions incorporated
+    const imagenPrompt = `Create a marketing poster with the following content:
+${originalContent}
+
+APPLY THESE MODIFICATIONS:
+${editInstructions}
+
+Style: Professional marketing poster, visually appealing, clean design.`;
+    
+    const imagenResponse = await fetchWithTimeout(
+      `https://us-central1-aiplatform.googleapis.com/v1/projects/${process.env.GOOGLE_CLOUD_PROJECT}/locations/us-central1/publishers/google/models/imagen-3.0-generate-001:predict`,
+      {
         method: 'POST',
         headers: {
+          'Authorization': `Bearer ${accessToken.token}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          contents: [{
-            parts: parts
+          instances: [{
+            prompt: imagenPrompt
           }],
-          generationConfig: {
-            temperature: 0.4,
-            maxOutputTokens: 8192,
-            responseModalities: ['image', 'text'],
-            responseMimeType: 'image/png'
+          parameters: {
+            sampleCount: 1,
+            aspectRatio: '1:1'
           }
         })
-      }, 120000);
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        console.error(`Gemini ${model} error:`, data.error?.message || data);
-        if (data.error?.code === 404) continue;
-        throw new Error(data.error?.message || 'Image edit failed');
-      }
-
-      // Extract the generated image
-      const candidates = data.candidates || [];
-      for (const candidate of candidates) {
-        const parts = candidate.content?.parts || [];
-        for (const part of parts) {
-          if (part.inline_data?.data) {
-            const duration = Date.now() - startTime;
-            console.log(`✅ Poster edited with ${model} in ${duration}ms`);
-            return {
-              success: true,
-              imageBase64: `data:${part.inline_data.mime_type || 'image/png'};base64,${part.inline_data.data}`,
-              model: model
-            };
-          }
-        }
-      }
-      
-      console.log(`No image generated by ${model}, trying next...`);
-      continue;
-      
-    } catch (error) {
-      console.error(`Poster edit with ${model} failed:`, error.message);
-      continue;
+      },
+      120000
+    );
+    
+    const imagenData = await imagenResponse.json();
+    
+    if (imagenData.predictions?.[0]?.bytesBase64Encoded) {
+      const duration = Date.now() - startTime;
+      console.log(`✅ Poster regenerated with Imagen in ${duration}ms`);
+      return {
+        success: true,
+        imageBase64: `data:image/png;base64,${imagenData.predictions[0].bytesBase64Encoded}`,
+        model: 'imagen-3.0-generate-001',
+        note: 'Regenerated with edit instructions applied'
+      };
     }
+  } catch (imagenError) {
+    console.error('Vertex AI Imagen fallback failed:', imagenError.message);
   }
   
   return {
