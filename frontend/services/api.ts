@@ -941,6 +941,105 @@ export const apiService = {
     return { campaign: response.campaign };
   },
 
+  // ============================================
+  // TEMPLATE POSTER GENERATION (Nano Banana Pro)
+  // ============================================
+
+  /**
+   * Generate a poster from a template image and content
+   */
+  generateTemplatePoster: async (
+    templateImage: string, 
+    content: string, 
+    options?: { platform?: string; style?: string }
+  ): Promise<{ 
+    success: boolean; 
+    imageBase64?: string; 
+    imageUrl?: string; 
+    model?: string; 
+    message?: string;
+    error?: string;
+  }> => {
+    const response = await apiCall<any>(
+      '/campaigns/template-poster',
+      { 
+        method: 'POST', 
+        body: JSON.stringify({ 
+          templateImage, 
+          content, 
+          platform: options?.platform || 'instagram',
+          style: options?.style
+        }) 
+      },
+      true
+    );
+    return response;
+  },
+
+  /**
+   * Edit/refine a generated poster based on user feedback
+   */
+  editTemplatePoster: async (
+    currentImage: string,
+    originalContent: string,
+    editInstructions: string,
+    templateImage?: string
+  ): Promise<{ 
+    success: boolean; 
+    imageBase64?: string; 
+    imageUrl?: string; 
+    model?: string; 
+    message?: string;
+    error?: string;
+  }> => {
+    const response = await apiCall<any>(
+      '/campaigns/template-poster/edit',
+      { 
+        method: 'POST', 
+        body: JSON.stringify({ 
+          currentImage, 
+          originalContent, 
+          editInstructions,
+          templateImage
+        }) 
+      },
+      true
+    );
+    return response;
+  },
+
+  /**
+   * Generate multiple posters from templates in batch
+   */
+  generateTemplatePosterBatch: async (
+    posters: Array<{ templateImage: string; content: string; style?: string }>,
+    platform?: string
+  ): Promise<{
+    success: boolean;
+    results: Array<{
+      index: number;
+      success: boolean;
+      imageBase64?: string;
+      imageUrl?: string;
+      error?: string;
+    }>;
+    summary: {
+      total: number;
+      successful: number;
+      failed: number;
+    };
+  }> => {
+    const response = await apiCall<any>(
+      '/campaigns/template-poster/batch',
+      { 
+        method: 'POST', 
+        body: JSON.stringify({ posters, platform }) 
+      },
+      true
+    );
+    return response;
+  },
+
   getCampaignAnalytics: async (startDate?: string, endDate?: string): Promise<any> => {
     try {
       let queryString = '';

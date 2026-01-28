@@ -887,4 +887,249 @@ Return ONLY valid JSON (no markdown, no code blocks):
   }
 });
 
+// ============================================
+// TEMPLATE POSTER GENERATION (Nano Banana Pro)
+// ============================================
+
+const { generateTemplatePoster, editTemplatePoster } = require('../services/geminiAI');
+
+/**
+ * POST /api/campaigns/template-poster
+ * Generate a poster from a template image and content
+ * Uses Gemini 3 Pro Image Preview (Nano Banana Pro) for template-based image generation
+ */
+router.post('/template-poster', protect, async (req, res) => {
+  try {
+    const { templateImage, content, platform, style } = req.body;
+    
+    if (!templateImage) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Template image is required' 
+      });
+    }
+    
+    if (!content || content.trim().length === 0) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Poster content is required' 
+      });
+    }
+    
+    console.log('🎨 Generating template poster...');
+    console.log('📝 Content length:', content.length, 'characters');
+    console.log('📱 Platform:', platform || 'general');
+    
+    const result = await generateTemplatePoster(templateImage, content, {
+      platform: platform || 'instagram',
+      style: style
+    });
+    
+    if (result.success) {
+      console.log('✅ Template poster generated successfully');
+      
+      // Upload to Cloudinary for persistent URL
+      let hostedUrl = null;
+      try {
+        const uploadResult = await ensurePublicUrl(result.imageBase64);
+        if (uploadResult) {
+          hostedUrl = uploadResult;
+          console.log('✅ Poster uploaded to Cloudinary:', hostedUrl);
+        }
+      } catch (uploadError) {
+        console.warn('⚠️ Could not upload to Cloudinary, returning base64');
+      }
+      
+      res.json({
+        success: true,
+        imageBase64: result.imageBase64,
+        imageUrl: hostedUrl,
+        model: result.model,
+        message: 'Poster generated successfully'
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        message: result.error || 'Failed to generate poster'
+      });
+    }
+  } catch (error) {
+    console.error('Template poster generation error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to generate poster', 
+      error: error.message 
+    });
+  }
+});
+
+/**
+ * POST /api/campaigns/template-poster/edit
+ * Edit/refine a generated poster based on user feedback
+ * Supports iterative refinement through conversational prompts
+ */
+router.post('/template-poster/edit', protect, async (req, res) => {
+  try {
+    const { currentImage, originalContent, editInstructions, templateImage } = req.body;
+    
+    if (!currentImage) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Current poster image is required' 
+      });
+    }
+    
+    if (!editInstructions || editInstructions.trim().length === 0) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Edit instructions are required' 
+      });
+    }
+    
+    console.log('✏️ Editing template poster...');
+    console.log('📝 Edit instructions:', editInstructions.substring(0, 100));
+    
+    const result = await editTemplatePoster(
+      currentImage, 
+      originalContent || '', 
+      editInstructions,
+      templateImage
+    );
+    
+    if (result.success) {
+      console.log('✅ Poster edited successfully');
+      
+      // Upload to Cloudinary
+      let hostedUrl = null;
+      try {
+        const uploadResult = await ensurePublicUrl(result.imageBase64);
+        if (uploadResult) {
+          hostedUrl = uploadResult;
+        }
+      } catch (uploadError) {
+        console.warn('⚠️ Could not upload edited image to Cloudinary');
+      }
+      
+      res.json({
+        success: true,
+        imageBase64: result.imageBase64,
+        imageUrl: hostedUrl,
+        model: result.model,
+        message: 'Poster updated successfully'
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        message: result.error || 'Failed to edit poster'
+      });
+    }
+  } catch (error) {
+    console.error('Template poster edit error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to edit poster', 
+      error: error.message 
+    });
+  }
+});
+
+/**
+ * POST /api/campaigns/template-poster/batch
+ * Generate multiple posters from multiple templates in batch
+ */
+router.post('/template-poster/batch', protect, async (req, res) => {
+  try {
+    const { posters, platform } = req.body;
+    
+    if (!posters || !Array.isArray(posters) || posters.length === 0) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Posters array is required' 
+      });
+    }
+    
+    if (posters.length > 10) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Maximum 10 posters per batch' 
+      });
+    }
+    
+    console.log(`🎨 Generating ${posters.length} template posters in batch...`);
+    
+    const results = [];
+    
+    for (let i = 0; i < posters.length; i++) {
+      const { templateImage, content, style } = posters[i];
+      
+      if (!templateImage || !content) {
+        results.push({
+          index: i,
+          success: false,
+          error: 'Missing template or content'
+        });
+        continue;
+      }
+      
+      console.log(`🎨 Generating poster ${i + 1}/${posters.length}...`);
+      
+      const result = await generateTemplatePoster(templateImage, content, {
+        platform: platform || 'instagram',
+        style: style
+      });
+      
+      if (result.success) {
+        // Upload to Cloudinary
+        let hostedUrl = null;
+        try {
+          const uploadResult = await ensurePublicUrl(result.imageBase64);
+          if (uploadResult) hostedUrl = uploadResult;
+        } catch (e) {
+          console.warn('Could not upload batch image', i);
+        }
+        
+        results.push({
+          index: i,
+          success: true,
+          imageBase64: result.imageBase64,
+          imageUrl: hostedUrl,
+          model: result.model
+        });
+        console.log(`✅ Poster ${i + 1} generated`);
+      } else {
+        results.push({
+          index: i,
+          success: false,
+          error: result.error
+        });
+      }
+      
+      // Rate limiting: wait 2 seconds between generations
+      if (i < posters.length - 1) {
+        await delay(2000);
+      }
+    }
+    
+    const successCount = results.filter(r => r.success).length;
+    console.log(`✅ Batch complete: ${successCount}/${posters.length} posters generated`);
+    
+    res.json({
+      success: true,
+      results,
+      summary: {
+        total: posters.length,
+        successful: successCount,
+        failed: posters.length - successCount
+      }
+    });
+  } catch (error) {
+    console.error('Batch poster generation error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Batch generation failed', 
+      error: error.message 
+    });
+  }
+});
+
 module.exports = router;

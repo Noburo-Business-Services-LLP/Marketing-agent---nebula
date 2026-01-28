@@ -2761,6 +2761,262 @@ Return ONLY valid JSON:
 }
 
 /**
+ * Generate a poster from a template image and content using Gemini 3 Pro Image Preview (Nano Banana Pro)
+ * This function takes a template image and user-provided content to generate a complete poster
+ * @param {string} templateImageBase64 - Base64 encoded template image
+ * @param {string} content - The text content to place on the poster
+ * @param {object} options - Additional options like platform, style preferences
+ * @returns {Promise<{success: boolean, imageBase64?: string, error?: string}>}
+ */
+async function generateTemplatePoster(templateImageBase64, content, options = {}) {
+  const startTime = Date.now();
+  
+  // Model priority: Gemini 3 Pro Image Preview (Nano Banana Pro) > Gemini 2.5 Flash Image > Gemini 2.0 Flash Image Gen
+  const imageModels = [
+    'gemini-3-pro-image-preview',      // Nano Banana Pro - primary
+    'gemini-2.5-flash-image',           // Nano Banana - fallback
+    'gemini-2.0-flash-exp-image-generation'  // Legacy fallback
+  ];
+  
+  // Extract just the base64 data if it includes the data URL prefix
+  let imageData = templateImageBase64;
+  let mimeType = 'image/png';
+  if (templateImageBase64.startsWith('data:')) {
+    const matches = templateImageBase64.match(/^data:([^;]+);base64,(.+)$/);
+    if (matches) {
+      mimeType = matches[1];
+      imageData = matches[2];
+    }
+  }
+  
+  // Build the prompt for poster generation
+  const platformHint = options.platform ? `The poster will be posted on ${options.platform}.` : '';
+  const styleHint = options.style ? `Style preference: ${options.style}.` : '';
+  
+  const prompt = `You are a professional graphic designer. I'm providing you with a template image and content for a poster.
+
+TEMPLATE IMAGE: This is the background template/design that you must use. Preserve the header, logos, colors, and overall design aesthetic.
+
+CONTENT TO ADD TO THE POSTER:
+${content}
+
+INSTRUCTIONS:
+1. Use the provided template image as the base design
+2. Add the content text to the poster following the template's visual style
+3. Place text in appropriate locations that complement the template design
+4. Use colors that match or complement the template's color scheme
+5. Ensure text is readable and professionally formatted
+6. Maintain proper text hierarchy (titles larger, details smaller)
+7. Keep the template's header/logo area intact
+8. ${platformHint}
+9. ${styleHint}
+
+Generate a complete, professional poster ready for social media posting. The output should be a polished, publication-ready image.`;
+
+  for (const model of imageModels) {
+    try {
+      console.log(`🎨 Generating template poster with ${model}...`);
+      
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+      
+      const response = await fetchWithTimeout(`${apiUrl}?key=${GEMINI_API_KEY}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              {
+                inline_data: {
+                  mime_type: mimeType,
+                  data: imageData
+                }
+              },
+              { text: prompt }
+            ]
+          }],
+          generationConfig: {
+            temperature: 0.4,
+            maxOutputTokens: 8192,
+            responseModalities: ['image', 'text'],
+            responseMimeType: 'image/png'
+          }
+        })
+      }, 120000); // 2 minute timeout for image generation
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.error(`Gemini ${model} error:`, data.error?.message || data);
+        if (data.error?.code === 404) {
+          console.log(`Model ${model} not available, trying next...`);
+          continue;
+        }
+        throw new Error(data.error?.message || 'Image generation failed');
+      }
+
+      // Extract the generated image from response
+      const candidates = data.candidates || [];
+      for (const candidate of candidates) {
+        const parts = candidate.content?.parts || [];
+        for (const part of parts) {
+          if (part.inline_data?.data) {
+            const duration = Date.now() - startTime;
+            console.log(`✅ Template poster generated with ${model} in ${duration}ms`);
+            return {
+              success: true,
+              imageBase64: `data:${part.inline_data.mime_type || 'image/png'};base64,${part.inline_data.data}`,
+              model: model
+            };
+          }
+        }
+      }
+      
+      // If no image in response, try text response for debugging
+      const textResponse = data.candidates?.[0]?.content?.parts?.find(p => p.text)?.text;
+      if (textResponse) {
+        console.log(`Model ${model} returned text instead of image:`, textResponse.substring(0, 200));
+      }
+      
+      console.log(`No image generated by ${model}, trying next model...`);
+      continue;
+      
+    } catch (error) {
+      console.error(`Template poster generation with ${model} failed:`, error.message);
+      continue;
+    }
+  }
+  
+  return {
+    success: false,
+    error: 'All image generation models failed. Please try again.'
+  };
+}
+
+/**
+ * Edit/refine a generated poster based on user feedback using conversational AI
+ * @param {string} currentImageBase64 - The current poster image (base64)
+ * @param {string} originalContent - The original content used
+ * @param {string} editInstructions - User's edit instructions (e.g., "Make title bigger", "Change color to blue")
+ * @param {string} templateImageBase64 - Original template for reference (optional)
+ * @returns {Promise<{success: boolean, imageBase64?: string, error?: string}>}
+ */
+async function editTemplatePoster(currentImageBase64, originalContent, editInstructions, templateImageBase64 = null) {
+  const startTime = Date.now();
+  
+  const imageModels = [
+    'gemini-3-pro-image-preview',
+    'gemini-2.5-flash-image',
+    'gemini-2.0-flash-exp-image-generation'
+  ];
+  
+  // Extract base64 data
+  let imageData = currentImageBase64;
+  let mimeType = 'image/png';
+  if (currentImageBase64.startsWith('data:')) {
+    const matches = currentImageBase64.match(/^data:([^;]+);base64,(.+)$/);
+    if (matches) {
+      mimeType = matches[1];
+      imageData = matches[2];
+    }
+  }
+  
+  const prompt = `You are a professional graphic designer. I'm providing you with a poster that needs modifications.
+
+CURRENT POSTER: This is the poster as it currently looks.
+
+ORIGINAL CONTENT ON THE POSTER:
+${originalContent}
+
+USER'S EDIT REQUEST:
+"${editInstructions}"
+
+INSTRUCTIONS:
+1. Apply the user's requested changes to the poster
+2. Maintain the overall design aesthetic and brand identity
+3. Keep unchanged elements as they are
+4. Ensure the final result is professionally polished
+5. Make sure all text remains readable after changes
+
+Generate the updated poster with the requested modifications.`;
+
+  for (const model of imageModels) {
+    try {
+      console.log(`🎨 Editing poster with ${model}...`);
+      
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+      
+      // Build parts array - include template if available
+      const parts = [
+        {
+          inline_data: {
+            mime_type: mimeType,
+            data: imageData
+          }
+        },
+        { text: prompt }
+      ];
+      
+      const response = await fetchWithTimeout(`${apiUrl}?key=${GEMINI_API_KEY}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          contents: [{
+            parts: parts
+          }],
+          generationConfig: {
+            temperature: 0.4,
+            maxOutputTokens: 8192,
+            responseModalities: ['image', 'text'],
+            responseMimeType: 'image/png'
+          }
+        })
+      }, 120000);
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.error(`Gemini ${model} error:`, data.error?.message || data);
+        if (data.error?.code === 404) continue;
+        throw new Error(data.error?.message || 'Image edit failed');
+      }
+
+      // Extract the generated image
+      const candidates = data.candidates || [];
+      for (const candidate of candidates) {
+        const parts = candidate.content?.parts || [];
+        for (const part of parts) {
+          if (part.inline_data?.data) {
+            const duration = Date.now() - startTime;
+            console.log(`✅ Poster edited with ${model} in ${duration}ms`);
+            return {
+              success: true,
+              imageBase64: `data:${part.inline_data.mime_type || 'image/png'};base64,${part.inline_data.data}`,
+              model: model
+            };
+          }
+        }
+      }
+      
+      console.log(`No image generated by ${model}, trying next...`);
+      continue;
+      
+    } catch (error) {
+      console.error(`Poster edit with ${model} failed:`, error.message);
+      continue;
+    }
+  }
+  
+  return {
+    success: false,
+    error: 'Failed to edit poster. Please try again with different instructions.'
+  };
+}
+
+/**
  * Get seasonal context based on month (India-focused)
  */
 function getSeasonalContext(month) {
@@ -2807,5 +3063,8 @@ module.exports = {
   generatePostFromSuggestion,
   refineImageWithPrompt,
   // Event Post generation
-  generateEventPost
+  generateEventPost,
+  // Template Poster functions (Nano Banana Pro)
+  generateTemplatePoster,
+  editTemplatePoster
 };
