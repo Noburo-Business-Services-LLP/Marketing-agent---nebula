@@ -2782,81 +2782,9 @@ async function generateTemplatePoster(templateImageBase64, content, options = {}
     }
   }
   
-  // PRIMARY: Try Vertex AI Imagen 3 with style reference
+  // PRIMARY: Use Nano Banana Pro Preview for image generation
   try {
-    console.log('🎨 Generating template poster with Imagen 3 (PRIMARY)...');
-    const accessToken = await getVertexAccessToken();
-    
-    // Imagen prompt - describe the template and content
-    const imagenPrompt = `Create a professional event poster matching this exact design style:
-
-Content to display:
-${content}
-
-Requirements:
-- Match the exact layout, colors, and visual style of the reference image
-- Keep all logos and emblems in their exact positions as shown
-- Preserve any Tamil/regional language header text EXACTLY as shown in the reference
-- Use the same fonts, color scheme, and visual hierarchy
-- All text must be sharp, clear, perfectly readable
-- High quality, 4K resolution, publication-ready
-- Zero blur or noise on any text`;
-    
-    // Imagen 3 with reference image for style matching
-    const vertexUrl = `https://${VERTEX_LOCATION}-aiplatform.googleapis.com/v1/projects/${VERTEX_PROJECT_ID}/locations/${VERTEX_LOCATION}/publishers/google/models/imagen-3.0-generate-001:predict`;
-    
-    const response = await fetchWithTimeout(vertexUrl, {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${accessToken}`
-      },
-      body: JSON.stringify({
-        instances: [{ 
-          prompt: imagenPrompt,
-          referenceImages: [{
-            referenceId: 1,
-            referenceImage: {
-              bytesBase64Encoded: imageData
-            },
-            referenceType: 'STYLE'
-          }]
-        }],
-        parameters: {
-          sampleCount: 1,
-          aspectRatio: options.platform === 'youtube' ? '16:9' : '1:1',
-          safetyFilterLevel: 'block_few',
-          personGeneration: 'allow_all'
-        }
-      })
-    }, 120000);
-
-    const data = await response.json();
-    
-    if (data.predictions?.[0]?.bytesBase64Encoded) {
-      const duration = Date.now() - startTime;
-      console.log(`✅ Template poster generated with Imagen 3 in ${duration}ms`);
-      return {
-        success: true,
-        imageBase64: `data:image/png;base64,${data.predictions[0].bytesBase64Encoded}`,
-        model: 'imagen-3.0-generate-001'
-      };
-    }
-    
-    if (data.error) {
-      console.error('Imagen 3 error:', data.error.message || JSON.stringify(data.error));
-      throw new Error(data.error.message || 'Imagen 3 failed');
-    }
-    
-    throw new Error('Imagen 3 returned no image');
-    
-  } catch (imagenError) {
-    console.error('Imagen 3 primary failed:', imagenError.message);
-  }
-  
-  // FALLBACK: Try Gemini 2.0 Flash image generation
-  try {
-    console.log('🎨 Falling back to Gemini 2.0 Flash...');
+    console.log('🎨 Generating template poster with Nano Banana Pro...');
     
     const prompt = `Act as a professional graphic designer. Using the attached image as a layout and style reference, RECONSTRUCT a new high-fidelity version.
 
@@ -2871,7 +2799,7 @@ ${content}
 
 5. Preserve: All logos, emblems, seals must be reproduced pixel-perfect.`;
 
-    const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp-image-generation:generateContent';
+    const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/nano-banana-pro-preview:generateContent';
     
     const requestBody = {
       contents: [{
@@ -2910,82 +2838,34 @@ ${content}
       for (const part of parts) {
         if (part.inlineData?.data) {
           const duration = Date.now() - startTime;
-          console.log(`✅ Template poster generated with Gemini in ${duration}ms`);
+          console.log(`✅ Template poster generated with Nano Banana Pro in ${duration}ms`);
           return {
             success: true,
             imageBase64: `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`,
-            model: 'gemini-2.0-flash-exp-image-generation'
+            model: 'nano-banana-pro-preview'
           };
         }
         if (part.inline_data?.data) {
           const duration = Date.now() - startTime;
-          console.log(`✅ Template poster generated with Gemini in ${duration}ms`);
+          console.log(`✅ Template poster generated with Nano Banana Pro in ${duration}ms`);
           return {
             success: true,
             imageBase64: `data:${part.inline_data.mime_type || 'image/png'};base64,${part.inline_data.data}`,
-            model: 'gemini-2.0-flash-exp-image-generation'
+            model: 'nano-banana-pro-preview'
           };
         }
       }
     }
     
-    throw new Error('Gemini returned no image');
+    throw new Error('Nano Banana Pro returned no image');
       
   } catch (error) {
-    console.error('Gemini fallback failed:', error.message);
+    console.error('Nano Banana Pro poster generation failed:', error.message);
+    return {
+      success: false,
+      error: error.message || 'Failed to generate poster. Please try again.'
+    };
   }
-  
-  // FINAL FALLBACK: Imagen 3 text-to-image (no template reference)
-  try {
-    console.log('🎨 Final fallback: Imagen 3 text-to-image...');
-    const accessToken = await getVertexAccessToken();
-    
-    const imagenPrompt = `Professional event poster with blue gradient background:
-
-${content}
-
-Style: Modern, clean corporate design. Blue and white color scheme with yellow accents.
-Layout: Header with logos at top, main title in center, details below, contact info at bottom.
-Typography: Bold, sharp, professional fonts. All text must be perfectly readable.
-Quality: 4K resolution, publication-ready, zero blur.`;
-    
-    const vertexUrl = `https://${VERTEX_LOCATION}-aiplatform.googleapis.com/v1/projects/${VERTEX_PROJECT_ID}/locations/${VERTEX_LOCATION}/publishers/google/models/imagen-3.0-generate-001:predict`;
-    
-    const response = await fetchWithTimeout(vertexUrl, {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${accessToken}`
-      },
-      body: JSON.stringify({
-        instances: [{ prompt: imagenPrompt }],
-        parameters: {
-          sampleCount: 1,
-          aspectRatio: '1:1',
-          safetyFilterLevel: 'block_few'
-        }
-      })
-    }, 90000);
-
-    const data = await response.json();
-    
-    if (data.predictions?.[0]?.bytesBase64Encoded) {
-      console.log('✅ Poster generated with Imagen 3 (text-to-image)');
-      return {
-        success: true,
-        imageBase64: `data:image/png;base64,${data.predictions[0].bytesBase64Encoded}`,
-        model: 'imagen-3.0-generate-001',
-        note: 'Generated from description (template style not applied)'
-      };
-    }
-  } catch (imagenError) {
-    console.error('Imagen text-to-image fallback failed:', imagenError.message);
-  }
-  
-  return {
-    success: false,
-    error: 'All image generation models failed. Please try again.'
-  };
 }
 
 /**
@@ -3059,11 +2939,11 @@ Instructions:
   
   parts.push({ text: prompt });
 
-  // Try Gemini 2.0 Flash (native image generation)
+  // Use Nano Banana Pro Preview for image editing
   try {
-    console.log('🎨 Editing poster with gemini-2.0-flash-exp-image-generation...');
+    console.log('🎨 Editing poster with Nano Banana Pro...');
     
-    const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp-image-generation:generateContent';
+    const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/nano-banana-pro-preview:generateContent';
     
     const response = await fetchWithTimeout(`${apiUrl}?key=${GEMINI_API_KEY}`, {
       method: 'POST',
@@ -3095,82 +2975,25 @@ Instructions:
       for (const part of parts) {
         if (part.inlineData?.data) {
           const duration = Date.now() - startTime;
-          console.log(`✅ Poster edited with gemini-2.0-flash-exp-image-generation in ${duration}ms`);
+          console.log(`✅ Poster edited with Nano Banana Pro in ${duration}ms`);
           return {
             success: true,
             imageBase64: `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`,
-            model: 'gemini-2.0-flash-exp-image-generation'
+            model: 'nano-banana-pro-preview'
           };
         }
       }
     }
     
-    console.log('No image generated by Gemini, trying Imagen fallback...');
+    throw new Error('Nano Banana Pro returned no image');
     
   } catch (error) {
-    console.error('Gemini poster edit failed:', error.message);
+    console.error('Nano Banana Pro poster edit failed:', error.message);
+    return {
+      success: false,
+      error: error.message || 'Failed to edit poster. Please try again with different instructions.'
+    };
   }
-  
-  // Fallback to Vertex AI Imagen for generation (without edit context, just regenerate)
-  try {
-    console.log('🎨 Attempting Vertex AI Imagen fallback...');
-    
-    const auth = new GoogleAuth({
-      scopes: ['https://www.googleapis.com/auth/cloud-platform']
-    });
-    const client = await auth.getClient();
-    const accessToken = await client.getAccessToken();
-    
-    // Regenerate with edit instructions incorporated
-    const imagenPrompt = `Create a marketing poster with the following content:
-${originalContent}
-
-APPLY THESE MODIFICATIONS:
-${editInstructions}
-
-Style: Professional marketing poster, visually appealing, clean design.`;
-    
-    const imagenResponse = await fetchWithTimeout(
-      `https://us-central1-aiplatform.googleapis.com/v1/projects/${process.env.GOOGLE_CLOUD_PROJECT}/locations/us-central1/publishers/google/models/imagen-3.0-generate-001:predict`,
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${accessToken.token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          instances: [{
-            prompt: imagenPrompt
-          }],
-          parameters: {
-            sampleCount: 1,
-            aspectRatio: '1:1'
-          }
-        })
-      },
-      120000
-    );
-    
-    const imagenData = await imagenResponse.json();
-    
-    if (imagenData.predictions?.[0]?.bytesBase64Encoded) {
-      const duration = Date.now() - startTime;
-      console.log(`✅ Poster regenerated with Imagen in ${duration}ms`);
-      return {
-        success: true,
-        imageBase64: `data:image/png;base64,${imagenData.predictions[0].bytesBase64Encoded}`,
-        model: 'imagen-3.0-generate-001',
-        note: 'Regenerated with edit instructions applied'
-      };
-    }
-  } catch (imagenError) {
-    console.error('Vertex AI Imagen fallback failed:', imagenError.message);
-  }
-  
-  return {
-    success: false,
-    error: 'Failed to edit poster. Please try again with different instructions.'
-  };
 }
 
 /**
