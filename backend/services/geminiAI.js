@@ -2815,6 +2815,7 @@ Requirements:
         instances: [{ 
           prompt: imagenPrompt,
           referenceImages: [{
+            referenceId: 1,
             referenceImage: {
               bytesBase64Encoded: imageData
             },
