@@ -2782,40 +2782,22 @@ async function generateTemplatePoster(templateImageBase64, content, options = {}
     }
   }
   
-  // Build a much stricter prompt for exact template replication
-  const platformHint = options.platform ? `Target platform: ${options.platform}.` : '';
-  
-  const prompt = `TASK: Create an EXACT replica of this poster template with ONLY the text content replaced.
+  // Simple, direct prompt - like how you'd use Gemini directly
+  const prompt = `Look at this poster template image. Create a new poster using the EXACT SAME design, layout, colors, fonts, logos, and structure.
 
-CRITICAL RULES - YOU MUST FOLLOW THESE EXACTLY:
-1. COPY the EXACT layout, structure, and positioning from the template
-2. PRESERVE all logos, emblems, seals, and decorative elements EXACTLY as they appear
-3. KEEP the EXACT same fonts, font sizes, and text styling
-4. MAINTAIN the EXACT same colors, gradients, and backgrounds
-5. DO NOT change ANY non-Latin scripts (Tamil, Hindi, etc.) - copy them EXACTLY character by character
-6. DO NOT add any new design elements or change the visual structure
-7. ONLY replace the main content text with the new content provided below
+Keep everything exactly the same EXCEPT replace the content with this:
 
-NEW CONTENT TO PUT IN THE POSTER:
 ${content}
 
-WHAT TO PRESERVE UNCHANGED:
-- All header text (including Tamil/regional language text) - COPY EXACTLY
-- All logos and institutional emblems
-- Background design, colors, and patterns
-- Text box shapes and positions
-- Font styles and colors
-- WhatsApp links, contact info formatting
-- Overall visual hierarchy
-
-${platformHint}
-
-Generate an image that looks IDENTICAL to the template, with only the specified content updated. The output should be indistinguishable from the original template in terms of design quality and layout.`;
+Important:
+- Copy the Tamil text in the header EXACTLY as shown - do not change any Tamil characters
+- Keep all logos and emblems exactly as they appear
+- Use the same colors, fonts, and text positioning
+- The new poster should look like it was made from the same template`;
 
   // Try native image generation models with correct API format
   const imageModels = [
-    'gemini-2.0-flash-exp-image-generation',
-    'gemini-2.0-flash-preview-image-generation'
+    'gemini-2.0-flash-exp-image-generation'
   ];
 
   for (const model of imageModels) {
@@ -2987,28 +2969,10 @@ async function editTemplatePoster(currentImageBase64, originalContent, editInstr
     }
   }
   
-  const prompt = `TASK: Edit this poster based on the user's specific instructions.
+  // Simple, direct prompt for editing
+  const prompt = `Look at this poster image. Make ONLY this change: "${editInstructions}"
 
-CURRENT POSTER: I'm showing you the poster that needs to be modified.
-
-USER'S EDIT REQUEST:
-"${editInstructions}"
-
-CRITICAL RULES FOR EDITING:
-1. ONLY make the specific changes the user requested - nothing else
-2. PRESERVE everything the user did NOT ask to change:
-   - All logos, emblems, and seals must remain EXACTLY the same
-   - All non-Latin text (Tamil, Hindi, etc.) must be copied EXACTLY - do not change spelling
-   - Background, colors, and design elements stay the same
-   - Font styles and sizes stay the same unless specifically asked to change
-3. DO NOT regenerate or reimagine the poster - EDIT it
-4. The output should look like the input with ONLY the requested changes applied
-5. Maintain professional quality and readability
-
-ORIGINAL CONTENT FOR REFERENCE:
-${originalContent}
-
-Generate the edited poster with ONLY the requested modifications applied.`;
+Keep everything else exactly the same - the design, colors, fonts, logos, Tamil text, layout, etc. Only change what I specifically asked for.`;
 
   // Build parts - include template if available for better reference
   const parts = [
@@ -3028,7 +2992,7 @@ Generate the edited poster with ONLY the requested modifications applied.`;
         data: templateData
       }
     });
-    parts.push({ text: "REFERENCE: The second image is the original template. Use it as reference for logos, headers, and design elements." });
+    parts.push({ text: "This second image is the original template for reference." });
   }
   
   parts.push({ text: prompt });

@@ -920,24 +920,12 @@ router.post('/template-poster', protect, async (req, res) => {
     console.log('🎨 Generating template poster...');
     console.log('📝 Content length:', content.length, 'characters');
     console.log('📱 Platform:', platform || 'general');
-    console.log('🤖 Use AI:', useAI ? 'Yes' : 'No (Canvas)');
     
-    let result;
-    
-    // Use AI generation if explicitly requested, otherwise use Canvas
-    if (useAI) {
-      result = await generateTemplatePoster(templateImage, content, {
-        platform: platform || 'instagram',
-        style: style
-      });
-    } else {
-      // Use Canvas-based approach (more reliable for templates)
-      result = await generatePosterFromTemplate(templateImage, content, {
-        platform: platform || 'instagram',
-        style: style,
-        overlayOnly: true
-      });
-    }
+    // Always use AI (Gemini) for poster generation - it produces better results
+    const result = await generateTemplatePoster(templateImage, content, {
+      platform: platform || 'instagram',
+      style: style
+    });
     
     if (result.success) {
       console.log('✅ Template poster generated successfully with', result.model || result.method);
@@ -984,7 +972,7 @@ router.post('/template-poster', protect, async (req, res) => {
  */
 router.post('/template-poster/edit', protect, async (req, res) => {
   try {
-    const { currentImage, originalContent, editInstructions, templateImage, useAI } = req.body;
+    const { currentImage, originalContent, editInstructions, templateImage } = req.body;
     
     if (!currentImage) {
       return res.status(400).json({ 
@@ -1002,27 +990,14 @@ router.post('/template-poster/edit', protect, async (req, res) => {
     
     console.log('✏️ Editing template poster...');
     console.log('📝 Edit instructions:', editInstructions.substring(0, 100));
-    console.log('🤖 Use AI:', useAI ? 'Yes' : 'No (Canvas)');
     
-    let result;
-    
-    // Use AI if explicitly requested or if no template is available
-    if (useAI || !templateImage) {
-      result = await editTemplatePoster(
-        currentImage, 
-        originalContent || '', 
-        editInstructions,
-        templateImage
-      );
-    } else {
-      // Use Canvas-based approach for reliable editing
-      result = await editPosterFromTemplate(
-        currentImage,
-        originalContent || '',
-        editInstructions,
-        templateImage
-      );
-    }
+    // Always use AI (Gemini) for editing - it produces better results
+    const result = await editTemplatePoster(
+      currentImage, 
+      originalContent || '', 
+      editInstructions,
+      templateImage
+    );
     
     if (result.success) {
       console.log('✅ Poster edited successfully');
@@ -1084,7 +1059,6 @@ router.post('/template-poster/batch', protect, async (req, res) => {
     }
     
     console.log(`🎨 Generating ${posters.length} template posters in batch...`);
-    console.log('🤖 Use AI:', useAI ? 'Yes' : 'No (Canvas)');
     
     const results = [];
     
@@ -1102,19 +1076,11 @@ router.post('/template-poster/batch', protect, async (req, res) => {
       
       console.log(`🎨 Generating poster ${i + 1}/${posters.length}...`);
       
-      let result;
-      if (useAI) {
-        result = await generateTemplatePoster(templateImage, content, {
-          platform: platform || 'instagram',
-          style: style
-        });
-      } else {
-        result = await generatePosterFromTemplate(templateImage, content, {
-          platform: platform || 'instagram',
-          style: style,
-          overlayOnly: true
-        });
-      }
+      // Always use AI (Gemini) for poster generation
+      const result = await generateTemplatePoster(templateImage, content, {
+        platform: platform || 'instagram',
+        style: style
+      });
       
       if (result.success) {
         // Upload to Cloudinary
