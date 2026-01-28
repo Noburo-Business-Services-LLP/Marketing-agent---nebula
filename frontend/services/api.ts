@@ -951,7 +951,7 @@ export const apiService = {
   generateTemplatePoster: async (
     templateImage: string, 
     content: string, 
-    options?: { platform?: string; style?: string }
+    options?: { platform?: string; style?: string; useAI?: boolean }
   ): Promise<{ 
     success: boolean; 
     imageBase64?: string; 
@@ -968,7 +968,8 @@ export const apiService = {
           templateImage, 
           content, 
           platform: options?.platform || 'instagram',
-          style: options?.style
+          style: options?.style,
+          useAI: options?.useAI || false
         }) 
       },
       true
@@ -983,7 +984,8 @@ export const apiService = {
     currentImage: string,
     originalContent: string,
     editInstructions: string,
-    templateImage?: string
+    templateImage?: string,
+    useAI?: boolean
   ): Promise<{ 
     success: boolean; 
     imageBase64?: string; 
@@ -1000,7 +1002,8 @@ export const apiService = {
           currentImage, 
           originalContent, 
           editInstructions,
-          templateImage
+          templateImage,
+          useAI: useAI || false
         }) 
       },
       true

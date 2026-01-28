@@ -2945,6 +2945,7 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
     const [editInstruction, setEditInstruction] = useState('');
     const [isEditing, setIsEditing] = useState(false);
     const [fullPreviewImage, setFullPreviewImage] = useState<string | null>(null);
+    const [useAIGeneration, setUseAIGeneration] = useState(false); // Canvas by default, AI optional
     
     // Schedule state
     const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(connectedPlatforms.slice(0, 1));
@@ -3028,7 +3029,10 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
           const result = await apiService.generateTemplatePoster(
             poster.templateImage,
             poster.content,
-            { platform: selectedPlatforms[0] || 'instagram' }
+            { 
+              platform: selectedPlatforms[0] || 'instagram',
+              useAI: useAIGeneration 
+            }
           );
 
           if (result.success) {
@@ -3268,6 +3272,42 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
                       </div>
                     </div>
                   </label>
+                </div>
+
+                {/* Generation Mode Toggle */}
+                <div className={`p-4 rounded-xl ${isDarkMode ? 'bg-slate-800/50' : 'bg-blue-50'}`}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Sparkles className={`w-5 h-5 ${useAIGeneration ? 'text-purple-500' : 'text-[#ffcc29]'}`} />
+                      <div>
+                        <span className={`font-medium ${theme.text}`}>
+                          {useAIGeneration ? 'AI Generation Mode' : 'Canvas Overlay Mode (Recommended)'}
+                        </span>
+                        <p className={`text-xs ${theme.textSecondary}`}>
+                          {useAIGeneration 
+                            ? 'Uses AI to regenerate poster - may alter template design' 
+                            : 'Preserves template exactly, overlays your text content'}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setUseAIGeneration(!useAIGeneration)}
+                      className={`relative w-12 h-6 rounded-full transition-colors ${
+                        useAIGeneration ? 'bg-purple-500' : 'bg-[#ffcc29]'
+                      }`}
+                    >
+                      <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${
+                        useAIGeneration ? 'left-7' : 'left-1'
+                      }`} />
+                    </button>
+                  </div>
+                  {useAIGeneration && (
+                    <div className="mt-3 p-2 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
+                      <p className="text-xs text-yellow-600 dark:text-yellow-400">
+                        ⚠️ AI mode may not preserve template exactly. Use Canvas mode for reliable results.
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Templates Grid */}
