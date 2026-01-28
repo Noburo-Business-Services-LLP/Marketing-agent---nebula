@@ -2782,29 +2782,35 @@ async function generateTemplatePoster(templateImageBase64, content, options = {}
     }
   }
   
-  // Build the prompt for poster generation
-  const platformHint = options.platform ? `The poster will be posted on ${options.platform}.` : '';
-  const styleHint = options.style ? `Style preference: ${options.style}.` : '';
+  // Build a much stricter prompt for exact template replication
+  const platformHint = options.platform ? `Target platform: ${options.platform}.` : '';
   
-  const prompt = `You are a professional graphic designer. I'm providing you with a template image and content for a poster.
+  const prompt = `TASK: Create an EXACT replica of this poster template with ONLY the text content replaced.
 
-TEMPLATE IMAGE: This is the background template/design that you must use. Preserve the header, logos, colors, and overall design aesthetic.
+CRITICAL RULES - YOU MUST FOLLOW THESE EXACTLY:
+1. COPY the EXACT layout, structure, and positioning from the template
+2. PRESERVE all logos, emblems, seals, and decorative elements EXACTLY as they appear
+3. KEEP the EXACT same fonts, font sizes, and text styling
+4. MAINTAIN the EXACT same colors, gradients, and backgrounds
+5. DO NOT change ANY non-Latin scripts (Tamil, Hindi, etc.) - copy them EXACTLY character by character
+6. DO NOT add any new design elements or change the visual structure
+7. ONLY replace the main content text with the new content provided below
 
-CONTENT TO ADD TO THE POSTER:
+NEW CONTENT TO PUT IN THE POSTER:
 ${content}
 
-INSTRUCTIONS:
-1. Use the provided template image as the base design
-2. Add the content text to the poster following the template's visual style
-3. Place text in appropriate locations that complement the template design
-4. Use colors that match or complement the template's color scheme
-5. Ensure text is readable and professionally formatted
-6. Maintain proper text hierarchy (titles larger, details smaller)
-7. Keep the template's header/logo area intact
-8. ${platformHint}
-9. ${styleHint}
+WHAT TO PRESERVE UNCHANGED:
+- All header text (including Tamil/regional language text) - COPY EXACTLY
+- All logos and institutional emblems
+- Background design, colors, and patterns
+- Text box shapes and positions
+- Font styles and colors
+- WhatsApp links, contact info formatting
+- Overall visual hierarchy
 
-IMPORTANT: Generate and return a complete, professional poster image ready for social media posting.`;
+${platformHint}
+
+Generate an image that looks IDENTICAL to the template, with only the specified content updated. The output should be indistinguishable from the original template in terms of design quality and layout.`;
 
   // Try native image generation models with correct API format
   const imageModels = [
@@ -2955,7 +2961,7 @@ IMPORTANT: Generate and return a complete, professional poster image ready for s
 async function editTemplatePoster(currentImageBase64, originalContent, editInstructions, templateImageBase64 = null) {
   const startTime = Date.now();
   
-  // Extract base64 data
+  // Extract base64 data from current image
   let imageData = currentImageBase64;
   let mimeType = 'image/png';
   if (currentImageBase64.startsWith('data:')) {
@@ -2966,24 +2972,66 @@ async function editTemplatePoster(currentImageBase64, originalContent, editInstr
     }
   }
   
-  const prompt = `You are a professional graphic designer. I'm providing you with a poster that needs modifications.
+  // Extract template data if provided (for reference)
+  let templateData = null;
+  let templateMimeType = 'image/png';
+  if (templateImageBase64) {
+    if (templateImageBase64.startsWith('data:')) {
+      const matches = templateImageBase64.match(/^data:([^;]+);base64,(.+)$/);
+      if (matches) {
+        templateMimeType = matches[1];
+        templateData = matches[2];
+      }
+    } else {
+      templateData = templateImageBase64;
+    }
+  }
+  
+  const prompt = `TASK: Edit this poster based on the user's specific instructions.
 
-CURRENT POSTER: This is the poster as it currently looks.
-
-ORIGINAL CONTENT ON THE POSTER:
-${originalContent}
+CURRENT POSTER: I'm showing you the poster that needs to be modified.
 
 USER'S EDIT REQUEST:
 "${editInstructions}"
 
-INSTRUCTIONS:
-1. Apply the user's requested changes to the poster
-2. Maintain the overall design aesthetic and brand identity
-3. Keep unchanged elements as they are
-4. Ensure the final result is professionally polished
-5. Make sure all text remains readable after changes
+CRITICAL RULES FOR EDITING:
+1. ONLY make the specific changes the user requested - nothing else
+2. PRESERVE everything the user did NOT ask to change:
+   - All logos, emblems, and seals must remain EXACTLY the same
+   - All non-Latin text (Tamil, Hindi, etc.) must be copied EXACTLY - do not change spelling
+   - Background, colors, and design elements stay the same
+   - Font styles and sizes stay the same unless specifically asked to change
+3. DO NOT regenerate or reimagine the poster - EDIT it
+4. The output should look like the input with ONLY the requested changes applied
+5. Maintain professional quality and readability
 
-Generate the updated poster with the requested modifications.`;
+ORIGINAL CONTENT FOR REFERENCE:
+${originalContent}
+
+Generate the edited poster with ONLY the requested modifications applied.`;
+
+  // Build parts - include template if available for better reference
+  const parts = [
+    {
+      inlineData: {
+        mimeType: mimeType,
+        data: imageData
+      }
+    }
+  ];
+  
+  // Add template as reference if available
+  if (templateData) {
+    parts.push({
+      inlineData: {
+        mimeType: templateMimeType,
+        data: templateData
+      }
+    });
+    parts.push({ text: "REFERENCE: The second image is the original template. Use it as reference for logos, headers, and design elements." });
+  }
+  
+  parts.push({ text: prompt });
 
   // Try Gemini 2.0 Flash (native image generation) - confirmed working model
   try {
@@ -2998,15 +3046,7 @@ Generate the updated poster with the requested modifications.`;
       },
       body: JSON.stringify({
         contents: [{
-          parts: [
-            {
-              inlineData: {
-                mimeType: mimeType,
-                data: imageData
-              }
-            },
-            { text: prompt }
-          ]
+          parts: parts
         }],
         generationConfig: {
           responseModalities: ["Text", "Image"]
