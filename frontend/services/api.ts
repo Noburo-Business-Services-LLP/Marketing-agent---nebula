@@ -1043,6 +1043,37 @@ export const apiService = {
     return response;
   },
 
+  /**
+   * Generate a poster using a REFERENCE image for style inspiration
+   * The AI creates a NEW poster that LOOKS LIKE the reference but uses your content
+   */
+  generatePosterFromReference: async (
+    referenceImage: string,
+    content: string,
+    platform?: string
+  ): Promise<{ 
+    success: boolean; 
+    imageBase64?: string; 
+    imageUrl?: string; 
+    model?: string; 
+    message?: string;
+    error?: string;
+  }> => {
+    const response = await apiCall<any>(
+      '/campaigns/template-poster/from-reference',
+      { 
+        method: 'POST', 
+        body: JSON.stringify({ 
+          referenceImage, 
+          content, 
+          platform: platform || 'instagram'
+        }) 
+      },
+      true
+    );
+    return response;
+  },
+
   getCampaignAnalytics: async (startDate?: string, endDate?: string): Promise<any> => {
     try {
       let queryString = '';

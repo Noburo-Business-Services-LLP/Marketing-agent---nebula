@@ -2786,36 +2786,24 @@ async function generateTemplatePoster(templateImageBase64, content, options = {}
   try {
     console.log('🎨 Generating template poster with Nano Banana Pro...');
     
-    const prompt = `You are a professional graphic designer. Your task is to create a NEW poster using the attached image ONLY as a layout reference.
+    const prompt = `You are a professional graphic designer. Your task is to recreate this poster/template image with NEW text content.
 
-CRITICAL INSTRUCTIONS:
+CRITICAL - PRESERVE EXACTLY:
+1. COLORS: Keep the EXACT same background color, gradients, and color scheme from the input image
+2. LOGOS/IMAGES: Recreate ALL logos, emblems, photos, icons with maximum sharpness and clarity
+3. LAYOUT: Maintain the EXACT same positions, spacing, and proportions of all elements
+4. STYLE: Keep the same fonts, text colors, and visual style as the original
 
-1. LOGOS & EMBLEMS - MOST IMPORTANT:
-   - The logos/emblems at the top corners are OFFICIAL GOVERNMENT/INSTITUTIONAL SEALS
-   - DO NOT attempt to redraw or recreate them - they will look blurry/smudged
-   - Instead, represent logo areas as clean circular/oval placeholder shapes with a subtle border
-   - Or simply leave those areas as solid color matching the background
-   - NEVER try to recreate intricate seal details - AI cannot render them cleanly
-
-2. LAYOUT:
-   - Follow the same spatial arrangement as the reference
-   - Blue gradient background
-   - Title area in the center-top
-   - Content in the main body area
-
-3. TEXT - Replace ALL text with:
+TEXT REPLACEMENT - Replace the existing text with this NEW content:
 ${content}
 
-4. STYLING:
-   - Use clean, crisp typography
-   - Tamil text must be perfectly sharp and readable
-   - Use the same color scheme (dark blue background, yellow/gold text for titles, white text for body)
-   - Professional, print-ready quality
+QUALITY REQUIREMENTS:
+- Ultra-sharp, print-ready resolution
+- All logos and emblems must be crisp with clean edges (no blur or smudging)
+- Text must be perfectly readable
+- Maintain professional poster quality
 
-5. OUTPUT:
-   - High resolution, sharp image
-   - Clean edges and professional appearance
-   - Focus on TEXT CLARITY over logo recreation`;
+DO NOT change any colors, backgrounds, or visual style from the original image. Only replace the text content.`;
 
     const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/nano-banana-pro-preview:generateContent';
     
@@ -2832,7 +2820,7 @@ ${content}
         ]
       }],
       generationConfig: {
-        temperature: 1.0,
+        temperature: 0.7,
         responseModalities: ["TEXT", "IMAGE"]
       }
     };
@@ -3035,6 +3023,128 @@ function getSeasonalContext(month) {
   return contexts[month] || 'Regular season';
 }
 
+/**
+ * Generate a poster using a REFERENCE image for style/design inspiration
+ * The AI will create a NEW poster that LOOKS LIKE the reference but uses the user's content
+ * @param {string} referenceImageBase64 - Base64 encoded reference/inspiration image
+ * @param {string} content - The user's text content for the poster
+ * @param {object} options - Additional options
+ * @returns {Promise<{success: boolean, imageBase64?: string, error?: string}>}
+ */
+async function generatePosterFromReference(referenceImageBase64, content, options = {}) {
+  const startTime = Date.now();
+  
+  // Extract just the base64 data if it includes the data URL prefix
+  let imageData = referenceImageBase64;
+  let mimeType = 'image/png';
+  if (referenceImageBase64.startsWith('data:')) {
+    const matches = referenceImageBase64.match(/^data:([^;]+);base64,(.+)$/);
+    if (matches) {
+      mimeType = matches[1];
+      imageData = matches[2];
+    }
+  }
+  
+  try {
+    console.log('🎨 Generating poster from reference with Nano Banana Pro...');
+    
+    const prompt = `You are a professional graphic designer. I'm showing you a REFERENCE poster/design for STYLE INSPIRATION.
+
+YOUR TASK: Create a BRAND NEW poster that:
+1. COPIES the VISUAL STYLE from the reference image:
+   - Same color scheme and palette
+   - Same layout structure and proportions
+   - Same typography style (font types, sizes, hierarchy)
+   - Same design elements style (shapes, borders, decorations)
+   - Same overall aesthetic and mood
+
+2. BUT uses THIS NEW CONTENT instead of the reference text:
+${content}
+
+IMPORTANT GUIDELINES:
+- The new poster should LOOK LIKE it belongs to the same design series as the reference
+- Match the reference's professional quality
+- Keep similar spacing, margins, and visual hierarchy
+- If the reference has logos/emblems, create similar placeholder shapes in the same positions
+- Adapt the layout to fit the new content while maintaining the reference's style
+
+QUALITY REQUIREMENTS:
+- Ultra-sharp, print-ready resolution
+- Clean, professional typography
+- Crisp edges and no blur
+- Perfect text readability
+
+Create a poster that someone would think "this looks like it was designed by the same person who made the reference".`;
+
+    const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/nano-banana-pro-preview:generateContent';
+    
+    const requestBody = {
+      contents: [{
+        parts: [
+          {
+            inlineData: {
+              mimeType: mimeType,
+              data: imageData
+            }
+          },
+          { text: prompt }
+        ]
+      }],
+      generationConfig: {
+        temperature: 0.8,
+        responseModalities: ["TEXT", "IMAGE"]
+      }
+    };
+    
+    const response = await fetchWithTimeout(`${apiUrl}?key=${GEMINI_API_KEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody)
+    }, 120000);
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error?.message || 'Gemini failed');
+    }
+
+    // Extract the generated image
+    const candidates = data.candidates || [];
+    for (const candidate of candidates) {
+      const parts = candidate.content?.parts || [];
+      for (const part of parts) {
+        if (part.inlineData?.data) {
+          const duration = Date.now() - startTime;
+          console.log(`✅ Poster from reference generated in ${duration}ms`);
+          return {
+            success: true,
+            imageBase64: `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`,
+            model: 'nano-banana-pro-preview'
+          };
+        }
+        if (part.inline_data?.data) {
+          const duration = Date.now() - startTime;
+          console.log(`✅ Poster from reference generated in ${duration}ms`);
+          return {
+            success: true,
+            imageBase64: `data:${part.inline_data.mime_type || 'image/png'};base64,${part.inline_data.data}`,
+            model: 'nano-banana-pro-preview'
+          };
+        }
+      }
+    }
+    
+    throw new Error('Nano Banana Pro returned no image');
+      
+  } catch (error) {
+    console.error('Poster from reference generation failed:', error.message);
+    return {
+      success: false,
+      error: error.message || 'Failed to generate poster from reference. Please try again.'
+    };
+  }
+}
+
 module.exports = {
   callGemini,
   parseGeminiJSON,
@@ -3064,5 +3174,6 @@ module.exports = {
   generateEventPost,
   // Template Poster functions (Nano Banana Pro)
   generateTemplatePoster,
-  editTemplatePoster
+  editTemplatePoster,
+  generatePosterFromReference
 };

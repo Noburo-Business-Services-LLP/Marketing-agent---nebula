@@ -954,7 +954,7 @@ Return ONLY valid JSON (no markdown, no code blocks):
 // TEMPLATE POSTER GENERATION (Canvas + AI Fallback)
 // ============================================
 
-const { generateTemplatePoster, editTemplatePoster } = require('../services/geminiAI');
+const { generateTemplatePoster, editTemplatePoster, generatePosterFromReference } = require('../services/geminiAI');
 const { generatePosterFromTemplate, editPosterFromTemplate } = require('../services/canvasPosterService');
 
 /**
@@ -1094,6 +1094,72 @@ router.post('/template-poster/edit', protect, async (req, res) => {
     res.status(500).json({ 
       success: false, 
       message: 'Failed to edit poster', 
+      error: error.message 
+    });
+  }
+});
+
+/**
+ * POST /api/campaigns/template-poster/from-reference
+ * Generate a NEW poster using a REFERENCE image for style inspiration
+ * The AI creates a poster that LOOKS LIKE the reference but uses user's content
+ */
+router.post('/template-poster/from-reference', protect, async (req, res) => {
+  try {
+    const { referenceImage, content, platform } = req.body;
+    
+    if (!referenceImage) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Reference image is required' 
+      });
+    }
+    
+    if (!content || content.trim().length === 0) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Content is required for the new poster' 
+      });
+    }
+    
+    console.log('🎨 Generating poster from reference image with AI...');
+    console.log('📝 Content:', content.substring(0, 100) + (content.length > 100 ? '...' : ''));
+    
+    const result = await generatePosterFromReference(referenceImage, content, {
+      platform: platform || 'instagram'
+    });
+    
+    if (result.success) {
+      // Upload to Cloudinary for public URL
+      let hostedUrl = null;
+      try {
+        const uploadResult = await ensurePublicUrl(result.imageBase64);
+        if (uploadResult) {
+          hostedUrl = uploadResult;
+          console.log('✅ Poster uploaded to Cloudinary:', hostedUrl);
+        }
+      } catch (uploadError) {
+        console.warn('Could not upload to Cloudinary:', uploadError.message);
+      }
+      
+      return res.json({
+        success: true,
+        imageBase64: result.imageBase64,
+        imageUrl: hostedUrl,
+        model: result.model
+      });
+    } else {
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to generate poster from reference',
+        error: result.error
+      });
+    }
+  } catch (error) {
+    console.error('Error generating poster from reference:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to generate poster from reference', 
       error: error.message 
     });
   }
