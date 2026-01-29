@@ -4,23 +4,37 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Nebulaa AI - Marketing Agent</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.tailwindcss.com/3.4.1"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script>
-      tailwind.config = {
-        darkMode: 'class',
-        theme: {
-          extend: {
-            colors: {
-              nebula: {
-                dark: '#070A12',
-                gold: '#ffcc29',
-                silver: '#ededed',
+      // Wait for tailwind to load, retry if needed
+      (function checkTailwind() {
+        if (typeof tailwind !== 'undefined') {
+          tailwind.config = {
+            darkMode: 'class',
+            theme: {
+              extend: {
+                colors: {
+                  nebula: {
+                    dark: '#070A12',
+                    gold: '#ffcc29',
+                    silver: '#ededed',
+                  }
+                }
               }
             }
+          };
+        } else {
+          // Tailwind not loaded yet, retry in 100ms (max 50 times = 5 seconds)
+          if (!window.tailwindRetries) window.tailwindRetries = 0;
+          if (window.tailwindRetries < 50) {
+            window.tailwindRetries++;
+            setTimeout(checkTailwind, 100);
+          } else {
+            console.warn('Tailwind CDN failed to load, app may have styling issues');
           }
         }
-      }
+      })();
     </script>
     <style>
       body {
