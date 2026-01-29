@@ -3193,7 +3193,10 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
               ? new Date(`${scheduleDate}T${scheduleTime}`).toISOString()
               : undefined;
             
-            await apiService.publishCampaign(campaign._id, selectedPlatforms, scheduledFor);
+            const publishResult = await apiService.publishCampaign(campaign._id, selectedPlatforms, scheduledFor);
+            if (!publishResult.success) {
+              throw new Error(publishResult.message || 'Failed to publish');
+            }
           }
 
           onSuccess(campaign);

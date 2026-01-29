@@ -311,7 +311,21 @@ router.post('/:id/publish', protect, async (req, res) => {
     
     console.log('Ayrshare publish result:', result);
     
-    if (result.success || result.data?.id || result.id) {
+    // Check for Ayrshare errors more thoroughly
+    // Ayrshare returns status: "error" when posts fail, even with 200 HTTP response
+    const hasAyrshareError = result.data?.status === 'error' || 
+                              result.data?.posts?.some(p => p.code || p.errors);
+    
+    // Check individual platform errors
+    if (result.data?.posts) {
+      for (const post of result.data.posts) {
+        if (post.code || post.errors || post.status === 'error') {
+          console.log('❌ Platform post error:', post.platform, post.message || post.errors);
+        }
+      }
+    }
+    
+    if ((result.success || result.data?.id || result.id) && !hasAyrshareError) {
       // Update campaign with post result
       const updateData = {
         status: isScheduled ? 'scheduled' : 'posted',
@@ -339,10 +353,23 @@ router.post('/:id/publish', protect, async (req, res) => {
         result
       });
     } else {
+      // Extract detailed error message from Ayrshare response
+      let errorMessage = 'Failed to publish to social media';
+      if (result.data?.posts) {
+        const postErrors = result.data.posts
+          .filter(p => p.code || p.errors || p.message)
+          .map(p => `${p.platform || 'Unknown'}: ${p.message || p.errors?.[0]?.message || 'Error'}`)
+          .join('; ');
+        if (postErrors) {
+          errorMessage = postErrors;
+        }
+      }
+      
       res.status(400).json({
         success: false,
-        message: 'Failed to publish to social media',
-        error: result.error || result.message || result.data?.errors?.[0]?.message
+        message: errorMessage,
+        error: result.error || result.message || result.data?.errors?.[0]?.message,
+        details: result.data?.posts
       });
     }
   } catch (error) {
