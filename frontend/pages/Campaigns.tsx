@@ -2948,6 +2948,9 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
     const [fullPreviewImage, setFullPreviewImage] = useState<string | null>(null);
     const [useAIGeneration, setUseAIGeneration] = useState(false); // Canvas by default, AI optional
     
+    // Reference image for editing (like AI tools - "make it look like this")
+    const [editReferenceImage, setEditReferenceImage] = useState<string | null>(null);
+    
     // Schedule state
     const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(connectedPlatforms.slice(0, 1));
     const [isScheduleMode, setIsScheduleMode] = useState(false);
@@ -3079,9 +3082,27 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
       setIsGenerating(false);
     };
 
+    // Handle reference image upload for editing
+    const handleEditReferenceUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      
+      const reader = new FileReader();
+      reader.onload = () => {
+        setEditReferenceImage(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    };
+
+    // Clear the edit reference image
+    const clearEditReference = () => {
+      setEditReferenceImage(null);
+    };
+
     // Edit current poster
     const handleEditPoster = async () => {
-      if (!editInstruction.trim()) return;
+      // Need either an instruction OR a reference image
+      if (!editInstruction.trim() && !editReferenceImage) return;
       
       const currentPoster = posters[currentPosterIndex];
       if (!currentPoster.generatedImage) return;
@@ -3092,12 +3113,29 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
       ));
 
       try {
-        const result = await apiService.editTemplatePoster(
-          currentPoster.generatedImage,
-          currentPoster.content,
-          editInstruction,
-          currentPoster.templateImage
-        );
+        let result;
+        
+        // If reference image is provided, use reference-based generation
+        if (editReferenceImage) {
+          // Generate new poster using reference style + current content + optional instruction
+          const contentWithInstruction = editInstruction.trim() 
+            ? `${currentPoster.content}\n\nAdditional instruction: ${editInstruction}`
+            : currentPoster.content;
+          
+          result = await apiService.generatePosterFromReference(
+            editReferenceImage,
+            contentWithInstruction,
+            selectedPlatforms[0] || 'instagram'
+          );
+        } else {
+          // Normal text-based editing
+          result = await apiService.editTemplatePoster(
+            currentPoster.generatedImage,
+            currentPoster.content,
+            editInstruction,
+            currentPoster.templateImage
+          );
+        }
 
         if (result.success) {
           setPosters(prev => prev.map((p, idx) => 
@@ -3106,10 +3144,11 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
               status: 'generated',
               generatedImage: result.imageBase64 || p.generatedImage,
               imageUrl: result.imageUrl || null,
-              editHistory: [...p.editHistory, { instruction: editInstruction, image: p.generatedImage! }]
+              editHistory: [...p.editHistory, { instruction: editReferenceImage ? `[Reference] ${editInstruction || 'Style from reference'}` : editInstruction, image: p.generatedImage! }]
             } : p
           ));
           setEditInstruction('');
+          setEditReferenceImage(null); // Clear reference after use
         } else {
           alert(result.error || 'Failed to edit poster');
           setPosters(prev => prev.map((p, idx) => 
@@ -3482,25 +3521,80 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
                       {/* Edit Controls */}
                       {currentPoster.status === 'generated' && currentPoster.generatedImage && (
                         <div className="space-y-3">
+                          {/* Reference Image Preview (if uploaded) */}
+                          {editReferenceImage && (
+                            <div className={`p-3 rounded-xl border ${isDarkMode ? 'border-purple-500/30 bg-purple-500/10' : 'border-purple-300 bg-purple-50'}`}>
+                              <div className="flex items-center gap-3">
+                                <img 
+                                  src={editReferenceImage} 
+                                  alt="Reference" 
+                                  className="w-16 h-16 rounded-lg object-cover border-2 border-purple-500"
+                                />
+                                <div className="flex-1">
+                                  <p className="text-sm font-medium text-purple-500">✨ Reference Image Added</p>
+                                  <p className={`text-xs ${theme.textSecondary}`}>AI will recreate poster using this style</p>
+                                </div>
+                                <button 
+                                  onClick={clearEditReference}
+                                  className="p-1.5 rounded-lg hover:bg-red-500/20 text-red-500"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* Edit Input Row */}
                           <div className="flex gap-2">
                             <input
                               type="text"
                               value={editInstruction}
                               onChange={(e) => setEditInstruction(e.target.value)}
-                              placeholder="Describe changes (e.g., 'Make title bigger', 'Change color to blue')"
+                              placeholder={editReferenceImage 
+                                ? "Optional: Add specific instructions for the reference style..." 
+                                : "Describe changes (e.g., 'Make title bigger', 'Change color to blue')"
+                              }
                               className={`${inputClasses} flex-1`}
                               onKeyDown={(e) => e.key === 'Enter' && handleEditPoster()}
                             />
                             <button
                               onClick={handleEditPoster}
-                              disabled={isEditing || !editInstruction.trim()}
-                              className="px-4 py-2 bg-[#ffcc29] text-black rounded-lg font-medium disabled:opacity-50 flex items-center gap-2"
+                              disabled={isEditing || (!editInstruction.trim() && !editReferenceImage)}
+                              className={`px-4 py-2 rounded-lg font-medium disabled:opacity-50 flex items-center gap-2 ${
+                                editReferenceImage 
+                                  ? 'bg-purple-500 text-white hover:bg-purple-600' 
+                                  : 'bg-[#ffcc29] text-black'
+                              }`}
                             >
                               {isEditing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
                               Apply
                             </button>
                           </div>
+                          
+                          {/* Action Buttons Row */}
                           <div className="flex gap-2">
+                            {/* Upload Reference Button */}
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handleEditReferenceUpload}
+                              className="hidden"
+                              id="edit-reference-upload"
+                            />
+                            <label
+                              htmlFor="edit-reference-upload"
+                              className={`flex-1 py-2 rounded-lg font-medium flex items-center justify-center gap-2 cursor-pointer transition-colors ${
+                                editReferenceImage
+                                  ? 'bg-purple-500/20 text-purple-500 border border-purple-500/30'
+                                  : isDarkMode 
+                                    ? 'bg-slate-700 hover:bg-purple-500/20 hover:text-purple-400 text-white' 
+                                    : 'bg-slate-100 hover:bg-purple-500/10 hover:text-purple-500 text-slate-700'
+                              }`}
+                            >
+                              <Sparkles className="w-4 h-4" /> 
+                              {editReferenceImage ? 'Change Reference' : 'Use Reference'}
+                            </label>
+                            
                             <button
                               onClick={handleRegenerate}
                               className={`flex-1 py-2 rounded-lg font-medium flex items-center justify-center gap-2 ${
