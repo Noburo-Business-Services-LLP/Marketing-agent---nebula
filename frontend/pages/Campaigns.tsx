@@ -3377,27 +3377,10 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
                               <textarea
                                 value={poster.content}
                                 onChange={(e) => updatePosterContent(poster.id, e.target.value)}
-                                placeholder={poster.useAsReference 
-                                  ? "Enter YOUR content for the new poster...&#10;&#10;AI will create a new poster with this content using the reference's style"
-                                  : "Enter poster content here...&#10;&#10;Example:&#10;Program: Workshop on AI&#10;Date: 31.01.2026&#10;Time: 10:00 AM"
-                                }
+                                placeholder="Enter poster content here...&#10;&#10;Example:&#10;Program: Workshop on AI&#10;Date: 31.01.2026&#10;Time: 10:00 AM"
                                 rows={3}
                                 className={`${inputClasses} text-sm resize-none`}
                               />
-                              {/* Use as Reference Toggle */}
-                              <button
-                                onClick={() => toggleUseAsReference(poster.id)}
-                                className={`mt-2 w-full py-1.5 px-3 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-all ${
-                                  poster.useAsReference
-                                    ? 'bg-purple-500 text-white'
-                                    : isDarkMode 
-                                      ? 'bg-slate-800 text-slate-400 hover:bg-purple-500/20 hover:text-purple-400'
-                                      : 'bg-slate-100 text-slate-600 hover:bg-purple-500/10 hover:text-purple-500'
-                                }`}
-                              >
-                                <Sparkles className="w-3 h-3" />
-                                {poster.useAsReference ? 'Using as Style Reference' : 'Use as Reference (new design)'}
-                              </button>
                             </div>
                           </div>
                         </div>
