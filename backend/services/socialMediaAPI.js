@@ -109,6 +109,7 @@ async function postToSocialMedia(platforms, content, options = {}) {
     const response = await makeRequest('https://app.ayrshare.com/api/post', {
       method: 'POST',
       headers: headers,
+      timeout: 120000, // 2 minutes timeout for posts with media
       body: {
         post: content,
         platforms: platforms, // ['instagram', 'twitter', 'facebook', 'linkedin']
