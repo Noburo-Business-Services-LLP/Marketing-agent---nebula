@@ -327,11 +327,20 @@ router.post('/:id/publish', protect, async (req, res) => {
     // Check individual platform posts for errors (error posts have numeric `code`)
     if (result.data?.posts && Array.isArray(result.data.posts)) {
       for (const post of result.data.posts) {
-        // Error posts have a numeric `code` field (like 151, 400, etc.)
-        if (typeof post.code === 'number' || post.status === 'error') {
+        // Error posts have a numeric `code` field (like 151, 400, etc.) or errors array
+        if (typeof post.code === 'number' || post.status === 'error' || post.errors?.length > 0) {
           hasAyrshareError = true;
-          console.log('❌ Platform post error:', post.platform, post.code, post.message);
-          errorMessage = `${post.platform || 'Unknown'}: ${post.message || 'Error ' + post.code}`;
+          
+          // Extract error message from various places
+          let postErrorMessage = post.message;
+          if (!postErrorMessage && post.errors?.length > 0) {
+            // Error is nested in errors array
+            const firstError = post.errors[0];
+            postErrorMessage = firstError.message || `Error code ${firstError.code}`;
+          }
+          
+          console.log('❌ Platform post error:', post.platform, post.code || post.errors?.[0]?.code, postErrorMessage);
+          errorMessage = postErrorMessage || `${post.platform || 'Unknown'}: Error ${post.code || 'unknown'}`;
         } else if (post.id || post.postId) {
           // Successful post has id
           console.log('✅ Platform post success:', post.platform, post.id || post.postId);
