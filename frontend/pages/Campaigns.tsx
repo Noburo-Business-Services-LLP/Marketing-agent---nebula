@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { apiService } from '../services/api';
 import { Campaign } from '../types';
-import { Plus, Sparkles, Filter, Loader2, Calendar, BarChart3, Image as ImageIcon, Video, X, ChevronRight, Check, Eye, MousePointer, Archive, Send, Edit3, DollarSign, RefreshCw, Wand2, Instagram, Facebook, Twitter, Linkedin, Youtube, Clock, Heart, MessageCircle, Share2, Zap, Download, FileText, ImageDown, ChevronDown, Trash2 } from 'lucide-react';
+import { Plus, Sparkles, Filter, Loader2, Calendar, BarChart3, Image as ImageIcon, Video, X, ChevronRight, Check, Eye, MousePointer, Archive, Send, Edit3, DollarSign, RefreshCw, Wand2, Instagram, Facebook, Twitter, Linkedin, Youtube, Clock, Heart, MessageCircle, Share2, Zap, Download, FileText, ImageDown, ChevronDown, Trash2, Save } from 'lucide-react';
 import { 
     LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, AreaChart, Area 
 } from 'recharts';
@@ -2956,6 +2956,7 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
     const [scheduleDate, setScheduleDate] = useState('');
     const [scheduleTime, setScheduleTime] = useState('');
     const [isPublishing, setIsPublishing] = useState(false);
+    const [isSavingDraft, setIsSavingDraft] = useState(false);
     const [publishResult, setPublishResult] = useState<{ success: boolean; message: string } | null>(null);
 
     const inputClasses = `w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#ffcc29] transition-all ${
@@ -3201,6 +3202,51 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
           idx === currentPosterIndex ? { ...p, status: 'generated' } : p
         ));
       }
+    };
+
+    // Handle save to draft
+    const handleSaveToDraft = async () => {
+      const generatedPosters = posters.filter(p => p.status === 'generated' && p.generatedImage);
+      if (generatedPosters.length === 0) {
+        alert('No posters ready to save');
+        return;
+      }
+
+      setIsSavingDraft(true);
+
+      try {
+        // Create draft campaigns for each generated poster
+        for (const poster of generatedPosters) {
+          const { campaign } = await apiService.createCampaign({
+            name: `Template Poster - ${new Date().toLocaleDateString()}`,
+            objective: 'awareness',
+            platforms: ['instagram'], // Default platform
+            status: 'draft',
+            creative: {
+              type: 'image',
+              textContent: poster.content,
+              imageUrls: [poster.imageUrl || poster.generatedImage || ''],
+              captions: ''
+            }
+          });
+
+          onSuccess(campaign);
+        }
+
+        setPublishResult({ 
+          success: true, 
+          message: `Saved ${generatedPosters.length} poster(s) to drafts!` 
+        });
+        
+        setTimeout(() => {
+          onClose();
+        }, 1500);
+
+      } catch (error: any) {
+        setPublishResult({ success: false, message: error.message || 'Failed to save draft' });
+      }
+
+      setIsSavingDraft(false);
     };
 
     // Handle publish/schedule
@@ -3720,13 +3766,30 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
             )}
 
             {step === 'preview' && (
-              <button 
-                onClick={() => setStep('schedule')}
-                disabled={posters.filter(p => p.status === 'generated').length === 0}
-                className="px-6 py-2.5 bg-gradient-to-r from-[#ffcc29] to-[#ffa500] text-black rounded-lg font-semibold disabled:opacity-50 flex items-center gap-2"
-              >
-                Continue to Publish <ChevronRight className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-3">
+                <button 
+                  onClick={handleSaveToDraft}
+                  disabled={isSavingDraft || posters.filter(p => p.status === 'generated').length === 0}
+                  className={`px-5 py-2.5 rounded-lg font-semibold disabled:opacity-50 flex items-center gap-2 ${
+                    isDarkMode 
+                      ? 'bg-slate-700 text-white hover:bg-slate-600' 
+                      : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
+                  }`}
+                >
+                  {isSavingDraft ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</>
+                  ) : (
+                    <><Save className="w-4 h-4" /> Save to Draft</>
+                  )}
+                </button>
+                <button 
+                  onClick={() => setStep('schedule')}
+                  disabled={posters.filter(p => p.status === 'generated').length === 0}
+                  className="px-6 py-2.5 bg-gradient-to-r from-[#ffcc29] to-[#ffa500] text-black rounded-lg font-semibold disabled:opacity-50 flex items-center gap-2"
+                >
+                  Continue to Publish <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
             )}
 
             {step === 'schedule' && (
