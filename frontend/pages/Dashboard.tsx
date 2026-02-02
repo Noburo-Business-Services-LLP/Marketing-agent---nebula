@@ -1007,9 +1007,11 @@ const Dashboard: React.FC = () => {
             {/* Bar Chart */}
             <div className="flex items-end justify-center gap-8 h-64 px-4">
               {(() => {
-                const maxFollowers = Math.max(...followerData.map(p => p.followers));
+                const maxFollowers = Math.max(...followerData.map(p => p.followers), 1); // min 1 to avoid division by 0
                 return followerData.map((platform, idx) => {
-                  const barHeight = maxFollowers > 0 ? (platform.followers / maxFollowers) * 180 : 0;
+                  // If all platforms have 0 followers, show equal bars
+                  const allZero = followerData.every(p => p.followers === 0);
+                  const barHeight = allZero ? 100 : (maxFollowers > 0 ? (platform.followers / maxFollowers) * 180 : 40);
                   const isHovered = hoveredBar === platform.platform;
                   
                   return (
@@ -1042,7 +1044,7 @@ const Dashboard: React.FC = () => {
                       {/* Follower count tooltip on hover */}
                       {isHovered && (
                         <div className={`absolute -top-8 left-1/2 transform -translate-x-1/2 px-3 py-1.5 rounded-lg text-xs font-bold shadow-lg whitespace-nowrap z-10 ${isDarkMode ? 'bg-white text-[#0a0f1a]' : 'bg-[#0a0f1a] text-white'}`}>
-                          {platform.followers.toLocaleString()} followers
+                          {platform.followers > 0 ? `${platform.followers.toLocaleString()} followers` : 'Connected ✓'}
                           <div className={`absolute left-1/2 -bottom-1 transform -translate-x-1/2 w-2 h-2 rotate-45 ${isDarkMode ? 'bg-white' : 'bg-[#0a0f1a]'}`}></div>
                         </div>
                       )}

@@ -1502,21 +1502,6 @@ router.get('/social-followers', protect, async (req, res) => {
       });
     }
     
-    // Get analytics from Ayrshare
-    const analyticsResult = await getUserSocialAnalytics(user.ayrshare.profileKey);
-    
-    if (!analyticsResult.success) {
-      return res.json({
-        success: true,
-        platforms: [],
-        message: 'Could not fetch analytics'
-      });
-    }
-    
-    // Extract follower counts for each platform
-    const platformData = [];
-    const data = analyticsResult.data || {};
-    
     // Platform configurations
     const platformConfig = {
       instagram: {
@@ -1557,44 +1542,71 @@ router.get('/social-followers', protect, async (req, res) => {
       }
     };
     
-    // Parse each platform's analytics
-    for (const [platformKey, platformInfo] of Object.entries(platformConfig)) {
-      const platformAnalytics = data[platformKey]?.analytics;
-      
-      if (platformAnalytics) {
-        let followers = 0;
-        
-        switch (platformKey) {
-          case 'instagram':
-            followers = platformAnalytics.followersCount || 0;
-            break;
-          case 'facebook':
-            followers = platformAnalytics.followersCount || platformAnalytics.fanCount || 0;
-            break;
-          case 'twitter':
-            followers = platformAnalytics.followersCount || 0;
-            break;
-          case 'linkedin':
-            followers = platformAnalytics.followers?.totalFollowerCount || 0;
-            break;
-          default:
-            followers = platformAnalytics.followersCount || platformAnalytics.followers || 0;
-        }
-        
-        if (followers > 0) {
-          platformData.push({
-            platform: platformKey,
-            name: platformInfo.name,
-            followers: followers,
-            color: platformInfo.color,
-            bgColor: platformInfo.bgColor,
-            logo: platformInfo.logo
-          });
-        }
-      }
+    // First get connected accounts from Ayrshare profile
+    const userProfile = await getAyrshareUserProfile(user.ayrshare.profileKey);
+    
+    if (!userProfile.success || !userProfile.data?.activeSocialAccounts?.length) {
+      return res.json({
+        success: true,
+        platforms: [],
+        message: 'No connected accounts found'
+      });
     }
     
-    // Sort by followers descending
+    const connectedPlatforms = userProfile.data.activeSocialAccounts;
+    const displayNames = userProfile.data.displayNames || [];
+    console.log('[social-followers] Connected platforms:', connectedPlatforms);
+    
+    // Now try to get analytics for follower counts
+    const analyticsResult = await getUserSocialAnalytics(user.ayrshare.profileKey, connectedPlatforms);
+    console.log('[social-followers] Analytics result:', JSON.stringify(analyticsResult).substring(0, 500));
+    
+    const platformData = [];
+    
+    // Build platform data - show all connected platforms, with followers if available
+    for (const platformKey of connectedPlatforms) {
+      const config = platformConfig[platformKey];
+      if (!config) continue;
+      
+      const displayInfo = displayNames.find(d => d.platform === platformKey);
+      let followers = 0;
+      
+      // Try to extract followers from analytics
+      if (analyticsResult.success && analyticsResult.data) {
+        const platformAnalytics = analyticsResult.data[platformKey]?.analytics || analyticsResult.data[platformKey];
+        
+        if (platformAnalytics) {
+          switch (platformKey) {
+            case 'instagram':
+              followers = platformAnalytics.followersCount || platformAnalytics.followers_count || 0;
+              break;
+            case 'facebook':
+              followers = platformAnalytics.followersCount || platformAnalytics.fanCount || platformAnalytics.fan_count || 0;
+              break;
+            case 'twitter':
+              followers = platformAnalytics.followersCount || platformAnalytics.followers_count || 0;
+              break;
+            case 'linkedin':
+              followers = platformAnalytics.followers?.totalFollowerCount || platformAnalytics.followersCount || 0;
+              break;
+            default:
+              followers = platformAnalytics.followersCount || platformAnalytics.followers || 0;
+          }
+        }
+      }
+      
+      platformData.push({
+        platform: platformKey,
+        name: config.name,
+        accountName: displayInfo?.username || displayInfo?.displayName || platformKey,
+        followers: followers,
+        color: config.color,
+        bgColor: config.bgColor,
+        logo: config.logo
+      });
+    }
+    
+    // Sort by followers descending (platforms with data first)
     platformData.sort((a, b) => b.followers - a.followers);
     
     res.json({
