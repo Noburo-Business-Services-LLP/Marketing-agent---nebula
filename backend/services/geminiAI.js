@@ -4,6 +4,7 @@
  */
 
 const { GoogleAuth } = require('google-auth-library');
+const { uploadBase64Image } = require('./imageUploader');
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 // Using Gemini 3 Pro Preview for all text generation
@@ -672,7 +673,20 @@ Make the image specific to ${brandContext.companyName || 'the brand'}'s actual b
     
     if (data.predictions && data.predictions[0]?.bytesBase64Encoded) {
       console.log('✅ Vertex AI Imagen 4 Ultra generated image successfully');
-      return `data:image/png;base64,${data.predictions[0].bytesBase64Encoded}`;
+      const base64Image = `data:image/png;base64,${data.predictions[0].bytesBase64Encoded}`;
+      
+      // Upload to Cloudinary for permanent URL (allows caching in localStorage)
+      try {
+        const uploadResult = await uploadBase64Image(base64Image, 'nebula-campaign-suggestions');
+        if (uploadResult.success && uploadResult.url) {
+          console.log('✅ Image uploaded to Cloudinary:', uploadResult.url);
+          return uploadResult.url;
+        }
+      } catch (uploadError) {
+        console.warn('⚠️ Cloudinary upload failed, returning base64:', uploadError.message);
+      }
+      
+      return base64Image;
     }
     
     // Log the error for debugging
@@ -707,7 +721,20 @@ Make the image specific to ${brandContext.companyName || 'the brand'}'s actual b
     
     if (imagen3Data.predictions?.[0]?.bytesBase64Encoded) {
       console.log('✅ Vertex AI Imagen 3 generated image successfully');
-      return `data:image/png;base64,${imagen3Data.predictions[0].bytesBase64Encoded}`;
+      const base64Image = `data:image/png;base64,${imagen3Data.predictions[0].bytesBase64Encoded}`;
+      
+      // Upload to Cloudinary for permanent URL
+      try {
+        const uploadResult = await uploadBase64Image(base64Image, 'nebula-campaign-suggestions');
+        if (uploadResult.success && uploadResult.url) {
+          console.log('✅ Image uploaded to Cloudinary:', uploadResult.url);
+          return uploadResult.url;
+        }
+      } catch (uploadError) {
+        console.warn('⚠️ Cloudinary upload failed, returning base64:', uploadError.message);
+      }
+      
+      return base64Image;
     }
     
     console.log('Vertex AI Imagen 3 response:', JSON.stringify(imagen3Data).substring(0, 200));
@@ -757,7 +784,20 @@ async function generateImageWithVertexAIFallback(campaignTitle, campaignDescript
     
     if (data.predictions?.[0]?.bytesBase64Encoded) {
       console.log('✅ Vertex AI Imagen 3 generated image successfully (fallback)');
-      return `data:image/png;base64,${data.predictions[0].bytesBase64Encoded}`;
+      const base64Image = `data:image/png;base64,${data.predictions[0].bytesBase64Encoded}`;
+      
+      // Upload to Cloudinary for permanent URL
+      try {
+        const uploadResult = await uploadBase64Image(base64Image, 'nebula-campaign-suggestions');
+        if (uploadResult.success && uploadResult.url) {
+          console.log('✅ Image uploaded to Cloudinary:', uploadResult.url);
+          return uploadResult.url;
+        }
+      } catch (uploadError) {
+        console.warn('⚠️ Cloudinary upload failed, returning base64:', uploadError.message);
+      }
+      
+      return base64Image;
     }
     
     console.log('Vertex AI Imagen 3 response:', JSON.stringify(data).substring(0, 200));
