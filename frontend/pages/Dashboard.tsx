@@ -350,6 +350,18 @@ const Dashboard: React.FC = () => {
   const [dismissedActions, setDismissedActions] = useState<Set<string>>(new Set());
   const [loadingMoreActions, setLoadingMoreActions] = useState(false);
   
+  // Social Followers Bar Chart State
+  const [followerData, setFollowerData] = useState<Array<{
+    platform: string;
+    name: string;
+    followers: number;
+    color: string;
+    bgColor: string;
+    logo: string;
+  }>>([]);
+  const [followerLoading, setFollowerLoading] = useState(true);
+  const [hoveredBar, setHoveredBar] = useState<string | null>(null);
+  
   // Rival Post State
   const [showRivalPostModal, setShowRivalPostModal] = useState(false);
   const [rivalPostLoading, setRivalPostLoading] = useState(false);
@@ -566,9 +578,25 @@ const Dashboard: React.FC = () => {
     }
   };
   
+  // Fetch Social Followers for bar chart
+  const fetchFollowerData = async () => {
+    setFollowerLoading(true);
+    try {
+      const result = await apiService.getSocialFollowers();
+      if (result.success && result.platforms) {
+        setFollowerData(result.platforms);
+      }
+    } catch (error) {
+      console.error('Failed to fetch follower data:', error);
+    } finally {
+      setFollowerLoading(false);
+    }
+  };
+  
   useEffect(() => {
     fetchData();
     fetchStrategicSuggestions();
+    fetchFollowerData();
   }, []);
 
   const handlePrevCompetitor = () => {
@@ -938,313 +966,126 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Stats Row - Two Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        {/* Active Campaigns Card */}
-        <div className={`${theme.bgCard} rounded-2xl border ${isDarkMode ? 'border-slate-700/50 hover:border-slate-600' : 'border-[#ededed] hover:border-slate-200'} p-5 transition-all duration-200`}>
-            <div className="flex justify-between items-start mb-4">
-                <span className={`font-medium text-xs uppercase tracking-wider ${theme.textSecondary}`}>Active Campaigns</span>
-                <div className="flex items-center gap-2">
-                    <SectionButtons 
-                      sectionType="activeCampaigns" 
-                      sectionData={{ count: data?.overview.activeCampaigns, change: data?.overview.activeCampaignsChange }} 
-                    />
-                </div>
-            </div>
-            <div className={`text-4xl font-bold mb-3 tracking-tight ${theme.text}`}>
-              {data?.overview.activeCampaigns ?? 0}
-            </div>
-            {(data?.overview?.activeCampaigns || 0) === 0 && (
-              <p className={`text-xs mb-3 ${theme.textMuted}`}>No active campaigns yet</p>
-            )}
-            <div className={`flex justify-between items-center pt-3 border-t ${isDarkMode ? 'border-slate-700/50' : 'border-[#f5f5f5]'}`}>
-                {(data?.overview?.activeCampaigns || 0) > 0 ? (
-                  <>
-                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-full flex items-center gap-1 ${isDarkMode ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-50 text-emerald-600'}`}>
-                        <ArrowUpRight className="w-3 h-3" /> {data?.overview.activeCampaignsChange || 0}%
-                    </span>
-                    <span className={`text-xs ${theme.textMuted}`}>vs last period</span>
-                  </>
-                ) : (
-                  <button 
-                    onClick={() => { window.location.hash = '/campaigns?action=create'; }}
-                    className="w-full py-2 bg-[#ffcc29] hover:bg-[#e6b825] text-[#070A12] text-xs font-semibold rounded-lg transition-colors flex items-center justify-center gap-1.5"
-                  >
-                    <Plus className="w-3.5 h-3.5" /> Create New Campaign
-                  </button>
-                )}
-            </div>
-        </div>
-
-        {/* Budget Spent Card - Interactive Graph */}
-        <div className={`${theme.bgCard} rounded-2xl border ${isDarkMode ? 'border-slate-700/50 hover:border-slate-600' : 'border-[#ededed] hover:border-slate-200'} p-5 transition-all duration-200`}>
-            <div className="flex justify-between items-start mb-3">
-                <span className={`font-medium text-xs uppercase tracking-wider ${theme.textSecondary}`}>Budget Spent</span>
-                <div className="flex items-center gap-2">
-                    <SectionButtons 
-                      sectionType="budgetSpent" 
-                      sectionData={{ total: data?.overview.totalSpent, dailyData: budgetData }} 
-                    />
-                </div>
-            </div>
-            <div className={`text-4xl font-bold mb-2 tracking-tight ${theme.text}`}>
-              {hasSpend ? `$${(data?.overview.totalSpent || 0).toLocaleString()}` : (
-                <span className={`text-2xl ${theme.textMuted}`}>$0</span>
-              )}
-            </div>
-            
-            {/* Interactive Graph */}
-            {hasSpend ? (
-              <div className="relative h-14 mt-2">
-                <svg 
-                  viewBox="0 0 280 60" 
-                  className="w-full h-full"
-                  onMouseLeave={() => setHoveredPoint(null)}
-                >
-                  {/* Gradient fill */}
-                  <defs>
-                    <linearGradient id="budgetGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                      <stop offset="0%" stopColor="rgb(99, 102, 241)" stopOpacity="0.3" />
-                      <stop offset="100%" stopColor="rgb(99, 102, 241)" stopOpacity="0.02" />
-                    </linearGradient>
-                  </defs>
-                  
-                  {/* Area fill */}
-                  <path
-                    d={`M 0 55 ${budgetData.map((val: number, i: number) => `L ${i * 40 + 20} ${55 - (val / Math.max(...budgetData, 1)) * 45}`).join(' ')} L 280 55 Z`}
-                    fill="url(#budgetGradient)"
-                  />
-                  
-                  {/* Line */}
-                  <path
-                    d={`M ${budgetData.map((val: number, i: number) => `${i * 40 + 20} ${55 - (val / Math.max(...budgetData, 1)) * 45}`).join(' L ')}`}
-                    fill="none"
-                    stroke="rgb(99, 102, 241)"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  
-                  {/* Interactive points */}
-                  {budgetData.map((val: number, i: number) => {
-                    const x = i * 40 + 20;
-                    const y = 55 - (val / Math.max(...budgetData, 1)) * 45;
-                    return (
-                      <g key={i}>
-                        <circle
-                          cx={x}
-                          cy={y}
-                          r="12"
-                          fill="transparent"
-                          className="cursor-pointer"
-                          onMouseEnter={() => setHoveredPoint({ x, y, value: val })}
-                        />
-                        <circle
-                          cx={x}
-                          cy={y}
-                          r={hoveredPoint?.x === x ? 5 : 3}
-                          fill="white"
-                          stroke="rgb(99, 102, 241)"
-                          strokeWidth="2"
-                          className="transition-all duration-150"
-                        />
-                      </g>
-                    );
-                  })}
-                </svg>
-                
-                {/* Tooltip */}
-                {hoveredPoint && (
-                  <div 
-                    className="absolute bg-#0a0f1a text-white text-xs font-semibold px-2.5 py-1.5 rounded-lg shadow-lg pointer-events-none transform -translate-x-1/2 -translate-y-full"
-                    style={{ left: `${(hoveredPoint.x / 280) * 100}%`, top: `${(hoveredPoint.y / 60) * 100 - 10}%` }}
-                  >
-                    ${hoveredPoint.value.toLocaleString()}
-                    <div className="absolute left-1/2 -bottom-1 transform -translate-x-1/2 w-2 h-2 bg-#0a0f1a rotate-45"></div>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="h-10 mt-2 flex items-center justify-center">
-                <p className={`text-xs ${theme.textMuted}`}>No spend data yet</p>
-              </div>
-            )}
-            
-            {/* Day labels */}
-            <div className="flex justify-between mt-1 px-2">
-              {days.map((day: string, i: number) => (
-                <span key={i} className={`text-[10px] ${theme.textMuted}`}>{day}</span>
-              ))}
-            </div>
-        </div>
-      </div>
-
-      {/* Social Profiles Card - Full Width Detailed */}
+      {/* Social Followers Bar Chart */}
       <div className={`${theme.bgCard} rounded-2xl border ${isDarkMode ? 'border-slate-700/50 hover:border-slate-600' : 'border-[#ededed] hover:border-slate-200'} p-6 transition-all duration-200`}>
-          <div className="flex justify-between items-center mb-5">
-              <div className="flex items-center gap-3">
-                  <span className={`font-semibold text-sm uppercase tracking-wider ${theme.text}`}>Social Profiles</span>
-                  <SectionButtons 
-                    sectionType="socialProfiles" 
-                    sectionData={{ profiles: data?.overview?.socialProfiles }} 
-                  />
-              </div>
-              <button 
-                onClick={() => { window.location.hash = '/connect-socials'; }}
-                className="px-4 py-2 bg-[#ffcc29] hover:bg-[#e6b825] text-black text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                Connect Account
-              </button>
+        <div className="flex justify-between items-center mb-6">
+          <div className="flex items-center gap-3">
+            <Users className={`w-5 h-5 ${isDarkMode ? 'text-[#ffcc29]' : 'text-[#ffcc29]'}`} />
+            <span className={`font-semibold text-sm uppercase tracking-wider ${theme.text}`}>Social Followers</span>
           </div>
-          
-          {/* Connected Profiles or Empty State */}
-          {(() => {
-            const profiles = data?.overview?.socialProfiles || [];
-            const hasProfiles = profiles.length > 0;
-            
-            // Platform info for connect buttons
-            const availablePlatforms = [
-              { platform: 'instagram', name: 'Instagram', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e7/Instagram_logo_2016.svg/132px-Instagram_logo_2016.svg.png', bgColor: 'bg-gradient-to-br from-purple-600 via-pink-500 to-orange-400' },
-              { platform: 'facebook', name: 'Facebook', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/05/Facebook_Logo_%282019%29.png/1200px-Facebook_Logo_%282019%29.png', bgColor: 'bg-[#1877F2]' },
-              { platform: 'twitter', name: 'X (Twitter)', logo: 'https://abs.twimg.com/responsive-web/client-web/icon-ios.77d25eba.png', bgColor: 'bg-black' },
-              { platform: 'linkedin', name: 'LinkedIn', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/ca/LinkedIn_logo_initials.png/800px-LinkedIn_logo_initials.png', bgColor: 'bg-[#0A66C2]' },
-              { platform: 'youtube', name: 'YouTube', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/09/YouTube_full-color_icon_%282017%29.svg/1024px-YouTube_full-color_icon_%282017%29.svg.png', bgColor: 'bg-[#FF0000]' },
-              { platform: 'tiktok', name: 'TikTok', logo: 'https://sf-tb-sg.ibytedtos.com/obj/eden-sg/uhtyvueh7nulogpoguhm/tiktok-icon2.png', bgColor: 'bg-black' },
-            ];
-            
-            // Platform logos - using real CDN URLs
-            const platformLogos: Record<string, { logo: string; color: string; bgColor: string }> = {
-              instagram: { 
-                logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e7/Instagram_logo_2016.svg/132px-Instagram_logo_2016.svg.png',
-                color: '#E4405F',
-                bgColor: 'bg-gradient-to-br from-purple-600 via-pink-500 to-orange-400'
-              },
-              facebook: { 
-                logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/05/Facebook_Logo_%282019%29.png/1200px-Facebook_Logo_%282019%29.png',
-                color: '#1877F2',
-                bgColor: 'bg-[#1877F2]'
-              },
-              twitter: { 
-                logo: 'https://abs.twimg.com/responsive-web/client-web/icon-ios.77d25eba.png',
-                color: '#000000',
-                bgColor: 'bg-black'
-              },
-              linkedin: { 
-                logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/ca/LinkedIn_logo_initials.png/800px-LinkedIn_logo_initials.png',
-                color: '#0A66C2',
-                bgColor: 'bg-[#0A66C2]'
-              },
-              youtube: { 
-                logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/09/YouTube_full-color_icon_%282017%29.svg/1024px-YouTube_full-color_icon_%282017%29.svg.png',
-                color: '#FF0000',
-                bgColor: 'bg-[#FF0000]'
-              },
-              tiktok: { 
-                logo: 'https://sf-tb-sg.ibytedtos.com/obj/eden-sg/uhtyvueh7nulogpoguhm/tiktok-icon2.png',
-                color: '#000000',
-                bgColor: 'bg-black'
-              },
-            };
-            
-            // If no profiles connected, show empty state with connect options
-            if (!hasProfiles) {
-              return (
-                <div className="py-8">
-                  {/* Empty State Message */}
-                  <div className="text-center mb-8">
-                    <div className={`w-16 h-16 mx-auto mb-4 rounded-full ${isDarkMode ? 'bg-slate-800' : 'bg-slate-100'} flex items-center justify-center`}>
-                      <svg className={`w-8 h-8 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                      </svg>
-                    </div>
-                    <h3 className={`text-lg font-semibold ${theme.text} mb-2`}>No Social Accounts Connected</h3>
-                    <p className={`text-sm ${theme.textMuted} max-w-md mx-auto`}>
-                      Connect your social media accounts to view real-time analytics, track growth, and manage all your profiles in one place.
-                    </p>
-                  </div>
+          <button 
+            onClick={() => { window.location.hash = '/connect-socials'; }}
+            className="px-4 py-2 bg-[#ffcc29] hover:bg-[#e6b825] text-black text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Connect Account
+          </button>
+        </div>
+        
+        {followerLoading ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className={`w-8 h-8 animate-spin ${theme.textMuted}`} />
+          </div>
+        ) : followerData.length === 0 ? (
+          <div className="text-center py-12">
+            <div className={`w-16 h-16 mx-auto mb-4 rounded-full ${isDarkMode ? 'bg-slate-800' : 'bg-slate-100'} flex items-center justify-center`}>
+              <Users className={`w-8 h-8 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`} />
+            </div>
+            <h3 className={`text-lg font-semibold ${theme.text} mb-2`}>No Connected Accounts</h3>
+            <p className={`text-sm ${theme.textMuted} max-w-md mx-auto mb-4`}>
+              Connect your social media accounts to see your follower statistics.
+            </p>
+            <button 
+              onClick={() => { window.location.hash = '/connect-socials'; }}
+              className="px-6 py-2.5 bg-[#ffcc29] hover:bg-[#e6b825] text-black text-sm font-semibold rounded-lg transition-colors"
+            >
+              Connect Your Accounts
+            </button>
+          </div>
+        ) : (
+          <div className="relative">
+            {/* Bar Chart */}
+            <div className="flex items-end justify-center gap-8 h-64 px-4">
+              {(() => {
+                const maxFollowers = Math.max(...followerData.map(p => p.followers));
+                return followerData.map((platform, idx) => {
+                  const barHeight = maxFollowers > 0 ? (platform.followers / maxFollowers) * 180 : 0;
+                  const isHovered = hoveredBar === platform.platform;
                   
-                  {/* Connect Platform Buttons */}
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                    {availablePlatforms.map((platform) => (
-                      <button
-                        key={platform.platform}
-                        onClick={() => { window.location.hash = '/connect-socials'; }}
-                        className={`p-4 rounded-xl border ${isDarkMode ? 'bg-[#161b22] border-[#30363d] hover:border-[#ffcc29]/50' : 'bg-white border-slate-200 hover:border-[#ffcc29]'} transition-all duration-200 hover:shadow-lg group`}
-                      >
-                        <div className={`w-12 h-12 mx-auto mb-3 rounded-xl ${platform.bgColor} p-2.5 flex items-center justify-center group-hover:scale-110 transition-transform`}>
-                          <img 
-                            src={platform.logo} 
-                            alt={platform.name}
-                            className="w-7 h-7 object-contain"
-                            style={{ filter: platform.platform === 'instagram' ? 'brightness(0) invert(1)' : 'none' }}
-                          />
-                        </div>
-                        <p className={`text-sm font-medium ${theme.text} text-center mb-2`}>{platform.name}</p>
-                        <div className={`text-xs text-center px-2 py-1 rounded-full ${isDarkMode ? 'bg-[#ffcc29]/10 text-[#ffcc29]' : 'bg-[#ffcc29]/20 text-amber-700'}`}>
-                          Connect
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              );
-            }
-            
-            // Show connected profiles - simplified view
-            return (
-              <>
-                {/* Profiles Grid - Simple cards showing connected status */}
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                  {profiles.map((profile: any, idx: number) => {
-                    const platformInfo = platformLogos[profile.platform?.toLowerCase()] || platformLogos.instagram;
-                    return (
+                  return (
+                    <div 
+                      key={platform.platform}
+                      className="flex flex-col items-center gap-3 relative"
+                      onMouseEnter={() => setHoveredBar(platform.platform)}
+                      onMouseLeave={() => setHoveredBar(null)}
+                    >
+                      {/* Platform Logo on top of bar */}
                       <div 
-                        key={idx}
-                        onClick={() => { window.location.hash = '/connect-socials'; }}
-                        className={`p-4 rounded-xl border ${isDarkMode ? 'bg-[#161b22] border-[#30363d] hover:border-slate-600' : 'bg-white border-slate-200 hover:border-slate-300'} transition-all duration-200 hover:shadow-lg cursor-pointer`}
+                        className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-lg transition-all duration-300 ${isHovered ? 'scale-110' : ''}`}
+                        style={{ 
+                          background: platform.bgColor.includes('gradient') ? platform.bgColor : platform.bgColor,
+                          backgroundColor: !platform.bgColor.includes('gradient') ? platform.bgColor : undefined
+                        }}
                       >
-                        {/* Platform Header */}
-                        <div className="flex items-center gap-3 mb-3">
-                          <div className={`w-10 h-10 rounded-xl ${platformInfo.bgColor} p-2 flex items-center justify-center`}>
-                            <img 
-                              src={platformInfo.logo} 
-                              alt={profile.platform}
-                              className="w-6 h-6 object-contain"
-                              style={{ filter: profile.platform?.toLowerCase() === 'instagram' ? 'brightness(0) invert(1)' : 'none' }}
-                            />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className={`text-sm font-semibold ${theme.text} capitalize`}>{profile.platform}</p>
-                            <p className={`text-xs ${theme.textMuted} truncate`}>{profile.accountName}</p>
-                          </div>
-                        </div>
-                        
-                        {/* Status Indicator */}
-                        <div className="flex items-center gap-1.5">
-                          <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-                          <span className={`text-xs ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>
-                            Connected
-                          </span>
-                        </div>
+                        <img 
+                          src={platform.logo} 
+                          alt={platform.name}
+                          className="w-6 h-6 object-contain"
+                          style={{ 
+                            filter: platform.platform === 'instagram' || platform.platform === 'twitter' || platform.platform === 'tiktok' 
+                              ? 'brightness(0) invert(1)' 
+                              : 'none' 
+                          }}
+                        />
                       </div>
-                    );
-                  })}
-                  
-                  {/* Add More Account Card */}
-                  <button
-                    onClick={() => { window.location.hash = '/connect-socials'; }}
-                    className={`p-4 rounded-xl border-2 border-dashed ${isDarkMode ? 'border-[#30363d] hover:border-[#ffcc29]/50 bg-transparent' : 'border-slate-200 hover:border-[#ffcc29] bg-transparent'} transition-all duration-200 flex flex-col items-center justify-center min-h-[100px] group`}
-                  >
-                    <div className={`w-10 h-10 rounded-full ${isDarkMode ? 'bg-slate-800 group-hover:bg-[#ffcc29]/20' : 'bg-slate-100 group-hover:bg-[#ffcc29]/20'} flex items-center justify-center mb-2 transition-colors`}>
-                      <Plus className={`w-5 h-5 ${isDarkMode ? 'text-slate-500 group-hover:text-[#ffcc29]' : 'text-slate-400 group-hover:text-[#ffcc29]'} transition-colors`} />
+                      
+                      {/* Follower count tooltip on hover */}
+                      {isHovered && (
+                        <div className={`absolute -top-8 left-1/2 transform -translate-x-1/2 px-3 py-1.5 rounded-lg text-xs font-bold shadow-lg whitespace-nowrap z-10 ${isDarkMode ? 'bg-white text-[#0a0f1a]' : 'bg-[#0a0f1a] text-white'}`}>
+                          {platform.followers.toLocaleString()} followers
+                          <div className={`absolute left-1/2 -bottom-1 transform -translate-x-1/2 w-2 h-2 rotate-45 ${isDarkMode ? 'bg-white' : 'bg-[#0a0f1a]'}`}></div>
+                        </div>
+                      )}
+                      
+                      {/* The Bar */}
+                      <div 
+                        className={`w-16 rounded-t-xl transition-all duration-500 cursor-pointer relative overflow-hidden ${isHovered ? 'shadow-2xl' : 'shadow-lg'}`}
+                        style={{ 
+                          height: `${Math.max(barHeight, 20)}px`,
+                          background: platform.bgColor.includes('gradient') 
+                            ? platform.bgColor 
+                            : `linear-gradient(to top, ${platform.color}, ${platform.color}dd)`,
+                          transform: isHovered ? 'scaleY(1.05)' : 'scaleY(1)',
+                          transformOrigin: 'bottom'
+                        }}
+                      >
+                        {/* Shine effect */}
+                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
+                      </div>
+                      
+                      {/* Platform Name */}
+                      <span className={`text-xs font-medium ${theme.textSecondary}`}>{platform.name}</span>
                     </div>
-                    <p className={`text-xs font-medium ${theme.textMuted} group-hover:text-[#ffcc29] transition-colors`}>Add Account</p>
-                  </button>
-                </div>
-              </>
-            );
-          })()}
+                  );
+                });
+              })()}
+            </div>
+            
+            {/* Total Followers Summary */}
+            <div className={`mt-6 pt-4 border-t ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'} flex justify-center gap-8`}>
+              <div className="text-center">
+                <p className={`text-2xl font-bold ${theme.text}`}>
+                  {followerData.reduce((sum, p) => sum + p.followers, 0).toLocaleString()}
+                </p>
+                <p className={`text-xs ${theme.textMuted}`}>Total Followers</p>
+              </div>
+              <div className="text-center">
+                <p className={`text-2xl font-bold ${theme.text}`}>{followerData.length}</p>
+                <p className={`text-xs ${theme.textMuted}`}>Connected Platforms</p>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">

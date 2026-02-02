@@ -1728,6 +1728,16 @@ export const apiService = {
     return response;
   },
 
+  // Get social followers for dashboard bar chart
+  getSocialFollowers: async (): Promise<any> => {
+    const response = await apiCall<any>(
+      '/dashboard/social-followers',
+      { method: 'GET' },
+      true
+    );
+    return response;
+  },
+
   // Quick analyze website for onboarding
   analyzeWebsite: async (websiteUrl: string): Promise<any> => {
     const response = await apiCall<any>(

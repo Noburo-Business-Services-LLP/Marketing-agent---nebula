@@ -1486,6 +1486,129 @@ router.post('/post-to-social', protect, async (req, res) => {
 });
 
 /**
+ * GET /api/dashboard/social-followers
+ * Get follower counts for all connected social platforms - used for dashboard bar chart
+ */
+router.get('/social-followers', protect, async (req, res) => {
+  try {
+    const userId = req.user.userId || req.user.id;
+    const user = await User.findById(userId);
+    
+    if (!user?.ayrshare?.profileKey) {
+      return res.json({
+        success: true,
+        platforms: [],
+        message: 'No social accounts connected'
+      });
+    }
+    
+    // Get analytics from Ayrshare
+    const analyticsResult = await getUserSocialAnalytics(user.ayrshare.profileKey);
+    
+    if (!analyticsResult.success) {
+      return res.json({
+        success: true,
+        platforms: [],
+        message: 'Could not fetch analytics'
+      });
+    }
+    
+    // Extract follower counts for each platform
+    const platformData = [];
+    const data = analyticsResult.data || {};
+    
+    // Platform configurations
+    const platformConfig = {
+      instagram: {
+        name: 'Instagram',
+        color: '#E4405F',
+        bgColor: 'linear-gradient(135deg, #833AB4, #E1306C, #F77737)',
+        logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e7/Instagram_logo_2016.svg/132px-Instagram_logo_2016.svg.png'
+      },
+      facebook: {
+        name: 'Facebook',
+        color: '#1877F2',
+        bgColor: '#1877F2',
+        logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/05/Facebook_Logo_%282019%29.png/1200px-Facebook_Logo_%282019%29.png'
+      },
+      twitter: {
+        name: 'X',
+        color: '#000000',
+        bgColor: '#000000',
+        logo: 'https://abs.twimg.com/responsive-web/client-web/icon-ios.77d25eba.png'
+      },
+      linkedin: {
+        name: 'LinkedIn',
+        color: '#0A66C2',
+        bgColor: '#0A66C2',
+        logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/ca/LinkedIn_logo_initials.png/800px-LinkedIn_logo_initials.png'
+      },
+      youtube: {
+        name: 'YouTube',
+        color: '#FF0000',
+        bgColor: '#FF0000',
+        logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/09/YouTube_full-color_icon_%282017%29.svg/1024px-YouTube_full-color_icon_%282017%29.svg.png'
+      },
+      tiktok: {
+        name: 'TikTok',
+        color: '#000000',
+        bgColor: '#000000',
+        logo: 'https://sf-tb-sg.ibytedtos.com/obj/eden-sg/uhtyvueh7nulogpoguhm/tiktok-icon2.png'
+      }
+    };
+    
+    // Parse each platform's analytics
+    for (const [platformKey, platformInfo] of Object.entries(platformConfig)) {
+      const platformAnalytics = data[platformKey]?.analytics;
+      
+      if (platformAnalytics) {
+        let followers = 0;
+        
+        switch (platformKey) {
+          case 'instagram':
+            followers = platformAnalytics.followersCount || 0;
+            break;
+          case 'facebook':
+            followers = platformAnalytics.followersCount || platformAnalytics.fanCount || 0;
+            break;
+          case 'twitter':
+            followers = platformAnalytics.followersCount || 0;
+            break;
+          case 'linkedin':
+            followers = platformAnalytics.followers?.totalFollowerCount || 0;
+            break;
+          default:
+            followers = platformAnalytics.followersCount || platformAnalytics.followers || 0;
+        }
+        
+        if (followers > 0) {
+          platformData.push({
+            platform: platformKey,
+            name: platformInfo.name,
+            followers: followers,
+            color: platformInfo.color,
+            bgColor: platformInfo.bgColor,
+            logo: platformInfo.logo
+          });
+        }
+      }
+    }
+    
+    // Sort by followers descending
+    platformData.sort((a, b) => b.followers - a.followers);
+    
+    res.json({
+      success: true,
+      platforms: platformData,
+      lastUpdated: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Social followers error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
  * GET /api/dashboard/social-analytics
  * Get analytics from connected social platforms via Ayrshare
  */
