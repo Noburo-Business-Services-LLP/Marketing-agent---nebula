@@ -1110,6 +1110,137 @@ Return ONLY the caption text with hashtags. No JSON, no explanations.`;
 });
 
 /**
+ * POST /api/campaigns/process-aspect-ratio
+ * Process image to fit aspect ratio with padding (no cropping)
+ */
+router.post('/process-aspect-ratio', protect, async (req, res) => {
+  try {
+    const { image, aspectRatio } = req.body;
+    
+    if (!image) {
+      return res.status(400).json({ success: false, message: 'Image is required' });
+    }
+    
+    console.log('📐 Processing image for aspect ratio:', aspectRatio);
+    
+    // Parse aspect ratio
+    const ratioMap = {
+      '1:1': 1,
+      '4:5': 4/5,
+      '16:9': 16/9,
+      '9:16': 9/16,
+      'original': null
+    };
+    
+    const targetRatio = ratioMap[aspectRatio];
+    
+    if (targetRatio === null || aspectRatio === 'original') {
+      // Return original image
+      return res.json({
+        success: true,
+        imageBase64: image,
+        message: 'Original aspect ratio kept'
+      });
+    }
+    
+    // Extract base64 data
+    let imageData = image;
+    let mimeType = 'image/png';
+    if (image.startsWith('data:')) {
+      const matches = image.match(/^data:([^;]+);base64,(.+)$/);
+      if (matches) {
+        mimeType = matches[1];
+        imageData = matches[2];
+      }
+    }
+    
+    // Use sharp for image processing
+    const sharp = require('sharp');
+    const buffer = Buffer.from(imageData, 'base64');
+    
+    // Get image dimensions
+    const metadata = await sharp(buffer).metadata();
+    const originalWidth = metadata.width;
+    const originalHeight = metadata.height;
+    const originalRatio = originalWidth / originalHeight;
+    
+    console.log(`Original: ${originalWidth}x${originalHeight} (${originalRatio.toFixed(2)})`);
+    console.log(`Target ratio: ${targetRatio.toFixed(2)}`);
+    
+    let newWidth, newHeight;
+    
+    if (originalRatio > targetRatio) {
+      // Image is wider than target - add padding top/bottom
+      newWidth = originalWidth;
+      newHeight = Math.round(originalWidth / targetRatio);
+    } else {
+      // Image is taller than target - add padding left/right  
+      newHeight = originalHeight;
+      newWidth = Math.round(originalHeight * targetRatio);
+    }
+    
+    console.log(`New dimensions: ${newWidth}x${newHeight}`);
+    
+    // Get dominant edge color for padding
+    const edgePixels = await sharp(buffer)
+      .resize(1, 1)
+      .raw()
+      .toBuffer();
+    
+    const bgColor = {
+      r: edgePixels[0] || 0,
+      g: edgePixels[1] || 0,
+      b: edgePixels[2] || 0
+    };
+    
+    // Create canvas with new dimensions and place image centered
+    const processedBuffer = await sharp({
+      create: {
+        width: newWidth,
+        height: newHeight,
+        channels: 3,
+        background: bgColor
+      }
+    })
+    .composite([{
+      input: buffer,
+      gravity: 'center'
+    }])
+    .png()
+    .toBuffer();
+    
+    const processedBase64 = `data:image/png;base64,${processedBuffer.toString('base64')}`;
+    
+    // Upload to Cloudinary
+    const { ensurePublicUrl } = require('../services/imageUploader');
+    let imageUrl = null;
+    try {
+      imageUrl = await ensurePublicUrl(processedBase64);
+      console.log('✅ Processed image uploaded:', imageUrl);
+    } catch (uploadError) {
+      console.warn('⚠️ Could not upload processed image');
+    }
+    
+    res.json({
+      success: true,
+      imageBase64: processedBase64,
+      imageUrl: imageUrl,
+      originalDimensions: { width: originalWidth, height: originalHeight },
+      newDimensions: { width: newWidth, height: newHeight },
+      message: `Image processed to ${aspectRatio} aspect ratio`
+    });
+    
+  } catch (error) {
+    console.error('Process aspect ratio error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to process image', 
+      error: error.message 
+    });
+  }
+});
+
+/**
  * POST /api/campaigns/template-poster
  * Generate a poster from a template image and content
  * Uses Canvas for reliable text overlay, AI as fallback

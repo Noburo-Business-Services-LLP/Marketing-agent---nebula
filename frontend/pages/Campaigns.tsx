@@ -3004,6 +3004,20 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
     const [isPublishing, setIsPublishing] = useState(false);
     const [isSavingDraft, setIsSavingDraft] = useState(false);
     const [publishResult, setPublishResult] = useState<{ success: boolean; message: string } | null>(null);
+    
+    // Aspect ratio and caption state
+    const [selectedAspectRatio, setSelectedAspectRatio] = useState<string>('original');
+    const [caption, setCaption] = useState('');
+    const [isGeneratingCaption, setIsGeneratingCaption] = useState(false);
+    const [isProcessingImage, setIsProcessingImage] = useState(false);
+    
+    const aspectRatioOptions = [
+      { id: 'original', label: 'Original', ratio: null, desc: 'Keep as-is' },
+      { id: '1:1', label: '1:1', ratio: 1, desc: 'Square (Instagram Feed)' },
+      { id: '4:5', label: '4:5', ratio: 4/5, desc: 'Portrait (Instagram Max)' },
+      { id: '16:9', label: '16:9', ratio: 16/9, desc: 'Landscape (YouTube, Twitter)' },
+      { id: '9:16', label: '9:16', ratio: 9/16, desc: 'Story/Reel (Vertical)' },
+    ];
 
     const inputClasses = `w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#ffcc29] transition-all ${
       isDarkMode 
@@ -3295,6 +3309,31 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
       setIsSavingDraft(false);
     };
 
+    // Generate caption from poster image
+    const handleGenerateCaption = async () => {
+      const currentPoster = posters[currentPosterIndex];
+      if (!currentPoster?.generatedImage) {
+        alert('No poster available to analyze');
+        return;
+      }
+      
+      setIsGeneratingCaption(true);
+      try {
+        const response = await apiService.generateCaptionFromImage(
+          currentPoster.generatedImage, 
+          selectedPlatforms[0] || 'instagram'
+        );
+        if (response.success && response.caption) {
+          setCaption(response.caption);
+        } else {
+          alert(response.message || 'Failed to generate caption');
+        }
+      } catch (error: any) {
+        alert(error.message || 'Failed to generate caption');
+      }
+      setIsGeneratingCaption(false);
+    };
+
     // Handle publish/schedule
     const handlePublish = async () => {
       const generatedPosters = posters.filter(p => p.status === 'generated' && p.generatedImage);
@@ -3305,6 +3344,11 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
 
       if (selectedPlatforms.length === 0) {
         alert('Please select at least one platform');
+        return;
+      }
+      
+      if (!caption.trim()) {
+        alert('Please add a caption for your post');
         return;
       }
 
@@ -3319,6 +3363,25 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
       try {
         // Create campaigns for each generated poster
         for (const poster of generatedPosters) {
+          // Process image with aspect ratio if not original
+          let finalImageUrl = poster.imageUrl || poster.generatedImage || '';
+          
+          if (selectedAspectRatio !== 'original' && poster.generatedImage) {
+            setIsProcessingImage(true);
+            try {
+              const processResult = await apiService.processImageAspectRatio(
+                poster.generatedImage,
+                selectedAspectRatio
+              );
+              if (processResult.success && processResult.imageUrl) {
+                finalImageUrl = processResult.imageUrl;
+              }
+            } catch (err) {
+              console.warn('Image processing failed, using original');
+            }
+            setIsProcessingImage(false);
+          }
+          
           const { campaign } = await apiService.createCampaign({
             name: `Template Poster - ${new Date().toLocaleDateString()}`,
             objective: 'awareness',
@@ -3326,8 +3389,8 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
             status: isScheduleMode ? 'scheduled' : 'draft',
             creative: {
               type: 'image',
-              textContent: poster.content,
-              imageUrls: [poster.imageUrl || poster.generatedImage || ''],
+              textContent: caption, // Use the caption instead of raw content
+              imageUrls: [finalImageUrl],
               captions: ''
             },
             scheduling: isScheduleMode ? {
@@ -3725,6 +3788,71 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
                   </div>
                 </div>
 
+                {/* Aspect Ratio Selection */}
+                <div>
+                  <label className={`block text-sm font-medium mb-3 ${theme.text}`}>
+                    Image Aspect Ratio
+                  </label>
+                  <p className={`text-xs mb-3 ${theme.textSecondary}`}>
+                    Image will be padded (not cropped) to fit the selected ratio
+                  </p>
+                  <div className="grid grid-cols-5 gap-2">
+                    {aspectRatioOptions.map(option => (
+                      <button
+                        key={option.id}
+                        onClick={() => setSelectedAspectRatio(option.id)}
+                        className={`p-3 rounded-xl border text-center transition-all ${
+                          selectedAspectRatio === option.id
+                            ? 'bg-[#ffcc29]/20 border-[#ffcc29] text-[#ffcc29]'
+                            : isDarkMode 
+                              ? 'border-slate-700 text-slate-400 hover:border-slate-600' 
+                              : 'border-slate-200 text-slate-600 hover:border-slate-300'
+                        }`}
+                      >
+                        <span className="text-lg font-bold block">{option.label}</span>
+                        <span className="text-[10px] block mt-1">{option.desc}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Caption Input */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className={`block text-sm font-medium ${theme.text}`}>
+                      Caption *
+                    </label>
+                    <button
+                      onClick={handleGenerateCaption}
+                      disabled={isGeneratingCaption || posters.filter(p => p.status === 'generated').length === 0}
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                        !isGeneratingCaption && posters.filter(p => p.status === 'generated').length > 0
+                          ? 'bg-purple-500/20 text-purple-400 hover:bg-purple-500/30'
+                          : 'bg-slate-700/50 text-slate-500 cursor-not-allowed'
+                      }`}
+                    >
+                      {isGeneratingCaption ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Generating...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-4 h-4" />
+                          Generate with AI
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  <textarea
+                    value={caption}
+                    onChange={(e) => setCaption(e.target.value)}
+                    placeholder="Write your caption or click 'Generate with AI' to auto-create from your poster..."
+                    rows={4}
+                    className={`${inputClasses} resize-none`}
+                  />
+                </div>
+
                 {/* Schedule Toggle */}
                 <div className={`p-4 rounded-xl ${isDarkMode ? 'bg-slate-800' : 'bg-slate-50'}`}>
                   <div className="flex items-center justify-between mb-4">
@@ -3781,6 +3909,7 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
                   <ul className={`text-sm space-y-1 ${theme.textSecondary}`}>
                     <li>• {posters.filter(p => p.status === 'generated').length} poster(s) ready</li>
                     <li>• Platforms: {selectedPlatforms.length > 0 ? selectedPlatforms.join(', ') : 'None selected'}</li>
+                    <li>• Aspect Ratio: {aspectRatioOptions.find(o => o.id === selectedAspectRatio)?.label || 'Original'}</li>
                     <li>• {isScheduleMode ? `Scheduled for ${scheduleDate} ${scheduleTime}` : 'Post immediately'}</li>
                   </ul>
                 </div>

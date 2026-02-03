@@ -1019,6 +1019,33 @@ export const apiService = {
   },
 
   /**
+   * Process image to fit aspect ratio with padding (no cropping)
+   */
+  processImageAspectRatio: async (
+    imageBase64: string,
+    aspectRatio: string
+  ): Promise<{
+    success: boolean;
+    imageBase64?: string;
+    imageUrl?: string;
+    message?: string;
+    error?: string;
+  }> => {
+    const response = await apiCall<any>(
+      '/campaigns/process-aspect-ratio',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          image: imageBase64,
+          aspectRatio
+        })
+      },
+      true
+    );
+    return response;
+  },
+
+  /**
    * Edit/refine a generated poster based on user feedback
    */
   editTemplatePoster: async (
