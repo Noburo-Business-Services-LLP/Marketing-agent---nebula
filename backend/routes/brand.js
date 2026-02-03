@@ -572,7 +572,7 @@ Find competitors who do THE SAME THING, not just same industry.
   "industry": "Broad industry (Edtech, FinTech, SaaS, etc.)",
   "niche": "HYPER-SPECIFIC niche (e.g., 'Startup Accelerator & Entrepreneurship Bootcamp', 'AI-Powered Coding Education', 'Premium Women's Workwear')",
   "businessModel": "How they make money (courses, equity, subscription, ads, marketplace fees, etc.)",
-  "businessType": "B2B, B2C, or Both",
+  "businessType": "MUST be exactly one of: B2B, B2C, or Both (no other text, just one of these 3 values)",
   "businessLocation": "City, State, Country",
   "description": "2-3 sentence description of EXACTLY what they do",
   "targetAudience": "SPECIFIC audience with demographics and pain points",
@@ -702,6 +702,20 @@ Return ONLY valid JSON, no other text.`;
       .split(' ')
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');
+    
+    // Sanitize businessType to match enum values
+    if (extractedData.businessType) {
+      const bt = extractedData.businessType.toUpperCase();
+      if (bt.includes('B2B') && bt.includes('B2C')) {
+        extractedData.businessType = 'Both';
+      } else if (bt.includes('B2B')) {
+        extractedData.businessType = 'B2B';
+      } else if (bt.includes('B2C')) {
+        extractedData.businessType = 'B2C';
+      } else {
+        extractedData.businessType = 'Both'; // Default fallback
+      }
+    }
     
     // Save discovered competitors to database for Competitor Radar
     const userId = req.user.userId || req.user.id;
