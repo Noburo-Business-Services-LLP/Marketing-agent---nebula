@@ -976,6 +976,140 @@ const { generateTemplatePoster, editTemplatePoster, generatePosterFromReference 
 const { generatePosterFromTemplate, editPosterFromTemplate } = require('../services/canvasPosterService');
 
 /**
+ * POST /api/campaigns/generate-caption
+ * Generate a caption from an uploaded image using AI vision
+ */
+router.post('/generate-caption', protect, async (req, res) => {
+  try {
+    const { image, platform } = req.body;
+    
+    if (!image) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Image is required' 
+      });
+    }
+    
+    console.log('🤖 Generating caption from image for platform:', platform || 'instagram');
+    
+    // Get user's brand profile for context
+    const userId = req.user.userId || req.user.id;
+    const User = require('../models/User');
+    const BrandProfile = require('../models/BrandProfile');
+    
+    const user = await User.findById(userId);
+    let brandContext = '';
+    
+    if (user?.brandProfileId) {
+      const brandProfile = await BrandProfile.findById(user.brandProfileId);
+      if (brandProfile) {
+        brandContext = `
+Business: ${brandProfile.name || 'Unknown'}
+Industry: ${brandProfile.industry || 'General'}
+Target Audience: ${brandProfile.targetAudience || 'General consumers'}
+Brand Voice: ${brandProfile.brandVoice || 'Professional'}`;
+      }
+    }
+    
+    // Use Gemini to analyze image and generate caption
+    const { callGemini } = require('../services/geminiAI');
+    
+    // Extract base64 data
+    let imageData = image;
+    let mimeType = 'image/png';
+    if (image.startsWith('data:')) {
+      const matches = image.match(/^data:([^;]+);base64,(.+)$/);
+      if (matches) {
+        mimeType = matches[1];
+        imageData = matches[2];
+      }
+    }
+    
+    const prompt = `You are a social media marketing expert. Analyze this image and create an engaging ${platform || 'Instagram'} caption for it.
+${brandContext}
+
+Requirements:
+1. Write a catchy, engaging caption that matches the image content
+2. Include relevant emojis
+3. Add a clear call-to-action
+4. Include 5-8 relevant hashtags at the end
+5. Keep it concise but impactful (2-4 sentences + hashtags)
+6. Match the tone appropriate for ${platform || 'Instagram'}
+
+Return ONLY the caption text with hashtags. No JSON, no explanations.`;
+
+    // Call Gemini with vision
+    const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+    const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+    
+    const requestBody = {
+      contents: [{
+        parts: [
+          {
+            inlineData: {
+              mimeType: mimeType,
+              data: imageData
+            }
+          },
+          { text: prompt }
+        ]
+      }],
+      generationConfig: {
+        temperature: 0.8,
+        maxOutputTokens: 500
+      }
+    };
+    
+    const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
+    const response = await fetch(`${apiUrl}?key=${GEMINI_API_KEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody)
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      console.error('Gemini caption error:', data);
+      return res.status(500).json({
+        success: false,
+        message: data.error?.message || 'Failed to generate caption'
+      });
+    }
+    
+    // Extract caption from response
+    const caption = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    
+    if (!caption) {
+      return res.status(500).json({
+        success: false,
+        message: 'No caption generated'
+      });
+    }
+    
+    // Extract hashtags from caption
+    const hashtagRegex = /#\w+/g;
+    const hashtags = caption.match(hashtagRegex) || [];
+    
+    console.log('✅ Caption generated successfully');
+    
+    res.json({
+      success: true,
+      caption: caption.trim(),
+      hashtags: hashtags
+    });
+    
+  } catch (error) {
+    console.error('Generate caption error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to generate caption', 
+      error: error.message 
+    });
+  }
+});
+
+/**
  * POST /api/campaigns/template-poster
  * Generate a poster from a template image and content
  * Uses Canvas for reliable text overlay, AI as fallback

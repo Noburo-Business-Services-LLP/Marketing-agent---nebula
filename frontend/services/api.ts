@@ -992,6 +992,33 @@ export const apiService = {
   },
 
   /**
+   * Generate caption from image using AI (vision)
+   */
+  generateCaptionFromImage: async (
+    imageBase64: string,
+    platform?: string
+  ): Promise<{
+    success: boolean;
+    caption?: string;
+    hashtags?: string[];
+    message?: string;
+    error?: string;
+  }> => {
+    const response = await apiCall<any>(
+      '/campaigns/generate-caption',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          image: imageBase64,
+          platform: platform || 'instagram'
+        })
+      },
+      true
+    );
+    return response;
+  },
+
+  /**
    * Edit/refine a generated poster based on user feedback
    */
   editTemplatePoster: async (
