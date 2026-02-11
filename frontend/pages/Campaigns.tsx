@@ -153,7 +153,7 @@ const Campaigns: React.FC = () => {
   // Schedule Mode State
   const [isScheduleMode, setIsScheduleMode] = useState(false);
   const [scheduleDate, setScheduleDate] = useState('');
-  const [scheduleTime, setScheduleTime] = useState('');
+  const [scheduleTime, setScheduleTime] = useState('10:00');
   
   // Bulk Selection State
   const [selectedCampaignIds, setSelectedCampaignIds] = useState<Set<string>>(new Set());
@@ -1919,7 +1919,9 @@ interface GeneratedPost {
   imageUrl: string;
   suggestedDate: string;
   suggestedTime: string;
-  status: 'pending' | 'accepted' | 'edited' | 'rejected';
+  status: 'pending' | 'accepted' | 'edited' | 'regenerating';
+  editPrompt?: string;
+  isRegenerating?: boolean;
 }
 
 const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campaign) => void; isDarkMode: boolean; theme: ReturnType<typeof getThemeClasses> }> = ({ onClose, onSuccess, isDarkMode, theme }) => {
@@ -2056,6 +2058,67 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
       setEditingPostId(null);
     };
 
+    // State for image editing
+    const [editingImageId, setEditingImageId] = useState<string | null>(null);
+    const [imageEditPrompt, setImageEditPrompt] = useState('');
+
+    // Regenerate a single post image
+    const handleRegenerateImage = async (postId: string, customPrompt?: string) => {
+      // Mark as regenerating
+      setGeneratedPosts(prev => prev.map(post => 
+        post.id === postId ? { ...post, isRegenerating: true, status: 'regenerating' } : post
+      ));
+      
+      const post = generatedPosts.find(p => p.id === postId);
+      if (!post) return;
+      
+      const apiBaseUrl = window.location.hostname !== 'localhost' ? '/api' : 'http://localhost:5000/api';
+      
+      try {
+        const response = await fetch(`${apiBaseUrl}/campaigns/regenerate-post-image`, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+          },
+          body: JSON.stringify({
+            postId,
+            platform: post.platform,
+            caption: post.caption,
+            customPrompt: customPrompt || `Create a new unique image for: ${post.caption.substring(0, 150)}`,
+            productLogo // Pass the logo for overlay
+          })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success && data.imageUrl) {
+          setGeneratedPosts(prev => prev.map(p => 
+            p.id === postId ? { ...p, imageUrl: data.imageUrl, isRegenerating: false, status: 'pending' } : p
+          ));
+          setEditingImageId(null);
+          setImageEditPrompt('');
+        } else {
+          throw new Error(data.message || 'Failed to regenerate image');
+        }
+      } catch (error) {
+        console.error('Error regenerating image:', error);
+        setGeneratedPosts(prev => prev.map(p => 
+          p.id === postId ? { ...p, isRegenerating: false, status: 'pending' } : p
+        ));
+        alert('Failed to regenerate image. Please try again.');
+      }
+    };
+
+    // Edit image with prompt
+    const handleEditImage = async (postId: string) => {
+      if (!imageEditPrompt.trim()) {
+        alert('Please enter an edit instruction');
+        return;
+      }
+      await handleRegenerateImage(postId, imageEditPrompt);
+    };
+
     // Helper to parse age range string to object
     const parseAgeRange = (ageStr: string): { min: number; max: number } => {
       if (!ageStr || ageStr === 'all') return { min: 18, max: 65 };
@@ -2070,66 +2133,99 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
     const handleSaveAndSchedule = async () => {
       setSavingPosts(true);
       
-      const postsToSave = generatedPosts.filter(p => p.status !== 'rejected');
+      // All posts should be accepted at this point (button is disabled otherwise)
+      const postsToSave = generatedPosts.filter(p => p.status === 'accepted');
       
       if (postsToSave.length === 0) {
-        alert('Please accept at least one post to schedule.');
+        alert('Please accept all posts before scheduling.');
         setSavingPosts(false);
         return;
       }
       
+      const errorMessages: string[] = [];
+      
       try {
         const scheduledCampaigns = [];
-        let hasErrors = false;
         
-        for (const post of postsToSave) {
-          // Create the campaign first
-          const { campaign } = await apiService.createCampaign({
-            name: `${campaignName} - ${post.platform}`,
-            objective: objective as any,
-            platforms: [post.platform.toLowerCase()],
-            status: 'scheduled',
-            creative: {
-              type: contentType,
-              textContent: post.caption,
-              imageUrls: [post.imageUrl],
-              captions: post.hashtags.join(' ')
-            },
-            scheduling: {
-              startDate: post.suggestedDate,
-              postTime: post.suggestedTime
-            },
-            budget: { type: 'lifetime' as const, amount: parseFloat(budget) / postsToSave.length || 0, currency: 'USD' },
-            targeting: {
-              ageRange: parseAgeRange(targetAge),
-              gender: targetGender,
-              locations: targetLocation ? [targetLocation] : [],
-              interests: targetInterests.split(',').map(i => i.trim())
-            }
-          });
-          
-          // Now actually schedule on Ayrshare using the publish endpoint
-          // Build the scheduled date/time in ISO format
-          const scheduledDateTime = new Date(`${post.suggestedDate}T${post.suggestedTime}:00`);
-          const scheduledFor = scheduledDateTime.toISOString();
+        for (let i = 0; i < postsToSave.length; i++) {
+          const post = postsToSave[i];
+          console.log(`📤 Scheduling post ${i + 1}/${postsToSave.length}: ${post.platform} on ${post.suggestedDate} at ${post.suggestedTime}`);
           
           try {
-            const publishResult = await apiService.publishCampaign(
-              campaign._id, 
-              [post.platform.toLowerCase()], 
-              scheduledFor
-            );
+            // Create the campaign as DRAFT first — only set to 'scheduled' after Ayrshare confirms
+            const createResult = await apiService.createCampaign({
+              name: `${campaignName} - ${post.platform} ${post.suggestedDate}`,
+              objective: objective as any,
+              platforms: [post.platform.toLowerCase()],
+              status: 'draft',  // Start as draft, update after successful publish
+              creative: {
+                type: contentType,
+                textContent: post.caption,
+                imageUrls: [post.imageUrl],
+                captions: post.hashtags.join(' ')
+              },
+              scheduling: {
+                startDate: post.suggestedDate,
+                postTime: post.suggestedTime
+              },
+              budget: { type: 'lifetime' as const, amount: 0, currency: 'USD' },
+              targeting: {
+                ageRange: parseAgeRange(targetAge),
+                gender: targetGender,
+                locations: targetLocation ? [targetLocation] : [],
+                interests: targetInterests.split(',').map(i => i.trim())
+              }
+            });
             
-            if (publishResult.success) {
-              scheduledCampaigns.push(campaign);
-              console.log(`✅ Scheduled ${post.platform} post for ${scheduledFor}`);
-            } else {
-              console.error(`❌ Failed to schedule ${post.platform} post:`, publishResult.message);
-              hasErrors = true;
+            const campaign = createResult.campaign;
+            if (!campaign || !campaign._id) {
+              errorMessages.push(`Post ${i + 1} (${post.platform}): Failed to create campaign`);
+              continue;
             }
-          } catch (publishError) {
-            console.error(`❌ Error scheduling ${post.platform} post:`, publishError);
-            hasErrors = true;
+            
+            // Build scheduled date/time - ensure it's in the future
+            // Ayrshare requires schedule dates to be at least 5 minutes in the future
+            const scheduledDateTime = new Date(`${post.suggestedDate}T${post.suggestedTime}:00`);
+            const now = new Date();
+            
+            // Only adjust if the schedule time is truly in the past
+            if (scheduledDateTime <= now) {
+              console.warn(`⚠️ Post ${i + 1} schedule time is in the past, adjusting to 2 min from now`);
+              scheduledDateTime.setTime(now.getTime() + (2 + i) * 60 * 1000); // stagger by 1 min each
+            }
+            
+            const scheduledFor = scheduledDateTime.toISOString();
+            console.log(`📅 Publishing ${post.platform} to Ayrshare for: ${scheduledFor}`);
+            
+            try {
+              const publishResult = await apiService.publishCampaign(
+                campaign._id, 
+                [post.platform.toLowerCase()], 
+                scheduledFor
+              );
+              
+              if (publishResult.success) {
+                scheduledCampaigns.push(campaign);
+                console.log(`✅ Ayrshare confirmed: ${post.platform} scheduled for ${scheduledFor}`);
+                // Status is updated to 'scheduled' by the backend publish endpoint on success
+              } else {
+                const msg = publishResult.message || publishResult.error || 'Ayrshare rejected the post';
+                errorMessages.push(`${post.platform} (${post.suggestedDate}): ${msg}`);
+                console.error(`❌ Ayrshare rejected ${post.platform} post:`, msg);
+                // Update campaign status to indicate failure
+                try { await apiService.updateCampaign(campaign._id, { status: 'draft' }); } catch(e) {}
+              }
+            } catch (publishError: any) {
+              const msg = publishError?.message || publishError?.error || 'Publish request failed - check connected accounts';
+              errorMessages.push(`${post.platform} (${post.suggestedDate}): ${msg}`);
+              console.error(`❌ Error publishing ${post.platform} to Ayrshare:`, publishError);
+              // Revert campaign to draft since publish failed
+              try { await apiService.updateCampaign(campaign._id, { status: 'draft' }); } catch(e) {}
+            }
+          } catch (postError: any) {
+            const msg = postError?.message || 'Failed to create/schedule';
+            errorMessages.push(`Post ${i + 1} (${post.platform}): ${msg}`);
+            console.error(`❌ Error with post ${i + 1}:`, postError);
           }
         }
         
@@ -2139,7 +2235,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
             name: campaignName,
             objective: objective as any,
             platforms,
-            status: 'active',
+            status: 'scheduled',
             creative: {
               type: contentType,
               textContent: campaignDescription,
@@ -2150,20 +2246,23 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
               startDate,
               postTime: preferredTimes[0] || '10:00'
             },
-            budget: { type: 'lifetime' as const, amount: parseFloat(budget) || 0, currency: 'USD' }
+            budget: { type: 'lifetime' as const, amount: 0, currency: 'USD' }
           });
           
-          if (hasErrors) {
-            alert(`${scheduledCampaigns.length} of ${postsToSave.length} posts scheduled successfully. Some posts failed - please check your connected accounts.`);
+          if (errorMessages.length > 0) {
+            alert(`✅ ${scheduledCampaigns.length}/${postsToSave.length} posts scheduled!\n\n❌ Failed:\n${errorMessages.join('\n')}`);
           }
           
           onSuccess(parentCampaign);
         } else {
-          alert('Failed to schedule posts. Please make sure you have connected your social accounts.');
+          const reason = errorMessages.length > 0 
+            ? `Errors:\n${errorMessages.join('\n')}`
+            : 'Please make sure you have connected your social accounts in Connect Socials page.';
+          alert(`Failed to schedule any posts.\n\n${reason}`);
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error saving campaign:', error);
-        alert('Failed to save campaign. Please try again.');
+        alert(`Failed to save campaign: ${error?.message || 'Unknown error'}\n\nMake sure you have connected social accounts.`);
       } finally {
         setSavingPosts(false);
       }
@@ -2174,7 +2273,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
       'Target Audience',
       'Content Preferences',
       'Scheduling',
-      'Budget & Goals',
+      'Goals',
       'Review Generated Posts'
     ];
 
@@ -2226,8 +2325,13 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                       <div className="mt-4 p-4 rounded-xl bg-gradient-to-br from-[#ffcc29]/20 to-[#ffa500]/10 border border-[#ffcc29]/30">
                         <p className={`text-sm font-medium ${theme.text}`}>📊 Generated Posts</p>
                         <p className={`text-xs ${theme.textMuted} mt-1`}>
-                          {generatedPosts.filter(p => p.status !== 'rejected').length} posts ready to schedule
+                          {generatedPosts.filter(p => p.status === 'accepted').length}/{generatedPosts.length} posts accepted
                         </p>
+                        {!generatedPosts.every(p => p.status === 'accepted') && (
+                          <p className="text-xs text-[#ffcc29] mt-1">
+                            ✓ Accept all posts to schedule
+                          </p>
+                        )}
                       </div>
                     )}
                 </div>
@@ -2644,11 +2748,11 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                                     <input
                                       type="time"
                                       id="customTimeInput"
+                                      defaultValue="10:00"
                                       className={`${inputClasses} flex-1`}
                                       onChange={(e) => {
                                         if (e.target.value && !preferredTimes.includes(e.target.value)) {
                                           setPreferredTimes(prev => [...prev, e.target.value]);
-                                          e.target.value = '';
                                         }
                                       }}
                                     />
@@ -2670,44 +2774,12 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                             </div>
                         )}
 
-                        {/* Step 5: Budget & Goals */}
+                        {/* Step 5: Goals */}
                         {step === 5 && (
                             <div className="space-y-6 animate-in fade-in duration-300">
                                 <div>
-                                  <h3 className={`text-xl font-bold ${theme.text}`}>Budget & Goals</h3>
-                                  <p className={`text-sm ${theme.textSecondary} mt-1`}>Set your investment and success metrics</p>
-                                </div>
-                                
-                                <div className="grid grid-cols-2 gap-4">
-                                  <div>
-                                    <label className={labelClasses}>Budget (Optional)</label>
-                                    <div className="relative">
-                                      <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                                      <input 
-                                        type="number"
-                                        className={`${inputClasses} pl-10`} 
-                                        placeholder="Enter amount"
-                                        value={budget} 
-                                        onChange={e => setBudget(e.target.value)} 
-                                      />
-                                    </div>
-                                  </div>
-                                  
-                                  <div>
-                                    <label className={labelClasses}>Expected Reach</label>
-                                    <select 
-                                      className={inputClasses} 
-                                      value={expectedReach} 
-                                      onChange={e => setExpectedReach(e.target.value)}
-                                    >
-                                      <option value="">Select expected reach</option>
-                                      <option value="1k-5k">1K - 5K</option>
-                                      <option value="5k-10k">5K - 10K</option>
-                                      <option value="10k-50k">10K - 50K</option>
-                                      <option value="50k-100k">50K - 100K</option>
-                                      <option value="100k+">100K+</option>
-                                    </select>
-                                  </div>
+                                  <h3 className={`text-xl font-bold ${theme.text}`}>Goals</h3>
+                                  <p className={`text-sm ${theme.textSecondary} mt-1`}>Define your success metrics for this campaign</p>
                                 </div>
                                 
                                 <div>
@@ -2765,14 +2837,24 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                                       AI has created {generatedPosts.length} posts for your campaign. Review and customize them.
                                     </p>
                                   </div>
-                                  <button
-                                    onClick={handleGeneratePosts}
-                                    disabled={isGenerating}
-                                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium ${isDarkMode ? 'bg-slate-700 hover:bg-slate-600' : 'bg-slate-200 hover:bg-slate-300'} ${theme.text}`}
-                                  >
-                                    <RefreshCw className={`w-4 h-4 ${isGenerating ? 'animate-spin' : ''}`} />
-                                    Regenerate All
-                                  </button>
+                                  <div className="flex gap-2">
+                                    <button
+                                      onClick={() => setGeneratedPosts(prev => prev.map(p => ({ ...p, status: 'accepted' })))}
+                                      disabled={generatedPosts.every(p => p.status === 'accepted') || generatedPosts.some(p => p.isRegenerating)}
+                                      className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-green-500/20 text-green-600 hover:bg-green-500/30 disabled:opacity-50 transition-colors"
+                                    >
+                                      <Check className="w-4 h-4" />
+                                      Accept All
+                                    </button>
+                                    <button
+                                      onClick={handleGeneratePosts}
+                                      disabled={isGenerating}
+                                      className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium ${isDarkMode ? 'bg-slate-700 hover:bg-slate-600' : 'bg-slate-200 hover:bg-slate-300'} ${theme.text}`}
+                                    >
+                                      <RefreshCw className={`w-4 h-4 ${isGenerating ? 'animate-spin' : ''}`} />
+                                      Regenerate All
+                                    </button>
+                                  </div>
                                 </div>
                                 
                                 <div className="space-y-4 max-h-[50vh] overflow-y-auto pr-2">
@@ -2780,17 +2862,59 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                                     <div 
                                       key={post.id}
                                       className={`p-4 rounded-xl border transition-all ${
-                                        post.status === 'rejected' 
-                                          ? 'opacity-50 bg-red-500/5 border-red-500/20' 
+                                        post.isRegenerating || post.status === 'regenerating'
+                                          ? 'opacity-70 border-[#ffcc29]/50 bg-[#ffcc29]/5' 
                                           : post.status === 'accepted' || post.status === 'edited'
                                             ? isDarkMode ? 'bg-green-900/10 border-green-500/30' : 'bg-green-50 border-green-200'
                                             : isDarkMode ? 'bg-[#161b22] border-slate-700/50' : 'bg-white border-slate-200'
                                       }`}
                                     >
                                       <div className="flex gap-4">
-                                        {/* Image Preview */}
-                                        <div className="w-32 h-32 rounded-lg overflow-hidden shrink-0">
-                                          <img src={post.imageUrl} alt="" className="w-full h-full object-cover" />
+                                        {/* Image Preview with Edit Option */}
+                                        <div className="w-32 shrink-0">
+                                          <div className="relative w-32 h-32 rounded-lg overflow-hidden group">
+                                            {post.isRegenerating ? (
+                                              <div className="w-full h-full flex items-center justify-center bg-slate-800">
+                                                <Loader2 className="w-6 h-6 animate-spin text-[#ffcc29]" />
+                                              </div>
+                                            ) : (
+                                              <>
+                                                <img src={post.imageUrl} alt="" className="w-full h-full object-cover" />
+                                                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                  <button
+                                                    onClick={() => {
+                                                      setEditingImageId(editingImageId === post.id ? null : post.id);
+                                                      setImageEditPrompt('');
+                                                    }}
+                                                    className="p-2 bg-white/20 rounded-full hover:bg-white/30 transition-colors"
+                                                    title="Edit Image"
+                                                  >
+                                                    <Wand2 className="w-4 h-4 text-white" />
+                                                  </button>
+                                                </div>
+                                              </>
+                                            )}
+                                          </div>
+                                          {/* Image Edit Prompt */}
+                                          {editingImageId === post.id && (
+                                            <div className="mt-2 space-y-2">
+                                              <input
+                                                type="text"
+                                                placeholder="Describe changes..."
+                                                value={imageEditPrompt}
+                                                onChange={e => setImageEditPrompt(e.target.value)}
+                                                className={`w-full p-2 text-xs rounded-lg border ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50 text-white placeholder-slate-500' : 'bg-white border-slate-200'}`}
+                                              />
+                                              <button
+                                                onClick={() => handleEditImage(post.id)}
+                                                disabled={!imageEditPrompt.trim() || post.isRegenerating}
+                                                className="w-full p-1.5 bg-[#ffcc29] text-black text-xs font-medium rounded-lg hover:bg-[#e6b825] disabled:opacity-50 flex items-center justify-center gap-1"
+                                              >
+                                                <Wand2 className="w-3 h-3" />
+                                                Apply
+                                              </button>
+                                            </div>
+                                          )}
                                         </div>
                                         
                                         {/* Content */}
@@ -2808,12 +2932,14 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                                             <span className={`text-xs ${theme.textMuted}`}>
                                               📅 {post.suggestedDate} at {post.suggestedTime}
                                             </span>
-                                            {post.status !== 'pending' && (
-                                              <span className={`text-xs px-2 py-0.5 rounded ${
-                                                post.status === 'rejected' ? 'bg-red-100 text-red-700' :
-                                                'bg-green-100 text-green-700'
-                                              }`}>
-                                                {post.status}
+                                            {post.status === 'accepted' && (
+                                              <span className="text-xs px-2 py-0.5 rounded bg-green-100 text-green-700">
+                                                ✓ Accepted
+                                              </span>
+                                            )}
+                                            {post.isRegenerating && (
+                                              <span className="text-xs px-2 py-0.5 rounded bg-[#ffcc29]/20 text-[#ffcc29]">
+                                                Regenerating...
                                               </span>
                                             )}
                                           </div>
@@ -2863,31 +2989,35 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                                         
                                         {/* Actions */}
                                         <div className="flex flex-col gap-2 shrink-0">
-                                          {post.status !== 'rejected' && editingPostId !== post.id && (
+                                          {editingPostId !== post.id && !post.isRegenerating && (
                                             <>
                                               <button
                                                 onClick={() => handleUpdatePost(post.id, { status: 'accepted' })}
-                                                className="p-2 rounded-lg bg-green-500/20 text-green-500 hover:bg-green-500/30 transition-colors"
-                                                title="Accept"
+                                                className={`p-2 rounded-lg transition-colors ${
+                                                  post.status === 'accepted' 
+                                                    ? 'bg-green-500 text-white' 
+                                                    : 'bg-green-500/20 text-green-500 hover:bg-green-500/30'
+                                                }`}
+                                                title={post.status === 'accepted' ? 'Accepted' : 'Accept'}
                                               >
                                                 <Check className="w-4 h-4" />
                                               </button>
                                               <button
+                                                onClick={() => handleRegenerateImage(post.id)}
+                                                className="p-2 rounded-lg bg-red-500/20 text-red-500 hover:bg-red-500/30 transition-colors"
+                                                title="Regenerate Image (Don't like this one)"
+                                              >
+                                                <X className="w-4 h-4" />
+                                              </button>
+                                              <button
                                                 onClick={() => setEditingPostId(post.id)}
                                                 className={`p-2 rounded-lg ${isDarkMode ? 'bg-slate-700 hover:bg-slate-600' : 'bg-slate-100 hover:bg-slate-200'} transition-colors`}
-                                                title="Edit"
+                                                title="Edit Caption & Schedule"
                                               >
                                                 <Edit3 className="w-4 h-4" />
                                               </button>
                                             </>
                                           )}
-                                          <button
-                                            onClick={() => handleUpdatePost(post.id, { status: post.status === 'rejected' ? 'pending' : 'rejected' })}
-                                            className={`p-2 rounded-lg ${post.status === 'rejected' ? 'bg-green-500/20 text-green-500' : 'bg-red-500/20 text-red-500'} hover:opacity-80 transition-colors`}
-                                            title={post.status === 'rejected' ? 'Restore' : 'Reject'}
-                                          >
-                                            <X className="w-4 h-4" />
-                                          </button>
                                         </div>
                                       </div>
                                     </div>
@@ -2938,23 +3068,34 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                         )}
                         
                         {step === 6 && (
-                          <button 
-                            onClick={handleSaveAndSchedule}
-                            disabled={savingPosts || generatedPosts.filter(p => p.status !== 'rejected').length === 0}
-                            className="px-6 py-2.5 bg-gradient-to-r from-[#ffcc29] to-[#ffa500] text-black rounded-lg font-semibold hover:shadow-lg transition-all disabled:opacity-50 flex items-center gap-2"
-                          >
-                            {savingPosts ? (
-                              <>
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                                Saving...
-                              </>
-                            ) : (
-                              <>
-                                <Calendar className="w-4 h-4" />
-                                Save & Schedule ({generatedPosts.filter(p => p.status !== 'rejected').length} posts)
-                              </>
-                            )}
-                          </button>
+                          <div className="flex items-center gap-4">
+                            {/* Status indicator */}
+                            <span className={`text-sm ${
+                              generatedPosts.every(p => p.status === 'accepted') 
+                                ? 'text-green-500' 
+                                : theme.textMuted
+                            }`}>
+                              {generatedPosts.filter(p => p.status === 'accepted').length}/{generatedPosts.length} accepted
+                            </span>
+                            <button 
+                              onClick={handleSaveAndSchedule}
+                              disabled={savingPosts || !generatedPosts.every(p => p.status === 'accepted') || generatedPosts.some(p => p.isRegenerating)}
+                              className="px-6 py-2.5 bg-gradient-to-r from-[#ffcc29] to-[#ffa500] text-black rounded-lg font-semibold hover:shadow-lg transition-all disabled:opacity-50 flex items-center gap-2"
+                              title={!generatedPosts.every(p => p.status === 'accepted') ? 'Accept all posts to continue' : ''}
+                            >
+                              {savingPosts ? (
+                                <>
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                  Scheduling...
+                                </>
+                              ) : (
+                                <>
+                                  <Calendar className="w-4 h-4" />
+                                  Save & Schedule ({generatedPosts.length} posts)
+                                </>
+                              )}
+                            </button>
+                          </div>
                         )}
                     </div>
                 </div>
@@ -3000,7 +3141,7 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
     const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(connectedPlatforms.slice(0, 1));
     const [isScheduleMode, setIsScheduleMode] = useState(false);
     const [scheduleDate, setScheduleDate] = useState('');
-    const [scheduleTime, setScheduleTime] = useState('');
+    const [scheduleTime, setScheduleTime] = useState('10:00');
     const [isPublishing, setIsPublishing] = useState(false);
     const [isSavingDraft, setIsSavingDraft] = useState(false);
     const [publishResult, setPublishResult] = useState<{ success: boolean; message: string } | null>(null);
@@ -4225,7 +4366,7 @@ const UploadPublishModal: React.FC<UploadPublishModalProps> = ({ onClose, onSucc
     const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(connectedPlatforms.slice(0, 1));
     const [isScheduleMode, setIsScheduleMode] = useState(false);
     const [scheduleDate, setScheduleDate] = useState('');
-    const [scheduleTime, setScheduleTime] = useState('');
+    const [scheduleTime, setScheduleTime] = useState('10:00');
     const [isPublishing, setIsPublishing] = useState(false);
     const [publishResult, setPublishResult] = useState<{ success: boolean; message: string } | null>(null);
 
