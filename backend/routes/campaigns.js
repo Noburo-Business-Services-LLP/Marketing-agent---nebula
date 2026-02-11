@@ -12,7 +12,7 @@ const { callGemini, parseGeminiJSON } = require('../services/geminiAI');
 const notificationScheduler = require('../services/notificationScheduler');
 
 // Import Ayrshare for social media posting
-const { postToSocialMedia, getAyrshareAnalytics } = require('../services/socialMediaAPI');
+const { postToSocialMedia, getAyrshareAnalytics, getPostStatus } = require('../services/socialMediaAPI');
 
 // Import image uploader for converting base64 to hosted URLs
 const { ensurePublicUrl, isBase64DataUrl } = require('../services/imageUploader');
@@ -55,6 +55,66 @@ router.get('/', protect, async (req, res) => {
     const campaigns = await Campaign.find(query)
       .sort({ createdAt: -1 })
       .limit(parseInt(limit));
+    
+    // For scheduled campaigns whose time has passed, verify with Ayrshare if actually posted
+    const now = new Date();
+    const scheduledPastDue = campaigns.filter(c => 
+      c.status === 'scheduled' && 
+      c.scheduledFor && 
+      new Date(c.scheduledFor) < now &&
+      c.socialPostId  // Must have an Ayrshare post ID to verify
+    );
+    
+    if (scheduledPastDue.length > 0) {
+      console.log(`🔍 Verifying ${scheduledPastDue.length} past-due scheduled campaigns with Ayrshare...`);
+      
+      // Get the user's Ayrshare profile key for API calls
+      const user = await User.findById(userId);
+      const profileKey = user?.ayrshare?.profileKey;
+      
+      for (const campaign of scheduledPastDue) {
+        try {
+          const statusResult = await getPostStatus(campaign.socialPostId, { profileKey });
+          
+          if (statusResult.success && statusResult.data) {
+            const postData = statusResult.data;
+            // Check if Ayrshare confirms the post was actually published
+            // Ayrshare returns status 'success' for posted, 'scheduled' for pending, 'error' for failed
+            const ayrshareStatus = postData.status || 
+              (postData.posts && postData.posts[0]?.status) || 
+              'unknown';
+            
+            console.log(`📊 Campaign ${campaign._id} Ayrshare status: ${ayrshareStatus}`);
+            
+            if (ayrshareStatus === 'success' || ayrshareStatus === 'posted') {
+              // Ayrshare confirmed it was actually posted!
+              await Campaign.findByIdAndUpdate(campaign._id, { 
+                $set: { status: 'posted', publishedAt: now, ayrshareStatus: 'success' } 
+              });
+              campaign.status = 'posted';
+              campaign.publishedAt = now;
+              console.log(`✅ Confirmed posted: ${campaign.name}`);
+            } else if (ayrshareStatus === 'error') {
+              // Ayrshare says it failed
+              await Campaign.findByIdAndUpdate(campaign._id, { 
+                $set: { status: 'draft', ayrshareStatus: 'error' } 
+              });
+              campaign.status = 'draft';
+              console.log(`❌ Ayrshare post failed: ${campaign.name}`);
+            } else {
+              // Still scheduled/pending on Ayrshare side - don't change status
+              console.log(`⏳ Still pending on Ayrshare: ${campaign.name} (status: ${ayrshareStatus})`);
+            }
+          }
+        } catch (verifyError) {
+          console.warn(`⚠️ Could not verify campaign ${campaign._id}:`, verifyError.message);
+          // Don't change status if we can't verify
+        }
+      }
+    }
+    
+    // For scheduled campaigns past due WITHOUT a socialPostId, keep as scheduled
+    // (they were never actually sent to Ayrshare)
     
     // Get counts by status
     const mongoose = require('mongoose');
@@ -236,7 +296,7 @@ router.post('/:id/publish', protect, async (req, res) => {
     const profileKey = user?.ayrshare?.profileKey;
     
     if (!profileKey) {
-      console.warn('User does not have an Ayrshare profile key');
+      console.warn('User does not have an Ayrshare profile key - already handled above');
     } else {
       console.log('Found user Ayrshare profileKey:', profileKey.substring(0, 20) + '...');
     }
@@ -250,6 +310,23 @@ router.post('/:id/publish', protect, async (req, res) => {
     
     if (isScheduled) {
       console.log('📅 Scheduling post for:', scheduledFor);
+      // Validate schedule date is in the future
+      const schedDate = new Date(scheduledFor);
+      const now = new Date();
+      if (schedDate <= now) {
+        console.warn('⚠️ Schedule date is in the past:', scheduledFor, 'Current:', now.toISOString());
+        return res.status(400).json({ 
+          success: false, 
+          message: `Schedule date must be in the future. Received: ${scheduledFor}, Current time: ${now.toISOString()}`
+        });
+      }
+    }
+    
+    if (!profileKey) {
+      return res.status(400).json({
+        success: false,
+        message: 'No social accounts connected. Please go to Connect Socials and link your Instagram/Facebook account first.'
+      });
     }
     
     // Build the post content
@@ -407,6 +484,73 @@ router.post('/:id/publish', protect, async (req, res) => {
       message: 'Failed to publish campaign', 
       error: error.message 
     });
+  }
+});
+
+/**
+ * GET /api/campaigns/:id/verify-status
+ * Check Ayrshare to see if a scheduled post was actually published
+ */
+router.get('/:id/verify-status', protect, async (req, res) => {
+  try {
+    const userId = req.user.userId || req.user.id;
+    const campaign = await Campaign.findOne({ _id: req.params.id, userId });
+    
+    if (!campaign) {
+      return res.status(404).json({ success: false, message: 'Campaign not found' });
+    }
+    
+    if (!campaign.socialPostId) {
+      return res.json({ 
+        success: true, 
+        status: campaign.status,
+        message: 'No Ayrshare post ID — this campaign was never sent to Ayrshare' 
+      });
+    }
+    
+    const user = await User.findById(userId);
+    const profileKey = user?.ayrshare?.profileKey;
+    
+    const statusResult = await getPostStatus(campaign.socialPostId, { profileKey });
+    
+    if (statusResult.success && statusResult.data) {
+      const postData = statusResult.data;
+      const ayrshareStatus = postData.status || 
+        (postData.posts && postData.posts[0]?.status) || 
+        'unknown';
+      
+      let newStatus = campaign.status;
+      
+      if (ayrshareStatus === 'success' || ayrshareStatus === 'posted') {
+        newStatus = 'posted';
+        await Campaign.findByIdAndUpdate(campaign._id, { 
+          $set: { status: 'posted', publishedAt: new Date(), ayrshareStatus: 'success' } 
+        });
+      } else if (ayrshareStatus === 'error') {
+        newStatus = 'draft';
+        await Campaign.findByIdAndUpdate(campaign._id, { 
+          $set: { status: 'draft', ayrshareStatus: 'error' } 
+        });
+      }
+      
+      return res.json({
+        success: true,
+        status: newStatus,
+        ayrshareStatus,
+        ayrshareData: postData,
+        message: `Ayrshare reports: ${ayrshareStatus}`
+      });
+    }
+    
+    res.json({
+      success: true,
+      status: campaign.status,
+      message: 'Could not get status from Ayrshare',
+      ayrshareResponse: statusResult
+    });
+  } catch (error) {
+    console.error('Verify status error:', error);
+    res.status(500).json({ success: false, message: error.message });
   }
 });
 
@@ -731,8 +875,13 @@ router.post('/generate-campaign-posts', protect, async (req, res) => {
     const duration = scheduling?.duration || '2weeks';
     const postsPerWeek = scheduling?.postsPerWeek || 3;
     const preferredDays = scheduling?.preferredDays || ['monday', 'wednesday', 'friday'];
-    const preferredTimes = scheduling?.preferredTimes || ['10:00', '18:00'];
+    // Fix: empty array [] is truthy in JS, so explicitly check length
+    const preferredTimes = (scheduling?.preferredTimes && scheduling.preferredTimes.length > 0) 
+      ? scheduling.preferredTimes 
+      : ['10:00', '14:00', '18:00'];
     const startDate = scheduling?.startDate || new Date().toISOString().split('T')[0];
+
+    console.log('📅 Preferred times received:', scheduling?.preferredTimes, '→ using:', preferredTimes);
 
     // Calculate number of posts based on duration
     const durationWeeks = {
@@ -863,10 +1012,16 @@ Return ONLY valid JSON (no markdown, no code blocks):
     let logoPublicId = null;
     if (productLogo) {
       console.log('📤 Uploading product logo for overlay...');
-      const logoResult = await uploadLogo(productLogo);
-      if (logoResult.success) {
-        logoPublicId = logoResult.publicId;
-        console.log('✅ Logo uploaded, public ID:', logoPublicId);
+      try {
+        const logoResult = await uploadLogo(productLogo, true);
+        if (logoResult.success) {
+          logoPublicId = logoResult.publicId;
+          console.log('✅ Logo uploaded, public ID:', logoPublicId);
+        } else {
+          console.error('❌ Logo upload failed:', logoResult.error);
+        }
+      } catch (logoErr) {
+        console.error('❌ Logo upload error:', logoErr.message);
       }
     }
 
@@ -904,16 +1059,22 @@ Return ONLY valid JSON (no markdown, no code blocks):
         // If logo is available, overlay it on the generated image
         if (logoPublicId && imageUrl) {
           console.log(`🏷️ Overlaying logo on image ${index + 1}...`);
-          const overlayResult = await uploadImageWithLogoOverlay(imageUrl, logoPublicId, {
-            position: 'south_east',
-            width: 100,
-            opacity: 85,
-            margin: 15
-          });
-          
-          if (overlayResult.success) {
-            imageUrl = overlayResult.url;
-            console.log(`✅ Logo overlay applied to image ${index + 1}`);
+          try {
+            const overlayResult = await uploadImageWithLogoOverlay(imageUrl, logoPublicId, {
+              position: 'south_east',
+              width: 180,
+              opacity: 95,
+              margin: 25
+            });
+            
+            if (overlayResult.success) {
+              imageUrl = overlayResult.url;
+              console.log(`✅ Logo overlay applied to image ${index + 1}`);
+            } else {
+              console.error(`❌ Logo overlay failed for image ${index + 1}:`, overlayResult.error);
+            }
+          } catch (overlayErr) {
+            console.error(`❌ Logo overlay error for image ${index + 1}:`, overlayErr.message);
           }
         }
         
@@ -965,6 +1126,138 @@ Return ONLY valid JSON (no markdown, no code blocks):
   } catch (error) {
     console.error('Generate campaign posts error:', error);
     res.status(500).json({ success: false, message: 'Failed to generate posts', error: error.message });
+  }
+});
+
+/**
+ * POST /api/campaigns/regenerate-post-image
+ * Regenerate a single post image with optional custom prompt
+ */
+router.post('/regenerate-post-image', protect, async (req, res) => {
+  try {
+    const { 
+      postId,
+      platform,
+      caption,
+      customPrompt,
+      referenceImageUrl,
+      productLogo, // logo for overlay
+      brandContext
+    } = req.body;
+
+    console.log(`🎨 Regenerating image for post ${postId || 'new'}...`);
+
+    const { getRelevantImage } = require('../services/geminiAI');
+    const { uploadLogo, uploadImageWithLogoOverlay } = require('../services/imageUploader');
+
+    // Build image description
+    let imageDescription = customPrompt || caption?.substring(0, 200) || 'Professional marketing image';
+    
+    if (brandContext) {
+      imageDescription += `. Brand: ${brandContext.companyName || 'Brand'}, Industry: ${brandContext.industry || 'business'}.`;
+    }
+
+    console.log('🖼️ Image prompt:', imageDescription.substring(0, 100) + '...');
+
+    // Generate the image
+    let imageUrl = await getRelevantImage(
+      imageDescription,
+      brandContext?.industry || 'business',
+      'awareness',
+      'Campaign',
+      platform || 'instagram',
+      brandContext
+    );
+
+    // If logo is provided, overlay it
+    if (productLogo && imageUrl) {
+      console.log('🏷️ Overlaying logo on regenerated image...');
+      const logoResult = await uploadLogo(productLogo, true); // true = remove background
+      if (logoResult.success) {
+        const overlayResult = await uploadImageWithLogoOverlay(imageUrl, logoResult.publicId, {
+          position: 'south_east',
+          width: 180,
+          opacity: 95,
+          margin: 25
+        });
+        if (overlayResult.success) {
+          imageUrl = overlayResult.url;
+          console.log('✅ Logo overlay applied');
+        }
+      }
+    }
+
+    console.log('✅ Image regenerated successfully');
+
+    res.json({
+      success: true,
+      imageUrl,
+      postId
+    });
+
+  } catch (error) {
+    console.error('Regenerate post image error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to regenerate image', 
+      error: error.message 
+    });
+  }
+});
+
+/**
+ * POST /api/campaigns/edit-post-image
+ * Edit an existing post image with a text prompt
+ */
+router.post('/edit-post-image', protect, async (req, res) => {
+  try {
+    const { 
+      imageUrl,
+      editPrompt,
+      postId,
+      platform
+    } = req.body;
+
+    if (!imageUrl || !editPrompt) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Image URL and edit prompt are required' 
+      });
+    }
+
+    console.log(`✏️ Editing image for post ${postId || 'unknown'}...`);
+    console.log('📝 Edit prompt:', editPrompt);
+
+    // For now, we'll regenerate with the edit prompt as context
+    // In the future, this could use image-to-image editing
+    const { getRelevantImage } = require('../services/geminiAI');
+    
+    const enhancedPrompt = `${editPrompt}. Maintain professional marketing quality. Platform: ${platform || 'instagram'}`;
+    
+    const newImageUrl = await getRelevantImage(
+      enhancedPrompt,
+      'business',
+      'awareness',
+      'Campaign',
+      platform || 'instagram',
+      {}
+    );
+
+    console.log('✅ Image edited/regenerated successfully');
+
+    res.json({
+      success: true,
+      imageUrl: newImageUrl,
+      postId
+    });
+
+  } catch (error) {
+    console.error('Edit post image error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to edit image', 
+      error: error.message 
+    });
   }
 });
 

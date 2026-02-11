@@ -110,35 +110,53 @@ async function ensurePublicUrl(imageUrl) {
 
 /**
  * Upload a logo and return its public ID for overlay operations
+ * Automatically removes background from the logo
  * @param {string} logoData - Base64 or URL of the logo
+ * @param {boolean} removeBackground - Whether to remove background (default: true)
  * @returns {Promise<{success: boolean, publicId?: string, url?: string, error?: string}>}
  */
-async function uploadLogo(logoData) {
+async function uploadLogo(logoData, removeBackground = true) {
   try {
     let uploadData = logoData;
     if (!logoData.startsWith('data:') && !logoData.startsWith('http')) {
       uploadData = `data:image/png;base64,${logoData}`;
     }
 
+    // Build transformations
+    const transformations = [
+      { quality: 'auto:best' },
+      { fetch_format: 'png' }
+    ];
+    
+    // Add background removal if requested
+    // Cloudinary's AI-based background removal
+    if (removeBackground) {
+      transformations.unshift({ background: 'transparent' });
+      transformations.unshift({ effect: 'background_removal' });
+    }
+
     // For URLs, we need to upload them to get a public_id
     const result = await cloudinary.uploader.upload(uploadData, {
       folder: 'nebula-logos',
       resource_type: 'image',
-      transformation: [
-        { quality: 'auto:best' },
-        { fetch_format: 'png' }
-      ]
+      transformation: transformations
     });
 
-    console.log('✅ Logo uploaded to Cloudinary:', result.public_id);
+    console.log('✅ Logo uploaded to Cloudinary (bg removed:', removeBackground, '):', result.public_id);
 
     return {
       success: true,
       url: result.secure_url,
-      publicId: result.public_id
+      publicId: result.public_id,
+      backgroundRemoved: removeBackground
     };
   } catch (error) {
     console.error('❌ Logo upload error:', error.message);
+    // If background removal fails, try without it
+    if (removeBackground && error.message.includes('background_removal')) {
+      console.log('⚠️ Background removal failed, retrying without it...');
+      return uploadLogo(logoData, false);
+    }
     return {
       success: false,
       error: error.message

@@ -210,22 +210,60 @@ async function getUserSocialAnalytics(profileKey, platforms = ['instagram', 'fac
 /**
  * Get posting history from Ayrshare
  */
-async function getPostHistory() {
+async function getPostHistory(options = {}) {
   if (!AYRSHARE_API_KEY) {
     return { success: false, error: 'API not configured' };
   }
 
   try {
+    const headers = {
+      'Authorization': `Bearer ${AYRSHARE_API_KEY}`
+    };
+    if (options.profileKey) {
+      headers['Profile-Key'] = options.profileKey;
+    }
+
     const response = await makeRequest('https://app.ayrshare.com/api/history', {
       method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${AYRSHARE_API_KEY}`
-      }
+      headers
     });
 
     return { success: response.status === 200, data: response.data };
   } catch (error) {
     console.error('Ayrshare history error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Get status of a specific post from Ayrshare by post ID
+ * Returns actual posting status from Ayrshare (not our DB)
+ */
+async function getPostStatus(postId, options = {}) {
+  if (!AYRSHARE_API_KEY) {
+    return { success: false, error: 'API not configured' };
+  }
+  if (!postId) {
+    return { success: false, error: 'No post ID provided' };
+  }
+
+  try {
+    const headers = {
+      'Authorization': `Bearer ${AYRSHARE_API_KEY}`
+    };
+    if (options.profileKey) {
+      headers['Profile-Key'] = options.profileKey;
+    }
+
+    const response = await makeRequest(`https://app.ayrshare.com/api/post/${postId}`, {
+      method: 'GET',
+      headers
+    });
+
+    console.log(`📡 Ayrshare post status for ${postId}:`, JSON.stringify(response.data, null, 2));
+    return { success: response.status === 200, data: response.data };
+  } catch (error) {
+    console.error('Ayrshare post status error:', error);
     return { success: false, error: error.message };
   }
 }
@@ -1937,6 +1975,7 @@ module.exports = {
   getAyrshareAnalytics,
   getUserSocialAnalytics,
   getPostHistory,
+  getPostStatus,
   deletePost,
   getAyrshareProfile,
   getAyrshareConnectUrl,
