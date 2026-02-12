@@ -86,6 +86,10 @@ export interface Campaign {
     engagement: number;
     spend: number;
   };
+  publishedAt?: string;
+  scheduledFor?: string;
+  socialPostId?: string;
+  ayrshareStatus?: string;
   createdAt: string;
 }
 

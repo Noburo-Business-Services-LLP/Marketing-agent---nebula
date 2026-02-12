@@ -7,7 +7,128 @@ const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
 const AnalyticsSnapshot = require('../models/AnalyticsSnapshot');
+const User = require('../models/User');
 const { analyzeMetrics, generateWithLLM } = require('../services/llmRouter');
+const { getPostAnalytics, getSocialAnalyticsDetailed } = require('../services/socialMediaAPI');
+
+/**
+ * Helper: Get user's Ayrshare profile key
+ */
+async function getProfileKey(userId) {
+  const user = await User.findById(userId);
+  return user?.ayrshare?.profileKey || null;
+}
+
+// ============================================
+// AYRSHARE POST ANALYTICS
+// ============================================
+
+/**
+ * POST /api/analytics/post-analytics
+ * Get analytics for a specific Ayrshare post
+ * Body: { postId, platforms }
+ */
+router.post('/post-analytics', protect, async (req, res) => {
+  try {
+    const profileKey = await getProfileKey(req.user.userId || req.user.id);
+    const { postId, platforms } = req.body;
+
+    if (!postId) {
+      return res.status(400).json({ success: false, error: 'Post ID is required' });
+    }
+
+    // Auto-detect connected platforms if not specified
+    let platformList = platforms;
+    if (!platformList || platformList.length === 0) {
+      const User = require('../models/User');
+      const user = await User.findById(req.user.userId || req.user.id);
+      const connected = user?.ayrshare?.connectedAccounts || [];
+      platformList = connected.length > 0 ? connected : ['instagram', 'facebook'];
+    }
+
+    console.log('Post analytics request - postId:', postId, 'platforms:', platformList);
+    const result = await getPostAnalytics(postId, platformList, profileKey);
+
+    if (!result.success) {
+      console.log('Post analytics failed:', result.error);
+      return res.status(400).json({ success: false, error: result.error || 'Failed to get post analytics' });
+    }
+
+    console.log('Post analytics result keys:', JSON.stringify(result.data).substring(0, 500));
+    res.json({ success: true, analytics: result.data });
+  } catch (error) {
+    console.error('Post analytics error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/analytics/social-analytics
+ * Get account-level social analytics (followers, demographics, etc.)
+ * Body: { platforms, quarters }
+ */
+router.post('/social-analytics', protect, async (req, res) => {
+  try {
+    const profileKey = await getProfileKey(req.user.userId || req.user.id);
+    const { platforms } = req.body;
+
+    // Use user's actual connected platforms if not specified
+    let platformList = platforms;
+    if (!platformList || platformList.length === 0) {
+      const User = require('../models/User');
+      const user = await User.findById(req.user.userId || req.user.id);
+      const connected = user?.ayrshare?.connectedAccounts || [];
+      platformList = connected.length > 0 ? connected : ['instagram', 'facebook'];
+    }
+
+    console.log('Social analytics request for platforms:', platformList);
+
+    const result = await getSocialAnalyticsDetailed(
+      profileKey,
+      platformList
+    );
+
+    if (!result.success) {
+      console.log('Social analytics failed:', result.error);
+      return res.status(400).json({ success: false, error: result.error || 'Failed to get social analytics' });
+    }
+
+    res.json({ success: true, analytics: result.data });
+  } catch (error) {
+    console.error('Social analytics error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/analytics/daily-analytics
+ * Get daily time-series analytics data
+ * Body: { platforms }
+ */
+router.post('/daily-analytics', protect, async (req, res) => {
+  try {
+    const profileKey = await getProfileKey(req.user.userId || req.user.id);
+    const { platforms } = req.body;
+
+    // Note: Ayrshare's /analytics/social doesn't natively support daily time-series.
+    // We return the standard analytics data and the frontend handles display.
+    const result = await getSocialAnalyticsDetailed(
+      profileKey,
+      platforms || ['instagram', 'facebook']
+    );
+
+    if (!result.success) {
+      // Return empty analytics instead of an error - daily breakdown is optional
+      return res.json({ success: true, analytics: {} });
+    }
+
+    res.json({ success: true, analytics: result.data });
+  } catch (error) {
+    console.error('Daily analytics error:', error);
+    // Don't 500 for optional daily data - return empty
+    res.json({ success: true, analytics: {} });
+  }
+});
 
 /**
  * POST /api/analytics/import/csv

@@ -12,7 +12,8 @@ import {
   Sparkles,
   Sun,
   Moon,
-  Palette
+  Palette,
+  BarChart3
 } from 'lucide-react';
 import { User } from '../types';
 import NotificationBell from './NotificationBell';
@@ -57,6 +58,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
     { path: '/campaigns', label: 'Campaigns', icon: Megaphone },
     { path: '/competitors', label: 'Competitors', icon: Users },
     { path: '/connect-socials', label: 'Connect Socials', icon: Link2 },
+    { path: '/analytics', label: 'Analytics & Ads', icon: BarChart3 },
   ];
 
   const handleLogout = () => {

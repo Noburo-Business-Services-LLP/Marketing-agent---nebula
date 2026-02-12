@@ -1969,6 +1969,285 @@ function calculateEngagementRate(likes, comments, followers) {
   return (((likes + comments) / followers) * 100).toFixed(2);
 }
 
+// ============================================
+// AYRSHARE POST-LEVEL ANALYTICS
+// ============================================
+
+/**
+ * Get analytics for a specific post (by Ayrshare post ID)
+ * @param {string} postId - Ayrshare post ID
+ * @param {string[]} platforms - Platforms to get analytics for
+ * @param {string} profileKey - User's Ayrshare profile key
+ */
+async function getPostAnalytics(postId, platforms = ['instagram', 'facebook'], profileKey = null) {
+  if (!AYRSHARE_API_KEY) {
+    return { success: false, error: 'API not configured' };
+  }
+
+  try {
+    const headers = {
+      'Authorization': `Bearer ${AYRSHARE_API_KEY}`,
+      'Content-Type': 'application/json'
+    };
+    if (profileKey) headers['Profile-Key'] = profileKey;
+
+    const response = await makeRequest('https://app.ayrshare.com/api/analytics/post', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ id: postId, platforms }),
+      timeout: 60000
+    });
+
+    console.log('Ayrshare post analytics response:', response.status, JSON.stringify(response.data).substring(0, 1000));
+    return { success: response.status === 200, data: response.data };
+  } catch (error) {
+    console.error('Ayrshare post analytics error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Get detailed social / account-level analytics (with daily, quarters support)
+ * @param {string} profileKey - User's Ayrshare profile key
+ * @param {string[]} platforms - Platforms to get analytics for
+ * @param {object} options - { daily: boolean, quarters: number }
+ */
+async function getSocialAnalyticsDetailed(profileKey, platforms = ['instagram', 'facebook'], options = {}) {
+  if (!AYRSHARE_API_KEY) {
+    return { success: false, error: 'API not configured' };
+  }
+
+  try {
+    const headers = {
+      'Authorization': `Bearer ${AYRSHARE_API_KEY}`,
+      'Content-Type': 'application/json'
+    };
+    if (profileKey) headers['Profile-Key'] = profileKey;
+
+    const body = { platforms };
+
+    const response = await makeRequest('https://app.ayrshare.com/api/analytics/social', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+      timeout: 60000
+    });
+
+    console.log('Ayrshare detailed social analytics response:', response.status, 'for platforms:', platforms);
+    if (response.status !== 200) {
+      console.log('Ayrshare analytics error response:', JSON.stringify(response.data).substring(0, 500));
+    }
+    return { success: response.status === 200, data: response.data };
+  } catch (error) {
+    console.error('Ayrshare detailed social analytics error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// ============================================
+// AYRSHARE ADS / BOOST API
+// ============================================
+
+/**
+ * Get Facebook/Instagram ad accounts
+ */
+async function getAdAccounts(profileKey = null) {
+  if (!AYRSHARE_API_KEY) {
+    return { success: false, error: 'API not configured' };
+  }
+
+  try {
+    const headers = {
+      'Authorization': `Bearer ${AYRSHARE_API_KEY}`
+    };
+    if (profileKey) headers['Profile-Key'] = profileKey;
+
+    const response = await makeRequest('https://app.ayrshare.com/api/ads/facebook/accounts', {
+      method: 'GET',
+      headers,
+      timeout: 30000
+    });
+
+    console.log('Ayrshare ad accounts response:', response.status, JSON.stringify(response.data).substring(0, 500));
+    return { success: response.status === 200, data: response.data };
+  } catch (error) {
+    console.error('Ayrshare get ad accounts error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Boost a post on Facebook/Instagram
+ * @param {object} params - { postId, adAccountId, objective, budget, startDate, endDate, targeting, platforms }
+ */
+async function boostPost(profileKey, params = {}) {
+  if (!AYRSHARE_API_KEY) {
+    return { success: false, error: 'API not configured' };
+  }
+
+  try {
+    const headers = {
+      'Authorization': `Bearer ${AYRSHARE_API_KEY}`,
+      'Content-Type': 'application/json'
+    };
+    if (profileKey) headers['Profile-Key'] = profileKey;
+
+    const body = {
+      id: params.postId,
+      adAccountId: params.adAccountId,
+      objective: params.objective || 'OUTCOME_AWARENESS',
+      dailyBudget: params.dailyBudget,
+      startDate: params.startDate,
+      endDate: params.endDate,
+      platforms: params.platforms || ['facebook', 'instagram']
+    };
+
+    // Add targeting if provided
+    if (params.targeting) {
+      body.targeting = params.targeting;
+    }
+
+    const response = await makeRequest('https://app.ayrshare.com/api/ads/facebook/boost', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+      timeout: 60000
+    });
+
+    console.log('Ayrshare boost response:', response.status, JSON.stringify(response.data).substring(0, 500));
+    return { success: response.status === 200, data: response.data };
+  } catch (error) {
+    console.error('Ayrshare boost post error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Get all boosted ads
+ */
+async function getBoostedAds(profileKey = null, params = {}) {
+  if (!AYRSHARE_API_KEY) {
+    return { success: false, error: 'API not configured' };
+  }
+
+  try {
+    const headers = {
+      'Authorization': `Bearer ${AYRSHARE_API_KEY}`
+    };
+    if (profileKey) headers['Profile-Key'] = profileKey;
+
+    let url = 'https://app.ayrshare.com/api/ads/facebook/boosted-ads';
+    const queryParams = [];
+    if (params.status) queryParams.push(`status=${params.status}`);
+    if (params.limit) queryParams.push(`limit=${params.limit}`);
+    if (queryParams.length) url += '?' + queryParams.join('&');
+
+    const response = await makeRequest(url, {
+      method: 'GET',
+      headers,
+      timeout: 30000
+    });
+
+    return { success: response.status === 200, data: response.data };
+  } catch (error) {
+    console.error('Ayrshare get boosted ads error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Get ad spend history
+ */
+async function getAdHistory(profileKey = null, params = {}) {
+  if (!AYRSHARE_API_KEY) {
+    return { success: false, error: 'API not configured' };
+  }
+
+  try {
+    const headers = {
+      'Authorization': `Bearer ${AYRSHARE_API_KEY}`
+    };
+    if (profileKey) headers['Profile-Key'] = profileKey;
+
+    let url = 'https://app.ayrshare.com/api/ads/facebook/history';
+    const queryParams = [];
+    if (params.startDate) queryParams.push(`startDate=${params.startDate}`);
+    if (params.endDate) queryParams.push(`endDate=${params.endDate}`);
+    if (queryParams.length) url += '?' + queryParams.join('&');
+
+    const response = await makeRequest(url, {
+      method: 'GET',
+      headers,
+      timeout: 30000
+    });
+
+    return { success: response.status === 200, data: response.data };
+  } catch (error) {
+    console.error('Ayrshare get ad history error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Search interests for ad targeting
+ */
+async function getAdInterests(profileKey = null, query = '') {
+  if (!AYRSHARE_API_KEY) {
+    return { success: false, error: 'API not configured' };
+  }
+
+  try {
+    const headers = {
+      'Authorization': `Bearer ${AYRSHARE_API_KEY}`
+    };
+    if (profileKey) headers['Profile-Key'] = profileKey;
+
+    const response = await makeRequest(`https://app.ayrshare.com/api/ads/facebook/interests?query=${encodeURIComponent(query)}`, {
+      method: 'GET',
+      headers,
+      timeout: 30000
+    });
+
+    return { success: response.status === 200, data: response.data };
+  } catch (error) {
+    console.error('Ayrshare get ad interests error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Update/pause/resume an ad
+ * @param {string} adId - The ad ID to update
+ * @param {object} params - { status: 'PAUSED' | 'ACTIVE', dailyBudget, endDate }
+ */
+async function updateAd(profileKey, adId, params = {}) {
+  if (!AYRSHARE_API_KEY) {
+    return { success: false, error: 'API not configured' };
+  }
+
+  try {
+    const headers = {
+      'Authorization': `Bearer ${AYRSHARE_API_KEY}`,
+      'Content-Type': 'application/json'
+    };
+    if (profileKey) headers['Profile-Key'] = profileKey;
+
+    const body = { adId, ...params };
+
+    const response = await makeRequest('https://app.ayrshare.com/api/ads/facebook/update', {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(body),
+      timeout: 30000
+    });
+
+    return { success: response.status === 200, data: response.data };
+  } catch (error) {
+    console.error('Ayrshare update ad error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
 module.exports = {
   // Ayrshare functions
   postToSocialMedia,
@@ -1984,6 +2263,16 @@ module.exports = {
   generateAyrshareJWT,
   getAyrshareUserProfile,
   deleteAyrshareProfile,
+  // Ayrshare Analytics (detailed)
+  getPostAnalytics,
+  getSocialAnalyticsDetailed,
+  // Ayrshare Ads / Boost
+  getAdAccounts,
+  boostPost,
+  getBoostedAds,
+  getAdHistory,
+  getAdInterests,
+  updateAd,
   
   // Apify functions
   runApifyActor,

@@ -1679,6 +1679,112 @@ export const apiService = {
   },
 
   // ============================================
+  // AYRSHARE ANALYTICS (Post + Account + Daily)
+  // ============================================
+
+  // Get analytics for a specific Ayrshare post
+  getPostAnalytics: async (postId: string, platforms?: string[]): Promise<any> => {
+    const response = await apiCall<any>(
+      '/analytics/post-analytics',
+      { method: 'POST', body: JSON.stringify({ postId, platforms: platforms || ['instagram', 'facebook'] }) },
+      true
+    );
+    return response;
+  },
+
+  // Get account-level social analytics (followers, demographics)
+  getAccountAnalytics: async (platforms?: string[], quarters?: number): Promise<any> => {
+    const body: any = {};
+    if (platforms && platforms.length > 0) body.platforms = platforms;
+    if (quarters) body.quarters = quarters;
+    const response = await apiCall<any>(
+      '/analytics/social-analytics',
+      { method: 'POST', body: JSON.stringify(body) },
+      true
+    );
+    return response;
+  },
+
+  // Get daily time-series analytics
+  getDailyAnalytics: async (platforms?: string[]): Promise<any> => {
+    const body: any = {};
+    if (platforms && platforms.length > 0) body.platforms = platforms;
+    const response = await apiCall<any>(
+      '/analytics/daily-analytics',
+      { method: 'POST', body: JSON.stringify(body) },
+      true
+    );
+    return response;
+  },
+
+  // ============================================
+  // AYRSHARE ADS / BOOST
+  // ============================================
+
+  // Get Facebook/Instagram ad accounts
+  getAdAccounts: async (): Promise<any> => {
+    const response = await apiCall<any>('/ads/accounts', { method: 'GET' }, true);
+    return response;
+  },
+
+  // Boost a post
+  boostPost: async (params: {
+    postId: string;
+    adAccountId: string;
+    objective?: string;
+    dailyBudget: number;
+    startDate: string;
+    endDate: string;
+    targeting?: any;
+    platforms?: string[];
+  }): Promise<any> => {
+    const response = await apiCall<any>(
+      '/ads/boost',
+      { method: 'POST', body: JSON.stringify(params) },
+      true
+    );
+    return response;
+  },
+
+  // Get all boosted ads
+  getBoostedAds: async (status?: string, limit?: number): Promise<any> => {
+    let url = '/ads/boosted';
+    const params: string[] = [];
+    if (status) params.push(`status=${status}`);
+    if (limit) params.push(`limit=${limit}`);
+    if (params.length) url += '?' + params.join('&');
+    const response = await apiCall<any>(url, { method: 'GET' }, true);
+    return response;
+  },
+
+  // Update an ad (pause/resume/change budget)
+  updateAd: async (adId: string, params: { status?: string; dailyBudget?: number; endDate?: string }): Promise<any> => {
+    const response = await apiCall<any>(
+      `/ads/${adId}`,
+      { method: 'PUT', body: JSON.stringify(params) },
+      true
+    );
+    return response;
+  },
+
+  // Get ad spend history
+  getAdHistory: async (startDate?: string, endDate?: string): Promise<any> => {
+    let url = '/ads/history';
+    const params: string[] = [];
+    if (startDate) params.push(`startDate=${startDate}`);
+    if (endDate) params.push(`endDate=${endDate}`);
+    if (params.length) url += '?' + params.join('&');
+    const response = await apiCall<any>(url, { method: 'GET' }, true);
+    return response;
+  },
+
+  // Search interests for ad targeting
+  searchAdInterests: async (query: string): Promise<any> => {
+    const response = await apiCall<any>(`/ads/interests?query=${encodeURIComponent(query)}`, { method: 'GET' }, true);
+    return response;
+  },
+
+  // ============================================
   // REAL-TIME DATA APIs (Ayrshare, Apify, SearchAPI)
   // ============================================
 

@@ -435,14 +435,16 @@ router.post('/:id/publish', protect, async (req, res) => {
     }
     
     // If we have an ID at the top level, it's likely successful
-    const hasSuccessId = result.data?.id || result.id || result.data?.postIds?.length > 0;
+    const extractedPostId = result.data?.posts?.[0]?.id || result.data?.id || result.id || result.data?.postIds?.[0];
+    const hasSuccessId = !!extractedPostId;
     
     if ((result.success || hasSuccessId) && !hasAyrshareError) {
       // Update campaign with post result
       const updateData = {
         status: isScheduled ? 'scheduled' : 'posted',
-        'socialPostId': result.id || result.data?.id || result.postIds?.[0],
-        'publishResult': result
+        'socialPostId': extractedPostId,
+        'publishResult': result,
+        'platforms': platforms  // Update platforms to match what user actually selected
       };
       
       if (isScheduled) {
@@ -458,7 +460,7 @@ router.post('/:id/publish', protect, async (req, res) => {
         message: isScheduled 
           ? `Campaign scheduled for ${new Date(scheduledFor).toLocaleString()}!` 
           : 'Campaign published to social media!',
-        postId: result.id || result.data?.id,
+        postId: extractedPostId,
         platforms,
         scheduled: isScheduled,
         scheduledFor: scheduledFor,
