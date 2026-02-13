@@ -55,12 +55,21 @@ router.get('/accounts', protect, async (req, res) => {
 /**
  * POST /api/ads/boost
  * Boost a post on Facebook/Instagram
- * Body: { postId, adAccountId, objective, dailyBudget, startDate, endDate, targeting, platforms }
+ * Body: { postId, adAccountId, goal, dailyBudget, bidAmount, startDate, endDate,
+ *         locations, excludedLocations, minAge, maxAge, gender, interests,
+ *         specialAdCategories, tracking, urlTags, dsaBeneficiary, dsaPayor }
  */
 router.post('/boost', protect, async (req, res) => {
   try {
     const profileKey = await getProfileKey(req.user.userId || req.user.id);
-    const { postId, adAccountId, objective, dailyBudget, startDate, endDate, targeting, platforms } = req.body;
+    const {
+      postId, adAccountId, goal, dailyBudget, bidAmount,
+      startDate, endDate,
+      locations, excludedLocations,
+      minAge, maxAge, gender, interests,
+      specialAdCategories, tracking, urlTags,
+      dsaBeneficiary, dsaPayor
+    } = req.body;
 
     if (!postId) {
       return res.status(400).json({ success: false, error: 'Post ID is required' });
@@ -72,15 +81,27 @@ router.post('/boost', protect, async (req, res) => {
       return res.status(400).json({ success: false, error: 'Daily budget is required' });
     }
 
+    console.log('Boost request body:', JSON.stringify(req.body));
+
     const result = await boostPost(profileKey, {
       postId,
       adAccountId,
-      objective,
+      goal,
       dailyBudget,
+      bidAmount,
       startDate,
       endDate,
-      targeting,
-      platforms
+      locations,
+      excludedLocations,
+      minAge,
+      maxAge,
+      gender,
+      interests,
+      specialAdCategories,
+      tracking,
+      urlTags,
+      dsaBeneficiary,
+      dsaPayor,
     });
 
     if (!result.success) {

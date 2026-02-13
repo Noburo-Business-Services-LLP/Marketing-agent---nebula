@@ -2078,7 +2078,7 @@ async function getAdAccounts(profileKey = null) {
 
 /**
  * Boost a post on Facebook/Instagram
- * @param {object} params - { postId, adAccountId, objective, budget, startDate, endDate, targeting, platforms }
+ * @param {object} params - All Ayrshare boost params (flat, matching their API)
  */
 async function boostPost(profileKey, params = {}) {
   if (!AYRSHARE_API_KEY) {
@@ -2092,19 +2092,61 @@ async function boostPost(profileKey, params = {}) {
     };
     if (profileKey) headers['Profile-Key'] = profileKey;
 
+    // Build the body matching Ayrshare's flat API schema
     const body = {
-      id: params.postId,
-      adAccountId: params.adAccountId,
-      objective: params.objective || 'OUTCOME_AWARENESS',
-      dailyBudget: params.dailyBudget,
-      startDate: params.startDate,
-      endDate: params.endDate,
-      platforms: params.platforms || ['facebook', 'instagram']
+      postId: params.postId,
+      accountId: params.adAccountId,
+      adName: params.adName || `Gravity Boost - ${params.postId}`,
+      goal: params.goal || 'engagement',
+      budget: params.dailyBudget || params.budget || 1,
+      bidAmount: params.bidAmount || 1,
+      status: params.status || 'active',
+      locations: params.locations || { countries: ['US'] },
     };
 
-    // Add targeting if provided
+    // Dates (omit endDate for ongoing ads)
+    if (params.startDate) body.startDate = params.startDate;
+    if (params.endDate) body.endDate = params.endDate;
+
+    // Excluded locations
+    if (params.excludedLocations) body.excludedLocations = params.excludedLocations;
+
+    // Targeting — flat params as Ayrshare expects
+    if (params.minAge) body.minAge = params.minAge;
+    if (params.maxAge && params.maxAge !== 65) body.maxAge = params.maxAge;
+    if (params.gender && params.gender !== 'all') body.gender = params.gender;
+    if (params.interests && Array.isArray(params.interests) && params.interests.length > 0) {
+      body.interests = params.interests.map(i => typeof i === 'object' ? i.id : i);
+    }
+
+    // Special Ad Categories (housing, finance, employment, politics)
+    if (params.specialAdCategories && Array.isArray(params.specialAdCategories) && params.specialAdCategories.length > 0) {
+      body.specialAdCategories = params.specialAdCategories;
+    }
+
+    // Facebook Pixel tracking
+    if (params.tracking && params.tracking.pixelId) {
+      body.tracking = { pixelId: params.tracking.pixelId };
+    }
+
+    // UTM tags
+    if (params.urlTags && Array.isArray(params.urlTags) && params.urlTags.length > 0) {
+      body.urlTags = params.urlTags;
+    }
+
+    // DSA compliance (EU)
+    if (params.dsaBeneficiary) body.dsaBeneficiary = params.dsaBeneficiary;
+    if (params.dsaPayor) body.dsaPayor = params.dsaPayor;
+
+    // Legacy support: handle old nested targeting format
     if (params.targeting) {
-      body.targeting = params.targeting;
+      if (params.targeting.age_min) body.minAge = body.minAge || params.targeting.age_min;
+      if (params.targeting.age_max) body.maxAge = body.maxAge || params.targeting.age_max;
+      if (params.targeting.gender) body.gender = body.gender || params.targeting.gender;
+      if (params.targeting.interests && Array.isArray(params.targeting.interests)) {
+        body.interests = body.interests || params.targeting.interests.map(i => typeof i === 'object' ? i.id : i);
+      }
+      if (params.targeting.locations) body.locations = params.targeting.locations;
     }
 
     const response = await makeRequest('https://app.ayrshare.com/api/ads/facebook/boost', {
@@ -2202,7 +2244,7 @@ async function getAdInterests(profileKey = null, query = '') {
     };
     if (profileKey) headers['Profile-Key'] = profileKey;
 
-    const response = await makeRequest(`https://app.ayrshare.com/api/ads/facebook/interests?query=${encodeURIComponent(query)}`, {
+    const response = await makeRequest(`https://app.ayrshare.com/api/ads/facebook/interests?search=${encodeURIComponent(query)}`, {
       method: 'GET',
       headers,
       timeout: 30000

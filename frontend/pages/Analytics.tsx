@@ -36,7 +36,7 @@ const Analytics: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [loading, setLoading] = useState(true);
   const [accountAnalytics, setAccountAnalytics] = useState<any>(null);
-  const [dailyAnalytics, setDailyAnalytics] = useState<any>(null);
+  // dailyAnalytics removed — replaced by Top Post Performance
   const [boostedAds, setBoostedAds] = useState<any[]>([]);
   const [adHistory, setAdHistory] = useState<any>(null);
   const [postAnalytics, setPostAnalytics] = useState<Record<string, any>>({});
@@ -55,17 +55,13 @@ const Analytics: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      const [accountRes, dailyRes, campaignsRes] = await Promise.allSettled([
+      const [accountRes, campaignsRes] = await Promise.allSettled([
         apiService.getAccountAnalytics(), // Backend auto-detects connected platforms
-        apiService.getDailyAnalytics(),
         apiService.getCampaigns(),
       ]);
 
       if (accountRes.status === 'fulfilled' && accountRes.value?.success) {
         setAccountAnalytics(accountRes.value.analytics);
-      }
-      if (dailyRes.status === 'fulfilled' && dailyRes.value?.success) {
-        setDailyAnalytics(dailyRes.value.analytics);
       }
       if (campaignsRes.status === 'fulfilled') {
         const cList = campaignsRes.value?.campaigns || campaignsRes.value || [];
@@ -223,7 +219,9 @@ const Analytics: React.FC = () => {
       {activeTab === 'overview' && (
         <OverviewTab
           accountAnalytics={accountAnalytics}
-          dailyAnalytics={dailyAnalytics}
+          campaigns={campaigns}
+          postAnalytics={postAnalytics}
+          loadPostAnalytics={loadPostAnalytics}
           isDarkMode={isDarkMode}
           tc={tc}
           formatNumber={formatNumber}
@@ -271,11 +269,22 @@ const Analytics: React.FC = () => {
 
 const OverviewTab: React.FC<{
   accountAnalytics: any;
-  dailyAnalytics: any;
+  campaigns: any[];
+  postAnalytics: Record<string, any>;
+  loadPostAnalytics: (postId: string) => void;
   isDarkMode: boolean;
   tc: any;
   formatNumber: (n: number) => string;
-}> = ({ accountAnalytics, dailyAnalytics, isDarkMode, tc, formatNumber }) => {
+}> = ({ accountAnalytics, campaigns, postAnalytics, loadPostAnalytics, isDarkMode, tc, formatNumber }) => {
+
+  // Auto-fetch post analytics for all published campaigns
+  useEffect(() => {
+    campaigns.forEach(c => {
+      if (c.socialPostId && !postAnalytics[c.socialPostId]) {
+        loadPostAnalytics(c.socialPostId);
+      }
+    });
+  }, [campaigns.length]);
   
   // Extract platform data - filter out 'status' key and non-object values
   const platforms = accountAnalytics 
@@ -421,73 +430,176 @@ const OverviewTab: React.FC<{
         </div>
       )}
 
-      {/* Daily Analytics Chart (simple bar representation) */}
-      {dailyAnalytics && (
-        <div className={`rounded-xl p-6 ${tc.card}`}>
-          <h3 className={`text-lg font-semibold mb-4 ${tc.text}`}>Daily Engagement Trends</h3>
-          <DailyChart data={dailyAnalytics} isDarkMode={isDarkMode} tc={tc} />
-        </div>
+      {/* Top Post Performance */}
+      {campaigns.length > 0 && (
+        <TopPostPerformance
+          campaigns={campaigns}
+          postAnalytics={postAnalytics}
+          isDarkMode={isDarkMode}
+          tc={tc}
+          formatNumber={formatNumber}
+        />
       )}
     </div>
   );
 };
 
-// Simple daily chart visualization
-const DailyChart: React.FC<{ data: any; isDarkMode: boolean; tc: any }> = ({ data, isDarkMode, tc }) => {
-  // Try to extract daily data points from the API response
-  const platforms = data ? Object.keys(data).filter(k => typeof data[k] === 'object') : [];
-  
-  if (platforms.length === 0) {
-    return <p className={`text-sm ${tc.textSecondary}`}>No daily data available</p>;
-  }
+// Top Post Performance — ranked leaderboard of published posts sorted by engagement
+const TopPostPerformance: React.FC<{
+  campaigns: any[];
+  postAnalytics: Record<string, any>;
+  isDarkMode: boolean;
+  tc: any;
+  formatNumber: (n: number) => string;
+}> = ({ campaigns, postAnalytics, isDarkMode, tc, formatNumber }) => {
+
+  // Calculate engagement score for a campaign's analytics
+  const getEngagementScore = (analytics: any): number => {
+    if (!analytics || typeof analytics !== 'object') return 0;
+    const platformKeys = Object.keys(analytics).filter(k =>
+      !['status', 'error', 'code', 'id'].includes(k) && typeof analytics[k] === 'object' && analytics[k] !== null
+    );
+    let total = 0;
+    platformKeys.forEach(pk => {
+      const d = analytics[pk]?.analytics || analytics[pk];
+      if (!d) return;
+      total += (d.likeCount || 0) + (d.commentsCount || d.commentCount || 0)
+        + (d.sharesCount || d.shareCount || 0) + (d.savedCount || 0)
+        + (d.engagementCount || 0) + (d.clickCount || 0);
+    });
+    return total;
+  };
+
+  // Get primary platform + its key metrics
+  const getTopMetrics = (analytics: any) => {
+    if (!analytics || typeof analytics !== 'object') return null;
+    const platformKeys = Object.keys(analytics).filter(k =>
+      !['status', 'error', 'code', 'id'].includes(k) && typeof analytics[k] === 'object' && analytics[k] !== null
+    );
+    if (platformKeys.length === 0) return null;
+    const platform = platformKeys[0];
+    const d = analytics[platform]?.analytics || analytics[platform];
+    if (!d) return null;
+    return {
+      platform,
+      views: d.viewsCount ?? d.totalVideoViews ?? d.videoViews ?? d.mediaView ?? undefined,
+      reach: d.reachCount ?? d.impressionsUnique ?? d.uniqueImpressionsCount ?? undefined,
+      impressions: d.impressionCount ?? undefined,
+      likes: d.likeCount ?? undefined,
+      comments: d.commentsCount ?? d.commentCount ?? undefined,
+      shares: d.sharesCount ?? d.shareCount ?? undefined,
+      engagement: d.engagementCount ?? d.engagement ?? undefined,
+    };
+  };
+
+  // Sort campaigns by engagement score
+  const ranked = campaigns
+    .map(c => ({
+      ...c,
+      score: getEngagementScore(postAnalytics[c.socialPostId]),
+      metrics: getTopMetrics(postAnalytics[c.socialPostId]),
+      hasData: !!postAnalytics[c.socialPostId],
+    }))
+    .sort((a, b) => b.score - a.score);
+
+  const anyLoading = ranked.some(c => !c.hasData);
 
   return (
-    <div className="space-y-4">
-      {platforms.map(platform => {
-        const platformData = data[platform];
-        if (!platformData || platformData.error) return null;
-        
-        // Try to find daily array in the response
-        const dailyEntries = platformData.daily || platformData.dailyData || platformData.data || [];
-        if (!Array.isArray(dailyEntries) || dailyEntries.length === 0) {
+    <div className={`rounded-xl p-6 ${tc.card}`}>
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <TrendingUp className="w-5 h-5 text-[#ffcc29]" />
+          <h3 className={`text-lg font-semibold ${tc.text}`}>Top Post Performance</h3>
+        </div>
+        {anyLoading && <Loader2 className="w-4 h-4 animate-spin text-[#ffcc29]" />}
+      </div>
+
+      <div className="space-y-2">
+        {ranked.map((campaign, idx) => {
+          const m = campaign.metrics;
+          const medal = idx === 0 ? '\uD83E\uDD47' : idx === 1 ? '\uD83E\uDD48' : idx === 2 ? '\uD83E\uDD49' : null;
+          const color = m ? (platformColors[m.platform] || '#ffcc29') : '#ffcc29';
+
           return (
-            <div key={platform} className={`p-3 rounded-lg ${isDarkMode ? 'bg-[#070A12]' : 'bg-gray-50'}`}>
-              <div className="flex items-center gap-2 mb-2">
-                <PlatformIcon platform={platform} className="w-4 h-4" />
-                <span className={`text-sm font-medium capitalize ${tc.text}`}>{platform}</span>
+            <div
+              key={campaign._id}
+              className={`flex items-center gap-3 p-3 rounded-lg transition-colors ${
+                isDarkMode ? 'bg-[#070A12] hover:bg-[#0d1117]' : 'bg-gray-50 hover:bg-gray-100'
+              }`}
+            >
+              {/* Rank */}
+              <div className={`w-7 text-center flex-shrink-0 font-bold text-sm ${
+                medal ? '' : tc.textMuted
+              }`}>
+                {medal || `#${idx + 1}`}
               </div>
-              <p className={`text-xs ${tc.textSecondary}`}>Daily breakdown data available in account</p>
+
+              {/* Platform icon */}
+              {m && (
+                <div className="p-1.5 rounded-md flex-shrink-0" style={{ backgroundColor: `${color}15` }}>
+                  <PlatformIcon platform={m.platform} className="w-4 h-4" />
+                </div>
+              )}
+
+              {/* Campaign name */}
+              <div className="min-w-0 flex-1">
+                <p className={`text-sm font-medium truncate ${tc.text}`}>{campaign.name || 'Untitled'}</p>
+                <span className={`text-[10px] ${tc.textMuted}`}>
+                  {campaign.publishedAt ? new Date(campaign.publishedAt).toLocaleDateString() : 'Published'}
+                </span>
+              </div>
+
+              {/* Metric chips */}
+              {m ? (
+                <div className="hidden sm:flex items-center gap-2 flex-shrink-0">
+                  {m.likes !== undefined && (
+                    <span className={`flex items-center gap-1 text-xs font-medium ${tc.textMuted}`}>
+                      <Heart className="w-3 h-3 text-red-400" /> {formatNumber(m.likes)}
+                    </span>
+                  )}
+                  {m.views !== undefined && (
+                    <span className={`flex items-center gap-1 text-xs font-medium ${tc.textMuted}`}>
+                      <Eye className="w-3 h-3 text-purple-400" /> {formatNumber(m.views)}
+                    </span>
+                  )}
+                  {m.reach !== undefined && m.views === undefined && (
+                    <span className={`flex items-center gap-1 text-xs font-medium ${tc.textMuted}`}>
+                      <Users className="w-3 h-3 text-blue-400" /> {formatNumber(m.reach)}
+                    </span>
+                  )}
+                  {m.comments !== undefined && (
+                    <span className={`flex items-center gap-1 text-xs font-medium ${tc.textMuted}`}>
+                      <MessageSquare className="w-3 h-3 text-yellow-400" /> {formatNumber(m.comments)}
+                    </span>
+                  )}
+                  {m.shares !== undefined && (
+                    <span className={`flex items-center gap-1 text-xs font-medium ${tc.textMuted}`}>
+                      <Share2 className="w-3 h-3 text-green-400" /> {formatNumber(m.shares)}
+                    </span>
+                  )}
+                </div>
+              ) : (
+                campaign.hasData === false && (
+                  <span className={`text-[11px] ${tc.textMuted}`}>Loading...</span>
+                )
+              )}
+
+              {/* Engagement score badge */}
+              {campaign.score > 0 && (
+                <div className={`flex-shrink-0 px-2.5 py-1 rounded-full text-xs font-bold ${
+                  isDarkMode ? 'bg-[#ffcc29]/10 text-[#ffcc29]' : 'bg-[#ffcc29]/20 text-[#9a7b00]'
+                }`}>
+                  {formatNumber(campaign.score)}
+                </div>
+              )}
             </div>
           );
-        }
+        })}
 
-        const maxVal = Math.max(...dailyEntries.map((d: any) => d.impressions || d.reach || d.engagement || 1));
-
-        return (
-          <div key={platform} className={`p-4 rounded-lg ${isDarkMode ? 'bg-[#070A12]' : 'bg-gray-50'}`}>
-            <div className="flex items-center gap-2 mb-3">
-              <PlatformIcon platform={platform} className="w-4 h-4" />
-              <span className={`text-sm font-medium capitalize ${tc.text}`}>{platform}</span>
-            </div>
-            <div className="flex items-end gap-1 h-24">
-              {dailyEntries.slice(-14).map((entry: any, i: number) => {
-                const val = entry.impressions || entry.reach || entry.engagement || 0;
-                const height = maxVal > 0 ? Math.max((val / maxVal) * 100, 4) : 4;
-                const color = platformColors[platform] || '#ffcc29';
-                return (
-                  <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                    <div
-                      className="w-full rounded-t-sm transition-all"
-                      style={{ height: `${height}%`, backgroundColor: color, opacity: 0.8, minHeight: '3px' }}
-                      title={`${entry.date || ''}: ${val.toLocaleString()}`}
-                    />
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        );
-      })}
+        {ranked.length === 0 && (
+          <p className={`text-sm text-center py-4 ${tc.textSecondary}`}>No published posts yet</p>
+        )}
+      </div>
     </div>
   );
 };
@@ -555,7 +667,7 @@ const PostAnalyticsTab: React.FC<{
     add('comments', 'Comments', '#F59E0B', <MessageSquare className="w-3.5 h-3.5" />, 'commentsCount', 'commentCount');
     add('shares', 'Shares', '#10B981', <Share2 className="w-3.5 h-3.5" />, 'sharesCount', 'shareCount', 'repostCount');
     add('saves', 'Saves', '#EC4899', <Target className="w-3.5 h-3.5" />, 'savedCount');
-    add('engagement', 'Engagement', '#F97316', <Zap className="w-3.5 h-3.5" />, 'engagementCount');
+    add('engagement', 'Engagement', '#F97316', <Zap className="w-3.5 h-3.5" />, 'engagementCount', 'engagement');
     add('clicks', 'Clicks', '#14B8A6', <ExternalLink className="w-3.5 h-3.5" />, 'clickCount');
     return metrics;
   };
@@ -692,7 +804,7 @@ const PostAnalyticsTab: React.FC<{
                   <div className="flex flex-wrap gap-1.5">
                     {reactions.map(r => (
                       <span key={r.type} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${isDarkMode ? 'bg-slate-700/20' : 'bg-gray-100'} ${tc.textSecondary}`}>
-                        {r.type === 'like' ? '\uD83D\uDC4D' : r.type === 'love' ? '\u2764\uFE0F' : r.type === 'haha' ? '\uD83D\uDE02' : r.type === 'wow' ? '\uD83D\uDE2E' : r.type === 'anger' ? '\uD83D\uDE21' : r.type === 'sorry' ? '\uD83D\uDE22' : r.type === 'praise' ? '\uD83D\uDC4F' : r.type === 'empathy' ? '\uD83D\uDC97' : '\u2022'} {r.type} {formatNumber(r.count)}
+                        {r.type === 'like' ? '\uD83D\uDC4D' : r.type === 'love' ? '\u2764\uFE0F' : r.type === 'haha' ? '\uD83D\uDE02' : r.type === 'wow' ? '\uD83D\uDE2E' : r.type === 'anger' ? '\uD83D\uDE21' : r.type === 'sorry' ? '\uD83D\uDE22' : r.type === 'praise' ? '\uD83D\uDC4F' : r.type === 'empathy' ? '\uD83D\uDC97' : r.type === 'maybe' ? '\uD83E\uDD14' : r.type === 'interest' ? '\uD83D\uDCA1' : r.type === 'appreciation' ? '\uD83D\uDE4F' : '\u2022'} {r.type === 'praise' ? 'Celebrate' : r.type === 'empathy' ? 'Love' : r.type === 'maybe' ? 'Curious' : r.type === 'interest' ? 'Insightful' : r.type === 'appreciation' ? 'Support' : r.type} {formatNumber(r.count)}
                       </span>
                     ))}
                   </div>

@@ -1727,16 +1727,26 @@ export const apiService = {
     return response;
   },
 
-  // Boost a post
+  // Boost a post (Instagram-style flow with all Ayrshare params)
   boostPost: async (params: {
     postId: string;
     adAccountId: string;
-    objective?: string;
+    goal?: string;
     dailyBudget: number;
-    startDate: string;
-    endDate: string;
-    targeting?: any;
-    platforms?: string[];
+    bidAmount?: number;
+    startDate?: string;
+    endDate?: string;
+    locations?: { countries?: string[]; regions?: string[]; cities?: string[] };
+    excludedLocations?: { countries?: string[]; regions?: string[]; cities?: string[] };
+    minAge?: number;
+    maxAge?: number;
+    gender?: string;
+    interests?: (string | number)[];
+    specialAdCategories?: string[];
+    tracking?: { pixelId: string };
+    urlTags?: string[];
+    dsaBeneficiary?: string;
+    dsaPayor?: string;
   }): Promise<any> => {
     const response = await apiCall<any>(
       '/ads/boost',
