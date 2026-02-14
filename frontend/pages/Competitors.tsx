@@ -20,6 +20,7 @@ interface Competitor {
   socialHandles?: { instagram?: string; twitter?: string };
   isIgnored?: boolean;
   isAutoDiscovered?: boolean;
+  competitorType?: 'local' | 'regional' | 'national' | 'global' | 'startup' | 'emerging' | 'direct' | 'indirect' | 'market_leader' | 'unknown';
 }
 
 const Competitors: React.FC = () => {
@@ -31,6 +32,8 @@ const Competitors: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedFilter, setSelectedFilter] = useState('Last 7 days');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [fetchingType, setFetchingType] = useState<string | null>(null);
   const [showIgnoredModal, setShowIgnoredModal] = useState(false);
   
   // Auto-discover state
@@ -249,7 +252,8 @@ const Competitors: React.FC = () => {
             (c.posts || []).map((p: any) => ({
               ...p,
               competitorName: c.name,
-              competitorId: c._id
+              competitorId: c._id,
+              competitorType: c.competitorType || 'unknown'
             }))
           );
           setPosts(allPosts);
@@ -303,10 +307,60 @@ const Competitors: React.FC = () => {
     loadPosts();
   }, []);
 
-  const filteredPosts = posts.filter(post =>
-    post.content?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    post.competitorName?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredPosts = posts.filter(post => {
+    const matchesSearch = post.content?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      post.competitorName?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCategory = selectedCategory === 'all' || (post as any).competitorType === selectedCategory;
+    return matchesSearch && matchesCategory;
+  });
+
+  // Count competitors per category for badge numbers
+  const categoryCounts: Record<string, number> = { all: competitors.length };
+  competitors.forEach(c => {
+    const t = c.competitorType || 'unknown';
+    categoryCounts[t] = (categoryCounts[t] || 0) + 1;
+  });
+
+  // Check if a category has competitors but no posts — auto-fetch
+  const postsForCategory = (type: string) => {
+    if (type === 'all') return posts;
+    return posts.filter((p: any) => p.competitorType === type);
+  };
+
+  const competitorsForCategory = (type: string) => {
+    if (type === 'all') return competitors;
+    return competitors.filter(c => c.competitorType === type);
+  };
+
+  const handleFetchPostsForType = async (type: string) => {
+    setFetchingType(type);
+    try {
+      const res = await apiService.scrapeCompetitorsByType(type);
+      if (res.success && res.posts && res.posts.length > 0) {
+        // Merge new posts into existing posts (avoid duplicates)
+        setPosts(prev => {
+          const existingIds = new Set(prev.map((p: any) => p.id || p._id));
+          const newPosts = res.posts.filter((p: any) => !existingIds.has(p.id || p._id));
+          return [...prev, ...newPosts];
+        });
+      }
+    } catch (error) {
+      console.error('Failed to fetch posts for type:', type, error);
+    } finally {
+      setFetchingType(null);
+    }
+  };
+
+  // Auto-fetch posts when switching to a category that has competitors but no posts
+  useEffect(() => {
+    if (selectedCategory !== 'all' && !fetchingType) {
+      const catPosts = postsForCategory(selectedCategory);
+      const catCompetitors = competitorsForCategory(selectedCategory);
+      if (catCompetitors.length > 0 && catPosts.length === 0) {
+        handleFetchPostsForType(selectedCategory);
+      }
+    }
+  }, [selectedCategory]);
 
   const handleRefresh = async () => {
     await loadPosts();
@@ -357,33 +411,6 @@ const Competitors: React.FC = () => {
           <h1 className={`text-2xl font-bold ${theme.text}`}>Competitor Analysis</h1>
           <p className={theme.textSecondary}>Track market rivals with real-time AI search.</p>
         </div>
-        <div className="flex gap-2">
-          {/* Auto-Discover Button */}
-          <button
-            onClick={() => setShowLocationModal(true)}
-            disabled={discovering}
-            className="flex items-center gap-2 px-4 py-1.5 bg-[#ffcc29] text-black rounded text-sm font-medium hover:bg-[#ffcc29]/90 disabled:opacity-50"
-          >
-            {discovering ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Sparkles className="w-4 h-4" />
-            )}
-            {discovering ? 'Discovering...' : 'Auto-Discover'}
-          </button>
-          
-          {['Last 7 days', 'Last 1 month', 'Last 3 months'].map(f => (
-            <button 
-              key={f} 
-              onClick={() => setSelectedFilter(f)}
-              className={`px-3 py-1.5 text-xs font-medium rounded border ${f === selectedFilter 
-                ? 'bg-[#ffcc29]/10 border-[#ffcc29]/30 text-[#ffcc29]' 
-                : `${theme.bgCard} ${isDarkMode ? 'border-slate-700/50 text-[#ededed]/70 hover:bg-[#ffcc29]/10' : 'border-slate-200 text-slate-600 hover:bg-[#f5f5f5]'}`}`}
-            >
-              {f}
-            </button>
-          ))}
-        </div>
       </div>
 
       {/* Discovery Message */}
@@ -397,6 +424,45 @@ const Competitors: React.FC = () => {
             <Sparkles className="w-5 h-5" />
             <span className="font-medium">{discoveryMessage}</span>
           </div>
+        </div>
+      )}
+
+      {/* Category Filter Tabs */}
+      {competitors.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-6">
+          {[
+            { key: 'all', label: 'All', icon: '🌐' },
+            { key: 'global', label: 'Global', icon: '🌍' },
+            { key: 'national', label: 'National', icon: '🏛️' },
+            { key: 'regional', label: 'Regional', icon: '📍' },
+            { key: 'local', label: 'Local', icon: '🏘️' },
+            { key: 'direct', label: 'Direct', icon: '⚔️' },
+            { key: 'indirect', label: 'Indirect', icon: '↔️' },
+          ].filter(tab => tab.key === 'all' || (categoryCounts[tab.key] || 0) > 0).map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setSelectedCategory(tab.key)}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all border ${
+                selectedCategory === tab.key
+                  ? 'bg-[#ffcc29] text-black border-[#ffcc29] shadow-sm'
+                  : isDarkMode
+                    ? 'bg-[#0f1419] border-slate-700/50 text-slate-300 hover:border-[#ffcc29]/40 hover:text-[#ffcc29]'
+                    : 'bg-white border-slate-200 text-slate-600 hover:border-[#ffcc29]/40 hover:text-[#ffcc29]'
+              }`}
+            >
+              <span>{tab.icon}</span>
+              {tab.label}
+              {(categoryCounts[tab.key] || 0) > 0 && (
+                <span className={`ml-1 text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+                  selectedCategory === tab.key
+                    ? 'bg-black/20 text-black'
+                    : isDarkMode ? 'bg-slate-700 text-slate-400' : 'bg-slate-100 text-slate-500'
+                }`}>
+                  {categoryCounts[tab.key]}
+                </span>
+              )}
+            </button>
+          ))}
         </div>
       )}
 
@@ -421,19 +487,29 @@ const Competitors: React.FC = () => {
               </div>
           </div>
 
-          {loading ? (
+          {loading || fetchingType ? (
              <div className="flex justify-center py-12">
-                <Loader2 className="w-8 h-8 text-[#ffcc29] animate-spin" />
+                <div className="text-center">
+                  <Loader2 className="w-8 h-8 text-[#ffcc29] animate-spin mx-auto mb-3" />
+                  {fetchingType && (
+                    <p className={`${theme.textSecondary} text-sm`}>
+                      Fetching posts for {fetchingType} competitors... This may take a moment.
+                    </p>
+                  )}
+                </div>
              </div>
           ) : filteredPosts.length === 0 ? (
              <div className="text-center py-12">
-                <p className={`${theme.textSecondary} mb-4`}>No competitor posts found.</p>
-                <button 
-                  onClick={handleRefresh}
-                  className="px-4 py-2 bg-[#ffcc29] text-white rounded-lg text-sm font-medium hover:bg-[#e6b825]"
-                >
-                  Load Sample Data
-                </button>
+                <p className={`${theme.textSecondary} mb-4`}>No posts yet for this category.</p>
+                {selectedCategory !== 'all' && competitorsForCategory(selectedCategory).length > 0 && (
+                  <button 
+                    onClick={() => handleFetchPostsForType(selectedCategory)}
+                    className="px-4 py-2 bg-[#ffcc29] text-black rounded-lg text-sm font-medium hover:bg-[#e6b825] flex items-center gap-2 mx-auto"
+                  >
+                    <RotateCw className="w-4 h-4" />
+                    Fetch Posts for {selectedCategory.charAt(0).toUpperCase() + selectedCategory.slice(1)} Competitors
+                  </button>
+                )}
              </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -453,6 +529,17 @@ const Competitors: React.FC = () => {
                                     <h3 className={`text-sm font-bold ${theme.text}`}>{post.competitorName}</h3>
                                     <p className={`text-xs flex items-center gap-1 ${theme.textMuted}`}>
                                       {platformIcons[post.platform] || post.platform} • {post.postedAt}
+                                      {(post as any).competitorType && (post as any).competitorType !== 'unknown' && (
+                                        <span className={`ml-1 px-1.5 py-0 rounded text-[9px] font-semibold uppercase ${
+                                          (post as any).competitorType === 'global' ? (isDarkMode ? 'bg-purple-500/20 text-purple-400' : 'bg-purple-100 text-purple-600') :
+                                          (post as any).competitorType === 'national' ? (isDarkMode ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-600') :
+                                          (post as any).competitorType === 'regional' ? (isDarkMode ? 'bg-green-500/20 text-green-400' : 'bg-green-100 text-green-600') :
+                                          (post as any).competitorType === 'local' ? (isDarkMode ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-600') :
+                                          (isDarkMode ? 'bg-slate-500/20 text-slate-400' : 'bg-slate-100 text-slate-600')
+                                        }`}>
+                                          {(post as any).competitorType}
+                                        </span>
+                                      )}
                                     </p>
                                 </div>
                             </div>

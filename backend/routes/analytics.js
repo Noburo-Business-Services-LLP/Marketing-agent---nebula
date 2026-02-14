@@ -37,16 +37,14 @@ router.post('/post-analytics', protect, async (req, res) => {
       return res.status(400).json({ success: false, error: 'Post ID is required' });
     }
 
-    // Auto-detect connected platforms if not specified
+    // Use provided platforms; if none, let Ayrshare use whatever platforms the post was sent to
+    // by NOT sending platforms param at all (Ayrshare auto-detects)
     let platformList = platforms;
     if (!platformList || platformList.length === 0) {
-      const User = require('../models/User');
-      const user = await User.findById(req.user.userId || req.user.id);
-      const connected = user?.ayrshare?.connectedAccounts || [];
-      platformList = connected.length > 0 ? connected : ['instagram', 'facebook'];
+      platformList = null; // null = let Ayrshare auto-detect from post history
     }
 
-    console.log('Post analytics request - postId:', postId, 'platforms:', platformList);
+    console.log('Post analytics request - postId:', postId, 'platforms:', platformList || 'auto-detect');
     const result = await getPostAnalytics(postId, platformList, profileKey);
 
     if (!result.success) {

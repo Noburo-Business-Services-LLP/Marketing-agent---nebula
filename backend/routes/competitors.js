@@ -22,7 +22,8 @@ const {
   scrapeInstagramPosts,
   scrapeTwitterProfile,
   scrapeTikTokProfile,
-  scrapeCompetitor
+  scrapeCompetitor,
+  searchInstagramByName
 } = require('../services/socialMediaAPI');
 
 // Try to use the old services if they exist, otherwise use stubs
@@ -266,86 +267,146 @@ function isEnglishContent(text) {
 }
 
 /**
+ * Smart Instagram handle finder
+ * Tries the given handle first, then name-based variations if it fails
+ * Updates the competitor's handle in DB once found so future scrapes work
+ */
+async function findInstagramProfile(competitor) {
+  const handles = competitor.socialHandles || {};
+  const givenHandle = handles.instagram?.replace('@', '');
+  
+  // STEP 1: Try the given handle first (fastest)
+  if (givenHandle) {
+    try {
+      console.log(`  🔎 Trying given handle @${givenHandle} for ${competitor.name}...`);
+      const result = await scrapeInstagramProfile(givenHandle);
+      if (result?.success && result?.data?.length > 0) {
+        const posts = result.data[0].latestPosts || result.data[0].posts || [];
+        if (posts.length > 0) {
+          console.log(`  ✅ @${givenHandle} works! ${posts.length} posts found.`);
+          return { result, handle: givenHandle };
+        }
+      }
+    } catch (err) {
+      console.log(`  ⚠️ @${givenHandle} failed: ${err.message}`);
+    }
+  }
+
+  // STEP 2: Search Instagram by business name (universal, works for ANY business)
+  try {
+    const searchResult = await searchInstagramByName(competitor.name);
+    if (searchResult?.success && searchResult?.username) {
+      const foundHandle = searchResult.username;
+      console.log(`  🔍 Search found @${foundHandle} for ${competitor.name}, fetching profile...`);
+      
+      const result = await scrapeInstagramProfile(foundHandle);
+      if (result?.success && result?.data?.length > 0) {
+        const posts = result.data[0].latestPosts || result.data[0].posts || [];
+        if (posts.length > 0) {
+          console.log(`  ✅ @${foundHandle} confirmed! ${posts.length} posts. Updating DB handle.`);
+          await Competitor.findByIdAndUpdate(competitor._id, {
+            'socialHandles.instagram': foundHandle
+          });
+          return { result, handle: foundHandle };
+        }
+      }
+    }
+  } catch (err) {
+    console.log(`  ⚠️ Instagram search failed for ${competitor.name}: ${err.message}`);
+  }
+
+  // STEP 3: Quick name-based variations as last resort
+  const nameCleaned = competitor.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const quickVariations = [
+    nameCleaned,
+    'the' + nameCleaned,
+    nameCleaned + '_official',
+  ].filter(v => v && v !== givenHandle && v.length >= 3 && v.length <= 30);
+
+  for (const handle of quickVariations.slice(0, 2)) {
+    try {
+      console.log(`  🔎 Trying variation @${handle}...`);
+      const result = await scrapeInstagramProfile(handle);
+      if (result?.success && result?.data?.length > 0) {
+        const posts = result.data[0].latestPosts || result.data[0].posts || [];
+        if (posts.length > 0) {
+          console.log(`  ✅ @${handle} works! Updating DB handle.`);
+          await Competitor.findByIdAndUpdate(competitor._id, {
+            'socialHandles.instagram': handle
+          });
+          return { result, handle };
+        }
+      }
+    } catch (err) { /* skip */ }
+  }
+
+  console.log(`  ❌ No working Instagram found for ${competitor.name}`);
+  return null;
+}
+
+/**
  * Fetch posts for a list of competitors
  * Only keeps English-language posts from verified brands
  * CRITICAL: Only posts from the last 3 months are allowed - NO older posts
  */
 async function fetchPostsForCompetitors(competitors) {
   const allPosts = [];
-  
-  // STRICT 3-MONTH THRESHOLD - Posts older than this are NEVER shown
   const threeMonthsAgo = Date.now() - (90 * 24 * 60 * 60 * 1000);
-  console.log(`📅 3-month threshold: ${new Date(threeMonthsAgo).toLocaleDateString()} - Only posts after this date will be shown`);
+  console.log(`📅 3-month threshold: ${new Date(threeMonthsAgo).toLocaleDateString()}`);
 
-  for (const competitor of competitors.slice(0, 5)) { // Limit to 5
-    const instagramHandle = competitor.socialHandles?.instagram?.replace('@', '');
-    
-    if (instagramHandle) {
-      try {
-        console.log(`📸 Fetching REAL Instagram posts for ${competitor.name} (@${instagramHandle})...`);
-        const result = await scrapeInstagramProfile(instagramHandle);
-        
-        // Apify returns { success: true, data: [profile] } where profile has latestPosts
-        if (result && result.success && result.data && result.data.length > 0) {
-          const profile = result.data[0];
-          const latestPosts = profile.latestPosts || profile.posts || [];
-          
-          if (latestPosts.length > 0) {
-            // Filter to only English posts
-            const englishPosts = latestPosts.filter(post => 
-              isEnglishContent(post.caption || post.text || post.description || '')
-            );
-          
-            // Map posts with timestamps
-            const mappedPosts = englishPosts.map(post => {
-              const timestamp = new Date(post.timestamp || post.takenAtTimestamp * 1000 || post.date || Date.now()).getTime();
-              return {
-                competitorId: competitor._id,
-                competitorName: competitor.name,
-                platform: 'instagram',
-                content: post.caption || post.text || post.description || '',
-                likes: post.likesCount || post.likes || 0,
-                comments: post.commentsCount || post.comments || 0,
-                imageUrl: post.displayUrl || post.imageUrl || post.thumbnailUrl || null,
-                postUrl: post.url || post.postUrl || `https://instagram.com/p/${post.shortCode || post.id || ''}`,
-                postedAt: post.timestamp || post.takenAtTimestamp || post.date || new Date(),
-                postedAtTimestamp: timestamp,
-                sentiment: analyzeSentiment(post.caption || ''),
-                isRealData: true
-              };
-            });
-          
-            // STRICT 3-MONTH FILTER: Remove any posts older than 3 months
-            const recentPosts = mappedPosts.filter(post => {
-              if (post.postedAtTimestamp < threeMonthsAgo) {
-                console.log(`⚠️ Filtering out old post from ${competitor.name} - posted ${new Date(post.postedAtTimestamp).toLocaleDateString()}`);
-                return false;
-              }
-              return true;
-            });
-          
-            const posts = recentPosts.slice(0, 5);
-            console.log(`📅 Kept ${posts.length}/${mappedPosts.length} posts after 3-month filter for ${competitor.name}`);
-          
-            // Save posts to competitor
-            competitor.posts = posts;
-            await competitor.save();
-          
-            allPosts.push(...posts);
-            console.log(`✅ Got ${posts.length} REAL recent English posts for ${competitor.name}`);
-          } else {
-            console.log(`⚠️ Profile found but no posts for ${competitor.name} (@${instagramHandle})`);
-          }
-        } else {
-          console.log(`⚠️ Apify returned no data for ${competitor.name} (@${instagramHandle}) - error: ${result?.error || 'unknown'}`);
-        }
-      } catch (fetchError) {
-        console.error(`Failed to fetch posts for ${competitor.name}:`, fetchError.message);
+  for (const competitor of competitors.slice(0, 5)) {
+    try {
+      console.log(`📸 Finding Instagram for ${competitor.name}...`);
+      const found = await findInstagramProfile(competitor);
+      
+      if (!found) continue;
+      
+      const profile = found.result.data[0];
+      const latestPosts = profile.latestPosts || profile.posts || [];
+      const posts = processAndSavePosts(latestPosts, competitor, threeMonthsAgo);
+      
+      if (posts.length > 0) {
+        await Competitor.findByIdAndUpdate(competitor._id, { posts });
+        allPosts.push(...posts);
+        console.log(`✅ Saved ${posts.length} REAL posts for ${competitor.name}`);
       }
+    } catch (fetchError) {
+      console.error(`Failed for ${competitor.name}:`, fetchError.message);
     }
   }
 
   return allPosts;
+}
+
+/**
+ * Process raw Instagram posts: filter English, recent, map fields, limit to 5
+ */
+function processAndSavePosts(latestPosts, competitor, threeMonthsAgo) {
+  const englishPosts = latestPosts.filter(post =>
+    isEnglishContent(post.caption || post.text || post.description || '')
+  );
+
+  const mappedPosts = englishPosts.map(post => {
+    const timestamp = new Date(post.timestamp || post.takenAtTimestamp * 1000 || post.date || Date.now()).getTime();
+    return {
+      platform: 'instagram',
+      content: post.caption || post.text || post.description || '',
+      likes: post.likesCount || post.likes || 0,
+      comments: post.commentsCount || post.comments || 0,
+      imageUrl: post.displayUrl || post.imageUrl || post.thumbnailUrl || null,
+      postUrl: post.url || post.postUrl || `https://instagram.com/p/${post.shortCode || post.id || ''}`,
+      postedAt: post.timestamp || post.takenAtTimestamp || post.date || new Date(),
+      postedAtTimestamp: timestamp,
+      sentiment: analyzeSentiment(post.caption || ''),
+      isRealData: true
+    };
+  });
+
+  const recentPosts = threeMonthsAgo
+    ? mappedPosts.filter(p => p.postedAtTimestamp >= threeMonthsAgo)
+    : mappedPosts;
+
+  return recentPosts.slice(0, 5);
 }
 
 /**
@@ -568,6 +629,124 @@ router.get('/real/:id', protect, async (req, res) => {
 });
 
 /**
+ * POST /api/competitors/scrape-by-type
+ * Scrape posts for competitors of a specific type (local, national, global, etc.)
+ */
+router.post('/scrape-by-type', protect, async (req, res) => {
+  try {
+    const userId = req.user.userId || req.user.id;
+    const { competitorType } = req.body;
+    
+    if (!competitorType) {
+      return res.status(400).json({ success: false, message: 'competitorType is required' });
+    }
+
+    console.log(`🔍 Scraping posts for ${competitorType} competitors...`);
+    
+    // Find competitors of this type that have NO posts yet
+    const competitors = await Competitor.find({ 
+      userId, 
+      isActive: true, 
+      isIgnored: { $ne: true },
+      competitorType,
+      $or: [
+        { posts: { $exists: false } },
+        { posts: { $size: 0 } }
+      ]
+    });
+
+    if (competitors.length === 0) {
+      // All competitors of this type already have posts, return them
+      const allOfType = await Competitor.find({ userId, isActive: true, isIgnored: { $ne: true }, competitorType });
+      const posts = [];
+      allOfType.forEach(c => {
+        if (c.posts && c.posts.length > 0) {
+          c.posts.forEach(p => {
+            posts.push({
+              ...p.toObject ? p.toObject() : p,
+              competitorName: c.name,
+              competitorId: c._id,
+              competitorType: c.competitorType
+            });
+          });
+        }
+      });
+      return res.json({ success: true, posts, scraped: 0, message: 'All competitors already have posts' });
+    }
+
+    console.log(`📋 Found ${competitors.length} ${competitorType} competitors without posts`);
+
+    const results = [];
+    const threeMonthsAgo = Date.now() - (90 * 24 * 60 * 60 * 1000);
+
+    for (const competitor of competitors.slice(0, 7)) {
+      try {
+        console.log(`📸 Finding Instagram for ${competitor.name}...`);
+        const found = await findInstagramProfile(competitor);
+        
+        if (found) {
+          const profile = found.result.data[0];
+          const latestPosts = profile.latestPosts || profile.posts || [];
+          const posts = processAndSavePosts(latestPosts, competitor, threeMonthsAgo);
+          
+          if (posts.length > 0) {
+            await Competitor.findByIdAndUpdate(competitor._id, { posts });
+            results.push({ name: competitor.name, success: true, postsCount: posts.length, handle: found.handle });
+            console.log(`✅ Saved ${posts.length} REAL posts for ${competitor.name} (@${found.handle})`);
+          } else {
+            results.push({ name: competitor.name, success: false, error: 'Profile found but 0 recent English posts' });
+          }
+        } else {
+          results.push({ name: competitor.name, success: false, error: 'No working Instagram handle found' });
+        }
+      } catch (err) {
+        results.push({ name: competitor.name, success: false, error: err.message });
+        console.error(`❌ Failed for ${competitor.name}:`, err.message);
+      }
+      
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+
+    // Now return ALL posts for this type
+    const allOfType = await Competitor.find({ userId, isActive: true, isIgnored: { $ne: true }, competitorType });
+    const allPosts = [];
+    allOfType.forEach(c => {
+      if (c.posts && c.posts.length > 0) {
+        c.posts.forEach(p => {
+          allPosts.push({
+            id: p._id,
+            competitorId: c._id,
+            competitorName: c.name,
+            competitorLogo: c.logo || c.name.charAt(0).toUpperCase(),
+            competitorType: c.competitorType,
+            platform: p.platform,
+            content: p.content,
+            imageUrl: p.imageUrl,
+            postUrl: p.postUrl,
+            likes: p.likes,
+            comments: p.comments,
+            sentiment: p.sentiment,
+            postedAt: formatTimeAgo(p.postedAt)
+          });
+        });
+      }
+    });
+
+    res.json({
+      success: true,
+      posts: allPosts,
+      scraped: results.filter(r => r.success).length,
+      failed: results.filter(r => !r.success).length,
+      results,
+      message: `Fetched posts for ${results.filter(r => r.success).length} ${competitorType} competitors`
+    });
+  } catch (error) {
+    console.error('Scrape by type error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
  * POST /api/competitors/scrape-all
  * Scrape real-time data for all active competitors using Apify
  */
@@ -699,6 +878,7 @@ router.get('/posts', protect, async (req, res) => {
             competitorId: competitor._id,
             competitorName: competitor.name,
             competitorLogo: competitor.logo || competitor.name.charAt(0).toUpperCase(),
+            competitorType: competitor.competitorType || 'unknown',
             platform: post.platform,
             content: post.content,
             imageUrl: post.imageUrl,
@@ -733,9 +913,20 @@ router.get('/posts', protect, async (req, res) => {
       postedAt: formatTimeAgo(post.postedAt)
     }));
     
+    // Return competitors list (with competitorType) alongside posts
+    const competitorsList = competitors.map(c => ({
+      _id: c._id,
+      name: c.name,
+      logo: c.logo,
+      competitorType: c.competitorType || 'unknown',
+      website: c.website,
+      isActive: c.isActive
+    }));
+
     res.json({
       success: true,
-      posts: allPosts
+      posts: allPosts,
+      competitors: competitorsList
     });
   } catch (error) {
     console.error('Get competitor posts error:', error);

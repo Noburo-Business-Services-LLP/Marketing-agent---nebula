@@ -9,6 +9,68 @@ import {
 import { useTheme, getThemeClasses } from '../context/ThemeContext';
 import BoostPostModal from '../components/BoostPostModal';
 
+// ============================================
+// PLATFORM CHARACTER LIMITS & FORMAT RULES
+// ============================================
+const PLATFORM_LIMITS: Record<string, { charLimit: number; label: string; imageMaxMB: number; videoMaxMB: number; bestRatio: string }> = {
+  twitter:   { charLimit: 280,    label: 'Twitter/X',  imageMaxMB: 5,  videoMaxMB: 512, bestRatio: '16:9' },
+  instagram: { charLimit: 2200,   label: 'Instagram',  imageMaxMB: 30, videoMaxMB: 650, bestRatio: '1:1 or 4:5' },
+  facebook:  { charLimit: 63206,  label: 'Facebook',   imageMaxMB: 30, videoMaxMB: 1024, bestRatio: '1.91:1 or 1:1' },
+  linkedin:  { charLimit: 3000,   label: 'LinkedIn',   imageMaxMB: 5,  videoMaxMB: 200, bestRatio: '1.91:1 or 1:1' },
+  youtube:   { charLimit: 5000,   label: 'YouTube',    imageMaxMB: 2,  videoMaxMB: 12800, bestRatio: '16:9' },
+};
+
+/** Reusable character counter bar for caption textareas */
+const CaptionCharCounter: React.FC<{
+  caption: string;
+  platforms: string[];
+  isDarkMode: boolean;
+}> = ({ caption, platforms, isDarkMode }) => {
+  const len = caption.length;
+  const activePlatforms = platforms.map(p => p.toLowerCase()).filter(p => PLATFORM_LIMITS[p]);
+  if (activePlatforms.length === 0) return null;
+
+  // Find the strictest (lowest) limit
+  const strictest = activePlatforms.reduce((min, p) => {
+    const lim = PLATFORM_LIMITS[p].charLimit;
+    return lim < min.charLimit ? { platform: p, charLimit: lim } : min;
+  }, { platform: activePlatforms[0], charLimit: PLATFORM_LIMITS[activePlatforms[0]].charLimit });
+
+  const pct = Math.min((len / strictest.charLimit) * 100, 100);
+  const isOver = len > strictest.charLimit;
+  const isWarn = len > strictest.charLimit * 0.9;
+
+  // Per-platform breakdown for warnings
+  const overPlatforms = activePlatforms.filter(p => len > PLATFORM_LIMITS[p].charLimit);
+
+  return (
+    <div className="mt-1.5 space-y-1">
+      {/* Progress bar */}
+      <div className="flex items-center gap-2">
+        <div className={`flex-1 h-1 rounded-full overflow-hidden ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`}>
+          <div
+            className={`h-full rounded-full transition-all ${isOver ? 'bg-red-500' : isWarn ? 'bg-yellow-500' : 'bg-green-500'}`}
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+        <span className={`text-[10px] font-mono tabular-nums ${isOver ? 'text-red-400 font-bold' : isWarn ? 'text-yellow-400' : isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+          {len.toLocaleString()}/{strictest.charLimit.toLocaleString()}
+        </span>
+      </div>
+
+      {/* Over-limit warnings */}
+      {overPlatforms.length > 0 && (
+        <div className="flex items-center gap-1.5 text-[10px] text-red-400">
+          <AlertCircle className="w-3 h-3 flex-shrink-0" />
+          <span>
+            Exceeds {overPlatforms.map(p => `${PLATFORM_LIMITS[p].label} (${PLATFORM_LIMITS[p].charLimit.toLocaleString()})`).join(', ')} limit
+          </span>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ComboBox component - allows selecting from dropdown OR entering custom value
 interface ComboBoxProps {
   value: string;
@@ -1924,7 +1986,7 @@ const CampaignCard: React.FC<{
                       <Send className="w-3 h-3" /> Post
                   </button>
               )}
-              {campaign.status === 'posted' && campaign.socialPostId && (
+              {campaign.status === 'posted' && campaign.socialPostId && campaign.platforms?.some(p => ['facebook', 'instagram'].includes(p)) && (
                   <button 
                     onClick={() => onBoost?.(campaign)}
                     className="text-xs font-bold text-black bg-[#ffcc29] px-3 py-1.5 rounded hover:bg-[#ffcc29]/80 flex items-center gap-1"
@@ -2981,11 +3043,12 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                                           {editingPostId === post.id ? (
                                             <div className="space-y-2">
                                               <textarea
-                                                className={`${inputClasses} text-sm resize-none`}
+                                                className={`${inputClasses} text-sm resize-none ${post.caption.length > (PLATFORM_LIMITS[post.platform?.toLowerCase()]?.charLimit || 99999) ? 'border-red-500 focus:ring-red-500' : ''}`}
                                                 rows={3}
                                                 value={post.caption}
                                                 onChange={e => handleUpdatePost(post.id, { caption: e.target.value })}
                                               />
+                                              <CaptionCharCounter caption={post.caption} platforms={[post.platform || '']} isDarkMode={isDarkMode} />
                                               <input
                                                 className={`${inputClasses} text-sm`}
                                                 value={post.hashtags.join(' ')}
@@ -4072,8 +4135,9 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
                     onChange={(e) => setCaption(e.target.value)}
                     placeholder="Write your caption or click 'Generate with AI' to auto-create from your poster..."
                     rows={4}
-                    className={`${inputClasses} resize-none`}
+                    className={`${inputClasses} resize-none ${selectedPlatforms.some(p => caption.length > (PLATFORM_LIMITS[p.toLowerCase()]?.charLimit || 99999)) ? 'border-red-500 focus:ring-red-500' : ''}`}
                   />
+                  <CaptionCharCounter caption={caption} platforms={selectedPlatforms} isDarkMode={isDarkMode} />
                 </div>
 
                 {/* Schedule Toggle */}
@@ -4193,7 +4257,8 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
             {step === 'schedule' && (
               <button 
                 onClick={handlePublish}
-                disabled={isPublishing || selectedPlatforms.length === 0}
+                disabled={isPublishing || selectedPlatforms.length === 0 || selectedPlatforms.some(p => caption.length > (PLATFORM_LIMITS[p.toLowerCase()]?.charLimit || 99999))}
+                title={selectedPlatforms.some(p => caption.length > (PLATFORM_LIMITS[p.toLowerCase()]?.charLimit || 99999)) ? 'Caption exceeds character limit' : ''}
                 className="px-6 py-2.5 bg-gradient-to-r from-[#ffcc29] to-[#ffa500] text-black rounded-lg font-semibold disabled:opacity-50 flex items-center gap-2"
               >
                 {isPublishing ? (
@@ -4674,6 +4739,7 @@ const UploadPublishModal: React.FC<UploadPublishModalProps> = ({ onClose, onSucc
     };
 
     const readyCount = posts.filter(p => p.caption.trim() && p.status !== 'success').length;
+    const overLimitPosts = posts.filter(p => p.caption.trim() && selectedPlatforms.some(pl => p.caption.length > (PLATFORM_LIMITS[pl.toLowerCase()]?.charLimit || 99999)));
     const hasAnyScheduled = posts.some(p => p.isScheduled);
 
     return (
@@ -4784,6 +4850,21 @@ const UploadPublishModal: React.FC<UploadPublishModalProps> = ({ onClose, onSucc
                                     );
                                 })}
                             </div>
+
+                            {/* Platform format hints */}
+                            {selectedPlatforms.length > 0 && (
+                                <div className={`mt-2 flex flex-wrap gap-1.5`}>
+                                    {selectedPlatforms.map(p => {
+                                        const pl = PLATFORM_LIMITS[p.toLowerCase()];
+                                        if (!pl) return null;
+                                        return (
+                                            <span key={p} className={`text-[10px] px-2 py-0.5 rounded-full ${isDarkMode ? 'bg-slate-700/50 text-slate-400' : 'bg-slate-100 text-slate-500'}`}>
+                                                {pl.label}: {pl.charLimit.toLocaleString()} chars · {pl.imageMaxMB}MB max · {pl.bestRatio}
+                                            </span>
+                                        );
+                                    })}
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -4885,13 +4966,16 @@ const UploadPublishModal: React.FC<UploadPublishModalProps> = ({ onClose, onSucc
 
                                         {/* Caption TextArea */}
                                         {post.status === 'pending' ? (
+                                            <>
                                             <textarea
                                                 value={post.caption}
                                                 onChange={e => updateCaption(post.id, e.target.value)}
                                                 placeholder="Write a caption or click AI Caption..."
                                                 rows={2}
-                                                className={`${inputClasses} resize-none text-xs`}
+                                                className={`${inputClasses} resize-none text-xs ${selectedPlatforms.some(p => post.caption.length > (PLATFORM_LIMITS[p.toLowerCase()]?.charLimit || 99999)) ? 'border-red-500 focus:ring-red-500' : ''}`}
                                             />
+                                            <CaptionCharCounter caption={post.caption} platforms={selectedPlatforms} isDarkMode={isDarkMode} />
+                                            </>
                                         ) : (
                                             <p className={`text-xs line-clamp-2 ${theme.textSecondary}`}>
                                                 {post.caption}
@@ -4985,7 +5069,8 @@ const UploadPublishModal: React.FC<UploadPublishModalProps> = ({ onClose, onSucc
                     </button>
                     <button 
                         onClick={handlePublishAll}
-                        disabled={isPublishing || readyCount === 0 || selectedPlatforms.length === 0}
+                        disabled={isPublishing || readyCount === 0 || selectedPlatforms.length === 0 || overLimitPosts.length > 0}
+                        title={overLimitPosts.length > 0 ? `${overLimitPosts.length} post(s) exceed character limits` : ''}
                         className="px-6 py-2.5 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-semibold rounded-lg hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                     >
                         {isPublishing ? (

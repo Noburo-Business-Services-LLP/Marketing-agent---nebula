@@ -91,7 +91,7 @@ async function apiCall<T>(
     console.log('[API] Response from', endpoint, ':', response.status, data?.success);
 
     if (!response.ok) {
-      throw new Error(data.message || 'Something went wrong');
+      throw new Error(data.error || data.message || 'Something went wrong');
     }
 
     return data as T;
@@ -708,16 +708,16 @@ export const apiService = {
   getCompetitors: async (): Promise<any> => {
     try {
       // First try to get real data from backend
-      const response = await apiCall<{ success: boolean; posts: any[] }>(
+      const response = await apiCall<{ success: boolean; posts: any[]; competitors: any[] }>(
         '/competitors/posts',
         { method: 'GET' },
         true
       );
-      return { posts: response.posts || [] };
+      return { posts: response.posts || [], competitors: response.competitors || [] };
     } catch (error) {
       console.log('Using fallback competitor data');
       // Return empty - will trigger seed on page
-      return { posts: [] };
+      return { posts: [], competitors: [] };
     }
   },
 
@@ -1684,9 +1684,10 @@ export const apiService = {
 
   // Get analytics for a specific Ayrshare post
   getPostAnalytics: async (postId: string, platforms?: string[]): Promise<any> => {
+    // Use campaign's actual platforms; fallback includes linkedin
     const response = await apiCall<any>(
       '/analytics/post-analytics',
-      { method: 'POST', body: JSON.stringify({ postId, platforms: platforms || ['instagram', 'facebook'] }) },
+      { method: 'POST', body: JSON.stringify({ postId, platforms: platforms && platforms.length > 0 ? platforms : undefined }) },
       true
     );
     return response;
@@ -1727,16 +1728,26 @@ export const apiService = {
     return response;
   },
 
-  // Boost a post
+  // Boost a post (Instagram-style flow with all Ayrshare params)
   boostPost: async (params: {
     postId: string;
     adAccountId: string;
-    objective?: string;
+    goal?: string;
     dailyBudget: number;
-    startDate: string;
-    endDate: string;
-    targeting?: any;
-    platforms?: string[];
+    bidAmount?: number;
+    startDate?: string;
+    endDate?: string;
+    locations?: { countries?: string[]; regions?: string[]; cities?: string[] };
+    excludedLocations?: { countries?: string[]; regions?: string[]; cities?: string[] };
+    minAge?: number;
+    maxAge?: number;
+    gender?: string;
+    interests?: (string | number)[];
+    specialAdCategories?: string[];
+    tracking?: { pixelId: string };
+    urlTags?: string[];
+    dsaBeneficiary?: string;
+    dsaPayor?: string;
   }): Promise<any> => {
     const response = await apiCall<any>(
       '/ads/boost',
@@ -1793,6 +1804,16 @@ export const apiService = {
     const response = await apiCall<any>(
       `/competitors/real/${competitorId}?platform=${platform}`,
       { method: 'GET' },
+      true
+    );
+    return response;
+  },
+
+  // Scrape competitors by type (local, national, global, etc.)
+  scrapeCompetitorsByType: async (competitorType: string): Promise<any> => {
+    const response = await apiCall<any>(
+      '/competitors/scrape-by-type',
+      { method: 'POST', body: JSON.stringify({ competitorType }) },
       true
     );
     return response;
