@@ -37,14 +37,10 @@ const chatRoutes = require('./routes/chat');
 const dashboardRoutes = require('./routes/dashboard');
 const campaignRoutes = require('./routes/campaigns');
 const competitorRoutes = require('./routes/competitors');
-const influencerRoutes = require('./routes/influencers');
 const reminderRoutes = require('./routes/reminders');
 
 // New real-data routes
 const brandRoutes = require('./routes/brand');
-const trendRoutes = require('./routes/trends');
-const contentRoutes = require('./routes/content');
-const campaignBuilderRoutes = require('./routes/campaignBuilder');
 const analyticsRoutes = require('./routes/analytics');
 
 // Reachouts CRM routes - REMOVED
@@ -113,14 +109,10 @@ app.use('/api/chat', chatRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/campaigns', campaignRoutes);
 app.use('/api/competitors', competitorRoutes);
-app.use('/api/influencers', influencerRoutes);
 app.use('/api/reminders', reminderRoutes);
 
 // Routes - Real Data Features
 app.use('/api/brand', brandRoutes);
-app.use('/api/trends', trendRoutes);
-app.use('/api/content', contentRoutes);
-app.use('/api/campaign-builder', campaignBuilderRoutes);
 app.use('/api/analytics', analyticsRoutes);
 
 // Routes - Reachouts CRM - REMOVED

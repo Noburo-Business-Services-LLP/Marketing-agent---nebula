@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Nebulaa AI - Marketing Agent</title>
-    <!-- Tailwind CSS via Play CDN -->
+    <!-- Tailwind CSS via Play CDN - more reliable -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script>
@@ -88,6 +88,20 @@
       ::-webkit-scrollbar-thumb:hover {
         background: #1a1f2e;
       }
+      /* Skeleton shimmer animation */
+      @keyframes shimmer {
+        0% { background-position: -200% 0; }
+        100% { background-position: 200% 0; }
+      }
+      .skeleton-shimmer {
+        background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.08) 50%, transparent 100%);
+        background-size: 200% 100%;
+        animation: shimmer 1.5s infinite;
+      }
+      .dark .skeleton-shimmer {
+        background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.05) 50%, transparent 100%);
+        background-size: 200% 100%;
+      }
     </style>
 
   <script type="importmap">
@@ -102,10 +116,9 @@
   }
 }
 </script>
-  <script type="module" crossorigin src="/assets/index-Db98KFXu.js"></script>
+  <script type="module" crossorigin src="/assets/index-Cr0Jgfst.js"></script>
 </head>
   <body>
-    <div id="root"></div>
-
+    <div id="root"></div>
   </body>
 </html>

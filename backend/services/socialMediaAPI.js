@@ -1,6 +1,6 @@
 /**
  * Social Media API Service
- * Integrates Ayrshare, Apify, and SearchAPI for real-time social media data
+ * Integrates Ayrshare and Apify for real-time social media data
  */
 
 const https = require('https');
@@ -9,7 +9,6 @@ const http = require('http');
 // API Configuration
 const AYRSHARE_API_KEY = process.env.AYRSHARE_API_KEY;
 const APIFY_API_KEY = process.env.APIFY_API_KEY;
-const SEARCHAPI_API_KEY = process.env.SEARCHAPI_API_KEY;
 
 // Cache for API responses
 const apiCache = new Map();
@@ -1011,137 +1010,7 @@ function formatPostDate(timestamp) {
   return { displayString, timestamp: date.getTime() };
 }
 
-// ============================================
-// SEARCHAPI - Search and Trends
-// ============================================
 
-/**
- * Search Google for topics/trends
- */
-async function searchGoogle(query, options = {}) {
-  if (!SEARCHAPI_API_KEY) {
-    console.warn('SearchAPI key not configured');
-    return { success: false, error: 'API not configured' };
-  }
-
-  const cacheKey = `google_search_${query}_${options.num || 10}`;
-  const cached = getCached(cacheKey);
-  if (cached) return cached;
-
-  try {
-    const params = new URLSearchParams({
-      api_key: SEARCHAPI_API_KEY,
-      engine: 'google',
-      q: query,
-      num: options.num || 10,
-      gl: options.country || 'us',
-      hl: options.language || 'en'
-    });
-
-    const response = await makeRequest(`https://www.searchapi.io/api/v1/search?${params}`);
-    
-    const result = { 
-      success: response.status === 200, 
-      data: response.data?.organic_results || response.data 
-    };
-    
-    if (result.success) setCache(cacheKey, result);
-    return result;
-  } catch (error) {
-    console.error('SearchAPI error:', error);
-    return { success: false, error: error.message };
-  }
-}
-
-/**
- * Get Google Trends data
- */
-async function getGoogleTrends(keyword, options = {}) {
-  if (!SEARCHAPI_API_KEY) {
-    return { success: false, error: 'API not configured' };
-  }
-
-  const cacheKey = `google_trends_${keyword}`;
-  const cached = getCached(cacheKey);
-  if (cached) return cached;
-
-  try {
-    const params = new URLSearchParams({
-      api_key: SEARCHAPI_API_KEY,
-      engine: 'google_trends',
-      q: keyword,
-      data_type: options.dataType || 'TIMESERIES',
-      geo: options.geo || 'US'
-    });
-
-    const response = await makeRequest(`https://www.searchapi.io/api/v1/search?${params}`);
-    
-    const result = { success: response.status === 200, data: response.data };
-    if (result.success) setCache(cacheKey, result);
-    return result;
-  } catch (error) {
-    console.error('Google Trends error:', error);
-    return { success: false, error: error.message };
-  }
-}
-
-/**
- * Search for industry news
- */
-async function searchIndustryNews(industry, options = {}) {
-  if (!SEARCHAPI_API_KEY) {
-    return { success: false, error: 'API not configured' };
-  }
-
-  const cacheKey = `news_${industry}`;
-  const cached = getCached(cacheKey);
-  if (cached) return cached;
-
-  try {
-    const params = new URLSearchParams({
-      api_key: SEARCHAPI_API_KEY,
-      engine: 'google_news',
-      q: `${industry} marketing trends ${new Date().getFullYear()}`,
-      gl: options.country || 'us',
-      hl: options.language || 'en'
-    });
-
-    const response = await makeRequest(`https://www.searchapi.io/api/v1/search?${params}`);
-    
-    const result = { 
-      success: response.status === 200, 
-      data: response.data?.news_results || response.data 
-    };
-    
-    if (result.success) setCache(cacheKey, result);
-    return result;
-  } catch (error) {
-    console.error('Industry news error:', error);
-    return { success: false, error: error.message };
-  }
-}
-
-/**
- * Get trending topics for an industry
- */
-async function getTrendingTopics(industry) {
-  const queries = [
-    `${industry} trends 2025`,
-    `${industry} marketing strategies`,
-    `${industry} social media trends`
-  ];
-
-  const results = [];
-  
-  for (const query of queries) {
-    const searchResult = await searchGoogle(query, { num: 5 });
-    if (searchResult.success && Array.isArray(searchResult.data)) {
-      results.push(...searchResult.data);
-    }
-  }
-
-  return { success: true, data: results };
-}
 
 // ============================================
 // COMBINED FUNCTIONS
@@ -1171,39 +1040,10 @@ async function getCompetitorAnalysis(competitorName, platforms = ['instagram']) 
     }
   }
 
-  // Search for news about the competitor
-  const newsResult = await searchGoogle(`${competitorName} company news`, { num: 5 });
-  if (newsResult.success) {
-    analysis.recentNews = newsResult.data;
-  }
-
   return analysis;
 }
 
-/**
- * Get real-time marketing insights
- */
-async function getMarketingInsights(industry, niche) {
-  const insights = {
-    industry,
-    niche,
-    fetchedAt: new Date().toISOString()
-  };
 
-  // Get trending topics
-  const trends = await getTrendingTopics(industry);
-  insights.trendingTopics = trends.data || [];
-
-  // Get industry news
-  const news = await searchIndustryNews(industry);
-  insights.industryNews = news.data || [];
-
-  // Get Google Trends data
-  const googleTrends = await getGoogleTrends(industry);
-  insights.googleTrends = googleTrends.data || null;
-
-  return insights;
-}
 
 /**
  * Check API configuration status
@@ -1219,129 +1059,10 @@ function getAPIStatus() {
       features: ['instagram-scraping', 'twitter-scraping', 'tiktok-scraping']
     },
     searchapi: {
-      configured: !!SEARCHAPI_API_KEY,
-      features: ['google-search', 'google-trends', 'news-search']
+      configured: false,
+      features: []
     }
   };
-}
-
-// ============================================
-// GOOGLE SEARCH BASED INFLUENCER DISCOVERY
-// ============================================
-
-/**
- * Search for influencers using Google Search (SearchAPI)
- * This provides a reliable fallback when Apify scrapers are limited
- */
-async function searchInfluencersViaGoogle(keyword, platform, options = {}) {
-  if (!SEARCHAPI_API_KEY) {
-    return { success: false, error: 'SearchAPI not configured', influencers: [] };
-  }
-
-  const limit = options.limit || 10;
-  const platformSite = {
-    instagram: 'instagram.com',
-    twitter: 'twitter.com OR x.com',
-    youtube: 'youtube.com',
-    linkedin: 'linkedin.com/in',
-    facebook: 'facebook.com'
-  };
-
-  const site = platformSite[platform] || '';
-  const searchQuery = `site:${site} "${keyword}" influencer OR creator followers`;
-
-  console.log(`🔍 Google searching for ${platform} influencers: ${searchQuery}`);
-
-  try {
-    const params = new URLSearchParams({
-      api_key: SEARCHAPI_API_KEY,
-      engine: 'google',
-      q: searchQuery,
-      num: limit.toString(),
-      gl: 'us',
-      hl: 'en'
-    });
-
-    const response = await makeRequest(`https://www.searchapi.io/api/v1/search?${params}`);
-    
-    if (response.status !== 200 || !response.data?.organic_results) {
-      return { success: false, error: 'No search results', influencers: [] };
-    }
-
-    const influencers = [];
-    
-    for (const result of response.data.organic_results) {
-      const profileUrl = result.link || '';
-      const title = result.title || '';
-      const snippet = result.snippet || '';
-      
-      // Extract username from URL
-      let username = '';
-      if (platform === 'instagram') {
-        const match = profileUrl.match(/instagram\.com\/([^\/\?]+)/);
-        username = match ? match[1] : '';
-      } else if (platform === 'twitter') {
-        const match = profileUrl.match(/(?:twitter|x)\.com\/([^\/\?]+)/);
-        username = match ? match[1] : '';
-      } else if (platform === 'youtube') {
-        const match = profileUrl.match(/youtube\.com\/(?:@|channel\/|c\/|user\/)([^\/\?]+)/);
-        username = match ? match[1] : '';
-      } else if (platform === 'linkedin') {
-        const match = profileUrl.match(/linkedin\.com\/in\/([^\/\?]+)/);
-        username = match ? match[1] : '';
-      } else if (platform === 'facebook') {
-        const match = profileUrl.match(/facebook\.com\/([^\/\?]+)/);
-        username = match ? match[1] : '';
-      }
-
-      // Skip if no username or if it's a generic page
-      if (!username || ['explore', 'search', 'watch', 'trending', 'login', 'signup'].includes(username.toLowerCase())) {
-        continue;
-      }
-
-      // Extract name from title
-      let name = title.split(/[-–|•@]/)[0].trim();
-      if (name.length > 50) name = name.substring(0, 50);
-
-      // Estimate follower count from snippet
-      let followerCount = 0;
-      const followerMatch = snippet.match(/(\d+(?:\.\d+)?)\s*([KMB]?)\s*(?:followers|subscribers)/i);
-      if (followerMatch) {
-        let num = parseFloat(followerMatch[1]);
-        const suffix = (followerMatch[2] || '').toUpperCase();
-        if (suffix === 'K') num *= 1000;
-        else if (suffix === 'M') num *= 1000000;
-        else if (suffix === 'B') num *= 1000000000;
-        followerCount = Math.round(num);
-      } else {
-        // Default estimate based on appearing in search
-        followerCount = Math.floor(Math.random() * 50000) + 5000;
-      }
-
-      influencers.push({
-        platform,
-        username,
-        handle: platform === 'twitter' ? `@${username}` : username,
-        name: name || username,
-        profileImage: null,
-        bio: snippet.substring(0, 200),
-        followerCount,
-        engagementRate: (Math.random() * 5 + 1).toFixed(2),
-        avgLikes: Math.floor(followerCount * 0.03),
-        avgComments: Math.floor(followerCount * 0.005),
-        isVerified: false,
-        profileUrl,
-        scrapedAt: new Date().toISOString(),
-        source: 'google_search'
-      });
-    }
-
-    console.log(`✅ Google found ${influencers.length} ${platform} influencers`);
-    return { success: influencers.length > 0, influencers, source: 'google_search' };
-  } catch (error) {
-    console.error(`Google search error for ${platform}:`, error);
-    return { success: false, error: error.message, influencers: [] };
-  }
 }
 
 // ============================================
@@ -1888,29 +1609,9 @@ async function discoverInfluencers(brandProfile, options = {}) {
     return true;
   });
 
-  // If Apify returned no results, try Google Search fallback
-  if (uniqueInfluencers.length === 0 && SEARCHAPI_API_KEY) {
-    console.log('\n🔄 Apify returned no results, trying Google Search fallback...');
-    
-    const googleSearchPromises = platforms.map(async (platform) => {
-      const keyword = keywords[0] || brandProfile.industry;
-      const result = await searchInfluencersViaGoogle(keyword, platform, { limit: Math.ceil(limit / platforms.length) });
-      if (result.success && result.influencers?.length > 0) {
-        allInfluencers.push(...result.influencers);
-        successfulPlatforms.push(platform);
-      }
-    });
-    
-    await Promise.allSettled(googleSearchPromises);
-    
-    // Re-dedupe after Google search
-    seenKeys.clear();
-    uniqueInfluencers = allInfluencers.filter(inf => {
-      const key = `${inf.platform}_${inf.username}`;
-      if (seenKeys.has(key)) return false;
-      seenKeys.add(key);
-      return true;
-    });
+  // If Apify returned no results, log a warning
+  if (uniqueInfluencers.length === 0) {
+    console.log('\n⚠️ Apify returned no influencer results for the given criteria');
   }
 
   // Sort by follower count (highest first) and limit
@@ -2449,17 +2150,9 @@ module.exports = {
   searchYouTubeInfluencers,
   searchLinkedInInfluencers,
   searchFacebookInfluencers,
-  searchInfluencersViaGoogle,
   discoverInfluencers,
-  
-  // SearchAPI functions
-  searchGoogle,
-  getGoogleTrends,
-  searchIndustryNews,
-  getTrendingTopics,
   
   // Combined functions
   getCompetitorAnalysis,
-  getMarketingInsights,
   getAPIStatus
 };

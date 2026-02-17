@@ -1796,7 +1796,7 @@ export const apiService = {
   },
 
   // ============================================
-  // REAL-TIME DATA APIs (Ayrshare, Apify, SearchAPI)
+  // REAL-TIME DATA APIs (Ayrshare, Apify)
   // ============================================
 
   // Get real-time competitor data using Apify scraping
@@ -1834,30 +1834,6 @@ export const apiService = {
     const response = await apiCall<any>(
       '/dashboard/refresh-competitor-posts',
       { method: 'POST' },
-      true
-    );
-    return response;
-  },
-
-  // Get real-time trends using SearchAPI
-  getRealTimeTrends: async (query?: string, category?: string): Promise<any> => {
-    const params = new URLSearchParams();
-    if (query) params.append('query', query);
-    if (category) params.append('category', category);
-    
-    const response = await apiCall<any>(
-      `/trends/real-time?${params.toString()}`,
-      { method: 'GET' },
-      true
-    );
-    return response;
-  },
-
-  // Search social media for trends
-  searchSocialTrends: async (query: string, platform: string = 'twitter'): Promise<any> => {
-    const response = await apiCall<any>(
-      `/trends/social-search?query=${encodeURIComponent(query)}&platform=${platform}`,
-      { method: 'GET' },
       true
     );
     return response;

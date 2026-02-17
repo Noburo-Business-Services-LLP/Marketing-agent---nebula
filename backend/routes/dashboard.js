@@ -855,34 +855,6 @@ router.get('/overview', protect, async (req, res) => {
 });
 
 /**
- * GET /api/dashboard/competitors
- * Get AI-powered competitor analysis
- */
-router.get('/competitors', protect, async (req, res) => {
-  try {
-    const user = await User.findById(req.user.userId || req.user.id);
-    
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
-
-    const competitors = req.query.competitors 
-      ? req.query.competitors.split(',') 
-      : (user.businessProfile?.competitors || []);
-
-    const analysis = await generateCompetitorAnalysis(user, competitors);
-
-    res.json({
-      success: true,
-      data: analysis
-    });
-  } catch (error) {
-    console.error('Competitor analysis error:', error);
-    res.status(500).json({ success: false, message: 'Failed to analyze competitors', error: error.message });
-  }
-});
-
-/**
  * GET /api/dashboard/campaign-suggestions
  * Get AI-powered campaign suggestions using Gemini with CACHING
  * Returns cached campaigns instantly if available, otherwise generates new ones
@@ -1103,48 +1075,6 @@ router.get('/campaign-suggestions-stream', protect, async (req, res) => {
 });
 
 /**
- * DELETE /api/dashboard/campaign-cache
- * Clear campaign cache for user (useful when profile changes)
- */
-router.delete('/campaign-cache', protect, async (req, res) => {
-  try {
-    const result = await CachedCampaign.invalidateCache(req.user.userId || req.user.id);
-    res.json({ success: true, message: 'Cache cleared', deleted: result.deletedCount });
-  } catch (error) {
-    res.status(500).json({ success: false, message: 'Failed to clear cache' });
-  }
-});
-
-/**
- * POST /api/dashboard/refresh
- * Force refresh AI-generated dashboard data
- */
-router.post('/refresh', protect, async (req, res) => {
-  try {
-    const user = await User.findById(req.user.userId || req.user.id);
-    
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
-
-    // Generate fresh AI data using Gemini
-    const metrics = {};
-    const aiData = user.businessProfile?.name 
-      ? await generateDashboardInsights(user.businessProfile, metrics)
-      : { suggestedActions: [], trendingTopics: [], personalizedTips: [], brandScoreFactors: {} };
-
-    res.json({
-      success: true,
-      message: 'Dashboard refreshed',
-      data: aiData
-    });
-  } catch (error) {
-    console.error('Dashboard refresh error:', error);
-    res.status(500).json({ success: false, message: 'Failed to refresh dashboard', error: error.message });
-  }
-});
-
-/**
  * POST /api/dashboard/refresh-competitor-posts
  * Manually trigger real competitor post scraping using Apify
  */
@@ -1296,20 +1226,6 @@ router.post('/generate-rival-post', protect, async (req, res) => {
   }
 });
 
-/**
- * GET /api/dashboard/section-info/:section
- * Get static info about a dashboard section
- */
-router.get('/section-info/:section', (req, res) => {
-  const { section } = req.params;
-  const info = getSectionInfo(section);
-  
-  res.json({
-    success: true,
-    ...info
-  });
-});
-
 // Helper functions
 
 /**
@@ -1389,101 +1305,6 @@ function getRelativeTime(date) {
   if (diffDays < 7) return `${diffDays}d ago`;
   return past.toLocaleDateString();
 }
-
-/**
- * GET /api/dashboard/api-status
- * Check status of all configured APIs
- */
-router.get('/api-status', protect, async (req, res) => {
-  try {
-    const status = socialMediaAPI ? socialMediaAPI.getAPIStatus() : {
-      ayrshare: { configured: false },
-      apify: { configured: false },
-      searchapi: { configured: false }
-    };
-    
-    res.json({ success: true, status });
-  } catch (error) {
-    console.error('API status error:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-/**
- * GET /api/dashboard/real-time-competitor/:competitorName
- * Fetch real-time competitor data using Apify
- */
-router.get('/real-time-competitor/:competitorName', protect, async (req, res) => {
-  try {
-    const { competitorName } = req.params;
-    const { platforms } = req.query;
-    
-    if (!socialMediaAPI) {
-      return res.status(503).json({ success: false, message: 'Social media API not available' });
-    }
-    
-    const platformList = platforms ? platforms.split(',') : ['instagram'];
-    const analysis = await socialMediaAPI.getCompetitorAnalysis(competitorName, platformList);
-    
-    res.json({ success: true, analysis });
-  } catch (error) {
-    console.error('Real-time competitor error:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-/**
- * GET /api/dashboard/trends
- * Get real-time marketing trends and insights
- */
-router.get('/trends', protect, async (req, res) => {
-  try {
-    const userId = req.user.userId || req.user.id;
-    const user = await User.findById(userId);
-    
-    if (!socialMediaAPI) {
-      return res.status(503).json({ success: false, message: 'Social media API not available' });
-    }
-    
-    const industry = user?.businessProfile?.industry || 'marketing';
-    const niche = user?.businessProfile?.niche || '';
-    
-    const insights = await socialMediaAPI.getMarketingInsights(industry, niche);
-    
-    res.json({ success: true, insights });
-  } catch (error) {
-    console.error('Trends error:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-/**
- * POST /api/dashboard/post-to-social
- * Post content to social media via Ayrshare
- */
-router.post('/post-to-social', protect, async (req, res) => {
-  try {
-    const { platforms, content, mediaUrls, scheduleDate } = req.body;
-    
-    if (!socialMediaAPI) {
-      return res.status(503).json({ success: false, message: 'Social media API not available' });
-    }
-    
-    if (!platforms || !content) {
-      return res.status(400).json({ success: false, message: 'Platforms and content are required' });
-    }
-    
-    const result = await socialMediaAPI.postToSocialMedia(platforms, content, {
-      mediaUrls,
-      scheduleDate
-    });
-    
-    res.json(result);
-  } catch (error) {
-    console.error('Post to social error:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
 
 /**
  * GET /api/dashboard/social-followers
@@ -1616,53 +1437,6 @@ router.get('/social-followers', protect, async (req, res) => {
     });
   } catch (error) {
     console.error('Social followers error:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-/**
- * GET /api/dashboard/social-analytics
- * Get analytics from connected social platforms via Ayrshare
- */
-router.get('/social-analytics', protect, async (req, res) => {
-  try {
-    const { platforms } = req.query;
-    
-    if (!socialMediaAPI) {
-      return res.status(503).json({ success: false, message: 'Social media API not available' });
-    }
-    
-    const platformList = platforms ? platforms.split(',') : ['instagram', 'twitter', 'facebook'];
-    const analytics = await socialMediaAPI.getAyrshareAnalytics(platformList);
-    
-    res.json(analytics);
-  } catch (error) {
-    console.error('Social analytics error:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-/**
- * GET /api/dashboard/search
- * Search for topics/trends via SearchAPI
- */
-router.get('/search', protect, async (req, res) => {
-  try {
-    const { q, num } = req.query;
-    
-    if (!socialMediaAPI) {
-      return res.status(503).json({ success: false, message: 'Social media API not available' });
-    }
-    
-    if (!q) {
-      return res.status(400).json({ success: false, message: 'Query is required' });
-    }
-    
-    const results = await socialMediaAPI.searchGoogle(q, { num: parseInt(num) || 10 });
-    
-    res.json(results);
-  } catch (error) {
-    console.error('Search error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

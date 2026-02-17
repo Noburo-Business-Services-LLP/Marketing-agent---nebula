@@ -76,7 +76,7 @@ router.post('/social-analytics', protect, async (req, res) => {
       const User = require('../models/User');
       const user = await User.findById(req.user.userId || req.user.id);
       const connected = user?.ayrshare?.connectedAccounts || [];
-      platformList = connected.length > 0 ? connected : ['instagram', 'facebook'];
+      platformList = connected.length > 0 ? connected : ['instagram', 'facebook', 'linkedin', 'twitter'];
     }
 
     console.log('Social analytics request for platforms:', platformList);
@@ -85,6 +85,13 @@ router.post('/social-analytics', protect, async (req, res) => {
       profileKey,
       platformList
     );
+
+    console.log('Social analytics raw keys:', Object.keys(result.data || {}));
+    Object.keys(result.data || {}).forEach(k => {
+      if (typeof result.data[k] === 'object' && result.data[k] !== null) {
+        console.log(`  [${k}] keys:`, Object.keys(result.data[k]));
+      }
+    });
 
     if (!result.success) {
       console.log('Social analytics failed:', result.error);

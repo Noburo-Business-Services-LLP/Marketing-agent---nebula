@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "jspdf": "^4.1.0",
     "lucide-react": "^0.560.0",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",

@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { apiService } from '../services/api';
 import { useTheme, getThemeClasses } from '../context/ThemeContext';
+import { generateAnalyticsPDF } from '../services/generateAnalyticsPDF';
 import {
   BarChart3, TrendingUp, Users, Eye, Heart, MessageSquare,
   Share2, Loader2, RefreshCw, Instagram, Facebook, Twitter, Linkedin,
   ArrowUpRight, ArrowDownRight, ChevronDown, Calendar, DollarSign,
   Pause, Play, ExternalLink, Search, Zap, Target, AlertCircle,
-  Megaphone
+  Megaphone, Download
 } from 'lucide-react';
 
 // Platform icon map
@@ -45,6 +46,7 @@ const Analytics: React.FC = () => {
   const [error, setError] = useState('');
   const [adLoadError, setAdLoadError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [generatingPDF, setGeneratingPDF] = useState(false);
 
   // Load data on mount
   useEffect(() => {
@@ -61,6 +63,7 @@ const Analytics: React.FC = () => {
       ]);
 
       if (accountRes.status === 'fulfilled' && accountRes.value?.success) {
+        console.log('[Analytics] Raw accountAnalytics:', JSON.stringify(accountRes.value.analytics, null, 2));
         setAccountAnalytics(accountRes.value.analytics);
       }
       if (campaignsRes.status === 'fulfilled') {
@@ -114,6 +117,41 @@ const Analytics: React.FC = () => {
     await loadAllData();
     if (activeTab === 'ads' || activeTab === 'history') await loadAdsData();
     setRefreshing(false);
+  };
+
+  const handleDownloadPDF = async () => {
+    setGeneratingPDF(true);
+    try {
+      // Ensure ads data is loaded before generating PDF
+      let adsData = boostedAds;
+      let historyData = adHistory;
+      if (adsData.length === 0 && !historyData) {
+        try {
+          const [adsRes, historyRes] = await Promise.allSettled([
+            apiService.getBoostedAds(),
+            apiService.getAdHistory(),
+          ]);
+          if (adsRes.status === 'fulfilled' && adsRes.value?.success) {
+            adsData = Array.isArray(adsRes.value.ads) ? adsRes.value.ads : [];
+          }
+          if (historyRes.status === 'fulfilled' && historyRes.value?.success) {
+            historyData = historyRes.value.history;
+          }
+        } catch (_) { /* non-critical */ }
+      }
+
+      await generateAnalyticsPDF({
+        accountAnalytics,
+        campaigns,
+        postAnalytics,
+        boostedAds: adsData,
+        adHistory: historyData,
+      });
+    } catch (err) {
+      console.error('PDF generation failed:', err);
+    } finally {
+      setGeneratingPDF(false);
+    }
   };
 
   const loadPostAnalytics = async (postId: string, platforms?: string[]) => {
@@ -179,14 +217,26 @@ const Analytics: React.FC = () => {
           <h1 className={`text-2xl font-bold ${tc.text}`}>Analytics & Ads</h1>
           <p className={`text-sm mt-1 ${tc.textSecondary}`}>Track performance across all your social platforms and manage boosted posts</p>
         </div>
-        <button
-          onClick={handleRefresh}
-          disabled={refreshing}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${tc.btnSecondary}`}
-        >
-          <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-          Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleDownloadPDF}
+            disabled={generatingPDF || loading}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-[#ffcc29] text-[#070A12] hover:bg-[#e6b825] disabled:opacity-50"
+          >
+            {generatingPDF
+              ? <Loader2 className="w-4 h-4 animate-spin" />
+              : <Download className="w-4 h-4" />}
+            {generatingPDF ? 'Generating…' : 'Download PDF'}
+          </button>
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${tc.btnSecondary}`}
+          >
+            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -299,13 +349,13 @@ const OverviewTab: React.FC<{
     // Data may be at raw.analytics or directly on raw
     const d = raw.analytics || raw;
     return {
-      followers: d.followersCount ?? d.followers ?? d.fanCount ?? undefined,
+      followers: d.followersCount ?? d.followers ?? d.fanCount ?? d.firstDegreeSize ?? d.connectionsCount ?? d.networkSize ?? undefined,
       following: d.followingCount ?? d.following ?? undefined,
       posts: d.postsCount ?? d.posts ?? d.mediaCount ?? undefined,
       engagementRate: d.engagementRate ?? d.engagement_rate ?? undefined,
       reach: d.reach ?? undefined,
       impressions: d.impressions ?? undefined,
-      name: d.name ?? d.username ?? undefined,
+      name: d.name ?? d.username ?? d.localizedFirstName ?? undefined,
       // Facebook-specific
       likes: d.fanCount ?? d.likes ?? undefined,
       // Extra info
