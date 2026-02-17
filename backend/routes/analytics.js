@@ -9,7 +9,7 @@ const { protect } = require('../middleware/auth');
 const AnalyticsSnapshot = require('../models/AnalyticsSnapshot');
 const User = require('../models/User');
 const { analyzeMetrics, generateWithLLM } = require('../services/llmRouter');
-const { getPostAnalytics, getSocialAnalyticsDetailed } = require('../services/socialMediaAPI');
+const { getPostAnalytics, getSocialAnalyticsDetailed, getAyrshareUserProfile, getUserSocialAnalytics } = require('../services/socialMediaAPI');
 
 /**
  * Helper: Get user's Ayrshare profile key
@@ -67,35 +67,32 @@ router.post('/post-analytics', protect, async (req, res) => {
  */
 router.post('/social-analytics', protect, async (req, res) => {
   try {
-    const profileKey = await getProfileKey(req.user.userId || req.user.id);
-    const { platforms } = req.body;
+    const userId = req.user.userId || req.user.id;
+    const user = await User.findById(userId);
+    const profileKey = user?.ayrshare?.profileKey || null;
 
-    // Use user's actual connected platforms if not specified
-    let platformList = platforms;
-    if (!platformList || platformList.length === 0) {
-      const User = require('../models/User');
-      const user = await User.findById(req.user.userId || req.user.id);
-      const connected = user?.ayrshare?.connectedAccounts || [];
-      platformList = connected.length > 0 ? connected : ['instagram', 'facebook', 'linkedin', 'twitter'];
+    if (!profileKey) {
+      return res.json({ success: true, analytics: {}, message: 'No social accounts connected yet' });
     }
 
-    console.log('Social analytics request for platforms:', platformList);
+    // Get actual connected platforms from Ayrshare (same as dashboard does)
+    const userProfile = await getAyrshareUserProfile(profileKey);
+    
+    if (!userProfile.success || !userProfile.data?.activeSocialAccounts?.length) {
+      return res.json({ success: true, analytics: {}, message: 'No connected accounts found' });
+    }
 
-    const result = await getSocialAnalyticsDetailed(
-      profileKey,
-      platformList
-    );
+    const connectedPlatforms = userProfile.data.activeSocialAccounts;
+    console.log('Social analytics request for connected platforms:', connectedPlatforms);
+
+    // Use the same function as dashboard (getUserSocialAnalytics)
+    const result = await getUserSocialAnalytics(profileKey, connectedPlatforms);
 
     console.log('Social analytics raw keys:', Object.keys(result.data || {}));
-    Object.keys(result.data || {}).forEach(k => {
-      if (typeof result.data[k] === 'object' && result.data[k] !== null) {
-        console.log(`  [${k}] keys:`, Object.keys(result.data[k]));
-      }
-    });
 
     if (!result.success) {
-      console.log('Social analytics failed:', result.error);
-      return res.status(400).json({ success: false, error: result.error || 'Failed to get social analytics' });
+      console.log('Social analytics not available:', result.error);
+      return res.json({ success: true, analytics: {}, message: result.error || 'Social analytics not available' });
     }
 
     res.json({ success: true, analytics: result.data });

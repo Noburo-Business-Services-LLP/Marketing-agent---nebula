@@ -348,16 +348,29 @@ const OverviewTab: React.FC<{
     if (!raw) return null;
     // Data may be at raw.analytics or directly on raw
     const d = raw.analytics || raw;
+    
+    // Helper: extract a numeric value — handles nested objects like LinkedIn's { totalFollowerCount: N }
+    const extractNumber = (val: any): number | undefined => {
+      if (val === null || val === undefined) return undefined;
+      if (typeof val === 'number') return val;
+      if (typeof val === 'object') {
+        // LinkedIn returns followers as { totalFollowerCount: N, organicFollowerCount: N, ... }
+        return val.totalFollowerCount ?? val.total ?? val.count ?? Object.values(val).find((v: any) => typeof v === 'number') as number | undefined;
+      }
+      const parsed = Number(val);
+      return isNaN(parsed) ? undefined : parsed;
+    };
+
     return {
-      followers: d.followersCount ?? d.followers ?? d.fanCount ?? d.firstDegreeSize ?? d.connectionsCount ?? d.networkSize ?? undefined,
-      following: d.followingCount ?? d.following ?? undefined,
-      posts: d.postsCount ?? d.posts ?? d.mediaCount ?? undefined,
-      engagementRate: d.engagementRate ?? d.engagement_rate ?? undefined,
-      reach: d.reach ?? undefined,
-      impressions: d.impressions ?? undefined,
+      followers: extractNumber(d.followersCount) ?? extractNumber(d.followers) ?? extractNumber(d.fanCount) ?? extractNumber(d.firstDegreeSize) ?? extractNumber(d.connectionsCount) ?? extractNumber(d.networkSize) ?? undefined,
+      following: extractNumber(d.followingCount) ?? extractNumber(d.following) ?? undefined,
+      posts: extractNumber(d.postsCount) ?? extractNumber(d.posts) ?? extractNumber(d.mediaCount) ?? undefined,
+      engagementRate: extractNumber(d.engagementRate) ?? extractNumber(d.engagement_rate) ?? undefined,
+      reach: extractNumber(d.reach) ?? undefined,
+      impressions: extractNumber(d.impressions) ?? undefined,
       name: d.name ?? d.username ?? d.localizedFirstName ?? undefined,
       // Facebook-specific
-      likes: d.fanCount ?? d.likes ?? undefined,
+      likes: extractNumber(d.fanCount) ?? extractNumber(d.likes) ?? undefined,
       // Extra info
       profileUrl: d.link ?? d.profileUrl ?? undefined,
     };
