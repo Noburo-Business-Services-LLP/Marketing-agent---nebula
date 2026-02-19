@@ -7,6 +7,7 @@ const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
 const AnalyticsSnapshot = require('../models/AnalyticsSnapshot');
+const SocialSnapshot = require('../models/SocialSnapshot');
 const User = require('../models/User');
 const { analyzeMetrics, generateWithLLM } = require('../services/llmRouter');
 const { getPostAnalytics, getSocialAnalyticsDetailed, getAyrshareUserProfile, getUserSocialAnalytics } = require('../services/socialMediaAPI');
@@ -441,6 +442,148 @@ router.get('/snapshots', protect, async (req, res) => {
   }
 });
 
+// ============================================
+// NAMED ROUTES (must be above /:id wildcard)
+// ============================================
+
+/**
+ * GET /api/analytics/summary
+ * Get aggregated analytics summary across all snapshots
+ */
+router.get('/summary', protect, async (req, res) => {
+  try {
+    const userId = req.user.userId || req.user.id;
+    const { days = 30 } = req.query;
+    
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - parseInt(days));
+    
+    const snapshots = await AnalyticsSnapshot.find({
+      userId,
+      'dateRange.start': { $gte: startDate }
+    });
+    
+    // Aggregate metrics
+    const summary = {
+      totalSessions: 0,
+      totalImpressions: 0,
+      totalClicks: 0,
+      totalConversions: 0,
+      totalSpend: 0,
+      totalRevenue: 0,
+      avgCTR: 0,
+      avgConversionRate: 0,
+      snapshotCount: snapshots.length
+    };
+    
+    for (const s of snapshots) {
+      summary.totalSessions += s.traffic?.sessions || 0;
+      summary.totalImpressions += s.engagement?.impressions || s.advertising?.impressions || 0;
+      summary.totalClicks += s.engagement?.clicks || s.advertising?.clicks || 0;
+      summary.totalConversions += s.conversions?.totalConversions || 0;
+      summary.totalSpend += s.advertising?.totalSpend || 0;
+      summary.totalRevenue += s.revenue?.totalRevenue || 0;
+    }
+    
+    if (summary.totalImpressions > 0) {
+      summary.avgCTR = (summary.totalClicks / summary.totalImpressions * 100).toFixed(2);
+    }
+    if (summary.totalSessions > 0) {
+      summary.avgConversionRate = (summary.totalConversions / summary.totalSessions * 100).toFixed(2);
+    }
+    
+    res.json({
+      success: true,
+      summary,
+      dateRange: {
+        start: startDate,
+        end: new Date()
+      }
+    });
+    
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================
+// HISTORICAL SNAPSHOTS 
+// ============================================
+
+/**
+ * GET /api/analytics/history
+ * Get historical social analytics snapshots for trend charts
+ * Query: ?days=30 (default 30, max 365)
+ */
+router.get('/history', protect, async (req, res) => {
+  try {
+    const userId = req.user.userId || req.user.id;
+    const days = Math.min(parseInt(req.query.days) || 30, 365);
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+    since.setHours(0, 0, 0, 0);
+
+    const snapshots = await SocialSnapshot.find({
+      userId,
+      date: { $gte: since }
+    }).sort({ date: 1 }).lean();
+
+    // Transform Map to plain object for JSON serialization
+    const history = snapshots.map(s => ({
+      date: s.date,
+      platforms: s.platforms instanceof Map ? Object.fromEntries(s.platforms) : s.platforms,
+      totals: s.totals,
+    }));
+
+    res.json({ success: true, history, days });
+  } catch (error) {
+    console.error('Analytics history error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/analytics/snapshot-now
+ * Manually trigger a snapshot for the current user (useful for first-time / testing)
+ */
+router.post('/snapshot-now', protect, async (req, res) => {
+  try {
+    const userId = req.user.userId || req.user.id;
+    const user = await User.findById(userId);
+    const profileKey = user?.ayrshare?.profileKey;
+
+    if (!profileKey) {
+      return res.status(400).json({ success: false, error: 'No social accounts connected' });
+    }
+
+    const snapshotScheduler = require('../services/snapshotScheduler');
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    await snapshotScheduler.collectForUser(userId, profileKey, today);
+
+    // Return the snapshot we just created
+    const snapshot = await SocialSnapshot.findOne({ userId, date: today }).lean();
+
+    res.json({
+      success: true,
+      message: 'Snapshot collected',
+      snapshot: snapshot ? {
+        date: snapshot.date,
+        platforms: snapshot.platforms instanceof Map ? Object.fromEntries(snapshot.platforms) : snapshot.platforms,
+        totals: snapshot.totals,
+      } : null,
+    });
+  } catch (error) {
+    console.error('Manual snapshot error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================
+// WILDCARD :id ROUTES (must be last)
+// ============================================
+
 /**
  * GET /api/analytics/:id
  * Get single analytics snapshot with insights
@@ -546,66 +689,6 @@ router.delete('/:id', protect, async (req, res) => {
     }
     
     res.json({ success: true, message: 'Analytics snapshot deleted' });
-    
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-/**
- * GET /api/analytics/summary
- * Get aggregated analytics summary across all snapshots
- */
-router.get('/summary', protect, async (req, res) => {
-  try {
-    const userId = req.user.userId || req.user.id;
-    const { days = 30 } = req.query;
-    
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - parseInt(days));
-    
-    const snapshots = await AnalyticsSnapshot.find({
-      userId,
-      'dateRange.start': { $gte: startDate }
-    });
-    
-    // Aggregate metrics
-    const summary = {
-      totalSessions: 0,
-      totalImpressions: 0,
-      totalClicks: 0,
-      totalConversions: 0,
-      totalSpend: 0,
-      totalRevenue: 0,
-      avgCTR: 0,
-      avgConversionRate: 0,
-      snapshotCount: snapshots.length
-    };
-    
-    for (const s of snapshots) {
-      summary.totalSessions += s.traffic?.sessions || 0;
-      summary.totalImpressions += s.engagement?.impressions || s.advertising?.impressions || 0;
-      summary.totalClicks += s.engagement?.clicks || s.advertising?.clicks || 0;
-      summary.totalConversions += s.conversions?.totalConversions || 0;
-      summary.totalSpend += s.advertising?.totalSpend || 0;
-      summary.totalRevenue += s.revenue?.totalRevenue || 0;
-    }
-    
-    if (summary.totalImpressions > 0) {
-      summary.avgCTR = (summary.totalClicks / summary.totalImpressions * 100).toFixed(2);
-    }
-    if (summary.totalSessions > 0) {
-      summary.avgConversionRate = (summary.totalConversions / summary.totalSessions * 100).toFixed(2);
-    }
-    
-    res.json({
-      success: true,
-      summary,
-      dateRange: {
-        start: startDate,
-        end: new Date()
-      }
-    });
     
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });

@@ -56,6 +56,8 @@ const adsRoutes = require('./routes/ads');
 
 // Notification scheduler service
 const notificationScheduler = require('./services/notificationScheduler');
+// Analytics snapshot scheduler
+const snapshotScheduler = require('./services/snapshotScheduler');
 
 const app = express();
 
@@ -224,6 +226,13 @@ const startServer = async () => {
     } catch (schedulerError) {
       console.warn('⚠️  Notification scheduler failed to start:', schedulerError.message);
     }
+
+    // Start analytics snapshot scheduler (every 12 hours)
+    try {
+      snapshotScheduler.start();
+    } catch (schedulerError) {
+      console.warn('⚠️  Snapshot scheduler failed to start:', schedulerError.message);
+    }
   } catch (error) {
     console.warn('⚠️  MongoDB not available:', error.message);
     console.warn('   Server will start in demo mode (no database persistence)');
@@ -251,6 +260,7 @@ mongoose.connection.on('error', (err) => {
 process.on('SIGINT', async () => {
   console.log('\nShutting down gracefully...');
   notificationScheduler.stop();
+  snapshotScheduler.stop();
   await mongoose.connection.close();
   process.exit(0);
 });

@@ -402,12 +402,25 @@ const Campaigns: React.FC = () => {
   const loadedFromCacheRef = useRef(false);
   const initialLoadDoneRef = useRef(false);
 
+  // Derive a user-scoped cache key from the JWT token so different users never share cached campaigns
+  const getCacheKey = () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      if (token) {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        const uid = payload.userId || payload.id || payload.sub || '';
+        return `nebula_suggested_campaigns_${uid}`;
+      }
+    } catch (_) {}
+    return 'nebula_suggested_campaigns';
+  };
+
   // Load cached campaigns from localStorage on mount - BEFORE any other effects
   useEffect(() => {
     if (initialLoadDoneRef.current) return;
     initialLoadDoneRef.current = true;
     
-    const cachedCampaigns = localStorage.getItem('nebula_suggested_campaigns');
+    const cachedCampaigns = localStorage.getItem(getCacheKey());
     if (cachedCampaigns) {
       try {
         const parsed = JSON.parse(cachedCampaigns);
@@ -476,14 +489,14 @@ const Campaigns: React.FC = () => {
             ? stockImages[idx % stockImages.length]
             : campaign.imageUrl
         }));
-        localStorage.setItem('nebula_suggested_campaigns', JSON.stringify({
+        localStorage.setItem(getCacheKey(), JSON.stringify({
           campaigns: campaignsForCache,
           timestamp: Date.now()
         }));
       } catch (e) {
         console.warn('Failed to cache campaigns to localStorage:', e);
         // Clear cache if quota exceeded
-        localStorage.removeItem('nebula_suggested_campaigns');
+        localStorage.removeItem(getCacheKey());
       }
     }
   }, [suggestedCampaigns]);
@@ -819,7 +832,7 @@ const Campaigns: React.FC = () => {
   // Handle regenerate - forces new generation and clears cache
   const handleRegenerate = () => {
     // Clear localStorage cache to force fresh generation
-    localStorage.removeItem('nebula_suggested_campaigns');
+    localStorage.removeItem(getCacheKey());
     setRegenerationCount(prev => prev + 1);
     generateSuggestionsStreaming(true);
   };

@@ -494,6 +494,9 @@ const OverviewTab: React.FC<{
         </div>
       )}
 
+      {/* Historical Trends */}
+      <HistoricalTrendsChart isDarkMode={isDarkMode} tc={tc} formatNumber={formatNumber} />
+
       {/* Top Post Performance */}
       {campaigns.length > 0 && (
         <TopPostPerformance
@@ -503,6 +506,387 @@ const OverviewTab: React.FC<{
           tc={tc}
           formatNumber={formatNumber}
         />
+      )}
+    </div>
+  );
+};
+
+// ============================================
+// HISTORICAL TRENDS — MULTI-METRIC DASHBOARD
+// ============================================
+
+type MetricKey = 'followers' | 'reach' | 'impressions' | 'engagementRate' | 'posts' | 'likes';
+
+const METRIC_CONFIG: Record<MetricKey, { label: string; icon: React.ReactNode; color: string; suffix?: string; totalKey?: string }> = {
+  followers: { label: 'Followers', icon: <Users className="w-4 h-4" />, color: '#ffcc29', totalKey: 'followers' },
+  reach:     { label: 'Reach', icon: <Eye className="w-4 h-4" />, color: '#8B5CF6', totalKey: 'reach' },
+  impressions: { label: 'Impressions', icon: <TrendingUp className="w-4 h-4" />, color: '#10B981', totalKey: 'impressions' },
+  engagementRate: { label: 'Engagement %', icon: <Heart className="w-4 h-4" />, color: '#F43F5E', suffix: '%' },
+  posts:     { label: 'Posts', icon: <MessageSquare className="w-4 h-4" />, color: '#F59E0B', totalKey: 'posts' },
+  likes:     { label: 'Likes', icon: <Heart className="w-4 h-4" />, color: '#EC4899' },
+};
+
+const HistoricalTrendsChart: React.FC<{
+  isDarkMode: boolean;
+  tc: any;
+  formatNumber: (n: number) => string;
+}> = ({ isDarkMode, tc, formatNumber }) => {
+  const [history, setHistory] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [days, setDays] = useState(30);
+  const [snapshotting, setSnapshotting] = useState(false);
+  const [metric, setMetric] = useState<MetricKey>('followers');
+
+  const loadHistory = async () => {
+    setLoading(true);
+    try {
+      const res = await apiService.getAnalyticsHistory(days);
+      if (res?.success) setHistory(res.history || []);
+    } catch (e) {}
+    setLoading(false);
+  };
+
+  const takeSnapshot = async () => {
+    setSnapshotting(true);
+    try {
+      await apiService.takeSnapshotNow();
+      await loadHistory();
+    } catch (e) {}
+    setSnapshotting(false);
+  };
+
+  useEffect(() => { loadHistory(); }, [days]);
+
+  const mc = METRIC_CONFIG[metric];
+
+  if (loading) {
+    return (
+      <div className={`rounded-xl p-6 ${tc.card}`}>
+        <div className="flex items-center gap-2 mb-4">
+          <TrendingUp className="w-5 h-5 text-[#ffcc29]" />
+          <h3 className={`text-lg font-semibold ${tc.text}`}>Performance Insights</h3>
+        </div>
+        <div className="flex items-center justify-center h-48">
+          <Loader2 className="w-6 h-6 animate-spin text-[#ffcc29]" />
+        </div>
+      </div>
+    );
+  }
+
+  // If no history yet, show a prompt to take first snapshot
+  if (history.length === 0) {
+    return (
+      <div className={`rounded-xl p-6 ${tc.card}`}>
+        <div className="flex items-center gap-2 mb-4">
+          <TrendingUp className="w-5 h-5 text-[#ffcc29]" />
+          <h3 className={`text-lg font-semibold ${tc.text}`}>Performance Insights</h3>
+        </div>
+        <div className="flex flex-col items-center justify-center py-8 gap-3">
+          <BarChart3 className={`w-10 h-10 ${tc.textSecondary}`} />
+          <p className={`text-sm ${tc.textSecondary} text-center max-w-md`}>
+            Start tracking your growth across followers, reach, engagement and more. Take your first snapshot to unlock performance insights.
+          </p>
+          <button
+            onClick={takeSnapshot}
+            disabled={snapshotting}
+            className="mt-2 px-4 py-2 bg-[#ffcc29] text-[#070A12] rounded-lg text-sm font-medium hover:bg-[#e6b800] transition-colors flex items-center gap-2"
+          >
+            {snapshotting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+            {snapshotting ? 'Collecting...' : 'Take First Snapshot'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Collect all platform keys across all snapshots
+  const allPlatforms = [...new Set(history.flatMap(h => Object.keys(h.platforms || {})))];
+
+  // Build chart data with selected metric
+  const chartData = history.map(h => {
+    const plats = h.platforms || {};
+    // For engagement rate, average across platforms instead of sum
+    let total = 0;
+    if (metric === 'engagementRate') {
+      const vals = allPlatforms.map(p => plats[p]?.engagementRate || 0).filter(v => v > 0);
+      total = vals.length > 0 ? vals.reduce((a: number, b: number) => a + b, 0) / vals.length : 0;
+    } else if (mc.totalKey && h.totals?.[mc.totalKey] !== undefined) {
+      total = h.totals[mc.totalKey];
+    } else {
+      total = allPlatforms.reduce((sum: number, p: string) => sum + (plats[p]?.[metric] || 0), 0);
+    }
+    return {
+      date: new Date(h.date),
+      label: new Date(h.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      total,
+      platforms: plats,
+    };
+  });
+
+  // Latest snapshot for platform cards
+  const latest = history[history.length - 1];
+  const previous = history.length >= 2 ? history[history.length - 2] : null;
+
+  // Per-platform latest values for the selected metric
+  const platformCards = allPlatforms.map(p => {
+    const latestVal = latest?.platforms?.[p]?.[metric] || 0;
+    const prevVal = previous?.platforms?.[p]?.[metric] || 0;
+    const change = previous ? latestVal - prevVal : 0;
+    const changePct = prevVal > 0 ? ((change / prevVal) * 100) : 0;
+    return { platform: p, value: latestVal, change, changePct };
+  });
+
+  // SVG dimensions
+  const W = 700, H = 220, PAD = { top: 20, right: 20, bottom: 35, left: 55 };
+  const cW = W - PAD.left - PAD.right;
+  const cH = H - PAD.top - PAD.bottom;
+
+  // Y scale
+  const allValues = chartData.map(d => d.total);
+  const rawMax = Math.max(...allValues, 0.01);
+  const rawMin = Math.min(...allValues, 0);
+  const yMax = rawMax * 1.15;
+  const yMin = Math.max(rawMin * 0.85, 0);
+  const yRange = yMax - yMin || 1;
+
+  const toX = (i: number) => PAD.left + (i / Math.max(chartData.length - 1, 1)) * cW;
+  const toY = (val: number) => PAD.top + cH - ((val - yMin) / yRange) * cH;
+
+  // Build total line
+  const totalLine = chartData.map((d, i) => `${i === 0 ? 'M' : 'L'}${toX(i).toFixed(1)},${toY(d.total).toFixed(1)}`).join(' ');
+  const areaPath = totalLine + ` L${toX(chartData.length - 1).toFixed(1)},${(PAD.top + cH).toFixed(1)} L${PAD.left},${(PAD.top + cH).toFixed(1)} Z`;
+
+  // Per-platform lines for selected metric
+  const platformLinesData = allPlatforms.map(p => {
+    const color = platformColors[p] || '#ffcc29';
+    const points = chartData.map((d, i) => {
+      const val = d.platforms[p]?.[metric] || 0;
+      return `${i === 0 ? 'M' : 'L'}${toX(i).toFixed(1)},${toY(val).toFixed(1)}`;
+    }).join(' ');
+    return { platform: p, color, points };
+  });
+
+  // Y gridlines
+  const gridCount = 4;
+  const gridLines = Array.from({ length: gridCount + 1 }, (_, i) => {
+    const val = yMin + (yRange * i) / gridCount;
+    return { y: toY(val), label: mc.suffix === '%' ? val.toFixed(1) + '%' : formatNumber(Math.round(val)) };
+  });
+
+  // X labels (show max 8)
+  const step = Math.max(1, Math.floor(chartData.length / 8));
+  const xLabels = chartData.filter((_, i) => i % step === 0 || i === chartData.length - 1);
+
+  // Growth calculations
+  const firstVal = chartData[0]?.total || 0;
+  const lastVal = chartData[chartData.length - 1]?.total || 0;
+  const growthPct = firstVal > 0 ? (((lastVal - firstVal) / firstVal) * 100).toFixed(1) : '0.0';
+  const isGrowing = lastVal >= firstVal;
+
+  // Auto-generated insights from data
+  const insights: string[] = [];
+  if (history.length >= 2) {
+    // Best performing platform for this metric
+    const best = platformCards.reduce((a, b) => (a.value > b.value ? a : b), platformCards[0]);
+    if (best && best.value > 0) {
+      insights.push(`${best.platform.charAt(0).toUpperCase() + best.platform.slice(1)} leads with ${mc.suffix === '%' ? best.value.toFixed(1) + '%' : formatNumber(best.value)} ${mc.label.toLowerCase()}`);
+    }
+    // Biggest grower
+    const grower = platformCards.filter(p => p.changePct > 0).sort((a, b) => b.changePct - a.changePct)[0];
+    if (grower) {
+      insights.push(`${grower.platform.charAt(0).toUpperCase() + grower.platform.slice(1)} grew ${grower.changePct.toFixed(1)}% since last snapshot`);
+    }
+    // Declining platform
+    const decliner = platformCards.filter(p => p.changePct < 0).sort((a, b) => a.changePct - b.changePct)[0];
+    if (decliner) {
+      insights.push(`${decliner.platform.charAt(0).toUpperCase() + decliner.platform.slice(1)} dropped ${Math.abs(decliner.changePct).toFixed(1)}% — consider refreshing your strategy`);
+    }
+  } else {
+    // Single snapshot — just describe current state
+    const best = platformCards.reduce((a, b) => (a.value > b.value ? a : b), platformCards[0]);
+    if (best && best.value > 0) {
+      insights.push(`${best.platform.charAt(0).toUpperCase() + best.platform.slice(1)} is your strongest for ${mc.label.toLowerCase()} at ${mc.suffix === '%' ? best.value.toFixed(1) + '%' : formatNumber(best.value)}`);
+    }
+    insights.push('More snapshots will unlock trend comparisons — data auto-collects every 12 hours');
+  }
+
+  return (
+    <div className={`rounded-xl p-6 ${tc.card}`}>
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <div className="flex items-center gap-2">
+          <TrendingUp className="w-5 h-5 text-[#ffcc29]" />
+          <h3 className={`text-lg font-semibold ${tc.text}`}>Performance Insights</h3>
+          <span className={`text-xs px-2 py-0.5 rounded-full ${
+            isGrowing
+              ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+              : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+          }`}>
+            {isGrowing ? <ArrowUpRight className="w-3 h-3 inline" /> : <ArrowDownRight className="w-3 h-3 inline" />}
+            {growthPct}%
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={takeSnapshot}
+            disabled={snapshotting}
+            className={`px-3 py-1 rounded-md text-xs font-medium transition-colors flex items-center gap-1 ${
+              isDarkMode ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+            }`}
+            title="Refresh snapshot"
+          >
+            {snapshotting ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+            Snapshot
+          </button>
+          {[7, 30, 90].map(d => (
+            <button
+              key={d}
+              onClick={() => setDays(d)}
+              className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                days === d
+                  ? 'bg-[#ffcc29] text-[#070A12]'
+                  : isDarkMode ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+              }`}
+            >
+              {d}d
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Metric Selector Tabs */}
+      <div className="flex gap-1 mb-4 overflow-x-auto pb-1">
+        {(Object.keys(METRIC_CONFIG) as MetricKey[]).map(key => {
+          const cfg = METRIC_CONFIG[key];
+          const isActive = metric === key;
+          return (
+            <button
+              key={key}
+              onClick={() => setMetric(key)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${
+                isActive
+                  ? 'text-white shadow-sm'
+                  : isDarkMode ? 'bg-slate-800/50 text-slate-400 hover:bg-slate-700' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'
+              }`}
+              style={isActive ? { backgroundColor: cfg.color } : undefined}
+            >
+              {cfg.icon}
+              {cfg.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* SVG Chart */}
+      <div className="w-full overflow-x-auto">
+        <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ minWidth: 400 }}>
+          {/* Grid lines */}
+          {gridLines.map((g, i) => (
+            <g key={i}>
+              <line x1={PAD.left} y1={g.y} x2={PAD.left + cW} y2={g.y} stroke={isDarkMode ? '#1e293b' : '#e2e8f0'} strokeWidth="0.5" />
+              <text x={PAD.left - 8} y={g.y} textAnchor="end" dominantBaseline="middle" fontSize="10" fill={isDarkMode ? '#94a3b8' : '#94a3b8'}>
+                {g.label}
+              </text>
+            </g>
+          ))}
+
+          {/* Area fill */}
+          <defs>
+            <linearGradient id="areaGradTrends" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={mc.color} stopOpacity="0.25" />
+              <stop offset="100%" stopColor={mc.color} stopOpacity="0.02" />
+            </linearGradient>
+          </defs>
+          {chartData.length > 1 && <path d={areaPath} fill="url(#areaGradTrends)" />}
+
+          {/* Platform lines */}
+          {platformLinesData.map(pl => (
+            <path key={pl.platform} d={pl.points} fill="none" stroke={pl.color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.6" strokeDasharray="4 2" />
+          ))}
+
+          {/* Total/average line (on top) */}
+          <path d={totalLine} fill="none" stroke={mc.color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+
+          {/* Data points */}
+          {chartData.map((d, i) => (
+            <circle key={i} cx={toX(i)} cy={toY(d.total)} r="3" fill={mc.color} stroke={isDarkMode ? '#070A12' : '#fff'} strokeWidth="1.5" />
+          ))}
+
+          {/* X labels */}
+          {xLabels.map((d, i) => {
+            const idx = chartData.indexOf(d);
+            return (
+              <text key={i} x={toX(idx)} y={H - 8} textAnchor="middle" fontSize="10" fill={isDarkMode ? '#94a3b8' : '#94a3b8'}>
+                {d.label}
+              </text>
+            );
+          })}
+        </svg>
+      </div>
+
+      {/* Legend */}
+      <div className="flex items-center gap-4 mt-2 flex-wrap">
+        <div className="flex items-center gap-1.5">
+          <div className="w-4 h-0.5 rounded" style={{ backgroundColor: mc.color }} />
+          <span className={`text-xs ${tc.textSecondary}`}>{metric === 'engagementRate' ? 'Avg' : 'Total'} {mc.label}</span>
+        </div>
+        {allPlatforms.map(p => (
+          <div key={p} className="flex items-center gap-1.5">
+            <div className="w-4 h-0.5 rounded" style={{ backgroundColor: platformColors[p] || '#ffcc29', opacity: 0.6 }} />
+            <span className={`text-xs ${tc.textSecondary} capitalize`}>{p}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Platform Breakdown Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-5">
+        {platformCards.map(pc => {
+          const color = platformColors[pc.platform] || '#ffcc29';
+          const up = pc.change >= 0;
+          return (
+            <div key={pc.platform} className={`p-3 rounded-lg ${isDarkMode ? 'bg-[#070A12]' : 'bg-gray-50'}`}>
+              <div className="flex items-center gap-2 mb-2">
+                <div className="p-1 rounded" style={{ backgroundColor: `${color}20` }}>
+                  <PlatformIcon platform={pc.platform} className="w-3.5 h-3.5" />
+                </div>
+                <span className={`text-xs font-medium capitalize ${tc.text}`}>{pc.platform}</span>
+              </div>
+              <p className={`text-xl font-bold ${tc.text}`}>
+                {mc.suffix === '%' ? pc.value.toFixed(1) + '%' : formatNumber(pc.value)}
+              </p>
+              {previous && (
+                <div className={`flex items-center gap-1 mt-1 text-xs ${up ? 'text-green-500' : 'text-red-400'}`}>
+                  {up ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+                  <span>
+                    {up ? '+' : ''}{mc.suffix === '%' ? pc.change.toFixed(2) + '%' : formatNumber(Math.abs(pc.change))}
+                    {pc.changePct !== 0 && ` (${pc.changePct > 0 ? '+' : ''}${pc.changePct.toFixed(1)}%)`}
+                  </span>
+                </div>
+              )}
+              {!previous && (
+                <p className={`text-xs mt-1 ${tc.textSecondary}`}>First snapshot</p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Auto-Generated Insights */}
+      {insights.length > 0 && (
+        <div className={`mt-4 p-4 rounded-lg ${isDarkMode ? 'bg-[#0d1117] border border-slate-800' : 'bg-yellow-50/50 border border-yellow-200/50'}`}>
+          <div className="flex items-center gap-2 mb-2">
+            <Zap className="w-4 h-4 text-[#ffcc29]" />
+            <span className={`text-xs font-semibold uppercase tracking-wide ${tc.textSecondary}`}>Quick Insights</span>
+          </div>
+          <ul className="space-y-1">
+            {insights.map((insight, i) => (
+              <li key={i} className={`text-sm ${tc.text} flex items-start gap-2`}>
+                <span className="text-[#ffcc29] mt-0.5">•</span>
+                {insight}
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
     </div>
   );

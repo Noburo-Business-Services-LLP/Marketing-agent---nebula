@@ -267,6 +267,10 @@ export const apiService = {
 
   logout: (): void => {
     removeToken();
+    // Clear user-specific caches so next user doesn't see stale data
+    Object.keys(localStorage).forEach(key => {
+      if (key.startsWith('nebula_suggested_campaigns')) localStorage.removeItem(key);
+    });
   },
 
   completeOnboarding: async (data: BusinessProfile, connectedSocials?: {platform: string; username?: string}[]): Promise<{ success: boolean; user: User }> => {
@@ -1716,6 +1720,24 @@ export const apiService = {
       true
     );
     return response;
+  },
+
+  // Get historical analytics snapshots for trend charts
+  getAnalyticsHistory: async (days: number = 30): Promise<any> => {
+    return await apiCall<any>(
+      `/analytics/history?days=${days}`,
+      { method: 'GET' },
+      true
+    );
+  },
+
+  // Manually trigger a snapshot for the current user
+  takeSnapshotNow: async (): Promise<any> => {
+    return await apiCall<any>(
+      '/analytics/snapshot-now',
+      { method: 'POST' },
+      true
+    );
   },
 
   // ============================================
