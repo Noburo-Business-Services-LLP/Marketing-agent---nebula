@@ -96,6 +96,17 @@ const userSchema = new mongoose.Schema({
     title: { type: String, default: '' },        // Profile title in Ayrshare
     createdAt: { type: Date }                    // When Ayrshare profile was created
   },
+  // Email OTP Verification
+  isVerified: {
+    type: Boolean,
+    default: false
+  },
+  otp: {
+    code: { type: String, select: false },
+    expiresAt: { type: Date, select: false },
+    attempts: { type: Number, default: 0, select: false },
+    lastSentAt: { type: Date, select: false }
+  },
   lastLoginAt: {
     type: Date,
     default: Date.now
@@ -133,6 +144,7 @@ userSchema.methods.toPublicJSON = function() {
     lastName: this.lastName,
     companyName: this.companyName,
     avatar: this.avatar,
+    isVerified: this.isVerified,
     onboardingCompleted: this.onboardingCompleted,
     businessProfile: this.businessProfile,
     connectedSocials: this.connectedSocials?.map(s => ({

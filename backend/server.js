@@ -233,6 +233,14 @@ const startServer = async () => {
     } catch (schedulerError) {
       console.warn('⚠️  Snapshot scheduler failed to start:', schedulerError.message);
     }
+
+    // Initialize OTP email service
+    try {
+      const otpService = require('./services/otpService');
+      otpService.initialize();
+    } catch (otpError) {
+      console.warn('⚠️  OTP service failed to initialize:', otpError.message);
+    }
   } catch (error) {
     console.warn('⚠️  MongoDB not available:', error.message);
     console.warn('   Server will start in demo mode (no database persistence)');
