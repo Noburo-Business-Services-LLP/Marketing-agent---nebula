@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { apiService } from '../services/api';
 import { DashboardData, Campaign, CompetitorPost } from '../types';
-import { TrendingUp, ArrowUpRight, ChevronRight, ChevronLeft, Calendar as CalendarIcon, Calendar, Info, Activity, Clock, MoreHorizontal, Plus, X, ExternalLink, Edit3, Share2, MessageSquare, FileText, Loader2, Bell, BellRing, Check, AlertCircle, Trash2, Eye, Users, BarChart3, Swords, Sparkles, Download, Copy, Send, Save, Lightbulb, Flame, Target, Zap, Music, Image as ImageIcon, RefreshCw, PenTool, Wand2 } from 'lucide-react';
+import { TrendingUp, ArrowUpRight, ChevronRight, ChevronLeft, Calendar as CalendarIcon, Calendar, Info, Activity, Clock, MoreHorizontal, Plus, X, ExternalLink, Edit3, Share2, MessageSquare, FileText, Loader2, Bell, BellRing, Check, AlertCircle, Trash2, Eye, Users, BarChart3, Swords, Sparkles, Download, Copy, Send, Save, Lightbulb, Flame, Target, Zap, Music, Image as ImageIcon, RefreshCw, PenTool, Wand2, Upload, Filter } from 'lucide-react';
 import { useTheme, getThemeClasses } from '../context/ThemeContext';
+import PlatformPreview from '../components/PlatformPreview';
 
 // Section info descriptions
 const sectionInfo: Record<string, { title: string; description: string }> = {
@@ -406,6 +407,7 @@ const Dashboard: React.FC = () => {
   const [scheduleDate, setScheduleDate] = useState('');
   const [scheduleTime, setScheduleTime] = useState('');
   const [selectedPlatform, setSelectedPlatform] = useState('instagram');
+  const [showPreview, setShowPreview] = useState(false);
   const [playingAudio, setPlayingAudio] = useState<string | null>(null);
   const [audioVolume, setAudioVolume] = useState(0.7);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -1857,6 +1859,12 @@ const Dashboard: React.FC = () => {
                   Cancel
                 </button>
                 <button
+                  onClick={() => setShowPreview(true)}
+                  className={`px-4 py-2 text-sm font-medium rounded-lg flex items-center gap-2 ${isDarkMode ? 'bg-[#161b22] text-white hover:bg-[#21262d] border border-slate-700/50' : 'bg-white hover:bg-slate-50 border border-slate-200'}`}
+                >
+                  <Eye className="w-4 h-4" /> Preview
+                </button>
+                <button
                   onClick={handleSchedulePost}
                   disabled={scheduling}
                   className="px-6 py-2 bg-[#ffcc29] hover:bg-[#e6b825] text-black text-sm font-semibold rounded-lg flex items-center gap-2 disabled:opacity-50"
@@ -2103,6 +2111,12 @@ const Dashboard: React.FC = () => {
                   </button>
                   <div className="flex items-center gap-2">
                     <button
+                      onClick={() => setShowPreview(true)}
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-xl ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 hover:border-[#ffcc29]' : 'bg-white border-slate-200 hover:border-[#ffcc29]'} border ${theme.text} text-sm font-medium transition-all`}
+                    >
+                      <Eye className="w-4 h-4" /> Preview
+                    </button>
+                    <button
                       onClick={handleSaveAsDraft}
                       disabled={savingDraft}
                       className={`flex items-center gap-2 px-4 py-2.5 rounded-xl ${isDarkMode ? 'bg-[#161b22] border-[#ffcc29]/30 hover:border-[#ffcc29]' : 'bg-white border-slate-200 hover:border-[#ffcc29]'} border ${theme.text} text-sm font-medium transition-all disabled:opacity-50`}
@@ -2123,6 +2137,19 @@ const Dashboard: React.FC = () => {
             )}
           </div>
         </div>
+      )}
+
+      {/* Platform Preview Modal */}
+      {showPreview && (
+        <PlatformPreview
+          platform={rivalPost?.platform || selectedPlatform || 'instagram'}
+          imageUrl={rivalPost?.imageUrl || postImageUrl || null}
+          caption={rivalPost ? editedCaption : postCaption}
+          hashtags={rivalPost ? editedHashtags.split(' ').filter(Boolean) : postHashtags}
+          brandName={data?.businessContext?.name || 'Your Brand'}
+          onClose={() => setShowPreview(false)}
+          isDarkMode={isDarkMode}
+        />
       )}
     </div>
   );
@@ -2172,23 +2199,56 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
       setAllCampaigns(campaigns);
     }, [campaigns]);
     
-    // Schedule form state with enhanced campaign fields
+    // Schedule form state — streamlined for quick posting
     const [scheduleForm, setScheduleForm] = useState({
       title: '',
       type: 'reminder' as 'reminder' | 'campaign',
       description: '',
       reminderOffset: 30,
       platform: 'instagram',
-      // Enhanced campaign fields
-      budget: '',
-      targetAudience: '',
-      contentType: 'image' as 'image' | 'video' | 'carousel' | 'story' | 'reel',
       hashtags: '',
-      callToAction: '',
-      objective: 'awareness' as 'awareness' | 'engagement' | 'traffic' | 'conversions' | 'leads',
-      priority: 'medium' as 'low' | 'medium' | 'high',
-      notes: ''
     });
+    
+    // Image upload & AI generation state
+    const [scheduleImage, setScheduleImage] = useState<string | null>(null);
+    const [scheduleImageFile, setScheduleImageFile] = useState<File | null>(null);
+    const [aiGenerating, setAiGenerating] = useState(false);
+    const scheduleFileInputRef = useRef<HTMLInputElement>(null);
+    const scheduleDragRef = useRef<HTMLDivElement>(null);
+    
+    // Poster generation state
+    const [generatedPoster, setGeneratedPoster] = useState<string | null>(null);
+    const [posterGenerating, setPosterGenerating] = useState(false);
+    const [posterContent, setPosterContent] = useState('');
+    const [posterEditMode, setPosterEditMode] = useState(false);
+    const [posterEditInstructions, setPosterEditInstructions] = useState('');
+    const [imageMode, setImageMode] = useState<'upload' | 'reference'>('upload'); // upload = use as-is, reference = generate new poster
+
+    // Platform preview state
+    const [showCalendarPreview, setShowCalendarPreview] = useState(false);
+    const [calendarPreviewData, setCalendarPreviewData] = useState<{ platform: string; imageUrl: string | null; caption: string; hashtags: string[] }>({ platform: 'instagram', imageUrl: null, caption: '', hashtags: [] });
+
+    // Platform filter state
+    const [platformFilter, setPlatformFilter] = useState<string | null>(null);
+    const [showPlatformFilter, setShowPlatformFilter] = useState(false);
+    const platformFilterRef = useRef<HTMLDivElement>(null);
+
+    // Close platform filter dropdown on outside click
+    useEffect(() => {
+      const handleClickOutside = (e: MouseEvent) => {
+        if (platformFilterRef.current && !platformFilterRef.current.contains(e.target as Node)) {
+          setShowPlatformFilter(false);
+        }
+      };
+      if (showPlatformFilter) {
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+      }
+    }, [showPlatformFilter]);
+
+    // Drag-and-drop rescheduling state
+    const [draggedEvent, setDraggedEvent] = useState<any | null>(null);
+    const [dragOverCell, setDragOverCell] = useState<string | null>(null); // "YYYY-MM-DD-HH" key
 
     // Get the start of the week (Monday)
     const getWeekStart = (date: Date) => {
@@ -2400,6 +2460,110 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
         console.error('Failed to refresh campaigns:', e);
       }
     };
+
+    const refreshCalendarEvents = async () => {
+      try {
+        const year = currentDate.getFullYear();
+        const month = currentDate.getMonth() + 1;
+        const { events } = await apiService.getCalendarEvents(year, month);
+        setCalendarEvents(events || []);
+      } catch (e) {
+        console.error('Failed to refresh calendar events:', e);
+      }
+    };
+
+    // --- Drag-and-drop rescheduling handlers ---
+    const handleEventDragStart = (e: React.DragEvent, event: any) => {
+      if (event.eventType === 'holiday') {
+        e.preventDefault();
+        return;
+      }
+      setDraggedEvent(event);
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', event._id || event.id || '');
+      // Make the drag ghost semi-transparent
+      if (e.currentTarget instanceof HTMLElement) {
+        e.currentTarget.style.opacity = '0.5';
+      }
+    };
+
+    const handleEventDragEnd = (e: React.DragEvent) => {
+      setDraggedEvent(null);
+      setDragOverCell(null);
+      if (e.currentTarget instanceof HTMLElement) {
+        e.currentTarget.style.opacity = '1';
+      }
+    };
+
+    const handleCellDragOver = (e: React.DragEvent, cellKey: string) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      setDragOverCell(cellKey);
+    };
+
+    const handleCellDragLeave = (e: React.DragEvent) => {
+      // Only clear if leaving the cell (not entering a child)
+      const relatedTarget = e.relatedTarget as HTMLElement;
+      if (!e.currentTarget.contains(relatedTarget)) {
+        setDragOverCell(null);
+      }
+    };
+
+    const handleCellDrop = async (e: React.DragEvent, targetDate: Date, targetHour: number) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setDragOverCell(null);
+
+      if (!draggedEvent) return;
+
+      const newDateStr = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}`;
+      const newTimeStr = `${String(targetHour).padStart(2, '0')}:00`;
+
+      try {
+        if (draggedEvent.eventType === 'campaign' || draggedEvent.type === 'campaign') {
+          // Update campaign schedule
+          await apiService.updateCampaign(draggedEvent._id, {
+            scheduling: {
+              ...draggedEvent.scheduling,
+              startDate: newDateStr,
+              postTime: newTimeStr
+            }
+          });
+          // Optimistic update
+          setAllCampaigns(prev => prev.map(c => 
+            c._id === draggedEvent._id 
+              ? { ...c, scheduling: { ...c.scheduling, startDate: newDateStr, postTime: newTimeStr } }
+              : c
+          ));
+        } else if (draggedEvent.eventType === 'reminder' || draggedEvent.type === 'reminder') {
+          // Update reminder scheduledFor
+          const newScheduledFor = new Date(targetDate);
+          newScheduledFor.setHours(targetHour, 0, 0, 0);
+          await apiService.updateReminder(draggedEvent._id || draggedEvent.id, {
+            scheduledFor: newScheduledFor.toISOString(),
+            time: newScheduledFor.toISOString()
+          });
+          // Optimistic update
+          setCalendarEvents(prev => prev.map(ev => 
+            (ev._id || ev.id) === (draggedEvent._id || draggedEvent.id)
+              ? { ...ev, scheduledFor: newScheduledFor.toISOString(), time: newScheduledFor.toISOString() }
+              : ev
+          ));
+        }
+      } catch (err) {
+        console.error('Failed to reschedule:', err);
+        // Revert on failure
+        await refreshCampaigns();
+        await refreshCalendarEvents();
+        alert('Failed to reschedule. Please try again.');
+      }
+
+      setDraggedEvent(null);
+    };
+
+    const getCellKey = (date: Date, hour: number) => {
+      return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}-${String(hour).padStart(2, '0')}`;
+    };
     
     // Handle click on time slot to schedule
     const handleSlotClick = (date: Date, hour: number) => {
@@ -2408,20 +2572,135 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
       setSelectedSlot({ date: slotDate, hour, minute: 0 });
       setScheduleForm({
         title: '',
-        type: 'reminder',
+        type: 'campaign',
         description: '',
         reminderOffset: 30,
         platform: 'instagram',
-        budget: '',
-        targetAudience: '',
-        contentType: 'image',
         hashtags: '',
-        callToAction: '',
-        objective: 'awareness',
-        priority: 'medium',
-        notes: ''
       });
+      setScheduleImage(null);
+      setScheduleImageFile(null);
+      setGeneratedPoster(null);
+      setPosterGenerating(false);
+      setPosterContent('');
+      setPosterEditMode(false);
+      setPosterEditInstructions('');
+      setImageMode('upload');
       setShowScheduleModal(true);
+    };
+    
+    // Handle image file selection for schedule modal
+    const handleScheduleImageSelect = (file: File) => {
+      if (!file.type.startsWith('image/')) {
+        alert('Please select a valid image file');
+        return;
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        alert('Image size should be less than 10MB');
+        return;
+      }
+      setScheduleImageFile(file);
+      const reader = new FileReader();
+      reader.onload = (e) => setScheduleImage(e.target?.result as string);
+      reader.readAsDataURL(file);
+    };
+    
+    // Handle drag & drop for schedule image
+    const handleScheduleDrop = (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const file = e.dataTransfer.files[0];
+      if (file) handleScheduleImageSelect(file);
+    };
+    
+    // AI Generate caption + hashtags from uploaded image
+    const handleAIGenerateCaption = async () => {
+      const imageToAnalyze = generatedPoster || scheduleImage;
+      if (!imageToAnalyze) {
+        alert('Please upload an image first');
+        return;
+      }
+      setAiGenerating(true);
+      try {
+        const result = await apiService.generateCaptionFromImage(imageToAnalyze, scheduleForm.platform);
+        if (result.success && result.caption) {
+          // Split caption text from hashtags
+          const hashtagRegex = /#\w+/g;
+          const hashtags = result.caption.match(hashtagRegex) || [];
+          const captionWithoutHashtags = result.caption.replace(hashtagRegex, '').trim();
+          
+          setScheduleForm(prev => ({
+            ...prev,
+            description: captionWithoutHashtags,
+            hashtags: hashtags.join(' '),
+          }));
+        } else {
+          alert('Failed to generate caption. Please try again.');
+        }
+      } catch (error) {
+        console.error('AI caption generation failed:', error);
+        alert('Failed to generate caption. Please try again.');
+      } finally {
+        setAiGenerating(false);
+      }
+    };
+    
+    // Generate poster from reference image using Nano Banana Pro
+    const handleGeneratePoster = async () => {
+      if (!scheduleImage) {
+        alert('Please upload a reference image first');
+        return;
+      }
+      if (!posterContent.trim()) {
+        alert('Please enter the content/text for your poster');
+        return;
+      }
+      setPosterGenerating(true);
+      try {
+        const result = await apiService.generatePosterFromReference(
+          scheduleImage,
+          posterContent,
+          scheduleForm.platform
+        );
+        if (result.success && result.imageBase64) {
+          setGeneratedPoster(result.imageBase64);
+          setPosterEditMode(false);
+          setPosterEditInstructions('');
+        } else {
+          alert(result.error || 'Failed to generate poster. Please try again.');
+        }
+      } catch (error) {
+        console.error('Poster generation failed:', error);
+        alert('Failed to generate poster. Please try again.');
+      } finally {
+        setPosterGenerating(false);
+      }
+    };
+    
+    // Regenerate/edit poster with new instructions
+    const handleEditPoster = async () => {
+      if (!scheduleImage || !posterEditInstructions.trim()) return;
+      setPosterGenerating(true);
+      try {
+        const editedContent = posterContent + '\n\nAdditional instruction: ' + posterEditInstructions;
+        const result = await apiService.generatePosterFromReference(
+          scheduleImage,
+          editedContent,
+          scheduleForm.platform
+        );
+        if (result.success && result.imageBase64) {
+          setGeneratedPoster(result.imageBase64);
+          setPosterEditInstructions('');
+          setPosterEditMode(false);
+        } else {
+          alert(result.error || 'Failed to edit poster. Please try again.');
+        }
+      } catch (error) {
+        console.error('Poster edit failed:', error);
+        alert('Failed to edit poster. Please try again.');
+      } finally {
+        setPosterGenerating(false);
+      }
     };
     
     // Handle creating a reminder/event
@@ -2454,27 +2733,23 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
           const { events } = await apiService.getCalendarEvents(calYear, calMonth);
           setCalendarEvents(events || []);
         } else {
-          // Create a campaign with all the enhanced fields
+          // Create a campaign/post with image support
           const result = await apiService.createCampaign({
             name: scheduleForm.title,
-            objective: scheduleForm.objective,
+            objective: 'engagement',
             platforms: [scheduleForm.platform],
             status: 'scheduled',
             creative: { 
-              type: scheduleForm.contentType, 
+              type: 'image', 
               textContent: scheduleForm.description, 
-              imageUrls: [],
-              hashtags: scheduleForm.hashtags ? scheduleForm.hashtags.split(',').map(h => h.trim()) : [],
-              callToAction: scheduleForm.callToAction
+              imageUrls: (generatedPoster || scheduleImage) ? [generatedPoster || scheduleImage!] : [],
+              hashtags: scheduleForm.hashtags ? scheduleForm.hashtags.split(/[\s,]+/).filter(Boolean).map(h => h.startsWith('#') ? h : `#${h}`) : [],
+              captions: scheduleForm.description + (scheduleForm.hashtags ? '\n\n' + scheduleForm.hashtags : '')
             },
             scheduling: {
               startDate: localDateStr,
               postTime: `${String(selectedSlot.hour).padStart(2, '0')}:${String(selectedSlot.minute).padStart(2, '0')}`
             },
-            budget: scheduleForm.budget ? { amount: parseFloat(scheduleForm.budget), currency: 'USD' } : undefined,
-            targeting: scheduleForm.targetAudience ? { demographics: scheduleForm.targetAudience } : undefined,
-            priority: scheduleForm.priority,
-            notes: scheduleForm.notes
           });
           
           // Add the new campaign to local state immediately with proper structure
@@ -2538,15 +2813,13 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
         description: campaign.creative?.textContent || '',
         reminderOffset: 30,
         platform: campaign.platforms?.[0] || 'instagram',
-        budget: campaign.budget?.amount?.toString() || '',
-        targetAudience: campaign.targeting?.demographics || '',
-        contentType: (campaign.creative?.type === 'text' ? 'image' : campaign.creative?.type) || 'image',
-        hashtags: campaign.creative?.hashtags?.join(', ') || '',
-        callToAction: campaign.creative?.callToAction || '',
-        objective: (campaign.objective === 'sales' ? 'conversions' : campaign.objective === 'conversion' ? 'conversions' : campaign.objective) || 'awareness',
-        priority: campaign.priority || 'medium',
-        notes: campaign.notes || ''
+        hashtags: campaign.creative?.hashtags?.join(' ') || '',
       });
+      
+      // Restore image if available
+      const existingImage = campaign.creative?.imageUrls?.[0] || null;
+      setScheduleImage(existingImage);
+      setScheduleImageFile(null);
       
       // Set the slot based on campaign schedule
       const startDate = campaign.scheduling?.startDate 
@@ -2578,7 +2851,9 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
           platforms: [scheduleForm.platform],
           creative: { 
             ...editingCampaign.creative,
-            textContent: scheduleForm.description 
+            textContent: scheduleForm.description,
+            hashtags: scheduleForm.hashtags ? scheduleForm.hashtags.split(',').map((h: string) => h.trim()) : [],
+            ...((generatedPoster || scheduleImage) ? { imageUrls: [generatedPoster || scheduleImage!] } : {})
           },
           scheduling: {
             ...editingCampaign.scheduling,
@@ -2701,11 +2976,19 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
           return eventDate === dateStr;
         });
         
+        // Apply platform filter
+        const filteredCampaigns = platformFilter
+          ? dayCampaigns.filter(c => c.platforms?.includes(platformFilter))
+          : dayCampaigns;
+        const filteredReminders = platformFilter
+          ? dayEvents.filter(e => e.platform === platformFilter)
+          : dayEvents;
+
         // Return holidays first, then campaigns, then reminders
         return [
           ...dayHolidays,
-          ...dayCampaigns.map(c => ({ ...c, eventType: 'campaign' as const })), 
-          ...dayEvents.map(e => ({ ...e, eventType: 'reminder' as const }))
+          ...filteredCampaigns.map(c => ({ ...c, eventType: 'campaign' as const })), 
+          ...filteredReminders.map(e => ({ ...e, eventType: 'reminder' as const }))
         ];
     };
 
@@ -2829,6 +3112,62 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                         </span>
                       </button>
                     )}
+                    {/* Platform Filter */}
+                    <div className="relative" ref={platformFilterRef}>
+                      <button
+                        onClick={() => setShowPlatformFilter(!showPlatformFilter)}
+                        className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+                          platformFilter
+                            ? 'bg-[#ffcc29] text-[#070A12]'
+                            : `${isDarkMode ? 'bg-[#0d1117] text-slate-300 hover:bg-[#161b22]' : 'bg-[#ededed] text-slate-600 hover:bg-slate-200'}`
+                        }`}
+                      >
+                        <Filter className="w-3.5 h-3.5" />
+                        {platformFilter ? platformFilter.charAt(0).toUpperCase() + platformFilter.slice(1) : 'Filter'}
+                        {platformFilter && (
+                          <X
+                            className="w-3 h-3 ml-0.5 hover:text-red-500"
+                            onClick={(e) => { e.stopPropagation(); setPlatformFilter(null); setShowPlatformFilter(false); }}
+                          />
+                        )}
+                      </button>
+                      {showPlatformFilter && (
+                        <div className={`absolute right-0 top-full mt-1 z-50 ${isDarkMode ? 'bg-[#161b22] border-slate-700' : 'bg-white border-slate-200'} border rounded-xl shadow-xl py-1 min-w-[160px] animate-in fade-in slide-in-from-top-1 duration-150`}>
+                          <button
+                            onClick={() => { setPlatformFilter(null); setShowPlatformFilter(false); }}
+                            className={`w-full text-left px-4 py-2 text-xs font-medium flex items-center gap-2 transition-colors ${
+                              !platformFilter
+                                ? `${isDarkMode ? 'bg-[#ffcc29]/20 text-[#ffcc29]' : 'bg-[#ffcc29]/10 text-[#b8941a]'}`
+                                : `${isDarkMode ? 'text-slate-300 hover:bg-[#0d1117]' : 'text-slate-600 hover:bg-slate-50'}`
+                            }`}
+                          >
+                            <span className="w-5 h-5 rounded-full bg-gradient-to-br from-slate-400 to-slate-600 flex items-center justify-center text-white text-[10px]">All</span>
+                            All Platforms
+                            {!platformFilter && <Check className="w-3.5 h-3.5 ml-auto text-[#ffcc29]" />}
+                          </button>
+                          {[
+                            { id: 'instagram', label: 'Instagram', color: 'from-pink-500 to-purple-600', icon: '📸' },
+                            { id: 'facebook', label: 'Facebook', color: 'from-blue-500 to-blue-700', icon: '👤' },
+                            { id: 'twitter', label: 'Twitter / X', color: 'from-sky-400 to-sky-600', icon: '𝕏' },
+                            { id: 'linkedin', label: 'LinkedIn', color: 'from-blue-600 to-blue-800', icon: '💼' },
+                          ].map(p => (
+                            <button
+                              key={p.id}
+                              onClick={() => { setPlatformFilter(p.id); setShowPlatformFilter(false); }}
+                              className={`w-full text-left px-4 py-2 text-xs font-medium flex items-center gap-2 transition-colors ${
+                                platformFilter === p.id
+                                  ? `${isDarkMode ? 'bg-[#ffcc29]/20 text-[#ffcc29]' : 'bg-[#ffcc29]/10 text-[#b8941a]'}`
+                                  : `${isDarkMode ? 'text-slate-300 hover:bg-[#0d1117]' : 'text-slate-600 hover:bg-slate-50'}`
+                              }`}
+                            >
+                              <span className={`w-5 h-5 rounded-full bg-gradient-to-br ${p.color} flex items-center justify-center text-white text-[10px]`}>{p.icon}</span>
+                              {p.label}
+                              {platformFilter === p.id && <Check className="w-3.5 h-3.5 ml-auto text-[#ffcc29]" />}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                     {/* View Type Selector */}
                     <div className={`flex items-center ${isDarkMode ? 'bg-[#0d1117]' : 'bg-[#ededed]'} rounded-lg p-0.5`}>
                       {(['day', 'week', 'month'] as const).map((view) => (
@@ -2943,7 +3282,10 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                         <div 
                           key={d} 
                           onClick={() => handleSlotClick(date, 9)}
-                          className={`h-24 p-1.5 border ${isDarkMode ? 'border-[#ffcc29]/10' : 'border-[#ededed]'} rounded-lg ${isDarkMode ? 'hover:bg-[#ffcc29]/10' : 'hover:bg-[#ffcc29]/5'} cursor-pointer transition-colors ${
+                          onDragOver={(e) => handleCellDragOver(e, getCellKey(date, 9))}
+                          onDragLeave={handleCellDragLeave}
+                          onDrop={(e) => handleCellDrop(e, date, 9)}
+                          className={`h-24 p-1.5 border ${isDarkMode ? 'border-[#ffcc29]/10' : 'border-[#ededed]'} rounded-lg ${dragOverCell === getCellKey(date, 9) ? (isDarkMode ? 'bg-[#ffcc29]/30 ring-2 ring-[#ffcc29]/50' : 'bg-[#ffcc29]/20 ring-2 ring-[#ffcc29]/40') : (isDarkMode ? 'hover:bg-[#ffcc29]/10' : 'hover:bg-[#ffcc29]/5')} cursor-pointer transition-colors ${
                             today ? `${isDarkMode ? 'bg-[#ffcc29]/20 border-slate-600' : 'bg-[#ffcc29]/10 border-indigo-200'}` : ''
                           }`}
                         >
@@ -2956,6 +3298,9 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                             {dayEvents.slice(0, 3).map((event: any, idx) => (
                               <div 
                                 key={event._id || idx} 
+                                draggable={event.eventType !== 'holiday'}
+                                onDragStart={(e) => { e.stopPropagation(); handleEventDragStart(e, event); }}
+                                onDragEnd={handleEventDragEnd}
                                 onClick={(e) => { 
                                   e.stopPropagation(); 
                                   if (event.eventType === 'campaign') {
@@ -2967,7 +3312,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                   }
                                 }}
                                 title={event.eventType === 'holiday' ? `${event.description}${event.marketingTip ? `\n💡 ${event.marketingTip}` : ''}` : undefined}
-                                className={`text-[10px] px-1.5 py-0.5 rounded truncate font-medium shadow-sm cursor-pointer hover:opacity-80 ${
+                                className={`text-[10px] px-1.5 py-0.5 rounded truncate font-medium shadow-sm hover:opacity-80 ${event.eventType !== 'holiday' ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${draggedEvent && (draggedEvent._id || draggedEvent.id) === (event._id || event.id) ? 'opacity-50 ring-1 ring-[#ffcc29]' : ''} ${
                                   event.eventType === 'holiday' 
                                     ? event.type === 'national' ? 'bg-orange-500 text-white' :
                                       event.type === 'festival' ? 'bg-pink-500 text-white' :
@@ -3021,11 +3366,17 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                       <div 
                         key={hour}
                         onClick={() => handleSlotClick(currentDate, hour)}
-                        className={`h-14 border-b ${isDarkMode ? 'border-[#ffcc29]/10' : 'border-[#ededed]'} ${isDarkMode ? 'hover:bg-[#ffcc29]/10' : 'hover:bg-[#ffcc29]/5'} transition-colors cursor-pointer px-4 flex items-center gap-3`}
+                        onDragOver={(e) => handleCellDragOver(e, getCellKey(currentDate, hour))}
+                        onDragLeave={handleCellDragLeave}
+                        onDrop={(e) => handleCellDrop(e, currentDate, hour)}
+                        className={`h-14 border-b ${isDarkMode ? 'border-[#ffcc29]/10' : 'border-[#ededed]'} ${dragOverCell === getCellKey(currentDate, hour) ? (isDarkMode ? 'bg-[#ffcc29]/30 ring-1 ring-[#ffcc29]/50' : 'bg-[#ffcc29]/20 ring-1 ring-[#ffcc29]/40') : (isDarkMode ? 'hover:bg-[#ffcc29]/10' : 'hover:bg-[#ffcc29]/5')} transition-colors cursor-pointer px-4 flex items-center gap-3`}
                       >
                         {dayEvents.map((event: any, idx) => (
                           <div 
                             key={event._id || idx}
+                            draggable={event.eventType !== 'holiday'}
+                            onDragStart={(e) => handleEventDragStart(e, event)}
+                            onDragEnd={handleEventDragEnd}
                             onClick={(e) => { 
                               e.stopPropagation(); 
                               if (event.eventType === 'campaign') {
@@ -3037,7 +3388,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                               }
                             }}
                             title={event.eventType === 'holiday' ? `${event.description}${event.marketingTip ? `\n💡 ${event.marketingTip}` : ''}` : undefined}
-                            className={`flex-1 py-2 px-3 rounded-lg cursor-pointer shadow-md hover:opacity-90 ${
+                            className={`flex-1 py-2 px-3 rounded-lg shadow-md hover:opacity-90 ${event.eventType !== 'holiday' ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${draggedEvent && (draggedEvent._id || draggedEvent.id) === (event._id || event.id) ? 'opacity-50 ring-2 ring-[#ffcc29]' : ''} ${
                               event.eventType === 'holiday' 
                                 ? event.type === 'national' ? 'bg-orange-500 text-white' :
                                   event.type === 'festival' ? 'bg-pink-500 text-white' :
@@ -3151,17 +3502,24 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                         today ? `${isDarkMode ? 'bg-[#ffcc29]/10' : 'bg-[#ffcc29]/5'}` : ''
                                     }`}
                                 >
-                                    {timeSlots.map(hour => (
+                                    {timeSlots.map(hour => {
+                                        const cellKey = getCellKey(day, hour);
+                                        const isDropTarget = dragOverCell === cellKey;
+                                        return (
                                         <div 
                                             key={hour} 
                                             onClick={() => handleSlotClick(day, hour)}
-                                            className={`h-12 border-b ${isDarkMode ? 'border-[#ffcc29]/10' : 'border-[#ededed]'} ${isDarkMode ? 'hover:bg-[#ffcc29]/10' : 'hover:bg-[#ffcc29]/5'} transition-colors cursor-pointer group`}
+                                            onDragOver={(e) => handleCellDragOver(e, cellKey)}
+                                            onDragLeave={handleCellDragLeave}
+                                            onDrop={(e) => handleCellDrop(e, day, hour)}
+                                            className={`h-12 border-b ${isDarkMode ? 'border-[#ffcc29]/10' : 'border-[#ededed]'} ${isDropTarget ? (isDarkMode ? 'bg-[#ffcc29]/30 border-[#ffcc29] ring-1 ring-[#ffcc29]/50' : 'bg-[#ffcc29]/20 border-[#ffcc29] ring-1 ring-[#ffcc29]/40') : (isDarkMode ? 'hover:bg-[#ffcc29]/10' : 'hover:bg-[#ffcc29]/5')} transition-colors cursor-pointer group`}
                                         >
                                             <div className="w-full h-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                               <Plus className="w-4 h-4 text-[#ffcc29]" />
                                             </div>
                                         </div>
-                                    ))}
+                                        );
+                                    })}
                                     
                                     {/* Events */}
                                     {dayEvents.map((event: any, idx) => {
@@ -3223,6 +3581,9 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                         return (
                                             <div
                                                 key={event._id || event.id || idx}
+                                                draggable={event.eventType !== 'holiday'}
+                                                onDragStart={(e) => handleEventDragStart(e, event)}
+                                                onDragEnd={handleEventDragEnd}
                                                 onClick={(e) => {
                                                   e.stopPropagation();
                                                   if (event.eventType === 'campaign' || event.type === 'campaign') {
@@ -3231,7 +3592,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                                     setSelectedReminder(event);
                                                   }
                                                 }}
-                                                className={`absolute left-1 right-1 rounded-md px-2 py-1 cursor-pointer hover:opacity-90 transition-opacity shadow-md border-l-4 ${colorClass}`}
+                                                className={`absolute left-1 right-1 rounded-md px-2 py-1 cursor-grab active:cursor-grabbing hover:opacity-90 transition-opacity shadow-md border-l-4 ${colorClass} ${draggedEvent?._id === event._id ? 'opacity-50 ring-2 ring-[#ffcc29]' : ''}`}
                                                 style={{ 
                                                     top: `${topOffset}px`,
                                                     height: '44px'
@@ -3282,7 +3643,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
               </div>
             )}
 
-            {/* Schedule Modal - Enhanced with all campaign details */}
+            {/* Schedule Modal - Quick Post Scheduler */}
             {showScheduleModal && selectedSlot && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => setShowScheduleModal(false)}>
                     <div className={`${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-slate-200'} border rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200`} onClick={e => e.stopPropagation()}>
@@ -3290,9 +3651,9 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                         <div className={`sticky top-0 z-10 ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-slate-200'} border-b px-6 py-4`}>
                             <div className="flex justify-between items-center">
                                 <div>
-                                    <h3 className={`text-lg font-bold ${theme.text}`}>{isEditMode ? 'Edit Campaign' : 'Schedule New Event'}</h3>
+                                    <h3 className={`text-lg font-bold ${theme.text}`}>{isEditMode ? 'Edit Post' : 'Quick Schedule'}</h3>
                                     <p className={`text-sm ${theme.textMuted} mt-0.5`}>
-                                      Fill in the details below to {isEditMode ? 'update' : 'schedule'} your {scheduleForm.type}
+                                      {selectedSlot.date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} at {(() => { const h = selectedSlot.hour; const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h; return `${h12}:${String(selectedSlot.minute).padStart(2,'0')} ${h >= 12 ? 'PM' : 'AM'}`; })()}
                                     </p>
                                 </div>
                                 <button onClick={() => { setShowScheduleModal(false); setIsEditMode(false); setEditingCampaign(null); }} className={`p-2 ${isDarkMode ? 'hover:bg-[#161b22]' : 'hover:bg-slate-100'} rounded-lg transition-colors`}>
@@ -3301,44 +3662,38 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                             </div>
                         </div>
                         
-                        <div className="p-6 space-y-5">
-                          {/* Event Type - hide in edit mode */}
+                        <div className="p-6 space-y-4">
+                          {/* Event Type Toggle - hide in edit mode */}
                           {!isEditMode && (
-                          <div>
-                            <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>Event Type</label>
-                            <div className="flex gap-2 mt-2">
-                              <button
-                                onClick={() => setScheduleForm(prev => ({ ...prev, type: 'reminder' }))}
-                                className={`flex-1 py-3 px-4 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-2 ${
-                                  scheduleForm.type === 'reminder' 
-                                    ? 'bg-purple-500/20 text-purple-500 border-2 border-purple-400' 
-                                    : `${isDarkMode ? 'bg-[#161b22] text-slate-400 border-[#ffcc29]/10' : 'bg-slate-100 text-slate-600 border-transparent'} border-2 hover:border-purple-300`
-                                }`}
-                              >
-                                <Bell className="w-4 h-4" /> Reminder
-                              </button>
-                              <button
-                                onClick={() => setScheduleForm(prev => ({ ...prev, type: 'campaign' }))}
-                                className={`flex-1 py-3 px-4 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-2 ${
-                                  scheduleForm.type === 'campaign' 
-                                    ? 'bg-[#ffcc29]/20 text-[#ffcc29] border-2 border-[#ffcc29]' 
-                                    : `${isDarkMode ? 'bg-[#161b22] text-slate-400 border-[#ffcc29]/10' : 'bg-slate-100 text-slate-600 border-transparent'} border-2 hover:border-[#ffcc29]/50`
-                                }`}
-                              >
-                                <Activity className="w-4 h-4" /> Campaign
-                              </button>
-                            </div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => setScheduleForm(prev => ({ ...prev, type: 'campaign' }))}
+                              className={`flex-1 py-2.5 px-4 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-2 ${
+                                scheduleForm.type === 'campaign' 
+                                  ? 'bg-[#ffcc29]/20 text-[#ffcc29] border-2 border-[#ffcc29]' 
+                                  : `${isDarkMode ? 'bg-[#161b22] text-slate-400 border-[#ffcc29]/10' : 'bg-slate-100 text-slate-600 border-transparent'} border-2 hover:border-[#ffcc29]/50`
+                              }`}
+                            >
+                              <Send className="w-4 h-4" /> Post
+                            </button>
+                            <button
+                              onClick={() => setScheduleForm(prev => ({ ...prev, type: 'reminder' }))}
+                              className={`flex-1 py-2.5 px-4 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-2 ${
+                                scheduleForm.type === 'reminder' 
+                                  ? 'bg-purple-500/20 text-purple-500 border-2 border-purple-400' 
+                                  : `${isDarkMode ? 'bg-[#161b22] text-slate-400 border-[#ffcc29]/10' : 'bg-slate-100 text-slate-600 border-transparent'} border-2 hover:border-purple-300`
+                              }`}
+                            >
+                              <Bell className="w-4 h-4" /> Reminder
+                            </button>
                           </div>
                           )}
                           
-                          {/* Date & Time Section */}
-                          <div className={`p-4 rounded-xl ${isDarkMode ? 'bg-[#161b22] border-[#ffcc29]/10' : 'bg-slate-50 border-slate-200'} border`}>
-                            <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide flex items-center gap-2`}>
-                              <CalendarIcon className="w-3.5 h-3.5" /> Date & Time
-                            </label>
-                            <div className="grid grid-cols-2 gap-3 mt-3">
+                          {/* Date & Time - compact */}
+                          <div className={`p-3 rounded-xl ${isDarkMode ? 'bg-[#161b22] border-[#ffcc29]/10' : 'bg-slate-50 border-slate-200'} border`}>
+                            <div className="grid grid-cols-2 gap-3">
                               <div>
-                                <label className={`text-[10px] ${theme.textMuted}`}>Date</label>
+                                <label className={`text-[10px] font-semibold ${theme.textMuted} uppercase`}>Date</label>
                                 <input
                                   type="date"
                                   value={selectedSlot.date.toISOString().split('T')[0]}
@@ -3347,71 +3702,50 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                     newDate.setHours(selectedSlot.hour, selectedSlot.minute, 0, 0);
                                     setSelectedSlot({ date: newDate, hour: selectedSlot.hour, minute: selectedSlot.minute });
                                   }}
-                                  className={`w-full mt-1 px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
+                                  className={`w-full mt-1 px-3 py-2 border rounded-lg text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
                                 />
                               </div>
                               <div>
-                                <label className={`text-[10px] ${theme.textMuted}`}>Time</label>
-                                <div className="flex gap-2 mt-1">
-                                  {/* Hour input */}
-                                  <input
-                                    type="number"
-                                    min="1"
-                                    max="12"
-                                    value={(() => {
-                                      const h = selectedSlot.hour;
-                                      return h === 0 ? 12 : h > 12 ? h - 12 : h;
-                                    })()}
+                                <label className={`text-[10px] font-semibold ${theme.textMuted} uppercase`}>Time</label>
+                                <div className="flex gap-1.5 mt-1">
+                                  <input type="number" min="1" max="12"
+                                    value={(() => { const h = selectedSlot.hour; return h === 0 ? 12 : h > 12 ? h - 12 : h; })()}
                                     onChange={(e) => {
                                       let hour12 = parseInt(e.target.value) || 1;
-                                      if (hour12 < 1) hour12 = 1;
-                                      if (hour12 > 12) hour12 = 12;
+                                      if (hour12 < 1) hour12 = 1; if (hour12 > 12) hour12 = 12;
                                       const isPM = selectedSlot.hour >= 12;
                                       let hour24 = hour12;
                                       if (isPM && hour12 !== 12) hour24 = hour12 + 12;
                                       if (!isPM && hour12 === 12) hour24 = 0;
-                                      const newDate = new Date(selectedSlot.date);
-                                      newDate.setHours(hour24, selectedSlot.minute, 0, 0);
+                                      const newDate = new Date(selectedSlot.date); newDate.setHours(hour24, selectedSlot.minute, 0, 0);
                                       setSelectedSlot({ date: newDate, hour: hour24, minute: selectedSlot.minute });
                                     }}
-                                    className={`w-14 px-2 py-2.5 border rounded-lg text-sm text-center focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
+                                    className={`w-12 px-1.5 py-2 border rounded-lg text-sm text-center focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
                                   />
-                                  <span className={`flex items-center ${theme.text}`}>:</span>
-                                  {/* Minute input */}
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    max="59"
+                                  <span className={`flex items-center text-xs ${theme.text}`}>:</span>
+                                  <input type="number" min="0" max="59"
                                     value={String(selectedSlot.minute).padStart(2, '0')}
                                     onChange={(e) => {
                                       let minute = parseInt(e.target.value) || 0;
-                                      if (minute < 0) minute = 0;
-                                      if (minute > 59) minute = 59;
-                                      const newDate = new Date(selectedSlot.date);
-                                      newDate.setHours(selectedSlot.hour, minute, 0, 0);
+                                      if (minute < 0) minute = 0; if (minute > 59) minute = 59;
+                                      const newDate = new Date(selectedSlot.date); newDate.setHours(selectedSlot.hour, minute, 0, 0);
                                       setSelectedSlot({ date: newDate, hour: selectedSlot.hour, minute });
                                     }}
-                                    className={`w-14 px-2 py-2.5 border rounded-lg text-sm text-center focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
+                                    className={`w-12 px-1.5 py-2 border rounded-lg text-sm text-center focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
                                   />
-                                  {/* AM/PM dropdown */}
-                                  <select
-                                    value={selectedSlot.hour >= 12 ? 'PM' : 'AM'}
+                                  <select value={selectedSlot.hour >= 12 ? 'PM' : 'AM'}
                                     onChange={(e) => {
                                       const newPeriod = e.target.value;
                                       const currentPeriod = selectedSlot.hour >= 12 ? 'PM' : 'AM';
                                       if (newPeriod !== currentPeriod) {
                                         let newHour = selectedSlot.hour;
-                                        if (newPeriod === 'PM' && selectedSlot.hour < 12) {
-                                          newHour = selectedSlot.hour + 12;
-                                        } else if (newPeriod === 'AM' && selectedSlot.hour >= 12) {
-                                          newHour = selectedSlot.hour - 12;
-                                        }
-                                        const newDate = new Date(selectedSlot.date);
-                                        newDate.setHours(newHour, selectedSlot.minute, 0, 0);
+                                        if (newPeriod === 'PM' && selectedSlot.hour < 12) newHour += 12;
+                                        else if (newPeriod === 'AM' && selectedSlot.hour >= 12) newHour -= 12;
+                                        const newDate = new Date(selectedSlot.date); newDate.setHours(newHour, selectedSlot.minute, 0, 0);
                                         setSelectedSlot({ date: newDate, hour: newHour, minute: selectedSlot.minute });
                                       }
                                     }}
-                                    className={`w-16 px-1 py-2.5 border rounded-lg text-sm text-center focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
+                                    className={`w-14 px-0.5 py-2 border rounded-lg text-xs text-center focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
                                   >
                                     <option value="AM">AM</option>
                                     <option value="PM">PM</option>
@@ -3421,202 +3755,267 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                             </div>
                           </div>
                           
-                          {/* Title */}
+                          {/* Post Name */}
                           <div>
                             <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>
-                              {scheduleForm.type === 'reminder' ? 'Reminder Title' : 'Campaign Name'} *
+                              {scheduleForm.type === 'reminder' ? 'Reminder Title' : 'Post Title'} *
                             </label>
                             <input
                               type="text"
                               value={scheduleForm.title}
                               onChange={(e) => setScheduleForm(prev => ({ ...prev, title: e.target.value }))}
-                              placeholder={scheduleForm.type === 'reminder' ? 'e.g., Review analytics report' : 'e.g., Holiday Sale Campaign'}
-                              className={`w-full mt-2 px-4 py-3 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
+                              placeholder={scheduleForm.type === 'reminder' ? 'e.g., Review analytics report' : 'e.g., Weekend Sale Announcement'}
+                              className={`w-full mt-1.5 px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
                             />
                           </div>
                           
-                          {/* Description / Content */}
-                          <div>
-                            <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>
-                              {scheduleForm.type === 'reminder' ? 'Notes' : 'Post Content / Caption'}
-                            </label>
-                            <textarea
-                              value={scheduleForm.description}
-                              onChange={(e) => setScheduleForm(prev => ({ ...prev, description: e.target.value }))}
-                              placeholder={scheduleForm.type === 'reminder' ? 'Add any notes or details...' : 'Write your post caption here... Include emojis, mentions, and your message'}
-                              rows={3}
-                              className={`w-full mt-2 px-4 py-3 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] resize-none ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
-                            />
-                          </div>
-                          
-                          {/* Campaign-specific fields */}
+                          {/* Campaign-only fields */}
                           {scheduleForm.type === 'campaign' && (
                             <>
-                              {/* Platform & Content Type Row */}
-                              <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                  <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>Platform *</label>
-                                  <select
-                                    value={scheduleForm.platform}
-                                    onChange={(e) => setScheduleForm(prev => ({ ...prev, platform: e.target.value }))}
-                                    className={`w-full mt-2 px-4 py-3 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
-                                  >
-                                    <option value="instagram">📸 Instagram</option>
-                                    <option value="facebook">📘 Facebook</option>
-                                    <option value="twitter">🐦 Twitter/X</option>
-                                    <option value="linkedin">💼 LinkedIn</option>
-                                    <option value="youtube">▶️ YouTube</option>
-                                  </select>
-                                </div>
-                                <div>
-                                  <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>Content Type</label>
-                                  <select
-                                    value={scheduleForm.contentType}
-                                    onChange={(e) => setScheduleForm(prev => ({ ...prev, contentType: e.target.value as any }))}
-                                    className={`w-full mt-2 px-4 py-3 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
-                                  >
-                                    <option value="image">🖼️ Image Post</option>
-                                    <option value="video">🎬 Video</option>
-                                    <option value="carousel">📱 Carousel</option>
-                                    <option value="story">⏱️ Story</option>
-                                    <option value="reel">🎞️ Reel/Short</option>
-                                  </select>
-                                </div>
+                              {/* Platform */}
+                              <div>
+                                <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>Platform</label>
+                                <select
+                                  value={scheduleForm.platform}
+                                  onChange={(e) => setScheduleForm(prev => ({ ...prev, platform: e.target.value }))}
+                                  className={`w-full mt-1.5 px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
+                                >
+                                  <option value="instagram">📸 Instagram</option>
+                                  <option value="facebook">📘 Facebook</option>
+                                  <option value="twitter">🐦 Twitter/X</option>
+                                  <option value="linkedin">💼 LinkedIn</option>
+                                  <option value="youtube">▶️ YouTube</option>
+                                </select>
                               </div>
+                              
+                              {/* Image Upload - Drag & Drop + Click */}
+                              <div>
+                                <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>Image / Poster</label>
+                                <input 
+                                  ref={scheduleFileInputRef}
+                                  type="file" 
+                                  accept="image/*" 
+                                  className="hidden" 
+                                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handleScheduleImageSelect(f); }}
+                                />
+                                
+                                {scheduleImage ? (
+                                  <>
+                                    {/* Mode toggle: Use as-is or as Reference */}
+                                    <div className="flex gap-2 mt-1.5 mb-2">
+                                      <button
+                                        onClick={() => { setImageMode('upload'); setGeneratedPoster(null); }}
+                                        className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-1.5 ${
+                                          imageMode === 'upload' 
+                                            ? 'bg-[#ffcc29]/20 text-[#ffcc29] border border-[#ffcc29]' 
+                                            : `${isDarkMode ? 'bg-[#161b22] text-slate-400 border-slate-700/50' : 'bg-slate-100 text-slate-500 border-slate-200'} border hover:border-[#ffcc29]/50`
+                                        }`}
+                                      >
+                                        <Upload className="w-3.5 h-3.5" /> Use as Poster
+                                      </button>
+                                      <button
+                                        onClick={() => setImageMode('reference')}
+                                        className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-1.5 ${
+                                          imageMode === 'reference' 
+                                            ? 'bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-purple-400 border border-purple-400' 
+                                            : `${isDarkMode ? 'bg-[#161b22] text-slate-400 border-slate-700/50' : 'bg-slate-100 text-slate-500 border-slate-200'} border hover:border-purple-400/50`
+                                        }`}
+                                      >
+                                        <Sparkles className="w-3.5 h-3.5" /> Create from Reference
+                                      </button>
+                                    </div>
+                                    
+                                    {/* Show generated poster or original image */}
+                                    <div className="relative group">
+                                      <img 
+                                        src={generatedPoster || scheduleImage} 
+                                        alt={generatedPoster ? 'Generated poster' : 'Upload preview'} 
+                                        className={`w-full max-h-80 object-contain rounded-xl border ${isDarkMode ? 'border-slate-700/50 bg-[#161b22]' : 'border-slate-200 bg-slate-50'}`}
+                                      />
+                                      {generatedPoster && (
+                                        <span className="absolute top-2 left-2 bg-purple-500/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-md">AI Generated</span>
+                                      )}
+                                      <div className="absolute inset-0 bg-black/40 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                                        <button 
+                                          onClick={() => scheduleFileInputRef.current?.click()}
+                                          className="px-3 py-2 bg-white/90 text-slate-800 text-xs font-medium rounded-lg hover:bg-white transition-colors flex items-center gap-1.5"
+                                        >
+                                          <RefreshCw className="w-3.5 h-3.5" /> Replace
+                                        </button>
+                                        <button 
+                                          onClick={() => { setScheduleImage(null); setScheduleImageFile(null); setGeneratedPoster(null); setImageMode('upload'); setPosterContent(''); }}
+                                          className="px-3 py-2 bg-red-500/90 text-white text-xs font-medium rounded-lg hover:bg-red-500 transition-colors flex items-center gap-1.5"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" /> Remove
+                                        </button>
 
-                              {/* Objective & Priority Row */}
-                              <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                  <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>Campaign Objective</label>
-                                  <select
-                                    value={scheduleForm.objective}
-                                    onChange={(e) => setScheduleForm(prev => ({ ...prev, objective: e.target.value as any }))}
-                                    className={`w-full mt-2 px-4 py-3 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
+                                      </div>
+                                    </div>
+                                    
+                                    {/* Reference mode: prompt input (always visible) */}
+                                    {imageMode === 'reference' && (
+                                      <div className="mt-3 space-y-2">
+                                        <div className="flex items-center gap-2">
+                                          <Sparkles className={`w-3.5 h-3.5 ${generatedPoster ? 'text-purple-400' : theme.textMuted}`} />
+                                          <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>
+                                            {generatedPoster ? 'Refine with a prompt' : 'Describe your poster'}
+                                          </label>
+                                        </div>
+                                        <div className="flex gap-2">
+                                          <textarea
+                                            value={generatedPoster ? posterEditInstructions : posterContent}
+                                            onChange={(e) => generatedPoster ? setPosterEditInstructions(e.target.value) : setPosterContent(e.target.value)}
+                                            placeholder={generatedPoster 
+                                              ? 'Tell AI what to change... e.g., Make the title bigger, use blue theme, add my phone number' 
+                                              : 'Tell AI what poster to create... e.g., Make a dark-themed marketing poster for a ChatGPT workshop on March 15 with topics and registration details'
+                                            }
+                                            rows={2}
+                                            className={`flex-1 px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:border-purple-400 resize-none ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
+                                            onKeyDown={(e) => {
+                                              if (e.key === 'Enter' && !e.shiftKey) {
+                                                e.preventDefault();
+                                                if (generatedPoster) {
+                                                  if (posterEditInstructions.trim()) handleEditPoster();
+                                                } else {
+                                                  if (posterContent.trim()) handleGeneratePoster();
+                                                }
+                                              }
+                                            }}
+                                          />
+                                          <button
+                                            onClick={generatedPoster ? handleEditPoster : handleGeneratePoster}
+                                            disabled={posterGenerating || (generatedPoster ? !posterEditInstructions.trim() : !posterContent.trim())}
+                                            className={`self-end p-3 rounded-xl transition-all flex items-center justify-center ${
+                                              (generatedPoster ? posterEditInstructions.trim() : posterContent.trim())
+                                                ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600 shadow-md' 
+                                                : `${isDarkMode ? 'bg-slate-800 text-slate-500' : 'bg-slate-200 text-slate-400'} cursor-not-allowed`
+                                            }`}
+                                            title={generatedPoster ? 'Refine poster' : 'Generate poster'}
+                                          >
+                                            {posterGenerating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+                                          </button>
+                                        </div>
+                                        {!generatedPoster && (
+                                          <p className={`text-[10px] ${theme.textMuted}`}>AI creates a new poster inspired by your reference image · Press Enter to send</p>
+                                        )}
+                                      </div>
+                                    )}
+                                  </>
+                                ) : !scheduleImage ? (
+                                  <div 
+                                    ref={scheduleDragRef}
+                                    onClick={() => scheduleFileInputRef.current?.click()}
+                                    onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                                    onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                                    onDrop={handleScheduleDrop}
+                                    className={`mt-1.5 border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all hover:border-[#ffcc29] ${isDarkMode ? 'border-slate-700 hover:bg-[#161b22]' : 'border-slate-300 hover:bg-slate-50'}`}
                                   >
-                                    <option value="awareness">🌟 Brand Awareness</option>
-                                    <option value="engagement">💬 Engagement</option>
-                                    <option value="traffic">🔗 Website Traffic</option>
-                                    <option value="conversions">🛒 Conversions</option>
-                                    <option value="leads">📧 Lead Generation</option>
-                                  </select>
-                                </div>
-                                <div>
-                                  <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>Priority</label>
-                                  <select
-                                    value={scheduleForm.priority}
-                                    onChange={(e) => setScheduleForm(prev => ({ ...prev, priority: e.target.value as any }))}
-                                    className={`w-full mt-2 px-4 py-3 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
-                                  >
-                                    <option value="low">🟢 Low</option>
-                                    <option value="medium">🟡 Medium</option>
-                                    <option value="high">🔴 High</option>
-                                  </select>
-                                </div>
+                                    <Upload className={`w-8 h-8 mx-auto mb-2 ${theme.textMuted}`} />
+                                    <p className={`text-sm font-medium ${theme.text}`}>Upload your poster or reference image</p>
+                                    <p className={`text-xs ${theme.textMuted} mt-1`}>Drag & drop or click to browse · Max 10MB</p>
+                                  </div>
+                                ) : null}
                               </div>
-
-                              {/* Hashtags */}
+                              
+                              {/* Caption with AI Generate Button */}
+                              <div>
+                                <div className="flex items-center justify-between">
+                                  <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>Caption</label>
+                                  <button 
+                                    onClick={handleAIGenerateCaption}
+                                    disabled={aiGenerating || (!scheduleImage && !generatedPoster)}
+                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                                      (scheduleImage || generatedPoster)
+                                        ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600 shadow-sm' 
+                                        : `${isDarkMode ? 'bg-slate-800 text-slate-500' : 'bg-slate-100 text-slate-400'} cursor-not-allowed`
+                                    }`}
+                                    title={(!scheduleImage && !generatedPoster) ? 'Upload an image first to generate AI caption' : 'Generate caption & hashtags from image'}
+                                  >
+                                    {aiGenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wand2 className="w-3.5 h-3.5" />}
+                                    {aiGenerating ? 'Generating...' : 'AI Generate'}
+                                  </button>
+                                </div>
+                                <textarea
+                                  value={scheduleForm.description}
+                                  onChange={(e) => setScheduleForm(prev => ({ ...prev, description: e.target.value }))}
+                                  placeholder="Write your caption or let AI generate one from your image..."
+                                  rows={3}
+                                  className={`w-full mt-1.5 px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] resize-none ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
+                                />
+                              </div>
+                              
+                              {/* Hashtags (AI-filled or manual edit) */}
                               <div>
                                 <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>Hashtags</label>
                                 <input
                                   type="text"
                                   value={scheduleForm.hashtags}
                                   onChange={(e) => setScheduleForm(prev => ({ ...prev, hashtags: e.target.value }))}
-                                  placeholder="#marketing, #socialmedia, #business"
-                                  className={`w-full mt-2 px-4 py-3 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
+                                  placeholder={aiGenerating ? 'Generating...' : '#marketing #brand #growth'}
+                                  className={`w-full mt-1.5 px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
                                 />
-                                <p className={`text-[10px] mt-1 ${theme.textMuted}`}>Separate hashtags with commas</p>
-                              </div>
-
-                              {/* Call to Action */}
-                              <div>
-                                <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>Call to Action</label>
-                                <select
-                                  value={scheduleForm.callToAction}
-                                  onChange={(e) => setScheduleForm(prev => ({ ...prev, callToAction: e.target.value }))}
-                                  className={`w-full mt-2 px-4 py-3 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
-                                >
-                                  <option value="">None</option>
-                                  <option value="learn_more">Learn More</option>
-                                  <option value="shop_now">Shop Now</option>
-                                  <option value="sign_up">Sign Up</option>
-                                  <option value="contact_us">Contact Us</option>
-                                  <option value="book_now">Book Now</option>
-                                  <option value="download">Download</option>
-                                  <option value="get_quote">Get Quote</option>
-                                  <option value="watch_more">Watch More</option>
-                                </select>
-                              </div>
-
-                              {/* Budget & Target Audience Row */}
-                              <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                  <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>Budget (USD)</label>
-                                  <div className="relative mt-2">
-                                    <span className={`absolute left-4 top-1/2 -translate-y-1/2 ${theme.textMuted}`}>$</span>
-                                    <input
-                                      type="number"
-                                      value={scheduleForm.budget}
-                                      onChange={(e) => setScheduleForm(prev => ({ ...prev, budget: e.target.value }))}
-                                      placeholder="0.00"
-                                      className={`w-full pl-8 pr-4 py-3 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
-                                    />
-                                  </div>
-                                </div>
-                                <div>
-                                  <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>Target Audience</label>
-                                  <input
-                                    type="text"
-                                    value={scheduleForm.targetAudience}
-                                    onChange={(e) => setScheduleForm(prev => ({ ...prev, targetAudience: e.target.value }))}
-                                    placeholder="e.g., 18-35, Females"
-                                    className={`w-full mt-2 px-4 py-3 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
-                                  />
-                                </div>
-                              </div>
-
-                              {/* Additional Notes */}
-                              <div>
-                                <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>Internal Notes</label>
-                                <textarea
-                                  value={scheduleForm.notes}
-                                  onChange={(e) => setScheduleForm(prev => ({ ...prev, notes: e.target.value }))}
-                                  placeholder="Any internal notes or reminders for this campaign..."
-                                  rows={2}
-                                  className={`w-full mt-2 px-4 py-3 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] resize-none ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
-                                />
+                                <p className={`text-[10px] mt-1 ${theme.textMuted}`}>Auto-generated by AI or edit manually</p>
                               </div>
                             </>
                           )}
                           
-                          {/* Reminder offset */}
+                          {/* Reminder-only fields */}
                           {scheduleForm.type === 'reminder' && (
-                            <div>
-                              <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>Remind me</label>
-                              <select
-                                value={scheduleForm.reminderOffset}
-                                onChange={(e) => setScheduleForm(prev => ({ ...prev, reminderOffset: parseInt(e.target.value) }))}
-                                className={`w-full mt-2 px-4 py-3 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
-                              >
-                                <option value={5}>5 minutes before</option>
-                                <option value={15}>15 minutes before</option>
-                                <option value={30}>30 minutes before</option>
-                                <option value={60}>1 hour before</option>
-                                <option value={1440}>1 day before</option>
-                              </select>
-                            </div>
+                            <>
+                              <div>
+                                <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>Notes</label>
+                                <textarea
+                                  value={scheduleForm.description}
+                                  onChange={(e) => setScheduleForm(prev => ({ ...prev, description: e.target.value }))}
+                                  placeholder="Add any notes or details..."
+                                  rows={2}
+                                  className={`w-full mt-1.5 px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] resize-none ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
+                                />
+                              </div>
+                              <div>
+                                <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>Remind me</label>
+                                <select
+                                  value={scheduleForm.reminderOffset}
+                                  onChange={(e) => setScheduleForm(prev => ({ ...prev, reminderOffset: parseInt(e.target.value) }))}
+                                  className={`w-full mt-1.5 px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
+                                >
+                                  <option value={5}>5 minutes before</option>
+                                  <option value={15}>15 minutes before</option>
+                                  <option value={30}>30 minutes before</option>
+                                  <option value={60}>1 hour before</option>
+                                  <option value={1440}>1 day before</option>
+                                </select>
+                              </div>
+                            </>
                           )}
                         </div>
                         
-                        {/* Footer with actions */}
+                        {/* Footer */}
                         <div className={`sticky bottom-0 ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-slate-200'} border-t px-6 py-4`}>
                             <div className="flex gap-3">
+                                {scheduleForm.type === 'campaign' && (
+                                  <button 
+                                    onClick={() => {
+                                      setCalendarPreviewData({
+                                        platform: scheduleForm.platform,
+                                        imageUrl: generatedPoster || scheduleImage || null,
+                                        caption: scheduleForm.description,
+                                        hashtags: scheduleForm.hashtags ? scheduleForm.hashtags.split(',').map((h: string) => h.trim()) : []
+                                      });
+                                      setShowCalendarPreview(true);
+                                    }}
+                                    className={`px-4 py-3 border ${isDarkMode ? 'border-slate-700/50 text-slate-300 hover:border-[#ffcc29] hover:text-[#ffcc29]' : 'border-slate-200 text-slate-600 hover:border-[#ffcc29] hover:text-[#b8941a]'} text-sm font-semibold rounded-xl transition-colors flex items-center gap-2`}
+                                  >
+                                    <Eye className="w-4 h-4" /> Preview
+                                  </button>
+                                )}
                                 <button 
                                   onClick={isEditMode ? handleUpdateCampaign : handleCreateEvent}
                                   disabled={!scheduleForm.title.trim() || loading}
                                   className="flex-1 py-3 bg-[#ffcc29] hover:bg-[#e6b825] disabled:bg-slate-300 disabled:cursor-not-allowed text-[#070A12] text-sm font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
                                 >
                                     {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                                    {isEditMode ? 'Update Campaign' : (scheduleForm.type === 'reminder' ? 'Set Reminder' : 'Schedule Campaign')}
+                                    {isEditMode ? 'Update' : (scheduleForm.type === 'reminder' ? 'Set Reminder' : 'Schedule Post')}
                                 </button>
                                 <button 
                                   onClick={() => { setShowScheduleModal(false); setIsEditMode(false); setEditingCampaign(null); }} 
@@ -4117,6 +4516,20 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                 
                                 {/* Action Buttons */}
                                 <div className={`flex gap-3 pt-4 border-t ${theme.border}`}>
+                                    <button
+                                      onClick={() => {
+                                        setCalendarPreviewData({
+                                          platform: eventSelectedPlatform,
+                                          imageUrl: eventPostImageUrl || null,
+                                          caption: eventPostCaption,
+                                          hashtags: eventPostHashtags
+                                        });
+                                        setShowCalendarPreview(true);
+                                      }}
+                                      className={`px-4 py-3 border ${isDarkMode ? 'border-slate-700/50 text-slate-300 hover:border-[#ffcc29] hover:text-[#ffcc29]' : 'border-slate-200 text-slate-600 hover:border-[#ffcc29] hover:text-[#b8941a]'} text-sm font-semibold rounded-lg transition-colors flex items-center gap-2`}
+                                    >
+                                      <Eye className="w-4 h-4" /> Preview
+                                    </button>
                                     <button 
                                         onClick={async () => {
                                             setEventScheduling(true);
@@ -4210,6 +4623,19 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                         )}
                     </div>
                 </div>
+            )}
+
+            {/* Calendar Platform Preview */}
+            {showCalendarPreview && (
+              <PlatformPreview
+                platform={calendarPreviewData.platform}
+                imageUrl={calendarPreviewData.imageUrl}
+                caption={calendarPreviewData.caption}
+                hashtags={calendarPreviewData.hashtags}
+                brandName={dashboardData?.businessContext?.name || 'Your Brand'}
+                onClose={() => setShowCalendarPreview(false)}
+                isDarkMode={isDarkMode}
+              />
             )}
         </div>
     );

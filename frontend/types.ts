@@ -17,6 +17,7 @@ export interface User {
   email: string;
   firstName: string;
   lastName: string;
+  isVerified?: boolean;
   onboardingCompleted: boolean;
   businessProfile?: BusinessProfile;
   brandScore?: {
@@ -37,6 +38,8 @@ export interface AuthResponse {
   token?: string;
   user?: User;
   error?: string;
+  message?: string;
+  requiresVerification?: boolean;
 }
 
 export interface Campaign {

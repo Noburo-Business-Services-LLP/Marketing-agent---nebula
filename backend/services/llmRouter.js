@@ -7,7 +7,7 @@
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const GROK_API_KEY = process.env.GROK_API_KEY;
 
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent';
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent';
 const GROK_API_URL = 'https://api.x.ai/v1/chat/completions';
 
 // Structured logging for LLM calls (no keys logged)

@@ -5,6 +5,7 @@ const { generateToken, protect } = require('../middleware/auth');
 const Competitor = require('../models/Competitor');
 const { generateWithLLM } = require('../services/llmRouter');
 const axios = require('axios');
+const otpService = require('../services/otpService');
 
 // ScrapingDog API for LinkedIn fallback
 const SCRAPINGDOG_API_KEY = process.env.SCRAPINGDOG_API_KEY || '';
@@ -490,14 +491,35 @@ router.post('/signup', [
       });
     }
 
-    // Create new user
+    // Create new user (unverified)
     const user = await User.create({
       email: email.toLowerCase(),
       password,
       firstName,
       lastName: lastName || '',
-      companyName: companyName || ''
+      companyName: companyName || '',
+      isVerified: false
     });
+
+    // Generate and send OTP
+    try {
+      const otp = otpService.generateOTP();
+      const hashedOtp = await otpService.hashOTP(otp);
+      
+      user.otp = {
+        code: hashedOtp,
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
+        attempts: 0,
+        lastSentAt: new Date()
+      };
+      await user.save({ validateBeforeSave: false });
+      
+      await otpService.sendOTP(email, otp, firstName);
+      console.log(`📧 OTP sent to ${email} during signup`);
+    } catch (otpError) {
+      console.error('OTP send error during signup:', otpError.message);
+      // Don't fail signup if OTP fails — user can request resend
+    }
 
     // Generate token
     const token = generateToken(user._id);
@@ -508,9 +530,10 @@ router.post('/signup', [
 
     res.status(201).json({
       success: true,
-      message: 'Account created successfully! Welcome to Gravity.',
+      message: 'Account created! Please verify your email.',
       token,
-      user: user.toPublicJSON()
+      user: user.toPublicJSON(),
+      requiresVerification: true
     });
   } catch (error) {
     console.error('Signup error:', error);
@@ -535,6 +558,176 @@ router.post('/signup', [
     res.status(500).json({
       success: false,
       message: 'Unable to create account. Please try again later.'
+    });
+  }
+});
+
+// @route   POST /api/auth/send-otp
+// @desc    Send or resend OTP to user's email
+// @access  Public (requires token or email)
+router.post('/send-otp', [
+  body('email')
+    .isEmail()
+    .withMessage('Please enter a valid email address')
+    .normalizeEmail(),
+  handleValidationErrors
+], async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    const user = await User.findOne({ email: email.toLowerCase() }).select('+otp.code +otp.expiresAt +otp.attempts +otp.lastSentAt');
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'No account found with this email.'
+      });
+    }
+
+    if (user.isVerified) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email is already verified.'
+      });
+    }
+
+    // Rate limit: 1 OTP per 60 seconds
+    if (user.otp?.lastSentAt) {
+      const timeSinceLastSend = Date.now() - new Date(user.otp.lastSentAt).getTime();
+      if (timeSinceLastSend < 60000) {
+        const waitSeconds = Math.ceil((60000 - timeSinceLastSend) / 1000);
+        return res.status(429).json({
+          success: false,
+          message: `Please wait ${waitSeconds} seconds before requesting a new code.`,
+          retryAfter: waitSeconds
+        });
+      }
+    }
+
+    // Generate new OTP
+    const otp = otpService.generateOTP();
+    const hashedOtp = await otpService.hashOTP(otp);
+
+    user.otp = {
+      code: hashedOtp,
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+      attempts: 0,
+      lastSentAt: new Date()
+    };
+    await user.save({ validateBeforeSave: false });
+
+    // Send email
+    await otpService.sendOTP(email, otp, user.firstName);
+
+    res.status(200).json({
+      success: true,
+      message: 'Verification code sent to your email.'
+    });
+  } catch (error) {
+    console.error('Send OTP error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to send verification code. Please try again.'
+    });
+  }
+});
+
+// @route   POST /api/auth/verify-otp
+// @desc    Verify OTP and mark email as verified
+// @access  Public
+router.post('/verify-otp', [
+  body('email')
+    .isEmail()
+    .withMessage('Please enter a valid email address')
+    .normalizeEmail(),
+  body('otp')
+    .isLength({ min: 6, max: 6 })
+    .isNumeric()
+    .withMessage('Please enter a valid 6-digit code'),
+  handleValidationErrors
+], async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+
+    const user = await User.findOne({ email: email.toLowerCase() }).select('+otp.code +otp.expiresAt +otp.attempts +otp.lastSentAt');
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'No account found with this email.'
+      });
+    }
+
+    if (user.isVerified) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email is already verified.'
+      });
+    }
+
+    // Check if OTP exists
+    if (!user.otp?.code) {
+      return res.status(400).json({
+        success: false,
+        message: 'No verification code found. Please request a new one.'
+      });
+    }
+
+    // Check if OTP expired
+    if (new Date() > new Date(user.otp.expiresAt)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Verification code has expired. Please request a new one.',
+        expired: true
+      });
+    }
+
+    // Check max attempts (5 attempts max)
+    if (user.otp.attempts >= 5) {
+      return res.status(429).json({
+        success: false,
+        message: 'Too many failed attempts. Please request a new code.',
+        maxAttempts: true
+      });
+    }
+
+    // Verify OTP
+    const isValid = await otpService.verifyOTP(otp, user.otp.code);
+
+    if (!isValid) {
+      // Increment attempts
+      user.otp.attempts = (user.otp.attempts || 0) + 1;
+      await user.save({ validateBeforeSave: false });
+
+      const remaining = 5 - user.otp.attempts;
+      return res.status(400).json({
+        success: false,
+        message: `Invalid code. ${remaining} attempt${remaining !== 1 ? 's' : ''} remaining.`,
+        attemptsRemaining: remaining
+      });
+    }
+
+    // OTP is valid — mark user as verified and clear OTP data
+    user.isVerified = true;
+    user.otp = undefined;
+    await user.save({ validateBeforeSave: false });
+
+    // Generate fresh token
+    const token = generateToken(user._id);
+
+    console.log(`✅ Email verified: ${email}`);
+
+    res.status(200).json({
+      success: true,
+      message: 'Email verified successfully! Welcome to Gravity.',
+      token,
+      user: user.toPublicJSON()
+    });
+  } catch (error) {
+    console.error('Verify OTP error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Verification failed. Please try again.'
     });
   }
 });
@@ -579,6 +772,42 @@ router.post('/login', [
       return res.status(401).json({
         success: false,
         message: 'Invalid email or password. Please try again.'
+      });
+    }
+
+    // Check if email is verified
+    if (!user.isVerified) {
+      // Send a new OTP automatically
+      try {
+        const otp = otpService.generateOTP();
+        const hashedOtp = await otpService.hashOTP(otp);
+        
+        // Need to re-fetch with OTP fields
+        const userWithOtp = await User.findById(user._id).select('+otp.lastSentAt');
+        
+        // Rate limit check
+        const timeSinceLastSend = userWithOtp?.otp?.lastSentAt ? Date.now() - new Date(userWithOtp.otp.lastSentAt).getTime() : Infinity;
+        
+        if (timeSinceLastSend >= 60000) {
+          await User.findByIdAndUpdate(user._id, {
+            'otp.code': hashedOtp,
+            'otp.expiresAt': new Date(Date.now() + 10 * 60 * 1000),
+            'otp.attempts': 0,
+            'otp.lastSentAt': new Date()
+          });
+          await otpService.sendOTP(email, otp, user.firstName);
+        }
+      } catch (otpErr) {
+        console.error('Auto OTP on login error:', otpErr.message);
+      }
+
+      const token = generateToken(user._id);
+      return res.status(200).json({
+        success: true,
+        message: 'Please verify your email to continue.',
+        token,
+        user: user.toPublicJSON(),
+        requiresVerification: true
       });
     }
 

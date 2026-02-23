@@ -7,9 +7,10 @@ const { GoogleAuth } = require('google-auth-library');
 const { uploadBase64Image } = require('./imageUploader');
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
-// Using Gemini 3 Pro Preview for all text generation
+// Using Gemini 2.5 Pro for all text generation (150 RPM, 1K RPD)
 const GEMINI_MODELS = [
-  'gemini-3-pro-preview',  // Gemini 3 Pro - Best quality
+  'gemini-2.5-pro',        // Gemini 2.5 Pro - Primary (150 RPM)
+  'gemini-2.5-flash',      // Gemini 2.5 Flash - Fallback (1K RPM)
 ];
 
 // Vertex AI Configuration for Image Generation (no daily rate limits!)
@@ -2823,10 +2824,7 @@ async function generateTemplatePoster(templateImageBase64, content, options = {}
   }
   
   // PRIMARY: Use Nano Banana Pro Preview for image generation
-  try {
-    console.log('🎨 Generating template poster with Nano Banana Pro...');
-    
-    const prompt = `You are a professional graphic designer. 
+  const prompt = `You are a professional graphic designer. 
 
 Look at this template/poster image carefully. Your task is to recreate it with NEW text content.
 
@@ -2839,6 +2837,9 @@ Instructions:
 3. Replace the existing text with the new content provided above
 4. Match the original fonts and text styling as closely as possible
 5. Output a high-quality, print-ready poster image`;
+
+  try {
+    console.log('🎨 Generating template poster with Nano Banana Pro...');
 
     const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/nano-banana-pro-preview:generateContent';
     
@@ -2901,7 +2902,74 @@ Instructions:
     throw new Error('Nano Banana Pro returned no image');
       
   } catch (error) {
-    console.error('Nano Banana Pro poster generation failed:', error.message);
+    const isTimeout = error.message && (error.message.includes('timed out') || error.message.includes('timeout'));
+    const isHighDemand = error.message && (error.message.includes('high demand') || error.message.includes('overloaded') || error.message.includes('503') || error.message.includes('429'));
+    console.error('Nano Banana Pro poster generation failed:', error.message, (isTimeout || isHighDemand) ? '(trying fallback)' : '');
+    
+    // Fallback to gemini-2.5-flash-image on timeout or high demand
+    if (isTimeout || isHighDemand) {
+      try {
+        console.log('🔄 Falling back to gemini-2.5-flash-image for template poster...');
+        const fallbackUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent';
+        
+        const fallbackBody = {
+          contents: [{
+            parts: [
+              { inlineData: { mimeType: mimeType, data: imageData } },
+              { text: prompt }
+            ]
+          }],
+          generationConfig: {
+            temperature: 0.7,
+            responseModalities: ["TEXT", "IMAGE"]
+          }
+        };
+        
+        const fallbackResponse = await fetchWithTimeout(`${fallbackUrl}?key=${GEMINI_API_KEY}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(fallbackBody)
+        }, 180000);
+        
+        const fallbackData = await fallbackResponse.json();
+        if (!fallbackResponse.ok) {
+          throw new Error(fallbackData.error?.message || 'Fallback model failed');
+        }
+        
+        const fbCandidates = fallbackData.candidates || [];
+        for (const candidate of fbCandidates) {
+          const parts = candidate.content?.parts || [];
+          for (const part of parts) {
+            if (part.inlineData?.data) {
+              const duration = Date.now() - startTime;
+              console.log(`✅ Template poster generated via fallback in ${duration}ms`);
+              return {
+                success: true,
+                imageBase64: `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`,
+                model: 'gemini-2.5-flash-image'
+              };
+            }
+            if (part.inline_data?.data) {
+              const duration = Date.now() - startTime;
+              console.log(`✅ Template poster generated via fallback in ${duration}ms`);
+              return {
+                success: true,
+                imageBase64: `data:${part.inline_data.mime_type || 'image/png'};base64,${part.inline_data.data}`,
+                model: 'gemini-2.5-flash-image'
+              };
+            }
+          }
+        }
+        throw new Error('Fallback model returned no image');
+      } catch (fallbackError) {
+        console.error('Fallback (gemini-2.5-flash-image) also failed:', fallbackError.message);
+        return {
+          success: false,
+          error: 'Image generation failed and fallback also failed. Please try again later.'
+        };
+      }
+    }
+    
     return {
       success: false,
       error: error.message || 'Failed to generate poster. Please try again.'
@@ -2988,8 +3056,8 @@ Instructions:
         const errorMsg = data.error?.message || 'Image edit failed';
         console.error(`Gemini edit error (attempt ${attempt}):`, errorMsg);
         
-        // If model is overloaded, retry after a delay
-        if (errorMsg.includes('overloaded') || errorMsg.includes('503') || errorMsg.includes('RESOURCE_EXHAUSTED')) {
+        // If model is overloaded/high demand, retry after a delay
+        if (errorMsg.includes('overloaded') || errorMsg.includes('503') || errorMsg.includes('RESOURCE_EXHAUSTED') || errorMsg.includes('high demand') || errorMsg.includes('429')) {
           lastError = new Error(errorMsg);
           if (attempt < maxRetries) {
             const delay = attempt * 3000; // 3s, 6s, 9s
@@ -2997,6 +3065,8 @@ Instructions:
             await new Promise(resolve => setTimeout(resolve, delay));
             continue;
           }
+          // Last attempt failed with overload - will fall through to fallback below
+          break;
         }
         throw new Error(errorMsg);
       }
@@ -3041,7 +3111,72 @@ Instructions:
     }
   }
   
-  // All retries exhausted
+  // All retries exhausted - try fallback with gemini-2.5-flash-image
+  const shouldFallback = lastError?.message && (
+    lastError.message.includes('high demand') || 
+    lastError.message.includes('overloaded') || 
+    lastError.message.includes('timeout') || 
+    lastError.message.includes('timed out') ||
+    lastError.message.includes('503') || 
+    lastError.message.includes('429')
+  );
+  
+  if (shouldFallback) {
+    try {
+      console.log('🔄 Falling back to gemini-2.5-flash-image for poster edit...');
+      const fallbackUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent';
+      
+      const fallbackResponse = await fetchWithTimeout(`${fallbackUrl}?key=${GEMINI_API_KEY}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts }],
+          generationConfig: {
+            temperature: 1.0,
+            responseModalities: ["TEXT", "IMAGE"]
+          }
+        })
+      }, 180000);
+      
+      const fallbackData = await fallbackResponse.json();
+      if (!fallbackResponse.ok) {
+        throw new Error(fallbackData.error?.message || 'Fallback model failed');
+      }
+      
+      const fbCandidates = fallbackData.candidates || [];
+      for (const candidate of fbCandidates) {
+        const candidateParts = candidate.content?.parts || [];
+        for (const part of candidateParts) {
+          if (part.inlineData?.data) {
+            const duration = Date.now() - startTime;
+            console.log(`✅ Poster edited via fallback in ${duration}ms`);
+            return {
+              success: true,
+              imageBase64: `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`,
+              model: 'gemini-2.5-flash-image'
+            };
+          }
+          if (part.inline_data?.data) {
+            const duration = Date.now() - startTime;
+            console.log(`✅ Poster edited via fallback in ${duration}ms`);
+            return {
+              success: true,
+              imageBase64: `data:${part.inline_data.mime_type || 'image/png'};base64,${part.inline_data.data}`,
+              model: 'gemini-2.5-flash-image'
+            };
+          }
+        }
+      }
+      throw new Error('Fallback model returned no image');
+    } catch (fallbackError) {
+      console.error('Fallback (gemini-2.5-flash-image) also failed:', fallbackError.message);
+      return {
+        success: false,
+        error: 'Image editing failed and fallback also failed. Please try again later.'
+      };
+    }
+  }
+  
   return {
     success: false,
     error: lastError?.message || 'Failed to edit poster. The AI model is busy - please try again in a moment.'
@@ -3091,10 +3226,7 @@ async function generatePosterFromReference(referenceImageBase64, content, option
     }
   }
   
-  try {
-    console.log('🎨 Generating poster from reference with Nano Banana Pro...');
-    
-    const prompt = `You are a professional graphic designer. I'm showing you a REFERENCE poster/design for STYLE INSPIRATION.
+  const prompt = `You are a professional graphic designer. I'm showing you a REFERENCE poster/design for STYLE INSPIRATION.
 
 YOUR TASK: Create a BRAND NEW poster that:
 1. COPIES the VISUAL STYLE from the reference image:
@@ -3121,6 +3253,9 @@ QUALITY REQUIREMENTS:
 - Perfect text readability
 
 Create a poster that someone would think "this looks like it was designed by the same person who made the reference".`;
+
+  try {
+    console.log('🎨 Generating poster from reference with Nano Banana Pro...');
 
     const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/nano-banana-pro-preview:generateContent';
     
@@ -3183,7 +3318,74 @@ Create a poster that someone would think "this looks like it was designed by the
     throw new Error('Nano Banana Pro returned no image');
       
   } catch (error) {
-    console.error('Poster from reference generation failed:', error.message);
+    const isTimeout = error.message && (error.message.includes('timed out') || error.message.includes('timeout'));
+    const isHighDemand = error.message && (error.message.includes('high demand') || error.message.includes('overloaded') || error.message.includes('503') || error.message.includes('429'));
+    console.error('Poster from reference generation failed:', error.message, (isTimeout || isHighDemand) ? '(trying fallback)' : '');
+    
+    // Fallback to gemini-2.5-flash-image on timeout or high demand
+    if (isTimeout || isHighDemand) {
+      try {
+        console.log('🔄 Falling back to gemini-2.5-flash-image...');
+        const fallbackUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent';
+        
+        const fallbackBody = {
+          contents: [{
+            parts: [
+              { inlineData: { mimeType: mimeType, data: imageData } },
+              { text: prompt }
+            ]
+          }],
+          generationConfig: {
+            temperature: 0.8,
+            responseModalities: ["TEXT", "IMAGE"]
+          }
+        };
+        
+        const fallbackResponse = await fetchWithTimeout(`${fallbackUrl}?key=${GEMINI_API_KEY}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(fallbackBody)
+        }, 180000);
+        
+        const fallbackData = await fallbackResponse.json();
+        if (!fallbackResponse.ok) {
+          throw new Error(fallbackData.error?.message || 'Fallback model failed');
+        }
+        
+        const fbCandidates = fallbackData.candidates || [];
+        for (const candidate of fbCandidates) {
+          const parts = candidate.content?.parts || [];
+          for (const part of parts) {
+            if (part.inlineData?.data) {
+              const duration = Date.now() - startTime;
+              console.log(`✅ Poster from reference generated via fallback in ${duration}ms`);
+              return {
+                success: true,
+                imageBase64: `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`,
+                model: 'gemini-2.5-flash-image'
+              };
+            }
+            if (part.inline_data?.data) {
+              const duration = Date.now() - startTime;
+              console.log(`✅ Poster from reference generated via fallback in ${duration}ms`);
+              return {
+                success: true,
+                imageBase64: `data:${part.inline_data.mime_type || 'image/png'};base64,${part.inline_data.data}`,
+                model: 'gemini-2.5-flash-image'
+              };
+            }
+          }
+        }
+        throw new Error('Fallback model returned no image');
+      } catch (fallbackError) {
+        console.error('Fallback (gemini-2.5-flash-image) also failed:', fallbackError.message);
+        return {
+          success: false,
+          error: 'Image generation timed out and fallback failed. Please try again.'
+        };
+      }
+    }
+    
     return {
       success: false,
       error: error.message || 'Failed to generate poster from reference. Please try again.'
