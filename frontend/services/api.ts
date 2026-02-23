@@ -197,7 +197,8 @@ export const apiService = {
       { method: 'POST', body: JSON.stringify(data) }
     );
     
-    if (response.token) {
+    // SECURITY: Do NOT save token until OTP is verified
+    if (response.token && !response.requiresVerification) {
       setToken(response.token);
     }
     
@@ -215,7 +216,8 @@ export const apiService = {
       { method: 'POST', body: JSON.stringify(data) }
     );
     
-    if (response.token) {
+    // SECURITY: Do NOT save token until OTP is verified
+    if (response.token && !response.requiresVerification) {
       setToken(response.token);
     }
     

@@ -521,17 +521,10 @@ router.post('/signup', [
       // Don't fail signup if OTP fails — user can request resend
     }
 
-    // Generate token
-    const token = generateToken(user._id);
-
-    // Update last login
-    user.lastLoginAt = new Date();
-    await user.save({ validateBeforeSave: false });
-
+    // SECURITY: Do NOT issue token until OTP is verified
     res.status(201).json({
       success: true,
       message: 'Account created! Please verify your email.',
-      token,
       user: user.toPublicJSON(),
       requiresVerification: true
     });
@@ -801,11 +794,10 @@ router.post('/login', [
         console.error('Auto OTP on login error:', otpErr.message);
       }
 
-      const token = generateToken(user._id);
+      // SECURITY: Do NOT issue a JWT token until OTP is verified
       return res.status(200).json({
         success: true,
         message: 'Please verify your email to continue.',
-        token,
         user: user.toPublicJSON(),
         requiresVerification: true
       });
@@ -877,6 +869,15 @@ router.get('/me', protect, async (req, res) => {
       return res.status(404).json({
         success: false,
         message: 'User not found'
+      });
+    }
+
+    // SECURITY: Reject unverified users — they should not have dashboard access
+    if (!user.isVerified) {
+      return res.status(403).json({
+        success: false,
+        message: 'Email not verified. Please complete OTP verification.',
+        requiresVerification: true
       });
     }
 
