@@ -8,7 +8,7 @@ const router = express.Router();
 const { protect } = require('../middleware/auth');
 const Campaign = require('../models/Campaign');
 const User = require('../models/User');
-const { callGemini, parseGeminiJSON } = require('../services/geminiAI');
+const { callGemini, parseGeminiJSON, generateICPAndStrategy } = require('../services/geminiAI');
 // Import Ayrshare for social media posting
 const { postToSocialMedia, getPostStatus } = require('../services/socialMediaAPI');
 
@@ -143,6 +143,87 @@ router.get('/', protect, async (req, res) => {
   } catch (error) {
     console.error('Get campaigns error:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch campaigns', error: error.message });
+  }
+});
+
+/**
+ * GET /api/campaigns/icp-strategy
+ * Returns stored ICP from DB. If none exists, generates via AI and saves.
+ * Use ?regenerate=true to force fresh AI generation.
+ */
+router.get('/icp-strategy', protect, async (req, res) => {
+  try {
+    const userId = req.user.userId || req.user.id;
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const bp = user.businessProfile || {};
+    const forceRegenerate = req.query.regenerate === 'true';
+
+    // If stored in DB and not forcing regenerate, return it
+    if (!forceRegenerate && user.icpStrategy && user.icpStrategy.icp && user.icpStrategy.icp.summary) {
+      console.log(`✅ Returning stored ICP for: ${bp.name || 'Unknown business'}`);
+      return res.json({
+        success: true,
+        icp: user.icpStrategy.icp,
+        channelStrategy: user.icpStrategy.channelStrategy || [],
+        businessName: bp.name || 'Your Business'
+      });
+    }
+
+    // Generate fresh via AI
+    console.log(`🎯 Generating ICP & Strategy for: ${bp.name || 'Unknown business'}`);
+    const result = await generateICPAndStrategy(bp);
+
+    // Save to DB using $set to avoid validation issues with select:false fields
+    const icpPayload = {
+      icp: result.icp,
+      channelStrategy: result.channelStrategy,
+      generatedAt: new Date()
+    };
+    await User.findByIdAndUpdate(userId, { $set: { icpStrategy: icpPayload } });
+    console.log(`💾 ICP saved to DB for user ${userId}`);
+
+    res.json({
+      success: true,
+      icp: result.icp,
+      channelStrategy: result.channelStrategy,
+      businessName: bp.name || 'Your Business'
+    });
+  } catch (error) {
+    console.error('ICP Strategy error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * PUT /api/campaigns/icp-strategy
+ * Save user-edited ICP data to DB
+ */
+router.put('/icp-strategy', protect, async (req, res) => {
+  try {
+    const userId = req.user.userId || req.user.id;
+    const { icp, channelStrategy } = req.body;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const icpPayload = {
+      icp: icp || user.icpStrategy?.icp,
+      channelStrategy: channelStrategy || user.icpStrategy?.channelStrategy,
+      generatedAt: new Date()
+    };
+    await User.findByIdAndUpdate(userId, { $set: { icpStrategy: icpPayload } });
+
+    console.log(`💾 ICP edits saved for user ${userId}`);
+    res.json({ success: true, message: 'ICP saved' });
+  } catch (error) {
+    console.error('ICP save error:', error);
+    res.status(500).json({ success: false, message: error.message });
   }
 });
 

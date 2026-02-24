@@ -96,6 +96,25 @@ const userSchema = new mongoose.Schema({
     title: { type: String, default: '' },        // Profile title in Ayrshare
     createdAt: { type: Date }                    // When Ayrshare profile was created
   },
+  // ICP & Channel Strategy (AI-generated, stored per user)
+  icpStrategy: {
+    icp: {
+      demographics: { type: String, default: '' },
+      psychographics: { type: String, default: '' },
+      painPoints: [{ type: String }],
+      buyingBehavior: { type: String, default: '' },
+      onlinePresence: { type: String, default: '' },
+      summary: { type: String, default: '' }
+    },
+    channelStrategy: [{
+      platform: { type: String },
+      percentage: { type: Number },
+      role: { type: String },
+      contentTypes: [{ type: String }],
+      postFrequency: { type: String }
+    }],
+    generatedAt: { type: Date }
+  },
   // Email OTP Verification
   isVerified: {
     type: Boolean,

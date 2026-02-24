@@ -298,8 +298,12 @@ export const apiService = {
     removeToken();
     // Clear user-specific caches so next user doesn't see stale data
     Object.keys(localStorage).forEach(key => {
-      if (key.startsWith('nebula_suggested_campaigns')) localStorage.removeItem(key);
+      if (key.startsWith('nebula_suggested_campaigns')) {
+        localStorage.removeItem(key);
+      }
     });
+    // Clear session storage too
+    sessionStorage.removeItem('nebulaa_website_analysis');
   },
 
   completeOnboarding: async (data: BusinessProfile, connectedSocials?: {platform: string; username?: string}[]): Promise<{ success: boolean; user: User }> => {
@@ -2538,4 +2542,43 @@ export const brandAssetsAPI = {
       true
     );
   },
+};
+
+// ============================================
+// ICP & CHANNEL STRATEGY API
+// ============================================
+export const icpStrategyService = {
+  // Fetch ICP from DB (auto-generates if not exists)
+  fetch: async (): Promise<any> => {
+    try {
+      return await apiCall<any>('/campaigns/icp-strategy', { method: 'GET' }, true);
+    } catch (error) {
+      console.error('ICP fetch error:', error);
+      return { success: false, icp: null, channelStrategy: [], businessName: '' };
+    }
+  },
+
+  // Force regenerate via AI
+  regenerate: async (): Promise<any> => {
+    try {
+      return await apiCall<any>('/campaigns/icp-strategy?regenerate=true', { method: 'GET' }, true);
+    } catch (error) {
+      console.error('ICP regenerate error:', error);
+      return { success: false, icp: null, channelStrategy: [], businessName: '' };
+    }
+  },
+
+  // Save user edits to DB
+  save: async (icp: any, channelStrategy?: any): Promise<any> => {
+    try {
+      return await apiCall<any>(
+        '/campaigns/icp-strategy',
+        { method: 'PUT', body: JSON.stringify({ icp, channelStrategy }) },
+        true
+      );
+    } catch (error) {
+      console.error('ICP save error:', error);
+      return { success: false };
+    }
+  }
 };
