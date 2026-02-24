@@ -262,7 +262,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
             if (!formData.businessLocation) return "Please enter your business location.";
         }
         if (currentStep === 2) {
-            if (!formData.targetAudience) return "Please describe your target audience.";
+            // Brand voice is optional, no required fields
         }
         if (currentStep === 3) {
             if (formData.marketingGoals.length === 0) return "Please select at least one marketing goal.";
@@ -697,20 +697,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
 
                         {step === 2 && (
                             <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-500">
-                                <h3 className={`text-xl font-bold ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>Target Audience</h3>
-                                <div>
-                                    <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Describe your ideal customer <span className="text-red-500">*</span></label>
-                                    <textarea 
-                                        className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#ffcc29] h-32 resize-none ${
-                                            theme === 'dark' 
-                                                ? 'bg-[#070A12] border-[#ffcc29]/30 text-[#ededed] placeholder-[#ededed]/40' 
-                                                : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
-                                        }`}
-                                        placeholder="e.g. Females aged 25-34 interested in eco-friendly living, yoga, and sustainable fashion. They value transparency and organic materials."
-                                        value={formData.targetAudience}
-                                        onChange={e => handleChange('targetAudience', e.target.value)}
-                                    />
-                                </div>
+                                <h3 className={`text-xl font-bold ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>Brand Voice</h3>
                                 <div>
                                     <label className={`block text-sm font-bold mb-2 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Brand Voice <span className="text-xs font-normal opacity-60">(select multiple)</span></label>
                                     <div className="grid grid-cols-2 gap-3">
