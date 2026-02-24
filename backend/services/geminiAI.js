@@ -3559,6 +3559,116 @@ If no logo is detected, return:
   }
 }
 
+/**
+ * Generate ICP (Ideal Customer Profile) and Channel Strategy Mix
+ * Based on the user's business profile from onboarding
+ */
+async function generateICPAndStrategy(businessProfile) {
+  const bp = businessProfile || {};
+  
+  const prompt = `You are a world-class marketing strategist. Based on the following business profile, generate:
+1. A detailed Ideal Customer Profile (ICP)
+2. A Channel Strategy Mix with percentage allocation
+
+Business Profile:
+- Company Name: ${bp.name || 'Unknown'}
+- Industry: ${bp.industry || 'Unknown'}
+- Niche: ${bp.niche || 'General'}
+- Business Type: ${bp.businessType || 'B2C'}
+- Location: ${bp.businessLocation || 'Global'}
+- Description: ${bp.description || 'No description provided'}
+- Marketing Goals: ${(bp.marketingGoals || []).join(', ') || 'General growth'}
+- Brand Voice: ${Array.isArray(bp.brandVoice) ? bp.brandVoice.join(', ') : bp.brandVoice || 'Professional'}
+
+Return ONLY valid JSON in this exact format:
+{
+  "icp": {
+    "demographics": "Age range, gender, income level, education, job titles",
+    "psychographics": "Values, interests, lifestyle, attitudes",
+    "painPoints": ["Pain point 1", "Pain point 2", "Pain point 3"],
+    "buyingBehavior": "How they discover, evaluate, and purchase",
+    "onlinePresence": "Where they spend time online (platforms, communities, forums)",
+    "summary": "A 2-3 sentence ICP summary paragraph"
+  },
+  "channelStrategy": [
+    {
+      "platform": "Instagram",
+      "percentage": 35,
+      "role": "Primary visual content & community building",
+      "contentTypes": ["Reels", "Carousels", "Stories"],
+      "postFrequency": "5-7 posts/week"
+    },
+    {
+      "platform": "LinkedIn",
+      "percentage": 25,
+      "role": "Thought leadership & B2B networking",
+      "contentTypes": ["Articles", "Polls", "Case studies"],
+      "postFrequency": "3-4 posts/week"
+    },
+    {
+      "platform": "Twitter",
+      "percentage": 20,
+      "role": "Real-time engagement & trending conversations",
+      "contentTypes": ["Threads", "Quick takes", "Polls"],
+      "postFrequency": "Daily"
+    },
+    {
+      "platform": "Facebook",
+      "percentage": 15,
+      "role": "Community groups & retargeting",
+      "contentTypes": ["Group posts", "Events", "Ads"],
+      "postFrequency": "3 posts/week"
+    },
+    {
+      "platform": "YouTube",
+      "percentage": 5,
+      "role": "Long-form educational content",
+      "contentTypes": ["Tutorials", "Behind-the-scenes"],
+      "postFrequency": "1 video/week"
+    }
+  ]
+}
+
+IMPORTANT RULES:
+- Channel percentages MUST add up to exactly 100
+- Include 3-5 channels based on what makes sense for this business
+- ICP must be highly specific to the business, not generic
+- Pain points should be real problems this ICP faces
+- Channel strategy roles should explain WHY that channel matters for this business
+- Consider the business type (B2B vs B2C) when recommending channels
+- Return ONLY valid JSON, no other text`;
+
+  try {
+    const raw = await callGemini(prompt, { 
+      temperature: 0.7, 
+      maxTokens: 4096,
+      skipCache: true  // Always skip cache — ICP is persisted in MongoDB per user
+    });
+    const parsed = parseGeminiJSON(raw);
+    return parsed;
+  } catch (error) {
+    console.error('❌ ICP/Strategy generation failed:', error.message);
+    // Return a sensible default
+    return {
+      icp: {
+        demographics: 'Unable to generate - please fill in manually',
+        psychographics: 'Unable to generate - please fill in manually',
+        painPoints: ['Cost efficiency', 'Time savings', 'Quality improvement'],
+        buyingBehavior: 'Unable to generate - please fill in manually',
+        onlinePresence: 'Unable to generate - please fill in manually',
+        summary: 'Unable to generate ICP. Please edit the fields above to describe your ideal customer.'
+      },
+      channelStrategy: [
+        { platform: 'Instagram', percentage: 30, role: 'Visual content', contentTypes: ['Posts', 'Reels'], postFrequency: '5/week' },
+        { platform: 'LinkedIn', percentage: 25, role: 'Professional networking', contentTypes: ['Articles', 'Posts'], postFrequency: '3/week' },
+        { platform: 'Twitter', percentage: 20, role: 'Engagement', contentTypes: ['Tweets', 'Threads'], postFrequency: 'Daily' },
+        { platform: 'Facebook', percentage: 15, role: 'Community', contentTypes: ['Posts', 'Groups'], postFrequency: '3/week' },
+        { platform: 'YouTube', percentage: 10, role: 'Long-form content', contentTypes: ['Videos'], postFrequency: '1/week' }
+      ]
+    };
+  }
+}
+
 module.exports = {
   callGemini,
   parseGeminiJSON,
@@ -3591,5 +3701,7 @@ module.exports = {
   editTemplatePoster,
   generatePosterFromReference,
   // Logo detection for auto-replacement
-  detectLogoInImage
+  detectLogoInImage,
+  // ICP and Channel Strategy
+  generateICPAndStrategy
 };
