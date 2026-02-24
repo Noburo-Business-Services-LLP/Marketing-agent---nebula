@@ -2050,11 +2050,7 @@ const CampaignCard: React.FC<{
             </button>
             
             <div className="flex gap-2">
-              {campaign.status === 'draft' && (
-                  <button className="text-xs font-bold text-[#ffcc29] px-3 py-1.5 hover:bg-[#ffcc29]/10 rounded border border-transparent hover:border-[#ffcc29]/30 flex items-center gap-1">
-                      <Edit3 className="w-3 h-3" /> Edit
-                  </button>
-              )}
+
                {campaign.status === 'draft' && (
                   <button 
                     onClick={() => onPost?.(campaign)}
@@ -4424,6 +4420,10 @@ const EditSuggestionModal: React.FC<EditSuggestionModalProps> = ({ suggestion, o
     const [bestTime, setBestTime] = useState(suggestion.bestTime);
     const [hashtags, setHashtags] = useState(suggestion.hashtags.join(' '));
     const [isRegenerating, setIsRegenerating] = useState(false);
+    const [currentImageUrl, setCurrentImageUrl] = useState(suggestion.imageUrl || '');
+    const [imageEditPrompt, setImageEditPrompt] = useState('');
+    const [isEditingImage, setIsEditingImage] = useState(false);
+    const [isRegeneratingImage, setIsRegeneratingImage] = useState(false);
 
     const inputClasses = `w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#ffcc29] ${
       isDarkMode 
@@ -4433,10 +4433,8 @@ const EditSuggestionModal: React.FC<EditSuggestionModalProps> = ({ suggestion, o
 
     const handleRegenerateCaption = async () => {
         setIsRegenerating(true);
-        // Use relative URL in production, localhost in development
         const apiBaseUrl = window.location.hostname !== 'localhost' ? '/api' : 'http://localhost:5000/api';
         try {
-            // Call the chat API to regenerate caption
             const response = await fetch(`${apiBaseUrl}/chat/message`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -4455,6 +4453,52 @@ const EditSuggestionModal: React.FC<EditSuggestionModalProps> = ({ suggestion, o
         }
     };
 
+    // Edit image with AI prompt
+    const handleEditImage = async () => {
+        if (!imageEditPrompt.trim()) return;
+        setIsEditingImage(true);
+        try {
+            const result = await apiService.refineImage(
+                `Campaign image for: ${title}`,
+                imageEditPrompt,
+                'professional'
+            );
+            if (result.success && result.imageUrl) {
+                setCurrentImageUrl(result.imageUrl);
+                setImageEditPrompt('');
+            } else {
+                alert('Failed to edit image. Please try again.');
+            }
+        } catch (e: any) {
+            console.error('Image edit error:', e);
+            alert(e.message || 'Failed to edit image');
+        } finally {
+            setIsEditingImage(false);
+        }
+    };
+
+    // Regenerate image entirely
+    const handleRegenerateImage = async () => {
+        setIsRegeneratingImage(true);
+        try {
+            const result = await apiService.regenerateImage({
+                prompt: `Professional marketing image for: ${title}. ${caption.substring(0, 200)}`,
+                industry: suggestion.objective || 'marketing',
+                platform: platform.toLowerCase()
+            });
+            if (result.success && result.imageUrl) {
+                setCurrentImageUrl(result.imageUrl);
+            } else {
+                alert('Failed to regenerate image. Please try again.');
+            }
+        } catch (e: any) {
+            console.error('Image regenerate error:', e);
+            alert(e.message || 'Failed to regenerate image');
+        } finally {
+            setIsRegeneratingImage(false);
+        }
+    };
+
     const handleSave = () => {
         onSave({
             ...suggestion,
@@ -4462,6 +4506,7 @@ const EditSuggestionModal: React.FC<EditSuggestionModalProps> = ({ suggestion, o
             caption,
             platform,
             bestTime,
+            imageUrl: currentImageUrl,
             hashtags: hashtags.split(' ').filter(h => h.startsWith('#'))
         });
     };
@@ -4487,14 +4532,55 @@ const EditSuggestionModal: React.FC<EditSuggestionModalProps> = ({ suggestion, o
 
                 {/* Content */}
                 <div className="p-6 space-y-5 overflow-y-auto max-h-[60vh]">
-                    {/* Preview Image */}
-                    <div className="relative h-48 rounded-xl overflow-hidden">
-                        <img 
-                            src={suggestion.imageUrl} 
-                            alt="Campaign preview" 
-                            className="w-full h-full object-cover"
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent"></div>
+                    {/* Preview Image with Edit Controls */}
+                    <div>
+                        <div className="relative h-48 rounded-xl overflow-hidden">
+                            {currentImageUrl ? (
+                                <img 
+                                    src={currentImageUrl} 
+                                    alt="Campaign preview" 
+                                    className="w-full h-full object-cover"
+                                />
+                            ) : (
+                                <div className={`w-full h-full flex items-center justify-center ${isDarkMode ? 'bg-slate-800' : 'bg-slate-100'}`}>
+                                    <ImageIcon className={`w-12 h-12 ${isDarkMode ? 'text-slate-600' : 'text-slate-300'}`} />
+                                </div>
+                            )}
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent"></div>
+                            {/* Regenerate button overlay */}
+                            <button
+                                onClick={handleRegenerateImage}
+                                disabled={isRegeneratingImage || isEditingImage}
+                                className="absolute top-2 right-2 p-2 bg-black/60 hover:bg-black/80 text-white rounded-lg transition-colors disabled:opacity-50"
+                                title="Regenerate image"
+                            >
+                                {isRegeneratingImage ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                            </button>
+                        </div>
+                        {/* Image Edit Prompt */}
+                        <div className="mt-2 flex gap-2">
+                            <input
+                                type="text"
+                                value={imageEditPrompt}
+                                onChange={e => setImageEditPrompt(e.target.value)}
+                                onKeyDown={e => e.key === 'Enter' && handleEditImage()}
+                                placeholder="E.g. Make it more vibrant, add brand colors..."
+                                disabled={isEditingImage}
+                                className={`flex-1 px-3 py-2 text-sm border rounded-lg outline-none focus:ring-2 focus:ring-[#ffcc29] ${
+                                    isDarkMode 
+                                        ? 'bg-[#0d1117] border-slate-700/50 text-white placeholder-slate-500' 
+                                        : 'bg-white border-slate-200 text-slate-900'
+                                }`}
+                            />
+                            <button
+                                onClick={handleEditImage}
+                                disabled={!imageEditPrompt.trim() || isEditingImage}
+                                className="px-3 py-2 bg-[#ffcc29] text-black text-sm font-bold rounded-lg hover:bg-[#e6b825] transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                            >
+                                {isEditingImage ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wand2 className="w-3.5 h-3.5" />}
+                                Refine
+                            </button>
+                        </div>
                     </div>
 
                     {/* Title */}

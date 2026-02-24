@@ -240,32 +240,86 @@ function parseGeminiJSON(text) {
     if (err.message.includes('Unterminated string') || err.message.includes('Unexpected end')) {
       console.log('Attempting to repair truncated JSON...');
       
-      // Find the last complete object in an array
+      // Strategy 1: Try to close the current truncated string and complete the JSON
+      // Find the last complete key-value pair by looking for last '", "' or '", \n"' pattern
+      const lastCompleteFieldMatch = repaired.match(/^([\s\S]*",)\s*"[^"]*"?\s*:?\s*"?[^"{}[\]]*$/);
+      if (lastCompleteFieldMatch) {
+        // Cut at the last comma after a complete field value
+        const cutPoint = lastCompleteFieldMatch[1].length;
+        let truncated = repaired.substring(0, cutPoint).trimEnd();
+        // Remove trailing comma
+        if (truncated.endsWith(',')) truncated = truncated.slice(0, -1);
+        
+        // Count and close brackets
+        const openBraces = (truncated.match(/{/g) || []).length;
+        const closeBraces = (truncated.match(/}/g) || []).length;
+        const openBrackets = (truncated.match(/\[/g) || []).length;
+        const closeBrackets = (truncated.match(/]/g) || []).length;
+        
+        for (let i = 0; i < openBrackets - closeBrackets; i++) truncated += ']';
+        for (let i = 0; i < openBraces - closeBraces; i++) truncated += '}';
+        
+        try {
+          const parsed = JSON.parse(truncated);
+          console.log('✅ Successfully repaired truncated JSON (strategy 1: last complete field)');
+          return parsed;
+        } catch (e) {
+          // Continue to strategy 2
+        }
+      }
+      
+      // Strategy 2: Find the last complete object boundary (for arrays)
       const lastCompleteIndex = repaired.lastIndexOf('},');
       if (lastCompleteIndex > 0) {
-        // Cut at last complete object and close the array/object
         repaired = repaired.substring(0, lastCompleteIndex + 1);
         
-        // Count open brackets to close properly
         const openBraces = (repaired.match(/{/g) || []).length;
         const closeBraces = (repaired.match(/}/g) || []).length;
         const openBrackets = (repaired.match(/\[/g) || []).length;
         const closeBrackets = (repaired.match(/]/g) || []).length;
         
-        // Add missing closing brackets
-        for (let i = 0; i < openBrackets - closeBrackets; i++) {
-          repaired += ']';
-        }
-        for (let i = 0; i < openBraces - closeBraces; i++) {
-          repaired += '}';
-        }
+        for (let i = 0; i < openBrackets - closeBrackets; i++) repaired += ']';
+        for (let i = 0; i < openBraces - closeBraces; i++) repaired += '}';
         
         try {
           const parsed = JSON.parse(repaired);
-          console.log('✅ Successfully repaired truncated JSON');
+          console.log('✅ Successfully repaired truncated JSON (strategy 2: last complete object)');
           return parsed;
         } catch (repairErr) {
-          console.error('Repair attempt failed:', repairErr.message);
+          console.error('Repair strategy 2 failed:', repairErr.message);
+        }
+      }
+      
+      // Strategy 3: Brute-force — find the last valid quote, close the string, then close brackets
+      const lastQuote = cleaned.lastIndexOf('"');
+      if (lastQuote > 10) {
+        let brute = cleaned.substring(0, lastQuote + 1);
+        // Remove incomplete key (if we ended mid key:value)
+        const trailingKeyMatch = brute.match(/,\s*"[^"]*"\s*:\s*"[^"]*"$/);
+        if (!trailingKeyMatch) {
+          // We might be mid-value, find the last complete key:value
+          const lastCompleteKV = brute.lastIndexOf('",');
+          if (lastCompleteKV > 0) {
+            brute = brute.substring(0, lastCompleteKV + 1);
+          }
+        }
+        // Remove trailing comma
+        brute = brute.trimEnd();
+        if (brute.endsWith(',')) brute = brute.slice(0, -1);
+        
+        const ob = (brute.match(/{/g) || []).length;
+        const cb = (brute.match(/}/g) || []).length;
+        const osb = (brute.match(/\[/g) || []).length;
+        const csb = (brute.match(/]/g) || []).length;
+        for (let i = 0; i < osb - csb; i++) brute += ']';
+        for (let i = 0; i < ob - cb; i++) brute += '}';
+        
+        try {
+          const parsed = JSON.parse(brute);
+          console.log('✅ Successfully repaired truncated JSON (strategy 3: brute-force)');
+          return parsed;
+        } catch (e) {
+          console.error('Repair strategy 3 failed:', e.message);
         }
       }
     }
@@ -1945,7 +1999,7 @@ Return ONLY valid JSON (no markdown, no explanations):
 
   try {
     console.log(`🎯 Generating SAVAGE rival post against ${competitorName} for ${brandContext.companyName}`);
-    const response = await callGemini(prompt, { skipCache: true, temperature: 0.9, maxTokens: 1500, timeout: 25000 });
+    const response = await callGemini(prompt, { skipCache: true, temperature: 0.9, maxTokens: 4096, timeout: 45000 });
     const parsed = parseGeminiJSON(response);
     
     if (!parsed || !parsed.caption) {
@@ -2620,7 +2674,7 @@ Return ONLY valid JSON:
     const response = await callGemini(prompt, { 
       skipCache: true, 
       temperature: 0.8, 
-      maxTokens: 2048,
+      maxTokens: 4096,
       timeout: EXTENDED_TIMEOUT 
     });
     const parsed = parseGeminiJSON(response);
@@ -2759,7 +2813,7 @@ Return ONLY valid JSON:
     const response = await callGemini(prompt, { 
       skipCache: true, 
       temperature: 0.85, 
-      maxTokens: 2048,
+      maxTokens: 4096,
       timeout: EXTENDED_TIMEOUT 
     });
     const parsed = parseGeminiJSON(response);
