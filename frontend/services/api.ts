@@ -107,6 +107,13 @@ async function apiCall<T>(
       throw new Error(data.error || data.message || 'Something went wrong');
     }
 
+    // Dispatch credit update if response contains credit balance info
+    if (data.creditsRemaining !== undefined) {
+      window.dispatchEvent(new CustomEvent('credits-updated', { 
+        detail: { creditsRemaining: data.creditsRemaining } 
+      }));
+    }
+
     return data as T;
   } catch (error: any) {
     console.error('[API] Error for', endpoint, ':', error.message);
@@ -520,7 +527,17 @@ export const apiService = {
                   onCampaign(data.campaign, data.index, data.total, data.cached || false);
                 } else if (data.type === 'complete') {
                   onComplete(data.total);
+                } else if (data.type === 'credits_update') {
+                  // Real-time credit balance update from server
+                  window.dispatchEvent(new CustomEvent('credits-updated', { 
+                    detail: { creditsRemaining: data.creditsRemaining } 
+                  }));
                 } else if (data.type === 'error') {
+                  if (data.trialExpired || data.creditsExhausted) {
+                    window.dispatchEvent(new CustomEvent('trial-expired', { 
+                      detail: { reason: data.trialExpired ? 'time' : 'credits', message: data.message } 
+                    }));
+                  }
                   onError(data.message);
                 }
               } catch (e) {

@@ -43,14 +43,17 @@ router.post('/message', optionalAuth, async (req, res) => {
     const aiResponse = await generateChatResponse(message, businessProfile, conversationHistory);
 
     // Deduct 0.5 credits for chat message (only for authenticated users)
+    let creditsRemaining;
     if (userId) {
-      await deductCredits(userId, 'chat_message', 1, 'Chat message');
+      const chatCreditResult = await deductCredits(userId, 'chat_message', 1, 'Chat message');
+      creditsRemaining = chatCreditResult.creditsRemaining;
     }
 
     res.json({
       success: true,
       response: aiResponse,
-      personalized: !!businessProfile
+      personalized: !!businessProfile,
+      creditsRemaining
     });
 
   } catch (error) {

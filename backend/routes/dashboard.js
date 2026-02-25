@@ -23,6 +23,7 @@ const {
 } = require('../services/geminiAI');
 const { generateWithLLM } = require('../services/llmRouter');
 const { getAyrshareUserProfile, getUserSocialAnalytics } = require('../services/socialMediaAPI');
+const { checkTrial, deductCredits } = require('../middleware/trialGuard');
 
 // In-memory dashboard cache for fast loading
 const dashboardCache = new Map();
@@ -980,6 +981,20 @@ router.get('/campaign-suggestions-stream', protect, async (req, res) => {
       return;
     }
 
+    // Trial & credit check for SSE (can't use middleware easily)
+    const now = new Date();
+    const trialEnd = user.trial?.expiresAt ? new Date(user.trial.expiresAt) : null;
+    if (trialEnd && now > trialEnd) {
+      res.write(`data: ${JSON.stringify({ type: 'error', trialExpired: true, message: 'Trial expired' })}\n\n`);
+      res.end();
+      return;
+    }
+    if ((user.credits?.balance ?? 100) <= 0) {
+      res.write(`data: ${JSON.stringify({ type: 'error', creditsExhausted: true, message: 'No credits remaining' })}\n\n`);
+      res.end();
+      return;
+    }
+
     if (!user.businessProfile?.name) {
       res.write(`data: ${JSON.stringify({ error: 'Please complete onboarding first' })}\n\n`);
       res.end();
@@ -1065,6 +1080,26 @@ router.get('/campaign-suggestions-stream', protect, async (req, res) => {
         await CachedCampaign.saveCampaigns(user._id, profileHash, generatedCampaigns);
       } catch (cacheError) {
         console.error('Failed to cache streamed campaigns:', cacheError);
+      }
+
+      // Deduct credits for AI campaign generation (2 credits for campaign_text)
+      if (forceRefresh) {
+        try {
+          const creditResult = await deductCredits(
+            user._id, 'campaign_text', 1,
+            `Regenerated ${generatedCampaigns.length} campaign ideas`
+          );
+          // Send credit update in the SSE stream so frontend can update immediately
+          if (creditResult.success) {
+            res.write(`data: ${JSON.stringify({ 
+              type: 'credits_update', 
+              creditsRemaining: creditResult.creditsRemaining,
+              creditsDeducted: creditResult.creditsDeducted
+            })}\n\n`);
+          }
+        } catch (creditErr) {
+          console.error('Credit deduction error on campaign stream:', creditErr);
+        }
       }
     }
     

@@ -817,10 +817,15 @@ Return ONLY valid JSON (no markdown, no code blocks):
 
     console.log(`✅ Generated ${postsWithImages.length} posts with images for campaign: ${campaignName}`);
 
+    // Fetch latest credit balance for frontend update
+    const updatedUser = await User.findById(userId).select('credits.balance');
+    const creditsRemaining = updatedUser?.credits?.balance ?? 0;
+
     res.json({
       success: true,
       posts: postsWithImages,
       contentCalendar: scheduleDates,
+      creditsRemaining,
       campaignSummary: {
         name: campaignName,
         objective,
@@ -899,12 +904,13 @@ router.post('/regenerate-post-image', protect, checkTrial, requireCredits('image
     console.log('✅ Image regenerated successfully');
 
     // Deduct credits for image edit/regenerate
-    await deductCredits(userId, 'image_edit', 1, 'Regenerated post image');
+    const editResult = await deductCredits(userId, 'image_edit', 1, 'Regenerated post image');
 
     res.json({
       success: true,
       imageUrl,
-      postId
+      postId,
+      creditsRemaining: editResult.creditsRemaining
     });
 
   } catch (error) {
