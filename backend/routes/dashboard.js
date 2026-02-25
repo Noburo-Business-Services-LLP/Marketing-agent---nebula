@@ -877,12 +877,14 @@ router.get('/campaign-suggestions', protect, async (req, res) => {
 
     const count = parseInt(req.query.count) || 6;
     const forceRefresh = req.query.refresh === 'true';
+    // Parse platforms filter (comma-separated, exclude YouTube)
+    const platformsParam = req.query.platforms ? decodeURIComponent(req.query.platforms).split(',').filter(p => p && p !== 'YouTube') : null;
     
     // Generate profile hash for cache invalidation
     const profileHash = CachedCampaign.createProfileHash(user.businessProfile);
     
-    // Check cache first (unless force refresh)
-    if (!forceRefresh) {
+    // Check cache first (skip cache when platforms filter is applied — cached campaigns may not match)
+    if (!forceRefresh && !platformsParam) {
       const cached = await CachedCampaign.getCachedForUser(
         user._id, 
         profileHash, 
@@ -927,8 +929,8 @@ router.get('/campaign-suggestions', protect, async (req, res) => {
     }
     
     // No cache or force refresh - generate new suggestions
-    console.log(`🔄 Generating fresh campaigns for user ${user._id}`);
-    const suggestions = await generateCampaignSuggestions(user.businessProfile, count);
+    console.log(`🔄 Generating fresh campaigns for user ${user._id}${platformsParam ? ` [platforms: ${platformsParam.join(',')}]` : ''}`);
+    const suggestions = await generateCampaignSuggestions(user.businessProfile, count, platformsParam);
     
     // Cache the new suggestions
     if (suggestions.campaigns && suggestions.campaigns.length > 0) {
@@ -987,9 +989,11 @@ router.get('/campaign-suggestions-stream', protect, async (req, res) => {
     const count = parseInt(req.query.count) || 6;
     const forceRefresh = req.query.refresh === 'true';
     const profileHash = CachedCampaign.createProfileHash(user.businessProfile);
+    // Parse platforms filter (comma-separated, exclude YouTube)
+    const platformsParam = req.query.platforms ? decodeURIComponent(req.query.platforms).split(',').filter(p => p && p !== 'YouTube') : null;
     
-    // Check cache first
-    if (!forceRefresh) {
+    // Check cache first (skip cache entirely when platforms filter is applied — cached campaigns may be for different platforms)
+    if (!forceRefresh && !platformsParam) {
       const cached = await CachedCampaign.getCachedForUser(user._id, profileHash, count);
       
       if (cached && cached.length >= count) {
@@ -1036,7 +1040,7 @@ router.get('/campaign-suggestions-stream', protect, async (req, res) => {
     for (let i = 0; i < count; i++) {
       try {
         // Generate single campaign
-        const campaign = await generateSingleCampaign(user.businessProfile, i, count);
+        const campaign = await generateSingleCampaign(user.businessProfile, i, count, platformsParam);
         
         if (campaign) {
           generatedCampaigns.push(campaign);

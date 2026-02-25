@@ -1422,7 +1422,7 @@ const Dashboard: React.FC = () => {
         </div>
 
         {/* Strategic Advisor - AI Content Suggestions */}
-        <div className={`${theme.bgCard} rounded-2xl border ${isDarkMode ? 'border-slate-700/50 hover:border-slate-600' : 'border-[#ededed] hover:border-slate-200'} p-6 transition-all duration-200 flex flex-col`}>
+        <div className={`${theme.bgCard} rounded-2xl border ${isDarkMode ? 'border-slate-700/50 hover:border-slate-600' : 'border-[#ededed] hover:border-slate-200'} p-6 transition-all duration-200 min-h-[420px] flex flex-col`}>
             <div className="flex justify-between items-center mb-4">
                 <div className="flex items-center gap-2">
                     <Lightbulb className="w-5 h-5 text-[#ffcc29]" />
@@ -1471,7 +1471,7 @@ const Dashboard: React.FC = () => {
               </div>
             )}
 
-            <div className="space-y-2.5 flex-1 max-h-[400px] overflow-y-auto pr-1">
+            <div className="space-y-2.5 flex-1 min-h-0 max-h-[600px] overflow-y-auto pr-1">
                 {/* Loading state */}
                 {strategicLoading && (
                   <div className="flex items-center justify-center py-8">

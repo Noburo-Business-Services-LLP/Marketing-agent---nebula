@@ -240,32 +240,86 @@ function parseGeminiJSON(text) {
     if (err.message.includes('Unterminated string') || err.message.includes('Unexpected end')) {
       console.log('Attempting to repair truncated JSON...');
       
-      // Find the last complete object in an array
+      // Strategy 1: Try to close the current truncated string and complete the JSON
+      // Find the last complete key-value pair by looking for last '", "' or '", \n"' pattern
+      const lastCompleteFieldMatch = repaired.match(/^([\s\S]*",)\s*"[^"]*"?\s*:?\s*"?[^"{}[\]]*$/);
+      if (lastCompleteFieldMatch) {
+        // Cut at the last comma after a complete field value
+        const cutPoint = lastCompleteFieldMatch[1].length;
+        let truncated = repaired.substring(0, cutPoint).trimEnd();
+        // Remove trailing comma
+        if (truncated.endsWith(',')) truncated = truncated.slice(0, -1);
+        
+        // Count and close brackets
+        const openBraces = (truncated.match(/{/g) || []).length;
+        const closeBraces = (truncated.match(/}/g) || []).length;
+        const openBrackets = (truncated.match(/\[/g) || []).length;
+        const closeBrackets = (truncated.match(/]/g) || []).length;
+        
+        for (let i = 0; i < openBrackets - closeBrackets; i++) truncated += ']';
+        for (let i = 0; i < openBraces - closeBraces; i++) truncated += '}';
+        
+        try {
+          const parsed = JSON.parse(truncated);
+          console.log('✅ Successfully repaired truncated JSON (strategy 1: last complete field)');
+          return parsed;
+        } catch (e) {
+          // Continue to strategy 2
+        }
+      }
+      
+      // Strategy 2: Find the last complete object boundary (for arrays)
       const lastCompleteIndex = repaired.lastIndexOf('},');
       if (lastCompleteIndex > 0) {
-        // Cut at last complete object and close the array/object
         repaired = repaired.substring(0, lastCompleteIndex + 1);
         
-        // Count open brackets to close properly
         const openBraces = (repaired.match(/{/g) || []).length;
         const closeBraces = (repaired.match(/}/g) || []).length;
         const openBrackets = (repaired.match(/\[/g) || []).length;
         const closeBrackets = (repaired.match(/]/g) || []).length;
         
-        // Add missing closing brackets
-        for (let i = 0; i < openBrackets - closeBrackets; i++) {
-          repaired += ']';
-        }
-        for (let i = 0; i < openBraces - closeBraces; i++) {
-          repaired += '}';
-        }
+        for (let i = 0; i < openBrackets - closeBrackets; i++) repaired += ']';
+        for (let i = 0; i < openBraces - closeBraces; i++) repaired += '}';
         
         try {
           const parsed = JSON.parse(repaired);
-          console.log('✅ Successfully repaired truncated JSON');
+          console.log('✅ Successfully repaired truncated JSON (strategy 2: last complete object)');
           return parsed;
         } catch (repairErr) {
-          console.error('Repair attempt failed:', repairErr.message);
+          console.error('Repair strategy 2 failed:', repairErr.message);
+        }
+      }
+      
+      // Strategy 3: Brute-force — find the last valid quote, close the string, then close brackets
+      const lastQuote = cleaned.lastIndexOf('"');
+      if (lastQuote > 10) {
+        let brute = cleaned.substring(0, lastQuote + 1);
+        // Remove incomplete key (if we ended mid key:value)
+        const trailingKeyMatch = brute.match(/,\s*"[^"]*"\s*:\s*"[^"]*"$/);
+        if (!trailingKeyMatch) {
+          // We might be mid-value, find the last complete key:value
+          const lastCompleteKV = brute.lastIndexOf('",');
+          if (lastCompleteKV > 0) {
+            brute = brute.substring(0, lastCompleteKV + 1);
+          }
+        }
+        // Remove trailing comma
+        brute = brute.trimEnd();
+        if (brute.endsWith(',')) brute = brute.slice(0, -1);
+        
+        const ob = (brute.match(/{/g) || []).length;
+        const cb = (brute.match(/}/g) || []).length;
+        const osb = (brute.match(/\[/g) || []).length;
+        const csb = (brute.match(/]/g) || []).length;
+        for (let i = 0; i < osb - csb; i++) brute += ']';
+        for (let i = 0; i < ob - cb; i++) brute += '}';
+        
+        try {
+          const parsed = JSON.parse(brute);
+          console.log('✅ Successfully repaired truncated JSON (strategy 3: brute-force)');
+          return parsed;
+        } catch (e) {
+          console.error('Repair strategy 3 failed:', e.message);
         }
       }
     }
@@ -280,7 +334,19 @@ function parseGeminiJSON(text) {
  * Generate personalized campaign suggestions based on business profile
  * Creates highly specific campaigns tailored to the company's products, audience, and brand voice
  */
-async function generateCampaignSuggestions(businessProfile, count = 6) {
+// Platform-specific caption rules for AI prompt injection
+function getPlatformCaptionRules(platform) {
+  const rules = {
+    'twitter': '- STRICT 280 character limit (including hashtags). Keep it punchy and concise.\n- Use 1-3 hashtags MAX, placed at the end.\n- No line breaks or long paragraphs — single impactful statement.\n- Threads are OK but each tweet must be under 280 chars.',
+    'x': '- STRICT 280 character limit (including hashtags). Keep it punchy and concise.\n- Use 1-3 hashtags MAX, placed at the end.\n- No line breaks or long paragraphs — single impactful statement.',
+    'instagram': '- Caption can be up to 2200 characters but keep it engaging (150-300 chars ideal for feed).\n- Use 5-15 relevant hashtags.\n- Include line breaks for readability.\n- Start with a hook in the first line (visible before "more").\n- Use emojis generously.',
+    'linkedin': '- Professional tone, 150-300 words ideal.\n- No excessive emojis (1-2 max).\n- Use line breaks every 1-2 sentences for readability.\n- Include a thought-provoking question or CTA at the end.\n- 3-5 hashtags max, lowercase preferred.',
+    'facebook': '- Medium length (100-250 chars ideal for engagement).\n- Conversational and relatable tone.\n- 1-3 hashtags max.\n- Include a question or CTA to drive comments.\n- Emojis OK but moderate.',
+  };
+  return rules[platform.toLowerCase()] || rules['instagram'];
+}
+
+async function generateCampaignSuggestions(businessProfile, count = 6, allowedPlatforms = null) {
   // Build a comprehensive context from the business profile
   const companyName = businessProfile.name || 'Your Company';
   const industry = businessProfile.industry || 'General';
@@ -290,6 +356,12 @@ async function generateCampaignSuggestions(businessProfile, count = 6) {
   const brandVoice = businessProfile.brandVoice || 'Professional';
   const description = businessProfile.description || '';
   const marketingGoals = (businessProfile.marketingGoals || []).join(', ') || 'Brand awareness';
+  
+  // Filter platforms — exclude YouTube always, use allowed list if provided
+  const defaultPlatforms = ['instagram', 'facebook', 'linkedin', 'twitter'];
+  const platformsList = allowedPlatforms 
+    ? allowedPlatforms.map(p => p.toLowerCase()).filter(p => p !== 'youtube')
+    : defaultPlatforms;
   
   // Get products/services context if available
   const products = businessProfile.products?.map(p => p.name || p).join(', ') || '';
@@ -344,6 +416,11 @@ ${brandVoice === 'Playful' ? '- Use humor, puns, emojis liberally, casual langua
 ${brandVoice === 'Bold' ? '- Use strong statements, powerful words, confident assertions, call to action' : ''}
 ${brandVoice === 'Minimal' ? '- Use concise, clean language, fewer words, impactful statements' : ''}
 
+=== PLATFORM-SPECIFIC CAPTION RULES ===
+${platformsList.map(p => `[${p.toUpperCase()}]\n${getPlatformCaptionRules(p)}`).join('\n\n')}
+
+IMPORTANT: Each campaign's caption MUST strictly follow the rules of its assigned platform. Especially enforce character limits for Twitter/X.
+
 Return ONLY valid JSON (no markdown, no code blocks):
 {
   "campaigns": [
@@ -366,7 +443,7 @@ Return ONLY valid JSON (no markdown, no code blocks):
   ]
 }
 
-Generate ${count} diverse campaigns covering different objectives (awareness, engagement, sales, etc.) and platforms (instagram, facebook, linkedin, twitter/X, youtube). Make every campaign UNIQUE and SPECIFIC to ${companyName}.`;
+Generate ${count} diverse campaigns covering different objectives (awareness, engagement, sales, etc.) and platforms. ONLY use these platforms: ${platformsList.join(', ')}. Do NOT include YouTube. Make every campaign UNIQUE and SPECIFIC to ${companyName}.`;
 
   try {
     // Use higher token limit for generating multiple campaigns
@@ -422,6 +499,9 @@ Generate ${count} diverse campaigns covering different objectives (awareness, en
         return {
           ...campaign,
           imageUrl,
+          // Post-process: force platform to one of the allowed platforms (Gemini sometimes ignores constraints)
+          platforms: platformsList.length > 0 ? [platformsList[index % platformsList.length]] : campaign.platforms,
+          platform: platformsList.length > 0 ? platformsList[index % platformsList.length] : campaign.platform,
           id: campaign.id || `campaign_${index + 1}`
         };
       }));
@@ -438,7 +518,7 @@ Generate ${count} diverse campaigns covering different objectives (awareness, en
  * Generate a SINGLE campaign quickly for streaming/progressive loading
  * This is optimized for speed - generates one campaign at a time
  */
-async function generateSingleCampaign(businessProfile, index, total) {
+async function generateSingleCampaign(businessProfile, index, total, allowedPlatforms = null) {
   const companyName = businessProfile.name || 'Your Company';
   const industry = businessProfile.industry || 'General';
   const niche = businessProfile.niche || industry;
@@ -449,7 +529,10 @@ async function generateSingleCampaign(businessProfile, index, total) {
   
   // Vary objectives for diversity with randomness
   const objectives = ['awareness', 'engagement', 'sales', 'traffic', 'trust', 'conversion'];
-  const platforms = ['instagram', 'facebook', 'linkedin', 'twitter', 'youtube'];
+  // Filter platforms — exclude YouTube always, use allowed list if provided
+  const platforms = allowedPlatforms 
+    ? allowedPlatforms.map(p => p.toLowerCase()).filter(p => p !== 'youtube')
+    : ['instagram', 'facebook', 'linkedin', 'twitter'];
   
   // Add randomness to selection to ensure variety on regeneration
   const randomSeed = Date.now() + index;
@@ -493,6 +576,11 @@ Platform: ${platform}
 Goals: ${marketingGoals}
 Timestamp: ${Date.now()}
 
+=== PLATFORM CAPTION RULES FOR ${platform.toUpperCase()} ===
+${getPlatformCaptionRules(platform)}
+
+IMPORTANT: The caption MUST strictly follow the ${platform} platform rules above. ${platform.toLowerCase() === 'twitter' || platform.toLowerCase() === 'x' ? 'STRICTLY keep caption under 280 characters including hashtags!' : ''}
+
 Return ONLY valid JSON (no markdown):
 {
   "id": "campaign_${Date.now()}_${index}",
@@ -509,6 +597,10 @@ Return ONLY valid JSON (no markdown):
   try {
     const response = await callGemini(prompt, { temperature: 0.95, maxTokens: 1024, skipCache: true });
     const campaign = parseGeminiJSON(response);
+    
+    // Post-process: force the platform to match what was requested (Gemini sometimes ignores it)
+    campaign.platforms = [platform];
+    campaign.platform = platform;
     
     // Build rich brand context for image generation
     const brandContext = {
@@ -1945,7 +2037,7 @@ Return ONLY valid JSON (no markdown, no explanations):
 
   try {
     console.log(`🎯 Generating SAVAGE rival post against ${competitorName} for ${brandContext.companyName}`);
-    const response = await callGemini(prompt, { skipCache: true, temperature: 0.9, maxTokens: 1500, timeout: 25000 });
+    const response = await callGemini(prompt, { skipCache: true, temperature: 0.9, maxTokens: 4096, timeout: 45000 });
     const parsed = parseGeminiJSON(response);
     
     if (!parsed || !parsed.caption) {
@@ -2620,7 +2712,7 @@ Return ONLY valid JSON:
     const response = await callGemini(prompt, { 
       skipCache: true, 
       temperature: 0.8, 
-      maxTokens: 2048,
+      maxTokens: 4096,
       timeout: EXTENDED_TIMEOUT 
     });
     const parsed = parseGeminiJSON(response);
@@ -2759,7 +2851,7 @@ Return ONLY valid JSON:
     const response = await callGemini(prompt, { 
       skipCache: true, 
       temperature: 0.85, 
-      maxTokens: 2048,
+      maxTokens: 4096,
       timeout: EXTENDED_TIMEOUT 
     });
     const parsed = parseGeminiJSON(response);
@@ -3505,6 +3597,136 @@ If no logo is detected, return:
   }
 }
 
+/**
+ * Generate ICP (Ideal Customer Profile) and Channel Strategy Mix
+ * Based on the user's business profile from onboarding
+ */
+async function generateICPAndStrategy(businessProfile) {
+  const bp = businessProfile || {};
+  
+  const prompt = `You are a world-class marketing strategist. Based on the following business profile, generate:
+1. A detailed Ideal Customer Profile (ICP)
+2. A Channel Strategy Mix with percentage allocation
+
+Business Profile:
+- Company Name: ${bp.name || 'Unknown'}
+- Industry: ${bp.industry || 'Unknown'}
+- Niche: ${bp.niche || 'General'}
+- Business Type: ${bp.businessType || 'B2C'}
+- Location: ${bp.businessLocation || 'Global'}
+- Description: ${bp.description || 'No description provided'}
+- Marketing Goals: ${(bp.marketingGoals || []).join(', ') || 'General growth'}
+- Brand Voice: ${Array.isArray(bp.brandVoice) ? bp.brandVoice.join(', ') : bp.brandVoice || 'Professional'}
+
+Return ONLY valid JSON in this exact format:
+{
+  "icp": {
+    "demographics": "Age range, gender, income level, education, job titles",
+    "psychographics": "Values, interests, lifestyle, attitudes",
+    "painPoints": ["Pain point 1", "Pain point 2", "Pain point 3"],
+    "buyingBehavior": "How they discover, evaluate, and purchase",
+    "onlinePresence": "Where they spend time online (platforms, communities, forums)",
+    "summary": "A 2-3 sentence ICP summary paragraph"
+  },
+  "channelStrategy": [
+    {
+      "platform": "Instagram",
+      "percentage": 35,
+      "role": "Primary visual content & community building",
+      "contentTypes": ["Reels", "Carousels", "Stories"],
+      "postFrequency": "5-7 posts/week"
+    },
+    {
+      "platform": "LinkedIn",
+      "percentage": 25,
+      "role": "Thought leadership & B2B networking",
+      "contentTypes": ["Articles", "Polls", "Case studies"],
+      "postFrequency": "3-4 posts/week"
+    },
+    {
+      "platform": "Twitter",
+      "percentage": 20,
+      "role": "Real-time engagement & trending conversations",
+      "contentTypes": ["Threads", "Quick takes", "Polls"],
+      "postFrequency": "Daily"
+    },
+    {
+      "platform": "Facebook",
+      "percentage": 15,
+      "role": "Community groups & retargeting",
+      "contentTypes": ["Group posts", "Events", "Ads"],
+      "postFrequency": "3 posts/week"
+    },
+    {
+      "platform": "YouTube",
+      "percentage": 5,
+      "role": "Long-form educational content",
+      "contentTypes": ["Tutorials", "Behind-the-scenes"],
+      "postFrequency": "1 video/week"
+    }
+  ]
+}
+
+IMPORTANT RULES:
+- Channel percentages MUST add up to exactly 100
+- Include 3-5 channels based on what makes sense for this business
+- ICP must be highly specific to the business, not generic
+- Pain points should be real problems this ICP faces
+- Channel strategy roles should explain WHY that channel matters for this business
+- Consider the business type (B2B vs B2C) when recommending channels
+- Return ONLY valid JSON, no other text`;
+
+  try {
+    const raw = await callGemini(prompt, { 
+      temperature: 0.7, 
+      maxTokens: 4096,
+      skipCache: true  // Always skip cache — ICP is persisted in MongoDB per user
+    });
+    const parsed = parseGeminiJSON(raw);
+    
+    // Post-process: normalize channel strategy percentages to exactly 100%
+    if (parsed.channelStrategy && parsed.channelStrategy.length > 0) {
+      const total = parsed.channelStrategy.reduce((sum, ch) => sum + (ch.percentage || 0), 0);
+      if (total !== 100 && total > 0) {
+        // Scale all percentages proportionally, then adjust rounding error on largest
+        const scaled = parsed.channelStrategy.map(ch => ({
+          ...ch,
+          percentage: Math.round((ch.percentage / total) * 100)
+        }));
+        const scaledTotal = scaled.reduce((sum, ch) => sum + ch.percentage, 0);
+        const diff = 100 - scaledTotal;
+        // Add rounding remainder to the channel with the highest percentage
+        const maxIdx = scaled.reduce((mi, ch, i, arr) => ch.percentage > arr[mi].percentage ? i : mi, 0);
+        scaled[maxIdx].percentage += diff;
+        parsed.channelStrategy = scaled;
+        console.log(`📊 Normalized channel percentages from ${total}% to 100%`);
+      }
+    }
+    
+    return parsed;
+  } catch (error) {
+    console.error('❌ ICP/Strategy generation failed:', error.message);
+    // Return a sensible default
+    return {
+      icp: {
+        demographics: 'Unable to generate - please fill in manually',
+        psychographics: 'Unable to generate - please fill in manually',
+        painPoints: ['Cost efficiency', 'Time savings', 'Quality improvement'],
+        buyingBehavior: 'Unable to generate - please fill in manually',
+        onlinePresence: 'Unable to generate - please fill in manually',
+        summary: 'Unable to generate ICP. Please edit the fields above to describe your ideal customer.'
+      },
+      channelStrategy: [
+        { platform: 'Instagram', percentage: 30, role: 'Visual content', contentTypes: ['Posts', 'Reels'], postFrequency: '5/week' },
+        { platform: 'LinkedIn', percentage: 25, role: 'Professional networking', contentTypes: ['Articles', 'Posts'], postFrequency: '3/week' },
+        { platform: 'Twitter', percentage: 20, role: 'Engagement', contentTypes: ['Tweets', 'Threads'], postFrequency: 'Daily' },
+        { platform: 'Facebook', percentage: 15, role: 'Community', contentTypes: ['Posts', 'Groups'], postFrequency: '3/week' },
+        { platform: 'YouTube', percentage: 10, role: 'Long-form content', contentTypes: ['Videos'], postFrequency: '1/week' }
+      ]
+    };
+  }
+}
+
 module.exports = {
   callGemini,
   parseGeminiJSON,
@@ -3537,5 +3759,7 @@ module.exports = {
   editTemplatePoster,
   generatePosterFromReference,
   // Logo detection for auto-replacement
-  detectLogoInImage
+  detectLogoInImage,
+  // ICP and Channel Strategy
+  generateICPAndStrategy
 };
