@@ -868,6 +868,16 @@ router.get('/campaign-suggestions', protect, async (req, res) => {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
+    // Trial & credit check
+    const now = new Date();
+    const trialEnd = user.trial?.expiresAt ? new Date(user.trial.expiresAt) : null;
+    if (trialEnd && now > trialEnd) {
+      return res.status(403).json({ success: false, trialExpired: true, message: 'Trial expired' });
+    }
+    if ((user.credits?.balance ?? 100) <= 0) {
+      return res.status(403).json({ success: false, creditsExhausted: true, message: 'No credits remaining' });
+    }
+
     if (!user.businessProfile?.name) {
       return res.status(400).json({ 
         success: false, 
@@ -934,13 +944,24 @@ router.get('/campaign-suggestions', protect, async (req, res) => {
     const suggestions = await generateCampaignSuggestions(user.businessProfile, count, platformsParam);
     
     // Cache the new suggestions
+    let creditsRemaining;
     if (suggestions.campaigns && suggestions.campaigns.length > 0) {
       try {
         await CachedCampaign.saveCampaigns(user._id, profileHash, suggestions.campaigns);
         console.log(`💾 Cached ${suggestions.campaigns.length} new campaigns`);
       } catch (cacheError) {
         console.error('Failed to cache campaigns:', cacheError);
-        // Continue anyway - caching failure shouldn't break the response
+      }
+
+      // Deduct credits: 5 (image) + 2 (caption) = 7 per campaign generated
+      const userId = user._id;
+      const campCount = suggestions.campaigns.length;
+      try {
+        await deductCredits(userId, 'image_generated', campCount, `${campCount} campaign images`);
+        const txtResult = await deductCredits(userId, 'campaign_text', campCount, `${campCount} campaign captions`);
+        creditsRemaining = txtResult.creditsRemaining;
+      } catch (creditErr) {
+        console.error('Credit deduction error on campaign suggestions:', creditErr);
       }
     }
 
@@ -949,6 +970,7 @@ router.get('/campaign-suggestions', protect, async (req, res) => {
       data: suggestions,
       personalized: true,
       cached: false,
+      creditsRemaining,
       businessContext: {
         name: user.businessProfile.name,
         industry: user.businessProfile.industry
@@ -1082,24 +1104,28 @@ router.get('/campaign-suggestions-stream', protect, async (req, res) => {
         console.error('Failed to cache streamed campaigns:', cacheError);
       }
 
-      // Deduct credits for AI campaign generation (2 credits for campaign_text)
-      if (forceRefresh) {
-        try {
-          const creditResult = await deductCredits(
-            user._id, 'campaign_text', 1,
-            `Regenerated ${generatedCampaigns.length} campaign ideas`
-          );
-          // Send credit update in the SSE stream so frontend can update immediately
-          if (creditResult.success) {
-            res.write(`data: ${JSON.stringify({ 
-              type: 'credits_update', 
-              creditsRemaining: creditResult.creditsRemaining,
-              creditsDeducted: creditResult.creditsDeducted
-            })}\n\n`);
-          }
-        } catch (creditErr) {
-          console.error('Credit deduction error on campaign stream:', creditErr);
+      // Deduct credits: 5 (image) + 2 (caption) = 7 per campaign generated
+      try {
+        const imgCredits = await deductCredits(
+          user._id, 'image_generated', generatedCampaigns.length,
+          `${generatedCampaigns.length} campaign images`
+        );
+        const txtCredits = await deductCredits(
+          user._id, 'campaign_text', generatedCampaigns.length,
+          `${generatedCampaigns.length} campaign captions`
+        );
+        const remaining = txtCredits.success ? txtCredits.creditsRemaining : (imgCredits.success ? imgCredits.creditsRemaining : undefined);
+        const totalDeducted = (imgCredits.creditsDeducted || 0) + (txtCredits.creditsDeducted || 0);
+        // Send credit update in SSE stream so frontend updates immediately
+        if (remaining !== undefined) {
+          res.write(`data: ${JSON.stringify({ 
+            type: 'credits_update', 
+            creditsRemaining: remaining,
+            creditsDeducted: totalDeducted
+          })}\n\n`);
         }
+      } catch (creditErr) {
+        console.error('Credit deduction error on campaign stream:', creditErr);
       }
     }
     
@@ -1237,6 +1263,16 @@ router.post('/generate-rival-post', protect, async (req, res) => {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
+    // Trial & credit check
+    const now = new Date();
+    const trialEnd = user.trial?.expiresAt ? new Date(user.trial.expiresAt) : null;
+    if (trialEnd && now > trialEnd) {
+      return res.status(403).json({ success: false, trialExpired: true, message: 'Trial expired' });
+    }
+    if ((user.credits?.balance ?? 100) < 7) {
+      return res.status(403).json({ success: false, creditsExhausted: true, message: 'Not enough credits. Rival post requires 7 credits (5 image + 2 caption).' });
+    }
+
     const { competitorName, competitorContent, platform, sentiment, likes, comments } = req.body;
     
     if (!competitorContent) {
@@ -1253,11 +1289,17 @@ router.post('/generate-rival-post', protect, async (req, res) => {
 
     console.log('✅ Rival post generated successfully');
 
+    // Deduct credits: 5 (image) + 2 (caption)
+    const userId = user._id;
+    await deductCredits(userId, 'image_generated', 1, `Rival post image vs ${competitorName}`);
+    const txtResult = await deductCredits(userId, 'campaign_text', 1, `Rival post caption vs ${competitorName}`);
+
     res.json({
       success: true,
       caption: rivalPost.caption,
       hashtags: rivalPost.hashtags,
-      imageUrl: rivalPost.imageUrl
+      imageUrl: rivalPost.imageUrl,
+      creditsRemaining: txtResult.creditsRemaining
     });
   } catch (error) {
     console.error('Rival post generation error:', error);
@@ -1566,6 +1608,18 @@ router.post('/strategic-advisor/generate-post', protect, async (req, res) => {
     if (!suggestion) {
       return res.status(400).json({ success: false, message: 'Suggestion is required' });
     }
+
+    // Trial & credit check
+    const userDoc = await User.findById(userId);
+    if (!userDoc) return res.status(404).json({ success: false, message: 'User not found' });
+    const now = new Date();
+    const trialEnd = userDoc.trial?.expiresAt ? new Date(userDoc.trial.expiresAt) : null;
+    if (trialEnd && now > trialEnd) {
+      return res.status(403).json({ success: false, trialExpired: true, message: 'Trial expired' });
+    }
+    if ((userDoc.credits?.balance ?? 100) < 7) {
+      return res.status(403).json({ success: false, creditsExhausted: true, message: 'Not enough credits. Post creation requires 7 credits (5 image + 2 caption).' });
+    }
     
     // Get user's business context
     const context = await OnboardingContext.findOne({ userId }).lean();
@@ -1579,10 +1633,15 @@ router.post('/strategic-advisor/generate-post', protect, async (req, res) => {
     
     // Generate complete post
     const post = await generatePostFromSuggestion(suggestion, businessProfile);
+
+    // Deduct credits: 5 (image) + 2 (caption)
+    await deductCredits(userId, 'image_generated', 1, `Strategic advisor post image: ${suggestion.title?.substring(0, 40) || 'Post'}`);
+    const txtResult = await deductCredits(userId, 'campaign_text', 1, `Strategic advisor post caption: ${suggestion.title?.substring(0, 40) || 'Post'}`);
     
     res.json({
       success: true,
-      post
+      post,
+      creditsRemaining: txtResult.creditsRemaining
     });
   } catch (error) {
     console.error('Generate post error:', error);
@@ -1596,13 +1655,32 @@ router.post('/strategic-advisor/generate-post', protect, async (req, res) => {
  */
 router.post('/strategic-advisor/refine-image', protect, async (req, res) => {
   try {
+    const userId = req.user._id;
     const { originalPrompt, refinementPrompt, style } = req.body;
     
     if (!originalPrompt || !refinementPrompt) {
       return res.status(400).json({ success: false, message: 'Prompts are required' });
     }
+
+    // Trial & credit check
+    const userDoc = await User.findById(userId);
+    if (!userDoc) return res.status(404).json({ success: false, message: 'User not found' });
+    const now = new Date();
+    const trialEnd = userDoc.trial?.expiresAt ? new Date(userDoc.trial.expiresAt) : null;
+    if (trialEnd && now > trialEnd) {
+      return res.status(403).json({ success: false, trialExpired: true, message: 'Trial expired' });
+    }
+    if ((userDoc.credits?.balance ?? 100) < 3) {
+      return res.status(403).json({ success: false, creditsExhausted: true, message: 'Not enough credits. Image refinement requires 3 credits.' });
+    }
     
     const result = await refineImageWithPrompt(originalPrompt, refinementPrompt, style);
+
+    // Deduct 3 credits for image edit
+    if (result.success) {
+      const editResult = await deductCredits(userId, 'image_edit', 1, 'Strategic advisor image refinement');
+      result.creditsRemaining = editResult.creditsRemaining;
+    }
     
     res.json({
       success: result.success,
@@ -1627,6 +1705,18 @@ router.post('/generate-event-post', protect, async (req, res) => {
     if (!event) {
       return res.status(400).json({ success: false, message: 'Event data is required' });
     }
+
+    // Trial & credit check
+    const userDoc = await User.findById(userId);
+    if (!userDoc) return res.status(404).json({ success: false, message: 'User not found' });
+    const now = new Date();
+    const trialEnd = userDoc.trial?.expiresAt ? new Date(userDoc.trial.expiresAt) : null;
+    if (trialEnd && now > trialEnd) {
+      return res.status(403).json({ success: false, trialExpired: true, message: 'Trial expired' });
+    }
+    if ((userDoc.credits?.balance ?? 100) < 7) {
+      return res.status(403).json({ success: false, creditsExhausted: true, message: 'Not enough credits. Event post requires 7 credits (5 image + 2 caption).' });
+    }
     
     // Get user's business context
     const context = await OnboardingContext.findOne({ userId }).lean();
@@ -1642,10 +1732,15 @@ router.post('/generate-event-post', protect, async (req, res) => {
     
     // Generate event-specific post using Gemini
     const post = await generateEventPost(event, businessProfile);
+
+    // Deduct credits: 5 (image) + 2 (caption)
+    await deductCredits(userId, 'image_generated', 1, `Event post image: ${event.name || 'Event'}`);
+    const txtResult = await deductCredits(userId, 'campaign_text', 1, `Event post caption: ${event.name || 'Event'}`);
     
     res.json({
       success: true,
-      post
+      post,
+      creditsRemaining: txtResult.creditsRemaining
     });
   } catch (error) {
     console.error('Generate event post error:', error);
