@@ -115,6 +115,23 @@ const userSchema = new mongoose.Schema({
     }],
     generatedAt: { type: Date }
   },
+  // Trial system (demo only)
+  trial: {
+    startDate: { type: Date, default: Date.now },
+    expiresAt: { type: Date, default: () => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) }, // 7 days from signup
+    isExpired: { type: Boolean, default: false }
+  },
+  // Credit system
+  credits: {
+    balance: { type: Number, default: 100 },  // 100 credits for demo
+    totalUsed: { type: Number, default: 0 },
+    history: [{
+      action: { type: String },     // 'image_generated', 'image_edit', 'campaign_text', 'chat_message'
+      amount: { type: Number },      // negative = deducted, positive = added
+      description: { type: String },
+      createdAt: { type: Date, default: Date.now }
+    }]
+  },
   // Email OTP Verification
   isVerified: {
     type: Boolean,
@@ -172,6 +189,11 @@ userSchema.methods.toPublicJSON = function() {
       connectedAt: s.connectedAt
     })),
     subscription: this.subscription,
+    trial: this.trial,
+    credits: {
+      balance: this.credits?.balance ?? 100,
+      totalUsed: this.credits?.totalUsed ?? 0
+    },
     createdAt: this.createdAt
   };
 };

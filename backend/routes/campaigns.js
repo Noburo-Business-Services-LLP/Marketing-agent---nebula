@@ -6,6 +6,7 @@
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
+const { checkTrial, deductCredits, requireCredits } = require('../middleware/trialGuard');
 const Campaign = require('../models/Campaign');
 const User = require('../models/User');
 const { callGemini, parseGeminiJSON, generateICPAndStrategy } = require('../services/geminiAI');
@@ -542,11 +543,22 @@ router.post('/:id/publish', protect, async (req, res) => {
  * POST /api/campaigns/generate-campaign-posts
  * Generate AI-powered posts for a campaign based on detailed inputs
  */
-router.post('/generate-campaign-posts', protect, async (req, res) => {
+router.post('/generate-campaign-posts', protect, checkTrial, async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
     const user = await User.findById(userId);
     const bp = user?.businessProfile || {};
+
+    // Check credits upfront for campaign text generation (2 credits)
+    const textCreditResult = await deductCredits(userId, 'campaign_text', 1, 'AI campaign generation');
+    if (!textCreditResult.success) {
+      return res.status(403).json({
+        success: false,
+        creditsExhausted: true,
+        message: textCreditResult.error,
+        creditsRemaining: textCreditResult.creditsRemaining
+      });
+    }
     
     const {
       campaignName,
@@ -772,6 +784,9 @@ Return ONLY valid JSON (no markdown, no code blocks):
         }
         
         console.log(`✅ Image ${index + 1}/${postsToProcess.length} generated`);
+
+        // Deduct 5 credits per successfully generated image
+        await deductCredits(userId, 'image_generated', 1, `Image ${index + 1} for campaign: ${campaignName}`);
       } catch (imgError) {
         console.error(`Error generating image for post ${index}:`, imgError);
         // Fallback image
@@ -826,8 +841,9 @@ Return ONLY valid JSON (no markdown, no code blocks):
  * POST /api/campaigns/regenerate-post-image
  * Regenerate a single post image with optional custom prompt
  */
-router.post('/regenerate-post-image', protect, async (req, res) => {
+router.post('/regenerate-post-image', protect, checkTrial, requireCredits('image_edit'), async (req, res) => {
   try {
+    const userId = req.user.userId || req.user.id || req.user._id;
     const { 
       postId,
       platform,
@@ -881,6 +897,9 @@ router.post('/regenerate-post-image', protect, async (req, res) => {
     }
 
     console.log('✅ Image regenerated successfully');
+
+    // Deduct credits for image edit/regenerate
+    await deductCredits(userId, 'image_edit', 1, 'Regenerated post image');
 
     res.json({
       success: true,
@@ -1176,7 +1195,7 @@ router.post('/process-aspect-ratio', protect, async (req, res) => {
  * Uses Canvas for reliable text overlay, AI as fallback
  * Supports logo overlay from Brand Assets
  */
-router.post('/template-poster', protect, async (req, res) => {
+router.post('/template-poster', protect, checkTrial, requireCredits('image_generated'), async (req, res) => {
   try {
     const { templateImage, content, platform, style, useAI, logoOverlay } = req.body;
     
@@ -1275,6 +1294,10 @@ router.post('/template-poster', protect, async (req, res) => {
         }
       }
       
+      // Deduct credits for image generation
+      const userId = req.user.userId || req.user.id || req.user._id;
+      await deductCredits(userId, 'image_generated', 1, 'Generated template poster');
+
       res.json({
         success: true,
         imageBase64: finalImageBase64,
@@ -1304,7 +1327,7 @@ router.post('/template-poster', protect, async (req, res) => {
  * Edit/refine a generated poster based on user feedback
  * Supports iterative refinement through conversational prompts
  */
-router.post('/template-poster/edit', protect, async (req, res) => {
+router.post('/template-poster/edit', protect, checkTrial, requireCredits('image_edit'), async (req, res) => {
   try {
     const { currentImage, originalContent, editInstructions, templateImage } = req.body;
     
@@ -1335,7 +1358,11 @@ router.post('/template-poster/edit', protect, async (req, res) => {
     
     if (result.success) {
       console.log('✅ Poster edited successfully');
-      
+
+      // Deduct credits for image edit
+      const userId = req.user.userId || req.user.id || req.user._id;
+      await deductCredits(userId, 'image_edit', 1, 'Edited template poster');
+
       // Upload to Cloudinary
       let hostedUrl = null;
       try {
@@ -1375,7 +1402,7 @@ router.post('/template-poster/edit', protect, async (req, res) => {
  * Generate a NEW poster using a REFERENCE image for style inspiration
  * The AI creates a poster that LOOKS LIKE the reference but uses user's content
  */
-router.post('/template-poster/from-reference', protect, async (req, res) => {
+router.post('/template-poster/from-reference', protect, checkTrial, requireCredits('image_generated'), async (req, res) => {
   try {
     const { referenceImage, content, platform } = req.body;
     
@@ -1412,6 +1439,10 @@ router.post('/template-poster/from-reference', protect, async (req, res) => {
       } catch (uploadError) {
         console.warn('Could not upload to Cloudinary:', uploadError.message);
       }
+
+      // Deduct credits for image generation from reference
+      const userId = req.user.userId || req.user.id || req.user._id;
+      await deductCredits(userId, 'image_generated', 1, 'Generated poster from reference');
       
       return res.json({
         success: true,
@@ -1440,7 +1471,7 @@ router.post('/template-poster/from-reference', protect, async (req, res) => {
  * POST /api/campaigns/template-poster/batch
  * Generate multiple posters from multiple templates in batch
  */
-router.post('/template-poster/batch', protect, async (req, res) => {
+router.post('/template-poster/batch', protect, checkTrial, async (req, res) => {
   try {
     const { posters, platform, useAI } = req.body;
     
@@ -1500,6 +1531,10 @@ router.post('/template-poster/batch', protect, async (req, res) => {
           model: result.model || result.method
         });
         console.log(`✅ Poster ${i + 1} generated`);
+
+        // Deduct credits per image generated in batch
+        const userId = req.user.userId || req.user.id || req.user._id;
+        await deductCredits(userId, 'image_generated', 1, `Batch poster ${i + 1}`);
       } else {
         results.push({
           index: i,

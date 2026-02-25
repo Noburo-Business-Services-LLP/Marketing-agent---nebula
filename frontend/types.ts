@@ -20,6 +20,15 @@ export interface User {
   isVerified?: boolean;
   onboardingCompleted: boolean;
   businessProfile?: BusinessProfile;
+  trial?: {
+    startDate?: string;
+    expiresAt?: string;
+    isExpired?: boolean;
+  };
+  credits?: {
+    balance: number;
+    totalUsed: number;
+  };
   brandScore?: {
     score: number;
     metrics: {

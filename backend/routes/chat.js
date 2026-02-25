@@ -3,6 +3,7 @@ const router = express.Router();
 const { protect, optionalAuth } = require('../middleware/auth');
 const User = require('../models/User');
 const { generateChatResponse, generateChatSuggestions } = require('../services/geminiAI');
+const { checkTrial, deductCredits } = require('../middleware/trialGuard');
 
 // Chat completion endpoint - uses Gemini AI with user context
 router.post('/message', optionalAuth, async (req, res) => {
@@ -18,15 +19,33 @@ router.post('/message', optionalAuth, async (req, res) => {
 
     // Get user's business profile if authenticated
     let businessProfile = null;
+    const userId = req.user?.userId || req.user?.id || req.user?._id;
     if (req.user) {
-      const user = await User.findById(req.user.userId || req.user.id || req.user._id);
+      const user = await User.findById(userId);
       if (user && user.businessProfile) {
         businessProfile = user.businessProfile;
+      }
+
+      // Check trial status for authenticated users
+      if (user) {
+        const now = new Date();
+        const trialEnd = user.trial?.expiresAt ? new Date(user.trial.expiresAt) : null;
+        if (trialEnd && now > trialEnd) {
+          return res.status(403).json({ success: false, trialExpired: true, message: 'Trial expired' });
+        }
+        if ((user.credits?.balance ?? 100) < 0.5) {
+          return res.status(403).json({ success: false, creditsExhausted: true, message: 'Insufficient credits for chat' });
+        }
       }
     }
 
     // Generate response using Gemini with business context
     const aiResponse = await generateChatResponse(message, businessProfile, conversationHistory);
+
+    // Deduct 0.5 credits for chat message (only for authenticated users)
+    if (userId) {
+      await deductCredits(userId, 'chat_message', 1, 'Chat message');
+    }
 
     res.json({
       success: true,

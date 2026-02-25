@@ -596,10 +596,10 @@ const LandingPage: React.FC = () => {
                 : 'bg-[#070A12] hover:bg-[#0a0f1a] text-white shadow-[#070A12]/10 hover:shadow-[#070A12]/20'
             }`}
           >
-            Sign up for free
+            Start Your 7-Day Free Trial
             <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
           </button>
-          <p className={`text-sm mt-4 ${theme === 'dark' ? 'text-[#ededed]/50' : 'text-gray-500'}`}>No credit card required</p>
+          <p className={`text-sm mt-4 ${theme === 'dark' ? 'text-[#ededed]/50' : 'text-gray-500'}`}>No credit card required · 100 credits included</p>
         </div>
       </section>
 

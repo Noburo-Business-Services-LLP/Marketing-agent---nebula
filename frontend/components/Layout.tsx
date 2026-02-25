@@ -13,10 +13,13 @@ import {
   Sun,
   Moon,
   Palette,
-  BarChart3
+  BarChart3,
+  Clock,
+  Zap
 } from 'lucide-react';
 import { User } from '../types';
 import NotificationBell from './NotificationBell';
+import { apiService } from '../services/api';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -27,8 +30,30 @@ interface LayoutProps {
 const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [trialInfo, setTrialInfo] = useState<{ daysLeft: number; creditsBalance: number } | null>(null);
   const location = useLocation();
   const navigate = useNavigate();
+
+  // Fetch trial/credit info
+  useEffect(() => {
+    const fetchTrialInfo = async () => {
+      try {
+        const data = await apiService.getCredits();
+        if (data.success) {
+          setTrialInfo({
+            daysLeft: data.trial?.daysLeft ?? 7,
+            creditsBalance: data.credits?.balance ?? 100
+          });
+        }
+      } catch (e) {
+        // Silently fail — banner just won't show
+      }
+    };
+    fetchTrialInfo();
+    // Refresh every 60 seconds
+    const interval = setInterval(fetchTrialInfo, 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     // Check for saved theme preference or default to light
@@ -193,7 +218,21 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
         </header>
 
         {/* Desktop Header with Notifications */}
-        <header className={`hidden md:flex ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-gray-200'} border-b px-8 py-3 items-center justify-end gap-4`}>
+        <header className={`hidden md:flex ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-gray-200'} border-b px-8 py-3 items-center justify-between gap-4`}>
+          {/* Trial Banner */}
+          {trialInfo && (
+            <div className={`flex items-center gap-3 px-4 py-1.5 rounded-full text-xs font-medium ${
+              trialInfo.daysLeft <= 2 || trialInfo.creditsBalance <= 10
+                ? 'bg-red-500/10 text-red-400 border border-red-500/20'
+                : 'bg-[#ffcc29]/10 text-[#ffcc29] border border-[#ffcc29]/20'
+            }`}>
+              <Clock className="w-3.5 h-3.5" />
+              <span>{trialInfo.daysLeft}d left</span>
+              <span className="opacity-40">|</span>
+              <Zap className="w-3.5 h-3.5" />
+              <span>{trialInfo.creditsBalance} credits</span>
+            </div>
+          )}
           <NotificationBell />
         </header>
 

@@ -90,6 +90,19 @@ async function apiCall<T>(
     const data = await response.json();
     console.log('[API] Response from', endpoint, ':', response.status, data?.success);
 
+    // Handle trial/credit expiry responses
+    if (response.status === 403 && (data.trialExpired || data.creditsExhausted)) {
+      // Dispatch custom event so App.tsx can catch it
+      window.dispatchEvent(new CustomEvent('trial-expired', { 
+        detail: { 
+          reason: data.trialExpired ? 'time' : 'credits',
+          message: data.message,
+          creditsRemaining: data.creditsRemaining
+        } 
+      }));
+      throw new Error(data.message || 'Trial expired or credits exhausted');
+    }
+
     if (!response.ok) {
       throw new Error(data.error || data.message || 'Something went wrong');
     }
@@ -271,6 +284,15 @@ export const apiService = {
     } catch (error) {
       removeToken();
       return { user: null };
+    }
+  },
+
+  // Credits & Trial
+  getCredits: async (): Promise<{ success: boolean; credits?: { balance: number; totalUsed: number; history?: any[] }; trial?: { startDate: string; expiresAt: string; daysLeft: number; isExpired: boolean }; costs?: Record<string, number> }> => {
+    try {
+      return await apiCall('/credits', { method: 'GET' }, true);
+    } catch (error) {
+      return { success: false };
     }
   },
 

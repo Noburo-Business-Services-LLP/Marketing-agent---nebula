@@ -54,6 +54,12 @@ const brandAssetsRoutes = require('./routes/brandAssets');
 // Ads / Boost routes
 const adsRoutes = require('./routes/ads');
 
+// Credits / Trial routes
+const creditsRoutes = require('./routes/credits');
+
+// Trial guard middleware
+const { checkTrial } = require('./middleware/trialGuard');
+
 // Notification scheduler service
 const notificationScheduler = require('./services/notificationScheduler');
 // Analytics snapshot scheduler
@@ -127,6 +133,9 @@ app.use('/api/brand-assets', brandAssetsRoutes);
 
 // Routes - Ads / Boost
 app.use('/api/ads', adsRoutes);
+
+// Routes - Credits / Trial
+app.use('/api/credits', creditsRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
