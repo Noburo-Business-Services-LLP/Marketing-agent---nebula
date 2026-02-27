@@ -12,6 +12,15 @@ export interface BusinessProfile {
   competitors?: string[]; // Competitor names/brands to track
 }
 
+export interface UserCredits {
+  balance: number;
+  monthlyAllowance: number;
+  cycleStart: string;
+  cycleEnd: string;
+  totalUsed: number;
+  lastLoginBonus: string | null;
+}
+
 export interface User {
   _id: string;
   email: string;
@@ -20,6 +29,7 @@ export interface User {
   isVerified?: boolean;
   onboardingCompleted: boolean;
   businessProfile?: BusinessProfile;
+  credits?: UserCredits;
   brandScore?: {
     score: number;
     metrics: {

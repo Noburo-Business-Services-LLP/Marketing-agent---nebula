@@ -115,6 +115,25 @@ const userSchema = new mongoose.Schema({
     }],
     generatedAt: { type: Date }
   },
+  // Credits system (monthly cycle)
+  credits: {
+    balance: { type: Number, default: 1500 },
+    monthlyAllowance: { type: Number, default: 1500 },
+    cycleStart: { type: Date, default: () => {
+      const d = new Date(); d.setDate(1); d.setHours(0,0,0,0); return d;
+    }},
+    cycleEnd: { type: Date, default: () => {
+      const d = new Date(); d.setMonth(d.getMonth() + 1, 1); d.setHours(0,0,0,0); return d;
+    }},
+    totalUsed: { type: Number, default: 0 },
+    lastLoginBonus: { type: Date, default: null },
+    history: [{
+      action: { type: String },
+      cost: { type: Number },
+      balanceAfter: { type: Number },
+      timestamp: { type: Date, default: Date.now }
+    }]
+  },
   // Email OTP Verification
   isVerified: {
     type: Boolean,
@@ -172,6 +191,14 @@ userSchema.methods.toPublicJSON = function() {
       connectedAt: s.connectedAt
     })),
     subscription: this.subscription,
+    credits: this.credits ? {
+      balance: this.credits.balance,
+      monthlyAllowance: this.credits.monthlyAllowance,
+      cycleStart: this.credits.cycleStart,
+      cycleEnd: this.credits.cycleEnd,
+      totalUsed: this.credits.totalUsed,
+      lastLoginBonus: this.credits.lastLoginBonus
+    } : undefined,
     createdAt: this.createdAt
   };
 };

@@ -94,6 +94,11 @@ async function apiCall<T>(
       throw new Error(data.error || data.message || 'Something went wrong');
     }
 
+    // Dispatch credits-updated event if creditsRemaining is in response
+    if (data && typeof data === 'object' && 'creditsRemaining' in data && data.creditsRemaining !== undefined) {
+      window.dispatchEvent(new CustomEvent('credits-updated', { detail: { creditsRemaining: data.creditsRemaining } }));
+    }
+
     return data as T;
   } catch (error: any) {
     console.error('[API] Error for', endpoint, ':', error.message);
@@ -272,6 +277,15 @@ export const apiService = {
       removeToken();
       return { user: null };
     }
+  },
+
+  // Credits
+  getCredits: async (): Promise<{ success: boolean; credits: any; costs: any; history: any[] }> => {
+    return apiCall('/credits', { method: 'GET' }, true);
+  },
+
+  claimLoginBonus: async (): Promise<{ success: boolean; bonusGranted: number; creditsRemaining: number; message: string }> => {
+    return apiCall('/credits/login-bonus', { method: 'POST' }, true);
   },
 
   getBusinessContext: async (): Promise<{ success: boolean; businessLocation?: string; company?: any; geography?: any }> => {
@@ -496,6 +510,11 @@ export const apiService = {
                 
                 if (data.type === 'campaign') {
                   onCampaign(data.campaign, data.index, data.total, data.cached || false);
+                } else if (data.type === 'credits_update') {
+                  // Real-time credit update from stream
+                  if (data.creditsRemaining !== undefined) {
+                    window.dispatchEvent(new CustomEvent('credits-updated', { detail: { creditsRemaining: data.creditsRemaining } }));
+                  }
                 } else if (data.type === 'complete') {
                   onComplete(data.total);
                 } else if (data.type === 'error') {
