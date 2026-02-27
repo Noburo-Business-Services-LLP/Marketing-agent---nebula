@@ -14,16 +14,32 @@ import {
   Moon,
   Palette,
   BarChart3,
-  Coins,
   ChevronDown,
   Zap,
-  Image,
-  Pencil,
-  MessageCircle,
-  CalendarClock
+  Clock
 } from 'lucide-react';
 import { User } from '../types';
 import NotificationBell from './NotificationBell';
+
+const ACTION_LABELS: Record<string, {label: string; icon: string}> = {
+  image_generated: { label: 'Image Generation', icon: '🎨' },
+  image_edit: { label: 'Image Edit', icon: '✏️' },
+  campaign_text: { label: 'Campaign Ideas', icon: '💡' },
+  chat_message: { label: 'Chat Message', icon: '💬' },
+  competitor_scrape: { label: 'Competitor Scan', icon: '🔍' },
+  login_bonus: { label: 'Login Bonus', icon: '🎁' },
+  monthly_reset: { label: 'Monthly Reset', icon: '🔄' },
+};
+
+interface CreditData {
+  daysLeft: number;
+  creditsBalance: number;
+  totalUsed: number;
+  monthlyAllowance: number;
+  cycleEnd: string;
+  history: Array<{action: string; amount: number; description?: string; createdAt: string}>;
+  costs: Record<string, number>;
+}
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -34,17 +50,13 @@ interface LayoutProps {
 const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
-  const [creditBalance, setCreditBalance] = useState(user?.credits?.balance ?? 1500);
-  const [creditAllowance, setCreditAllowance] = useState(user?.credits?.monthlyAllowance ?? 1500);
-  const [cycleEnd, setCycleEnd] = useState(user?.credits?.cycleEnd || '');
-  const [totalUsed, setTotalUsed] = useState(user?.credits?.totalUsed ?? 0);
+  const [creditData, setCreditData] = useState<CreditData | null>(null);
   const [showCreditPanel, setShowCreditPanel] = useState(false);
   const creditPanelRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Check for saved theme preference or default to light
     const savedTheme = localStorage.getItem('theme');
     if (savedTheme === 'dark') {
       setIsDarkMode(true);
@@ -66,37 +78,38 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
     }
   };
 
-  // Fetch credits on mount
-  useEffect(() => {
-    const fetchCredits = async () => {
-      try {
-        const token = localStorage.getItem('authToken');
-        if (!token) return;
-        const API_BASE = window.location.hostname !== 'localhost' ? '/api' : 'http://localhost:5000/api';
-        const resp = await fetch(`${API_BASE}/credits`, {
-          headers: { Authorization: `Bearer ${token}` }
+  // Fetch full credit data (balance, costs, history)
+  const fetchCredits = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      if (!token) return;
+      const API_BASE = window.location.hostname !== 'localhost' ? '/api' : 'http://localhost:5000/api';
+      const resp = await fetch(`${API_BASE}/credits`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await resp.json();
+      if (data.success) {
+        setCreditData({
+          creditsBalance: data.credits.balance,
+          monthlyAllowance: data.credits.monthlyAllowance,
+          totalUsed: data.credits.totalUsed,
+          daysLeft: data.credits.daysLeft,
+          cycleEnd: data.credits.cycleEnd,
+          history: data.history || [],
+          costs: data.costs || {},
         });
-        const data = await resp.json();
-        if (data.success) {
-          setCreditBalance(data.credits.balance);
-          setCreditAllowance(data.credits.monthlyAllowance);
-          setCycleEnd(data.credits.cycleEnd);
-          setTotalUsed(data.credits.totalUsed);
-        }
-      } catch (e) {
-        console.error('Failed to fetch credits:', e);
       }
-    };
-    fetchCredits();
-  }, []);
+    } catch (e) {
+      console.error('Failed to fetch credits:', e);
+    }
+  };
 
-  // Listen for real-time credit updates from API responses
+  useEffect(() => { fetchCredits(); }, []);
+
+  // Listen for real-time credit updates — refetch to get updated history
   useEffect(() => {
-    const handleCreditsUpdate = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (detail?.creditsRemaining !== undefined) {
-        setCreditBalance(detail.creditsRemaining);
-      }
+    const handleCreditsUpdate = () => {
+      setTimeout(fetchCredits, 500);
     };
     window.addEventListener('credits-updated', handleCreditsUpdate);
     return () => window.removeEventListener('credits-updated', handleCreditsUpdate);
@@ -112,18 +125,6 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
     if (showCreditPanel) document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showCreditPanel]);
-
-  // Credit helpers
-  const creditPercent = creditAllowance > 0 ? Math.min(100, (creditBalance / creditAllowance) * 100) : 0;
-  const creditColor = creditPercent > 50 ? '#22c55e' : creditPercent > 20 ? '#eab308' : '#ef4444';
-  const daysLeft = cycleEnd ? Math.max(0, Math.ceil((new Date(cycleEnd).getTime() - Date.now()) / (1000 * 60 * 60 * 24))) : 0;
-
-  // SVG ring
-  const ringSize = 36;
-  const strokeWidth = 3.5;
-  const radius = (ringSize - strokeWidth) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const dashOffset = circumference * (1 - creditPercent / 100);
 
   const navItems = [
     { path: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -258,13 +259,16 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
           <span className={`font-bold ${isDarkMode ? 'text-[#ffcc29]' : 'text-[#070A12]'}`}>GRAVITY</span>
           <div className="flex items-center gap-2">
             {/* Mobile credit indicator */}
-            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-              creditPercent > 50 ? 'bg-emerald-500/20 text-emerald-400'
-              : creditPercent > 20 ? 'bg-yellow-500/20 text-yellow-400'
-              : 'bg-red-500/20 text-red-400'
-            }`}>
-              {Math.round(creditBalance)}
-            </span>
+            {creditData && (
+              <div className={`flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full ${
+                (creditData.creditsBalance / creditData.monthlyAllowance * 100) > 50 ? 'bg-emerald-500/20 text-emerald-400'
+                : (creditData.creditsBalance / creditData.monthlyAllowance * 100) > 20 ? 'bg-yellow-500/20 text-yellow-400'
+                : 'bg-red-500/20 text-red-400'
+              }`}>
+                <Zap className="w-3 h-3" />
+                <span className="tabular-nums">{Math.round(creditData.creditsBalance)}</span>
+              </div>
+            )}
             <NotificationBell />
             <button onClick={toggleTheme} className={isDarkMode ? 'text-[#ededed]' : 'text-[#070A12]'}>
               {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
@@ -272,123 +276,178 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
           </div>
         </header>
 
-        {/* Desktop Header with Notifications + Credits */}
-        <header className={`hidden md:flex ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-gray-200'} border-b px-8 py-3 items-center justify-end gap-4`}>
-          {/* Credit Meter */}
-          <div className="relative" ref={creditPanelRef}>
-            <button
-              onClick={() => setShowCreditPanel(!showCreditPanel)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all hover:shadow-md ${
-                isDarkMode
-                  ? 'bg-[#0d1117] border-slate-700/60 hover:border-[#ffcc29]/40'
-                  : 'bg-white border-gray-200 hover:border-yellow-400'
-              }`}
-            >
-              {/* SVG Ring */}
-              <svg width={ringSize} height={ringSize} className="-rotate-90">
-                <circle
-                  cx={ringSize / 2} cy={ringSize / 2} r={radius}
-                  fill="none" stroke={isDarkMode ? '#1e293b' : '#e5e7eb'}
-                  strokeWidth={strokeWidth}
-                />
-                <circle
-                  cx={ringSize / 2} cy={ringSize / 2} r={radius}
-                  fill="none" stroke={creditColor}
-                  strokeWidth={strokeWidth}
-                  strokeDasharray={circumference}
-                  strokeDashoffset={dashOffset}
-                  strokeLinecap="round"
-                  className="transition-all duration-700"
-                />
-              </svg>
-              <div className="flex flex-col items-start -ml-1">
-                <span className={`text-xs font-bold leading-tight ${isDarkMode ? 'text-[#ededed]' : 'text-gray-800'}`}>
-                  {Math.round(creditBalance)}
-                </span>
-                <span className={`text-[10px] leading-tight ${isDarkMode ? 'text-[#ededed]/50' : 'text-gray-400'}`}>
-                  credits
-                </span>
-              </div>
-              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showCreditPanel ? 'rotate-180' : ''} ${isDarkMode ? 'text-[#ededed]/40' : 'text-gray-400'}`} />
-            </button>
+        {/* Desktop Header with Credits Widget */}
+        <header className={`hidden md:flex ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-gray-200'} border-b px-8 py-3 items-center justify-between gap-4`}>
+          {/* Enterprise Credits Widget */}
+          {creditData && (() => {
+            const pct = Math.max(0, Math.min(100, (creditData.creditsBalance / creditData.monthlyAllowance) * 100));
+            const isLow = pct <= 25;
+            const isMed = pct <= 50 && pct > 25;
+            const ringColor = isLow ? '#ef4444' : isMed ? '#f59e0b' : '#22c55e';
+            const ringBg = isDarkMode ? '#1e293b' : '#e2e8f0';
+            const radius = 18;
+            const circumference = 2 * Math.PI * radius;
+            const offset = circumference - (pct / 100) * circumference;
 
-            {/* Credit Panel Dropdown */}
-            {showCreditPanel && (
-              <div className={`absolute right-0 top-full mt-2 w-72 rounded-xl shadow-2xl border z-50 overflow-hidden ${
-                isDarkMode
-                  ? 'bg-[#0d1117] border-slate-700/60'
-                  : 'bg-white border-gray-200'
-              }`}>
-                {/* Header */}
-                <div className={`px-4 py-3 ${isDarkMode ? 'bg-[#ffcc29]/10' : 'bg-yellow-50'} border-b ${isDarkMode ? 'border-slate-700/40' : 'border-gray-100'}`}>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Coins className="w-4 h-4 text-[#ffcc29]" />
-                      <span className={`text-sm font-semibold ${isDarkMode ? 'text-[#ededed]' : 'text-gray-800'}`}>Monthly Credits</span>
-                    </div>
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-[#ffcc29]/20 text-[#ffcc29] font-medium">
-                      {daysLeft}d left
-                    </span>
-                  </div>
-                  <div className="mt-2">
-                    <div className={`flex items-baseline gap-1`}>
-                      <span className="text-2xl font-bold" style={{ color: creditColor }}>{Math.round(creditBalance)}</span>
-                      <span className={`text-xs ${isDarkMode ? 'text-[#ededed]/40' : 'text-gray-400'}`}>/ {creditAllowance}</span>
-                    </div>
-                    {/* Progress bar */}
-                    <div className={`w-full h-1.5 rounded-full mt-2 ${isDarkMode ? 'bg-slate-800' : 'bg-gray-200'}`}>
-                      <div
-                        className="h-full rounded-full transition-all duration-500"
-                        style={{ width: `${creditPercent}%`, backgroundColor: creditColor }}
+            return (
+              <div className="relative" ref={creditPanelRef}>
+                {/* Trigger Button */}
+                <button
+                  onClick={() => setShowCreditPanel(!showCreditPanel)}
+                  className={`flex items-center gap-3 px-4 py-2 rounded-xl transition-all duration-200 border ${
+                    isLow
+                      ? isDarkMode ? 'border-red-500/30 bg-red-500/5 hover:bg-red-500/10' : 'border-red-200 bg-red-50 hover:bg-red-100'
+                      : isDarkMode ? 'border-slate-700 bg-[#0f1419] hover:bg-slate-800/80' : 'border-gray-200 bg-gray-50 hover:bg-gray-100'
+                  }`}
+                >
+                  {/* Circular Credit Ring */}
+                  <div className="relative w-10 h-10 flex-shrink-0">
+                    <svg className="w-10 h-10 -rotate-90" viewBox="0 0 44 44">
+                      <circle cx="22" cy="22" r={radius} fill="none" stroke={ringBg} strokeWidth="3" />
+                      <circle
+                        cx="22" cy="22" r={radius} fill="none"
+                        stroke={ringColor} strokeWidth="3" strokeLinecap="round"
+                        strokeDasharray={circumference} strokeDashoffset={offset}
+                        style={{ transition: 'stroke-dashoffset 0.6s ease' }}
                       />
+                    </svg>
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <Zap className="w-3.5 h-3.5" style={{ color: ringColor }} />
                     </div>
                   </div>
-                </div>
 
-                {/* Usage Overview */}
-                <div className={`px-4 py-3 border-b ${isDarkMode ? 'border-slate-700/40' : 'border-gray-100'}`}>
-                  <p className={`text-[10px] uppercase tracking-wider font-semibold mb-2 ${isDarkMode ? 'text-[#ededed]/30' : 'text-gray-400'}`}>This Month</p>
-                  <div className="flex items-center justify-between">
-                    <span className={`text-xs ${isDarkMode ? 'text-[#ededed]/60' : 'text-gray-500'}`}>Used</span>
-                    <span className={`text-xs font-medium ${isDarkMode ? 'text-[#ededed]' : 'text-gray-700'}`}>{totalUsed} credits</span>
+                  {/* Text Info */}
+                  <div className="text-left">
+                    <div className="flex items-center gap-1.5">
+                      <span className={`text-sm font-semibold tabular-nums ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                        {Math.round(creditData.creditsBalance)}
+                      </span>
+                      <span className={`text-xs ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}>credits</span>
+                    </div>
+                    <div className={`text-[11px] flex items-center gap-1 ${
+                      creditData.daysLeft <= 2
+                        ? 'text-red-400'
+                        : isDarkMode ? 'text-slate-500' : 'text-gray-400'
+                    }`}>
+                      <Clock className="w-3 h-3" />
+                      <span>{creditData.daysLeft}d remaining</span>
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between mt-1">
-                    <span className={`text-xs ${isDarkMode ? 'text-[#ededed]/60' : 'text-gray-500'}`}>Daily bonus</span>
-                    <span className="text-xs font-medium text-emerald-500">+10/day</span>
-                  </div>
-                </div>
 
-                {/* Cost Table */}
-                <div className={`px-4 py-3`}>
-                  <p className={`text-[10px] uppercase tracking-wider font-semibold mb-2 ${isDarkMode ? 'text-[#ededed]/30' : 'text-gray-400'}`}>Credit Costs</p>
-                  <div className="space-y-1.5">
-                    {[
-                      { icon: Image, label: 'Image generated', cost: 5 },
-                      { icon: Pencil, label: 'Image edit', cost: 3 },
-                      { icon: Zap, label: 'Campaign text', cost: 2 },
-                      { icon: MessageCircle, label: 'Chat message', cost: 0.5 },
-                    ].map((item) => (
-                      <div key={item.label} className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <item.icon className={`w-3 h-3 ${isDarkMode ? 'text-[#ededed]/40' : 'text-gray-400'}`} />
-                          <span className={`text-xs ${isDarkMode ? 'text-[#ededed]/60' : 'text-gray-500'}`}>{item.label}</span>
-                        </div>
-                        <span className={`text-xs font-medium ${isDarkMode ? 'text-[#ededed]' : 'text-gray-700'}`}>{item.cost}</span>
+                  <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${showCreditPanel ? 'rotate-180' : ''} ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`} />
+                </button>
+
+                {/* Dropdown Panel */}
+                {showCreditPanel && (
+                  <div className={`absolute top-full left-0 mt-2 w-80 rounded-2xl shadow-2xl border z-50 overflow-hidden ${
+                    isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-gray-200'
+                  }`} style={{ animation: 'fadeSlideDown 0.2s ease-out' }}>
+                    {/* Header */}
+                    <div className={`px-5 pt-5 pb-4 ${isDarkMode ? 'bg-[#0f1419]' : 'bg-gray-50'}`}>
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className={`text-sm font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Usage Overview</h3>
+                        <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-[#ffcc29]/10 text-[#d4a800]">
+                          Monthly
+                        </span>
                       </div>
-                    ))}
-                  </div>
-                </div>
 
-                {/* Cycle Reset Info */}
-                <div className={`px-4 py-2.5 ${isDarkMode ? 'bg-slate-800/50' : 'bg-gray-50'} flex items-center gap-2`}>
-                  <CalendarClock className={`w-3.5 h-3.5 ${isDarkMode ? 'text-[#ededed]/30' : 'text-gray-400'}`} />
-                  <span className={`text-[11px] ${isDarkMode ? 'text-[#ededed]/40' : 'text-gray-400'}`}>
-                    Resets {cycleEnd ? new Date(cycleEnd).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'monthly'}
-                  </span>
-                </div>
+                      {/* Credit Bar */}
+                      <div className="space-y-2">
+                        <div className="flex items-end justify-between">
+                          <div>
+                            <span className={`text-2xl font-bold tabular-nums ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                              {Math.round(creditData.creditsBalance)}
+                            </span>
+                            <span className={`text-sm ml-1 ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}>
+                              / {creditData.monthlyAllowance}
+                            </span>
+                          </div>
+                          <span className={`text-xs ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}>
+                            {creditData.totalUsed} used
+                          </span>
+                        </div>
+                        <div className={`h-2 rounded-full overflow-hidden ${isDarkMode ? 'bg-slate-800' : 'bg-gray-200'}`}>
+                          <div
+                            className="h-full rounded-full transition-all duration-500 ease-out"
+                            style={{
+                              width: `${pct}%`,
+                              background: isLow
+                                ? 'linear-gradient(90deg, #ef4444, #dc2626)'
+                                : isMed
+                                  ? 'linear-gradient(90deg, #f59e0b, #d97706)'
+                                  : 'linear-gradient(90deg, #22c55e, #16a34a)'
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Cost Reference */}
+                    <div className={`px-5 py-3 border-t ${isDarkMode ? 'border-slate-800' : 'border-gray-100'}`}>
+                      <p className={`text-[11px] font-medium uppercase tracking-wider mb-2 ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}>
+                        Credit Costs
+                      </p>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {Object.entries(creditData.costs || {}).filter(([, v]) => v > 0).map(([action, cost]) => (
+                          <div key={action} className={`flex items-center justify-between px-2 py-1 rounded-lg text-xs ${
+                            isDarkMode ? 'bg-slate-800/50' : 'bg-gray-50'
+                          }`}>
+                            <span className={isDarkMode ? 'text-slate-400' : 'text-gray-500'}>
+                              {ACTION_LABELS[action]?.icon} {ACTION_LABELS[action]?.label || action}
+                            </span>
+                            <span className={`font-medium tabular-nums ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}>
+                              {cost}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Recent Activity */}
+                    {creditData.history.length > 0 && (
+                      <div className={`px-5 py-3 border-t ${isDarkMode ? 'border-slate-800' : 'border-gray-100'}`}>
+                        <p className={`text-[11px] font-medium uppercase tracking-wider mb-2 ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}>
+                          Recent Activity
+                        </p>
+                        <div className="space-y-1.5 max-h-32 overflow-y-auto">
+                          {creditData.history.slice(0, 5).map((entry: any, i: number) => (
+                            <div key={i} className={`flex items-center justify-between text-xs py-1 ${
+                              isDarkMode ? 'text-slate-400' : 'text-gray-500'
+                            }`}>
+                              <span className="truncate mr-2">
+                                {ACTION_LABELS[entry.action]?.icon || '⚡'}{' '}
+                                {entry.description || ACTION_LABELS[entry.action]?.label || entry.action}
+                              </span>
+                              <span className={`font-medium tabular-nums flex-shrink-0 ${
+                                entry.amount < 0 ? (isDarkMode ? 'text-red-400' : 'text-red-500') : (isDarkMode ? 'text-green-400' : 'text-green-500')
+                              }`}>
+                                {entry.amount > 0 ? '+' : ''}{entry.amount}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Cycle Reset Footer */}
+                    <div className={`px-5 py-3 border-t ${isDarkMode ? 'border-slate-800 bg-[#0f1419]' : 'border-gray-100 bg-gray-50'}`}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Clock className={`w-3.5 h-3.5 ${creditData.daysLeft <= 2 ? 'text-red-400' : isDarkMode ? 'text-slate-500' : 'text-gray-400'}`} />
+                          <span className={`text-xs ${creditData.daysLeft <= 2 ? 'text-red-400 font-medium' : isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+                            Resets {creditData.cycleEnd ? new Date(creditData.cycleEnd).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'monthly'}
+                          </span>
+                        </div>
+                        <span className={`text-xs ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}>
+                          +10/day bonus
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            );
+          })()}
           <NotificationBell />
         </header>
 
