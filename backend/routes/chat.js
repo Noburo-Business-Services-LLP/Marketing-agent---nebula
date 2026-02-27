@@ -3,6 +3,7 @@ const router = express.Router();
 const { protect, optionalAuth } = require('../middleware/auth');
 const User = require('../models/User');
 const { generateChatResponse, generateChatSuggestions } = require('../services/geminiAI');
+const { deductCredits, ensureCreditCycle } = require('../middleware/creditGuard');
 
 // Chat completion endpoint - uses Gemini AI with user context
 router.post('/message', optionalAuth, async (req, res) => {
@@ -18,20 +19,41 @@ router.post('/message', optionalAuth, async (req, res) => {
 
     // Get user's business profile if authenticated
     let businessProfile = null;
+    let userId = null;
     if (req.user) {
-      const user = await User.findById(req.user.userId || req.user.id || req.user._id);
-      if (user && user.businessProfile) {
-        businessProfile = user.businessProfile;
+      userId = req.user.userId || req.user.id || req.user._id;
+      const user = await User.findById(userId);
+      if (user) {
+        businessProfile = user.businessProfile || null;
+        
+        // Credit check (0.5 per chat message)
+        await ensureCreditCycle(user);
+        if (user.credits.balance < 0.5) {
+          return res.status(403).json({
+            success: false,
+            message: 'Insufficient credits',
+            creditsRemaining: user.credits.balance,
+            required: 0.5
+          });
+        }
       }
     }
 
     // Generate response using Gemini with business context
     const aiResponse = await generateChatResponse(message, businessProfile, conversationHistory);
 
+    // Deduct credits if authenticated
+    let creditsRemaining;
+    if (userId) {
+      const creditResult = await deductCredits(userId, 0.5, 'chat_message');
+      creditsRemaining = creditResult.balance;
+    }
+
     res.json({
       success: true,
       response: aiResponse,
-      personalized: !!businessProfile
+      personalized: !!businessProfile,
+      creditsRemaining
     });
 
   } catch (error) {

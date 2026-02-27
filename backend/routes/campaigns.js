@@ -6,6 +6,7 @@
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
+const { deductCredits, ensureCreditCycle, requireCredits } = require('../middleware/creditGuard');
 const Campaign = require('../models/Campaign');
 const User = require('../models/User');
 const { callGemini, parseGeminiJSON, generateICPAndStrategy } = require('../services/geminiAI');
@@ -546,7 +547,11 @@ router.post('/generate-campaign-posts', protect, async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
     const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
     const bp = user?.businessProfile || {};
+    
+    // Credit check — estimate cost before generation
+    await ensureCreditCycle(user);
     
     const {
       campaignName,
@@ -584,6 +589,17 @@ router.post('/generate-campaign-posts', protect, async (req, res) => {
       '3months': 12
     };
     const totalPosts = Math.min(postsPerWeek * (durationWeeks[duration] || 2), 20); // Cap at 20 posts
+
+    // Credit pre-check: each post = 5 (image) + 2 (caption) = 7
+    const estimatedCost = totalPosts * 7;
+    if (user.credits.balance < estimatedCost) {
+      return res.status(403).json({
+        success: false,
+        message: 'Insufficient credits',
+        creditsRemaining: user.credits.balance,
+        required: estimatedCost
+      });
+    }
 
     console.log(`🎯 Generating ${totalPosts} posts for campaign: ${campaignName}`);
 
@@ -802,10 +818,15 @@ Return ONLY valid JSON (no markdown, no code blocks):
 
     console.log(`✅ Generated ${postsWithImages.length} posts with images for campaign: ${campaignName}`);
 
+    // Deduct credits for generated posts
+    const actualCost = postsWithImages.length * 7;
+    const creditResult = await deductCredits(userId, actualCost, `campaign_posts_${postsWithImages.length}`);
+
     res.json({
       success: true,
       posts: postsWithImages,
       contentCalendar: scheduleDates,
+      creditsRemaining: creditResult.balance,
       campaignSummary: {
         name: campaignName,
         objective,
@@ -828,6 +849,16 @@ Return ONLY valid JSON (no markdown, no code blocks):
  */
 router.post('/regenerate-post-image', protect, async (req, res) => {
   try {
+    const userId = req.user.userId || req.user.id;
+    
+    // Credit check (5 for image generation)
+    const creditUser = await User.findById(userId);
+    if (!creditUser) return res.status(404).json({ success: false, message: 'User not found' });
+    await ensureCreditCycle(creditUser);
+    if (creditUser.credits.balance < 5) {
+      return res.status(403).json({ success: false, message: 'Insufficient credits', creditsRemaining: creditUser.credits.balance, required: 5 });
+    }
+    
     const { 
       postId,
       platform,
@@ -882,10 +913,14 @@ router.post('/regenerate-post-image', protect, async (req, res) => {
 
     console.log('✅ Image regenerated successfully');
 
+    // Deduct credits
+    const creditResult = await deductCredits(userId, 5, 'regenerate_image');
+
     res.json({
       success: true,
       imageUrl,
-      postId
+      postId,
+      creditsRemaining: creditResult.balance
     });
 
   } catch (error) {
@@ -912,12 +947,21 @@ const { generatePosterFromTemplate, editPosterFromTemplate } = require('../servi
 router.post('/generate-caption', protect, async (req, res) => {
   try {
     const { image, platform } = req.body;
+    const userId = req.user.userId || req.user.id;
     
     if (!image) {
       return res.status(400).json({ 
         success: false, 
         message: 'Image is required' 
       });
+    }
+    
+    // Credit check (2 for caption text)
+    const creditUser = await User.findById(userId);
+    if (!creditUser) return res.status(404).json({ success: false, message: 'User not found' });
+    await ensureCreditCycle(creditUser);
+    if (creditUser.credits.balance < 2) {
+      return res.status(403).json({ success: false, message: 'Insufficient credits', creditsRemaining: creditUser.credits.balance, required: 2 });
     }
     
     console.log('🤖 Generating caption from image for platform:', platform || 'instagram');
@@ -1023,10 +1067,14 @@ Return ONLY the caption text with hashtags. No JSON, no explanations.`;
     
     console.log('✅ Caption generated successfully');
     
+    // Deduct credits
+    const creditResult = await deductCredits(userId, 2, 'generate_caption');
+    
     res.json({
       success: true,
       caption: caption.trim(),
-      hashtags: hashtags
+      hashtags: hashtags,
+      creditsRemaining: creditResult.balance
     });
     
   } catch (error) {
@@ -1179,6 +1227,7 @@ router.post('/process-aspect-ratio', protect, async (req, res) => {
 router.post('/template-poster', protect, async (req, res) => {
   try {
     const { templateImage, content, platform, style, useAI, logoOverlay } = req.body;
+    const userId = req.user.userId || req.user.id;
     
     if (!templateImage) {
       return res.status(400).json({ 
@@ -1192,6 +1241,14 @@ router.post('/template-poster', protect, async (req, res) => {
         success: false, 
         message: 'Poster content is required' 
       });
+    }
+    
+    // Credit check (5 for image generation)
+    const creditUser = await User.findById(userId);
+    if (!creditUser) return res.status(404).json({ success: false, message: 'User not found' });
+    await ensureCreditCycle(creditUser);
+    if (creditUser.credits.balance < 5) {
+      return res.status(403).json({ success: false, message: 'Insufficient credits', creditsRemaining: creditUser.credits.balance, required: 5 });
     }
     
     console.log('🎨 Generating template poster...');
@@ -1275,12 +1332,16 @@ router.post('/template-poster', protect, async (req, res) => {
         }
       }
       
+      // Deduct credits
+      const creditResult = await deductCredits(userId, 5, 'template_poster');
+      
       res.json({
         success: true,
         imageBase64: finalImageBase64,
         imageUrl: hostedUrl,
         model: result.model || result.method,
         logoApplied: logoReplaced,
+        creditsRemaining: creditResult.balance,
         message: 'Poster generated successfully'
       });
     } else {
@@ -1307,6 +1368,7 @@ router.post('/template-poster', protect, async (req, res) => {
 router.post('/template-poster/edit', protect, async (req, res) => {
   try {
     const { currentImage, originalContent, editInstructions, templateImage } = req.body;
+    const userId = req.user.userId || req.user.id;
     
     if (!currentImage) {
       return res.status(400).json({ 
@@ -1320,6 +1382,14 @@ router.post('/template-poster/edit', protect, async (req, res) => {
         success: false, 
         message: 'Edit instructions are required' 
       });
+    }
+    
+    // Credit check (3 for image edit)
+    const creditUser = await User.findById(userId);
+    if (!creditUser) return res.status(404).json({ success: false, message: 'User not found' });
+    await ensureCreditCycle(creditUser);
+    if (creditUser.credits.balance < 3) {
+      return res.status(403).json({ success: false, message: 'Insufficient credits', creditsRemaining: creditUser.credits.balance, required: 3 });
     }
     
     console.log('✏️ Editing template poster...');
@@ -1347,11 +1417,15 @@ router.post('/template-poster/edit', protect, async (req, res) => {
         console.warn('⚠️ Could not upload edited image to Cloudinary');
       }
       
+      // Deduct credits
+      const creditResult = await deductCredits(userId, 3, 'poster_edit');
+      
       res.json({
         success: true,
         imageBase64: result.imageBase64,
         imageUrl: hostedUrl,
         model: result.model || result.method,
+        creditsRemaining: creditResult.balance,
         message: 'Poster updated successfully'
       });
     } else {
@@ -1378,6 +1452,7 @@ router.post('/template-poster/edit', protect, async (req, res) => {
 router.post('/template-poster/from-reference', protect, async (req, res) => {
   try {
     const { referenceImage, content, platform } = req.body;
+    const userId = req.user.userId || req.user.id;
     
     if (!referenceImage) {
       return res.status(400).json({ 
@@ -1391,6 +1466,14 @@ router.post('/template-poster/from-reference', protect, async (req, res) => {
         success: false, 
         message: 'Content is required for the new poster' 
       });
+    }
+    
+    // Credit check (5 for image generation)
+    const creditUser = await User.findById(userId);
+    if (!creditUser) return res.status(404).json({ success: false, message: 'User not found' });
+    await ensureCreditCycle(creditUser);
+    if (creditUser.credits.balance < 5) {
+      return res.status(403).json({ success: false, message: 'Insufficient credits', creditsRemaining: creditUser.credits.balance, required: 5 });
     }
     
     console.log('🎨 Generating poster from reference image with AI...');
@@ -1413,11 +1496,15 @@ router.post('/template-poster/from-reference', protect, async (req, res) => {
         console.warn('Could not upload to Cloudinary:', uploadError.message);
       }
       
+      // Deduct credits
+      const creditResult = await deductCredits(userId, 5, 'poster_from_reference');
+      
       return res.json({
         success: true,
         imageBase64: result.imageBase64,
         imageUrl: hostedUrl,
-        model: result.model
+        model: result.model,
+        creditsRemaining: creditResult.balance
       });
     } else {
       return res.status(500).json({
@@ -1443,6 +1530,7 @@ router.post('/template-poster/from-reference', protect, async (req, res) => {
 router.post('/template-poster/batch', protect, async (req, res) => {
   try {
     const { posters, platform, useAI } = req.body;
+    const userId = req.user.userId || req.user.id;
     
     if (!posters || !Array.isArray(posters) || posters.length === 0) {
       return res.status(400).json({ 
@@ -1457,6 +1545,10 @@ router.post('/template-poster/batch', protect, async (req, res) => {
         message: 'Maximum 10 posters per batch' 
       });
     }
+    
+    // Credit pre-check: 5 per poster
+    const batchCost = posters.length * 5;
+    await requireCredits(userId, batchCost);
     
     console.log(`🎨 Generating ${posters.length} template posters in batch...`);
     
@@ -1517,9 +1609,18 @@ router.post('/template-poster/batch', protect, async (req, res) => {
     const successCount = results.filter(r => r.success).length;
     console.log(`✅ Batch complete: ${successCount}/${posters.length} posters generated`);
     
+    // Deduct credits for successful posters only
+    let creditsRemaining = 0;
+    if (successCount > 0) {
+      const actualCost = successCount * 5;
+      const creditResult = await deductCredits(userId, actualCost, `batch_poster_${successCount}`);
+      creditsRemaining = creditResult.balance;
+    }
+    
     res.json({
       success: true,
       results,
+      creditsRemaining,
       summary: {
         total: posters.length,
         successful: successCount,
@@ -1527,6 +1628,15 @@ router.post('/template-poster/batch', protect, async (req, res) => {
       }
     });
   } catch (error) {
+    // Handle insufficient credits error from requireCredits
+    if (error.message === 'Insufficient credits') {
+      return res.status(403).json({
+        success: false,
+        message: 'Insufficient credits for batch',
+        creditsRemaining: error.creditsRemaining,
+        required: error.required
+      });
+    }
     console.error('Batch poster generation error:', error);
     res.status(500).json({ 
       success: false, 
