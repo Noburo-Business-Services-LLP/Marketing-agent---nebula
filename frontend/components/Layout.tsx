@@ -181,6 +181,19 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
   };
 
   return (
+    <>
+    {/* Credit deduction animation — rendered outside all containers at top level */}
+    {deductAnim && (
+      <div
+        key={deductAnim.key}
+        className="fixed top-4 right-32 pointer-events-none select-none"
+        style={{ zIndex: 99999, animation: 'creditDeduct 1.8s ease-out forwards' }}
+      >
+        <div className="bg-red-500 text-white text-base font-bold px-4 py-2 rounded-full shadow-2xl" style={{ boxShadow: '0 0 20px rgba(239,68,68,0.5)' }}>
+          -{deductAnim.amount} credits ⚡
+        </div>
+      </div>
+    )}
     <div className={`flex h-screen font-sans ${isDarkMode ? 'bg-[#070A12] text-[#ededed]' : 'bg-[#ededed] text-[#070A12]'}`}>
       {/* Mobile Sidebar Overlay */}
       {isSidebarOpen && (
@@ -498,24 +511,12 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
           <NotificationBell />
         </header>
 
-        {/* Credit deduction animation — fixed overlay so it never gets clipped */}
-        {deductAnim && (
-          <div
-            key={deductAnim.key}
-            className="fixed top-16 right-24 z-[9999] pointer-events-none select-none"
-            style={{ animation: 'creditDeduct 1.6s ease-out forwards' }}
-          >
-            <div className="bg-red-500 text-white text-sm font-bold px-3 py-1.5 rounded-full shadow-lg">
-              -{deductAnim.amount} credits
-            </div>
-          </div>
-        )}
-
         <main className="flex-1 overflow-y-auto p-4 md:p-8">
           {children}
         </main>
       </div>
     </div>
+    </>
   );
 };
 
