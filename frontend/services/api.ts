@@ -303,6 +303,19 @@ export const apiService = {
     }
   },
 
+  // Payment / Razorpay
+  createPaymentOrder: async (): Promise<any> => {
+    return apiCall('/payment/create-order', { method: 'POST' }, true);
+  },
+
+  verifyPayment: async (data: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }): Promise<any> => {
+    return apiCall('/payment/verify', { method: 'POST', body: JSON.stringify(data) }, true);
+  },
+
+  getPaymentStatus: async (): Promise<any> => {
+    return apiCall('/payment/status', { method: 'GET' }, true);
+  },
+
   getBusinessContext: async (): Promise<{ success: boolean; businessLocation?: string; company?: any; geography?: any }> => {
     try {
       const response = await apiCall<{ success: boolean; context: any }>(
@@ -2628,5 +2641,23 @@ export const icpStrategyService = {
       console.error('ICP save error:', error);
       return { success: false };
     }
+  }
+};
+
+// ============================================
+// PAYMENT / RAZORPAY
+// ============================================
+
+export const paymentService = {
+  createOrder: async (): Promise<any> => {
+    return apiCall<any>('/payment/create-order', { method: 'POST' }, true);
+  },
+
+  verify: async (data: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }): Promise<any> => {
+    return apiCall<any>('/payment/verify', { method: 'POST', body: JSON.stringify(data) }, true);
+  },
+
+  status: async (): Promise<any> => {
+    return apiCall<any>('/payment/status', { method: 'GET' }, true);
   }
 };

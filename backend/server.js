@@ -57,6 +57,9 @@ const adsRoutes = require('./routes/ads');
 // Credits / Trial routes
 const creditsRoutes = require('./routes/credits');
 
+// Payment / Razorpay routes
+const paymentRoutes = require('./routes/payment');
+
 // Trial guard middleware
 const { checkTrial } = require('./middleware/trialGuard');
 
@@ -136,6 +139,9 @@ app.use('/api/ads', adsRoutes);
 
 // Routes - Credits / Trial
 app.use('/api/credits', creditsRoutes);
+
+// Routes - Payment / Razorpay
+app.use('/api/payment', paymentRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
