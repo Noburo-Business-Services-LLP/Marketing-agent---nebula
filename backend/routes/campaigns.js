@@ -967,8 +967,6 @@ router.post('/generate-caption', protect, async (req, res) => {
     console.log('🤖 Generating caption from image for platform:', platform || 'instagram');
     
     // Get user's brand profile for context
-    const userId = req.user.userId || req.user.id;
-    const User = require('../models/User');
     const BrandProfile = require('../models/BrandProfile');
     
     const user = await User.findById(userId);
