@@ -117,8 +117,8 @@ const userSchema = new mongoose.Schema({
   },
   // Credits system (monthly cycle)
   credits: {
-    balance: { type: Number, default: 1500 },
-    monthlyAllowance: { type: Number, default: 1500 },
+    balance: { type: Number, default: 1000 },
+    monthlyAllowance: { type: Number, default: 1000 },
     cycleStart: { type: Date, default: () => {
       const d = new Date(); d.setDate(1); d.setHours(0,0,0,0); return d;
     }},

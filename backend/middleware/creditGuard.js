@@ -12,7 +12,7 @@
 
 const User = require('../models/User');
 
-const MONTHLY_ALLOWANCE = 1500;
+const MONTHLY_ALLOWANCE = 1000;
 const DAILY_LOGIN_BONUS = 10;
 
 /**
