@@ -77,7 +77,9 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [creditData, setCreditData] = useState<CreditData | null>(null);
   const [showCreditPanel, setShowCreditPanel] = useState(false);
+  const [deductAnim, setDeductAnim] = useState<{amount: number; key: number} | null>(null);
   const creditPanelRef = useRef<HTMLDivElement>(null);
+  const prevBalanceRef = useRef<number | null>(null);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -131,14 +133,28 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
 
   useEffect(() => { fetchCredits(); }, []);
 
-  // Listen for real-time credit updates — refetch to get updated history
+  // Listen for real-time credit updates — refetch + trigger deduction animation
   useEffect(() => {
-    const handleCreditsUpdate = () => {
+    const handleCreditsUpdate = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.creditsRemaining !== undefined && prevBalanceRef.current !== null) {
+        const diff = prevBalanceRef.current - detail.creditsRemaining;
+        if (diff > 0) {
+          setDeductAnim({ amount: diff, key: Date.now() });
+          setTimeout(() => setDeductAnim(null), 1500);
+        }
+        prevBalanceRef.current = detail.creditsRemaining;
+      }
       setTimeout(fetchCredits, 500);
     };
     window.addEventListener('credits-updated', handleCreditsUpdate);
     return () => window.removeEventListener('credits-updated', handleCreditsUpdate);
   }, []);
+
+  // Track balance for animation diffing
+  useEffect(() => {
+    if (creditData) prevBalanceRef.current = creditData.creditsBalance;
+  }, [creditData]);
 
   // Close credit panel when clicking outside
   useEffect(() => {
@@ -302,7 +318,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
         </header>
 
         {/* Desktop Header with Credits Widget */}
-        <header className={`hidden md:flex ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-gray-200'} border-b px-8 py-3 items-center justify-between gap-4`}>
+        <header className={`hidden md:flex ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-gray-200'} border-b px-8 py-3 items-center justify-end gap-4`}>
           {/* Enterprise Credits Widget */}
           {creditData && (() => {
             const pct = Math.max(0, Math.min(100, (creditData.creditsBalance / creditData.monthlyAllowance) * 100));
@@ -360,11 +376,24 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
                   </div>
 
                   <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${showCreditPanel ? 'rotate-180' : ''} ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`} />
+
+                  {/* Floating deduction animation */}
+                  {deductAnim && (
+                    <span
+                      key={deductAnim.key}
+                      className="absolute -top-1 -right-1 text-red-500 font-bold text-sm pointer-events-none select-none"
+                      style={{
+                        animation: 'creditDeduct 1.4s ease-out forwards',
+                      }}
+                    >
+                      -{deductAnim.amount}
+                    </span>
+                  )}
                 </button>
 
                 {/* Dropdown Panel */}
                 {showCreditPanel && (
-                  <div className={`absolute top-full left-0 mt-2 w-80 rounded-2xl shadow-2xl border z-50 overflow-hidden ${
+                  <div className={`absolute top-full right-0 mt-2 w-80 rounded-2xl shadow-2xl border z-50 overflow-hidden ${
                     isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-gray-200'
                   }`} style={{ animation: 'fadeSlideDown 0.2s ease-out' }}>
                     {/* Header */}

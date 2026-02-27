@@ -102,6 +102,17 @@
         background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.05) 50%, transparent 100%);
         background-size: 200% 100%;
       }
+      /* Credit deduction float-up animation */
+      @keyframes creditDeduct {
+        0% { opacity: 1; transform: translateY(0) scale(1); }
+        30% { opacity: 1; transform: translateY(-12px) scale(1.15); }
+        100% { opacity: 0; transform: translateY(-36px) scale(0.8); }
+      }
+      /* Dropdown slide animation */
+      @keyframes fadeSlideDown {
+        0% { opacity: 0; transform: translateY(-8px); }
+        100% { opacity: 1; transform: translateY(0); }
+      }
     </style>
   <script type="importmap">
 {
