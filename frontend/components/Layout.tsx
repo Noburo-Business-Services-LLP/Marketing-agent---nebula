@@ -288,7 +288,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
       </aside>
 
       {/* Main Content */}
-      <div className={`flex-1 flex flex-col min-w-0 overflow-hidden ${isDarkMode ? 'bg-[#070A12]' : 'bg-gray-100'}`}>
+      <div className={`flex-1 flex flex-col min-w-0 ${isDarkMode ? 'bg-[#070A12]' : 'bg-gray-100'}`}>
         {/* Mobile Header */}
         <header className={`md:hidden ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-[#ffcc29]'} border-b p-4 flex items-center justify-between sticky top-0 z-10`}>
           <button 
@@ -318,7 +318,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
         </header>
 
         {/* Desktop Header with Credits Widget */}
-        <header className={`hidden md:flex ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-gray-200'} border-b px-8 py-3 items-center justify-end gap-4`}>
+        <header className={`hidden md:flex ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-gray-200'} border-b px-8 py-3 items-center justify-end gap-4 overflow-visible relative z-20`}>
           {/* Enterprise Credits Widget */}
           {creditData && (() => {
             const pct = Math.max(0, Math.min(100, (creditData.creditsBalance / creditData.monthlyAllowance) * 100));
@@ -381,12 +381,12 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
                   {deductAnim && (
                     <span
                       key={deductAnim.key}
-                      className="absolute -top-1 -right-1 text-red-500 font-bold text-sm pointer-events-none select-none"
+                      className="absolute top-full left-1/2 -translate-x-1/2 mt-1 text-red-500 font-bold text-sm pointer-events-none select-none whitespace-nowrap z-50"
                       style={{
                         animation: 'creditDeduct 1.4s ease-out forwards',
                       }}
                     >
-                      -{deductAnim.amount}
+                      -{deductAnim.amount} credits
                     </span>
                   )}
                 </button>
