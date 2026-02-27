@@ -22,13 +22,38 @@ import { User } from '../types';
 import NotificationBell from './NotificationBell';
 
 const ACTION_LABELS: Record<string, {label: string; icon: string}> = {
+  // Cost table keys (from /api/credits costs)
   image_generated: { label: 'Image Generation', icon: '🎨' },
   image_edit: { label: 'Image Edit', icon: '✏️' },
-  campaign_text: { label: 'Campaign Ideas', icon: '💡' },
+  campaign_text: { label: 'Campaign Text', icon: '💡' },
   chat_message: { label: 'Chat Message', icon: '💬' },
   competitor_scrape: { label: 'Competitor Scan', icon: '🔍' },
-  login_bonus: { label: 'Login Bonus', icon: '🎁' },
+  // Dashboard routes
+  campaign_suggestions: { label: 'Campaign Ideas', icon: '💡' },
+  campaign_stream: { label: 'Campaign Ideas', icon: '💡' },
+  generate_rival_post: { label: 'Rival Post', icon: '⚔️' },
+  strategic_advisor_post: { label: 'Strategy Post', icon: '🎯' },
+  refine_image: { label: 'Image Refine', icon: '✏️' },
+  generate_event_post: { label: 'Event Post', icon: '🎉' },
+  // Campaign routes
+  campaign_posts: { label: 'Campaign Posts', icon: '📝' },
+  regenerate_image: { label: 'Regenerate Image', icon: '🔄' },
+  generate_caption: { label: 'Caption', icon: '✍️' },
+  template_poster: { label: 'Poster', icon: '🎨' },
+  poster_edit: { label: 'Poster Edit', icon: '✏️' },
+  poster_from_reference: { label: 'Reference Poster', icon: '🖼️' },
+  batch_poster: { label: 'Batch Posters', icon: '📦' },
+  // Credit system
+  daily_login_bonus: { label: 'Login Bonus', icon: '🎁' },
   monthly_reset: { label: 'Monthly Reset', icon: '🔄' },
+};
+
+/** Get label for an action, stripping trailing _N count suffix */
+const getActionLabel = (action: string) => {
+  if (ACTION_LABELS[action]) return ACTION_LABELS[action];
+  // Handle dynamic suffixes like campaign_suggestions_6, batch_poster_3
+  const base = action.replace(/_\d+$/, '');
+  return ACTION_LABELS[base] || { label: action.replace(/_/g, ' '), icon: '⚡' };
 };
 
 interface CreditData {
@@ -37,7 +62,7 @@ interface CreditData {
   totalUsed: number;
   monthlyAllowance: number;
   cycleEnd: string;
-  history: Array<{action: string; amount: number; description?: string; createdAt: string}>;
+  history: Array<{action: string; cost: number; balanceAfter: number; timestamp: string}>;
   costs: Record<string, number>;
 }
 
@@ -388,18 +413,21 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
                         Credit Costs
                       </p>
                       <div className="grid grid-cols-2 gap-1.5">
-                        {Object.entries(creditData.costs || {}).filter(([, v]) => v > 0).map(([action, cost]) => (
+                        {Object.entries(creditData.costs || {}).filter(([, v]) => v > 0).map(([action, cost]) => {
+                          const lbl = getActionLabel(action);
+                          return (
                           <div key={action} className={`flex items-center justify-between px-2 py-1 rounded-lg text-xs ${
                             isDarkMode ? 'bg-slate-800/50' : 'bg-gray-50'
                           }`}>
                             <span className={isDarkMode ? 'text-slate-400' : 'text-gray-500'}>
-                              {ACTION_LABELS[action]?.icon} {ACTION_LABELS[action]?.label || action}
+                              {lbl.icon} {lbl.label}
                             </span>
                             <span className={`font-medium tabular-nums ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}>
                               {cost}
                             </span>
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
 
@@ -410,21 +438,24 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
                           Recent Activity
                         </p>
                         <div className="space-y-1.5 max-h-32 overflow-y-auto">
-                          {creditData.history.slice(0, 5).map((entry: any, i: number) => (
-                            <div key={i} className={`flex items-center justify-between text-xs py-1 ${
-                              isDarkMode ? 'text-slate-400' : 'text-gray-500'
-                            }`}>
-                              <span className="truncate mr-2">
-                                {ACTION_LABELS[entry.action]?.icon || '⚡'}{' '}
-                                {entry.description || ACTION_LABELS[entry.action]?.label || entry.action}
-                              </span>
-                              <span className={`font-medium tabular-nums flex-shrink-0 ${
-                                entry.amount < 0 ? (isDarkMode ? 'text-red-400' : 'text-red-500') : (isDarkMode ? 'text-green-400' : 'text-green-500')
+                          {creditData.history.slice(0, 5).map((entry: any, i: number) => {
+                            const lbl = getActionLabel(entry.action);
+                            const isBonus = entry.cost < 0;
+                            return (
+                              <div key={i} className={`flex items-center justify-between text-xs py-1 ${
+                                isDarkMode ? 'text-slate-400' : 'text-gray-500'
                               }`}>
-                                {entry.amount > 0 ? '+' : ''}{entry.amount}
-                              </span>
-                            </div>
-                          ))}
+                                <span className="truncate mr-2">
+                                  {lbl.icon}{' '}{lbl.label}
+                                </span>
+                                <span className={`font-medium tabular-nums flex-shrink-0 ${
+                                  isBonus ? (isDarkMode ? 'text-green-400' : 'text-green-500') : (isDarkMode ? 'text-red-400' : 'text-red-500')
+                                }`}>
+                                  {isBonus ? '+' : '-'}{Math.abs(entry.cost)}
+                                </span>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     )}
