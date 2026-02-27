@@ -39,11 +39,11 @@ async function migrateUserData(demoUserId) {
   let prodConn = null;
 
   try {
-    const demoUri = process.env.DEMO_MONGODB_URI;
-    const prodUri = process.env.MONGODB_URI;
+    const demoUri = process.env.MONGODB_URI;          // Demo DB (this server's own DB)
+    const prodUri = process.env.PROD_MONGODB_URI;      // Prod DB (migration target)
 
     if (!demoUri || !prodUri) {
-      throw new Error('Missing DEMO_MONGODB_URI or MONGODB_URI environment variables');
+      throw new Error('Missing MONGODB_URI or PROD_MONGODB_URI environment variables');
     }
 
     console.log(`🚀 Starting migration for demo user: ${demoUserId}`);
