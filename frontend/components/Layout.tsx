@@ -331,7 +331,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
         </header>
 
         {/* Desktop Header with Credits Widget */}
-        <header className={`hidden md:flex ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-gray-200'} border-b px-8 py-3 items-center justify-end gap-4 overflow-visible`} style={{ position: 'relative', zIndex: 9998 }}>
+        <header className={`hidden md:flex ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-gray-200'} border-b px-8 py-3 items-center justify-end gap-4 overflow-visible relative`}>
           {/* Enterprise Credits Widget */}
           {creditData && (() => {
             const pct = Math.max(0, Math.min(100, (creditData.creditsBalance / creditData.monthlyAllowance) * 100));
