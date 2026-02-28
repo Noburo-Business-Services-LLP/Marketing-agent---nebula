@@ -47,7 +47,7 @@ router.post('/create-order', protect, async (req, res) => {
     const options = {
       amount: PLAN_AMOUNT,
       currency: PLAN_CURRENCY,
-      receipt: `nebulaa_${userId}_${Date.now()}`,
+      receipt: `neb_${userId.toString().slice(-8)}_${Date.now().toString(36)}`,
       notes: {
         userId: userId.toString(),
         email: user.email,
