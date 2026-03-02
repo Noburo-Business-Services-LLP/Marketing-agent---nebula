@@ -546,13 +546,31 @@ const Dashboard: React.FC = () => {
     }
   };
   
+  // Map strategic advisor categories to valid campaign objectives
+  const mapCategoryToObjective = (category?: string): string => {
+    const mapping: Record<string, string> = {
+      'trending': 'awareness',
+      'event': 'awareness',
+      'competitor': 'engagement',
+      'insight': 'engagement',
+      'audience': 'engagement',
+      'moment': 'awareness',
+      'story': 'engagement',
+      'promo': 'sales'
+    };
+    if (!category) return 'engagement';
+    // Handle pipe-separated categories like "event|audience" — take the first one
+    const primary = category.split('|')[0].trim().toLowerCase();
+    return mapping[primary] || 'engagement';
+  };
+
   // Handle scheduling/posting the content
   const handleSchedulePost = async () => {
     setScheduling(true);
     try {
       await apiService.createCampaign({
         name: selectedSuggestion?.title || 'Strategic Post',
-        objective: selectedSuggestion?.category || 'engagement',
+        objective: mapCategoryToObjective(selectedSuggestion?.category),
         platforms: [selectedPlatform],
         status: scheduleDate ? 'scheduled' : 'draft',
         creative: {
