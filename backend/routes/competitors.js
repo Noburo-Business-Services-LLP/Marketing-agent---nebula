@@ -381,15 +381,30 @@ function processAndSavePosts(latestPosts, competitor, threeMonthsAgo) {
     isEnglishContent(post.caption || post.text || post.description || '')
   );
 
+  const oneMonthAgo = threeMonthsAgo || (Date.now() - (30 * 24 * 60 * 60 * 1000));
+
   const mappedPosts = englishPosts.map(post => {
-    // Check ALL possible Apify timestamp fields (different actors use different names)
-    const rawTs = post.timestamp       // ISO string e.g. "2026-02-28T10:30:00.000Z"
-      || post.takenAt                  // ISO string variant
-      || (post.takenAtTimestamp ? post.takenAtTimestamp * 1000 : null)   // Unix seconds (camelCase)
-      || (post.taken_at_timestamp ? post.taken_at_timestamp * 1000 : null) // Unix seconds (snake_case)
-      || post.date                     // generic date field
-      || null;
-    const timestamp = rawTs ? new Date(rawTs).getTime() : Date.now();
+    // Check ALL possible Apify timestamp fields
+    let rawTs = null;
+    if (post.timestamp) rawTs = post.timestamp;
+    else if (post.takenAt) rawTs = post.takenAt;
+    else if (post.takenAtTimestamp && !isNaN(post.takenAtTimestamp)) rawTs = post.takenAtTimestamp * 1000;
+    else if (post.taken_at_timestamp && !isNaN(post.taken_at_timestamp)) rawTs = post.taken_at_timestamp * 1000;
+    else if (post.date) rawTs = post.date;
+
+    // If no valid timestamp found, SKIP this post entirely
+    if (!rawTs) {
+      console.log(`  ⚠️ Skipping post (no timestamp): ${(post.caption || '').substring(0, 40)}...`);
+      return null;
+    }
+
+    const timestamp = new Date(rawTs).getTime();
+
+    // If date is invalid or older than 1 month, SKIP
+    if (isNaN(timestamp) || timestamp < oneMonthAgo) {
+      return null;
+    }
+
     return {
       platform: 'instagram',
       content: post.caption || post.text || post.description || '',
@@ -397,18 +412,14 @@ function processAndSavePosts(latestPosts, competitor, threeMonthsAgo) {
       comments: post.commentsCount || post.comments || 0,
       imageUrl: post.displayUrl || post.imageUrl || post.thumbnailUrl || null,
       postUrl: post.url || post.postUrl || `https://instagram.com/p/${post.shortCode || post.id || ''}`,
-      postedAt: new Date(timestamp),  // Use computed ms timestamp for accurate date
+      postedAt: new Date(timestamp),
       postedAtTimestamp: timestamp,
       sentiment: analyzeSentiment(post.caption || ''),
       isRealData: true
     };
-  });
+  }).filter(Boolean); // Remove nulls (skipped posts)
 
-  const recentPosts = threeMonthsAgo
-    ? mappedPosts.filter(p => p.postedAtTimestamp >= threeMonthsAgo)
-    : mappedPosts;
-
-  return recentPosts.slice(0, 5);
+  return mappedPosts.slice(0, 5);
 }
 
 /**
@@ -593,10 +604,15 @@ router.post('/scrape-by-type', protect, async (req, res) => {
 
     // Now return ALL posts for this type
     const allOfType = await Competitor.find({ userId, isActive: true, isIgnored: { $ne: true }, competitorType });
+    const oneMonthAgoFilter = Date.now() - (30 * 24 * 60 * 60 * 1000);
     const allPosts = [];
     allOfType.forEach(c => {
       if (c.posts && c.posts.length > 0) {
         c.posts.forEach(p => {
+          // Skip posts with no valid date or older than 1 month
+          const postTime = new Date(p.postedAt).getTime();
+          if (isNaN(postTime) || postTime < oneMonthAgoFilter) return;
+
           allPosts.push({
             id: p._id,
             competitorId: c._id,
@@ -678,6 +694,13 @@ router.get('/posts', protect, async (req, res) => {
       allPosts = allPosts.filter(p => p.sentiment === sentiment);
     }
     
+    // Filter out posts older than 1 month (clean up old DB data)
+    const oneMonthAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
+    allPosts = allPosts.filter(p => {
+      const ts = new Date(p.postedAt).getTime();
+      return !isNaN(ts) && ts > oneMonthAgo;
+    });
+
     // Sort by posted date (most recent first)
     allPosts.sort((a, b) => new Date(b.postedAt) - new Date(a.postedAt));
     
