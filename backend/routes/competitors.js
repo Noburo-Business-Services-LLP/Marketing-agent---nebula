@@ -382,7 +382,14 @@ function processAndSavePosts(latestPosts, competitor, threeMonthsAgo) {
   );
 
   const mappedPosts = englishPosts.map(post => {
-    const timestamp = new Date(post.timestamp || post.takenAtTimestamp * 1000 || post.date || Date.now()).getTime();
+    // Check ALL possible Apify timestamp fields (different actors use different names)
+    const rawTs = post.timestamp       // ISO string e.g. "2026-02-28T10:30:00.000Z"
+      || post.takenAt                  // ISO string variant
+      || (post.takenAtTimestamp ? post.takenAtTimestamp * 1000 : null)   // Unix seconds (camelCase)
+      || (post.taken_at_timestamp ? post.taken_at_timestamp * 1000 : null) // Unix seconds (snake_case)
+      || post.date                     // generic date field
+      || null;
+    const timestamp = rawTs ? new Date(rawTs).getTime() : Date.now();
     return {
       platform: 'instagram',
       content: post.caption || post.text || post.description || '',
