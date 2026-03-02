@@ -17,7 +17,6 @@ const {
   generateDashboardInsights,
   generateCampaignSuggestions,
   generateSectionSynopsis,
-  generateCompetitorActivity,
   generateSingleCampaign,
   generateRivalPost,
   generateEventPost
@@ -56,27 +55,7 @@ function setCachedDashboard(userId, data) {
   }
 }
 
-// Helper to generate competitor profile URLs
-function getCompetitorProfileUrl(name, platform) {
-  const handle = (name || 'competitor').toLowerCase().replace(/[^a-z0-9]/g, '').replace(/\s+/g, '');
-  switch (platform?.toLowerCase()) {
-    case 'instagram':
-      return `https://www.instagram.com/${handle}/`;
-    case 'twitter':
-    case 'x':
-      return `https://twitter.com/${handle}`;
-    case 'facebook':
-      return `https://www.facebook.com/${handle}`;
-    case 'linkedin':
-      return `https://www.linkedin.com/company/${handle}`;
-    case 'youtube':
-      return `https://www.youtube.com/@${handle}`;
-    default:
-      return `https://www.google.com/search?q=${encodeURIComponent(name)}+${platform}`;
-  }
-}
-
-// Import socialMediaAPI for real competitor scraping (optional - mainly use Gemini)
+// Import socialMediaAPI for real competitor scraping (Instagram only)
 let socialMediaAPI = null;
 try {
   socialMediaAPI = require('../services/socialMediaAPI');
@@ -411,7 +390,7 @@ router.get('/overview', protect, async (req, res) => {
     
     // Check if we have fresh posts in DB (less than 2 hours old)
     const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
-    const threeMonthsAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+    const threeMonthsAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000); // 1 month filter
     
     const hasRecentPostsInDB = competitorList.some(c => 
       c.posts && c.posts.length > 0 && 
@@ -424,12 +403,10 @@ router.get('/overview', protect, async (req, res) => {
         try {
           console.log('Fetching REAL competitor posts using Apify...');
           
-          // Build competitor handles for real scraping
+          // Build competitor handles for real scraping (Instagram ONLY)
           const competitorHandles = competitorList.map(comp => ({
             name: comp.name,
-            instagram: comp.socialHandles?.instagram?.replace('@', '') || comp.name?.toLowerCase().replace(/[^a-z0-9]/g, ''),
-            twitter: comp.socialHandles?.twitter?.replace('@', '') || null,
-            tiktok: comp.socialHandles?.tiktok?.replace('@', '') || null
+            instagram: comp.socialHandles?.instagram?.replace('@', '') || comp.name?.toLowerCase().replace(/[^a-z0-9]/g, '')
           }));
           
           const realResult = await socialMediaAPI.fetchRealCompetitorPosts(competitorHandles, { limit: 5 });
@@ -439,7 +416,7 @@ router.get('/overview', protect, async (req, res) => {
             
             // STRICT 3-MONTH FILTER: Only show posts from the last 3 months
             // This is a CRITICAL requirement - NO posts older than 3 months should ever be displayed
-            const threeMonthsAgoTimestamp = Date.now() - (90 * 24 * 60 * 60 * 1000);
+            const threeMonthsAgoTimestamp = Date.now() - (30 * 24 * 60 * 60 * 1000); // 1 month filter
             const filteredPosts = realResult.posts.filter(post => {
               const postTime = post.postedAtTimestamp || 0;
               if (postTime < threeMonthsAgoTimestamp) {
@@ -454,20 +431,23 @@ router.get('/overview', protect, async (req, res) => {
             // Sort by timestamp (most recent first)
             filteredPosts.sort((a, b) => (b.postedAtTimestamp || 0) - (a.postedAtTimestamp || 0));
             
-            competitorPosts = filteredPosts.map(post => ({
+            // Only include posts that have a valid timestamp — never fake it
+            competitorPosts = filteredPosts
+              .filter(post => post.postedAtTimestamp && post.postedAtTimestamp > 0)
+              .map(post => ({
               id: post.id,
               competitorName: post.competitorName,
               competitorLogo: post.competitorLogo || post.competitorName?.charAt(0) || 'C',
               content: post.content || 'No content available',
               sentiment: post.sentiment || 'neutral',
               postedAt: post.postedAt || 'Recently',
-              postedAtTimestamp: post.postedAtTimestamp || Date.now(),
+              postedAtTimestamp: post.postedAtTimestamp,
               likes: post.likes || 0,
               comments: post.comments || 0,
-              platform: post.platform || 'instagram',
-              postUrl: post.postUrl || getCompetitorProfileUrl(post.competitorName, post.platform),
+              platform: 'instagram',
+              postUrl: post.postUrl || `https://www.instagram.com/${post.competitorName?.toLowerCase().replace(/[^a-z0-9]/g, '')}/`,
               imageUrl: post.imageUrl || null,
-              isReal: true // These are REAL posts from Apify
+              isReal: true
             }));
             
             // Save fetched posts to DB for caching (only posts within 3 months)
@@ -476,14 +456,14 @@ router.get('/overview', protect, async (req, res) => {
               if (compPosts.length > 0 && comp._id) {
                 try {
                   await Competitor.findByIdAndUpdate(comp._id, {
-                    posts: compPosts.map(p => ({
-                      platform: p.platform,
+                    posts: compPosts.filter(p => p.postedAtTimestamp).map(p => ({
+                      platform: 'instagram',
                       content: p.content,
                       likes: p.likes,
                       comments: p.comments,
                       postUrl: p.postUrl,
                       imageUrl: p.imageUrl,
-                      postedAt: p.postedAtTimestamp ? new Date(p.postedAtTimestamp) : new Date(),
+                      postedAt: new Date(p.postedAtTimestamp),
                       postedAtTimestamp: p.postedAtTimestamp,
                       fetchedAt: new Date(),
                       isRealData: true
@@ -497,93 +477,31 @@ router.get('/overview', protect, async (req, res) => {
             }
           }
         } catch (realError) {
-          console.log('Real post fetching failed, will try Gemini fallback:', realError.message);
+          console.log('Real post fetching failed:', realError.message);
         }
       }
       
-      // PRIORITY 2: Fallback to Gemini AI if no real posts found
-      if (competitorPosts.length === 0 && !hasRecentPostsInDB) {
-        try {
-          console.log('Falling back to Gemini AI for competitor posts...');
-          
-          // Generate posts using Gemini AI
-          const generatedPosts = await generateCompetitorActivity(competitorNames, {
-            industry: user.businessProfile?.industry || 'General',
-            niche: user.businessProfile?.niche || '',
-            targetAudience: user.businessProfile?.targetAudience || 'General consumers',
-            location: user.businessProfile?.businessLocation || 'India'
-          });
-          
-          if (generatedPosts && generatedPosts.length > 0) {
-            console.log(`Generated ${generatedPosts.length} competitor posts via Gemini`);
-            
-            // Filter posts older than 3 months (based on generated timestamp)
-            const recentPosts = generatedPosts.filter(post => 
-              !post.postedAtTimestamp || post.postedAtTimestamp > threeMonthsAgo.getTime()
-            );
-            
-            // Sort by timestamp (most recent first)
-            recentPosts.sort((a, b) => (b.postedAtTimestamp || 0) - (a.postedAtTimestamp || 0));
-            
-            // Use generated posts
-            competitorPosts = recentPosts.map(post => ({
-              id: post.id || `gemini-${Math.random().toString(36).slice(2)}`,
-              competitorName: post.competitorName,
-              competitorLogo: post.competitorLogo || post.competitorName?.charAt(0) || 'C',
-              content: post.content || 'No content available',
-              sentiment: post.sentiment || 'neutral',
-              postedAt: post.postedAt || 'Recently',
-              postedAtTimestamp: post.postedAtTimestamp || Date.now(),
-              likes: post.likes || 0,
-              comments: post.comments || 0,
-              platform: post.platform || 'instagram',
-              postUrl: post.postUrl || getCompetitorProfileUrl(post.competitorName, post.platform),
-              isReal: false // Generated by AI
-            }));
-          }
-        } catch (genError) {
-          console.log('Gemini post generation failed:', genError.message);
-        }
-      }
+      // NO Gemini AI fallback — only real Instagram data is allowed
       
-      // If we didn't get posts from Gemini, check database
+      // If no real posts from Apify, check database for cached Instagram posts
       if (competitorPosts.length === 0) {
+        const oneMonthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
         for (const comp of competitorList) {
           if (comp.posts && comp.posts.length > 0) {
-            // Filter out posts older than 3 months
-            const recentDbPosts = comp.posts.filter(p => 
-              !p.postedAt || new Date(p.postedAt) > threeMonthsAgo
-            );
+            // Only show Instagram posts with valid timestamps within 1 month
+            const recentDbPosts = comp.posts.filter(p => {
+              if (!p.postedAt) return false;
+              const postDate = new Date(p.postedAt);
+              if (isNaN(postDate.getTime())) return false;
+              return postDate > oneMonthAgo;
+            });
             
             recentDbPosts.slice(0, 5).forEach(post => {
-              // Get timestamp for sorting
-              const postTimestamp = post.postedAt ? new Date(post.postedAt).getTime() : 0;
-              
-              // Generate profile URL if postUrl is missing or invalid
-              let validPostUrl = post.postUrl;
-              if (!validPostUrl || validPostUrl === '#' || validPostUrl === '') {
-                const platform = post.platform || comp.platforms?.[0] || 'instagram';
-                const handle = comp.socialHandles?.[platform] || comp.name.toLowerCase().replace(/[^a-z0-9]/g, '');
-                switch (platform) {
-                  case 'instagram':
-                    validPostUrl = `https://www.instagram.com/${handle}/`;
-                    break;
-                  case 'twitter':
-                    validPostUrl = `https://twitter.com/${handle}`;
-                    break;
-                  case 'facebook':
-                    validPostUrl = `https://www.facebook.com/${handle}`;
-                    break;
-                  case 'linkedin':
-                    validPostUrl = `https://www.linkedin.com/company/${handle}`;
-                    break;
-                  case 'youtube':
-                    validPostUrl = `https://www.youtube.com/@${handle}`;
-                    break;
-                  default:
-                    validPostUrl = `https://www.google.com/search?q=${encodeURIComponent(comp.name)}+${platform}`;
-                }
-              }
+              const postTimestamp = new Date(post.postedAt).getTime();
+              const handle = comp.socialHandles?.instagram || comp.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+              const validPostUrl = post.postUrl && post.postUrl !== '#' && post.postUrl !== '' 
+                ? post.postUrl 
+                : `https://www.instagram.com/${handle}/`;
               
               competitorPosts.push({
                 id: post._id?.toString() || Math.random().toString(),
@@ -591,11 +509,11 @@ router.get('/overview', protect, async (req, res) => {
                 competitorLogo: comp.name?.charAt(0) || 'C',
                 content: post.content || 'No content available',
                 sentiment: post.sentiment || 'neutral',
-                postedAt: post.postedAt ? getRelativeTime(post.postedAt) : 'Recently',
+                postedAt: getRelativeTime(post.postedAt),
                 postedAtTimestamp: postTimestamp,
                 likes: post.likes || 0,
                 comments: post.comments || 0,
-                platform: post.platform || comp.platforms?.[0] || 'unknown',
+                platform: 'instagram',
                 postUrl: validPostUrl,
                 isReal: true
               });
@@ -607,57 +525,9 @@ router.get('/overview', protect, async (req, res) => {
         competitorPosts.sort((a, b) => (b.postedAtTimestamp || 0) - (a.postedAtTimestamp || 0));
       }
       
-      // If still no posts, show a message that we're fetching real data
+      // If no real posts exist, return empty array — NO fake/placeholder data
       if (competitorPosts.length === 0) {
-        console.log('No real posts available yet, showing placeholder');
-        
-        // Helper to generate actual platform profile URLs
-        const getCompetitorProfileUrl = (name, platform) => {
-          const handle = name.toLowerCase().replace(/[^a-z0-9]/g, '').replace(/\s+/g, '');
-          switch (platform) {
-            case 'instagram':
-              return `https://www.instagram.com/${handle}/`;
-            case 'twitter':
-              return `https://twitter.com/${handle}`;
-            case 'facebook':
-              return `https://www.facebook.com/${handle}`;
-            case 'linkedin':
-              return `https://www.linkedin.com/company/${handle}`;
-            case 'youtube':
-              return `https://www.youtube.com/@${handle}`;
-            default:
-              return `https://www.google.com/search?q=${encodeURIComponent(name)}+${platform}`;
-          }
-        };
-        
-        // Create timestamps for proper sorting (most recent first)
-        const now = Date.now();
-        const timestamps = [
-          now - (2 * 60 * 60 * 1000),  // 2 hours ago
-          now - (5 * 60 * 60 * 1000),  // 5 hours ago
-          now - (24 * 60 * 60 * 1000), // 1 day ago
-        ];
-        
-        competitorPosts = competitorNames.slice(0, 3).map((name, index) => {
-          const platform = ['instagram', 'twitter', 'linkedin'][index % 3];
-          return {
-            id: `sample-${index}`,
-            competitorName: name,
-            competitorLogo: name.charAt(0).toUpperCase(),
-            content: `Check out ${name}'s latest marketing activity in your industry.`,
-            sentiment: ['positive', 'neutral', 'positive'][index % 3],
-            postedAt: getRelativeTime(new Date(timestamps[index])),
-            postedAtTimestamp: timestamps[index],
-            likes: Math.floor(Math.random() * 500) + 100,
-            comments: Math.floor(Math.random() * 50) + 10,
-            platform: platform,
-            postUrl: getCompetitorProfileUrl(name, platform),
-            isReal: false
-          };
-        });
-        
-        // Sort by timestamp (most recent first)
-        competitorPosts.sort((a, b) => (b.postedAtTimestamp || 0) - (a.postedAtTimestamp || 0));
+        console.log('No real Instagram posts available for competitors — returning empty');
       }
     }
 
@@ -1145,12 +1015,10 @@ router.post('/refresh-competitor-posts', protect, async (req, res) => {
       return res.status(503).json({ success: false, message: 'Scraping service not available' });
     }
     
-    // Build competitor handles
+    // Build competitor handles (Instagram ONLY)
     const competitorHandles = competitors.map(c => ({
       name: c.name,
-      instagram: c.socialHandles?.instagram || c.name.toLowerCase().replace(/\s+/g, ''),
-      twitter: c.socialHandles?.twitter,
-      facebook: c.socialHandles?.facebook
+      instagram: c.socialHandles?.instagram || c.name.toLowerCase().replace(/\s+/g, '')
     }));
     
     console.log('Manual refresh: Fetching real posts for', competitorHandles.map(c => c.name));
@@ -1164,17 +1032,21 @@ router.post('/refresh-competitor-posts', protect, async (req, res) => {
         if (competitor) {
           // Clear old posts and add new real ones
           competitor.posts = competitor.posts.filter(p => p.isReal !== false).slice(-10);
-          competitor.posts.push({
-            platform: post.platform,
-            postUrl: post.postUrl,
-            content: post.content,
-            imageUrl: post.imageUrl,
-            likes: post.likes,
-            comments: post.comments,
-            sentiment: post.sentiment,
-            postedAt: new Date(),
-            fetchedAt: new Date()
-          });
+          // Only save posts that have a real timestamp
+          if (post.postedAtTimestamp && post.postedAtTimestamp > 0) {
+            competitor.posts.push({
+              platform: 'instagram',
+              postUrl: post.postUrl,
+              content: post.content,
+              imageUrl: post.imageUrl,
+              likes: post.likes,
+              comments: post.comments,
+              sentiment: post.sentiment,
+              postedAt: new Date(post.postedAtTimestamp),
+              postedAtTimestamp: post.postedAtTimestamp,
+              fetchedAt: new Date()
+            });
+          }
           await competitor.save();
         }
       }
