@@ -804,7 +804,19 @@ async function fetchRealCompetitorPosts(competitorHandles, options = {}) {
             
             const posts = (profile.latestPosts || profile.posts || [])
               .map((post, idx) => {
-                const timeInfo = formatPostDate(post.timestamp || post.takenAt || post.taken_at_timestamp * 1000);
+                // Extract timestamp from all possible Apify fields
+                let rawTs = null;
+                if (post.timestamp) rawTs = post.timestamp;
+                else if (post.takenAt) rawTs = post.takenAt;
+                else if (post.takenAtTimestamp && !isNaN(post.takenAtTimestamp)) rawTs = post.takenAtTimestamp * 1000;
+                else if (post.taken_at_timestamp && !isNaN(post.taken_at_timestamp)) rawTs = post.taken_at_timestamp * 1000;
+                else if (post.date) rawTs = post.date;
+
+                if (!rawTs) return null; // Skip posts with no timestamp
+
+                const timeInfo = formatPostDate(rawTs);
+                if (isNaN(timeInfo.timestamp) || timeInfo.timestamp < threeMonthsAgo) return null; // Skip old/invalid
+
                 return {
                   id: `real_ig_${instagram}_${idx}_${Date.now()}`,
                   competitorName: name,
@@ -822,7 +834,7 @@ async function fetchRealCompetitorPosts(competitorHandles, options = {}) {
                   isReal: true
                 };
               })
-              .filter(post => post.postedAtTimestamp > threeMonthsAgo) // Filter out posts older than 1 month
+              .filter(Boolean) // Remove nulls (no timestamp or too old)
               .slice(0, limit);
             
             allPosts.push(...posts);
@@ -857,6 +869,7 @@ async function fetchRealCompetitorPosts(competitorHandles, options = {}) {
             const posts = result.data
               .map((tweet, idx) => {
                 const timeInfo = formatPostDate(tweet.created_at);
+                if (!timeInfo || timeInfo.timestamp < threeMonthsAgo) return null;
                 return {
                   id: `real_tw_${twitter}_${idx}_${Date.now()}`,
                   competitorName: name,
@@ -874,11 +887,10 @@ async function fetchRealCompetitorPosts(competitorHandles, options = {}) {
                   isReal: true
                 };
               })
-              .filter(post => post.postedAtTimestamp > threeMonthsAgo)
+              .filter(Boolean)
               .slice(0, limit);
             
             allPosts.push(...posts);
-            setCache(cacheKey, { posts });
             console.log(`Fetched ${posts.length} real Twitter posts for ${twitter}`);
           }
         }
@@ -908,6 +920,7 @@ async function fetchRealCompetitorPosts(competitorHandles, options = {}) {
             const posts = result.data
               .map((video, idx) => {
                 const timeInfo = formatPostDate(video.createTime * 1000);
+                if (!timeInfo || timeInfo.timestamp < threeMonthsAgo) return null;
                 return {
                   id: `real_tt_${tiktok}_${idx}_${Date.now()}`,
                   competitorName: name,
@@ -925,7 +938,7 @@ async function fetchRealCompetitorPosts(competitorHandles, options = {}) {
                   isReal: true
                 };
               })
-              .filter(post => post.postedAtTimestamp > threeMonthsAgo)
+              .filter(Boolean)
               .slice(0, limit);
             
             allPosts.push(...posts);
@@ -990,9 +1003,10 @@ function detectPostType(text) {
  * Format post date to relative time and return both display string and timestamp
  */
 function formatPostDate(timestamp) {
-  if (!timestamp) return { displayString: 'Recently', timestamp: Date.now() };
+  if (!timestamp) return null; // No fallback — caller must skip this post
   
   const date = new Date(timestamp);
+  if (isNaN(date.getTime())) return null; // Invalid date — skip
   const now = new Date();
   const diffMs = now - date;
   const diffMins = Math.floor(diffMs / 60000);
