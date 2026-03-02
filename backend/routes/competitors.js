@@ -538,25 +538,40 @@ router.post('/scrape-by-type', protect, async (req, res) => {
 
     console.log(`ðŸ” Scraping posts for ${competitorType} competitors...`);
     
-    // Find competitors of this type that have NO posts yet
-    const competitors = await Competitor.find({ 
+    const oneMonthAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
+
+    // Find all competitors of this type
+    const allOfType = await Competitor.find({ 
       userId, 
       isActive: true, 
       isIgnored: { $ne: true },
-      competitorType,
-      $or: [
-        { posts: { $exists: false } },
-        { posts: { $size: 0 } }
-      ]
+      competitorType
+    });
+
+    // Check which competitors need re-scraping:
+    // - No posts at all
+    // - All posts are older than 1 month or have bad timestamps
+    const competitors = allOfType.filter(c => {
+      if (!c.posts || c.posts.length === 0) return true;
+      const hasRecentPost = c.posts.some(p => {
+        const ts = new Date(p.postedAt).getTime();
+        return !isNaN(ts) && ts > oneMonthAgo && ts < Date.now();
+      });
+      if (!hasRecentPost) {
+        console.log(`  Rescraping ${c.name}: no valid recent posts found`);
+        return true;
+      }
+      return false;
     });
 
     if (competitors.length === 0) {
-      // All competitors of this type already have posts, return them
-      const allOfType = await Competitor.find({ userId, isActive: true, isIgnored: { $ne: true }, competitorType });
+      // All competitors have valid recent posts — return them filtered
       const posts = [];
       allOfType.forEach(c => {
         if (c.posts && c.posts.length > 0) {
           c.posts.forEach(p => {
+            const ts = new Date(p.postedAt).getTime();
+            if (isNaN(ts) || ts < oneMonthAgo) return;
             posts.push({
               ...p.toObject ? p.toObject() : p,
               competitorName: c.name,
@@ -589,9 +604,12 @@ router.post('/scrape-by-type', protect, async (req, res) => {
             results.push({ name: competitor.name, success: true, postsCount: posts.length, handle: found.handle });
             console.log(`âœ… Saved ${posts.length} REAL posts for ${competitor.name} (@${found.handle})`);
           } else {
-            results.push({ name: competitor.name, success: false, error: 'Profile found but 0 recent English posts' });
+            // Clear old bad posts — no recent content for this competitor
+            await Competitor.findByIdAndUpdate(competitor._id, { posts: [] });
+            results.push({ name: competitor.name, success: false, error: 'No posts within last month' });
           }
         } else {
+          await Competitor.findByIdAndUpdate(competitor._id, { posts: [] });
           results.push({ name: competitor.name, success: false, error: 'No working Instagram handle found' });
         }
       } catch (err) {
