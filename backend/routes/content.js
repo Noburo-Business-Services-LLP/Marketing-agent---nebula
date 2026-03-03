@@ -17,14 +17,21 @@ router.post('/regenerate-image', protect, async (req, res) => {
       return res.status(400).json({ success: false, error: 'Prompt is required' });
     }
 
-    const { originalImagePrompt } = req.body;
+    const { originalImagePrompt, caption } = req.body;
 
     console.log(`🎨 Regenerate image request - prompt: "${prompt.substring(0, 80)}...", platform: ${platform || 'instagram'}`);
 
-    // If there's an original image prompt, combine it with the refinement for context-aware generation
-    const effectivePrompt = originalImagePrompt 
-      ? `${originalImagePrompt}. Additionally apply this refinement: ${prompt}` 
-      : prompt;
+    // Build a context-aware prompt that keeps the image relevant to the original
+    let effectivePrompt;
+    if (originalImagePrompt) {
+      // Best case: we have the original image description, refine it
+      effectivePrompt = `${originalImagePrompt}. REFINEMENT: ${prompt}. Keep the same subject matter and scene but apply the refinement.`;
+    } else if (caption) {
+      // Fallback: use the post caption as context
+      effectivePrompt = `Create an image for this social media post: "${caption.substring(0, 300)}". Style/modification: ${prompt}. The image must be directly relevant to the post content.`;
+    } else {
+      effectivePrompt = prompt;
+    }
 
     // Generate image from the prompt
     const imageResult = await generateImageFromCustomPrompt(effectivePrompt, platform || 'instagram');

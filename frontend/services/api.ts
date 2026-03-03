@@ -601,13 +601,14 @@ export const apiService = {
     sentiment?: string;
     likes?: number;
     comments?: number;
-  }): Promise<{ caption: string; hashtags: string[]; imageUrl: string }> => {
+  }): Promise<{ caption: string; hashtags: string[]; imageUrl: string; imagePrompt?: string }> => {
     try {
       const response = await apiCall<{ 
         success: boolean; 
         caption: string; 
         hashtags: string[]; 
-        imageUrl: string 
+        imageUrl: string;
+        imagePrompt?: string 
       }>(
         '/dashboard/generate-rival-post',
         { method: 'POST', body: JSON.stringify(data) },
@@ -616,7 +617,8 @@ export const apiService = {
       return {
         caption: response.caption,
         hashtags: response.hashtags,
-        imageUrl: response.imageUrl
+        imageUrl: response.imageUrl,
+        imagePrompt: response.imagePrompt
       };
     } catch (error) {
       console.error('Rival post generation error:', error);
@@ -2117,7 +2119,7 @@ export const apiService = {
   // IMAGE REGENERATION
   // ============================================
 
-  regenerateImage: async (data: { prompt?: string; style?: string; campaignId?: string; industry?: string; platform?: string; originalImagePrompt?: string }): Promise<any> => {
+  regenerateImage: async (data: { prompt?: string; style?: string; campaignId?: string; industry?: string; platform?: string; originalImagePrompt?: string; caption?: string }): Promise<any> => {
     const response = await apiCall<any>(
       '/content/regenerate-image',
       { method: 'POST', body: JSON.stringify(data) },

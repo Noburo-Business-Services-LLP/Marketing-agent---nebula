@@ -235,7 +235,8 @@ const Competitors: React.FC = () => {
         prompt: customImagePrompt,
         industry: 'general',
         platform: rivalPost.platform,
-        originalImagePrompt: rivalImagePrompt || undefined
+        originalImagePrompt: rivalImagePrompt || undefined,
+        caption: editedCaption || rivalPost.caption || undefined
       });
       if (result.imageUrl) {
         setRivalPost({
@@ -872,14 +873,14 @@ const Competitors: React.FC = () => {
                     {imageMode === 'ai' && (
                       <div className={`p-4 rounded-xl ${isDarkMode ? 'bg-[#161b22] border-[#ffcc29]/10' : 'bg-slate-50 border-slate-200'} border`}>
                         <p className={`text-xs font-medium ${theme.textMuted} mb-2 flex items-center gap-1.5`}>
-                          <Edit3 className="w-3.5 h-3.5" /> Regenerate with Custom Prompt
+                          <Edit3 className="w-3.5 h-3.5" /> Refine Image
                         </p>
                         <div className="flex gap-2">
                           <input
                             type="text"
                             value={customImagePrompt}
                             onChange={(e) => setCustomImagePrompt(e.target.value)}
-                            placeholder="Describe the image you want..."
+                            placeholder="e.g. make it more vibrant, add warm tones, more professional..."
                             className={`flex-1 px-3 py-2 rounded-lg text-sm ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50 text-white placeholder-gray-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'} border focus:ring-2 focus:ring-[#ffcc29]/50 focus:border-[#ffcc29] transition-all`}
                             onKeyDown={(e) => {
                               if (e.key === 'Enter' && !regeneratingImage) {
@@ -901,7 +902,7 @@ const Competitors: React.FC = () => {
                           </button>
                         </div>
                         <p className={`text-xs ${theme.textMuted} mt-2`}>
-                          E.g., "Modern office with team collaboration", "Product showcase on white background"
+                          Refines the current image — e.g., "more vibrant", "darker background", "add tech elements"
                         </p>
                       </div>
                     )}
