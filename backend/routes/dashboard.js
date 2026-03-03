@@ -1147,6 +1147,7 @@ router.post('/generate-rival-post', protect, async (req, res) => {
       caption: rivalPost.caption,
       hashtags: rivalPost.hashtags,
       imageUrl: rivalPost.imageUrl,
+      imagePrompt: rivalPost.imagePrompt || '',
       creditsRemaining: creditResult.balance
     });
   } catch (error) {

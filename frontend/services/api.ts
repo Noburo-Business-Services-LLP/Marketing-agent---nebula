@@ -2117,7 +2117,7 @@ export const apiService = {
   // IMAGE REGENERATION
   // ============================================
 
-  regenerateImage: async (data: { prompt?: string; style?: string; campaignId?: string; industry?: string; platform?: string }): Promise<any> => {
+  regenerateImage: async (data: { prompt?: string; style?: string; campaignId?: string; industry?: string; platform?: string; originalImagePrompt?: string }): Promise<any> => {
     const response = await apiCall<any>(
       '/content/regenerate-image',
       { method: 'POST', body: JSON.stringify(data) },

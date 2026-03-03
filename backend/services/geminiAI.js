@@ -2069,7 +2069,8 @@ Return ONLY valid JSON (no markdown, no explanations):
     return {
       caption: parsed.caption,
       hashtags: cleanHashtags,
-      imageUrl
+      imageUrl,
+      imagePrompt
     };
   } catch (error) {
     console.error('Error generating rival post:', error);

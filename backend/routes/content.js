@@ -17,10 +17,17 @@ router.post('/regenerate-image', protect, async (req, res) => {
       return res.status(400).json({ success: false, error: 'Prompt is required' });
     }
 
+    const { originalImagePrompt } = req.body;
+
     console.log(`🎨 Regenerate image request - prompt: "${prompt.substring(0, 80)}...", platform: ${platform || 'instagram'}`);
 
-    // Generate image from the custom prompt
-    const imageResult = await generateImageFromCustomPrompt(prompt, platform || 'instagram');
+    // If there's an original image prompt, combine it with the refinement for context-aware generation
+    const effectivePrompt = originalImagePrompt 
+      ? `${originalImagePrompt}. Additionally apply this refinement: ${prompt}` 
+      : prompt;
+
+    // Generate image from the prompt
+    const imageResult = await generateImageFromCustomPrompt(effectivePrompt, platform || 'instagram');
 
     if (!imageResult) {
       return res.status(500).json({ success: false, error: 'Failed to generate image' });

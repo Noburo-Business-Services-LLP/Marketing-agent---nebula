@@ -384,6 +384,7 @@ const Dashboard: React.FC = () => {
   const [customImagePrompt, setCustomImagePrompt] = useState('');
   const [regeneratingImage, setRegeneratingImage] = useState(false);
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
+  const [rivalImagePrompt, setRivalImagePrompt] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Strategic Advisor State
@@ -688,6 +689,7 @@ const Dashboard: React.FC = () => {
         competitorName: competitor.competitorName,
         originalContent: competitor.content
       });
+      setRivalImagePrompt(result.imagePrompt || '');
       setEditedCaption(result.caption);
       setEditedHashtags(result.hashtags.join(' '));
     } catch (error) {
@@ -783,7 +785,8 @@ const Dashboard: React.FC = () => {
       const result = await apiService.regenerateImage({
         prompt: customImagePrompt,
         industry: data?.businessContext?.industry || 'general',
-        platform: rivalPost.platform
+        platform: rivalPost.platform,
+        originalImagePrompt: rivalImagePrompt || undefined
       });
       if (result.imageUrl) {
         setRivalPost({

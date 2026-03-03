@@ -60,6 +60,7 @@ const Competitors: React.FC = () => {
   const [customImagePrompt, setCustomImagePrompt] = useState('');
   const [regeneratingImage, setRegeneratingImage] = useState(false);
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
+  const [rivalImagePrompt, setRivalImagePrompt] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Ignore a competitor
@@ -169,6 +170,7 @@ const Competitors: React.FC = () => {
       });
       setEditedCaption(result.caption);
       setEditedHashtags(result.hashtags.join(' '));
+      setRivalImagePrompt(result.imagePrompt || '');
       setImageMode('ai');
       setCustomImagePrompt('');
       setUploadedImageUrl(null);
@@ -232,7 +234,8 @@ const Competitors: React.FC = () => {
       const result = await apiService.regenerateImage({
         prompt: customImagePrompt,
         industry: 'general',
-        platform: rivalPost.platform
+        platform: rivalPost.platform,
+        originalImagePrompt: rivalImagePrompt || undefined
       });
       if (result.imageUrl) {
         setRivalPost({
