@@ -4884,11 +4884,12 @@ const EditSuggestionModal: React.FC<EditSuggestionModalProps> = ({ suggestion, o
         if (!imageEditPrompt.trim()) return;
         setIsEditingImage(true);
         try {
-            const result = await apiService.refineImage(
-                `Campaign image for: ${title}`,
-                imageEditPrompt,
-                'professional'
-            );
+            const result = await apiService.regenerateImage({
+                prompt: imageEditPrompt,
+                platform: platform.toLowerCase(),
+                industry: suggestion.objective || 'marketing',
+                caption: caption || `${title}. ${suggestion.objective} campaign.`
+            });
             if (result.success && result.imageUrl) {
                 setCurrentImageUrl(result.imageUrl);
                 setImageEditPrompt('');
@@ -4908,9 +4909,10 @@ const EditSuggestionModal: React.FC<EditSuggestionModalProps> = ({ suggestion, o
         setIsRegeneratingImage(true);
         try {
             const result = await apiService.regenerateImage({
-                prompt: `Professional marketing image for: ${title}. ${caption.substring(0, 200)}`,
+                prompt: `Professional marketing image for: ${title}. ${caption.substring(0, 300)}`,
                 industry: suggestion.objective || 'marketing',
-                platform: platform.toLowerCase()
+                platform: platform.toLowerCase(),
+                caption: caption
             });
             if (result.success && result.imageUrl) {
                 setCurrentImageUrl(result.imageUrl);
