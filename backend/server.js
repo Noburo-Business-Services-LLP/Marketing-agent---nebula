@@ -57,6 +57,9 @@ const adsRoutes = require('./routes/ads');
 // Credits routes
 const creditsRoutes = require('./routes/credits');
 
+// Content routes
+const contentRoutes = require('./routes/content');
+
 // Notification scheduler service
 const notificationScheduler = require('./services/notificationScheduler');
 // Analytics snapshot scheduler
@@ -133,6 +136,9 @@ app.use('/api/ads', adsRoutes);
 
 // Routes - Credits
 app.use('/api/credits', creditsRoutes);
+
+// Routes - Content
+app.use('/api/content', contentRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

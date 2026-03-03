@@ -764,8 +764,8 @@ async function searchInstagramByName(businessName) {
 }
 
 /**
- * Fetch REAL competitor posts from social media using Apify
- * This fetches actual posts from competitor Instagram/Twitter/TikTok accounts
+ * Fetch REAL competitor posts from Instagram using Apify
+ * Only Instagram — no Twitter/TikTok/LinkedIn/Facebook
  */
 async function fetchRealCompetitorPosts(competitorHandles, options = {}) {
   if (!APIFY_API_KEY) {
@@ -779,9 +779,9 @@ async function fetchRealCompetitorPosts(competitorHandles, options = {}) {
   console.log('Fetching REAL competitor posts for:', competitorHandles);
 
   for (const competitor of competitorHandles) {
-    const { name, instagram, twitter, tiktok, facebook, linkedin } = competitor;
+    const { name, instagram } = competitor;
     
-    // Try Instagram first (most reliable with Apify)
+    // Instagram ONLY — no other platforms
     if (instagram) {
       try {
         console.log(`Scraping Instagram for ${name}: @${instagram}`);
