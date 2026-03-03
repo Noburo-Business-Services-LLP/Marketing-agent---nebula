@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { apiService } from '../services/api';
 import { CompetitorPost } from '../types';
-import { Loader2, Search, RotateCw, ExternalLink, Heart, MessageCircle, Plus, Instagram, Twitter, Linkedin, Facebook, Youtube, Swords, Sparkles, X, Eye, Download, Copy, Save, MessageSquare, FileText, EyeOff, Users, MapPin } from 'lucide-react';
+import { Loader2, Search, RotateCw, ExternalLink, Heart, MessageCircle, Plus, Instagram, Twitter, Linkedin, Facebook, Youtube, Swords, Sparkles, X, Eye, Download, Copy, Save, MessageSquare, FileText, EyeOff, Users, MapPin, Edit3 } from 'lucide-react';
 import { useTheme, getThemeClasses } from '../context/ThemeContext';
 
 const platformIcons: Record<string, React.ReactNode> = {
@@ -56,6 +56,11 @@ const Competitors: React.FC = () => {
   const [editedCaption, setEditedCaption] = useState('');
   const [editedHashtags, setEditedHashtags] = useState('');
   const [savingDraft, setSavingDraft] = useState(false);
+  const [imageMode, setImageMode] = useState<'ai' | 'upload'>('ai');
+  const [customImagePrompt, setCustomImagePrompt] = useState('');
+  const [regeneratingImage, setRegeneratingImage] = useState(false);
+  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Ignore a competitor
   const handleIgnoreCompetitor = async (competitorId: string, competitorName: string) => {
@@ -164,6 +169,9 @@ const Competitors: React.FC = () => {
       });
       setEditedCaption(result.caption);
       setEditedHashtags(result.hashtags.join(' '));
+      setImageMode('ai');
+      setCustomImagePrompt('');
+      setUploadedImageUrl(null);
     } catch (error) {
       console.error('Failed to generate rival post:', error);
       alert('Failed to generate rival post. Please try again.');
@@ -187,7 +195,7 @@ const Competitors: React.FC = () => {
         creative: {
           type: 'image',
           textContent: editedCaption,
-          imageUrls: [rivalPost.imageUrl],
+          imageUrls: [imageMode === 'upload' && uploadedImageUrl ? uploadedImageUrl : rivalPost.imageUrl],
           captions: editedCaption,
           hashtags: editedHashtags.split(/[\s#]+/).filter(t => t.trim())
         },
@@ -213,6 +221,62 @@ const Competitors: React.FC = () => {
     const fullCaption = `${editedCaption}\n\n${editedHashtags}`;
     navigator.clipboard.writeText(fullCaption);
     alert('Caption and hashtags copied to clipboard!');
+  };
+
+  // Regenerate image with custom prompt
+  const handleRegenerateImage = async () => {
+    if (!customImagePrompt.trim() || !rivalPost) return;
+    
+    setRegeneratingImage(true);
+    try {
+      const result = await apiService.regenerateImage({
+        prompt: customImagePrompt,
+        industry: 'general',
+        platform: rivalPost.platform
+      });
+      if (result.imageUrl) {
+        setRivalPost({
+          ...rivalPost,
+          imageUrl: result.imageUrl
+        });
+        setUploadedImageUrl(null);
+        setImageMode('ai');
+        setCustomImagePrompt('');
+      }
+    } catch (error) {
+      console.error('Failed to regenerate image:', error);
+      alert('Failed to regenerate image. Please try again.');
+    } finally {
+      setRegeneratingImage(false);
+    }
+  };
+
+  // Handle file upload for custom image
+  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Image must be less than 5MB');
+      return;
+    }
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setUploadedImageUrl(e.target?.result as string);
+      setImageMode('upload');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Get current image URL based on mode
+  const getCurrentImageUrl = () => {
+    if (imageMode === 'upload' && uploadedImageUrl) return uploadedImageUrl;
+    return rivalPost?.imageUrl || '';
   };
 
   // Download image
@@ -755,15 +819,37 @@ const Competitors: React.FC = () => {
                     <p className={`text-sm ${theme.textSecondary} italic`}>"{rivalPost.originalContent}"</p>
                   </div>
 
-                  {/* Generated Image */}
-                  <div className="relative">
-                    <p className={`text-xs font-medium ${theme.textMuted} mb-2 flex items-center gap-1.5`}>
-                      <Sparkles className="w-3.5 h-3.5 text-[#ffcc29]" /> AI Generated Image
-                    </p>
+                  {/* Image Section with Editing Options */}
+                  <div className="space-y-4">
+                    {/* Image Mode Toggle */}
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setImageMode('ai')}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                          imageMode === 'ai' 
+                            ? 'bg-[#ffcc29] text-black' 
+                            : `${isDarkMode ? 'bg-[#161b22] text-white hover:bg-[#21262d]' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`
+                        }`}
+                      >
+                        <Sparkles className="w-3 h-3" /> AI Image
+                      </button>
+                      <button
+                        onClick={() => setImageMode('upload')}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                          imageMode === 'upload' 
+                            ? 'bg-[#ffcc29] text-black' 
+                            : `${isDarkMode ? 'bg-[#161b22] text-white hover:bg-[#21262d]' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`
+                        }`}
+                      >
+                        <Download className="w-3 h-3 rotate-180" /> Upload Image
+                      </button>
+                    </div>
+
+                    {/* Image Display */}
                     <div className="relative rounded-xl overflow-hidden border border-slate-700/50">
                       <img 
-                        src={rivalPost.imageUrl} 
-                        alt="Generated rival post" 
+                        src={getCurrentImageUrl()} 
+                        alt="Post image" 
                         className="w-full h-64 object-cover"
                       />
                       <button
@@ -772,7 +858,79 @@ const Competitors: React.FC = () => {
                       >
                         <Download className="w-4 h-4" />
                       </button>
+                      {imageMode === 'upload' && uploadedImageUrl && (
+                        <div className="absolute top-3 left-3 px-2 py-1 bg-[#ffcc29] text-black text-xs font-medium rounded-lg">
+                          Custom Image
+                        </div>
+                      )}
                     </div>
+
+                    {/* AI Image Regeneration */}
+                    {imageMode === 'ai' && (
+                      <div className={`p-4 rounded-xl ${isDarkMode ? 'bg-[#161b22] border-[#ffcc29]/10' : 'bg-slate-50 border-slate-200'} border`}>
+                        <p className={`text-xs font-medium ${theme.textMuted} mb-2 flex items-center gap-1.5`}>
+                          <Edit3 className="w-3.5 h-3.5" /> Regenerate with Custom Prompt
+                        </p>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={customImagePrompt}
+                            onChange={(e) => setCustomImagePrompt(e.target.value)}
+                            placeholder="Describe the image you want..."
+                            className={`flex-1 px-3 py-2 rounded-lg text-sm ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50 text-white placeholder-gray-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'} border focus:ring-2 focus:ring-[#ffcc29]/50 focus:border-[#ffcc29] transition-all`}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && !regeneratingImage) {
+                                handleRegenerateImage();
+                              }
+                            }}
+                          />
+                          <button
+                            onClick={handleRegenerateImage}
+                            disabled={regeneratingImage || !customImagePrompt.trim()}
+                            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gradient-to-r from-[#ffcc29] to-[#ffa500] text-black text-sm font-medium hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {regeneratingImage ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Sparkles className="w-4 h-4" />
+                            )}
+                            {regeneratingImage ? 'Generating...' : 'Generate'}
+                          </button>
+                        </div>
+                        <p className={`text-xs ${theme.textMuted} mt-2`}>
+                          E.g., "Modern office with team collaboration", "Product showcase on white background"
+                        </p>
+                      </div>
+                    )}
+
+                    {/* File Upload */}
+                    {imageMode === 'upload' && (
+                      <div className={`p-4 rounded-xl ${isDarkMode ? 'bg-[#161b22] border-[#ffcc29]/10' : 'bg-slate-50 border-slate-200'} border`}>
+                        <p className={`text-xs font-medium ${theme.textMuted} mb-2 flex items-center gap-1.5`}>
+                          <Download className="w-3.5 h-3.5 rotate-180" /> Upload Your Own Image
+                        </p>
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="image/*"
+                          onChange={handleImageUpload}
+                          className="hidden"
+                        />
+                        <button
+                          onClick={() => fileInputRef.current?.click()}
+                          className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 border-dashed ${
+                            isDarkMode 
+                              ? 'border-[#ffcc29]/30 hover:border-[#ffcc29] bg-[#0d1117]' 
+                              : 'border-slate-300 hover:border-[#ffcc29] bg-white'
+                          } transition-all`}
+                        >
+                          <Plus className="w-5 h-5 text-[#ffcc29]" />
+                          <span className={`text-sm ${theme.text}`}>
+                            {uploadedImageUrl ? 'Change Image' : 'Select Image'}
+                          </span>
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   {/* Caption */}
