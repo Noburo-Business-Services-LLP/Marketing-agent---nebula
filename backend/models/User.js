@@ -115,21 +115,23 @@ const userSchema = new mongoose.Schema({
     }],
     generatedAt: { type: Date }
   },
-  // Trial system (demo only)
-  trial: {
-    startDate: { type: Date, default: Date.now },
-    expiresAt: { type: Date, default: () => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) }, // 7 days from signup
-    isExpired: { type: Boolean, default: false }
-  },
-  // Credit system
+  // Credits system (monthly cycle)
   credits: {
-    balance: { type: Number, default: 100 },  // 100 credits for demo
+    balance: { type: Number, default: 1000 },
+    monthlyAllowance: { type: Number, default: 1000 },
+    cycleStart: { type: Date, default: () => {
+      const d = new Date(); d.setDate(1); d.setHours(0,0,0,0); return d;
+    }},
+    cycleEnd: { type: Date, default: () => {
+      const d = new Date(); d.setMonth(d.getMonth() + 1, 1); d.setHours(0,0,0,0); return d;
+    }},
     totalUsed: { type: Number, default: 0 },
+    lastLoginBonus: { type: Date, default: null },
     history: [{
-      action: { type: String },     // 'image_generated', 'image_edit', 'campaign_text', 'chat_message'
-      amount: { type: Number },      // negative = deducted, positive = added
-      description: { type: String },
-      createdAt: { type: Date, default: Date.now }
+      action: { type: String },
+      cost: { type: Number },
+      balanceAfter: { type: Number },
+      timestamp: { type: Date, default: Date.now }
     }]
   },
   // Email OTP Verification
@@ -189,11 +191,14 @@ userSchema.methods.toPublicJSON = function() {
       connectedAt: s.connectedAt
     })),
     subscription: this.subscription,
-    trial: this.trial,
-    credits: {
-      balance: this.credits?.balance ?? 100,
-      totalUsed: this.credits?.totalUsed ?? 0
-    },
+    credits: this.credits ? {
+      balance: this.credits.balance,
+      monthlyAllowance: this.credits.monthlyAllowance,
+      cycleStart: this.credits.cycleStart,
+      cycleEnd: this.credits.cycleEnd,
+      totalUsed: this.credits.totalUsed,
+      lastLoginBonus: this.credits.lastLoginBonus
+    } : undefined,
     createdAt: this.createdAt
   };
 };
