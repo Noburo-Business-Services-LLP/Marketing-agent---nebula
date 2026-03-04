@@ -449,7 +449,12 @@ export const apiService = {
         true
       );
       return { ...response.data, cached: response.cached };
-    } catch (error) {
+    } catch (error: any) {
+      // Propagate credit errors instead of swallowing them
+      if (error?.message?.includes('Insufficient credits') || error?.message?.includes('credits') || error?.status === 403) {
+        console.log('Insufficient credits for campaign suggestions:', error);
+        return { campaigns: [], insufficientCredits: true, creditsRemaining: error?.creditsRemaining || 0, required: error?.required || 0 };
+      }
       console.log('Campaign suggestions error:', error);
       return { campaigns: [] };
     }

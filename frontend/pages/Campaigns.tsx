@@ -811,8 +811,16 @@ const Campaigns: React.FC = () => {
           setLoadingSuggestions(false);
           setStreamingProgress(null);
         },
-        // On error - fallback to regular API
+        // On error - check if it's a credit issue before falling back
         async (error) => {
+          // If it's a credit-related error, show it to the user instead of falling back
+          if (error && (error.includes('Insufficient credits') || error.includes('credits'))) {
+            console.log('❌ Insufficient credits:', error);
+            setLoadingSuggestions(false);
+            setStreamingProgress(null);
+            alert('⚠️ Insufficient credits to generate new campaigns. Please wait for your monthly credit reset or upgrade your plan.');
+            return;
+          }
           console.log('Streaming failed, falling back to regular API:', error);
           await generateSuggestionsFallback(forceRefresh);
         },
@@ -845,6 +853,14 @@ const Campaigns: React.FC = () => {
     
     try {
       const response = await apiService.getCampaignSuggestions(6, forceRefresh, platformsFilter.length > 0 ? platformsFilter : undefined);
+      
+      // Check for insufficient credits error from the API
+      if (response.insufficientCredits) {
+        setLoadingSuggestions(false);
+        alert(`⚠️ Insufficient credits. You have ${response.creditsRemaining} credits but need ${response.required}. Please wait for your monthly credit reset or upgrade your plan.`);
+        return;
+      }
+      
       setIsCached(response.cached || false);
       
       if (response.campaigns && response.campaigns.length > 0) {
@@ -863,7 +879,13 @@ const Campaigns: React.FC = () => {
         setLoadingSuggestions(false);
         return;
       }
-    } catch (error) {
+    } catch (error: any) {
+      // Check if the error is a credit issue
+      if (error?.message?.includes('Insufficient credits') || error?.message?.includes('credits')) {
+        setLoadingSuggestions(false);
+        alert('⚠️ Insufficient credits to generate new campaigns. Please wait for your monthly credit reset or upgrade your plan.');
+        return;
+      }
       console.log('AI suggestions not available, using personalized fallback:', error);
     }
     
