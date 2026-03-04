@@ -774,6 +774,21 @@ const Campaigns: React.FC = () => {
 
   // Progressive streaming generation - campaigns appear one by one
   const generateSuggestionsStreaming = useCallback(async (forceRefresh: boolean = false) => {
+    // If force refresh, check credits upfront before doing anything
+    if (forceRefresh) {
+      try {
+        const creditData = await apiService.getCredits();
+        const balance = creditData?.credits?.balance ?? 0;
+        const required = 42;
+        if (balance < required) {
+          alert(`⚠️ Insufficient credits. You have ${balance} credits but need ${required} to generate new campaigns.`);
+          return;
+        }
+      } catch (err) {
+        console.error('Credit pre-check failed:', err);
+      }
+    }
+
     setLoadingSuggestions(true);
     setSuggestedCampaigns([]);
     setStreamingProgress({ current: 0, total: 6 });
@@ -901,7 +916,20 @@ const Campaigns: React.FC = () => {
   };
   
   // Handle regenerate - forces new generation and clears cache
-  const handleRegenerate = () => {
+  const handleRegenerate = async () => {
+    // Check credits first — need 42 credits (6 campaigns × 7 each)
+    try {
+      const creditData = await apiService.getCredits();
+      const balance = creditData?.credits?.balance ?? 0;
+      const required = 42; // 6 campaigns × 7 credits each
+      if (balance < required) {
+        alert(`⚠️ Insufficient credits. You have ${balance} credits but need ${required} to regenerate campaigns. Please wait for your monthly credit reset or upgrade your plan.`);
+        return;
+      }
+    } catch (err) {
+      console.error('Credit check failed:', err);
+    }
+
     // Clear localStorage cache to force fresh generation
     localStorage.removeItem(getCacheKey());
     setRegenerationCount(prev => prev + 1);
