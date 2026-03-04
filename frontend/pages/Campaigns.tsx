@@ -4936,8 +4936,8 @@ const EditSuggestionModal: React.FC<EditSuggestionModalProps> = ({ suggestion, o
         try {
             const creditData = await apiService.getCredits();
             const balance = creditData?.credits?.balance ?? 0;
-            if (balance < 5) {
-                alert(`Insufficient credits. You need 5 credits to refine an image but you only have ${balance}. Please wait for your next credit cycle or upgrade your plan.`);
+            if (balance < 3) {
+                alert(`Insufficient credits. You need 3 credits to refine an image but you only have ${balance}. Please wait for your next credit cycle or upgrade your plan.`);
                 return;
             }
         } catch (e) {

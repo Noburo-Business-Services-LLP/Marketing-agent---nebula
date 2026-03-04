@@ -19,12 +19,12 @@ router.post('/regenerate-image', protect, async (req, res) => {
       return res.status(400).json({ success: false, error: 'Prompt is required' });
     }
 
-    // Credit check (5 for image generation)
+    // Credit check (3 for image refinement)
     const user = await User.findById(req.user.userId || req.user.id);
     if (!user) return res.status(404).json({ success: false, error: 'User not found' });
     await ensureCreditCycle(user);
-    if (user.credits.balance < 5) {
-      return res.status(403).json({ success: false, error: 'Insufficient credits', creditsRemaining: user.credits.balance, required: 5 });
+    if (user.credits.balance < 3) {
+      return res.status(403).json({ success: false, error: 'Insufficient credits', creditsRemaining: user.credits.balance, required: 3 });
     }
 
     const { originalImagePrompt, caption } = req.body;
@@ -62,8 +62,8 @@ router.post('/regenerate-image', protect, async (req, res) => {
       }
     }
 
-    // Deduct 5 credits for image generation
-    const creditResult = await deductCredits(user._id, 5, 'regenerate_image');
+    // Deduct 3 credits for image refinement
+    const creditResult = await deductCredits(user._id, 3, 'refine_image');
 
     res.json({
       success: true,
