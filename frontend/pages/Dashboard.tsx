@@ -507,6 +507,17 @@ const Dashboard: React.FC = () => {
   
   // Handle creating a post from suggestion
   const handleCreatePost = async (suggestion: any) => {
+    // Upfront credit check
+    try {
+      const creditData = await apiService.getCredits();
+      const balance = creditData?.credits?.balance ?? 0;
+      if (balance < 7) {
+        alert(`Insufficient credits. You need 7 credits to create a post but you only have ${balance}. Please wait for your next credit cycle or upgrade your plan.`);
+        return;
+      }
+    } catch (e) {
+      console.error('Credit check failed:', e);
+    }
     setSelectedSuggestion(suggestion);
     setShowPostCreator(true);
     setGeneratingPost(true);
@@ -532,7 +543,17 @@ const Dashboard: React.FC = () => {
   // Handle refining image
   const handleRefineImage = async () => {
     if (!imageRefinementPrompt.trim() || !postImagePrompt) return;
-    
+    // Upfront credit check
+    try {
+      const creditData = await apiService.getCredits();
+      const balance = creditData?.credits?.balance ?? 0;
+      if (balance < 3) {
+        alert(`Insufficient credits. You need 3 credits to refine an image but you only have ${balance}. Please wait for your next credit cycle or upgrade your plan.`);
+        return;
+      }
+    } catch (e) {
+      console.error('Credit check failed:', e);
+    }
     setRefiningImage(true);
     try {
       const result = await apiService.refineImage(postImagePrompt, imageRefinementPrompt);
@@ -547,13 +568,41 @@ const Dashboard: React.FC = () => {
     }
   };
   
+  // Map strategic advisor categories to valid campaign objectives
+  const mapCategoryToObjective = (category?: string): string => {
+    const mapping: Record<string, string> = {
+      'trending': 'awareness',
+      'event': 'awareness',
+      'competitor': 'engagement',
+      'insight': 'engagement',
+      'audience': 'engagement',
+      'moment': 'awareness',
+      'story': 'engagement',
+      'promo': 'sales'
+    };
+    if (!category) return 'engagement';
+    // Handle pipe-separated categories like "event|audience" — take the first one
+    const primary = category.split('|')[0].trim().toLowerCase();
+    return mapping[primary] || 'engagement';
+  };
+
   // Handle scheduling/posting the content
   const handleSchedulePost = async () => {
     setScheduling(true);
     try {
-      await apiService.createCampaign({
+      // Build the scheduled datetime in ISO format for Ayrshare
+      let scheduledFor: string | undefined;
+      if (scheduleDate) {
+        const time = scheduleTime || '10:00';
+        const [hours, minutes] = time.split(':');
+        const dt = new Date(scheduleDate);
+        dt.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+        scheduledFor = dt.toISOString();
+      }
+
+      const result = await apiService.createCampaign({
         name: selectedSuggestion?.title || 'Strategic Post',
-        objective: selectedSuggestion?.category || 'engagement',
+        objective: mapCategoryToObjective(selectedSuggestion?.category),
         platforms: [selectedPlatform],
         status: scheduleDate ? 'scheduled' : 'draft',
         creative: {
@@ -568,6 +617,25 @@ const Dashboard: React.FC = () => {
           postTime: scheduleTime || '10:00'
         } : undefined
       });
+
+      // Actually publish to social media via Ayrshare
+      if (result.campaign?._id) {
+        try {
+          await apiService.publishCampaign(
+            result.campaign._id,
+            [selectedPlatform],
+            scheduledFor
+          );
+        } catch (publishErr) {
+          console.error('Ayrshare publish failed:', publishErr);
+          // Campaign is saved — warn user about publish failure
+          alert('Post saved but failed to publish to social media. You can retry from the Campaigns page.');
+          setShowPostCreator(false);
+          setSelectedSuggestion(null);
+          setGeneratedPost(null);
+          return;
+        }
+      }
       
       alert(scheduleDate ? 'Post scheduled successfully!' : 'Post saved as draft!');
       setShowPostCreator(false);
@@ -616,6 +684,17 @@ const Dashboard: React.FC = () => {
 
   // Handle creating a rival post
   const handleCreateRivalPost = async (competitor: any) => {
+    // Upfront credit check
+    try {
+      const creditData = await apiService.getCredits();
+      const balance = creditData?.credits?.balance ?? 0;
+      if (balance < 7) {
+        alert(`Insufficient credits. You need 7 credits to create a rival post but you only have ${balance}. Please wait for your next credit cycle or upgrade your plan.`);
+        return;
+      }
+    } catch (e) {
+      console.error('Credit check failed:', e);
+    }
     setRivalPostLoading(true);
     setShowRivalPostModal(true);
     setRivalPost(null);
@@ -2755,6 +2834,19 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
               postTime: `${String(selectedSlot.hour).padStart(2, '0')}:${String(selectedSlot.minute).padStart(2, '0')}`
             },
           });
+
+          // Actually publish to social media via Ayrshare
+          if (result.campaign?._id) {
+            try {
+              await apiService.publishCampaign(
+                result.campaign._id,
+                [scheduleForm.platform],
+                scheduledFor.toISOString()
+              );
+            } catch (publishErr) {
+              console.error('Ayrshare publish failed:', publishErr);
+            }
+          }
           
           // Add the new campaign to local state immediately with proper structure
           if (result.campaign) {

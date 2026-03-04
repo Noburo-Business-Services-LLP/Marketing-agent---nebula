@@ -4932,6 +4932,17 @@ const EditSuggestionModal: React.FC<EditSuggestionModalProps> = ({ suggestion, o
     // Edit image with AI prompt
     const handleEditImage = async () => {
         if (!imageEditPrompt.trim()) return;
+        // Upfront credit check
+        try {
+            const creditData = await apiService.getCredits();
+            const balance = creditData?.credits?.balance ?? 0;
+            if (balance < 5) {
+                alert(`Insufficient credits. You need 5 credits to refine an image but you only have ${balance}. Please wait for your next credit cycle or upgrade your plan.`);
+                return;
+            }
+        } catch (e) {
+            console.error('Credit check failed:', e);
+        }
         setIsEditingImage(true);
         try {
             const result = await apiService.regenerateImage({
@@ -4956,6 +4967,17 @@ const EditSuggestionModal: React.FC<EditSuggestionModalProps> = ({ suggestion, o
 
     // Regenerate image entirely
     const handleRegenerateImage = async () => {
+        // Upfront credit check
+        try {
+            const creditData = await apiService.getCredits();
+            const balance = creditData?.credits?.balance ?? 0;
+            if (balance < 5) {
+                alert(`Insufficient credits. You need 5 credits to regenerate an image but you only have ${balance}. Please wait for your next credit cycle or upgrade your plan.`);
+                return;
+            }
+        } catch (e) {
+            console.error('Credit check failed:', e);
+        }
         setIsRegeneratingImage(true);
         try {
             const result = await apiService.regenerateImage({
