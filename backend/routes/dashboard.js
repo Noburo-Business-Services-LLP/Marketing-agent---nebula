@@ -6,6 +6,7 @@
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
+const { deductCredits, ensureCreditCycle } = require('../middleware/creditGuard');
 const User = require('../models/User');
 const Campaign = require('../models/Campaign');
 const Competitor = require('../models/Competitor');
@@ -22,7 +23,6 @@ const {
 } = require('../services/geminiAI');
 const { generateWithLLM } = require('../services/llmRouter');
 const { getAyrshareUserProfile, getUserSocialAnalytics } = require('../services/socialMediaAPI');
-const { checkTrial, deductCredits } = require('../middleware/trialGuard');
 
 // In-memory dashboard cache for fast loading
 const dashboardCache = new Map();
@@ -738,16 +738,6 @@ router.get('/campaign-suggestions', protect, async (req, res) => {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
-    // Trial & credit check
-    const now = new Date();
-    const trialEnd = user.trial?.expiresAt ? new Date(user.trial.expiresAt) : null;
-    if (trialEnd && now > trialEnd) {
-      return res.status(403).json({ success: false, trialExpired: true, message: 'Trial expired' });
-    }
-    if ((user.credits?.balance ?? 100) <= 0) {
-      return res.status(403).json({ success: false, creditsExhausted: true, message: 'No credits remaining' });
-    }
-
     if (!user.businessProfile?.name) {
       return res.status(400).json({ 
         success: false, 
@@ -811,27 +801,39 @@ router.get('/campaign-suggestions', protect, async (req, res) => {
     
     // No cache or force refresh - generate new suggestions
     console.log(`🔄 Generating fresh campaigns for user ${user._id}${platformsParam ? ` [platforms: ${platformsParam.join(',')}]` : ''}`);
+    
+    // Credit check before generation
+    await ensureCreditCycle(user);
+    const campaignCount = count || 6;
+    const creditCost = campaignCount * 7; // 5 (image) + 2 (caption) per campaign
+    if (user.credits.balance < creditCost) {
+      return res.status(403).json({
+        success: false,
+        message: 'Insufficient credits',
+        creditsRemaining: user.credits.balance,
+        required: creditCost
+      });
+    }
+    
     const suggestions = await generateCampaignSuggestions(user.businessProfile, count, platformsParam);
     
+    // Deduct credits after successful generation
+    const generatedCount = suggestions.campaigns?.length || 0;
+    let creditsRemaining = user.credits.balance;
+    if (generatedCount > 0) {
+      const actualCost = generatedCount * 7;
+      const result = await deductCredits(user._id, actualCost, `campaign_suggestions_${generatedCount}`);
+      creditsRemaining = result.balance;
+    }
+    
     // Cache the new suggestions
-    let creditsRemaining;
     if (suggestions.campaigns && suggestions.campaigns.length > 0) {
       try {
         await CachedCampaign.saveCampaigns(user._id, profileHash, suggestions.campaigns);
         console.log(`💾 Cached ${suggestions.campaigns.length} new campaigns`);
       } catch (cacheError) {
         console.error('Failed to cache campaigns:', cacheError);
-      }
-
-      // Deduct credits: 5 (image) + 2 (caption) = 7 per campaign generated
-      const userId = user._id;
-      const campCount = suggestions.campaigns.length;
-      try {
-        await deductCredits(userId, 'image_generated', campCount, `${campCount} campaign images`);
-        const txtResult = await deductCredits(userId, 'campaign_text', campCount, `${campCount} campaign captions`);
-        creditsRemaining = txtResult.creditsRemaining;
-      } catch (creditErr) {
-        console.error('Credit deduction error on campaign suggestions:', creditErr);
+        // Continue anyway - caching failure shouldn't break the response
       }
     }
 
@@ -869,20 +871,6 @@ router.get('/campaign-suggestions-stream', protect, async (req, res) => {
     
     if (!user) {
       res.write(`data: ${JSON.stringify({ error: 'User not found' })}\n\n`);
-      res.end();
-      return;
-    }
-
-    // Trial & credit check for SSE (can't use middleware easily)
-    const now = new Date();
-    const trialEnd = user.trial?.expiresAt ? new Date(user.trial.expiresAt) : null;
-    if (trialEnd && now > trialEnd) {
-      res.write(`data: ${JSON.stringify({ type: 'error', trialExpired: true, message: 'Trial expired' })}\n\n`);
-      res.end();
-      return;
-    }
-    if ((user.credits?.balance ?? 100) <= 0) {
-      res.write(`data: ${JSON.stringify({ type: 'error', creditsExhausted: true, message: 'No credits remaining' })}\n\n`);
       res.end();
       return;
     }
@@ -940,6 +928,15 @@ router.get('/campaign-suggestions-stream', protect, async (req, res) => {
     }
     
     // Generate campaigns one by one using streaming
+    // Credit check before generation
+    await ensureCreditCycle(user);
+    const creditCostStream = count * 7; // 5 (image) + 2 (caption) per campaign
+    if (user.credits.balance < creditCostStream) {
+      res.write(`data: ${JSON.stringify({ type: 'error', message: 'Insufficient credits', creditsRemaining: user.credits.balance, required: creditCostStream })}\n\n`);
+      res.end();
+      return;
+    }
+    
     res.write(`data: ${JSON.stringify({ type: 'start', total: count, message: 'Generating personalized campaigns...' })}\n\n`);
     
     const generatedCampaigns = [];
@@ -973,29 +970,14 @@ router.get('/campaign-suggestions-stream', protect, async (req, res) => {
       } catch (cacheError) {
         console.error('Failed to cache streamed campaigns:', cacheError);
       }
-
-      // Deduct credits: 5 (image) + 2 (caption) = 7 per campaign generated
+      
+      // Deduct credits for all generated campaigns
       try {
-        const imgCredits = await deductCredits(
-          user._id, 'image_generated', generatedCampaigns.length,
-          `${generatedCampaigns.length} campaign images`
-        );
-        const txtCredits = await deductCredits(
-          user._id, 'campaign_text', generatedCampaigns.length,
-          `${generatedCampaigns.length} campaign captions`
-        );
-        const remaining = txtCredits.success ? txtCredits.creditsRemaining : (imgCredits.success ? imgCredits.creditsRemaining : undefined);
-        const totalDeducted = (imgCredits.creditsDeducted || 0) + (txtCredits.creditsDeducted || 0);
-        // Send credit update in SSE stream so frontend updates immediately
-        if (remaining !== undefined) {
-          res.write(`data: ${JSON.stringify({ 
-            type: 'credits_update', 
-            creditsRemaining: remaining,
-            creditsDeducted: totalDeducted
-          })}\n\n`);
-        }
+        const actualCost = generatedCampaigns.length * 7;
+        const result = await deductCredits(user._id, actualCost, `campaign_stream_${generatedCampaigns.length}`);
+        res.write(`data: ${JSON.stringify({ type: 'credits_update', creditsRemaining: result.balance })}\n\n`);
       } catch (creditErr) {
-        console.error('Credit deduction error on campaign stream:', creditErr);
+        console.error('Credit deduction failed after streaming:', creditErr);
       }
     }
     
@@ -1135,14 +1117,10 @@ router.post('/generate-rival-post', protect, async (req, res) => {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
-    // Trial & credit check
-    const now = new Date();
-    const trialEnd = user.trial?.expiresAt ? new Date(user.trial.expiresAt) : null;
-    if (trialEnd && now > trialEnd) {
-      return res.status(403).json({ success: false, trialExpired: true, message: 'Trial expired' });
-    }
-    if ((user.credits?.balance ?? 100) < 7) {
-      return res.status(403).json({ success: false, creditsExhausted: true, message: 'Not enough credits. Rival post requires 7 credits (5 image + 2 caption).' });
+    // Credit check
+    await ensureCreditCycle(user);
+    if (user.credits.balance < 7) {
+      return res.status(403).json({ success: false, message: 'Insufficient credits', creditsRemaining: user.credits.balance, required: 7 });
     }
 
     const { competitorName, competitorContent, platform, sentiment, likes, comments } = req.body;
@@ -1161,10 +1139,8 @@ router.post('/generate-rival-post', protect, async (req, res) => {
 
     console.log('✅ Rival post generated successfully');
 
-    // Deduct credits: 5 (image) + 2 (caption)
-    const userId = user._id;
-    await deductCredits(userId, 'image_generated', 1, `Rival post image vs ${competitorName}`);
-    const txtResult = await deductCredits(userId, 'campaign_text', 1, `Rival post caption vs ${competitorName}`);
+    // Deduct credits (5 image + 2 caption = 7)
+    const creditResult = await deductCredits(user._id, 7, 'generate_rival_post');
 
     res.json({
       success: true,
@@ -1172,7 +1148,7 @@ router.post('/generate-rival-post', protect, async (req, res) => {
       hashtags: rivalPost.hashtags,
       imageUrl: rivalPost.imageUrl,
       imagePrompt: rivalPost.imagePrompt || '',
-      creditsRemaining: txtResult.creditsRemaining
+      creditsRemaining: creditResult.balance
     });
   } catch (error) {
     console.error('Rival post generation error:', error);
@@ -1481,40 +1457,35 @@ router.post('/strategic-advisor/generate-post', protect, async (req, res) => {
     if (!suggestion) {
       return res.status(400).json({ success: false, message: 'Suggestion is required' });
     }
-
-    // Trial & credit check
-    const userDoc = await User.findById(userId);
-    if (!userDoc) return res.status(404).json({ success: false, message: 'User not found' });
-    const now = new Date();
-    const trialEnd = userDoc.trial?.expiresAt ? new Date(userDoc.trial.expiresAt) : null;
-    if (trialEnd && now > trialEnd) {
-      return res.status(403).json({ success: false, trialExpired: true, message: 'Trial expired' });
-    }
-    if ((userDoc.credits?.balance ?? 100) < 7) {
-      return res.status(403).json({ success: false, creditsExhausted: true, message: 'Not enough credits. Post creation requires 7 credits (5 image + 2 caption).' });
+    
+    // Credit check (7 = 5 image + 2 caption)
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    await ensureCreditCycle(user);
+    if (user.credits.balance < 7) {
+      return res.status(403).json({ success: false, message: 'Insufficient credits', creditsRemaining: user.credits.balance, required: 7 });
     }
     
     // Get user's business context
     const context = await OnboardingContext.findOne({ userId }).lean();
-    const user = await User.findById(userId).lean();
+    const userLean = await User.findById(userId).lean();
     
     const businessProfile = {
-      name: context?.onboardingData?.companyName || user?.companyName || 'Your Company',
-      industry: context?.onboardingData?.industry || user?.industry || 'General',
+      name: context?.onboardingData?.companyName || userLean?.companyName || 'Your Company',
+      industry: context?.onboardingData?.industry || userLean?.industry || 'General',
       brandVoice: context?.onboardingData?.brandVoice || 'Professional'
     };
     
     // Generate complete post
     const post = await generatePostFromSuggestion(suggestion, businessProfile);
-
-    // Deduct credits: 5 (image) + 2 (caption)
-    await deductCredits(userId, 'image_generated', 1, `Strategic advisor post image: ${suggestion.title?.substring(0, 40) || 'Post'}`);
-    const txtResult = await deductCredits(userId, 'campaign_text', 1, `Strategic advisor post caption: ${suggestion.title?.substring(0, 40) || 'Post'}`);
+    
+    // Deduct credits
+    const creditResult = await deductCredits(userId, 7, 'strategic_advisor_post');
     
     res.json({
       success: true,
       post,
-      creditsRemaining: txtResult.creditsRemaining
+      creditsRemaining: creditResult.balance
     });
   } catch (error) {
     console.error('Generate post error:', error);
@@ -1528,36 +1499,30 @@ router.post('/strategic-advisor/generate-post', protect, async (req, res) => {
  */
 router.post('/strategic-advisor/refine-image', protect, async (req, res) => {
   try {
-    const userId = req.user._id;
-    const { originalPrompt, refinementPrompt, style } = req.body;
+    const { originalPrompt, refinementPrompt, style, currentImageUrl } = req.body;
+    const userId = req.user._id || req.user.userId || req.user.id;
     
     if (!originalPrompt || !refinementPrompt) {
       return res.status(400).json({ success: false, message: 'Prompts are required' });
     }
-
-    // Trial & credit check
-    const userDoc = await User.findById(userId);
-    if (!userDoc) return res.status(404).json({ success: false, message: 'User not found' });
-    const now = new Date();
-    const trialEnd = userDoc.trial?.expiresAt ? new Date(userDoc.trial.expiresAt) : null;
-    if (trialEnd && now > trialEnd) {
-      return res.status(403).json({ success: false, trialExpired: true, message: 'Trial expired' });
-    }
-    if ((userDoc.credits?.balance ?? 100) < 3) {
-      return res.status(403).json({ success: false, creditsExhausted: true, message: 'Not enough credits. Image refinement requires 3 credits.' });
+    
+    // Credit check (3 for image edit)
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    await ensureCreditCycle(user);
+    if (user.credits.balance < 3) {
+      return res.status(403).json({ success: false, message: 'Insufficient credits', creditsRemaining: user.credits.balance, required: 3 });
     }
     
-    const result = await refineImageWithPrompt(originalPrompt, refinementPrompt, style);
-
-    // Deduct 3 credits for image edit
-    if (result.success) {
-      const editResult = await deductCredits(userId, 'image_edit', 1, 'Strategic advisor image refinement');
-      result.creditsRemaining = editResult.creditsRemaining;
-    }
+    const result = await refineImageWithPrompt(originalPrompt, refinementPrompt, style, currentImageUrl);
+    
+    // Deduct credits
+    const creditResult = await deductCredits(userId, 3, 'refine_image');
     
     res.json({
       success: result.success,
-      ...result
+      ...result,
+      creditsRemaining: creditResult.balance
     });
   } catch (error) {
     console.error('Refine image error:', error);
@@ -1578,17 +1543,13 @@ router.post('/generate-event-post', protect, async (req, res) => {
     if (!event) {
       return res.status(400).json({ success: false, message: 'Event data is required' });
     }
-
-    // Trial & credit check
-    const userDoc = await User.findById(userId);
-    if (!userDoc) return res.status(404).json({ success: false, message: 'User not found' });
-    const now = new Date();
-    const trialEnd = userDoc.trial?.expiresAt ? new Date(userDoc.trial.expiresAt) : null;
-    if (trialEnd && now > trialEnd) {
-      return res.status(403).json({ success: false, trialExpired: true, message: 'Trial expired' });
-    }
-    if ((userDoc.credits?.balance ?? 100) < 7) {
-      return res.status(403).json({ success: false, creditsExhausted: true, message: 'Not enough credits. Event post requires 7 credits (5 image + 2 caption).' });
+    
+    // Credit check (7 = 5 image + 2 caption)
+    const creditUser = await User.findById(userId);
+    if (!creditUser) return res.status(404).json({ success: false, message: 'User not found' });
+    await ensureCreditCycle(creditUser);
+    if (creditUser.credits.balance < 7) {
+      return res.status(403).json({ success: false, message: 'Insufficient credits', creditsRemaining: creditUser.credits.balance, required: 7 });
     }
     
     // Get user's business context
@@ -1605,15 +1566,14 @@ router.post('/generate-event-post', protect, async (req, res) => {
     
     // Generate event-specific post using Gemini
     const post = await generateEventPost(event, businessProfile);
-
-    // Deduct credits: 5 (image) + 2 (caption)
-    await deductCredits(userId, 'image_generated', 1, `Event post image: ${event.name || 'Event'}`);
-    const txtResult = await deductCredits(userId, 'campaign_text', 1, `Event post caption: ${event.name || 'Event'}`);
+    
+    // Deduct credits
+    const creditResult = await deductCredits(userId, 7, 'generate_event_post');
     
     res.json({
       success: true,
       post,
-      creditsRemaining: txtResult.creditsRemaining
+      creditsRemaining: creditResult.balance
     });
   } catch (error) {
     console.error('Generate event post error:', error);
