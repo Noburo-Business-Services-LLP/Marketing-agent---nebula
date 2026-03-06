@@ -819,7 +819,8 @@ const Dashboard: React.FC = () => {
         industry: data?.businessContext?.industry || 'general',
         platform: rivalPost.platform,
         originalImagePrompt: rivalImagePrompt || undefined,
-        caption: editedCaption || rivalPost.caption || undefined
+        caption: editedCaption || rivalPost.caption || undefined,
+        currentImageUrl: getCurrentImageUrl()
       });
       if (result.imageUrl) {
         setRivalPost({
