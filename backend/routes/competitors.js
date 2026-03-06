@@ -262,9 +262,116 @@ function isEnglishContent(text) {
 }
 
 /**
- * Smart Instagram handle finder
- * Tries the given handle first, then name-based variations if it fails
- * Updates the competitor's handle in DB once found so future scrapes work
+ * Maker-checker: Validate that a scraped Instagram profile actually matches the competitor.
+ * Compares profile fullName, bio, website against competitor name, industry, website.
+ * Returns { valid: boolean, score: number, reason: string }
+ */
+function validateProfileMatch(profile, competitor) {
+  const profileName = (profile.fullName || profile.ownerFullName || '').toLowerCase().trim();
+  const profileBio = (profile.biography || profile.bio || '').toLowerCase();
+  const profileUrl = (profile.externalUrl || '').toLowerCase();
+  const profileUsername = (profile.username || profile.ownerUsername || '').toLowerCase();
+
+  const compName = (competitor.name || '').toLowerCase().trim();
+  const compWebsite = (competitor.website || '').toLowerCase();
+  const compIndustry = (competitor.industry || '').toLowerCase();
+  const compDescription = (competitor.description || '').toLowerCase();
+
+  let score = 0;
+  const reasons = [];
+
+  // 1. Name matching (strongest signal)
+  const compWords = compName.split(/\s+/).filter(w => w.length > 2);
+
+  if (profileName && compName && profileName.length > 2 && (profileName.includes(compName) || compName.includes(profileName))) {
+    // Short names (<=5 chars) are more ambiguous — e.g. "Vanta" matches "Vanta Official", "Vanta Clothing"
+    const nameBonus = compName.length <= 5 ? 5 : 10;
+    score += nameBonus;
+    reasons.push(nameBonus < 10 ? 'short name match' : 'exact name match');
+  } else {
+    let nameScore = 0;
+    for (const word of compWords) {
+      if (profileName.includes(word)) nameScore += 3; // fullName is a strong signal
+      else if (profileUsername.includes(word)) nameScore += 1; // username alone is weak — anyone can register it
+    }
+    if (nameScore > 0) {
+      score += nameScore;
+      reasons.push(`name score: ${nameScore}`);
+    }
+  }
+
+  // 2. Website domain match/mismatch (very strong signal both ways)
+  if (compWebsite) {
+    const compDomain = compWebsite.replace(/https?:\/\//, '').replace(/www\./, '').split('/')[0];
+    if (profileUrl) {
+      const profileDomain = profileUrl.replace(/https?:\/\//, '').replace(/www\./, '').split('/')[0];
+      if (compDomain && profileDomain) {
+        if (compDomain.includes(profileDomain) || profileDomain.includes(compDomain)) {
+          score += 8;
+          reasons.push('website domain match');
+        } else {
+          score -= 4;
+          reasons.push('website domain MISMATCH');
+        }
+      }
+    }
+  }
+
+  // 3. Industry keywords in bio
+  if (compIndustry) {
+    const industryWords = compIndustry.split(/[\s,]+/).filter(w => w.length > 3);
+    let bioMatches = 0;
+    for (const word of industryWords) {
+      if (profileBio.includes(word)) bioMatches++;
+    }
+    if (bioMatches > 0) {
+      score += bioMatches * 2;
+      reasons.push(`industry in bio: ${bioMatches}`);
+    }
+  }
+
+  // 4. Description keywords in bio
+  if (compDescription) {
+    const descWords = compDescription.split(/[\s,]+/).filter(w => w.length > 4);
+    let descMatches = 0;
+    for (const word of descWords.slice(0, 5)) {
+      if (profileBio.includes(word)) descMatches++;
+    }
+    if (descMatches >= 2) {
+      score += descMatches;
+      reasons.push(`description in bio: ${descMatches}`);
+    }
+  }
+
+  // 5. Language mismatch penalty — if competitor name is Latin/English but bio is mostly non-Latin
+  if (compWords.length > 0 && compWords.every(w => /^[a-z0-9]+$/.test(w)) && profileBio.length > 20) {
+    const latinChars = (profileBio.match(/[a-zA-Z]/g) || []).length;
+    const totalChars = profileBio.replace(/[\s\d@#.,!?:;'"()\-]/g, '').length;
+    if (totalChars > 10 && latinChars / totalChars < 0.3) {
+      score -= 5;
+      reasons.push('non-English bio penalty');
+    }
+  }
+
+  // 6. Verified accounts get a boost
+  if (profile.verified || profile.isVerified) {
+    score += 3;
+    reasons.push('verified');
+  }
+
+  const valid = score >= 6;
+  const reason = reasons.join(', ') || 'no matching signals';
+
+  console.log(`    🔍 Maker-checker @${profileUsername} vs "${compName}": score=${score} (${reason}) → ${valid ? '✅ PASS' : '❌ REJECT'}`);
+
+  return { valid, score, reason };
+}
+
+/**
+ * Smart Instagram handle finder with maker-checker validation.
+ * Tries the given handle first, then name-based variations if it fails.
+ * Validates each profile against competitor identity before accepting.
+ * Updates the competitor's handle in DB once found so future scrapes work.
  */
 async function findInstagramProfile(competitor) {
   const handles = competitor.socialHandles || {};
@@ -276,10 +383,16 @@ async function findInstagramProfile(competitor) {
       console.log(`  ðŸ”Ž Trying given handle @${givenHandle} for ${competitor.name}...`);
       const result = await scrapeInstagramProfile(givenHandle);
       if (result?.success && result?.data?.length > 0) {
-        const posts = result.data[0].latestPosts || result.data[0].posts || [];
+        const profile = result.data[0];
+        const posts = profile.latestPosts || profile.posts || [];
         if (posts.length > 0) {
-          console.log(`  âœ… @${givenHandle} works! ${posts.length} posts found.`);
-          return { result, handle: givenHandle };
+          const validation = validateProfileMatch(profile, competitor);
+          if (validation.valid) {
+            console.log(`  âœ… @${givenHandle} VERIFIED for ${competitor.name} (${validation.reason})`);
+            return { result, handle: givenHandle };
+          } else {
+            console.log(`  âš ï¸ @${givenHandle} has posts but FAILED validation for ${competitor.name} — searching further...`);
+          }
         }
       }
     } catch (err) {
@@ -289,20 +402,30 @@ async function findInstagramProfile(competitor) {
 
   // STEP 2: Search Instagram by business name (universal, works for ANY business)
   try {
-    const searchResult = await searchInstagramByName(competitor.name);
+    const searchResult = await searchInstagramByName(competitor.name, {
+      industry: competitor.industry,
+      website: competitor.website,
+      description: competitor.description
+    });
     if (searchResult?.success && searchResult?.username) {
       const foundHandle = searchResult.username;
       console.log(`  ðŸ” Search found @${foundHandle} for ${competitor.name}, fetching profile...`);
       
       const result = await scrapeInstagramProfile(foundHandle);
       if (result?.success && result?.data?.length > 0) {
-        const posts = result.data[0].latestPosts || result.data[0].posts || [];
+        const profile = result.data[0];
+        const posts = profile.latestPosts || profile.posts || [];
         if (posts.length > 0) {
-          console.log(`  âœ… @${foundHandle} confirmed! ${posts.length} posts. Updating DB handle.`);
-          await Competitor.findByIdAndUpdate(competitor._id, {
-            'socialHandles.instagram': foundHandle
-          });
-          return { result, handle: foundHandle };
+          const validation = validateProfileMatch(profile, competitor);
+          if (validation.valid) {
+            console.log(`  âœ… @${foundHandle} VERIFIED! ${posts.length} posts. Updating DB handle.`);
+            await Competitor.findByIdAndUpdate(competitor._id, {
+              'socialHandles.instagram': foundHandle
+            });
+            return { result, handle: foundHandle };
+          } else {
+            console.log(`  âš ï¸ @${foundHandle} FAILED validation for ${competitor.name}`);
+          }
         }
       }
     }
@@ -323,19 +446,25 @@ async function findInstagramProfile(competitor) {
       console.log(`  ðŸ”Ž Trying variation @${handle}...`);
       const result = await scrapeInstagramProfile(handle);
       if (result?.success && result?.data?.length > 0) {
-        const posts = result.data[0].latestPosts || result.data[0].posts || [];
+        const profile = result.data[0];
+        const posts = profile.latestPosts || profile.posts || [];
         if (posts.length > 0) {
-          console.log(`  âœ… @${handle} works! Updating DB handle.`);
-          await Competitor.findByIdAndUpdate(competitor._id, {
-            'socialHandles.instagram': handle
-          });
-          return { result, handle };
+          const validation = validateProfileMatch(profile, competitor);
+          if (validation.valid) {
+            console.log(`  âœ… @${handle} VERIFIED! Updating DB handle.`);
+            await Competitor.findByIdAndUpdate(competitor._id, {
+              'socialHandles.instagram': handle
+            });
+            return { result, handle };
+          } else {
+            console.log(`  âš ï¸ @${handle} FAILED validation for ${competitor.name}`);
+          }
         }
       }
     } catch (err) { /* skip */ }
   }
 
-  console.log(`  âŒ No working Instagram found for ${competitor.name}`);
+  console.log(`  âŒ No VERIFIED Instagram found for ${competitor.name}`);
   return null;
 }
 
@@ -755,6 +884,13 @@ function formatTimeAgo(date) {
   
   const now = new Date();
   const past = new Date(date);
+  
+  // Guard against invalid dates (e.g., "3d ago" strings or garbage data)
+  if (isNaN(past.getTime())) return 'Unknown';
+  
+  // Guard against future dates
+  if (past > now) return 'Just now';
+  
   const diffMs = now - past;
   const diffMins = Math.floor(diffMs / 60000);
   const diffHours = Math.floor(diffMs / 3600000);
