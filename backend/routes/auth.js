@@ -118,6 +118,17 @@ async function triggerCompetitorDiscovery(userId, contextData) {
       return;
     }
 
+    // Check if competitors were already discovered recently (avoid race condition with auto-discover route)
+    const existing = await Competitor.find({
+      userId,
+      isAutoDiscovered: true,
+      createdAt: { $gte: new Date(Date.now() - 60 * 60 * 1000) } // Last 1 hour
+    });
+    if (existing.length >= 10) {
+      console.log(`⚠️ ${existing.length} competitors already discovered recently, skipping`);
+      return;
+    }
+
     // Delete existing auto-discovered competitors
     await Competitor.deleteMany({ userId, isAutoDiscovered: true });
 
@@ -379,18 +390,34 @@ All 15 competitors must be REAL companies with VERIFIED handles. Return only val
           console.log(`📋 ${competitor.name} found ${latestPosts.length} posts`);
           
           if (latestPosts.length > 0) {
-            const posts = latestPosts.slice(0, 10).map(post => ({
-              platform: 'instagram',
-              content: post.caption || post.text || post.description || post.edge_media_to_caption?.edges?.[0]?.node?.text || '',
-              likes: post.likesCount || post.likes || post.edge_liked_by?.count || 0,
-              comments: post.commentsCount || post.comments || post.edge_media_to_comment?.count || 0,
-              shares: post.shares || 0,
-              imageUrl: post.displayUrl || post.imageUrl || post.thumbnailUrl || null,
-              postUrl: post.url || `https://instagram.com/p/${post.shortCode || post.id || ''}`,
-              postedAt: new Date(post.timestamp * 1000 || post.takenAtTimestamp * 1000 || Date.now()),
-              fetchedAt: new Date(),
-              isRealData: true
-            }));
+            const oneMonthAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
+            const posts = latestPosts.slice(0, 10).map(post => {
+              // Check ALL possible Apify timestamp fields
+              let rawTs = null;
+              if (post.timestamp) rawTs = post.timestamp;
+              else if (post.takenAt) rawTs = post.takenAt;
+              else if (post.takenAtTimestamp && !isNaN(post.takenAtTimestamp)) rawTs = post.takenAtTimestamp * 1000;
+              else if (post.taken_at_timestamp && !isNaN(post.taken_at_timestamp)) rawTs = post.taken_at_timestamp * 1000;
+              else if (post.date) rawTs = post.date;
+
+              if (!rawTs) return null;
+              const timestamp = new Date(rawTs).getTime();
+              if (isNaN(timestamp) || timestamp < oneMonthAgo) return null;
+
+              return {
+                platform: 'instagram',
+                content: post.caption || post.text || post.description || post.edge_media_to_caption?.edges?.[0]?.node?.text || '',
+                likes: post.likesCount || post.likes || post.edge_liked_by?.count || 0,
+                comments: post.commentsCount || post.comments || post.edge_media_to_comment?.count || 0,
+                shares: post.shares || 0,
+                imageUrl: post.displayUrl || post.imageUrl || post.thumbnailUrl || null,
+                postUrl: post.url || `https://instagram.com/p/${post.shortCode || post.id || ''}`,
+                postedAt: new Date(timestamp),
+                postedAtTimestamp: timestamp,
+                fetchedAt: new Date(),
+                isRealData: true
+              };
+            }).filter(Boolean);
             
             // Update follower count if available
             if (profile.followersCount || profile.followers) {
