@@ -4,6 +4,7 @@ const User = require('../models/User');
 const { generateToken, protect } = require('../middleware/auth');
 const Competitor = require('../models/Competitor');
 const { generateWithLLM } = require('../services/llmRouter');
+const { lookupInstagramHandle } = require('../services/serperLookup');
 const axios = require('axios');
 const otpService = require('../services/otpService');
 
@@ -221,6 +222,21 @@ All 15 competitors must be REAL companies with VERIFIED handles. Return only val
 
     console.log(`✅ Found ${parsed.competitors.length} competitors`);
 
+    // Use Serper to resolve REAL Instagram handles
+    console.log('🔍 Resolving Instagram handles via Serper...');
+    const handleMap = {};
+    for (const comp of parsed.competitors) {
+      if (!comp.name || comp.name.length < 2) continue;
+      const lookup = await lookupInstagramHandle(comp.name);
+      handleMap[comp.name] = lookup.handle;
+      if (lookup.handle) {
+        console.log(`  ✅ ${comp.name} → @${lookup.handle}`);
+      } else {
+        console.log(`  ⚠️ ${comp.name} → no Instagram found`);
+      }
+      await new Promise(r => setTimeout(r, 300));
+    }
+
     // Save competitors and generate posts for each
     let savedCount = 0;
     const savedCompetitors = [];
@@ -228,6 +244,10 @@ All 15 competitors must be REAL companies with VERIFIED handles. Return only val
     for (const comp of parsed.competitors) {
       if (!comp.name || comp.name.length < 2) continue;
       
+      // Use Serper-verified handle, fall back to Gemini's guess only if Serper found nothing
+      const serperHandle = handleMap[comp.name];
+      const instagramHandle = serperHandle || (comp.instagram || '').replace('@', '');
+
       try {
         const competitor = await Competitor.create({
           userId,
@@ -236,7 +256,7 @@ All 15 competitors must be REAL companies with VERIFIED handles. Return only val
           description: comp.description || '',
           industry: businessContext.industry,
           socialHandles: {
-            instagram: (comp.instagram || '').replace('@', ''),
+            instagram: instagramHandle,
             twitter: (comp.twitter || '').replace('@', ''),
             facebook: '',
             linkedin: comp.linkedin || ''

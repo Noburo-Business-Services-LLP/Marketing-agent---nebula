@@ -10,6 +10,7 @@ const Competitor = require('../models/Competitor');
 const User = require('../models/User');
 const OnboardingContext = require('../models/OnboardingContext');
 const { generateWithLLM } = require('../services/llmRouter');
+const { lookupInstagramHandle } = require('../services/serperLookup');
 
 // Import real social media API service for fetching actual posts
 const {
@@ -179,10 +180,29 @@ IMPORTANT: All 15 competitors must be REAL companies that exist. Return only val
 
     console.log(`âœ… Gemini returned ${parsed.competitors.length} competitors`);
 
+    // Use Serper to resolve REAL Instagram handles (replaces Gemini's guesses)
+    console.log('🔍 Resolving Instagram handles via Serper...');
+    const companyNames = parsed.competitors.filter(c => c.name?.length >= 2).map(c => c.name);
+    const handleMap = {};
+    for (const name of companyNames) {
+      const lookup = await lookupInstagramHandle(name);
+      handleMap[name] = lookup.handle;
+      if (lookup.handle) {
+        console.log(`  ✅ ${name} → @${lookup.handle}`);
+      } else {
+        console.log(`  ⚠️ ${name} → no Instagram found`);
+      }
+      await new Promise(r => setTimeout(r, 300));
+    }
+
     // Save competitors to database
     const savedCompetitors = [];
     for (const comp of parsed.competitors) {
       if (!comp.name || comp.name.length < 2) continue;
+
+      // Use Serper-verified handle, fall back to Gemini's guess only if Serper found nothing
+      const serperHandle = handleMap[comp.name];
+      const instagramHandle = serperHandle || (comp.instagram || '').replace('@', '');
 
       try {
         const competitor = new Competitor({
@@ -192,7 +212,7 @@ IMPORTANT: All 15 competitors must be REAL companies that exist. Return only val
           description: comp.description || '',
           industry: businessContext.industry,
           socialHandles: {
-            instagram: (comp.instagram || '').replace('@', ''),
+            instagram: instagramHandle,
             twitter: (comp.twitter || '').replace('@', ''),
             facebook: (comp.facebook || '').replace('@', ''),
             linkedin: comp.linkedin || ''

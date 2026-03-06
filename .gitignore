@@ -24,3 +24,4 @@ Thumbs.db
 
 backend/vertex-ai-key.json
 *.json.bak
+backend/scripts/simulate-competitor-fetch.js
