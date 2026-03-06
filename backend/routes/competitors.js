@@ -131,10 +131,11 @@ BUSINESS:
 FIND 15 REAL COMPETITORS that offer similar products/services.
 
 Include this mix:
-- 4 LOCAL competitors (same region as ${businessContext.location})
-- 5 NATIONAL competitors (major players in the country)
-- 3 GLOBAL competitors (international leaders)
-- 3 STARTUPS (emerging players)
+- Go through the entire website and determine the product(s) or service offering by the company
+- 4 LOCAL competitors with the context of the company's product(s) or service offering(same region as ${businessContext.location})
+- 5 NATIONAL competitors with the context of the company's product(s) or service offering(major players in the country)
+- 3 GLOBAL competitors with the context of the company's product(s) or service offering(international leaders)
+- 3 STARTUPS with the context of the company's product(s) or service offering(emerging players)
 
 For each competitor, provide:
 - Real company name
@@ -165,7 +166,7 @@ IMPORTANT: All 15 competitors must be REAL companies that exist. Return only val
 
     console.log('ðŸ“¤ Calling Gemini for competitor discovery...');
     
-    const response = await callGemini(prompt, { maxTokens: 4000, skipCache: true });
+    const response = await callGemini(prompt, { maxTokens: 8000, skipCache: true });
     const parsed = parseGeminiJSON(response);
 
     if (!parsed || !parsed.competitors || !Array.isArray(parsed.competitors)) {

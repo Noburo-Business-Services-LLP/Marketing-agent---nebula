@@ -802,28 +802,40 @@ router.get('/campaign-suggestions', protect, async (req, res) => {
     // No cache or force refresh - generate new suggestions
     console.log(`🔄 Generating fresh campaigns for user ${user._id}${platformsParam ? ` [platforms: ${platformsParam.join(',')}]` : ''}`);
     
-    // Credit check before generation
-    await ensureCreditCycle(user);
-    const campaignCount = count || 6;
-    const creditCost = campaignCount * 7; // 5 (image) + 2 (caption) per campaign
-    if (user.credits.balance < creditCost) {
-      return res.status(403).json({
-        success: false,
-        message: 'Insufficient credits',
-        creditsRemaining: user.credits.balance,
-        required: creditCost
-      });
+    // Check if this is the first-ever generation (onboarding) — free of charge
+    const isFirstGeneration = !user.initialCampaignsGenerated;
+    
+    // Credit check before generation (skip for first-time onboarding generation)
+    if (!isFirstGeneration) {
+      await ensureCreditCycle(user);
+      const campaignCount = count || 6;
+      const creditCost = campaignCount * 7; // 5 (image) + 2 (caption) per campaign
+      if (user.credits.balance < creditCost) {
+        return res.status(403).json({
+          success: false,
+          message: 'Insufficient credits',
+          creditsRemaining: user.credits.balance,
+          required: creditCost
+        });
+      }
+    } else {
+      console.log('🎁 First-time campaign generation — skipping credit check');
     }
     
     const suggestions = await generateCampaignSuggestions(user.businessProfile, count, platformsParam);
     
-    // Deduct credits after successful generation
+    // Deduct credits after successful generation (skip for first-time onboarding)
     const generatedCount = suggestions.campaigns?.length || 0;
     let creditsRemaining = user.credits.balance;
     if (generatedCount > 0) {
-      const actualCost = generatedCount * 7;
-      const result = await deductCredits(user._id, actualCost, `campaign_suggestions_${generatedCount}`);
-      creditsRemaining = result.balance;
+      if (!isFirstGeneration) {
+        const actualCost = generatedCount * 7;
+        const result = await deductCredits(user._id, actualCost, `campaign_suggestions_${generatedCount}`);
+        creditsRemaining = result.balance;
+      } else {
+        console.log(`🎁 Skipping credit deduction for ${generatedCount} initial campaigns`);
+        await User.findByIdAndUpdate(user._id, { $set: { initialCampaignsGenerated: true } });
+      }
     }
     
     // Cache the new suggestions
@@ -928,13 +940,20 @@ router.get('/campaign-suggestions-stream', protect, async (req, res) => {
     }
     
     // Generate campaigns one by one using streaming
-    // Credit check before generation
-    await ensureCreditCycle(user);
-    const creditCostStream = count * 7; // 5 (image) + 2 (caption) per campaign
-    if (user.credits.balance < creditCostStream) {
-      res.write(`data: ${JSON.stringify({ type: 'error', message: 'Insufficient credits', creditsRemaining: user.credits.balance, required: creditCostStream })}\n\n`);
-      res.end();
-      return;
+    // Check if this is the first-ever generation (onboarding) — free of charge
+    const isFirstStreamGen = !user.initialCampaignsGenerated;
+    
+    // Credit check before generation (skip for first-time onboarding generation)
+    if (!isFirstStreamGen) {
+      await ensureCreditCycle(user);
+      const creditCostStream = count * 7; // 5 (image) + 2 (caption) per campaign
+      if (user.credits.balance < creditCostStream) {
+        res.write(`data: ${JSON.stringify({ type: 'error', message: 'Insufficient credits', creditsRemaining: user.credits.balance, required: creditCostStream })}\n\n`);
+        res.end();
+        return;
+      }
+    } else {
+      console.log('🎁 First-time streaming campaign generation — skipping credit check');
     }
     
     res.write(`data: ${JSON.stringify({ type: 'start', total: count, message: 'Generating personalized campaigns...' })}\n\n`);
@@ -971,11 +990,17 @@ router.get('/campaign-suggestions-stream', protect, async (req, res) => {
         console.error('Failed to cache streamed campaigns:', cacheError);
       }
       
-      // Deduct credits for all generated campaigns
+      // Deduct credits for all generated campaigns (skip for first-time onboarding)
       try {
-        const actualCost = generatedCampaigns.length * 7;
-        const result = await deductCredits(user._id, actualCost, `campaign_stream_${generatedCampaigns.length}`);
-        res.write(`data: ${JSON.stringify({ type: 'credits_update', creditsRemaining: result.balance })}\n\n`);
+        if (!isFirstStreamGen) {
+          const actualCost = generatedCampaigns.length * 7;
+          const result = await deductCredits(user._id, actualCost, `campaign_stream_${generatedCampaigns.length}`);
+          res.write(`data: ${JSON.stringify({ type: 'credits_update', creditsRemaining: result.balance })}\n\n`);
+        } else {
+          console.log(`🎁 Skipping credit deduction for ${generatedCampaigns.length} initial streamed campaigns`);
+          await User.findByIdAndUpdate(user._id, { $set: { initialCampaignsGenerated: true } });
+          res.write(`data: ${JSON.stringify({ type: 'credits_update', creditsRemaining: user.credits.balance })}\n\n`);
+        }
       } catch (creditErr) {
         console.error('Credit deduction failed after streaming:', creditErr);
       }

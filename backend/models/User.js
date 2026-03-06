@@ -42,6 +42,10 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  initialCampaignsGenerated: {
+    type: Boolean,
+    default: false
+  },
   businessProfile: {
     name: { type: String, default: '' },
     website: { type: String, default: '' },
