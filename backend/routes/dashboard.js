@@ -456,7 +456,7 @@ router.get('/overview', protect, async (req, res) => {
               if (compPosts.length > 0 && comp._id) {
                 try {
                   await Competitor.findByIdAndUpdate(comp._id, {
-                    posts: compPosts.filter(p => p.postedAtTimestamp).map(p => ({
+                    posts: compPosts.filter(p => p.postedAtTimestamp).slice(0, 5).map(p => ({
                       platform: 'instagram',
                       content: p.content,
                       likes: p.likes,
@@ -1026,27 +1026,32 @@ router.post('/refresh-competitor-posts', protect, async (req, res) => {
     const realPosts = await socialMediaAPI.fetchRealCompetitorPosts(competitorHandles, { limit: 5 });
     
     if (realPosts.success && realPosts.posts.length > 0) {
-      // Save to database
+      // Group posts by competitor name, then REPLACE all posts per competitor
+      const postsByCompetitor = {};
       for (const post of realPosts.posts) {
-        const competitor = await Competitor.findOne({ userId, name: post.competitorName });
+        if (!post.postedAtTimestamp || post.postedAtTimestamp <= 0) continue;
+        if (!postsByCompetitor[post.competitorName]) {
+          postsByCompetitor[post.competitorName] = [];
+        }
+        postsByCompetitor[post.competitorName].push({
+          platform: 'instagram',
+          postUrl: post.postUrl,
+          content: post.content,
+          imageUrl: post.imageUrl,
+          likes: post.likes,
+          comments: post.comments,
+          sentiment: post.sentiment,
+          postedAt: new Date(post.postedAtTimestamp),
+          postedAtTimestamp: post.postedAtTimestamp,
+          fetchedAt: new Date(),
+          isRealData: true
+        });
+      }
+
+      for (const [compName, posts] of Object.entries(postsByCompetitor)) {
+        const competitor = await Competitor.findOne({ userId, name: compName });
         if (competitor) {
-          // Clear old posts and add new real ones
-          competitor.posts = competitor.posts.filter(p => p.isReal !== false).slice(-10);
-          // Only save posts that have a real timestamp
-          if (post.postedAtTimestamp && post.postedAtTimestamp > 0) {
-            competitor.posts.push({
-              platform: 'instagram',
-              postUrl: post.postUrl,
-              content: post.content,
-              imageUrl: post.imageUrl,
-              likes: post.likes,
-              comments: post.comments,
-              sentiment: post.sentiment,
-              postedAt: new Date(post.postedAtTimestamp),
-              postedAtTimestamp: post.postedAtTimestamp,
-              fetchedAt: new Date()
-            });
-          }
+          competitor.posts = posts.slice(0, 5); // Replace entirely, max 5
           await competitor.save();
         }
       }

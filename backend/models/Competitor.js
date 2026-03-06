@@ -18,9 +18,14 @@ const competitorPostSchema = new mongoose.Schema({
     default: 'neutral'
   },
   postedAt: Date,
+  postedAtTimestamp: Number,
   fetchedAt: {
     type: Date,
     default: Date.now
+  },
+  isRealData: {
+    type: Boolean,
+    default: false
   }
 });
 
