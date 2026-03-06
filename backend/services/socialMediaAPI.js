@@ -696,7 +696,7 @@ async function scrapeCompetitor(competitorName, platforms = ['instagram']) {
  * Search Instagram for a business/brand by name using Apify
  * Returns the best matching username with posts
  */
-async function searchInstagramByName(businessName) {
+async function searchInstagramByName(businessName, context = {}) {
   const cacheKey = `instagram_search_${businessName.toLowerCase().replace(/\s+/g, '_')}`;
   const cached = getCached(cacheKey);
   if (cached) return cached;
@@ -741,9 +741,35 @@ async function searchInstagramByName(businessName) {
           if (followers > 10000) score += 3;
           if (followers > 1000) score += 1;
           
+          // Industry keyword matching (if context provided)
+          if (context.industry) {
+            const industryWords = context.industry.toLowerCase().split(/[\s,]+/).filter(w => w.length > 3);
+            for (const word of industryWords) {
+              if (bio.includes(word)) score += 3;
+            }
+          }
+
+          // Website domain cross-reference
+          if (context.website) {
+            const compDomain = context.website.toLowerCase().replace(/https?:\/\//, '').replace(/www\./, '').split('/')[0];
+            const profileUrl = (p.externalUrl || '').toLowerCase().replace(/https?:\/\//, '').replace(/www\./, '').split('/')[0];
+            if (compDomain && profileUrl && (compDomain.includes(profileUrl) || profileUrl.includes(compDomain))) {
+              score += 8;
+            }
+          }
+
+          // Non-English bio penalty for English-named businesses
+          if (nameWords.length > 0 && nameWords.every(w => /^[a-z]+$/.test(w)) && bio.length > 20) {
+            const latinChars = (bio.match(/[a-z]/g) || []).length;
+            const totalChars = bio.replace(/[\s\d@#.,!?:;'"()\-]/g, '').length;
+            if (totalChars > 10 && latinChars / totalChars < 0.3) {
+              score -= 5;
+            }
+          }
+
           return { username, fullName, score, followers, profile: p };
         })
-        .filter(s => s.score >= 3)
+        .filter(s => s.score >= 5)
         .sort((a, b) => b.score - a.score);
 
       if (scored.length > 0) {
@@ -827,7 +853,7 @@ async function fetchRealCompetitorPosts(competitorHandles, options = {}) {
                   comments: post.commentsCount || post.comments || 0,
                   sentiment: analyzeSentiment(post.caption || ''),
                   postType: detectPostType(post.caption || ''),
-                  postedAt: timeInfo.displayString,
+                  postedAt: new Date(timeInfo.timestamp).toISOString(),
                   postedAtTimestamp: timeInfo.timestamp,
                   postUrl: post.url || `https://instagram.com/p/${post.shortCode || post.id}`,
                   imageUrl: post.displayUrl || post.imageUrl || null,

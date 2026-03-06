@@ -440,7 +440,7 @@ router.get('/overview', protect, async (req, res) => {
               competitorLogo: post.competitorLogo || post.competitorName?.charAt(0) || 'C',
               content: post.content || 'No content available',
               sentiment: post.sentiment || 'neutral',
-              postedAt: post.postedAt || 'Recently',
+              postedAt: getRelativeTime(post.postedAt || post.postedAtTimestamp),
               postedAtTimestamp: post.postedAtTimestamp,
               likes: post.likes || 0,
               comments: post.comments || 0,
@@ -1054,7 +1054,10 @@ router.post('/refresh-competitor-posts', protect, async (req, res) => {
       res.json({
         success: true,
         message: `Fetched ${realPosts.posts.length} real posts from social media`,
-        posts: realPosts.posts,
+        posts: realPosts.posts.map(p => ({
+          ...p,
+          postedAt: getRelativeTime(p.postedAt || p.postedAtTimestamp)
+        })),
         source: 'apify_real_scrape'
       });
     } else {
@@ -1225,6 +1228,7 @@ function getRelativeTime(date) {
   
   const now = new Date();
   const past = new Date(date);
+  if (isNaN(past.getTime())) return 'Recently';
   const diffMs = now - past;
   const diffMins = Math.floor(diffMs / 60000);
   const diffHours = Math.floor(diffMins / 60);
