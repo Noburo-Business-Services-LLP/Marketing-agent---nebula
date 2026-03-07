@@ -584,6 +584,71 @@ function analyzeSentiment(text) {
 }
 
 /**
+ * POST /api/competitors/add-manual
+ * Add a competitor by name — Serper finds handle, Apify scrapes posts
+ */
+router.post('/add-manual', protect, async (req, res) => {
+  try {
+    const userId = req.user.userId || req.user.id;
+    const { name } = req.body;
+
+    if (!name || name.trim().length < 2) {
+      return res.status(400).json({ success: false, message: 'Competitor name is required (min 2 chars)' });
+    }
+
+    const trimmedName = name.trim();
+
+    // Check if already exists
+    const existing = await Competitor.findOne({ userId, name: { $regex: new RegExp(`^${trimmedName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } });
+    if (existing) {
+      return res.status(400).json({ success: false, message: `${trimmedName} is already in your competitors list` });
+    }
+
+    // Serper handle lookup
+    console.log(`🔎 Manual add: looking up Instagram handle for "${trimmedName}"...`);
+    const lookup = await lookupInstagramHandle(trimmedName, '');
+    const instagramHandle = lookup.handle || '';
+    console.log(`📸 Serper result for "${trimmedName}": @${instagramHandle || 'not found'}`);
+
+    // Save competitor to DB
+    const competitor = new Competitor({
+      userId,
+      name: trimmedName,
+      website: '',
+      description: '',
+      industry: '',
+      competitorType: 'direct',
+      socialHandles: { instagram: instagramHandle, twitter: '', facebook: '', linkedin: '' },
+      location: '',
+      isActive: true,
+      isAutoDiscovered: false,
+      posts: [],
+      metrics: { followers: 0, lastFetched: new Date() }
+    });
+    await competitor.save();
+    console.log(`✅ Saved manual competitor: ${trimmedName} (@${instagramHandle || 'no-handle'})`);
+
+    // Fire-and-forget: Apify scrapes posts in background
+    if (instagramHandle) {
+      fetchPostsForCompetitors([competitor]).catch(err =>
+        console.error(`Background post fetch error for ${trimmedName}:`, err.message)
+      );
+    }
+
+    res.json({
+      success: true,
+      competitor,
+      message: instagramHandle
+        ? `Added ${trimmedName} (@${instagramHandle}). Posts are being fetched in the background.`
+        : `Added ${trimmedName}. No Instagram handle found — you can update it later.`
+    });
+  } catch (error) {
+    console.error('Manual add competitor error:', error);
+    res.status(500).json({ success: false, message: 'Failed to add competitor' });
+  }
+});
+
+/**
  * PUT /api/competitors/:id/ignore
  * Ignore a competitor (hide from view)
  */
