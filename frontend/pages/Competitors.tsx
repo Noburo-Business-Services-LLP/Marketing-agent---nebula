@@ -42,6 +42,10 @@ const Competitors: React.FC = () => {
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [location, setLocation] = useState('');
   
+  // Manual add competitor state
+  const [addCompetitorName, setAddCompetitorName] = useState('');
+  const [addingCompetitor, setAddingCompetitor] = useState(false);
+  
   // Rival Post State
   const [showRivalPostModal, setShowRivalPostModal] = useState(false);
   const [rivalPostLoading, setRivalPostLoading] = useState(false);
@@ -141,6 +145,33 @@ const Competitors: React.FC = () => {
       setTimeout(() => setDiscoveryMessage(''), 3000);
     } finally {
       setDiscovering(false);
+    }
+  };
+
+  // Handle manual add competitor
+  const handleAddCompetitor = async () => {
+    if (!addCompetitorName.trim() || addingCompetitor) return;
+    
+    setAddingCompetitor(true);
+    setDiscoveryMessage(`🔍 Adding ${addCompetitorName.trim()}...`);
+    
+    try {
+      const res = await apiService.addManualCompetitor(addCompetitorName.trim());
+      if (res.success) {
+        setCompetitors(prev => [...prev, res.competitor]);
+        setDiscoveryMessage(res.message || `✅ Added ${addCompetitorName.trim()}!`);
+        setAddCompetitorName('');
+        // Reload posts after a delay to catch background Apify results
+        setTimeout(() => loadPosts(), 15000);
+      } else {
+        setDiscoveryMessage(`⚠️ ${res.message || 'Failed to add competitor'}`);
+      }
+    } catch (e: any) {
+      const msg = e?.message || '';
+      setDiscoveryMessage(`❌ ${msg.includes('already') ? msg : 'Failed to add competitor. Try again.'}`);
+    } finally {
+      setAddingCompetitor(false);
+      setTimeout(() => setDiscoveryMessage(''), 5000);
     }
   };
 
@@ -673,22 +704,51 @@ const Competitors: React.FC = () => {
       </div>
 
       {/* Discovered Competitors Section */}
-      {competitors.length > 0 && (
+      {(competitors.length > 0 || !loading) && (
         <div className={`${theme.bgCard} p-6 rounded-xl border ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'} mb-8`}>
           <div className="flex justify-between items-center mb-4">
             <h2 className={`text-lg font-bold ${theme.text} flex items-center gap-2`}>
               <Users className="w-5 h-5 text-[#ffcc29]" />
-              Discovered Competitors ({competitors.length})
+              Competitors ({competitors.length})
             </h2>
-            {ignoredCompetitors.length > 0 && (
-              <button
-                onClick={() => setShowIgnoredModal(true)}
-                className={`text-xs font-medium px-3 py-1.5 rounded-lg ${isDarkMode ? 'bg-[#ededed]/10 text-[#ededed]/70 hover:bg-[#ededed]/20' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
-              >
-                View Ignored ({ignoredCompetitors.length})
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              {ignoredCompetitors.length > 0 && (
+                <button
+                  onClick={() => setShowIgnoredModal(true)}
+                  className={`text-xs font-medium px-3 py-1.5 rounded-lg ${isDarkMode ? 'bg-[#ededed]/10 text-[#ededed]/70 hover:bg-[#ededed]/20' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                >
+                  View Ignored ({ignoredCompetitors.length})
+                </button>
+              )}
+            </div>
           </div>
+
+          {/* Add Competitor Input */}
+          <div className="flex items-center gap-2 mb-4">
+            <div className="relative flex-1 max-w-sm">
+              <Plus className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${theme.textMuted}`} />
+              <input
+                type="text"
+                placeholder="Add a competitor by name..."
+                value={addCompetitorName}
+                onChange={(e) => setAddCompetitorName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleAddCompetitor()}
+                disabled={addingCompetitor}
+                className={`w-full pl-9 pr-4 py-2 border rounded-lg text-sm outline-none focus:border-[#ffcc29] disabled:opacity-50 ${
+                  isDarkMode ? 'bg-[#070A12] border-slate-700/50 text-[#ededed] placeholder-[#ededed]/50' : 'border-slate-300 text-[#070A12]'
+                }`}
+              />
+            </div>
+            <button
+              onClick={handleAddCompetitor}
+              disabled={!addCompetitorName.trim() || addingCompetitor}
+              className="flex items-center gap-1.5 px-4 py-2 bg-[#ffcc29] text-black rounded-lg text-sm font-medium hover:bg-[#e6b825] disabled:opacity-50 transition-all"
+            >
+              {addingCompetitor ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+              {addingCompetitor ? 'Adding...' : 'Add'}
+            </button>
+          </div>
+
           <div className="flex flex-wrap gap-3">
             {competitors.map(comp => (
               <div 

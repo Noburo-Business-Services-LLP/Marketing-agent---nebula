@@ -856,6 +856,15 @@ export const apiService = {
     return response;
   },
 
+  addManualCompetitor: async (name: string): Promise<any> => {
+    const response = await apiCall<{ success: boolean; competitor: any; message: string }>(
+      '/competitors/add-manual',
+      { method: 'POST', body: JSON.stringify({ name }) },
+      true
+    );
+    return response;
+  },
+
   getInfluencers: async (sortBy?: string): Promise<any> => {
     try {
       const queryString = sortBy ? `?sortBy=${sortBy}` : '';
