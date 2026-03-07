@@ -182,16 +182,11 @@ IMPORTANT: All 15 competitors must be REAL companies that exist. Return only val
 
     // Use Serper to resolve REAL Instagram handles (replaces Gemini's guesses)
     console.log('🔍 Resolving Instagram handles via Serper...');
-    const companyNames = parsed.competitors.filter(c => c.name?.length >= 2).map(c => c.name);
     const handleMap = {};
-    for (const name of companyNames) {
-      const lookup = await lookupInstagramHandle(name);
-      handleMap[name] = lookup.handle;
-      if (lookup.handle) {
-        console.log(`  ✅ ${name} → @${lookup.handle}`);
-      } else {
-        console.log(`  ⚠️ ${name} → no Instagram found`);
-      }
+    for (const comp of parsed.competitors) {
+      if (!comp.name || comp.name.length < 2) continue;
+      const lookup = await lookupInstagramHandle(comp.name, comp.description);
+      handleMap[comp.name] = lookup.handle;
       await new Promise(r => setTimeout(r, 300));
     }
 

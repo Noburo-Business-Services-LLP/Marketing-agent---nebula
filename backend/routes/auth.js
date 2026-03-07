@@ -238,13 +238,8 @@ All 15 competitors must be REAL companies with VERIFIED handles. Return only val
     const handleMap = {};
     for (const comp of parsed.competitors) {
       if (!comp.name || comp.name.length < 2) continue;
-      const lookup = await lookupInstagramHandle(comp.name);
+      const lookup = await lookupInstagramHandle(comp.name, comp.description);
       handleMap[comp.name] = lookup.handle;
-      if (lookup.handle) {
-        console.log(`  ✅ ${comp.name} → @${lookup.handle}`);
-      } else {
-        console.log(`  ⚠️ ${comp.name} → no Instagram found`);
-      }
       await new Promise(r => setTimeout(r, 300));
     }
 
