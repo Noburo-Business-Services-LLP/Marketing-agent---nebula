@@ -273,7 +273,7 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, daysUsed = 7, onLog
 
   return (
     <SpaceBg>
-      <div className="max-w-5xl w-full">
+      <div className="max-w-6xl w-full">
         {/* ── Header ── */}
         <div className="text-center mb-12">
           <img src="/assets/nebulaa-gold.png" alt="Nebulaa" className="w-28 h-28 mx-auto mb-6 drop-shadow-[0_0_25px_rgba(255,204,41,0.3)]" />
@@ -375,24 +375,26 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, daysUsed = 7, onLog
                 <span className="text-[#ededed]/30 text-sm ml-1.5">/month</span>
               </div>
 
-              {/* Gravity section */}
-              <div className="mb-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="h-px flex-1 bg-gradient-to-r from-[#ffcc29]/20 to-transparent" />
-                  <span className="text-[10px] font-bold text-[#ffcc29]/50 uppercase tracking-[0.15em]">Gravity — Marketing</span>
-                  <div className="h-px flex-1 bg-gradient-to-l from-[#ffcc29]/20 to-transparent" />
+              {/* Features — two columns */}
+              <div className="grid grid-cols-2 gap-5 flex-1 mb-7">
+                {/* Gravity column */}
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="h-px flex-1 bg-gradient-to-r from-[#ffcc29]/20 to-transparent" />
+                    <span className="text-[10px] font-bold text-[#ffcc29]/50 uppercase tracking-[0.15em] whitespace-nowrap">Gravity — Marketing</span>
+                    <div className="h-px flex-1 bg-gradient-to-l from-[#ffcc29]/20 to-transparent" />
+                  </div>
+                  {gravityFeatures.map((f, i) => <FeatureRow key={i} {...f} />)}
                 </div>
-                {gravityFeatures.map((f, i) => <FeatureRow key={i} {...f} />)}
-              </div>
-
-              {/* Pulsar section */}
-              <div className="flex-1 mb-7">
-                <div className="flex items-center gap-2 mb-3 mt-2">
-                  <div className="h-px flex-1 bg-gradient-to-r from-[#ffcc29]/20 to-transparent" />
-                  <span className="text-[10px] font-bold text-[#ffcc29]/50 uppercase tracking-[0.15em]">Pulsar — Outreach</span>
-                  <div className="h-px flex-1 bg-gradient-to-l from-[#ffcc29]/20 to-transparent" />
+                {/* Pulsar column */}
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="h-px flex-1 bg-gradient-to-r from-[#ffcc29]/20 to-transparent" />
+                    <span className="text-[10px] font-bold text-[#ffcc29]/50 uppercase tracking-[0.15em] whitespace-nowrap">Pulsar — Outreach</span>
+                    <div className="h-px flex-1 bg-gradient-to-l from-[#ffcc29]/20 to-transparent" />
+                  </div>
+                  {pulsarFeatures.map((f, i) => <FeatureRow key={i} {...f} />)}
                 </div>
-                {pulsarFeatures.map((f, i) => <FeatureRow key={i} {...f} />)}
               </div>
 
               {/* CTA */}
