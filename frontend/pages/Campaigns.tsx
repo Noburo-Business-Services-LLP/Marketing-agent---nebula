@@ -917,17 +917,24 @@ const Campaigns: React.FC = () => {
   
   // Handle regenerate - forces new generation and clears cache
   const handleRegenerate = async () => {
+    // Prevent double-clicks during credit check
+    if (loadingSuggestions) return;
+    setLoadingSuggestions(true);
+
     // Check credits first — need 42 credits (6 campaigns × 7 each)
     try {
       const creditData = await apiService.getCredits();
       const balance = creditData?.credits?.balance ?? 0;
       const required = 42; // 6 campaigns × 7 credits each
       if (balance < required) {
+        setLoadingSuggestions(false);
         alert(`⚠️ Insufficient credits. You have ${balance} credits but need ${required} to regenerate campaigns. Please wait for your monthly credit reset or upgrade your plan.`);
         return;
       }
     } catch (err) {
       console.error('Credit check failed:', err);
+      setLoadingSuggestions(false);
+      return;
     }
 
     // Clear localStorage cache to force fresh generation
