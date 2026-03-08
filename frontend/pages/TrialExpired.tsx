@@ -157,7 +157,7 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, daysUsed = 7, onLog
     { icon: <MessageSquare className="w-4 h-4" />, text: 'Cold WhatsApp & SMS outreach' },
     { icon: <Mail className="w-4 h-4" />, text: 'Automated cold email campaigns' },
     { icon: <BarChart3 className="w-4 h-4" />, text: 'Call summaries & lead status tracking' },
-    { icon: <Users className="w-4 h-4" />, text: 'Manage 1,000–2,000+ leads effortlessly' },
+    { icon: <Users className="w-4 h-4" />, text: 'Manage all your leads effortlessly' },
   ];
 
   return (
