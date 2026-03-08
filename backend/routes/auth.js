@@ -733,6 +733,121 @@ router.post('/verify-otp', [
   }
 });
 
+// @route   POST /api/auth/forgot-password
+// @desc    Send OTP for password reset (works for verified users)
+// @access  Public
+router.post('/forgot-password', [
+  body('email')
+    .isEmail()
+    .withMessage('Please enter a valid email address')
+    .normalizeEmail(),
+  handleValidationErrors
+], async (req, res) => {
+  try {
+    const { email } = req.body;
+    const user = await User.findOne({ email: email.toLowerCase() }).select('+otp.code +otp.expiresAt +otp.attempts +otp.lastSentAt');
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'No account found with this email.' });
+    }
+
+    // Rate limit: 1 OTP per 60 seconds
+    if (user.otp?.lastSentAt) {
+      const timeSinceLastSend = Date.now() - new Date(user.otp.lastSentAt).getTime();
+      if (timeSinceLastSend < 60000) {
+        const waitSeconds = Math.ceil((60000 - timeSinceLastSend) / 1000);
+        return res.status(429).json({ success: false, message: `Please wait ${waitSeconds} seconds before requesting a new code.`, retryAfter: waitSeconds });
+      }
+    }
+
+    const otp = otpService.generateOTP();
+    const hashedOtp = await otpService.hashOTP(otp);
+
+    user.otp = {
+      code: hashedOtp,
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+      attempts: 0,
+      lastSentAt: new Date()
+    };
+    await user.save({ validateBeforeSave: false });
+
+    await otpService.sendOTP(email, otp, user.firstName);
+
+    console.log(`📧 Password reset OTP sent to ${email}`);
+    res.status(200).json({ success: true, message: 'Reset code sent to your email.' });
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({ success: false, message: 'Failed to send reset code. Please try again.' });
+  }
+});
+
+// @route   POST /api/auth/verify-reset-otp
+// @desc    Verify OTP for password reset (does NOT log in)
+// @access  Public
+router.post('/verify-reset-otp', [
+  body('email').isEmail().normalizeEmail(),
+  body('otp').isLength({ min: 6, max: 6 }).isNumeric(),
+  handleValidationErrors
+], async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+    const user = await User.findOne({ email: email.toLowerCase() }).select('+otp.code +otp.expiresAt +otp.attempts +otp.lastSentAt');
+
+    if (!user) return res.status(404).json({ success: false, message: 'No account found.' });
+    if (!user.otp?.code) return res.status(400).json({ success: false, message: 'No reset code found. Please request a new one.' });
+    if (new Date() > new Date(user.otp.expiresAt)) return res.status(400).json({ success: false, message: 'Code has expired. Please request a new one.' });
+    if (user.otp.attempts >= 5) return res.status(429).json({ success: false, message: 'Too many failed attempts. Please request a new code.' });
+
+    const isValid = await otpService.verifyOTP(otp, user.otp.code);
+    if (!isValid) {
+      user.otp.attempts = (user.otp.attempts || 0) + 1;
+      await user.save({ validateBeforeSave: false });
+      const remaining = 5 - user.otp.attempts;
+      return res.status(400).json({ success: false, message: `Invalid code. ${remaining} attempt${remaining !== 1 ? 's' : ''} remaining.` });
+    }
+
+    // OTP valid — don't clear it yet, we need it for the reset step
+    res.status(200).json({ success: true, message: 'Code verified. You can now set a new password.' });
+  } catch (error) {
+    console.error('Verify reset OTP error:', error);
+    res.status(500).json({ success: false, message: 'Verification failed.' });
+  }
+});
+
+// @route   POST /api/auth/reset-password
+// @desc    Reset password after OTP verification
+// @access  Public
+router.post('/reset-password', [
+  body('email').isEmail().normalizeEmail(),
+  body('otp').isLength({ min: 6, max: 6 }).isNumeric(),
+  body('newPassword').isLength({ min: 8 }).withMessage('Password must be at least 8 characters'),
+  handleValidationErrors
+], async (req, res) => {
+  try {
+    const { email, otp, newPassword } = req.body;
+    const user = await User.findOne({ email: email.toLowerCase() }).select('+password +otp.code +otp.expiresAt +otp.attempts');
+
+    if (!user) return res.status(404).json({ success: false, message: 'No account found.' });
+    if (!user.otp?.code) return res.status(400).json({ success: false, message: 'No reset code found. Please start over.' });
+    if (new Date() > new Date(user.otp.expiresAt)) return res.status(400).json({ success: false, message: 'Code has expired. Please start over.' });
+
+    // Re-verify OTP to prevent bypassing
+    const isValid = await otpService.verifyOTP(otp, user.otp.code);
+    if (!isValid) return res.status(400).json({ success: false, message: 'Invalid code. Please start over.' });
+
+    // Update password (pre-save hook will hash it)
+    user.password = newPassword;
+    user.otp = undefined;
+    await user.save();
+
+    console.log(`✅ Password reset successful for ${email}`);
+    res.status(200).json({ success: true, message: 'Password updated successfully. Please sign in.' });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({ success: false, message: 'Failed to reset password.' });
+  }
+});
+
 // @route   POST /api/auth/login
 // @desc    Login user
 // @access  Public

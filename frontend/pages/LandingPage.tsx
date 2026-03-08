@@ -106,7 +106,7 @@ const LandingPage: React.FC = () => {
                 Sign in
               </button>
               <button 
-                onClick={() => navigate('/login')}
+                onClick={() => navigate('/login?mode=signup')}
                 className="px-5 py-2.5 bg-[#ffcc29] hover:bg-[#e6b825] text-[#070A12] text-sm font-medium rounded-full transition-all duration-300 shadow-lg shadow-[#ffcc29]/20 hover:shadow-[#ffcc29]/30"
               >
                 Sign Up
@@ -161,14 +161,6 @@ const LandingPage: React.FC = () => {
               >
                 Start free trial
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-              </button>
-              <button className={`group w-full sm:w-auto px-8 py-4 font-medium rounded-full border transition-all duration-300 flex items-center justify-center gap-2 ${
-                theme === 'dark' 
-                  ? 'bg-[#0d1117] hover:bg-[#161b22] text-[#ededed] border-[#ffcc29]/30'
-                  : 'bg-white hover:bg-gray-50 text-gray-900 border-gray-300'
-              }`}>
-                <Play className="w-4 h-4 text-[#ffcc29]" />
-                Watch demo
               </button>
             </div>
 

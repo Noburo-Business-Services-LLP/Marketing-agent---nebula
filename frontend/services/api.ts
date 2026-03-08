@@ -274,6 +274,28 @@ export const apiService = {
     };
   },
 
+  // Forgot Password
+  forgotPassword: async (email: string): Promise<{ success: boolean; message: string }> => {
+    return apiCall('/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email })
+    });
+  },
+
+  verifyResetOTP: async (email: string, otp: string): Promise<{ success: boolean; message: string }> => {
+    return apiCall('/auth/verify-reset-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email, otp })
+    });
+  },
+
+  resetPassword: async (email: string, otp: string, newPassword: string): Promise<{ success: boolean; message: string }> => {
+    return apiCall('/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ email, otp, newPassword })
+    });
+  },
+
   getCurrentUser: async (): Promise<{ user: User | null }> => {
     try {
       const token = getToken();
