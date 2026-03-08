@@ -276,7 +276,7 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, daysUsed = 7, onLog
       <div className="max-w-5xl w-full">
         {/* ── Header ── */}
         <div className="text-center mb-12">
-          <img src="/assets/logo.png" alt="Nebulaa" className="w-16 h-16 mx-auto mb-6 drop-shadow-[0_0_25px_rgba(255,204,41,0.3)]" />
+          <img src="/assets/nebulaa-gold.png" alt="Nebulaa" className="w-16 h-16 mx-auto mb-6 drop-shadow-[0_0_25px_rgba(255,204,41,0.3)]" />
 
           <h1 className="text-3xl md:text-5xl font-extrabold text-white mb-4 tracking-tight">
             Trial Credits Exhausted
