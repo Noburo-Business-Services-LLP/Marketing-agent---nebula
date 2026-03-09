@@ -326,8 +326,8 @@ export const apiService = {
   },
 
   // Payment / Razorpay
-  createPaymentOrder: async (plan: string): Promise<any> => {
-    return apiCall('/payment/create-order', { method: 'POST', body: JSON.stringify({ plan }) }, true);
+  createPaymentOrder: async (amount: number): Promise<any> => {
+    return apiCall('/payment/create-order', { method: 'POST', body: JSON.stringify({ amount }) }, true);
   },
 
   verifyPayment: async (data: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }): Promise<any> => {

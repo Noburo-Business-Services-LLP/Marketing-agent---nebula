@@ -34,7 +34,7 @@ const COLLECTIONS = [
  * @param {string} demoUserId - The user's _id in the demo database
  * @returns {{ success: boolean, prodUserId: string, summary: object, error?: string }}
  */
-async function migrateUserData(demoUserId) {
+async function migrateUserData(demoUserId, paidCredits = 100) {
   let demoConn = null;
   let prodConn = null;
 
@@ -78,24 +78,24 @@ async function migrateUserData(demoUserId) {
     const prodUser = { ...demoUser };
     delete prodUser._id; // Let MongoDB generate new _id
 
-    // Reset to production credit system (1000 monthly credits)
+    // Set credits to the amount the user paid for
     const now = new Date();
     const cycleEnd = new Date(now);
     cycleEnd.setMonth(cycleEnd.getMonth() + 1);
 
     prodUser.credits = {
-      balance: 1000,
-      monthlyAllowance: 1000,
+      balance: paidCredits,
+      monthlyAllowance: paidCredits,
       totalUsed: 0,
       cycleStart: now,
       cycleEnd: cycleEnd,
       lastLoginBonus: null,
       history: [{
         action: 'migration_bonus',
-        cost: -1000,
-        balanceAfter: 1000,
+        cost: -paidCredits,
+        balanceAfter: paidCredits,
         timestamp: now,
-        description: 'Welcome to Nebulaa Gravity Production — 1000 monthly credits'
+        description: `Welcome to Nebulaa Gravity Production — ${paidCredits} credits`
       }]
     };
 

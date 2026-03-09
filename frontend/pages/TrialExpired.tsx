@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { CreditCard, ArrowRight, CheckCircle, Loader2, ExternalLink, Phone, Mail, MessageSquare, BarChart3, Bot, Megaphone, Users, Target, Globe, Shield } from 'lucide-react';
+import { CreditCard, ArrowRight, CheckCircle, Loader2, ExternalLink, BarChart3, Bot, Megaphone, Users, Target, Globe, Shield } from 'lucide-react';
 import { apiService } from '../services/api';
 
 declare global {
@@ -128,15 +128,16 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, daysUsed = 7, onLog
   const [migrating, setMigrating] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
-  const [selectedPlan, setSelectedPlan] = useState<'gravity' | 'gravity_pulsar' | null>(null);
+  const [sliderValue, setSliderValue] = useState(3000); // ₹3,000 default
 
-  const handleSubscribe = async (plan: 'gravity' | 'gravity_pulsar') => {
+  const credits = (sliderValue / 1000) * 100;
+
+  const handleSubscribe = async () => {
     setLoading(true);
-    setSelectedPlan(plan);
     setError('');
 
     try {
-      const orderData = await apiService.createPaymentOrder(plan);
+      const orderData = await apiService.createPaymentOrder(sliderValue);
       if (!orderData.success) throw new Error(orderData.message || 'Failed to create order');
 
       const options = {
@@ -144,7 +145,7 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, daysUsed = 7, onLog
         amount: orderData.order.amount,
         currency: orderData.order.currency,
         name: 'Nebulaa',
-        description: orderData.plan?.description || 'Subscription',
+        description: `${credits} Credits — ₹${sliderValue.toLocaleString('en-IN')}`,
         order_id: orderData.order.id,
         prefill: orderData.prefill,
         theme: { color: '#ffcc29', backdrop_color: 'rgba(7, 10, 18, 0.9)' },
@@ -164,19 +165,17 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, daysUsed = 7, onLog
             setError(err.message || 'Payment verified but migration failed. Contact support.');
           }
         },
-        modal: { ondismiss: () => { setLoading(false); setSelectedPlan(null); } }
+        modal: { ondismiss: () => { setLoading(false); } }
       };
 
       const rzp = new window.Razorpay(options);
       rzp.on('payment.failed', (response: any) => {
         setLoading(false);
-        setSelectedPlan(null);
         setError(response.error?.description || 'Payment failed. Please try again.');
       });
       rzp.open();
     } catch (err: any) {
       setLoading(false);
-      setSelectedPlan(null);
       setError(err.message || 'Something went wrong');
     }
   };
@@ -218,7 +217,7 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, daysUsed = 7, onLog
                 className="w-full py-4 bg-[#ffcc29] hover:bg-[#e6b825] text-[#070A12] font-bold text-lg rounded-2xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#ffcc29]/20">
                 Go to Gravity Production <ExternalLink className="w-5 h-5" />
               </a>
-              <p className="text-[#ededed]/30 text-xs mt-4">gravity.nebulaa.ai — 1,000 credits/month + daily bonus</p>
+              <p className="text-[#ededed]/30 text-xs mt-4">gravity.nebulaa.ai — your credits are ready</p>
             </div>
           </GlassCard>
         </div>
@@ -246,22 +245,14 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, daysUsed = 7, onLog
   }
 
   // ─── Feature lists ───
-  const gravityFeatures = [
-    { icon: <Bot className="w-4 h-4" />, text: '1,000 AI credits / month (auto-resets)' },
+  const features = [
+    { icon: <Bot className="w-4 h-4" />, text: 'AI credits loaded instantly on production' },
     { icon: <Target className="w-4 h-4" />, text: '+10 daily login bonus credits' },
-    { icon: <Globe className="w-4 h-4" />, text: 'All demo data migrated instantly' },
+    { icon: <Globe className="w-4 h-4" />, text: 'All your demo data migrated' },
     { icon: <Megaphone className="w-4 h-4" />, text: 'AI campaign & content generation' },
     { icon: <Globe className="w-4 h-4" />, text: 'Multi-platform social posting' },
     { icon: <Users className="w-4 h-4" />, text: 'Competitor intelligence & tracking' },
     { icon: <BarChart3 className="w-4 h-4" />, text: 'Analytics & performance insights' },
-  ];
-
-  const pulsarFeatures = [
-    { icon: <Phone className="w-4 h-4" />, text: 'Automated lead calling with AI voice' },
-    { icon: <MessageSquare className="w-4 h-4" />, text: 'Cold WhatsApp & SMS outreach' },
-    { icon: <Mail className="w-4 h-4" />, text: 'Automated cold email campaigns' },
-    { icon: <BarChart3 className="w-4 h-4" />, text: 'Call summaries & lead status tracking' },
-    { icon: <Users className="w-4 h-4" />, text: 'Manage all your leads effortlessly' },
   ];
 
   const FeatureRow: React.FC<{ icon: React.ReactNode; text: string }> = ({ icon, text }) => (
@@ -273,145 +264,127 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, daysUsed = 7, onLog
 
   return (
     <SpaceBg>
-      <div className="max-w-6xl w-full">
+      <div className="max-w-2xl w-full">
         {/* ── Header ── */}
         <div className="text-center mb-12">
           <img src="/assets/nebulaa-gold.png" alt="Nebulaa" className="w-28 h-28 mx-auto mb-6 drop-shadow-[0_0_25px_rgba(255,204,41,0.3)]" />
 
           <h1 className="text-3xl md:text-5xl font-extrabold text-white mb-4 tracking-tight">
-            Trial Credits Exhausted
+            {reason === 'time' ? 'Your Free Trial Has Ended' : 'Trial Credits Exhausted'}
           </h1>
           <p className="text-[#ededed]/40 text-base md:text-lg max-w-lg mx-auto leading-relaxed">
             {reason === 'time'
-              ? `You explored Nebulaa Gravity for ${daysUsed} days. Choose a plan to keep going.`
-              : 'You\'ve used all 100 trial credits. Choose a plan to get 1,000 monthly credits and keep growing.'}
+              ? `You explored Nebulaa Gravity for ${daysUsed} days. Buy credits to keep going.`
+              : 'You\'ve used all 100 trial credits. Buy credits to continue with all your data intact.'}
           </p>
         </div>
 
         {/* ── Error ── */}
         {error && (
-          <div className="max-w-2xl mx-auto mb-8">
+          <div className="mb-8">
             <GlassCard>
               <div className="px-5 py-3 text-red-400 text-sm text-center">{error}</div>
             </GlassCard>
           </div>
         )}
 
-        {/* ── Plan Cards ── */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-7 mb-10">
-
-          {/* ▸ Gravity */}
-          <GlassCard className="hover:scale-[1.01] hover:shadow-lg hover:shadow-white/[0.02]">
-            <div className="p-7 md:p-8 flex flex-col h-full">
-              {/* Header */}
-              <div className="flex items-center gap-3.5 mb-5">
-                <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-[#ffcc29]/15 to-[#ffcc29]/5 flex items-center justify-center ring-1 ring-[#ffcc29]/10 overflow-hidden">
-                  <img src="/assets/gravity-logo.png" alt="" className="w-7 h-7 object-contain" />
-                </div>
-                <div>
-                  <h3 className="text-[17px] font-bold text-white">Gravity</h3>
-                  <p className="text-[11px] text-[#ededed]/35 tracking-wide">AI Marketing Agent</p>
-                </div>
+        {/* ── Credit Slider Card ── */}
+        <GlassCard highlighted className="mb-10">
+          <div className="p-7 md:p-10">
+            {/* Card header */}
+            <div className="flex items-center gap-3.5 mb-8">
+              <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-[#ffcc29]/15 to-[#ffcc29]/5 flex items-center justify-center ring-1 ring-[#ffcc29]/10 overflow-hidden">
+                <img src="/assets/gravity-logo.png" alt="" className="w-7 h-7 object-contain" />
               </div>
-
-              {/* Price */}
-              <div className="mb-6 pb-5 border-b border-white/[0.06] text-center">
-                <span className="text-[42px] font-extrabold text-white leading-none">₹6,999</span>
-                <span className="text-[#ededed]/30 text-sm ml-1.5">/month</span>
+              <div>
+                <h3 className="text-[17px] font-bold text-white">Buy Credits</h3>
+                <p className="text-[11px] text-[#ededed]/35 tracking-wide">Choose your amount</p>
               </div>
-
-              {/* Features */}
-              <div className="flex-1 mb-7">
-                {gravityFeatures.map((f, i) => <FeatureRow key={i} {...f} />)}
-              </div>
-
-              {/* CTA */}
-              <button
-                onClick={() => handleSubscribe('gravity')}
-                disabled={loading}
-                className="w-full py-4 rounded-2xl font-semibold text-sm transition-all duration-300 flex items-center justify-center gap-2
-                  bg-white/[0.04] hover:bg-white/[0.08] text-[#ededed]/90 border border-white/[0.08] hover:border-white/[0.15]
-                  disabled:opacity-50 disabled:cursor-not-allowed backdrop-blur-sm
-                  shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_1px_3px_rgba(0,0,0,0.3)]
-                  hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_4px_12px_rgba(0,0,0,0.4)]"
-              >
-                {loading && selectedPlan === 'gravity' ? (
-                  <><Loader2 className="w-4 h-4 animate-spin" /> Processing...</>
-                ) : (
-                  <><CreditCard className="w-4 h-4" /> Choose Gravity <ArrowRight className="w-4 h-4" /></>
-                )}
-              </button>
             </div>
-          </GlassCard>
 
-          {/* ▸ Gravity + Pulsar */}
-          <GlassCard highlighted className="hover:scale-[1.01]">
-            <div className="p-7 md:p-8 flex flex-col h-full relative">
-              {/* Badge */}
-              <div className="absolute -top-px left-1/2 -translate-x-1/2 -translate-y-1/2">
-                <span className="inline-block bg-gradient-to-r from-[#ffcc29] via-[#ffd84d] to-[#f5a623] text-[#070A12] text-[10px] font-extrabold px-5 py-1.5 rounded-full uppercase tracking-[0.12em] shadow-lg shadow-[#ffcc29]/25">
-                  Best Value
-                </span>
+            {/* Price + credits display */}
+            <div className="text-center mb-8">
+              <div className="text-[56px] font-extrabold text-white leading-none">
+                ₹{sliderValue.toLocaleString('en-IN')}
               </div>
-
-              {/* Header */}
-              <div className="flex items-center gap-3.5 mb-5 mt-1">
-                <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-[#ffcc29]/20 to-[#ffcc29]/5 flex items-center justify-center ring-1 ring-[#ffcc29]/20 overflow-hidden">
-                  <img src="/assets/gravity-logo.png" alt="" className="w-7 h-7 object-contain" />
-                </div>
-                <div>
-                  <h3 className="text-[17px] font-bold text-white">Gravity + Pulsar</h3>
-                  <p className="text-[11px] text-[#ededed]/35 tracking-wide">Marketing + Outreach Agents</p>
-                </div>
+              <div className="mt-3 inline-flex items-center gap-2 bg-[#ffcc29]/10 border border-[#ffcc29]/20 rounded-full px-5 py-2">
+                <span className="text-[#ffcc29] font-bold text-lg">{credits}</span>
+                <span className="text-[#ededed]/50 text-sm">credits</span>
               </div>
-
-              {/* Price */}
-              <div className="mb-6 pb-5 border-b border-[#ffcc29]/[0.08] text-center">
-                <span className="text-[42px] font-extrabold text-white leading-none">₹9,999</span>
-                <span className="text-[#ededed]/30 text-sm ml-1.5">/month</span>
-              </div>
-
-              {/* Features — two columns */}
-              <div className="grid grid-cols-2 gap-5 flex-1 mb-7">
-                {/* Gravity column */}
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="h-px flex-1 bg-gradient-to-r from-[#ffcc29]/20 to-transparent" />
-                    <span className="text-[10px] font-bold text-[#ffcc29]/50 uppercase tracking-[0.15em] whitespace-nowrap">Gravity — Marketing</span>
-                    <div className="h-px flex-1 bg-gradient-to-l from-[#ffcc29]/20 to-transparent" />
-                  </div>
-                  {gravityFeatures.map((f, i) => <FeatureRow key={i} {...f} />)}
-                </div>
-                {/* Pulsar column */}
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="h-px flex-1 bg-gradient-to-r from-[#ffcc29]/20 to-transparent" />
-                    <span className="text-[10px] font-bold text-[#ffcc29]/50 uppercase tracking-[0.15em] whitespace-nowrap">Pulsar — Outreach</span>
-                    <div className="h-px flex-1 bg-gradient-to-l from-[#ffcc29]/20 to-transparent" />
-                  </div>
-                  {pulsarFeatures.map((f, i) => <FeatureRow key={i} {...f} />)}
-                </div>
-              </div>
-
-              {/* CTA */}
-              <button
-                onClick={() => handleSubscribe('gravity_pulsar')}
-                disabled={loading}
-                className="w-full py-4 rounded-2xl font-semibold text-sm transition-all duration-300 flex items-center justify-center gap-2
-                  bg-gradient-to-b from-[#ffcc29] to-[#e6b825] hover:from-[#ffd54f] hover:to-[#ffcc29] text-[#070A12]
-                  disabled:opacity-50 disabled:cursor-not-allowed
-                  shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_2px_8px_rgba(255,204,41,0.3),0_0_30px_rgba(255,204,41,0.08)]
-                  hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.3),0_4px_16px_rgba(255,204,41,0.4),0_0_50px_rgba(255,204,41,0.12)]"
-              >
-                {loading && selectedPlan === 'gravity_pulsar' ? (
-                  <><Loader2 className="w-4 h-4 animate-spin" /> Processing...</>
-                ) : (
-                  <><CreditCard className="w-4 h-4" /> Choose Gravity + Pulsar <ArrowRight className="w-4 h-4" /></>
-                )}
-              </button>
+              <p className="text-[#ededed]/30 text-xs mt-2">100 credits per ₹1,000</p>
             </div>
-          </GlassCard>
-        </div>
+
+            {/* Slider */}
+            <div className="mb-8 px-2">
+              <input
+                type="range"
+                min={1000}
+                max={20000}
+                step={1000}
+                value={sliderValue}
+                onChange={(e) => setSliderValue(Number(e.target.value))}
+                className="w-full h-2 rounded-full appearance-none cursor-pointer"
+                style={{
+                  background: `linear-gradient(to right, #ffcc29 ${((sliderValue - 1000) / 19000) * 100}%, rgba(255,255,255,0.08) ${((sliderValue - 1000) / 19000) * 100}%)`,
+                }}
+              />
+              <style>{`
+                input[type="range"]::-webkit-slider-thumb {
+                  -webkit-appearance: none;
+                  appearance: none;
+                  width: 24px;
+                  height: 24px;
+                  border-radius: 50%;
+                  background: #ffcc29;
+                  cursor: pointer;
+                  box-shadow: 0 0 12px rgba(255, 204, 41, 0.4), 0 2px 6px rgba(0,0,0,0.3);
+                  border: 3px solid #070A12;
+                }
+                input[type="range"]::-moz-range-thumb {
+                  width: 24px;
+                  height: 24px;
+                  border-radius: 50%;
+                  background: #ffcc29;
+                  cursor: pointer;
+                  box-shadow: 0 0 12px rgba(255, 204, 41, 0.4), 0 2px 6px rgba(0,0,0,0.3);
+                  border: 3px solid #070A12;
+                }
+              `}</style>
+              <div className="flex justify-between text-[11px] text-[#ededed]/25 mt-2 px-0.5">
+                <span>₹1,000</span>
+                <span>₹5,000</span>
+                <span>₹10,000</span>
+                <span>₹15,000</span>
+                <span>₹20,000</span>
+              </div>
+            </div>
+
+            {/* Divider */}
+            <div className="border-t border-white/[0.06] pt-6 mb-6">
+              <p className="text-[10px] font-bold text-[#ededed]/25 uppercase tracking-[0.15em] mb-3">What you get</p>
+              <div className="grid grid-cols-2 gap-x-6">
+                {features.map((f, i) => <FeatureRow key={i} {...f} />)}
+              </div>
+            </div>
+
+            {/* CTA */}
+            <button
+              onClick={handleSubscribe}
+              disabled={loading}
+              className="w-full py-4 rounded-2xl font-semibold text-sm transition-all duration-300 flex items-center justify-center gap-2
+                bg-gradient-to-b from-[#ffcc29] to-[#e6b825] hover:from-[#ffd54f] hover:to-[#ffcc29] text-[#070A12]
+                disabled:opacity-50 disabled:cursor-not-allowed
+                shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_2px_8px_rgba(255,204,41,0.3),0_0_30px_rgba(255,204,41,0.08)]
+                hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.3),0_4px_16px_rgba(255,204,41,0.4),0_0_50px_rgba(255,204,41,0.12)]"
+            >
+              {loading ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> Processing...</>
+              ) : (
+                <><CreditCard className="w-4 h-4" /> Pay ₹{sliderValue.toLocaleString('en-IN')} & Activate <ArrowRight className="w-4 h-4" /></>
+              )}
+            </button>
+          </div>
+        </GlassCard>
 
         {/* ── Footer ── */}
         <div className="text-center space-y-3">

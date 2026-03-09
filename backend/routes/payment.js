@@ -20,23 +20,22 @@ const razorpay = new Razorpay({
   key_secret: process.env.RAZORPAY_KEY_SECRET
 });
 
-const PLANS = {
-  gravity: { amount: 699900, label: 'Gravity', description: 'Gravity Plan — ₹6,999/month' },
-  gravity_pulsar: { amount: 999900, label: 'Gravity + Pulsar', description: 'Gravity + Pulsar Plan — ₹9,999/month' }
-};
 const PLAN_CURRENCY = 'INR';
+const MIN_AMOUNT = 1000;
+const MAX_AMOUNT = 20000;
 
 /**
  * POST /api/payment/create-order
- * Creates a Razorpay order for subscription
+ * Creates a Razorpay order for chosen credit amount
  */
 router.post('/create-order', protect, async (req, res) => {
   try {
-    const { plan } = req.body;
-    const selectedPlan = PLANS[plan];
-    if (!selectedPlan) {
-      return res.status(400).json({ success: false, message: 'Invalid plan. Choose gravity or gravity_pulsar.' });
+    const { amount } = req.body;
+    const numAmount = Number(amount);
+    if (!numAmount || numAmount < MIN_AMOUNT || numAmount > MAX_AMOUNT || numAmount % 1000 !== 0) {
+      return res.status(400).json({ success: false, message: `Choose an amount between ₹${MIN_AMOUNT.toLocaleString()} and ₹${MAX_AMOUNT.toLocaleString()} (in multiples of ₹1,000).` });
     }
+    const credits = (numAmount / 1000) * 100;
 
     const userId = req.user?.userId || req.user?.id || req.user?._id;
     const user = await User.findById(userId);
@@ -54,13 +53,13 @@ router.post('/create-order', protect, async (req, res) => {
     }
 
     const options = {
-      amount: selectedPlan.amount,
+      amount: numAmount * 100,
       currency: PLAN_CURRENCY,
       receipt: `neb_${userId.toString().slice(-8)}_${Date.now().toString(36)}`,
       notes: {
         userId: userId.toString(),
         email: user.email,
-        plan: plan
+        credits: credits.toString()
       }
     };
 
@@ -74,7 +73,7 @@ router.post('/create-order', protect, async (req, res) => {
         currency: order.currency
       },
       key: process.env.RAZORPAY_KEY_ID,
-      plan: { key: plan, label: selectedPlan.label, description: selectedPlan.description },
+      description: `Nebulaa Gravity — ${credits} credits`,
       prefill: {
         name: `${user.firstName} ${user.lastName || ''}`.trim(),
         email: user.email,
@@ -132,9 +131,12 @@ router.post('/verify', protect, async (req, res) => {
     };
     await user.save();
 
+    // Calculate credits from paid amount
+    const paidCredits = paidAmount ? Math.round((paidAmount / 100 / 1000) * 100) : 100;
+
     // Run migration: demo → prod
-    console.log(`🚀 Starting migration for user: ${userId}`);
-    const migrationResult = await migrateUserData(userId.toString());
+    console.log(`🚀 Starting migration for user: ${userId} with ${paidCredits} credits`);
+    const migrationResult = await migrateUserData(userId.toString(), paidCredits);
 
     if (!migrationResult.success) {
       return res.status(500).json({ 
