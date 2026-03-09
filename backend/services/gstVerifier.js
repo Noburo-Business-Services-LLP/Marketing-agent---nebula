@@ -10,6 +10,8 @@
  * - Char 15:    Checksum digit
  */
 
+const https = require('https');
+
 const GST_REGEX = /^[0-3][0-9][A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
 
 /**
@@ -18,6 +20,27 @@ const GST_REGEX = /^[0-3][0-9][A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
 function isValidGSTFormat(gst) {
   if (!gst || typeof gst !== 'string') return false;
   return GST_REGEX.test(gst.trim().toUpperCase());
+}
+
+/**
+ * Make HTTPS GET request (works on all Node.js versions)
+ */
+function httpsGet(url) {
+  return new Promise((resolve, reject) => {
+    const req = https.get(url, { headers: { 'Accept': 'application/json' }, timeout: 10000 }, (res) => {
+      let body = '';
+      res.on('data', chunk => body += chunk);
+      res.on('end', () => {
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          try { resolve(JSON.parse(body)); } catch { reject(new Error('Invalid JSON')); }
+        } else {
+          reject(new Error(`HTTP ${res.statusCode}`));
+        }
+      });
+    });
+    req.on('error', reject);
+    req.on('timeout', () => { req.destroy(); reject(new Error('Timeout')); });
+  });
 }
 
 /**
@@ -32,20 +55,8 @@ async function verifyGST(gstNumber) {
   }
 
   try {
-    // Use the free GST search API (Sheet2API / public GST portal proxy)
-    const response = await fetch(`https://sheet.gstincheck.co.in/check/${process.env.GST_API_KEY || 'free'}/${gst}`, {
-      method: 'GET',
-      headers: { 'Accept': 'application/json' },
-      signal: AbortSignal.timeout(10000)
-    });
-
-    if (!response.ok) {
-      // Fallback: if API is down, accept format-valid GST with a warning
-      console.warn(`GST API returned ${response.status}, falling back to format-only validation`);
-      return { valid: true, legalName: '', tradeName: '', status: 'unverified', fallback: true };
-    }
-
-    const data = await response.json();
+    const apiKey = process.env.GST_API_KEY || 'free';
+    const data = await httpsGet(`https://sheet.gstincheck.co.in/check/${apiKey}/${gst}`);
 
     if (data.flag === true && data.data) {
       const info = data.data;
@@ -59,11 +70,11 @@ async function verifyGST(gstNumber) {
         taxpayerType: info.dty || ''
       };
     } else {
-      return { valid: false, error: data.message || 'GST number not found in government records.' };
+      return { valid: false, error: 'This GST number does not exist. Please enter a valid GST number.' };
     }
   } catch (err) {
     console.error('GST verification API error:', err.message);
-    // If network error, accept format-valid GST with fallback flag
+    // If API is down/timeout, accept format-valid GST with fallback flag
     return { valid: true, legalName: '', tradeName: '', status: 'unverified', fallback: true };
   }
 }
