@@ -58,7 +58,12 @@ async function verifyGST(gstNumber) {
     const apiKey = process.env.GST_API_KEY || 'free';
     const data = await httpsGet(`https://sheet.gstincheck.co.in/check/${apiKey}/${gst}`);
 
-    if (data.flag === true && data.data) {
+    console.log('GST API raw response for', gst, ':', JSON.stringify(data));
+
+    // API may return flag as boolean true or string "true"
+    const isValid = data.flag === true || data.flag === 'true' || data.flag === 1;
+
+    if (isValid && data.data && data.data.lgnm) {
       const info = data.data;
       return {
         valid: true,
