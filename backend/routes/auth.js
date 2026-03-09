@@ -1068,6 +1068,81 @@ router.put('/update-profile', protect, [
   }
 });
 
+// @route   POST /api/auth/verify-gst
+// @desc    Verify a GST number against government database
+// @access  Private
+router.post('/verify-gst', protect, async (req, res) => {
+  try {
+    const { gstNumber } = req.body;
+    if (!gstNumber) {
+      return res.status(400).json({ success: false, message: 'GST number is required' });
+    }
+    const { verifyGST } = require('../services/gstVerifier');
+    const result = await verifyGST(gstNumber);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('GST verify error:', error);
+    res.status(500).json({ success: false, message: 'GST verification failed' });
+  }
+});
+
+// @route   POST /api/auth/check-duplicate
+// @desc    Check if business name, website, or GST already exists in another account
+// @access  Private
+router.post('/check-duplicate', protect, async (req, res) => {
+  try {
+    const { businessName, website, gstNumber } = req.body;
+    const currentUserId = req.user._id;
+
+    // Build OR query for any matching field (case-insensitive)
+    const conditions = [];
+    if (businessName && businessName.trim()) {
+      conditions.push({ 'businessProfile.name': { $regex: new RegExp(`^${businessName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } });
+    }
+    if (website && website.trim()) {
+      const cleanUrl = website.trim().replace(/^https?:\/\//, '').replace(/\/+$/, '').toLowerCase();
+      conditions.push({ 'businessProfile.website': { $regex: new RegExp(cleanUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') } });
+    }
+    if (gstNumber && gstNumber.trim()) {
+      conditions.push({ 'businessProfile.gstNumber': gstNumber.trim().toUpperCase() });
+    }
+
+    if (conditions.length === 0) {
+      return res.json({ success: true, duplicate: false });
+    }
+
+    const existingUser = await User.findOne({
+      _id: { $ne: currentUserId },
+      onboardingCompleted: true,
+      $or: conditions
+    });
+
+    if (existingUser) {
+      // Determine which field matched
+      const matched = [];
+      if (businessName && existingUser.businessProfile?.name?.toLowerCase() === businessName.trim().toLowerCase()) matched.push('business name');
+      if (website) {
+        const cleanInput = website.trim().replace(/^https?:\/\//, '').replace(/\/+$/, '').toLowerCase();
+        const cleanExisting = (existingUser.businessProfile?.website || '').replace(/^https?:\/\//, '').replace(/\/+$/, '').toLowerCase();
+        if (cleanInput === cleanExisting) matched.push('website');
+      }
+      if (gstNumber && existingUser.businessProfile?.gstNumber?.toUpperCase() === gstNumber.trim().toUpperCase()) matched.push('GST number');
+
+      return res.json({
+        success: true,
+        duplicate: true,
+        matchedFields: matched,
+        existingEmail: existingUser.email.replace(/(.{2})(.*)(@.*)/, '$1***$3') // Mask email
+      });
+    }
+
+    res.json({ success: true, duplicate: false });
+  } catch (error) {
+    console.error('Check duplicate error:', error);
+    res.status(500).json({ success: false, message: 'Duplicate check failed' });
+  }
+});
+
 // @route   PUT /api/auth/complete-onboarding
 // @desc    Complete onboarding and save business profile
 // @access  Private

@@ -61,6 +61,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
     const [formData, setFormData] = useState<BusinessProfile>(savedState?.formData || {
         name: registrationCompany || '',
         website: '',
+        gstNumber: '',
         industry: '',
         niche: '',
         businessType: '',
@@ -94,6 +95,19 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
     const [analyzingWebsite, setAnalyzingWebsite] = useState(false);
     const [websiteStatus, setWebsiteStatus] = useState<'idle' | 'valid' | 'invalid' | 'analyzed'>(savedState?.websiteStatus || 'idle');
     const [websiteError, setWebsiteError] = useState<string | null>(null);
+
+    // GST verification state
+    const [verifyingGST, setVerifyingGST] = useState(false);
+    const [gstStatus, setGstStatus] = useState<'idle' | 'valid' | 'invalid'>(savedState?.gstStatus || 'idle');
+    const [gstError, setGstError] = useState<string | null>(null);
+    const [gstInfo, setGstInfo] = useState<{ legalName?: string; tradeName?: string } | null>(null);
+
+    // Duplicate detection state
+    const [duplicateCheck, setDuplicateCheck] = useState<{
+        show: boolean;
+        matchedFields: string[];
+        existingEmail: string;
+    }>({ show: false, matchedFields: [], existingEmail: '' });
 
     // Save state to sessionStorage whenever it changes
     useEffect(() => {
@@ -173,7 +187,43 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
             setWebsiteStatus('idle');
             setWebsiteError(null);
         }
+        // Reset GST status when number changes
+        if (field === 'gstNumber') {
+            setGstStatus('idle');
+            setGstError(null);
+            setGstInfo(null);
+        }
     };
+
+    // Verify GST number against government database
+    const verifyGSTNumber = useCallback(async () => {
+        if (!formData.gstNumber || formData.gstNumber.length !== 15) return;
+        setVerifyingGST(true);
+        setGstError(null);
+        try {
+            const result = await apiService.verifyGST(formData.gstNumber);
+            if (result.valid) {
+                setGstStatus('valid');
+                setGstInfo({ legalName: result.legalName, tradeName: result.tradeName });
+                if (result.legalName && !formData.name) {
+                    setFormData(prev => ({ ...prev, name: result.tradeName || result.legalName }));
+                }
+                if (result.fallback) {
+                    setNotification({ type: 'success', message: 'GST format valid. Live verification unavailable — will retry later.' });
+                } else {
+                    setNotification({ type: 'success', message: `GST verified! Registered: ${result.tradeName || result.legalName}` });
+                }
+            } else {
+                setGstStatus('invalid');
+                setGstError(result.error || 'Invalid GST number');
+            }
+        } catch {
+            setGstStatus('idle');
+            setGstError('Could not verify GST. Please check and try again.');
+        } finally {
+            setVerifyingGST(false);
+        }
+    }, [formData.gstNumber, formData.name]);
 
     // Analyze website and auto-fill form
     const analyzeWebsite = useCallback(async () => {
@@ -260,6 +310,9 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
             if (!formData.name || !formData.industry) return "Company Name and Industry are required.";
             if (!formData.businessType) return "Please select your business type (B2B, B2C, or Both).";
             if (!formData.businessLocation) return "Please enter your business location.";
+            if (!formData.gstNumber || formData.gstNumber.trim().length !== 15) return "Please enter a valid 15-character GST number.";
+            if (gstStatus === 'invalid') return "GST number is invalid. Please enter a valid GST number.";
+            if (gstStatus === 'idle') return "Please verify your GST number before proceeding.";
         }
         if (currentStep === 2) {
             // Brand voice is optional, no required fields
@@ -353,18 +406,33 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
         }
     };
 
-    const handleSubmit = async () => {
+    // Run duplicate check before completing onboarding
+    const runDuplicateCheck = async (connectedSocials?: {platform: string; username?: string}[]) => {
         setSubmitting(true);
         try {
-            // Get connected socials to save
-            const connectedSocials = socialConnections
-                .filter(s => s.connected)
-                .map(s => ({ platform: s.platform, username: s.username }));
-            
-            // Complete onboarding with business profile and connected socials
+            const dupResult = await apiService.checkDuplicate(formData.name, formData.website, formData.gstNumber);
+            if (dupResult.duplicate) {
+                setDuplicateCheck({
+                    show: true,
+                    matchedFields: dupResult.matchedFields || [],
+                    existingEmail: dupResult.existingEmail || ''
+                });
+                setSubmitting(false);
+                return; // Block — don't complete onboarding
+            }
+            // No duplicate — proceed
+            await finishOnboarding(connectedSocials);
+        } catch (error) {
+            console.error("Duplicate check failed", error);
+            setError("Could not verify business details. Please try again.");
+            setSubmitting(false);
+        }
+    };
+
+    const finishOnboarding = async (connectedSocials?: {platform: string; username?: string}[]) => {
+        try {
             const response = await apiService.completeOnboarding(formData, connectedSocials);
             if (response.success && response.user) {
-                // Clear saved onboarding state on successful completion
                 sessionStorage.removeItem(ONBOARDING_STATE_KEY);
                 onComplete(response.user);
             }
@@ -376,22 +444,23 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
         }
     };
 
+    const handleSubmit = async () => {
+        const connectedSocials = socialConnections
+            .filter(s => s.connected)
+            .map(s => ({ platform: s.platform, username: s.username }));
+        await runDuplicateCheck(connectedSocials);
+    };
+
     const handleSkipSocials = async () => {
-        // Skip socials and just complete onboarding
-        setSubmitting(true);
-        try {
-            const response = await apiService.completeOnboarding(formData);
-            if (response.success && response.user) {
-                // Clear saved onboarding state on successful completion
-                sessionStorage.removeItem(ONBOARDING_STATE_KEY);
-                onComplete(response.user);
-            }
-        } catch (error) {
-            console.error("Onboarding failed", error);
-            setError("Failed to save data. Please try again.");
-        } finally {
-            setSubmitting(false);
-        }
+        await runDuplicateCheck();
+    };
+
+    // Handle "Switch account" from duplicate modal
+    const handleSwitchAccount = () => {
+        // Log out current user and redirect to login
+        localStorage.removeItem('nebulaa_token');
+        sessionStorage.removeItem(ONBOARDING_STATE_KEY);
+        window.location.href = '/#/login';
     };
 
     const steps = [
@@ -403,6 +472,49 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
 
     return (
         <div className={`min-h-screen flex items-center justify-center p-4 ${theme === 'dark' ? 'bg-[#070A12]' : 'bg-gray-100'}`}>
+            {/* Duplicate Account Modal */}
+            {duplicateCheck.show && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                    <div className={`max-w-md w-full mx-4 rounded-2xl p-8 shadow-2xl ${
+                        theme === 'dark' ? 'bg-[#0d1117] border border-[#ffcc29]/20' : 'bg-white border border-gray-200'
+                    }`}>
+                        <div className="text-center mb-6">
+                            <div className="w-16 h-16 rounded-full bg-amber-500/10 flex items-center justify-center mx-auto mb-4">
+                                <AlertCircle className="w-8 h-8 text-amber-500" />
+                            </div>
+                            <h3 className={`text-xl font-bold mb-2 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+                                Account Already Exists
+                            </h3>
+                            <p className={`text-sm ${theme === 'dark' ? 'text-[#ededed]/60' : 'text-gray-600'}`}>
+                                A business with the same <strong>{duplicateCheck.matchedFields.join(', ')}</strong> is already registered
+                                {duplicateCheck.existingEmail && <> under <strong>{duplicateCheck.existingEmail}</strong></>}.
+                            </p>
+                            <p className={`text-sm mt-2 ${theme === 'dark' ? 'text-[#ededed]/60' : 'text-gray-600'}`}>
+                                Would you like to switch to that account?
+                            </p>
+                        </div>
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setDuplicateCheck({ show: false, matchedFields: [], existingEmail: '' })}
+                                className={`flex-1 py-3 rounded-xl font-semibold text-sm transition-colors ${
+                                    theme === 'dark'
+                                        ? 'bg-white/5 hover:bg-white/10 text-[#ededed]/70 border border-white/10'
+                                        : 'bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-200'
+                                }`}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleSwitchAccount}
+                                className="flex-1 py-3 rounded-xl font-semibold text-sm bg-[#ffcc29] hover:bg-[#e6b825] text-[#070A12] transition-colors"
+                            >
+                                Switch Account
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Theme Toggle Button */}
             <button
                 onClick={toggleTheme}
@@ -678,6 +790,57 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                     <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-[#ededed]/50' : 'text-gray-500'}`}>
                                         Enter the city/region where your business primarily operates
                                     </p>
+                                </div>
+                                <div>
+                                    <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>GST Number <span className="text-red-500">*</span></label>
+                                    <div className="flex gap-2">
+                                        <div className="flex-1 relative">
+                                            <input 
+                                                type="text" 
+                                                maxLength={15}
+                                                className={`w-full p-3 pr-10 border rounded-lg outline-none focus:ring-2 focus:ring-[#ffcc29] uppercase ${
+                                                    theme === 'dark' 
+                                                        ? 'bg-[#070A12] border-[#ffcc29]/30 text-[#ededed] placeholder-[#ededed]/40' 
+                                                        : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
+                                                } ${gstStatus === 'invalid' ? 'border-red-500' : gstStatus === 'valid' ? 'border-emerald-500' : ''}`}
+                                                placeholder="e.g. 22AAAAA0000A1Z5"
+                                                value={formData.gstNumber}
+                                                onChange={e => handleChange('gstNumber', e.target.value.toUpperCase())}
+                                            />
+                                            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                                                {verifyingGST && <Loader2 className="w-5 h-5 animate-spin text-[#ffcc29]" />}
+                                                {!verifyingGST && gstStatus === 'valid' && <CheckCircle className="w-5 h-5 text-emerald-500" />}
+                                                {!verifyingGST && gstStatus === 'invalid' && <XCircle className="w-5 h-5 text-red-500" />}
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={verifyGSTNumber}
+                                            disabled={!formData.gstNumber || formData.gstNumber.length !== 15 || verifyingGST}
+                                            className={`px-4 py-3 rounded-lg font-semibold text-sm flex items-center gap-2 transition-colors ${
+                                                !formData.gstNumber || formData.gstNumber.length !== 15 || verifyingGST
+                                                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                                    : 'bg-[#ffcc29] text-[#070A12] hover:bg-[#e6b825]'
+                                            }`}
+                                        >
+                                            {verifyingGST ? <Loader2 className="w-4 h-4 animate-spin" /> : <>Verify</>}
+                                        </button>
+                                    </div>
+                                    {gstStatus === 'valid' && gstInfo?.legalName && (
+                                        <p className="text-xs text-emerald-600 mt-1 flex items-center gap-1">
+                                            <CheckCircle className="w-3 h-3" /> Registered: {gstInfo.tradeName || gstInfo.legalName}
+                                        </p>
+                                    )}
+                                    {gstError && (
+                                        <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                                            <AlertCircle className="w-3 h-3" /> {gstError}
+                                        </p>
+                                    )}
+                                    {gstStatus === 'idle' && !gstError && (
+                                        <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-[#ededed]/50' : 'text-gray-500'}`}>
+                                            Enter your 15-character GST number for business verification
+                                        </p>
+                                    )}
                                 </div>
                                 <div>
                                     <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Short Description</label>

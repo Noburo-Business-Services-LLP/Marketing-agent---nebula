@@ -371,6 +371,14 @@ export const apiService = {
     sessionStorage.removeItem('nebulaa_website_analysis');
   },
 
+  verifyGST: async (gstNumber: string): Promise<any> => {
+    return apiCall('/auth/verify-gst', { method: 'POST', body: JSON.stringify({ gstNumber }) }, true);
+  },
+
+  checkDuplicate: async (businessName: string, website: string, gstNumber: string): Promise<any> => {
+    return apiCall('/auth/check-duplicate', { method: 'POST', body: JSON.stringify({ businessName, website, gstNumber }) }, true);
+  },
+
   completeOnboarding: async (data: BusinessProfile, connectedSocials?: {platform: string; username?: string}[]): Promise<{ success: boolean; user: User }> => {
     const response = await apiCall<{ success: boolean; user: User }>(
       '/auth/complete-onboarding',

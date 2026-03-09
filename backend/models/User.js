@@ -49,6 +49,7 @@ const userSchema = new mongoose.Schema({
   businessProfile: {
     name: { type: String, default: '' },
     website: { type: String, default: '' },
+    gstNumber: { type: String, default: '' },
     industry: { type: String, default: '' },
     niche: { type: String, default: '' },
     businessType: { type: String, enum: ['B2B', 'B2C', 'Both', ''], default: '' },

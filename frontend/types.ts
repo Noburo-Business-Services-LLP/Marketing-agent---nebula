@@ -1,6 +1,7 @@
 export interface BusinessProfile {
   name: string;
   website: string;
+  gstNumber: string;
   industry: string;
   niche: string;
   businessType: 'B2B' | 'B2C' | 'Both' | '';
