@@ -459,6 +459,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
     const handleSwitchAccount = () => {
         localStorage.removeItem('nebulaa_token');
         sessionStorage.removeItem(ONBOARDING_STATE_KEY);
+        window.location.href = '/#/login';
         window.location.reload();
     };
 
