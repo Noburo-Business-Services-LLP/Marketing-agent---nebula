@@ -66,7 +66,6 @@ const Competitors: React.FC = () => {
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
   const [rivalImagePrompt, setRivalImagePrompt] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const rivalAbortRef = useRef<AbortController | null>(null);
 
   // Ignore a competitor
   const handleIgnoreCompetitor = async (competitorId: string, competitorName: string) => {
@@ -176,21 +175,15 @@ const Competitors: React.FC = () => {
     }
   };
 
-  // Close rival post modal with credit warning if generation started
+  // Close rival post modal with credit warning
   const handleCloseRivalModal = () => {
-    if (rivalPostLoading) {
-      const shouldClose = window.confirm('Generation is in progress. Do you want to cancel? No credits will be charged.');
-      if (!shouldClose) return;
-      // Abort the in-flight request
-      rivalAbortRef.current?.abort();
-      rivalAbortRef.current = null;
-      setRivalPostLoading(false);
-    } else if (rivalPost) {
-      const shouldClose = window.confirm('⚡ 7 credits have been consumed for this rival post. Do you want to discard it?');
+    if (rivalPostLoading || rivalPost) {
+      const shouldClose = window.confirm('⚡ 7 credits have already been consumed. Do you want to close?');
       if (!shouldClose) return;
     }
     setShowRivalPostModal(false);
     setRivalPost(null);
+    setRivalPostLoading(false);
   };
 
   // Handle creating a rival post
@@ -198,10 +191,6 @@ const Competitors: React.FC = () => {
     setRivalPostLoading(true);
     setShowRivalPostModal(true);
     setRivalPost(null);
-    
-    // Create AbortController for this request
-    const abortController = new AbortController();
-    rivalAbortRef.current = abortController;
     
     try {
       const result = await apiService.generateRivalPost({
@@ -211,7 +200,7 @@ const Competitors: React.FC = () => {
         sentiment: post.sentiment,
         likes: post.likes,
         comments: post.comments
-      }, abortController.signal);
+      });
       
       setRivalPost({
         caption: result.caption,
@@ -228,7 +217,6 @@ const Competitors: React.FC = () => {
       setCustomImagePrompt('');
       setUploadedImageUrl(null);
     } catch (error: any) {
-      if (error?.name === 'AbortError') return; // User cancelled
       console.error('Failed to generate rival post:', error);
       alert('Failed to generate rival post. Please try again.');
       setShowRivalPostModal(false);

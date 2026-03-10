@@ -2046,14 +2046,16 @@ Return ONLY valid JSON (no markdown, no explanations):
     
     console.log(`✅ Generated mocking caption for ${brandContext.companyName}`);
     
-    // Use stock image for instant response (no slow AI image generation)
+    // Generate AI image with rich brand context
     const imagePrompt = `${parsed.imageDescription}. Brand: ${brandContext.companyName}. Industry: ${brandContext.industry}. Products: ${brandContext.products || 'premium products'}. Style: modern, premium, commercial photography, high-end advertising quality.`;
     
-    const imageUrl = getRelevantStockImage(
-      `${brandContext.companyName} ${contentThemes.slice(0, 2).join(' ')}`,
+    const imageUrl = await getRelevantImage(
+      imagePrompt,
       brandContext.industry,
       'engagement',
-      platform
+      `${brandContext.companyName} ${contentThemes.slice(0, 2).join(' ')}`,
+      platform,
+      brandContext
     );
     
     // Clean and format hashtags
@@ -2096,11 +2098,13 @@ Return ONLY valid JSON (no markdown, no explanations):
     return {
       caption: themeBasedCaption,
       hashtags: fallbackHashtags,
-      imageUrl: getRelevantStockImage(
-        `${brandName} ${contentThemes[0] || 'excellence'}`,
+      imageUrl: await getRelevantImage(
+        `Professional ${brandContext.industry} ${contentThemes.join(' ')} marketing photo showcasing ${brandName} superiority, premium aesthetic, commercial quality, modern studio lighting`,
         brandContext.industry || contentThemes[0] || 'business',
         'engagement',
-        platform
+        `${brandName} ${contentThemes[0] || 'excellence'}`,
+        platform,
+        brandContext
       )
     };
   }

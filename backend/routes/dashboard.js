@@ -1163,22 +1163,16 @@ router.post('/generate-rival-post', protect, async (req, res) => {
 
     console.log(`🗡️ Generating rival post to counter ${competitorName} on ${platform}`);
 
-    // Generate the rival post using Gemini AI
+    // Deduct credits UPFRONT before generation starts
+    const creditResult = await deductCredits(user._id, 'rival_post', 1, 'Create rival post');
+
+    // Generate the rival post using Gemini AI (image gen may take time)
     const rivalPost = await generateRivalPost(
       { competitorName, competitorContent, platform, sentiment, likes, comments },
       user.businessProfile
     );
 
-    // Don't deduct credits if client disconnected
-    if (req.socket.destroyed) {
-      console.log('⚠️ Client disconnected before rival post response, skipping credit deduction');
-      return;
-    }
-
     console.log('✅ Rival post generated successfully');
-
-    // Deduct credits
-    const creditResult = await deductCredits(user._id, 'rival_post', 1, 'Create rival post');
 
     res.json({
       success: true,
