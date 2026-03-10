@@ -518,7 +518,7 @@ Generate ${count} diverse campaigns covering different objectives (awareness, en
  * Generate a SINGLE campaign quickly for streaming/progressive loading
  * This is optimized for speed - generates one campaign at a time
  */
-async function generateSingleCampaign(businessProfile, index, total, allowedPlatforms = null) {
+async function generateSingleCampaign(businessProfile, index, total, allowedPlatforms = null, usedTitles = []) {
   const companyName = businessProfile.name || 'Your Company';
   const industry = businessProfile.industry || 'General';
   const niche = businessProfile.niche || industry;
@@ -569,7 +569,7 @@ BUSINESS DETAILS:
 - Description: ${description || 'A leading company in ' + industry}
 
 IMPORTANT: Generate content SPECIFICALLY about these products/services. Make it relevant to what ${companyName} actually sells.
-
+${usedTitles.length > 0 ? `\nALREADY USED TITLES (DO NOT REPEAT OR USE SIMILAR):\n${usedTitles.map(t => `- "${t}"`).join('\n')}\nYou MUST create a COMPLETELY DIFFERENT campaign topic and title.\n` : ''}
 Target: ${targetAudience}
 Voice: ${brandVoice}
 Platform: ${platform}

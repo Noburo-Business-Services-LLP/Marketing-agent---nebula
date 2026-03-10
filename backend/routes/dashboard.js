@@ -959,13 +959,22 @@ router.get('/campaign-suggestions-stream', protect, async (req, res) => {
     res.write(`data: ${JSON.stringify({ type: 'start', total: count, message: 'Generating personalized campaigns...' })}\n\n`);
     
     const generatedCampaigns = [];
+    const usedTitles = [];
     
     for (let i = 0; i < count; i++) {
       try {
-        // Generate single campaign
-        const campaign = await generateSingleCampaign(user.businessProfile, i, count, platformsParam);
+        // Generate single campaign, passing used titles to avoid duplicates
+        let campaign = await generateSingleCampaign(user.businessProfile, i, count, platformsParam, usedTitles);
+        
+        // Retry once if title is duplicate
+        if (campaign && usedTitles.some(t => t.toLowerCase() === (campaign.name || campaign.title || '').toLowerCase())) {
+          console.log(`⚠️ Duplicate title detected: "${campaign.name}", retrying...`);
+          campaign = await generateSingleCampaign(user.businessProfile, i, count, platformsParam, usedTitles);
+        }
         
         if (campaign) {
+          const title = campaign.name || campaign.title || '';
+          if (title) usedTitles.push(title);
           generatedCampaigns.push(campaign);
           
           res.write(`data: ${JSON.stringify({ 
