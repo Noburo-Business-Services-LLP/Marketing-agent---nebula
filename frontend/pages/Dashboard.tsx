@@ -1166,10 +1166,6 @@ const Dashboard: React.FC = () => {
               }
             </p>
         </div>
-        <div className={`${theme.bgCard} border ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'} rounded-lg px-4 py-2 text-sm font-medium ${theme.textSecondary} flex items-center gap-2 shadow-sm hover:border-slate-300 transition-colors cursor-pointer`}>
-            Last 7 Days
-            <ChevronRight className={`w-4 h-4 rotate-90 ${theme.textMuted}`} />
-        </div>
       </div>
 
       {/* Social Followers Bar Chart */}
