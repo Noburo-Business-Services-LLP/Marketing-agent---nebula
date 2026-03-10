@@ -447,12 +447,33 @@ Return ONLY valid JSON (no markdown, no code blocks):
   ]
 }
 
-Generate ${count} diverse campaigns covering different objectives (awareness, engagement, sales, etc.) and platforms. ONLY use these platforms: ${platformsList.join(', ')}. Do NOT include YouTube. Make every campaign UNIQUE and SPECIFIC to ${companyName}.`;
+Generate ${count} diverse campaigns covering different objectives (awareness, engagement, sales, etc.) and platforms. ONLY use these platforms: ${platformsList.join(', ')}. Do NOT include YouTube. Make every campaign UNIQUE and SPECIFIC to ${companyName}.
+
+CRITICAL UNIQUENESS RULES:
+- ALL ${count} campaigns MUST have completely DIFFERENT titles/names
+- ALL ${count} campaigns MUST have completely DIFFERENT captions (no reusing the same text)
+- ALL ${count} campaigns MUST cover DIFFERENT topics or angles about ${companyName}
+- Do NOT create multiple campaigns that look or read the same
+- Each campaign should promote a DIFFERENT product, service, or aspect of ${companyName}`;
 
   try {
     // Use higher token limit for generating multiple campaigns
     const response = await callGemini(prompt, { temperature: 0.8, maxTokens: 16384, timeout: EXTENDED_TIMEOUT });
     const parsed = parseGeminiJSON(response);
+    
+    // Deduplicate campaigns — remove any with duplicate titles or very similar captions
+    if (parsed.campaigns && parsed.campaigns.length > 1) {
+      const seen = new Set();
+      parsed.campaigns = parsed.campaigns.filter(c => {
+        const title = (c.name || c.title || '').toLowerCase().trim();
+        if (seen.has(title)) {
+          console.log(`🚫 Removing duplicate campaign: "${title}"`);
+          return false;
+        }
+        seen.add(title);
+        return true;
+      });
+    }
     
     // Build rich brand context for image generation
     const brandContext = {
@@ -572,8 +593,8 @@ BUSINESS DETAILS:
 - Unique Selling Points: ${usps || 'Quality and excellence'}
 - Description: ${description || 'A leading company in ' + industry}
 
-IMPORTANT: Generate content SPECIFICALLY about these products/services. Make it relevant to what ${companyName} actually sells.
-${usedTitles.length > 0 ? `\nALREADY USED TITLES (DO NOT REPEAT OR USE SIMILAR):\n${usedTitles.map(t => `- "${t}"`).join('\n')}\nYou MUST create a COMPLETELY DIFFERENT campaign topic and title.\n` : ''}
+IMPORTANT: Generate content SPECIFICALLY about ${companyName}'s actual products/services. The campaign MUST be relevant to what ${companyName} does — do NOT create generic motivational or startup advice content unless that IS the business.
+${usedTitles.length > 0 ? `\nALREADY USED TITLES (DO NOT REPEAT OR USE SIMILAR):\n${usedTitles.map(t => `- "${t}"`).join('\n')}\nYou MUST create a COMPLETELY DIFFERENT campaign topic, title, AND caption. Do NOT reuse any words from the above titles.\n` : ''}
 Target: ${targetAudience}
 Voice: ${brandVoice}
 Platform: ${platform}

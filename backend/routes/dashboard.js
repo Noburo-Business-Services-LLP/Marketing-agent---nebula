@@ -967,9 +967,17 @@ router.get('/campaign-suggestions-stream', protect, async (req, res) => {
         // Generate single campaign, passing used titles to avoid duplicates
         let campaign = await generateSingleCampaign(user.businessProfile, i, count, platformsParam, usedTitles);
         
-        // Retry once if title is duplicate
-        if (campaign && usedTitles.some(t => t.toLowerCase() === (campaign.name || campaign.title || '').toLowerCase())) {
-          console.log(`⚠️ Duplicate title detected: "${campaign.name}", retrying...`);
+        // Retry once if title is duplicate or too similar
+        const isDuplicate = campaign && usedTitles.some(t => {
+          const existing = t.toLowerCase().trim();
+          const newTitle = (campaign.name || campaign.title || '').toLowerCase().trim();
+          return existing === newTitle || 
+                 existing.includes(newTitle) || 
+                 newTitle.includes(existing) ||
+                 (newTitle.split(' ').filter(w => w.length > 3 && existing.includes(w)).length >= 3);
+        });
+        if (isDuplicate) {
+          console.log(`⚠️ Duplicate/similar title detected: "${campaign.name}", retrying...`);
           campaign = await generateSingleCampaign(user.businessProfile, i, count, platformsParam, usedTitles);
         }
         
