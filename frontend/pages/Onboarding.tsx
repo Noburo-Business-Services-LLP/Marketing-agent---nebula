@@ -460,8 +460,9 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
         // Log out current user and redirect to login
         localStorage.removeItem('nebulaa_token');
         sessionStorage.removeItem(ONBOARDING_STATE_KEY);
-        window.location.href = '/#/login';
-        window.location.reload();
+        // Use assign with full URL to force a fresh page load at login
+        window.location.assign(window.location.origin + '/#/login');
+        setTimeout(() => window.location.reload(), 100);
     };
 
     const steps = [
