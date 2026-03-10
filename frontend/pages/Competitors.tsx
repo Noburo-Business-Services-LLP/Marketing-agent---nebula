@@ -175,6 +175,19 @@ const Competitors: React.FC = () => {
     }
   };
 
+  // Close rival post modal with credit warning if generation started
+  const handleCloseRivalModal = () => {
+    if (rivalPostLoading) {
+      const shouldClose = window.confirm('⚡ 7 credits have already been consumed for this action. Do you want to cancel?');
+      if (!shouldClose) return;
+    } else if (rivalPost) {
+      const shouldClose = window.confirm('⚡ 7 credits have been consumed for this rival post. Do you want to discard it?');
+      if (!shouldClose) return;
+    }
+    setShowRivalPostModal(false);
+    setRivalPost(null);
+  };
+
   // Handle creating a rival post
   const handleCreateRivalPost = async (post: CompetitorPost) => {
     setRivalPostLoading(true);
@@ -828,7 +841,7 @@ const Competitors: React.FC = () => {
 
       {/* Rival Post Modal */}
       {showRivalPostModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => !rivalPostLoading && setShowRivalPostModal(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={handleCloseRivalModal}>
           <div 
             className={`${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-slate-200'} border rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden`}
             onClick={(e) => e.stopPropagation()}
@@ -848,9 +861,8 @@ const Competitors: React.FC = () => {
                   </div>
                 </div>
                 <button
-                  onClick={() => setShowRivalPostModal(false)}
-                  disabled={rivalPostLoading}
-                  className={`p-2 rounded-lg ${isDarkMode ? 'hover:bg-[#161b22]' : 'hover:bg-slate-100'} transition-colors disabled:opacity-50`}
+                  onClick={handleCloseRivalModal}
+                  className={`p-2 rounded-lg ${isDarkMode ? 'hover:bg-[#161b22]' : 'hover:bg-slate-100'} transition-colors`}
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -1044,7 +1056,7 @@ const Competitors: React.FC = () => {
               <div className={`px-6 py-4 border-t ${isDarkMode ? 'border-slate-700/50 bg-[#0d1117]' : 'border-slate-100 bg-white'}`}>
                 <div className="flex items-center justify-between gap-3">
                   <button
-                    onClick={() => setShowRivalPostModal(false)}
+                    onClick={handleCloseRivalModal}
                     className={`px-4 py-2.5 rounded-xl ${isDarkMode ? 'bg-[#161b22] hover:bg-[#21262d]' : 'bg-slate-100 hover:bg-slate-200'} ${theme.text} text-sm font-medium transition-colors`}
                   >
                     Cancel
