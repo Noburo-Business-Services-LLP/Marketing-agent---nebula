@@ -99,20 +99,30 @@ function checkCredits(requiredCredits) {
 
 /**
  * Deduct credits from a user. Call after successful AI generation.
- * @param {string} userId
- * @param {number} amount - credits to deduct
- * @param {string} action - description of the action
- * @returns {{ balance, totalUsed }} updated values
+ * Supports two calling conventions:
+ *   deductCredits(userId, amount, action)
+ *   deductCredits(userId, action, amount, description)
  */
-async function deductCredits(userId, amount, action) {
+async function deductCredits(userId, amountOrAction, actionOrAmount, description) {
+  let amount, action;
+  if (typeof amountOrAction === 'string') {
+    // Called as deductCredits(userId, 'campaign_text', 1, 'description')
+    action = description || amountOrAction;
+    amount = Number(actionOrAmount) || 1;
+  } else {
+    // Called as deductCredits(userId, 7, 'action')
+    amount = Number(amountOrAction) || 1;
+    action = actionOrAmount || 'unknown';
+  }
+
   const user = await User.findById(userId);
   if (!user) throw new Error('User not found');
 
   // Ensure cycle is current
   await ensureCreditCycle(user);
 
-  user.credits.balance = Math.max(0, user.credits.balance - amount);
-  user.credits.totalUsed += amount;
+  user.credits.balance = Math.max(0, Number(user.credits.balance) - amount);
+  user.credits.totalUsed = Number(user.credits.totalUsed || 0) + amount;
   
   // Trim history to last 50 entries before pushing
   user.credits.history = (user.credits.history || []).slice(-50);
@@ -126,7 +136,10 @@ async function deductCredits(userId, amount, action) {
   await user.save();
 
   return {
+    success: true,
     balance: user.credits.balance,
+    creditsRemaining: user.credits.balance,
+    creditsDeducted: amount,
     totalUsed: user.credits.totalUsed
   };
 }
