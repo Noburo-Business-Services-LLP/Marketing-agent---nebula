@@ -6,7 +6,8 @@
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
-const { deductCredits, ensureCreditCycle } = require('../middleware/creditGuard');
+const { deductCredits } = require('../middleware/trialGuard');
+const { ensureCreditCycle } = require('../middleware/creditGuard');
 const User = require('../models/User');
 const Campaign = require('../models/Campaign');
 const Competitor = require('../models/Competitor');
@@ -829,7 +830,7 @@ router.get('/campaign-suggestions', protect, async (req, res) => {
     let creditsRemaining = user.credits.balance;
     if (generatedCount > 0) {
       if (!isFirstGeneration) {
-        const result = await deductCredits(user._id, 'campaign_text', generatedCount, `AI campaign suggestions x${generatedCount}`);
+        const result = await deductCredits(user._id, 'campaign_full', generatedCount, `AI campaign suggestions x${generatedCount}`);
         creditsRemaining = result.creditsRemaining;
       } else {
         console.log(`🎁 Skipping credit deduction for ${generatedCount} initial campaigns`);
@@ -992,7 +993,7 @@ router.get('/campaign-suggestions-stream', protect, async (req, res) => {
       // Deduct credits for all generated campaigns (skip for first-time onboarding)
       try {
         if (!isFirstStreamGen) {
-          const result = await deductCredits(user._id, 'campaign_text', generatedCampaigns.length, `AI streamed campaigns x${generatedCampaigns.length}`);
+          const result = await deductCredits(user._id, 'campaign_full', generatedCampaigns.length, `AI streamed campaigns x${generatedCampaigns.length}`);
           res.write(`data: ${JSON.stringify({ type: 'credits_update', creditsRemaining: result.creditsRemaining })}\n\n`);
         } else {
           console.log(`🎁 Skipping credit deduction for ${generatedCampaigns.length} initial streamed campaigns`);
@@ -1171,7 +1172,7 @@ router.post('/generate-rival-post', protect, async (req, res) => {
     console.log('✅ Rival post generated successfully');
 
     // Deduct credits (5 image + 2 caption = 7)
-    const creditResult = await deductCredits(user._id, 7, 'generate_rival_post');
+    const creditResult = await deductCredits(user._id, 'rival_post', 1, 'Create rival post');
 
     res.json({
       success: true,
@@ -1179,7 +1180,7 @@ router.post('/generate-rival-post', protect, async (req, res) => {
       hashtags: rivalPost.hashtags,
       imageUrl: rivalPost.imageUrl,
       imagePrompt: rivalPost.imagePrompt || '',
-      creditsRemaining: creditResult.balance
+      creditsRemaining: creditResult.creditsRemaining
     });
   } catch (error) {
     console.error('Rival post generation error:', error);
@@ -1512,12 +1513,12 @@ router.post('/strategic-advisor/generate-post', protect, async (req, res) => {
     const post = await generatePostFromSuggestion(suggestion, businessProfile);
     
     // Deduct credits
-    const creditResult = await deductCredits(userId, 7, 'strategic_advisor_post');
+    const creditResult = await deductCredits(userId, 'strategic_post', 1, 'Strategic advisor post');
     
     res.json({
       success: true,
       post,
-      creditsRemaining: creditResult.balance
+      creditsRemaining: creditResult.creditsRemaining
     });
   } catch (error) {
     console.error('Generate post error:', error);
@@ -1549,12 +1550,12 @@ router.post('/strategic-advisor/refine-image', protect, async (req, res) => {
     const result = await refineImageWithPrompt(originalPrompt, refinementPrompt, style, currentImageUrl);
     
     // Deduct credits
-    const creditResult = await deductCredits(userId, 3, 'refine_image');
+    const creditResult = await deductCredits(userId, 'refine_image', 1, 'Refine image with AI');
     
     res.json({
       success: result.success,
       ...result,
-      creditsRemaining: creditResult.balance
+      creditsRemaining: creditResult.creditsRemaining
     });
   } catch (error) {
     console.error('Refine image error:', error);
@@ -1600,12 +1601,12 @@ router.post('/generate-event-post', protect, async (req, res) => {
     const post = await generateEventPost(event, businessProfile);
     
     // Deduct credits
-    const creditResult = await deductCredits(userId, 7, 'generate_event_post');
+    const creditResult = await deductCredits(userId, 'event_post', 1, 'Generate event post');
     
     res.json({
       success: true,
       post,
-      creditsRemaining: creditResult.balance
+      creditsRemaining: creditResult.creditsRemaining
     });
   } catch (error) {
     console.error('Generate event post error:', error);

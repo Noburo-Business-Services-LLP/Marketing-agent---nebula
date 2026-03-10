@@ -3,7 +3,8 @@ const router = express.Router();
 const { protect } = require('../middleware/auth');
 const { generateImageFromCustomPrompt, refineImageWithPrompt } = require('../services/geminiAI');
 const { uploadBase64Image } = require('../services/imageUploader');
-const { deductCredits, ensureCreditCycle } = require('../middleware/creditGuard');
+const { deductCredits } = require('../middleware/trialGuard');
+const { ensureCreditCycle } = require('../middleware/creditGuard');
 const User = require('../models/User');
 
 /**
@@ -41,13 +42,13 @@ router.post('/regenerate-image', protect, async (req, res) => {
     }
 
     // Deduct 3 credits for image refinement
-    const creditResult = await deductCredits(user._id, 3, 'refine_image');
+    const creditResult = await deductCredits(user._id, 'refine_image', 1, 'Refine image with AI');
 
     res.json({
       success: true,
       imageUrl: result.imageUrl,
       prompt,
-      creditsRemaining: creditResult.balance
+      creditsRemaining: creditResult.creditsRemaining
     });
   } catch (error) {
     console.error('❌ Refine image error:', error.message);

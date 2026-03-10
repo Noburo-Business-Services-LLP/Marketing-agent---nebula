@@ -7,8 +7,13 @@ const CREDIT_COSTS = {
   image_generated: 5,    // Per image generated via AI
   image_edit: 3,         // Edit/regenerate an image
   campaign_text: 2,      // Campaign text/caption generation
+  campaign_full: 7,      // Full campaign (image + text)
   chat_message: 0.5,     // Chatbot message
   competitor_scrape: 0,  // FREE
+  rival_post: 7,         // Create rival post (image + text)
+  strategic_post: 7,     // Strategic advisor post (image + text)
+  event_post: 7,         // Event post (image + text)
+  refine_image: 3,       // Refine/edit image with AI
 };
 
 /**
