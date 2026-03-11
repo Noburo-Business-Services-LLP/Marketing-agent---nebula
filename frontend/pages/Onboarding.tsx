@@ -310,9 +310,10 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
             if (!formData.name || !formData.industry) return "Company Name and Industry are required.";
             if (!formData.businessType) return "Please select your business type (B2B, B2C, or Both).";
             if (!formData.businessLocation) return "Please enter your business location.";
-            if (!formData.gstNumber || formData.gstNumber.trim().length !== 15) return "Please enter a valid 15-character GST number.";
-            if (gstStatus === 'invalid') return "GST number is invalid. Please enter a valid GST number.";
-            if (gstStatus === 'idle') return "Please verify your GST number before proceeding.";
+            if (formData.gstNumber && formData.gstNumber.trim().length > 0) {
+                if (formData.gstNumber.trim().length !== 15) return "GST number must be exactly 15 characters.";
+                if (gstStatus === 'invalid') return "GST number is invalid. Please enter a valid GST number.";
+            }
         }
         if (currentStep === 2) {
             // Brand voice is optional, no required fields
@@ -792,7 +793,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                     </p>
                                 </div>
                                 <div>
-                                    <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>GST Number <span className="text-red-500">*</span></label>
+                                    <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>GST Number <span className={`text-xs font-normal ${theme === 'dark' ? 'text-[#ededed]/40' : 'text-gray-400'}`}>(optional)</span></label>
                                     <div className="flex gap-2">
                                         <div className="flex-1 relative">
                                             <input 
@@ -838,7 +839,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                     )}
                                     {gstStatus === 'idle' && !gstError && (
                                         <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-[#ededed]/50' : 'text-gray-500'}`}>
-                                            Enter your 15-character GST number for business verification
+                                            Optional — enter your 15-character GST number for business verification
                                         </p>
                                     )}
                                 </div>
