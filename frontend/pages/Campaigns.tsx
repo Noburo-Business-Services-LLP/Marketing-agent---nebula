@@ -367,7 +367,7 @@ const SuggestionCard: React.FC<{
         {/* X dismiss button */}
         {!isUsed && (
           <button
-            onClick={handleDismiss}
+            onClick={(e) => { e.stopPropagation(); handleDismiss(); }}
             className="absolute top-2 right-2 z-10 w-7 h-7 flex items-center justify-center rounded-full bg-black/50 hover:bg-red-500/80 text-white transition-colors backdrop-blur-sm"
             title="Dismiss this campaign"
           >
@@ -391,13 +391,13 @@ const SuggestionCard: React.FC<{
         {!isUsed && (
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end justify-center pb-4 gap-2">
             <button
-              onClick={() => onEdit(suggestion)}
+              onClick={(e) => { e.stopPropagation(); onEdit(suggestion); }}
               className="px-3 py-2 bg-white text-slate-800 rounded-lg font-semibold text-sm flex items-center gap-1.5 hover:bg-slate-100 transition-colors shadow-lg"
             >
               <Edit3 className="w-3.5 h-3.5" /> Edit
             </button>
             <button
-              onClick={() => onUse(suggestion)}
+              onClick={(e) => { e.stopPropagation(); onUse(suggestion); }}
               className="px-3 py-2 bg-[#ffcc29] text-black rounded-lg font-semibold text-sm flex items-center gap-1.5 hover:bg-[#e6b825] transition-colors shadow-lg"
             >
               <Send className="w-3.5 h-3.5" /> Use
