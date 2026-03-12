@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { MessageCircle, X, Send, Loader2, Sparkles, ChevronDown } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
 import { useTheme, getThemeClasses } from '../context/ThemeContext';
 
 interface Message {
@@ -20,6 +21,8 @@ const getToken = (): string | null => localStorage.getItem('authToken');
 const ChatBot: React.FC = () => {
   const { isDarkMode } = useTheme();
   const theme = getThemeClasses(isDarkMode);
+  const location = useLocation();
+  const currentPage = location.pathname.replace('/', '') || 'dashboard';
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
@@ -74,7 +77,8 @@ const ChatBot: React.FC = () => {
               conversationHistory: messages.slice(-10).map(m => ({
                 role: m.role,
                 content: m.content
-              }))
+              })),
+              currentPage
             })
           })
             .then(res => res.json())
@@ -171,7 +175,8 @@ const ChatBot: React.FC = () => {
         headers,
         body: JSON.stringify({
           message: text,
-          conversationHistory
+          conversationHistory,
+          currentPage
         })
       });
 

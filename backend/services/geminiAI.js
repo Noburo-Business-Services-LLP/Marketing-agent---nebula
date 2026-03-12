@@ -1425,7 +1425,7 @@ Make titles and descriptions SPECIFIC to their business "${businessProfile.name 
 /**
  * Generate chat response with business context
  */
-async function generateChatResponse(message, businessProfile, conversationHistory = []) {
+async function generateChatResponse(message, businessProfile, conversationHistory = [], pageContext = null) {
   const context = businessProfile ? `
 You are Daddy, the dedicated marketing assistant for ${businessProfile.name}. You're friendly, confident, and always ready to help with marketing advice.
 
@@ -1443,15 +1443,85 @@ Always personalize your responses based on their business. Reference their indus
 Maintain a ${businessProfile.brandVoice || 'Professional'} tone but be approachable and fun.
 ` : `You are Daddy, an intelligent and friendly marketing assistant. You're confident, helpful, and always ready to provide actionable marketing advice.`;
 
+  // Build page-specific context
+  let pageSection = '';
+  if (pageContext && pageContext.data) {
+    pageSection = `\nCURRENT PAGE: The user is on the "${pageContext.page}" tab.\n`;
+    switch (pageContext.page) {
+      case 'Competitors':
+        if (pageContext.data.length > 0) {
+          pageSection += `USER'S COMPETITORS (${pageContext.data.length} tracked):\n`;
+          pageContext.data.forEach((c, i) => {
+            pageSection += `${i + 1}. ${c.name} — Type: ${c.type || 'unknown'}, Industry: ${c.industry || 'N/A'}, Location: ${c.location || 'N/A'}, Followers: ${c.followers || 'N/A'}, Avg Engagement: ${c.avgEngagement || 'N/A'}${c.description ? ', About: ' + c.description : ''}\n`;
+          });
+          pageSection += `\nUse this competitor data to answer questions about their competition accurately. If asked "who are my competitors", list them.`;
+        } else {
+          pageSection += 'The user has no competitors tracked yet. Suggest they add some.';
+        }
+        break;
+      case 'Campaigns':
+        if (pageContext.data.length > 0) {
+          pageSection += `USER'S CAMPAIGNS (${pageContext.data.length}):\n`;
+          pageContext.data.forEach((c, i) => {
+            pageSection += `${i + 1}. "${c.name}" — Objective: ${c.objective || 'N/A'}, Status: ${c.status}, Platforms: ${(c.platforms || []).join(', ')}, Start: ${c.startDate || 'N/A'}\n`;
+          });
+          pageSection += `\nUse this campaign data to answer questions about their campaigns. Reference specific campaigns by name.`;
+        } else {
+          pageSection += 'The user has no campaigns yet. Suggest creating one.';
+        }
+        break;
+      case 'Analytics':
+        if (pageContext.data.length > 0) {
+          pageSection += `PUBLISHED CAMPAIGNS WITH ANALYTICS (${pageContext.data.length}):\n`;
+          pageContext.data.forEach((c, i) => {
+            const perf = c.performance || {};
+            pageSection += `${i + 1}. "${c.name}" — Platforms: ${(c.platforms || []).join(', ')}, Impressions: ${perf.impressions || 'N/A'}, Clicks: ${perf.clicks || 'N/A'}, CTR: ${perf.ctr || 'N/A'}%, Engagement: ${perf.engagement || 'N/A'}\n`;
+          });
+          pageSection += `\nUse this data to discuss their marketing performance and suggest improvements.`;
+        } else {
+          pageSection += 'No published campaigns with analytics data yet.';
+        }
+        break;
+      case 'Influencers':
+        if (pageContext.data.length > 0) {
+          pageSection += `DISCOVERED INFLUENCERS (${pageContext.data.length}):\n`;
+          pageContext.data.forEach((inf, i) => {
+            pageSection += `${i + 1}. ${inf.name} (@${inf.handle}) — Platform: ${inf.platform}, Followers: ${inf.followers || 'N/A'}, Engagement Rate: ${inf.engagementRate || 'N/A'}%, Niche: ${inf.niche || 'N/A'}, AI Match Score: ${inf.matchScore || 'N/A'}/100\n`;
+          });
+          pageSection += `\nUse this influencer data to recommend partnerships and collaboration strategies.`;
+        } else {
+          pageSection += 'No influencers discovered yet. Suggest running a discovery.';
+        }
+        break;
+      case 'Brand Assets':
+        if (pageContext.data.length > 0) {
+          pageSection += `BRAND ASSETS (${pageContext.data.length}):\n`;
+          pageContext.data.forEach((a, i) => {
+            pageSection += `${i + 1}. ${a.name} — Type: ${a.type}, Format: ${a.format || 'N/A'}${a.isPrimary ? ' (Primary)' : ''}\n`;
+          });
+        } else {
+          pageSection += 'No brand assets uploaded yet. Suggest uploading logos and templates.';
+        }
+        break;
+      case 'Dashboard':
+        pageSection += `OVERVIEW: ${pageContext.data.activeCampaigns} active campaigns, ${pageContext.data.competitorsTracked} competitors tracked.\n`;
+        pageSection += `The user is viewing their dashboard overview. Help them understand their marketing performance.`;
+        break;
+      default:
+        pageSection += `The user is browsing the ${pageContext.page} section.`;
+    }
+  }
+
   const historyText = conversationHistory.slice(-5).map(m => 
     `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`
   ).join('\n');
 
   const prompt = `${context}
+${pageSection}
 
 ${historyText ? `Previous conversation:\n${historyText}\n\n` : ''}User: ${message}
 
-Provide a helpful, concise response (under 200 words). Be actionable and specific to their business if context is available.`;
+Provide a helpful, concise response (under 200 words). Be actionable and specific to their business if context is available. When the user asks about data on their current page (competitors, campaigns, etc.), use the provided data to answer accurately.`;
 
   try {
     const response = await callGemini(prompt, { maxTokens: 500 });
