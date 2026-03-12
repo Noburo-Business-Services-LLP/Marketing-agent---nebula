@@ -2923,7 +2923,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
             id: post.id || `post-${idx}`,
             status: 'pending'
           })));
-          setStep(6); // Go to review step
+          setStep(5); // Go to review step
         } else {
           throw new Error(data.message || 'Failed to generate posts');
         }
@@ -3155,7 +3155,6 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
 
     const stepTitles = [
       'Campaign Details',
-      'Target Audience',
       'Content Preferences',
       'Scheduling',
       'Goals',
@@ -3167,18 +3166,26 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
             <div className={`rounded-2xl shadow-xl w-full max-w-5xl max-h-[90vh] flex overflow-hidden ${theme.bgCard}`}>
                 {/* Sidebar */}
                 <div className={`w-72 border-r p-6 flex flex-col shrink-0 ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-slate-50 border-slate-200'}`}>
-                    <div className="flex items-center gap-3 mb-8">
-                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#ffcc29] to-[#ffa500] flex items-center justify-center">
-                        <Sparkles className="w-5 h-5 text-black" />
+                    <div className="flex items-center justify-between mb-8">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#ffcc29] to-[#ffa500] flex items-center justify-center">
+                          <Sparkles className="w-5 h-5 text-black" />
+                        </div>
+                        <div>
+                          <h2 className={`text-lg font-bold ${theme.text}`}>Create Campaign</h2>
+                          <p className={`text-xs ${theme.textMuted}`}>AI-Powered</p>
+                        </div>
                       </div>
-                      <div>
-                        <h2 className={`text-lg font-bold ${theme.text}`}>Create Campaign</h2>
-                        <p className={`text-xs ${theme.textMuted}`}>AI-Powered</p>
-                      </div>
+                      <button
+                        onClick={onClose}
+                        className={`p-1.5 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-slate-200 text-slate-500'}`}
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
                     </div>
                     
                     <div className="space-y-3 flex-1">
-                      {stepTitles.slice(0, 5).map((title, idx) => (
+                      {stepTitles.slice(0, 4).map((title, idx) => (
                         <div 
                           key={idx}
                           className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-all ${
@@ -3206,7 +3213,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                       ))}
                     </div>
                     
-                    {step === 6 && (
+                    {step === 5 && (
                       <div className="mt-4 p-4 rounded-xl bg-gradient-to-br from-[#ffcc29]/20 to-[#ffa500]/10 border border-[#ffcc29]/30">
                         <p className={`text-sm font-medium ${theme.text}`}>📊 Generated Posts</p>
                         <p className={`text-xs ${theme.textMuted} mt-1`}>
@@ -3283,85 +3290,8 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                             </div>
                         )}
 
-                        {/* Step 2: Target Audience */}
+                        {/* Step 2: Content Preferences */}
                         {step === 2 && (
-                            <div className="space-y-6 animate-in fade-in duration-300">
-                                <div>
-                                  <h3 className={`text-xl font-bold ${theme.text}`}>Target Audience</h3>
-                                  <p className={`text-sm ${theme.textSecondary} mt-1`}>Define who you want to reach</p>
-                                </div>
-                                
-                                <div className="grid grid-cols-2 gap-4">
-                                  <div>
-                                    <label className={labelClasses}>Age Range</label>
-                                    <ComboBox
-                                      value={targetAge}
-                                      onChange={setTargetAge}
-                                      className={inputClasses}
-                                      isDarkMode={isDarkMode}
-                                      placeholder="e.g., 25-40 or select from list"
-                                      options={[
-                                        { value: '13-17', label: '13-17 (Teens)' },
-                                        { value: '18-24', label: '18-24 (Young Adults)' },
-                                        { value: '18-35', label: '18-35 (Millennials)' },
-                                        { value: '25-44', label: '25-44 (Adults)' },
-                                        { value: '35-54', label: '35-54 (Middle Age)' },
-                                        { value: '45-65', label: '45-65 (Mature)' },
-                                        { value: '65+', label: '65+ (Seniors)' },
-                                        { value: 'all', label: 'All Ages' }
-                                      ]}
-                                    />
-                                  </div>
-                                  
-                                  <div>
-                                    <label className={labelClasses}>Gender</label>
-                                    <select 
-                                      className={inputClasses} 
-                                      value={targetGender} 
-                                      onChange={e => setTargetGender(e.target.value as 'all' | 'male' | 'female')}
-                                    >
-                                      <option value="all">All Genders</option>
-                                      <option value="male">Male</option>
-                                      <option value="female">Female</option>
-                                    </select>
-                                  </div>
-                                </div>
-                                
-                                <div>
-                                  <label className={labelClasses}>Target Location</label>
-                                  <input 
-                                    className={inputClasses} 
-                                    placeholder="e.g., United States, California, New York City..."
-                                    value={targetLocation} 
-                                    onChange={e => setTargetLocation(e.target.value)} 
-                                  />
-                                </div>
-                                
-                                <div>
-                                  <label className={labelClasses}>Interests & Behaviors</label>
-                                  <input 
-                                    className={inputClasses} 
-                                    placeholder="e.g., fitness, technology, fashion, travel (comma separated)"
-                                    value={targetInterests} 
-                                    onChange={e => setTargetInterests(e.target.value)} 
-                                  />
-                                </div>
-                                
-                                <div>
-                                  <label className={labelClasses}>Describe Your Ideal Customer</label>
-                                  <textarea 
-                                    className={`${inputClasses} resize-none`} 
-                                    rows={3}
-                                    placeholder="e.g., Health-conscious millennials who value quality over price, active on social media, interested in sustainable products..."
-                                    value={audienceDescription} 
-                                    onChange={e => setAudienceDescription(e.target.value)} 
-                                  />
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Step 3: Content Preferences */}
-                        {step === 3 && (
                             <div className="space-y-6 animate-in fade-in duration-300">
                                 <div>
                                   <h3 className={`text-xl font-bold ${theme.text}`}>Content Preferences</h3>
@@ -3533,8 +3463,8 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                             </div>
                         )}
 
-                        {/* Step 4: Scheduling */}
-                        {step === 4 && (
+                        {/* Step 3: Scheduling */}
+                        {step === 3 && (
                             <div className="space-y-6 animate-in fade-in duration-300">
                                 <div>
                                   <h3 className={`text-xl font-bold ${theme.text}`}>Scheduling Preferences</h3>
@@ -3659,8 +3589,8 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                             </div>
                         )}
 
-                        {/* Step 5: Goals */}
-                        {step === 5 && (
+                        {/* Step 4: Goals */}
+                        {step === 4 && (
                             <div className="space-y-6 animate-in fade-in duration-300">
                                 <div>
                                   <h3 className={`text-xl font-bold ${theme.text}`}>Goals</h3>
@@ -3712,8 +3642,8 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                             </div>
                         )}
 
-                        {/* Step 6: Review Generated Posts */}
-                        {step === 6 && (
+                        {/* Step 5: Review Generated Posts */}
+                        {step === 5 && (
                             <div className="space-y-6 animate-in fade-in duration-300">
                                 <div className="flex items-center justify-between">
                                   <div>
@@ -3923,7 +3853,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                           {step === 1 ? 'Cancel' : 'Back'}
                         </button>
                         
-                        {step < 5 && (
+                        {step < 4 && (
                           <button 
                             onClick={() => setStep(s => s + 1)} 
                             disabled={step === 1 && !campaignName}
@@ -3934,7 +3864,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                           </button>
                         )}
                         
-                        {step === 5 && (
+                        {step === 4 && (
                           <button 
                             onClick={handleGeneratePosts}
                             disabled={isGenerating || !campaignName || platforms.length === 0}
@@ -3955,7 +3885,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                           </button>
                         )}
                         
-                        {step === 6 && (
+                        {step === 5 && (
                           <div className="flex items-center gap-4">
                             {/* Status indicator */}
                             <span className={`text-sm ${
