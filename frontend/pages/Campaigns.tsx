@@ -3163,11 +3163,17 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-            <div className={`rounded-2xl shadow-xl w-full max-w-5xl max-h-[90vh] flex overflow-hidden ${theme.bgCard}`}>
+            <div className={`relative rounded-2xl shadow-xl w-full max-w-5xl max-h-[90vh] flex overflow-hidden ${theme.bgCard}`}>
+                {/* X Close Button - top right of modal */}
+                <button
+                  onClick={onClose}
+                  className={`absolute top-4 right-4 z-20 p-1.5 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-slate-200 text-slate-500'}`}
+                >
+                  <X className="w-5 h-5" />
+                </button>
                 {/* Sidebar */}
                 <div className={`w-72 border-r p-6 flex flex-col shrink-0 ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-slate-50 border-slate-200'}`}>
-                    <div className="flex items-center justify-between mb-8">
-                      <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 mb-8">
                         <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#ffcc29] to-[#ffa500] flex items-center justify-center">
                           <Sparkles className="w-5 h-5 text-black" />
                         </div>
@@ -3175,13 +3181,6 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                           <h2 className={`text-lg font-bold ${theme.text}`}>Create Campaign</h2>
                           <p className={`text-xs ${theme.textMuted}`}>AI-Powered</p>
                         </div>
-                      </div>
-                      <button
-                        onClick={onClose}
-                        className={`p-1.5 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-slate-200 text-slate-500'}`}
-                      >
-                        <X className="w-5 h-5" />
-                      </button>
                     </div>
                     
                     <div className="space-y-3 flex-1">

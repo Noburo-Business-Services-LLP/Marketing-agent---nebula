@@ -1454,7 +1454,7 @@ Maintain a ${businessProfile.brandVoice || 'Professional'} tone but be approacha
           pageContext.data.forEach((c, i) => {
             pageSection += `${i + 1}. ${c.name} — Type: ${c.type || 'unknown'}, Industry: ${c.industry || 'N/A'}, Location: ${c.location || 'N/A'}, Followers: ${c.followers || 'N/A'}, Avg Engagement: ${c.avgEngagement || 'N/A'}${c.description ? ', About: ' + c.description : ''}\n`;
           });
-          pageSection += `\nUse this competitor data to answer questions about their competition accurately. If asked "who are my competitors", list them.`;
+          pageSection += `\nIMPORTANT: When the user asks about their competitors (e.g. "who are my comps", "list my competitors", "who am I competing with"), you MUST list every single competitor by name from the data above - do not summarize, generalize, or use vague descriptions. Name each one individually.`;
         } else {
           pageSection += 'The user has no competitors tracked yet. Suggest they add some.';
         }
@@ -1521,7 +1521,7 @@ ${pageSection}
 
 ${historyText ? `Previous conversation:\n${historyText}\n\n` : ''}User: ${message}
 
-Provide a helpful, concise response (under 200 words). Be actionable and specific to their business if context is available. When the user asks about data on their current page (competitors, campaigns, etc.), use the provided data to answer accurately.`;
+Provide a helpful, concise response (under 250 words). Be specific and data-driven using the page context above. When the user asks about data visible on their current page (competitors, campaigns, influencers, etc.), you MUST use the exact names and details from the provided data — never give vague or generalized answers when real data is available.`;
 
   try {
     const response = await callGemini(prompt, { maxTokens: 500 });
