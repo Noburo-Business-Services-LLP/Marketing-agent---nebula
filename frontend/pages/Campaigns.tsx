@@ -356,8 +356,8 @@ const SuggestionCard: React.FC<{
           : (isDarkMode ? 'border-slate-700/50 hover:border-slate-600' : 'border-slate-200 hover:border-[#ffcc29]/30')
       } ${isUsed ? '' : 'group hover:shadow-lg'}`}
     >
-      {/* Image */}
-      <div className="relative h-48 overflow-hidden">
+      {/* Image — click to open platform preview */}
+      <div className="relative h-48 overflow-hidden cursor-pointer" onClick={() => !isUsed && setShowPreview(true)}>
         <img
           src={suggestion.imageUrl}
           alt={suggestion.title}
@@ -459,16 +459,20 @@ const SuggestionCard: React.FC<{
           isDarkMode ? 'border-slate-700/50' : 'border-slate-200'
         }`}>
           <button
-            onClick={() => setShowPreview(true)}
-            disabled={isUsed}
+            onClick={() => onDownloadImage(suggestion)}
+            disabled={downloadingImage === suggestion.id || isUsed}
             className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
               isDarkMode
                 ? 'bg-slate-800 hover:bg-slate-700 text-white'
                 : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-            } ${isUsed ? 'opacity-50 cursor-not-allowed' : ''}`}
+            } ${(downloadingImage === suggestion.id || isUsed) ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
-            <Eye className="w-3.5 h-3.5" />
-            Preview
+            {downloadingImage === suggestion.id ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <ImageDown className="w-3.5 h-3.5" />
+            )}
+            Image
           </button>
           <button
             onClick={() => onDownloadText(suggestion)}
