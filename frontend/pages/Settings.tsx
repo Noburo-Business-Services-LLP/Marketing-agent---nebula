@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Save, AlertCircle, Check, Loader2, Eye, EyeOff, Zap, RefreshCw } from 'lucide-react';
-import { User } from '../types';
+import { Save, AlertCircle, Check, Loader2, Eye, EyeOff, Zap, RefreshCw, CreditCard, Download, ExternalLink } from 'lucide-react';
+import { User, BillingData } from '../types';
 import { apiService } from '../services/api';
 import { useTheme, getThemeClasses } from '../context/ThemeContext';
 
@@ -45,6 +45,21 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
       new: false,
       confirm: false
   });
+
+  // Billing State
+  const [billingData, setBillingData] = useState<BillingData | null>(null);
+  const [loadingBilling, setLoadingBilling] = useState(false);
+
+  // Fetch billing data when Billing tab is active
+  useEffect(() => {
+    if (activeTab === 'Billing' && !billingData) {
+      setLoadingBilling(true);
+      apiService.getBillingData()
+        .then((res: BillingData) => setBillingData(res))
+        .catch(() => {})
+        .finally(() => setLoadingBilling(false));
+    }
+  }, [activeTab]);
 
   // Load user data when component mounts or user changes
   useEffect(() => {
@@ -433,11 +448,151 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                       </div>
                   )}
 
-                  {(activeTab === 'Notifications' || activeTab === 'Billing') && (
+                  {activeTab === 'Notifications' && (
                       <div className={`text-center py-12 rounded-lg border border-dashed ${
                         isDarkMode ? 'bg-[#0d1117] border-slate-700/50 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-400'
                       }`}>
-                          <p>Advanced settings for {activeTab} coming soon.</p>
+                          <p>Advanced notification settings coming soon.</p>
+                      </div>
+                  )}
+
+                  {activeTab === 'Billing' && (
+                      <div className="animate-in fade-in duration-300">
+                          <h2 className={`text-lg font-bold mb-6 ${theme.text}`}>Billing & Invoices</h2>
+
+                          {loadingBilling ? (
+                            <div className="flex items-center justify-center py-16">
+                              <Loader2 className="w-6 h-6 animate-spin text-[#ffcc29]" />
+                              <span className={`ml-3 ${theme.textSecondary}`}>Loading billing info...</span>
+                            </div>
+                          ) : billingData ? (
+                            <div className="space-y-6">
+                              {/* Current Plan */}
+                              <div className={`p-5 rounded-lg border ${
+                                isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-slate-50 border-slate-200'
+                              }`}>
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-1">Current Plan</p>
+                                    <div className="flex items-center gap-3">
+                                      <span className={`text-xl font-bold ${theme.text}`}>
+                                        {billingData.subscription.plan.charAt(0).toUpperCase() + billingData.subscription.plan.slice(1)}
+                                      </span>
+                                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                                        billingData.subscription.status === 'active'
+                                          ? 'bg-green-500/20 text-green-400'
+                                          : billingData.subscription.status === 'cancelled'
+                                          ? 'bg-red-500/20 text-red-400'
+                                          : 'bg-slate-500/20 text-slate-400'
+                                      }`}>
+                                        {billingData.subscription.status}
+                                      </span>
+                                    </div>
+                                    {billingData.subscription.expiresAt && (
+                                      <p className={`text-xs mt-1 ${theme.textSecondary}`}>
+                                        Expires: {new Date(billingData.subscription.expiresAt).toLocaleDateString()}
+                                      </p>
+                                    )}
+                                  </div>
+                                  <CreditCard className={`w-8 h-8 ${isDarkMode ? 'text-slate-600' : 'text-slate-300'}`} />
+                                </div>
+                              </div>
+
+                              {/* Credits */}
+                              <div className={`p-5 rounded-lg border ${
+                                isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-slate-50 border-slate-200'
+                              }`}>
+                                <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3">Credits</p>
+                                <div className="grid grid-cols-2 gap-4">
+                                  <div>
+                                    <p className={`text-2xl font-bold ${theme.text}`}>{billingData.credits.balance}</p>
+                                    <p className={`text-xs ${theme.textSecondary}`}>Remaining</p>
+                                  </div>
+                                  <div>
+                                    <p className={`text-2xl font-bold ${theme.text}`}>{billingData.credits.totalUsed}</p>
+                                    <p className={`text-xs ${theme.textSecondary}`}>Used</p>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Payment History */}
+                              <div>
+                                <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3">Payment History</p>
+                                {billingData.payments.length > 0 ? (
+                                  <div className={`rounded-lg border overflow-hidden ${
+                                    isDarkMode ? 'border-slate-700/50' : 'border-slate-200'
+                                  }`}>
+                                    <table className="w-full text-sm">
+                                      <thead>
+                                        <tr className={isDarkMode ? 'bg-slate-800/50' : 'bg-slate-50'}>
+                                          <th className={`text-left px-4 py-3 font-medium ${theme.textSecondary}`}>Date</th>
+                                          <th className={`text-left px-4 py-3 font-medium ${theme.textSecondary}`}>Amount</th>
+                                          <th className={`text-left px-4 py-3 font-medium ${theme.textSecondary}`}>Credits</th>
+                                          <th className={`text-left px-4 py-3 font-medium ${theme.textSecondary}`}>Status</th>
+                                          <th className={`text-left px-4 py-3 font-medium ${theme.textSecondary}`}>Invoice</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {billingData.payments.map((payment, idx) => (
+                                          <tr key={payment.paymentId || idx} className={`border-t ${
+                                            isDarkMode ? 'border-slate-700/50' : 'border-slate-200'
+                                          }`}>
+                                            <td className={`px-4 py-3 ${theme.text}`}>
+                                              {new Date(payment.paidAt).toLocaleDateString()}
+                                            </td>
+                                            <td className={`px-4 py-3 ${theme.text}`}>
+                                              {payment.currency === 'INR' ? '\u20B9' : payment.currency} {payment.amount?.toLocaleString()}
+                                            </td>
+                                            <td className={`px-4 py-3 ${theme.text}`}>
+                                              {payment.credits || '—'}
+                                            </td>
+                                            <td className="px-4 py-3">
+                                              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                                                payment.status === 'paid'
+                                                  ? 'bg-green-500/20 text-green-400'
+                                                  : payment.status === 'refunded'
+                                                  ? 'bg-amber-500/20 text-amber-400'
+                                                  : 'bg-red-500/20 text-red-400'
+                                              }`}>
+                                                {payment.status}
+                                              </span>
+                                            </td>
+                                            <td className="px-4 py-3">
+                                              {payment.invoiceUrl ? (
+                                                <a
+                                                  href={payment.invoiceUrl}
+                                                  target="_blank"
+                                                  rel="noopener noreferrer"
+                                                  className="text-[#ffcc29] hover:text-[#ffcc29]/80 flex items-center gap-1 text-xs font-medium"
+                                                >
+                                                  <ExternalLink className="w-3 h-3" /> View
+                                                </a>
+                                              ) : (
+                                                <span className={theme.textSecondary}>—</span>
+                                              )}
+                                            </td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                ) : (
+                                  <div className={`text-center py-8 rounded-lg border border-dashed ${
+                                    isDarkMode ? 'bg-[#0d1117] border-slate-700/50 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-400'
+                                  }`}>
+                                    <CreditCard className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                                    <p>No payments yet.</p>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className={`text-center py-12 rounded-lg border border-dashed ${
+                              isDarkMode ? 'bg-[#0d1117] border-slate-700/50 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-400'
+                            }`}>
+                              <p>Could not load billing data. Try again later.</p>
+                            </div>
+                          )}
                       </div>
                   )}
               </div>

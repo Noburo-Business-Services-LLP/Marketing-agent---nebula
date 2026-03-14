@@ -338,6 +338,10 @@ export const apiService = {
     return apiCall('/payment/status', { method: 'GET' }, true);
   },
 
+  getBillingData: async (): Promise<any> => {
+    return apiCall('/payment/billing', { method: 'GET' }, true);
+  },
+
   getBusinessContext: async (): Promise<{ success: boolean; businessLocation?: string; company?: any; geography?: any }> => {
     try {
       const response = await apiCall<{ success: boolean; context: any }>(
@@ -2711,5 +2715,9 @@ export const paymentService = {
 
   status: async (): Promise<any> => {
     return apiCall<any>('/payment/status', { method: 'GET' }, true);
+  },
+
+  billing: async (): Promise<any> => {
+    return apiCall<any>('/payment/billing', { method: 'GET' }, true);
   }
 };

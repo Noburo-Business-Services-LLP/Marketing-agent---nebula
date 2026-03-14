@@ -134,6 +134,24 @@ const userSchema = new mongoose.Schema({
       timestamp: { type: Date, default: Date.now }
     }]
   },
+  // Payment history
+  payments: [{
+    razorpayOrderId: { type: String },
+    razorpayPaymentId: { type: String },
+    amount: { type: Number },
+    currency: { type: String, default: 'INR' },
+    status: { type: String, enum: ['paid', 'failed', 'refunded'], default: 'paid' },
+    credits: { type: Number },
+    invoiceUrl: { type: String, default: '' },
+    paidAt: { type: Date, default: Date.now }
+  }],
+  // Trial tracking
+  trial: {
+    startDate: { type: Date },
+    expiresAt: { type: Date },
+    isExpired: { type: Boolean, default: false },
+    migratedToProd: { type: Boolean, default: false }
+  },
   // Email OTP Verification
   isVerified: {
     type: Boolean,
@@ -195,6 +213,14 @@ userSchema.methods.toPublicJSON = function() {
       balance: this.credits.balance,
       totalUsed: this.credits.totalUsed
     } : undefined,
+    trial: this.trial || undefined,
+    payments: this.payments?.map(p => ({
+      amount: p.amount,
+      currency: p.currency,
+      status: p.status,
+      credits: p.credits,
+      paidAt: p.paidAt
+    })),
     createdAt: this.createdAt
   };
 };

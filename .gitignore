@@ -18,6 +18,9 @@ build/
 *.log
 npm-debug.log*
 
+# Generated reports
+Nebulaa_Gravity_Vulnerability_Assessment_CVSS_Report.html
+
 # OS files
 .DS_Store
 Thumbs.db

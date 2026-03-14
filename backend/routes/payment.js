@@ -13,6 +13,7 @@ const Razorpay = require('razorpay');
 const { protect } = require('../middleware/auth');
 const User = require('../models/User');
 const { migrateUserData } = require('../services/migrationService');
+const { createInvoice } = require('../services/zohoBooks');
 
 // Initialize Razorpay
 const razorpay = new Razorpay({
@@ -119,20 +120,43 @@ router.post('/verify', protect, async (req, res) => {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
-    // Store payment info on demo user before migration
+    // Store payment in history array
     const paidAmount = (await razorpay.orders.fetch(razorpay_order_id))?.amount;
-    user.payment = {
+    const paidCredits = paidAmount ? Math.round((paidAmount / 100 / 1000) * 100) : 100;
+    user.payments.push({
       razorpayOrderId: razorpay_order_id,
       razorpayPaymentId: razorpay_payment_id,
       amount: paidAmount ? paidAmount / 100 : 0,
       currency: PLAN_CURRENCY,
+      credits: paidCredits,
       status: 'paid',
       paidAt: new Date()
-    };
+    });
     await user.save();
 
-    // Calculate credits from paid amount
-    const paidCredits = paidAmount ? Math.round((paidAmount / 100 / 1000) * 100) : 100;
+    // Create invoice in Zoho Books (non-blocking)
+    try {
+      const invoiceResult = await createInvoice({
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName || '',
+        companyName: user.companyName || user.businessProfile?.name || '',
+        amount: paidAmount ? paidAmount / 100 : 0,
+        credits: paidCredits,
+        razorpayPaymentId: razorpay_payment_id
+      });
+
+      // Store Zoho invoice URL on the payment record
+      const lastPayment = user.payments[user.payments.length - 1];
+      if (lastPayment && invoiceResult.invoiceUrl) {
+        lastPayment.invoiceUrl = invoiceResult.invoiceUrl;
+        await user.save();
+      }
+
+      console.log(`📄 Zoho Books invoice created: ${invoiceResult.invoiceNumber}`);
+    } catch (zohoErr) {
+      console.warn('Zoho Books invoice creation failed (non-blocking):', zohoErr.message);
+    }
 
     // Run migration: demo → prod
     console.log(`🚀 Starting migration for user: ${userId} with ${paidCredits} credits`);
@@ -184,13 +208,14 @@ router.get('/status', protect, async (req, res) => {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
+    const lastPayment = user.payments?.length ? user.payments[user.payments.length - 1] : null;
     res.json({
       success: true,
       payment: {
-        paid: user.payment?.status === 'paid',
-        paymentId: user.payment?.razorpayPaymentId || null,
-        paidAt: user.payment?.paidAt || null,
-        amount: user.payment?.amount || null
+        paid: lastPayment?.status === 'paid',
+        paymentId: lastPayment?.razorpayPaymentId || null,
+        paidAt: lastPayment?.paidAt || null,
+        amount: lastPayment?.amount || null
       },
       migrated: user.trial?.migratedToProd || false,
       prodUrl: user.trial?.migratedToProd ? 'https://gravity.nebulaa.ai' : null
@@ -199,6 +224,64 @@ router.get('/status', protect, async (req, res) => {
   } catch (error) {
     console.error('Payment status error:', error);
     res.status(500).json({ success: false, message: 'Failed to get payment status' });
+  }
+});
+
+/**
+ * GET /api/payment/billing
+ * Returns payment history, subscription status, and credits for the Billing tab
+ */
+router.get('/billing', protect, async (req, res) => {
+  try {
+    const userId = req.user?.userId || req.user?.id || req.user?._id;
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const payments = user.payments || [];
+    let needsSave = false;
+
+    // Lazily enrich payments with Razorpay invoice URLs (fetched once, then cached)
+    for (const payment of payments) {
+      if (!payment.invoiceUrl && payment.razorpayPaymentId) {
+        try {
+          const rpPayment = await razorpay.payments.fetch(payment.razorpayPaymentId);
+          if (rpPayment.invoice_id) {
+            const invoice = await razorpay.invoices.fetch(rpPayment.invoice_id);
+            payment.invoiceUrl = invoice.short_url || '';
+            needsSave = true;
+          }
+        } catch (e) {
+          console.warn(`Could not fetch invoice for ${payment.razorpayPaymentId}:`, e.message);
+        }
+      }
+    }
+
+    if (needsSave) await user.save();
+
+    res.json({
+      success: true,
+      subscription: user.subscription || { plan: 'free', status: 'active' },
+      credits: {
+        balance: user.credits?.balance ?? 0,
+        totalUsed: user.credits?.totalUsed ?? 0
+      },
+      payments: payments.map(p => ({
+        orderId: p.razorpayOrderId,
+        paymentId: p.razorpayPaymentId,
+        amount: p.amount,
+        currency: p.currency,
+        credits: p.credits,
+        status: p.status,
+        invoiceUrl: p.invoiceUrl || null,
+        paidAt: p.paidAt
+      }))
+    });
+  } catch (error) {
+    console.error('Billing fetch error:', error);
+    res.status(500).json({ success: false, message: 'Failed to load billing data' });
   }
 });
 

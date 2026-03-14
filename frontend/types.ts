@@ -25,6 +25,12 @@ export interface User {
     startDate?: string;
     expiresAt?: string;
     isExpired?: boolean;
+    migratedToProd?: boolean;
+  };
+  subscription?: {
+    plan: 'free' | 'pro' | 'enterprise';
+    status: 'active' | 'cancelled' | 'expired';
+    expiresAt?: string;
   };
   credits?: {
     balance: number;
@@ -41,6 +47,24 @@ export interface User {
   preferences?: {
     emailNotifications: boolean;
   };
+}
+
+export interface Payment {
+  orderId: string;
+  paymentId: string;
+  amount: number;
+  currency: string;
+  credits?: number;
+  status: 'paid' | 'failed' | 'refunded';
+  invoiceUrl?: string | null;
+  paidAt: string;
+}
+
+export interface BillingData {
+  success: boolean;
+  subscription: { plan: string; status: string; expiresAt?: string };
+  credits: { balance: number; totalUsed: number };
+  payments: Payment[];
 }
 
 export interface AuthResponse {
