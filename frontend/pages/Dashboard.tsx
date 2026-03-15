@@ -2444,8 +2444,20 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
         return d;
     });
 
-    // Time slots from 12 AM to 12 PM
-    const timeSlots = Array.from({ length: 13 }, (_, i) => i);
+    // Time slots from 6 AM to 11 PM
+    const timeSlots = Array.from({ length: 18 }, (_, i) => i + 6);
+    const scrollBodyRef = useRef<HTMLDivElement>(null);
+
+    // Auto-scroll to current time area on mount
+    useEffect(() => {
+      if (scrollBodyRef.current && viewType === 'week') {
+        const now = new Date();
+        const currentHour = now.getHours();
+        // Scroll to 2 hours before current time (or 6 AM min)
+        const scrollToHour = Math.max(currentHour - 2, 6) - 6;
+        scrollBodyRef.current.scrollTop = scrollToHour * 40;
+      }
+    }, [viewType]);
 
     // Indian Holidays, Festivals & Marketing Events (2025-2026)
     // This includes national holidays, major festivals, and important marketing dates
@@ -3566,11 +3578,11 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
               </div>
             ) : viewType === 'day' ? (
               // Day View
-              <div className="flex overflow-y-auto" style={{ height: '600px' }}>
+              <div className="flex overflow-y-auto" style={{ height: '520px' }}>
                 {/* Time Column */}
                 <div className={`flex-shrink-0 w-20 border-r ${isDarkMode ? 'border-slate-700/50 bg-[#0d1117]' : 'border-slate-200 bg-[#f5f5f5]'}`}>
                   {timeSlots.map(hour => (
-                    <div key={hour} className={`h-14 border-b ${isDarkMode ? 'border-[#ffcc29]/10' : 'border-[#ededed]'} pr-3 flex items-start justify-end pt-0`}>
+                    <div key={hour} className={`h-10 border-b ${isDarkMode ? 'border-[#ffcc29]/10' : 'border-[#ededed]'} pr-3 flex items-start justify-end pt-0`}>
                       <span className={`text-xs ${theme.textMuted} -mt-2`}>
                         {hour === 0 ? '12 AM' : hour < 12 ? `${hour} AM` : hour === 12 ? '12 PM' : `${hour - 12} PM`}
                       </span>
@@ -3595,7 +3607,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                         onDragOver={(e) => handleCellDragOver(e, getCellKey(currentDate, hour))}
                         onDragLeave={handleCellDragLeave}
                         onDrop={(e) => handleCellDrop(e, currentDate, hour)}
-                        className={`h-14 border-b ${isDarkMode ? 'border-[#ffcc29]/10' : 'border-[#ededed]'} ${dragOverCell === getCellKey(currentDate, hour) ? (isDarkMode ? 'bg-[#ffcc29]/30 ring-1 ring-[#ffcc29]/50' : 'bg-[#ffcc29]/20 ring-1 ring-[#ffcc29]/40') : (isDarkMode ? 'hover:bg-[#ffcc29]/10' : 'hover:bg-[#ffcc29]/5')} transition-colors cursor-pointer px-4 flex items-center gap-3`}
+                        className={`h-10 border-b ${isDarkMode ? 'border-[#ffcc29]/10' : 'border-[#ededed]'} ${dragOverCell === getCellKey(currentDate, hour) ? (isDarkMode ? 'bg-[#ffcc29]/30 ring-1 ring-[#ffcc29]/50' : 'bg-[#ffcc29]/20 ring-1 ring-[#ffcc29]/40') : (isDarkMode ? 'hover:bg-[#ffcc29]/10' : 'hover:bg-[#ffcc29]/5')} transition-colors cursor-pointer px-4 flex items-center gap-3`}
                       >
                         {dayEvents.map((event: any, idx) => (
                           <div 
@@ -3653,8 +3665,8 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                       const now = new Date();
                       const currentHour = now.getHours();
                       const currentMinute = now.getMinutes();
-                      if (currentHour >= 0 && currentHour <= 23) {
-                        const topPos = (currentHour * 56) + (currentMinute * 0.93);
+                      if (currentHour >= 6 && currentHour <= 23) {
+                        const topPos = ((currentHour - 6) * 40) + (currentMinute * 0.67);
                         return (
                           <div 
                             className="absolute left-0 right-0 h-0.5 bg-red-500 z-20 pointer-events-none"
@@ -3671,7 +3683,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
               </div>
             ) : (
               // Week View (default)
-              <div className="flex flex-col overflow-hidden" style={{ height: '600px' }}>
+              <div className="flex flex-col overflow-hidden" style={{ height: '520px' }}>
                 {/* Day Headers - fixed at top */}
                 <div className={`flex border-b flex-shrink-0 ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'} ${theme.bgCard}`}>
                     <div className={`flex-shrink-0 w-16 border-r ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'}`}></div>
@@ -3683,7 +3695,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                         return (
                             <div
                                 key={idx}
-                                className={`flex-1 h-16 flex flex-col items-center justify-center border-r ${isDarkMode ? 'border-[#ffcc29]/10' : 'border-[#ededed]'} last:border-r-0 ${
+                                className={`flex-1 h-12 flex flex-col items-center justify-center border-r ${isDarkMode ? 'border-[#ffcc29]/10' : 'border-[#ededed]'} last:border-r-0 ${
                                     today ? `${isDarkMode ? 'bg-[#ffcc29]/20' : 'bg-[#ffcc29]/10'}` : ''
                                 }`}
                             >
@@ -3703,11 +3715,11 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                 </div>
 
                 {/* Scrollable Body: Time Column + Day Grid */}
-                <div className="flex flex-1 overflow-y-auto">
+                <div className="flex flex-1 overflow-y-auto" ref={scrollBodyRef}>
                   {/* Time Column */}
                   <div className={`flex-shrink-0 w-16 border-r ${isDarkMode ? 'border-slate-700/50 bg-[#0d1117]' : 'border-slate-200 bg-[#f5f5f5]'}`}>
                     {timeSlots.map(hour => (
-                        <div key={hour} className={`h-12 border-b ${isDarkMode ? 'border-[#ffcc29]/10' : 'border-[#ededed]'} pr-2 flex items-start justify-end pt-0`}>
+                        <div key={hour} className={`h-10 border-b ${isDarkMode ? 'border-[#ffcc29]/10' : 'border-[#ededed]'} pr-2 flex items-start justify-end pt-0`}>
                             <span className={`text-xs ${theme.textMuted} -mt-2`}>
                                 {hour === 0 ? '12 AM' : hour < 12 ? `${hour} AM` : hour === 12 ? '12 PM' : `${hour - 12} PM`}
                             </span>
@@ -3740,7 +3752,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                             onDragOver={(e) => handleCellDragOver(e, cellKey)}
                                             onDragLeave={handleCellDragLeave}
                                             onDrop={(e) => handleCellDrop(e, day, hour)}
-                                            className={`h-12 border-b ${isDarkMode ? 'border-[#ffcc29]/10' : 'border-[#ededed]'} ${isDropTarget ? (isDarkMode ? 'bg-[#ffcc29]/30 border-[#ffcc29] ring-1 ring-[#ffcc29]/50' : 'bg-[#ffcc29]/20 border-[#ffcc29] ring-1 ring-[#ffcc29]/40') : (isDarkMode ? 'hover:bg-[#ffcc29]/10' : 'hover:bg-[#ffcc29]/5')} transition-colors cursor-pointer group`}
+                                            className={`h-10 border-b ${isDarkMode ? 'border-[#ffcc29]/10' : 'border-[#ededed]'} ${isDropTarget ? (isDarkMode ? 'bg-[#ffcc29]/30 border-[#ffcc29] ring-1 ring-[#ffcc29]/50' : 'bg-[#ffcc29]/20 border-[#ffcc29] ring-1 ring-[#ffcc29]/40') : (isDarkMode ? 'hover:bg-[#ffcc29]/10' : 'hover:bg-[#ffcc29]/5')} transition-colors cursor-pointer group`}
                                         >
                                             <div className="w-full h-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                               <Plus className="w-4 h-4 text-[#ffcc29]" />
@@ -3768,7 +3780,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                               }`}
                                               style={{ 
                                                 top: `${idx * 48}px`,
-                                                height: '42px'
+                                                height: '36px'
                                               }}
                                               title={`${event.description}${event.marketingTip ? `\n💡 ${event.marketingTip}` : ''}`}
                                             >
@@ -3790,7 +3802,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                           : event.time 
                                             ? new Date(event.time).getHours()
                                             : 9;
-                                        const topOffset = startHour * 48;
+                                        const topOffset = (startHour - 6) * 40;
                                         
                                         const colors: Record<string, string> = {
                                             'active': 'bg-emerald-500 border-emerald-600',
@@ -3823,7 +3835,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                                 className={`absolute left-1 right-1 rounded-md px-2 py-1 cursor-grab active:cursor-grabbing hover:opacity-90 transition-opacity shadow-md border-l-4 ${colorClass} ${draggedEvent?._id === event._id ? 'opacity-50 ring-2 ring-[#ffcc29]' : ''}`}
                                                 style={{ 
                                                     top: `${topOffset}px`,
-                                                    height: '44px'
+                                                    height: '36px'
                                                 }}
                                             >
                                                 <div className="flex items-center gap-1">
@@ -3847,8 +3859,8 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                 const now = new Date();
                                 const currentHour = now.getHours();
                                 const currentMinute = now.getMinutes();
-                                if (currentHour >= 0 && currentHour <= 23) {
-                                    const topPos = (currentHour * 48) + (currentMinute * 0.8);
+                                if (currentHour >= 6 && currentHour <= 23) {
+                                    const topPos = ((currentHour - 6) * 40) + (currentMinute * 0.67);
                                     const todayIdx = weekDays.findIndex(d => isToday(d));
                                     return (
                                         <div 
