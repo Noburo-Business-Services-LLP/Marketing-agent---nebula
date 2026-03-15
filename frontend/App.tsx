@@ -14,6 +14,8 @@ import ConnectSocials from './pages/ConnectSocials';
 import BrandAssets from './pages/BrandAssets';
 import Settings from './pages/Settings';
 import Analytics from './pages/Analytics';
+import TermsAndConditions from './pages/TermsAndConditions';
+import PrivacyPolicy from './pages/PrivacyPolicy';
 import { ThemeProvider } from './context/ThemeContext';
 import { apiService } from './services/api';
 import { User } from './types';
@@ -135,6 +137,10 @@ const App: React.FC = () => {
           element={!user ? <Auth onLoginSuccess={handleLoginSuccess} /> : <Navigate to="/dashboard" replace />} 
         />
         
+        {/* Public legal pages */}
+        <Route path="/terms" element={<TermsAndConditions />} />
+        <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+
         {/* Onboarding Route - Protected but outside main Layout if needed, or redirect check */}
         <Route 
             path="/onboarding"

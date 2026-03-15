@@ -433,7 +433,7 @@ const ConnectSocials: React.FC = () => {
                                   </button>
                               </div>
                               <p className="text-[10px] text-slate-400">
-                                  By authorizing, you agree to our Terms of Service.
+                                  By authorizing, you agree to our <a href="/#/terms" className="text-[#ffcc29] hover:underline">Terms of Service</a>.
                               </p>
                           </div>
                       )}

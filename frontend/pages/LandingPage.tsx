@@ -606,8 +606,8 @@ const LandingPage: React.FC = () => {
               <span className={`text-lg font-semibold ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>Nebulaa Gravity</span>
             </div>
             <div className={`flex items-center gap-8 text-sm ${theme === 'dark' ? 'text-[#ededed]/70' : 'text-gray-600'}`}>
-              <a href="#" className={`transition-colors ${theme === 'dark' ? 'hover:text-[#ffcc29]' : 'hover:text-[#070A12]'}`}>Privacy</a>
-              <a href="#" className={`transition-colors ${theme === 'dark' ? 'hover:text-[#ffcc29]' : 'hover:text-[#070A12]'}`}>Terms</a>
+              <a href="/#/privacy-policy" className={`transition-colors ${theme === 'dark' ? 'hover:text-[#ffcc29]' : 'hover:text-[#070A12]'}`}>Privacy</a>
+              <a href="/#/terms" className={`transition-colors ${theme === 'dark' ? 'hover:text-[#ffcc29]' : 'hover:text-[#070A12]'}`}>Terms</a>
               <a href="#" className={`transition-colors ${theme === 'dark' ? 'hover:text-[#ffcc29]' : 'hover:text-[#070A12]'}`}>Contact</a>
             </div>
             <div className={`text-sm ${theme === 'dark' ? 'text-[#ededed]/50' : 'text-gray-500'}`}>
