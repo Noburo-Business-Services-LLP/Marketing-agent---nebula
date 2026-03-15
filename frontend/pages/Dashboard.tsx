@@ -2444,8 +2444,8 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
         return d;
     });
 
-    // Time slots from 12 AM to 11 PM (full 24 hours)
-    const timeSlots = Array.from({ length: 24 }, (_, i) => i);
+    // Time slots from 12 AM to 12 PM
+    const timeSlots = Array.from({ length: 13 }, (_, i) => i);
 
     // Indian Holidays, Festivals & Marketing Events (2025-2026)
     // This includes national holidays, major festivals, and important marketing dates
