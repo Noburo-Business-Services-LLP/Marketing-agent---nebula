@@ -3573,8 +3573,8 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                 {/* Time Column */}
                 <div className={`flex-shrink-0 w-20 border-r ${isDarkMode ? 'border-slate-700/50 bg-[#0d1117]' : 'border-slate-200 bg-[#f5f5f5]'}`}>
                   {timeSlots.map(hour => (
-                    <div key={hour} className={`h-10 border-b ${isDarkMode ? 'border-[#ffcc29]/10' : 'border-[#ededed]'} pr-3 flex items-start justify-end pt-0`}>
-                      <span className={`text-xs ${theme.textMuted} -mt-2`}>
+                    <div key={hour} className={`h-10 border-b ${isDarkMode ? 'border-[#ffcc29]/10' : 'border-[#ededed]'} pr-3 flex items-center justify-end`}>
+                      <span className={`text-xs ${theme.textMuted}`}>
                         {hour === 0 ? '12 AM' : hour < 12 ? `${hour} AM` : hour === 12 ? '12 PM' : `${hour - 12} PM`}
                       </span>
                     </div>
@@ -3710,8 +3710,8 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                   {/* Time Column */}
                   <div className={`flex-shrink-0 w-16 border-r ${isDarkMode ? 'border-slate-700/50 bg-[#0d1117]' : 'border-slate-200 bg-[#f5f5f5]'}`}>
                     {timeSlots.map(hour => (
-                        <div key={hour} className={`h-10 border-b ${isDarkMode ? 'border-[#ffcc29]/10' : 'border-[#ededed]'} pr-2 flex items-start justify-end pt-0`}>
-                            <span className={`text-xs ${theme.textMuted} -mt-2`}>
+                        <div key={hour} className={`h-10 border-b ${isDarkMode ? 'border-[#ffcc29]/10' : 'border-[#ededed]'} pr-2 flex items-center justify-end`}>
+                            <span className={`text-xs ${theme.textMuted}`}>
                                 {hour === 0 ? '12 AM' : hour < 12 ? `${hour} AM` : hour === 12 ? '12 PM' : `${hour - 12} PM`}
                             </span>
                         </div>
