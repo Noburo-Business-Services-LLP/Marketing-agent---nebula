@@ -387,6 +387,11 @@ const Dashboard: React.FC = () => {
   const [rivalImagePrompt, setRivalImagePrompt] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   
+  // Cache flags — prevent re-fetching on tab switch
+  const hasFetchedDashboard = useRef(false);
+  const hasFetchedStrategic = useRef(false);
+  const hasFetchedFollowers = useRef(false);
+
   // Strategic Advisor State
   const [strategicSuggestions, setStrategicSuggestions] = useState<any[]>([]);
   const [trendingNow, setTrendingNow] = useState<string[]>([]);
@@ -472,11 +477,17 @@ const Dashboard: React.FC = () => {
 
   const fetchData = async (refresh = false) => {
     const startTime = Date.now();
-    if (refresh) setRefreshing(true);
+    if (refresh) {
+      setRefreshing(true);
+      hasFetchedDashboard.current = false;
+      hasFetchedStrategic.current = false;
+      hasFetchedFollowers.current = false;
+    }
 
     try {
       const dashboardData = await apiService.getDashboardOverview(refresh);
       setData(dashboardData);
+      hasFetchedDashboard.current = true;
       console.log(`Dashboard ${refresh ? 'refreshed' : 'loaded'} in ${Date.now() - startTime}ms`);
     } catch (error) {
       console.error("Failed to load dashboard", error);
@@ -484,10 +495,17 @@ const Dashboard: React.FC = () => {
       setLoading(false);
       setRefreshing(false);
     }
+
+    // Also refresh strategic suggestions and follower data
+    if (refresh) {
+      fetchStrategicSuggestions(true);
+      fetchFollowerData(true);
+    }
   };
   
   // Fetch Strategic Advisor suggestions (lazy load after dashboard is ready)
-  const fetchStrategicSuggestions = async () => {
+  const fetchStrategicSuggestions = async (force = false) => {
+    if (hasFetchedStrategic.current && !force) return;
     console.log('[Strategic] Fetching suggestions...');
     setStrategicLoading(true);
     try {
@@ -499,6 +517,7 @@ const Dashboard: React.FC = () => {
         setTrendingNow(result.trendingNow || []);
         setUpcomingEvents(result.upcomingEvents || []);
         setCompetitorInsight(result.competitorInsight || '');
+        hasFetchedStrategic.current = true;
       } else {
         console.error('[Strategic] API returned success: false');
       }
@@ -654,12 +673,14 @@ const Dashboard: React.FC = () => {
   };
   
   // Fetch Social Followers for bar chart
-  const fetchFollowerData = async () => {
+  const fetchFollowerData = async (force = false) => {
+    if (hasFetchedFollowers.current && !force) return;
     setFollowerLoading(true);
     try {
       const result = await apiService.getSocialFollowers();
       if (result.success && result.platforms) {
         setFollowerData(result.platforms);
+        hasFetchedFollowers.current = true;
       }
     } catch (error) {
       console.error('Failed to fetch follower data:', error);
@@ -669,9 +690,9 @@ const Dashboard: React.FC = () => {
   };
   
   useEffect(() => {
-    fetchData();
-    fetchStrategicSuggestions();
-    fetchFollowerData();
+    if (!hasFetchedDashboard.current) fetchData();
+    if (!hasFetchedStrategic.current) fetchStrategicSuggestions();
+    if (!hasFetchedFollowers.current) fetchFollowerData();
   }, []);
 
   const handlePrevCompetitor = () => {
@@ -1684,10 +1705,10 @@ const Dashboard: React.FC = () => {
                   </div>
                 )}
                 
-                <button 
+                <button
                   onClick={async () => {
                     setDismissedSuggestions(new Set());
-                    await fetchStrategicSuggestions();
+                    await fetchStrategicSuggestions(true);
                   }}
                   disabled={strategicLoading}
                   className={`w-full mt-2 py-3 border border-dashed ${isDarkMode ? 'border-[#ffcc29]/30 hover:border-[#ffcc29]/50' : 'border-slate-300 hover:border-[#ffcc29]'} rounded-xl ${theme.textSecondary} text-sm hover:text-[#ffcc29] hover:bg-[#ffcc29]/10 transition-colors flex items-center justify-center gap-2 disabled:opacity-50`}
