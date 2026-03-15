@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import ChatBot from './components/ChatBot';
@@ -77,11 +77,36 @@ const App: React.FC = () => {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
     apiService.logout();
     setUser(null);
     setTrialExpired({ expired: false, reason: 'time' });
-  };
+  }, []);
+
+  // Auto-logout after 10 minutes of inactivity
+  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const IDLE_TIMEOUT = 10 * 60 * 1000; // 10 minutes
+
+  useEffect(() => {
+    if (!user) return;
+
+    const resetIdleTimer = () => {
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+      idleTimerRef.current = setTimeout(() => {
+        console.log('⏰ Auto-logout: user idle for 10 minutes');
+        handleLogout();
+      }, IDLE_TIMEOUT);
+    };
+
+    const events = ['mousedown', 'keydown', 'scroll', 'touchstart', 'mousemove'];
+    events.forEach(e => window.addEventListener(e, resetIdleTimer));
+    resetIdleTimer(); // start timer on mount
+
+    return () => {
+      events.forEach(e => window.removeEventListener(e, resetIdleTimer));
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+    };
+  }, [user, handleLogout]);
 
   const handleOnboardingComplete = (updatedUser: User) => {
       setUser(updatedUser);

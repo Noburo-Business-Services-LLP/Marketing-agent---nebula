@@ -24,36 +24,7 @@ const {
 } = require('../services/geminiAI');
 const { generateWithLLM } = require('../services/llmRouter');
 const { getAyrshareUserProfile, getUserSocialAnalytics } = require('../services/socialMediaAPI');
-
-// In-memory dashboard cache — persists until user explicitly refreshes
-const dashboardCache = new Map();
-
-// Cache helper functions
-function getCachedDashboard(userId) {
-  const cached = dashboardCache.get(userId);
-  if (cached) {
-    console.log(`📦 Dashboard cache hit for user ${userId}`);
-    return cached.data;
-  }
-  return null;
-}
-
-function setCachedDashboard(userId, data) {
-  dashboardCache.set(userId, {
-    data,
-    timestamp: Date.now()
-  });
-
-  // Evict oldest entries if cache grows too large
-  if (dashboardCache.size > 100) {
-    const oldest = [...dashboardCache.entries()]
-      .sort((a, b) => a[1].timestamp - b[1].timestamp)
-      .slice(0, 20);
-    for (const [key] of oldest) {
-      dashboardCache.delete(key);
-    }
-  }
-}
+const DashboardCache = require('../models/DashboardCache');
 
 function clearCachedDashboard(userId) {
   dashboardCache.delete(userId);
@@ -279,11 +250,11 @@ router.get('/overview', protect, async (req, res) => {
     const userId = req.user.userId || req.user.id;
     const forceRefresh = req.query.refresh === 'true';
 
-    // Check cache first for instant response (skip if refresh requested)
+    // Check MongoDB cache first (skip if refresh requested)
     if (!forceRefresh) {
-      const cached = getCachedDashboard(userId);
+      const cached = await DashboardCache.getCached(userId, 'dashboard');
       if (cached) {
-        console.log(`⚡ Dashboard served from cache in ${Date.now() - startTime}ms`);
+        console.log(`⚡ Dashboard served from DB cache in ${Date.now() - startTime}ms`);
         return res.json(cached);
       }
     } else {
@@ -724,9 +695,9 @@ router.get('/overview', protect, async (req, res) => {
       }
     };
 
-    // Cache the response for faster subsequent loads
-    setCachedDashboard(userId, dashboardData);
-    console.log(`⚡ Dashboard generated in ${Date.now() - startTime}ms (cached for next load)`);
+    // Cache to MongoDB for persistence across restarts
+    await DashboardCache.setCached(userId, 'dashboard', dashboardData);
+    console.log(`⚡ Dashboard generated in ${Date.now() - startTime}ms (cached to DB)`);
 
     res.json(dashboardData);
   } catch (error) {
@@ -1516,24 +1487,7 @@ const {
   refineImageWithPrompt
 } = require('../services/geminiAI');
 
-// In-memory cache for strategic advisor — persists until user refreshes
-const strategicCache = new Map();
-
-function getCachedStrategic(userId) {
-  const cached = strategicCache.get(userId);
-  if (cached) return cached.data;
-  return null;
-}
-
-function setCachedStrategic(userId, data) {
-  strategicCache.set(userId, { data, timestamp: Date.now() });
-  if (strategicCache.size > 100) {
-    const oldest = [...strategicCache.entries()]
-      .sort((a, b) => a[1].timestamp - b[1].timestamp)
-      .slice(0, 20);
-    for (const [key] of oldest) strategicCache.delete(key);
-  }
-}
+// Strategic advisor uses DashboardCache model (MongoDB) with type 'strategic'
 
 /**
  * GET /api/dashboard/strategic-advisor
@@ -1546,9 +1500,9 @@ router.get('/strategic-advisor', protect, async (req, res) => {
 
     // Check cache first
     if (!forceRefresh) {
-      const cached = getCachedStrategic(userId.toString());
+      const cached = await DashboardCache.getCached(userId, 'strategic');
       if (cached) {
-        console.log(`📦 Strategic advisor cache hit for user ${userId}`);
+        console.log(`📦 Strategic advisor served from DB cache for user ${userId}`);
         return res.json(cached);
       }
     }
@@ -1603,9 +1557,9 @@ router.get('/strategic-advisor', protect, async (req, res) => {
       ...suggestions
     };
 
-    // Cache the result
-    setCachedStrategic(userId.toString(), responseData);
-    console.log(`💡 Strategic advisor generated and cached for user ${userId}`);
+    // Cache to MongoDB
+    await DashboardCache.setCached(userId, 'strategic', responseData);
+    console.log(`💡 Strategic advisor generated and cached to DB for user ${userId}`);
 
     res.json(responseData);
   } catch (error) {
