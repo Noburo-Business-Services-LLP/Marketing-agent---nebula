@@ -1444,7 +1444,7 @@ export const apiService = {
   // STRATEGIC ADVISOR API
   // ============================================
   
-  getStrategicSuggestions: async (): Promise<{
+  getStrategicSuggestions: async (refresh = false): Promise<{
     success: boolean;
     suggestions: any[];
     trendingNow: string[];
@@ -1454,7 +1454,7 @@ export const apiService = {
   }> => {
     try {
       const response = await apiCall<any>(
-        '/dashboard/strategic-advisor',
+        `/dashboard/strategic-advisor${refresh ? '?refresh=true' : ''}`,
         { method: 'GET' },
         true
       );

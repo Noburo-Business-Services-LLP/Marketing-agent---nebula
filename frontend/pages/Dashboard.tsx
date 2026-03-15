@@ -509,7 +509,7 @@ const Dashboard: React.FC = () => {
     console.log('[Strategic] Fetching suggestions...');
     setStrategicLoading(true);
     try {
-      const result = await apiService.getStrategicSuggestions();
+      const result = await apiService.getStrategicSuggestions(force);
       console.log('[Strategic] API result:', result);
       if (result.success) {
         console.log('[Strategic] Setting suggestions:', result.suggestions?.length, 'items');

@@ -1510,11 +1510,30 @@ router.get('/social-followers', protect, async (req, res) => {
 });
 
 // Import strategic advisor functions
-const { 
+const {
   generateStrategicContentSuggestions,
   generatePostFromSuggestion,
   refineImageWithPrompt
 } = require('../services/geminiAI');
+
+// In-memory cache for strategic advisor — persists until user refreshes
+const strategicCache = new Map();
+
+function getCachedStrategic(userId) {
+  const cached = strategicCache.get(userId);
+  if (cached) return cached.data;
+  return null;
+}
+
+function setCachedStrategic(userId, data) {
+  strategicCache.set(userId, { data, timestamp: Date.now() });
+  if (strategicCache.size > 100) {
+    const oldest = [...strategicCache.entries()]
+      .sort((a, b) => a[1].timestamp - b[1].timestamp)
+      .slice(0, 20);
+    for (const [key] of oldest) strategicCache.delete(key);
+  }
+}
 
 /**
  * GET /api/dashboard/strategic-advisor
@@ -1523,12 +1542,22 @@ const {
 router.get('/strategic-advisor', protect, async (req, res) => {
   try {
     const userId = req.user._id;
-    
+    const forceRefresh = req.query.refresh === 'true';
+
+    // Check cache first
+    if (!forceRefresh) {
+      const cached = getCachedStrategic(userId.toString());
+      if (cached) {
+        console.log(`📦 Strategic advisor cache hit for user ${userId}`);
+        return res.json(cached);
+      }
+    }
+
     // Get user's business context
     const context = await OnboardingContext.findOne({ userId }).lean();
     const user = await User.findById(userId).lean();
     const bp = user?.businessProfile || {};
-    
+
     const businessProfile = {
       name: context?.company?.name || bp.name || bp.companyName || user?.companyName || 'Your Company',
       industry: context?.company?.industry || bp.industry || user?.industry || 'General',
@@ -1538,13 +1567,13 @@ router.get('/strategic-advisor', protect, async (req, res) => {
       location: context?.geography?.businessLocation || bp.businessLocation || bp.location || 'India',
       businessType: bp.businessType || 'B2C'
     };
-    
+
     // Get recent competitor posts
     const competitors = await Competitor.find({ userId, isActive: true })
       .sort({ 'posts.timestamp': -1 })
       .limit(5)
       .lean();
-    
+
     const competitorPosts = [];
     competitors.forEach(comp => {
       if (comp.posts && comp.posts.length > 0) {
@@ -1560,23 +1589,29 @@ router.get('/strategic-advisor', protect, async (req, res) => {
         });
       }
     });
-    
+
     // Generate strategic suggestions
     const suggestions = await generateStrategicContentSuggestions(
-      businessProfile, 
+      businessProfile,
       competitorPosts,
       new Date()
     );
-    
-    res.json({
+
+    const responseData = {
       success: true,
       businessContext: businessProfile,
       ...suggestions
-    });
+    };
+
+    // Cache the result
+    setCachedStrategic(userId.toString(), responseData);
+    console.log(`💡 Strategic advisor generated and cached for user ${userId}`);
+
+    res.json(responseData);
   } catch (error) {
     console.error('Strategic advisor error:', error);
-    res.status(500).json({ 
-      success: false, 
+    res.status(500).json({
+      success: false,
       error: error.message,
       suggestions: []
     });
