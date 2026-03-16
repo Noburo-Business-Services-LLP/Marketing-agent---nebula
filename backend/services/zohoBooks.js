@@ -106,6 +106,8 @@ async function getOrCreateContact(customerInfo) {
   const contactData = {
     contact_name: companyName || `${firstName} ${lastName}`.trim(),
     contact_type: 'customer',
+    gst_treatment: 'consumer',
+    place_of_supply: 'TN',
     email,
     contact_persons: [{
       first_name: firstName,
@@ -148,11 +150,15 @@ async function createInvoice(params) {
   const invoiceData = {
     customer_id: contactId,
     date: today,
+    is_inclusive_tax: true,
+    gst_treatment: 'consumer',
+    place_of_supply: 'TN',
     line_items: [{
       name: `Nebulaa Gravity - ${credits} Credits`,
       description: `${credits} AI marketing credits for Nebulaa Gravity platform`,
       rate: amount,
-      quantity: 1
+      quantity: 1,
+      tax_percentage: 18
     }],
     notes: `Payment via Razorpay (${razorpayPaymentId})`,
     reference_number: razorpayPaymentId
