@@ -194,8 +194,8 @@ async function createInvoice(params) {
       description: `${credits} AI marketing credits for Nebulaa Gravity platform`,
       rate: amount,
       quantity: 1,
-      hsn_or_sac: '998314',
-      tax_id: await getGST18TaxId()
+      tax_name: 'GST18',
+      tax_percentage: 18
     }],
     notes: `Payment via Razorpay (${razorpayPaymentId})`,
     reference_number: razorpayPaymentId
