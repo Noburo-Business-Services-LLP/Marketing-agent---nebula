@@ -3341,42 +3341,63 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                                   </div>
                                 </div>
                                 
-                                <div className="grid grid-cols-2 gap-4">
-                                  <div>
-                                    <label className={labelClasses}>Content Tone</label>
-                                    <ComboBox
-                                      value={contentTone}
-                                      onChange={(v) => setContentTone(v as any)}
-                                      className={inputClasses}
-                                      isDarkMode={isDarkMode}
-                                      placeholder="Select or type your own tone"
-                                      options={[
-                                        { value: 'professional', label: 'Professional & Formal' },
-                                        { value: 'casual', label: 'Casual & Friendly' },
-                                        { value: 'humorous', label: 'Witty & Humorous' },
-                                        { value: 'inspirational', label: 'Inspirational & Motivational' },
-                                        { value: 'educational', label: 'Educational & Informative' },
-                                        { value: 'bold', label: 'Bold & Confident' },
-                                        { value: 'empathetic', label: 'Empathetic & Caring' },
-                                        { value: 'luxurious', label: 'Premium & Luxurious' }
-                                      ]}
-                                    />
-                                  </div>
+                                <div>
+                                  <label className={labelClasses}>Content Tone</label>
+                                  <ComboBox
+                                    value={contentTone}
+                                    onChange={(v) => setContentTone(v as any)}
+                                    className={inputClasses}
+                                    isDarkMode={isDarkMode}
+                                    placeholder="Select or type your own tone"
+                                    options={[
+                                      { value: 'professional', label: 'Professional & Formal' },
+                                      { value: 'casual', label: 'Casual & Friendly' },
+                                      { value: 'humorous', label: 'Witty & Humorous' },
+                                      { value: 'inspirational', label: 'Inspirational & Motivational' },
+                                      { value: 'educational', label: 'Educational & Informative' },
+                                      { value: 'bold', label: 'Bold & Confident' },
+                                      { value: 'empathetic', label: 'Empathetic & Caring' },
+                                      { value: 'luxurious', label: 'Premium & Luxurious' }
+                                    ]}
+                                  />
+                                </div>
 
-                                  <div>
-                                    <label className={labelClasses}>Aspect Ratio</label>
-                                    <select
-                                      value={contentType}
-                                      onChange={(e) => setContentType(e.target.value as any)}
-                                      className={inputClasses}
-                                    >
-                                      <option value="1:1">1:1 — Square</option>
-                                      <option value="3:4">3:4 — Portrait</option>
-                                      <option value="4:3">4:3 — Landscape</option>
-                                      <option value="4:5">4:5 — Instagram Portrait</option>
-                                      <option value="9:16">9:16 — Story / Reel</option>
-                                      <option value="16:9">16:9 — Widescreen</option>
-                                    </select>
+                                <div>
+                                  <label className={labelClasses}>Aspect Ratio</label>
+                                  <div className="flex items-end gap-3 mt-2">
+                                    {[
+                                      { value: '1:1', w: 40, h: 40 },
+                                      { value: '3:4', w: 36, h: 48 },
+                                      { value: '4:3', w: 48, h: 36 },
+                                      { value: '4:5', w: 36, h: 45 },
+                                      { value: '9:16', w: 30, h: 53 },
+                                      { value: '16:9', w: 53, h: 30 },
+                                    ].map((ratio) => (
+                                      <button
+                                        key={ratio.value}
+                                        type="button"
+                                        onClick={() => setContentType(ratio.value as any)}
+                                        className={`flex flex-col items-center gap-1.5 group`}
+                                      >
+                                        <div
+                                          style={{ width: ratio.w, height: ratio.h }}
+                                          className={`rounded-lg border-2 transition-all duration-200 ${
+                                            contentType === ratio.value
+                                              ? 'border-[#ffcc29] bg-[#ffcc29]/10 shadow-md shadow-[#ffcc29]/20'
+                                              : isDarkMode
+                                                ? 'border-slate-600 bg-slate-800/50 group-hover:border-slate-400'
+                                                : 'border-slate-300 bg-slate-50 group-hover:border-slate-400'
+                                          }`}
+                                        />
+                                        <span className={`text-[11px] font-medium ${
+                                          contentType === ratio.value
+                                            ? 'text-[#ffcc29]'
+                                            : theme.textSecondary
+                                        }`}>
+                                          {ratio.value}
+                                        </span>
+                                      </button>
+                                    ))}
                                   </div>
                                 </div>
 
