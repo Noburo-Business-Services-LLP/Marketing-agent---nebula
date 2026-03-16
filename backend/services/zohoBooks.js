@@ -80,6 +80,41 @@ async function zohoRequest(method, endpoint, body = null) {
 }
 
 /**
+ * Get or create the 18% GST tax and return its tax_id
+ */
+let cachedTaxId = null;
+async function getGST18TaxId() {
+  if (cachedTaxId) return cachedTaxId;
+
+  try {
+    // List existing taxes
+    const taxList = await zohoRequest('GET', '/settings/taxes');
+    console.log('📄 [ZOHO] Available taxes:', JSON.stringify(taxList.taxes, null, 2));
+
+    // Find existing 18% GST tax
+    const gst18 = (taxList.taxes || []).find(t => t.tax_percentage === 18);
+    if (gst18) {
+      cachedTaxId = gst18.tax_id;
+      console.log(`📄 [ZOHO] Found existing 18% tax: ${gst18.tax_name} (${cachedTaxId})`);
+      return cachedTaxId;
+    }
+
+    // Create 18% GST tax if not found
+    const newTax = await zohoRequest('POST', '/settings/taxes', {
+      tax_name: 'GST',
+      tax_percentage: 18,
+      tax_type: 'tax'
+    });
+    cachedTaxId = newTax.tax.tax_id;
+    console.log(`📄 [ZOHO] Created 18% GST tax: ${cachedTaxId}`);
+    return cachedTaxId;
+  } catch (e) {
+    console.error('📄 [ZOHO] Failed to get/create tax:', e.message);
+    return ''; // fallback — let Zoho decide
+  }
+}
+
+/**
  * Find existing contact by email, or create a new one
  */
 async function getOrCreateContact(customerInfo) {
@@ -151,18 +186,16 @@ async function createInvoice(params) {
   const invoiceData = {
     customer_id: contactId,
     date: today,
-    is_inclusive_tax: false,
+    is_inclusive_tax: true,
     gst_treatment: 'consumer',
-    gst_no: '',
     place_of_supply: 'TN',
-    tax_treatment: 'vat_exempt',
     line_items: [{
       name: `Nebulaa Gravity - ${credits} Credits`,
       description: `${credits} AI marketing credits for Nebulaa Gravity platform`,
       rate: amount,
       quantity: 1,
-      item_type: 'sales',
-      tax_exemption_code: 'NON_TAXABLE'
+      hsn_or_sac: '998314',
+      tax_id: await getGST18TaxId()
     }],
     notes: `Payment via Razorpay (${razorpayPaymentId})`,
     reference_number: razorpayPaymentId
