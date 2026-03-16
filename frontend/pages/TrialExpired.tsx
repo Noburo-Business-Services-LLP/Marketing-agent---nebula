@@ -9,7 +9,7 @@ declare global {
 }
 
 interface TrialExpiredProps {
-  reason: 'time' | 'credits';
+  reason: 'time' | 'credits' | 'migrated';
   daysUsed?: number;
   creditsUsed?: number;
   onLogout: () => void;
@@ -198,6 +198,35 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, daysUsed = 7, onLog
       </div>
     </div>
   );
+
+  // ─── Already migrated state ───
+  if (reason === 'migrated') {
+    return (
+      <SpaceBg>
+        <div className="max-w-lg w-full">
+          <GlassCard highlighted>
+            <div className="p-8 md:p-10 text-center">
+              <div className="mx-auto w-20 h-20 bg-[#ffcc29]/10 rounded-full flex items-center justify-center mb-6 ring-1 ring-[#ffcc29]/20">
+                <CheckCircle className="w-10 h-10 text-[#ffcc29]" />
+              </div>
+              <h1 className="text-2xl md:text-3xl font-bold text-[#ededed] mb-3">Account Activated!</h1>
+              <p className="text-[#ededed]/55 text-base mb-8">
+                Your data has been migrated to production. Log in on the production app with the same credentials.
+              </p>
+              <a href="https://gravity.nebulaa.ai" target="_blank" rel="noopener noreferrer"
+                className="w-full py-4 bg-[#ffcc29] hover:bg-[#e6b825] text-[#070A12] font-bold text-lg rounded-2xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#ffcc29]/20">
+                Go to Gravity Production <ExternalLink className="w-5 h-5" />
+              </a>
+              <p className="text-[#ededed]/30 text-xs mt-4">gravity.nebulaa.ai — your credits are ready</p>
+              <button onClick={onLogout} className="text-[#ededed]/25 hover:text-[#ededed]/50 text-sm transition-colors underline mt-6">
+                Log out
+              </button>
+            </div>
+          </GlassCard>
+        </div>
+      </SpaceBg>
+    );
+  }
 
   // ─── Success state ───
   if (success) {

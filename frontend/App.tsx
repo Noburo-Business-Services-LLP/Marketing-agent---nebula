@@ -37,12 +37,16 @@ const App: React.FC = () => {
           
           // Check trial status
           if (res.user) {
-            const trialEnd = res.user.trial?.expiresAt ? new Date(res.user.trial.expiresAt) : null;
-            const now = new Date();
-            if (res.user.trial?.isExpired || (trialEnd && now > trialEnd)) {
-              setTrialExpired({ expired: true, reason: 'time' });
-            } else if ((res.user.credits?.balance ?? 100) <= 0) {
-              setTrialExpired({ expired: true, reason: 'credits' });
+            if (res.user.trial?.migratedToProd) {
+              setTrialExpired({ expired: true, reason: 'migrated' as any });
+            } else {
+              const trialEnd = res.user.trial?.expiresAt ? new Date(res.user.trial.expiresAt) : null;
+              const now = new Date();
+              if (res.user.trial?.isExpired || (trialEnd && now > trialEnd)) {
+                setTrialExpired({ expired: true, reason: 'time' });
+              } else if ((res.user.credits?.balance ?? 100) <= 0) {
+                setTrialExpired({ expired: true, reason: 'credits' });
+              }
             }
           }
         } catch (error) {
@@ -68,14 +72,18 @@ const App: React.FC = () => {
   const handleLoginSuccess = (userData: User) => {
     setUser(userData);
     // Check trial on login
-    const trialEnd = userData.trial?.expiresAt ? new Date(userData.trial.expiresAt) : null;
-    const now = new Date();
-    if (userData.trial?.isExpired || (trialEnd && now > trialEnd)) {
-      setTrialExpired({ expired: true, reason: 'time' });
-    } else if ((userData.credits?.balance ?? 100) <= 0) {
-      setTrialExpired({ expired: true, reason: 'credits' });
+    if (userData.trial?.migratedToProd) {
+      setTrialExpired({ expired: true, reason: 'migrated' as any });
     } else {
-      setTrialExpired({ expired: false, reason: 'time' });
+      const trialEnd = userData.trial?.expiresAt ? new Date(userData.trial.expiresAt) : null;
+      const now = new Date();
+      if (userData.trial?.isExpired || (trialEnd && now > trialEnd)) {
+        setTrialExpired({ expired: true, reason: 'time' });
+      } else if ((userData.credits?.balance ?? 100) <= 0) {
+        setTrialExpired({ expired: true, reason: 'credits' });
+      } else {
+        setTrialExpired({ expired: false, reason: 'time' });
+      }
     }
   };
 
