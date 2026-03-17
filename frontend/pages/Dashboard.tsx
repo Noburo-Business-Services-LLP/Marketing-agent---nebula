@@ -4,6 +4,7 @@ import { DashboardData, Campaign, CompetitorPost } from '../types';
 import { TrendingUp, ArrowUpRight, ChevronRight, ChevronLeft, Calendar as CalendarIcon, Calendar, CalendarSync, Info, Activity, Clock, MoreHorizontal, Plus, X, ExternalLink, Edit3, Share2, MessageSquare, FileText, Loader2, Bell, BellRing, Check, AlertCircle, Trash2, Eye, Users, BarChart3, Swords, Sparkles, Download, Copy, Send, Save, Lightbulb, Flame, Target, Zap, Music, Image as ImageIcon, RefreshCw, PenTool, Wand2, Upload, Filter, Unlink } from 'lucide-react';
 import { useTheme, getThemeClasses } from '../context/ThemeContext';
 import PlatformPreview from '../components/PlatformPreview';
+import LogoSelector from '../components/LogoSelector';
 
 // Section info descriptions
 const sectionInfo: Record<string, { title: string; description: string }> = {
@@ -239,6 +240,11 @@ const Dashboard: React.FC = () => {
   const [followerLoading, setFollowerLoading] = useState(true);
   const [hoveredBar, setHoveredBar] = useState<string | null>(null);
   
+  // Logo Selector State
+  const [showLogoSelector, setShowLogoSelector] = useState(false);
+  const [pendingRivalCompetitor, setPendingRivalCompetitor] = useState<any>(null);
+  const [selectedLogoUrl, setSelectedLogoUrl] = useState<string | null>(null);
+
   // Rival Post State
   const [showRivalPostModal, setShowRivalPostModal] = useState(false);
   const [rivalPostLoading, setRivalPostLoading] = useState(false);
@@ -583,7 +589,7 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  // Handle creating a rival post
+  // Handle creating a rival post — show logo selector first
   const handleCreateRivalPost = async (competitor: any) => {
     // Upfront credit check
     try {
@@ -596,6 +602,14 @@ const Dashboard: React.FC = () => {
     } catch (e) {
       console.error('Credit check failed:', e);
     }
+    // Show logo selector before generating
+    setPendingRivalCompetitor(competitor);
+    setShowLogoSelector(true);
+  };
+
+  // Actually generate rival post after logo selection
+  const executeRivalPostGeneration = async (competitor: any, logoUrl: string | null) => {
+    setSelectedLogoUrl(logoUrl);
     setRivalPostLoading(true);
     setShowRivalPostModal(true);
     setRivalPost(null);
@@ -603,7 +617,7 @@ const Dashboard: React.FC = () => {
     setImageMode('ai');
     setCustomImagePrompt('');
     setUploadedImageUrl(null);
-    
+
     try {
       const result = await apiService.generateRivalPost({
         competitorName: competitor.competitorName,
@@ -611,7 +625,8 @@ const Dashboard: React.FC = () => {
         platform: competitor.platform,
         sentiment: competitor.sentiment,
         likes: competitor.likes,
-        comments: competitor.comments
+        comments: competitor.comments,
+        brandLogo: logoUrl
       });
       
       setRivalPost({
@@ -1877,6 +1892,19 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Logo Selector Modal */}
+      <LogoSelector
+        isOpen={showLogoSelector}
+        onClose={() => { setShowLogoSelector(false); setPendingRivalCompetitor(null); }}
+        onConfirm={(logoUrl) => {
+          setShowLogoSelector(false);
+          if (pendingRivalCompetitor) {
+            executeRivalPostGeneration(pendingRivalCompetitor, logoUrl);
+            setPendingRivalCompetitor(null);
+          }
+        }}
+      />
 
       {/* Rival Post Modal */}
       {showRivalPostModal && (

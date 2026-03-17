@@ -134,6 +134,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
     { path: '/campaigns', label: 'Campaigns', icon: Megaphone },
     { path: '/competitors', label: 'Competitors', icon: Users },
     { path: '/connect-socials', label: 'Connect Socials', icon: Link2 },
+    { path: '/brand-assets', label: 'Brand Assets', icon: Palette },
     { path: '/analytics', label: 'Analytics & Ads', icon: BarChart3 },
   ];
 

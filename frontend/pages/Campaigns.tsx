@@ -8,6 +8,7 @@ import {
 } from 'recharts';
 import { useTheme, getThemeClasses } from '../context/ThemeContext';
 import BoostPostModal from '../components/BoostPostModal';
+import LogoSelector from '../components/LogoSelector';
 import PlatformPreview from '../components/PlatformPreview';
 
 // ============================================
@@ -2842,6 +2843,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
     const [callToAction, setCallToAction] = useState('');
     const [productLogo, setProductLogo] = useState<string | null>(null);
     const [productLogoName, setProductLogoName] = useState<string>('');
+    const [showBrandLogoSelector, setShowBrandLogoSelector] = useState(false);
     
     // Step 4: Scheduling Preferences
     const [campaignDuration, setCampaignDuration] = useState<'1week' | '2weeks' | '1month' | '3months'>('2weeks');
@@ -3464,31 +3466,40 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                                         </div>
                                       </div>
                                     ) : (
-                                      <label className="cursor-pointer">
-                                        <input
-                                          type="file"
-                                          accept="image/*,video/*"
-                                          className="hidden"
-                                          onChange={(e) => {
-                                            const file = e.target.files?.[0];
-                                            if (file) {
-                                              setProductLogoName(file.name);
-                                              const reader = new FileReader();
-                                              reader.onloadend = () => {
-                                                setProductLogo(reader.result as string);
-                                              };
-                                              reader.readAsDataURL(file);
-                                            }
-                                          }}
-                                        />
-                                        <div className="flex flex-col items-center gap-2">
-                                          <div className="w-12 h-12 rounded-full bg-[#ffcc29]/10 flex items-center justify-center">
-                                            <ImageIcon className="w-6 h-6 text-[#ffcc29]" />
+                                      <div className="flex flex-col items-center gap-3">
+                                        <label className="cursor-pointer">
+                                          <input
+                                            type="file"
+                                            accept="image/*,video/*"
+                                            className="hidden"
+                                            onChange={(e) => {
+                                              const file = e.target.files?.[0];
+                                              if (file) {
+                                                setProductLogoName(file.name);
+                                                const reader = new FileReader();
+                                                reader.onloadend = () => {
+                                                  setProductLogo(reader.result as string);
+                                                };
+                                                reader.readAsDataURL(file);
+                                              }
+                                            }}
+                                          />
+                                          <div className="flex flex-col items-center gap-2">
+                                            <div className="w-12 h-12 rounded-full bg-[#ffcc29]/10 flex items-center justify-center">
+                                              <ImageIcon className="w-6 h-6 text-[#ffcc29]" />
+                                            </div>
+                                            <p className={`text-sm ${theme.text}`}>Click to upload logo</p>
+                                            <p className={`text-xs ${theme.textMuted}`}>PNG, JPG, SVG up to 5MB</p>
                                           </div>
-                                          <p className={`text-sm ${theme.text}`}>Click to upload logo</p>
-                                          <p className={`text-xs ${theme.textMuted}`}>PNG, JPG, SVG up to 5MB</p>
-                                        </div>
-                                      </label>
+                                        </label>
+                                        <button
+                                          type="button"
+                                          onClick={() => setShowBrandLogoSelector(true)}
+                                          className="text-xs text-[#ffcc29] hover:text-[#e6b825] font-medium"
+                                        >
+                                          Or select from Brand Assets
+                                        </button>
+                                      </div>
                                     )}
                                   </div>
                                 </div>
@@ -3920,6 +3931,21 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                     </div>
                 </div>
             </div>
+
+            {/* Logo Selector for Campaign */}
+            <LogoSelector
+              isOpen={showBrandLogoSelector}
+              onClose={() => setShowBrandLogoSelector(false)}
+              onConfirm={(logoUrl) => {
+                setShowBrandLogoSelector(false);
+                if (logoUrl) {
+                  setProductLogo(logoUrl);
+                  setProductLogoName('Brand Asset Logo');
+                }
+              }}
+              title="Select Brand Logo"
+              subtitle="Choose a logo from your Brand Assets"
+            />
         </div>
     );
 };

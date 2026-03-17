@@ -3,6 +3,7 @@ import { apiService } from '../services/api';
 import { CompetitorPost } from '../types';
 import { Loader2, Search, RotateCw, ExternalLink, Heart, MessageCircle, Plus, Instagram, Twitter, Linkedin, Facebook, Youtube, Swords, Sparkles, X, Eye, Download, Copy, Save, MessageSquare, FileText, EyeOff, Users, MapPin, Edit3, Zap } from 'lucide-react';
 import { useTheme, getThemeClasses } from '../context/ThemeContext';
+import LogoSelector from '../components/LogoSelector';
 
 const platformIcons: Record<string, React.ReactNode> = {
   instagram: <Instagram className="w-3 h-3" />,
@@ -49,6 +50,8 @@ const Competitors: React.FC = () => {
   // Rival Post State
   const [showRivalPostModal, setShowRivalPostModal] = useState(false);
   const [rivalPostLoading, setRivalPostLoading] = useState(false);
+  const [showLogoSelector, setShowLogoSelector] = useState(false);
+  const [pendingRivalPost, setPendingRivalPost] = useState<CompetitorPost | null>(null);
   const [rivalPost, setRivalPost] = useState<{
     caption: string;
     hashtags: string[];
@@ -188,12 +191,18 @@ const Competitors: React.FC = () => {
     setRivalPostLoading(false);
   };
 
-  // Handle creating a rival post
-  const handleCreateRivalPost = async (post: CompetitorPost) => {
+  // Handle creating a rival post — show logo selector first
+  const handleCreateRivalPost = (post: CompetitorPost) => {
+    setPendingRivalPost(post);
+    setShowLogoSelector(true);
+  };
+
+  // Actually generate rival post after logo selection
+  const executeRivalPostGeneration = async (post: CompetitorPost, logoUrl: string | null) => {
     setRivalPostLoading(true);
     setShowRivalPostModal(true);
     setRivalPost(null);
-    
+
     try {
       const result = await apiService.generateRivalPost({
         competitorName: post.competitorName,
@@ -201,7 +210,8 @@ const Competitors: React.FC = () => {
         platform: post.platform,
         sentiment: post.sentiment,
         likes: post.likes,
-        comments: post.comments
+        comments: post.comments,
+        brandLogo: logoUrl
       });
       
       setRivalPost({
@@ -838,6 +848,19 @@ const Competitors: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Logo Selector Modal */}
+      <LogoSelector
+        isOpen={showLogoSelector}
+        onClose={() => { setShowLogoSelector(false); setPendingRivalPost(null); }}
+        onConfirm={(logoUrl) => {
+          setShowLogoSelector(false);
+          if (pendingRivalPost) {
+            executeRivalPostGeneration(pendingRivalPost, logoUrl);
+            setPendingRivalPost(null);
+          }
+        }}
+      />
 
       {/* Rival Post Modal */}
       {showRivalPostModal && (

@@ -655,6 +655,7 @@ export const apiService = {
     sentiment?: string;
     likes?: number;
     comments?: number;
+    brandLogo?: string | null;
   }): Promise<{ caption: string; hashtags: string[]; imageUrl: string; imagePrompt?: string }> => {
     try {
       const response = await apiCall<{ 

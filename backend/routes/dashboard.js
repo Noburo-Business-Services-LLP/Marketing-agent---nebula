@@ -1231,8 +1231,8 @@ router.post('/generate-rival-post', protect, async (req, res) => {
       return res.status(403).json({ success: false, message: 'Insufficient credits', creditsRemaining: user.credits.balance, required: 7 });
     }
 
-    const { competitorName, competitorContent, platform, sentiment, likes, comments } = req.body;
-    
+    const { competitorName, competitorContent, platform, sentiment, likes, comments, brandLogo } = req.body;
+
     if (!competitorContent) {
       return res.status(400).json({ success: false, message: 'Competitor content is required' });
     }
@@ -1244,7 +1244,7 @@ router.post('/generate-rival-post', protect, async (req, res) => {
 
     // Generate the rival post using Gemini AI (image gen may take time)
     const rivalPost = await generateRivalPost(
-      { competitorName, competitorContent, platform, sentiment, likes, comments },
+      { competitorName, competitorContent, platform, sentiment, likes, comments, brandLogo },
       user.businessProfile
     );
 

@@ -2030,7 +2030,7 @@ function generatePostUrl(platform, competitorName) {
  * Creates a viral-optimized post with caption, hashtags, and AI-generated image
  */
 async function generateRivalPost(competitorData, brandProfile) {
-  const { competitorName, competitorContent, platform, sentiment, likes, comments } = competitorData;
+  const { competitorName, competitorContent, platform, sentiment, likes, comments, brandLogo } = competitorData;
   const bp = brandProfile || {};
   
   // Extract comprehensive brand context
@@ -2165,15 +2165,27 @@ Return ONLY valid JSON (no markdown, no explanations):
     
     // Generate AI image with rich brand context
     const imagePrompt = `${parsed.imageDescription}. Brand: ${brandContext.companyName}. Industry: ${brandContext.industry}. Products: ${brandContext.products || 'premium products'}. Style: modern, premium, commercial photography, high-end advertising quality.`;
-    
-    const imageUrl = await getRelevantImage(
-      imagePrompt,
-      brandContext.industry,
-      'engagement',
-      `${brandContext.companyName} ${contentThemes.slice(0, 2).join(' ')}`,
-      platform,
-      brandContext
-    );
+
+    // Use Nano Banana for image generation if brand logo is provided, otherwise use standard
+    let imageUrl;
+    if (brandLogo) {
+      imageUrl = await generateCampaignImageNanoBanana(imagePrompt, {
+        brandName: brandContext.companyName,
+        brandLogo,
+        industry: brandContext.industry,
+        tone: 'professional',
+        campaignTheme: `Rival post countering ${competitorName}`
+      });
+    } else {
+      imageUrl = await getRelevantImage(
+        imagePrompt,
+        brandContext.industry,
+        'engagement',
+        `${brandContext.companyName} ${contentThemes.slice(0, 2).join(' ')}`,
+        platform,
+        brandContext
+      );
+    }
     
     // Clean and format hashtags
     const cleanHashtags = Array.isArray(parsed.hashtags) 
