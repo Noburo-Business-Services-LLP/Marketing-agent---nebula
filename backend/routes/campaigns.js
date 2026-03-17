@@ -269,7 +269,7 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
     const totalPosts = Math.min(preferredDays.length * weeks, 14);
 
     // Deduct credits: 1 text generation + 1 per image
-    const creditCost = 7 + (totalPosts * 5); // 7 for text gen + 5 per image
+    const creditCost = totalPosts * 7; // 7 per post (5 image + 2 caption)
     const creditResult = await deductCredits(userId, 'campaign_full', totalPosts, `AI campaign generation (${totalPosts} posts with images)`);
     if (!creditResult.success) {
       sendEvent('error', { message: creditResult.error, creditsExhausted: true });

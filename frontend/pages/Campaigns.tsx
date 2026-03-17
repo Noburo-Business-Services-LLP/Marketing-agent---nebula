@@ -2881,13 +2881,13 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
 
     const handleGeneratePosts = async () => {
       const totalPosts = preferredDays.length * (campaignDuration === '2weeks' ? 2 : 1);
-      const creditCost = 7 + (totalPosts * 5);
+      const creditCost = totalPosts * 7; // 7 per post (5 image + 2 caption)
 
       try {
         const creditData = await apiService.getCredits();
         const balance = creditData?.credits?.balance ?? 0;
         if (balance < creditCost) {
-          alert(`⚠️ Insufficient credits. You have ${balance} credits but need ${creditCost} (7 for text + ${totalPosts * 5} for ${totalPosts} images).`);
+          alert(`⚠️ Insufficient credits. You have ${balance} credits but need ${creditCost} (7 per post × ${totalPosts} posts).`);
           return;
         }
       } catch (err) {
@@ -3900,7 +3900,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                               <>
                                 <Sparkles className="w-4 h-4" />
                                 Generate AI Posts
-                                <span className="flex items-center gap-0.5 text-xs opacity-80"><Zap className="w-3 h-3" />{7 + (preferredDays.length * (campaignDuration === '2weeks' ? 2 : 1) * 5)}</span>
+                                <span className="flex items-center gap-0.5 text-xs opacity-80"><Zap className="w-3 h-3" />{preferredDays.length * (campaignDuration === '2weeks' ? 2 : 1) * 7}</span>
                               </>
                             )}
                           </button>
