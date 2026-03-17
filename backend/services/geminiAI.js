@@ -2166,13 +2166,14 @@ Return ONLY valid JSON (no markdown, no explanations):
     // Generate AI image with Nano Banana 2
     const imagePrompt = `${parsed.imageDescription}. Brand: ${brandContext.companyName}. Industry: ${brandContext.industry}. Products: ${brandContext.products || 'premium products'}. Style: modern, premium, commercial photography, high-end advertising quality.`;
 
-    const imageUrl = await generateCampaignImageNanoBanana(imagePrompt, {
+    const imageResult = await generateCampaignImageNanoBanana(imagePrompt, {
       brandName: brandContext.companyName,
       brandLogo: brandLogo || null,
       industry: brandContext.industry,
       tone: 'professional',
       campaignTheme: `Rival post countering ${competitorName}`
     });
+    const imageUrl = imageResult?.imageUrl || imageResult;
     
     // Clean and format hashtags
     const cleanHashtags = Array.isArray(parsed.hashtags) 
