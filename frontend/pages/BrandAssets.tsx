@@ -1,17 +1,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  ImageIcon, 
-  Upload, 
-  Trash2, 
-  Star, 
+import {
+  ImageIcon,
+  Upload,
+  Trash2,
+  Star,
   StarOff,
   Loader2,
   CheckCircle,
   AlertCircle,
-  FileImage,
   Palette,
-  X,
-  Download
+  X
 } from 'lucide-react';
 import { brandAssetsAPI } from '../services/api';
 
@@ -33,20 +31,15 @@ interface BrandAsset {
 
 const BrandAssets: React.FC = () => {
   const [logos, setLogos] = useState<BrandAsset[]>([]);
-  const [templates, setTemplates] = useState<BrandAsset[]>([]);
   const [loading, setLoading] = useState(true);
-  const [uploading, setUploading] = useState<'logo' | 'template' | null>(null);
+  const [uploading, setUploading] = useState<'logo' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
   // Upload form state
   const [logoName, setLogoName] = useState('');
-  const [templateName, setTemplateName] = useState('');
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
-  const [templatePreview, setTemplatePreview] = useState<string | null>(null);
   const [isPrimaryLogo, setIsPrimaryLogo] = useState(false);
-  const [logoPosition, setLogoPosition] = useState<string>('bottom-right');
-  const [logoSize, setLogoSize] = useState<string>('medium');
 
   const isDarkMode = document.documentElement.classList.contains('dark');
 
@@ -58,13 +51,8 @@ const BrandAssets: React.FC = () => {
   const fetchAssets = async () => {
     try {
       setLoading(true);
-      const [logosRes, templatesRes] = await Promise.all([
-        brandAssetsAPI.getLogos(),
-        brandAssetsAPI.getTemplates()
-      ]);
-      
+      const logosRes = await brandAssetsAPI.getLogos();
       if (logosRes.success) setLogos(logosRes.logos || []);
-      if (templatesRes.success) setTemplates(templatesRes.templates || []);
     } catch (err) {
       console.error('Error fetching brand assets:', err);
       setError('Failed to load brand assets');
@@ -75,43 +63,33 @@ const BrandAssets: React.FC = () => {
 
   // Handle file selection
   const handleFileSelect = useCallback((
-    event: React.ChangeEvent<HTMLInputElement>,
-    type: 'logo' | 'template'
+    event: React.ChangeEvent<HTMLInputElement>
   ) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    // Validate file type
     if (!file.type.startsWith('image/')) {
       setError('Please select an image file (PNG, JPG, etc.)');
       return;
     }
 
-    // Validate file size (max 10MB)
     if (file.size > 10 * 1024 * 1024) {
       setError('File size must be less than 10MB');
       return;
     }
 
-    // Read file as base64
     const reader = new FileReader();
     reader.onload = (e) => {
       const base64 = e.target?.result as string;
-      if (type === 'logo') {
-        setLogoPreview(base64);
-        if (!logoName) setLogoName(file.name.replace(/\.[^/.]+$/, ''));
-      } else {
-        setTemplatePreview(base64);
-        if (!templateName) setTemplateName(file.name.replace(/\.[^/.]+$/, ''));
-      }
+      setLogoPreview(base64);
+      if (!logoName) setLogoName(file.name.replace(/\.[^/.]+$/, ''));
     };
     reader.readAsDataURL(file);
-  }, [logoName, templateName]);
+  }, [logoName]);
 
   // Handle drag and drop
   const handleDrop = useCallback((
-    event: React.DragEvent<HTMLDivElement>,
-    type: 'logo' | 'template'
+    event: React.DragEvent<HTMLDivElement>
   ) => {
     event.preventDefault();
     event.stopPropagation();
@@ -127,65 +105,41 @@ const BrandAssets: React.FC = () => {
     const reader = new FileReader();
     reader.onload = (e) => {
       const base64 = e.target?.result as string;
-      if (type === 'logo') {
-        setLogoPreview(base64);
-        if (!logoName) setLogoName(file.name.replace(/\.[^/.]+$/, ''));
-      } else {
-        setTemplatePreview(base64);
-        if (!templateName) setTemplateName(file.name.replace(/\.[^/.]+$/, ''));
-      }
+      setLogoPreview(base64);
+      if (!logoName) setLogoName(file.name.replace(/\.[^/.]+$/, ''));
     };
     reader.readAsDataURL(file);
-  }, [logoName, templateName]);
+  }, [logoName]);
 
-  // Upload asset
-  const handleUpload = async (type: 'logo' | 'template') => {
-    const preview = type === 'logo' ? logoPreview : templatePreview;
-    const name = type === 'logo' ? logoName : templateName;
-
-    if (!preview || !name.trim()) {
-      setError(`Please select an image and enter a name for the ${type}`);
+  // Upload logo
+  const handleUpload = async () => {
+    if (!logoPreview || !logoName.trim()) {
+      setError('Please select an image and enter a name for the logo');
       return;
     }
 
     try {
-      setUploading(type);
+      setUploading('logo');
       setError(null);
 
-      const uploadData: any = {
-        imageData: preview,
-        type,
-        name: name.trim()
-      };
-
-      if (type === 'logo') {
-        uploadData.isPrimary = isPrimaryLogo || logos.length === 0;
-        uploadData.defaultPosition = logoPosition;
-        uploadData.defaultSize = logoSize;
-      }
-
-      const response = await brandAssetsAPI.upload(uploadData);
+      const response = await brandAssetsAPI.upload({
+        imageData: logoPreview,
+        type: 'logo',
+        name: logoName.trim(),
+        isPrimary: isPrimaryLogo || logos.length === 0
+      });
 
       if (response.success) {
-        setSuccess(`${type === 'logo' ? 'Logo' : 'Template'} uploaded successfully!`);
-        
-        // Reset form
-        if (type === 'logo') {
-          setLogoPreview(null);
-          setLogoName('');
-          setIsPrimaryLogo(false);
-        } else {
-          setTemplatePreview(null);
-          setTemplateName('');
-        }
-
-        // Refresh assets
+        setSuccess('Logo uploaded successfully!');
+        setLogoPreview(null);
+        setLogoName('');
+        setIsPrimaryLogo(false);
         await fetchAssets();
       } else {
         setError(response.message || 'Failed to upload');
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to upload asset');
+      setError(err.message || 'Failed to upload logo');
     } finally {
       setUploading(null);
     }
@@ -261,7 +215,7 @@ const BrandAssets: React.FC = () => {
             Brand Assets
           </h1>
           <p className={`${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-            Store your brand logos and templates for quick access when creating posters
+            Upload your brand logos — AI will automatically place them in the best position on generated images
           </p>
         </div>
 
@@ -283,7 +237,7 @@ const BrandAssets: React.FC = () => {
           </div>
         )}
 
-        <div className="grid lg:grid-cols-2 gap-8">
+        <div className="max-w-xl">
           {/* Logos Section */}
           <div className={`${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-gray-200'} border rounded-xl p-6`}>
             <div className="flex items-center gap-3 mb-6">
@@ -303,7 +257,7 @@ const BrandAssets: React.FC = () => {
             {/* Upload Zone */}
             <div
               onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => handleDrop(e, 'logo')}
+              onDrop={(e) => handleDrop(e)}
               className={`border-2 border-dashed rounded-lg p-6 mb-4 text-center transition-colors
                 ${isDarkMode 
                   ? 'border-slate-600 hover:border-[#ffcc29]/50 bg-slate-800/30' 
@@ -337,7 +291,7 @@ const BrandAssets: React.FC = () => {
                     type="file"
                     accept="image/*"
                     className="hidden"
-                    onChange={(e) => handleFileSelect(e, 'logo')}
+                    onChange={(e) => handleFileSelect(e)}
                   />
                 </label>
               )}
@@ -358,47 +312,6 @@ const BrandAssets: React.FC = () => {
                   } focus:outline-none focus:ring-2 focus:ring-[#ffcc29]/50`}
                 />
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'} mb-1 block`}>
-                      Default Position
-                    </label>
-                    <select
-                      value={logoPosition}
-                      onChange={(e) => setLogoPosition(e.target.value)}
-                      className={`w-full px-3 py-2 rounded-lg border ${
-                        isDarkMode 
-                          ? 'bg-slate-800 border-slate-600 text-white' 
-                          : 'bg-white border-gray-300 text-gray-900'
-                      } focus:outline-none focus:ring-2 focus:ring-[#ffcc29]/50`}
-                    >
-                      <option value="top-left">Top Left</option>
-                      <option value="top-right">Top Right</option>
-                      <option value="bottom-left">Bottom Left</option>
-                      <option value="bottom-right">Bottom Right</option>
-                      <option value="center">Center</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'} mb-1 block`}>
-                      Default Size
-                    </label>
-                    <select
-                      value={logoSize}
-                      onChange={(e) => setLogoSize(e.target.value)}
-                      className={`w-full px-3 py-2 rounded-lg border ${
-                        isDarkMode 
-                          ? 'bg-slate-800 border-slate-600 text-white' 
-                          : 'bg-white border-gray-300 text-gray-900'
-                      } focus:outline-none focus:ring-2 focus:ring-[#ffcc29]/50`}
-                    >
-                      <option value="small">Small (10%)</option>
-                      <option value="medium">Medium (15%)</option>
-                      <option value="large">Large (20%)</option>
-                    </select>
-                  </div>
-                </div>
-
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
@@ -412,7 +325,7 @@ const BrandAssets: React.FC = () => {
                 </label>
 
                 <button
-                  onClick={() => handleUpload('logo')}
+                  onClick={() => handleUpload()}
                   disabled={uploading === 'logo'}
                   className="w-full py-2.5 bg-[#ffcc29] text-[#070A12] font-semibold rounded-lg hover:bg-[#ffcc29]/90 disabled:opacity-50 flex items-center justify-center gap-2"
                 >
@@ -485,150 +398,6 @@ const BrandAssets: React.FC = () => {
             </div>
           </div>
 
-          {/* Templates Section */}
-          <div className={`${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-gray-200'} border rounded-xl p-6`}>
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
-                <FileImage className="w-5 h-5 text-purple-400" />
-              </div>
-              <div>
-                <h2 className={`text-xl font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                  Templates
-                </h2>
-                <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                  {templates.length} template{templates.length !== 1 ? 's' : ''} saved
-                </p>
-              </div>
-            </div>
-
-            {/* Upload Zone */}
-            <div
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => handleDrop(e, 'template')}
-              className={`border-2 border-dashed rounded-lg p-6 mb-4 text-center transition-colors
-                ${isDarkMode 
-                  ? 'border-slate-600 hover:border-purple-500/50 bg-slate-800/30' 
-                  : 'border-gray-300 hover:border-purple-500 bg-gray-50'
-                } cursor-pointer`}
-            >
-              {templatePreview ? (
-                <div className="space-y-4">
-                  <img 
-                    src={templatePreview} 
-                    alt="Template preview" 
-                    className="max-h-40 mx-auto object-contain rounded-lg"
-                  />
-                  <button 
-                    onClick={() => { setTemplatePreview(null); setTemplateName(''); }}
-                    className={`text-sm ${isDarkMode ? 'text-gray-400 hover:text-red-400' : 'text-gray-500 hover:text-red-500'}`}
-                  >
-                    Remove
-                  </button>
-                </div>
-              ) : (
-                <label className="cursor-pointer">
-                  <Upload className={`w-10 h-10 mx-auto mb-3 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`} />
-                  <p className={`font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                    Drop template here or click to browse
-                  </p>
-                  <p className={`text-sm ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
-                    PNG, JPG, WEBP supported
-                  </p>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => handleFileSelect(e, 'template')}
-                  />
-                </label>
-              )}
-            </div>
-
-            {/* Upload Form */}
-            {templatePreview && (
-              <div className="space-y-4 mb-6">
-                <input
-                  type="text"
-                  placeholder="Template name (e.g., Instagram Post)"
-                  value={templateName}
-                  onChange={(e) => setTemplateName(e.target.value)}
-                  className={`w-full px-4 py-2 rounded-lg border ${
-                    isDarkMode 
-                      ? 'bg-slate-800 border-slate-600 text-white placeholder-gray-500' 
-                      : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
-                  } focus:outline-none focus:ring-2 focus:ring-purple-500/50`}
-                />
-
-                <button
-                  onClick={() => handleUpload('template')}
-                  disabled={uploading === 'template'}
-                  className="w-full py-2.5 bg-purple-500 text-white font-semibold rounded-lg hover:bg-purple-600 disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {uploading === 'template' ? (
-                    <><Loader2 className="w-4 h-4 animate-spin" /> Uploading...</>
-                  ) : (
-                    <><Upload className="w-4 h-4" /> Upload Template</>
-                  )}
-                </button>
-              </div>
-            )}
-
-            {/* Existing Templates */}
-            <div className="space-y-3">
-              <h3 className={`text-sm font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-600'} uppercase tracking-wide`}>
-                Saved Templates
-              </h3>
-              {templates.length === 0 ? (
-                <p className={`text-sm ${isDarkMode ? 'text-gray-500' : 'text-gray-400'} py-4 text-center`}>
-                  No templates uploaded yet
-                </p>
-              ) : (
-                <div className="grid grid-cols-2 gap-3">
-                  {templates.map((template) => (
-                    <div 
-                      key={template._id}
-                      className={`relative group rounded-lg border overflow-hidden ${
-                        isDarkMode ? 'border-slate-700 bg-slate-800/50' : 'border-gray-200 bg-gray-50'
-                      }`}
-                    >
-                      <div className="aspect-video flex items-center justify-center">
-                        <img 
-                          src={template.url} 
-                          alt={template.name}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                      
-                      {/* Overlay Actions */}
-                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                        <a
-                          href={template.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="p-2 rounded-lg bg-white/20 text-white hover:bg-white/30"
-                          title="View Full Size"
-                        >
-                          <Download className="w-4 h-4" />
-                        </a>
-                        <button
-                          onClick={() => handleDelete(template)}
-                          className="p-2 rounded-lg bg-red-500/80 text-white hover:bg-red-500"
-                          title="Delete"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-
-                      {/* Name Badge */}
-                      <div className={`px-3 py-2 text-xs truncate ${isDarkMode ? 'bg-slate-900/80 text-gray-300' : 'bg-white text-gray-700'}`}>
-                        {template.name}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
         </div>
       </div>
     </div>
