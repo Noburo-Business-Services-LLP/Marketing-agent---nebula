@@ -229,11 +229,10 @@ router.put('/icp-strategy', protect, async (req, res) => {
 });
 
 /**
- * GET /api/campaigns/generate-campaign-stream
+ * POST /api/campaigns/generate-campaign-stream
  * SSE endpoint — generates campaign posts with AI images one by one, streaming each to the frontend
- * IMPORTANT: Must be defined BEFORE /:id route to avoid being caught by the wildcard
  */
-router.get('/generate-campaign-stream', protect, checkTrial, async (req, res) => {
+router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) => {
   // Set SSE headers
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
@@ -254,17 +253,17 @@ router.get('/generate-campaign-stream', protect, checkTrial, async (req, res) =>
     const user = await User.findById(userId);
     const bp = user?.businessProfile || {};
 
-    // Parse params from query string
+    // Parse params from request body (POST)
     const {
       campaignName, campaignDescription, objective,
-      platforms: platformsStr, tone, aspectRatio,
+      platforms: platformsInput, tone, aspectRatio,
       keyMessages, duration, startDate: startDateParam,
-      preferredDays: daysStr, targetAge, targetGender,
+      preferredDays: daysInput, targetAge, targetGender,
       targetLocation, targetInterests, productLogo
-    } = req.query;
+    } = req.body;
 
-    const platforms = platformsStr ? platformsStr.split(',') : ['instagram'];
-    const preferredDays = daysStr ? daysStr.split(',') : ['monday', 'wednesday', 'friday'];
+    const platforms = Array.isArray(platformsInput) ? platformsInput : (platformsInput ? platformsInput.split(',') : ['instagram']);
+    const preferredDays = Array.isArray(daysInput) ? daysInput : (daysInput ? daysInput.split(',') : ['monday', 'wednesday', 'friday']);
     const startDate = startDateParam || new Date().toISOString().split('T')[0];
     const weeks = duration === '2weeks' ? 2 : 1;
     const totalPosts = Math.min(preferredDays.length * weeks, 14);
@@ -299,38 +298,43 @@ router.get('/generate-campaign-stream', protect, checkTrial, async (req, res) =>
       currentDay++;
     }
 
-    // Step 1: Generate all captions via Gemini
-    const captionPrompt = `You are an expert social media marketing strategist. Create ${totalPosts} engaging posts for a marketing campaign.
+    // Step 1: Generate all captions via Gemini (ROCI format prompt)
+    const captionPrompt = `ROLE: You are a senior social media strategist and copywriter at a leading digital marketing agency. You craft high-converting, scroll-stopping social media campaigns for premium brands.
 
-CAMPAIGN: "${campaignName}" - ${campaignDescription || 'Marketing campaign'}
-OBJECTIVE: ${objective || 'awareness'}
-TARGET: ${targetAge || '18-35'} age, ${targetGender || 'all'} gender${targetLocation ? ', ' + targetLocation : ''}${targetInterests ? ', interests: ' + targetInterests : ''}
-PLATFORMS: ${platforms.join(', ')}
-TONE: ${tone || 'professional'}
-KEY MESSAGES: ${keyMessages || 'Not specified'}
-BRAND: ${bp.companyName || bp.name || 'Brand'} (${bp.industry || 'General'})
+OBJECTIVE: Create exactly ${totalPosts} unique, varied social media posts for a marketing campaign. Each post must feel distinct — different angles, hooks, and content themes — while maintaining a cohesive brand voice across the series. Also provide a detailed image description for each post that will be used to generate AI ad creatives.
 
-REQUIREMENTS:
-1. Create exactly ${totalPosts} unique posts
-2. Vary themes: educational, promotional, engagement, storytelling, behind-the-scenes
-3. Include emojis, platform-appropriate hashtags
-4. Posts should build a cohesive brand narrative across the campaign
-5. For each post, provide a DETAILED imageDescription — describe the visual: subject, colors, mood, style, text overlays, composition. This will be used for AI image generation.
+CONTEXT:
+- Brand: ${bp.companyName || bp.name || 'Brand'} (${bp.industry || 'General'} industry)
+- Campaign: "${campaignName}"${campaignDescription ? ` — ${campaignDescription}` : ''}
+- Objective: ${objective || 'awareness'}
+- Target audience: ${targetAge || '18-35'} age, ${targetGender || 'all'} gender${targetLocation ? ', located in ' + targetLocation : ''}${targetInterests ? ', interested in ' + targetInterests : ''}
+- Platforms: ${platforms.join(', ')}
+- Tone: ${tone || 'professional'}
+${keyMessages ? `- Core message (use as UNDERLYING THEME, do NOT repeat verbatim in every post): ${keyMessages}` : ''}
 
-Return ONLY valid JSON:
+INSTRUCTIONS:
+1. Create exactly ${totalPosts} posts. Each post MUST have a DIFFERENT content angle. Distribute across these themes: problem/solution (2-3 posts), social proof/testimonial (1-2 posts), educational/tips (2-3 posts), behind-the-scenes/story (1-2 posts), promotional/CTA (1-2 posts), engagement/question (1 post). Adjust distribution based on total count.
+2. Captions must be platform-native: ${platforms.includes('twitter') ? 'Twitter posts under 280 chars.' : ''} ${platforms.includes('instagram') ? 'Instagram captions with hook in first line.' : ''} ${platforms.includes('linkedin') ? 'LinkedIn posts that open with a bold statement or question.' : ''} Use natural language, not corporate jargon.
+3. Each caption should open with a strong hook (question, bold claim, statistic, or story opener) — the first line must make someone stop scrolling.
+4. Include 3-5 relevant hashtags per post. Mix broad and niche hashtags. Never use generic tags like #marketing or #business alone.
+5. Include appropriate emojis but don't overdo it (2-4 per post max).
+6. The imageDescription for each post should describe a PROFESSIONAL AD CREATIVE — describe the visual style (photography, illustration, graphic design), subjects, colors, mood, lighting, and composition. Do NOT mention aspect ratios, post numbers, "Brand" labels, or any metadata. Do NOT use placeholder text like [Date] or [Name]. Describe it as if briefing a professional designer.
+7. The key message should influence the overall campaign narrative but each post should express it differently — through stories, statistics, questions, tips, or social proof. NEVER copy-paste the same message across posts.
+
+Return ONLY valid JSON (no markdown, no backticks):
 {
   "posts": [
     {
-      "platform": "platform_name",
-      "caption": "Full caption with emojis",
-      "hashtags": ["#tag1", "#tag2"],
-      "contentTheme": "educational|promotional|engagement|storytelling",
-      "imageDescription": "Detailed visual description for image generation — be specific about colors, composition, text overlays, mood, subjects"
+      "platform": "${platforms[0] || 'instagram'}",
+      "caption": "The full caption text with emojis and line breaks",
+      "hashtags": ["#tag1", "#tag2", "#tag3"],
+      "contentTheme": "educational|promotional|engagement|storytelling|social_proof|problem_solution",
+      "imageDescription": "Detailed visual description for AI image generation — describe the creative direction, visual style, subjects, colors, mood, composition. No metadata or placeholder text."
     }
   ]
 }`;
 
-    const textResponse = await callGemini(captionPrompt, { maxTokens: 4000, temperature: 0.8, skipCache: true });
+    const textResponse = await callGemini(captionPrompt, { maxTokens: 8000, temperature: 0.85, skipCache: true });
     const parsed = parseGeminiJSON(textResponse);
 
     if (!parsed?.posts?.length) {

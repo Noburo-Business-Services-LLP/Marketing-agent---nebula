@@ -2837,6 +2837,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
     const [platforms, setPlatforms] = useState<string[]>(['instagram']);
     const [contentTone, setContentTone] = useState<'professional' | 'casual' | 'humorous' | 'inspirational' | 'educational'>('professional');
     const [contentType, setContentType] = useState<'image' | 'video' | 'carousel' | 'story'>('image');
+    const [selectedAspectRatio, setSelectedAspectRatio] = useState<string>('1:1');
     const [keyMessages, setKeyMessages] = useState('');
     const [callToAction, setCallToAction] = useState('');
     const [productLogo, setProductLogo] = useState<string | null>(null);
@@ -2902,26 +2903,32 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
       const apiBaseUrl = window.location.hostname !== 'localhost' ? '' : 'http://localhost:5000';
       const token = localStorage.getItem('authToken');
 
-      const params = new URLSearchParams({
+      const requestBody = {
         campaignName: campaignName || '',
         campaignDescription: campaignDescription || '',
         objective: objective || 'awareness',
-        platforms: platforms.join(','),
+        platforms,
         tone: contentTone || 'professional',
-        aspectRatio: contentType || '1:1',
+        aspectRatio: selectedAspectRatio || '1:1',
         keyMessages: keyMessages || '',
         duration: campaignDuration || '1week',
         startDate: startDate || new Date().toISOString().split('T')[0],
-        preferredDays: preferredDays.join(','),
+        preferredDays,
         targetAge: targetAge || '18-35',
         targetGender: targetGender || 'all',
         targetLocation: targetLocation || '',
         targetInterests: targetInterests || '',
-      });
+        productLogo: productLogo || null,
+      };
 
       try {
-        const response = await fetch(`${apiBaseUrl}/api/campaigns/generate-campaign-stream?${params.toString()}`, {
-          headers: { 'Authorization': `Bearer ${token}` }
+        const response = await fetch(`${apiBaseUrl}/api/campaigns/generate-campaign-stream`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(requestBody)
         });
 
         if (!response.ok) {
@@ -3402,9 +3409,9 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                                       <button
                                         key={ratio.value}
                                         type="button"
-                                        onClick={() => setContentType(ratio.value as any)}
+                                        onClick={() => setSelectedAspectRatio(ratio.value)}
                                         className={`flex flex-col items-center justify-end gap-2 p-3 rounded-xl border-2 transition-all duration-200 ${
-                                          contentType === ratio.value
+                                          selectedAspectRatio === ratio.value
                                             ? 'border-[#ffcc29] bg-[#ffcc29]/10 shadow-md shadow-[#ffcc29]/20'
                                             : isDarkMode
                                               ? 'border-slate-700 bg-slate-800/30 hover:border-slate-500'
@@ -3414,7 +3421,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                                         <div
                                           style={{ width: ratio.w, height: ratio.h }}
                                           className={`rounded transition-colors ${
-                                            contentType === ratio.value
+                                            selectedAspectRatio === ratio.value
                                               ? 'bg-[#ffcc29]/30 border border-[#ffcc29]/50'
                                               : isDarkMode
                                                 ? 'bg-slate-600/50 border border-slate-600'
@@ -3423,7 +3430,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                                         />
                                         <div className="text-center">
                                           <span className={`text-xs font-bold block ${
-                                            contentType === ratio.value ? 'text-[#ffcc29]' : theme.text
+                                            selectedAspectRatio === ratio.value ? 'text-[#ffcc29]' : theme.text
                                           }`}>
                                             {ratio.value}
                                           </span>

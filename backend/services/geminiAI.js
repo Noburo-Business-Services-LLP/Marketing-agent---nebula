@@ -3952,45 +3952,27 @@ async function generateCampaignImageNanoBanana(imageDescription, options = {}) {
     keyMessages = '',
   } = options;
 
-  // Aspect ratio to pixel dimensions for the prompt
-  const ratioDimensions = {
-    '1:1': { desc: 'square (1080x1080)', w: 1080, h: 1080 },
-    '3:4': { desc: 'portrait 3:4 (1080x1440)', w: 1080, h: 1440 },
-    '4:3': { desc: 'landscape 4:3 (1440x1080)', w: 1440, h: 1080 },
-    '4:5': { desc: 'Instagram portrait 4:5 (1080x1350)', w: 1080, h: 1350 },
-    '9:16': { desc: 'story/reel 9:16 (1080x1920)', w: 1080, h: 1920 },
-    '16:9': { desc: 'widescreen 16:9 (1920x1080)', w: 1920, h: 1080 },
-  };
+  const prompt = `ROLE: You are an elite creative director at a top-tier advertising agency. You create award-winning social media ad creatives that drive engagement and conversions for global brands.
 
-  const dims = ratioDimensions[aspectRatio] || ratioDimensions['1:1'];
+OBJECTIVE: Generate a single, publication-ready social media ad image that looks like it was produced by a professional design team. The image must be visually stunning, immediately attention-grabbing in a social feed, and communicate the brand message through design — not through literal text dumps.
 
-  const logoInstruction = brandName
-    ? `BRAND INTEGRATION: Incorporate the brand name "${brandName}" naturally into the design. Place a professional brand watermark, logo area, or brand bar in the composition — it can be a bottom bar with the brand name, a corner badge, or subtly embedded into the design. Make it look like an official branded post, not a generic image with a slapped-on watermark.`
-    : '';
+CONTEXT:
+- Brand: ${brandName || 'The brand'}${industry ? ` (${industry} industry)` : ''}
+- Campaign theme: ${campaignTheme || 'Marketing campaign'}
+- Visual direction: ${imageDescription}
+- Tone & mood: ${tone || 'professional'}
+${keyMessages ? `- Campaign messaging (for design inspiration, NOT to be written verbatim on the image): ${keyMessages}` : ''}
 
-  const consistencyInstruction = totalPosts > 1
-    ? `VISUAL CONSISTENCY: This is post ${postIndex + 1} of ${totalPosts} in a campaign series themed "${campaignTheme}". Maintain a consistent visual style, color palette, and design language across all posts. Use similar typography style, color scheme, and composition approach.`
-    : '';
-
-  const prompt = `Create a professional, stunning social media marketing post image.
-
-DESIGN BRIEF:
-${imageDescription}
-
-FORMAT: ${dims.desc} — the image MUST be in ${aspectRatio} aspect ratio.
-STYLE: ${tone} tone, modern design, visually striking, social media optimized.
-INDUSTRY: ${industry || 'general business'}
-${keyMessages ? `KEY MESSAGE: ${keyMessages}` : ''}
-${logoInstruction}
-${consistencyInstruction}
-
-IMPORTANT RULES:
-1. The image must be publication-ready for social media
-2. Use bold, clean typography if including text overlays
-3. Create a cohesive color palette that feels premium
-4. The design should immediately grab attention in a social feed
-5. Output the image in exactly ${aspectRatio} aspect ratio
-6. Make it look like it was designed by a professional graphic designer`;
+INSTRUCTIONS:
+1. DESIGN QUALITY: Create a polished, agency-grade ad creative. Think Canva Pro templates, not PowerPoint slides. Use professional color grading, balanced composition, and modern design trends (gradients, glassmorphism, bold typography, lifestyle photography style, etc.)
+2. ASPECT RATIO: The image MUST be in exactly ${aspectRatio} aspect ratio. This is critical.
+3. RESOLUTION: Output at 1024px on the longest edge maximum. Do not exceed 1K resolution.
+4. TEXT ON IMAGE: If the design calls for text overlays, keep them SHORT (3-7 words max). Use professional typography — no more than 2 font styles. The text should be a punchy headline or tagline, NOT a paragraph. Never put placeholder text like [Date], [Name], [CTA], etc.
+5. BRAND IDENTITY: ${brandName ? `Subtly incorporate "${brandName}" — a small, elegant brand name in a corner or a minimal brand bar at the bottom. It should feel native to the design, like a real brand's post.` : 'Make the design look professionally branded.'}
+6. NO METADATA: Do NOT include any of the following in the image: post numbers, aspect ratio labels, "Brand" labels, campaign names, watermark text, frame borders, or any UI-like elements. The image should look like a final published ad, not a draft with annotations.
+7. VISUAL STORYTELLING: Let the imagery communicate the message. Use evocative visuals, strong focal points, and emotional resonance rather than explaining everything with text.
+8. COLOR PALETTE: Use a cohesive, premium color palette. ${tone === 'luxurious' ? 'Think dark tones with gold/silver accents.' : tone === 'playful' ? 'Use vibrant, energetic colors.' : 'Use modern, clean colors that feel trustworthy and professional.'}
+${totalPosts > 1 ? `9. SERIES CONSISTENCY: This is part of a ${totalPosts}-post campaign series. Maintain a consistent visual style, color palette, and design language that ties all posts together as a cohesive campaign.` : ''}`;
 
   try {
     console.log(`🎨 [NanoBanana2] Generating post ${postIndex + 1}/${totalPosts} in ${aspectRatio}...`);
@@ -3999,7 +3981,7 @@ IMPORTANT RULES:
 
     const parts = [];
 
-    // If brand logo provided, include it as reference
+    // If brand logo provided, include it as inline image reference
     if (brandLogo) {
       let logoData = brandLogo;
       let logoMime = 'image/png';
@@ -4013,7 +3995,7 @@ IMPORTANT RULES:
       parts.push({
         inlineData: { mimeType: logoMime, data: logoData }
       });
-      parts.push({ text: `This is the brand logo. Incorporate it naturally into the post design.\n\n${prompt}` });
+      parts.push({ text: `The image above is the brand logo. Integrate it elegantly into the ad design — place it naturally as part of the composition (corner placement, brand bar, or embedded in the layout). Do NOT just slap it as a watermark.\n\n${prompt}` });
     } else {
       parts.push({ text: prompt });
     }
