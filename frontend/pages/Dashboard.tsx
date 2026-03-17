@@ -44,26 +44,8 @@ const SectionButtons: React.FC<{
   variant?: 'light' | 'dark';
 }> = ({ sectionType, sectionData, variant = 'light' }) => {
   const [showSynopsis, setShowSynopsis] = useState(false);
-  const [synopsis, setSynopsis] = useState<{ synopsis: string; insights: string[]; trend: 'up' | 'down' | 'stable' } | null>(null);
-  const [loadingSynopsis, setLoadingSynopsis] = useState(false);
   const [isHoveringInfo, setIsHoveringInfo] = useState(false);
-  const [isHoveringD, setIsHoveringD] = useState(false);
   const infoRef = useRef<HTMLDivElement>(null);
-  const dRef = useRef<HTMLDivElement>(null);
-
-  const handleSynopsisHover = async () => {
-    setIsHoveringD(true);
-    if (!synopsis && !loadingSynopsis) {
-      setLoadingSynopsis(true);
-      try {
-        const result = await apiService.getSynopsis(sectionType, sectionData);
-        setSynopsis(result);
-      } catch (error) {
-        setSynopsis({ synopsis: 'Unable to generate synopsis.', insights: [], trend: 'stable' });
-      }
-      setLoadingSynopsis(false);
-    }
-  };
 
   const info = sectionInfo[sectionType];
   const isDark = variant === 'dark';
@@ -230,112 +212,6 @@ const SectionButtons: React.FC<{
         )}
       </div>
       
-      {/* Synopsis Button with Hover Tooltip - Click to chat */}
-      <div 
-        className="relative"
-        ref={dRef}
-        onMouseEnter={handleSynopsisHover}
-        onMouseLeave={() => setIsHoveringD(false)}
-      >
-        <button
-          onClick={() => {
-            if (synopsis) {
-              // Dispatch custom event to open chatbot with this synopsis
-              const message = `Tell me more about my ${info?.title || sectionType}: ${synopsis.synopsis}`;
-              window.dispatchEvent(new CustomEvent('openChatWithMessage', { detail: { message, synopsis: synopsis.synopsis, insights: synopsis.insights } }));
-            }
-          }}
-          className={`group relative w-6 h-6 rounded-full flex items-center justify-center transition-all duration-300 text-xs font-bold shadow-sm cursor-pointer ${
-            isDark 
-              ? 'bg-gradient-to-br from-slate-700 to-slate-800 hover:from-slate-600 hover:to-slate-700 text-[#ffcc29] border border-slate-600 hover:border-slate-500 hover:scale-110' 
-              : 'bg-gradient-to-br from-amber-50 to-amber-100 hover:from-amber-100 hover:to-amber-200 text-amber-600 border border-amber-200/50 hover:border-amber-300 hover:scale-110 hover:shadow-md'
-          }`}
-          title="Click to discuss with Daddy"
-        >
-          <span className="relative z-10">d</span>
-          <div className={`absolute inset-0 rounded-full transition-opacity duration-300 ${isDark ? 'bg-slate-600/20' : 'bg-amber-200/30'} opacity-0 group-hover:opacity-100`}></div>
-          {loadingSynopsis && (
-            <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-[#ffcc29] animate-spin"></div>
-          )}
-        </button>
-        
-        {/* Synopsis Hover Tooltip */}
-        {isHoveringD && (
-          <div className="absolute z-50 top-full right-0 mt-2 w-80 animate-in fade-in zoom-in-95 duration-200">
-            <div className="bg-white rounded-xl shadow-xl border border-slate-200 p-4 relative">
-              {/* Arrow */}
-              <div className="absolute -top-2 right-4 w-4 h-4 bg-white border-l border-t border-slate-200 rotate-45"></div>
-              
-              <div className="relative">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <div className="p-1.5 bg-[#ffcc29]/20 rounded-lg">
-                      <FileText className="w-3.5 h-3.5 text-[#ffcc29]" />
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-semibold text-[#0a0f1a]">AI Synopsis</h4>
-                      <p className="text-[10px] text-slate-400">{info?.title}</p>
-                    </div>
-                  </div>
-                  {synopsis && (
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const message = `Tell me more about my ${info?.title || sectionType}: ${synopsis.synopsis}`;
-                        window.dispatchEvent(new CustomEvent('openChatWithMessage', { detail: { message, synopsis: synopsis.synopsis, insights: synopsis.insights } }));
-                      }}
-                      className="text-[10px] bg-[#ffcc29] text-[#070A12] px-2 py-1 rounded-full font-semibold hover:bg-[#e6b825] transition-colors"
-                    >
-                      💬 Ask Daddy
-                    </button>
-                  )}
-                </div>
-                
-                {loadingSynopsis ? (
-                  <div className="flex items-center gap-2 py-4">
-                    <Loader2 className="w-4 h-4 text-[#ffcc29] animate-spin" />
-                    <p className="text-xs text-slate-500">AI is analyzing...</p>
-                  </div>
-                ) : synopsis ? (
-                  <>
-                    {/* Trend Badge */}
-                    <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold mb-2 ${
-                      synopsis.trend === 'up' ? 'bg-emerald-100 text-emerald-700' :
-                      synopsis.trend === 'down' ? 'bg-red-100 text-red-700' :
-                      'bg-gray-100 text-slate-600'
-                    }`}>
-                      {synopsis.trend === 'up' ? '↑ Trending Up' : synopsis.trend === 'down' ? '↓ Trending Down' : '→ Stable'}
-                    </div>
-                    
-                    {/* Synopsis */}
-                    <p className="text-xs text-slate-600 leading-relaxed mb-3">
-                      {synopsis.synopsis}
-                    </p>
-                    
-                    {/* Quick Insights */}
-                    {synopsis.insights && synopsis.insights.length > 0 && (
-                      <div className="border-t border-gray-100 pt-2">
-                        <p className="text-[10px] text-slate-400 uppercase tracking-wide mb-1.5">Key Insights</p>
-                        <ul className="space-y-1">
-                          {synopsis.insights.slice(0, 3).map((insight, idx) => (
-                            <li key={idx} className="text-xs text-slate-600 flex items-start gap-1.5">
-                              <span className="text-[#ffcc29]">💡</span>
-                              <span>{insight}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                    
-                    {/* Click hint */}
-                    <p className="text-[10px] text-slate-400 mt-3 text-center">Click to discuss with Daddy 💬</p>
-                  </>
-                ) : null}
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
     </div>
   );
 };
