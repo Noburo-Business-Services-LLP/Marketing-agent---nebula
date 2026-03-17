@@ -9,7 +9,7 @@ const { protect } = require('../middleware/auth');
 const { checkTrial, deductCredits, requireCredits } = require('../middleware/trialGuard');
 const Campaign = require('../models/Campaign');
 const User = require('../models/User');
-const { callGemini, parseGeminiJSON, generateICPAndStrategy } = require('../services/geminiAI');
+const { callGemini, parseGeminiJSON, generateICPAndStrategy, generateCampaignImageNanoBanana } = require('../services/geminiAI');
 // Import Ayrshare for social media posting
 const { postToSocialMedia, getPostStatus } = require('../services/socialMediaAPI');
 
@@ -766,6 +766,180 @@ Return ONLY valid JSON (no markdown, no code blocks):
   } catch (error) {
     console.error('Generate campaign posts error:', error);
     res.status(500).json({ success: false, message: 'Failed to generate posts', error: error.message });
+  }
+});
+
+/**
+ * GET /api/campaigns/generate-campaign-stream
+ * SSE endpoint — generates campaign posts with AI images one by one, streaming each to the frontend
+ */
+router.get('/generate-campaign-stream', protect, checkTrial, async (req, res) => {
+  // Set SSE headers
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no'
+  });
+
+  const sendEvent = (event, data) => {
+    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  };
+
+  let aborted = false;
+  req.on('close', () => { aborted = true; });
+
+  try {
+    const userId = req.user.userId || req.user.id;
+    const user = await User.findById(userId);
+    const bp = user?.businessProfile || {};
+
+    // Parse params from query string
+    const {
+      campaignName, campaignDescription, objective,
+      platforms: platformsStr, tone, aspectRatio,
+      keyMessages, duration, startDate: startDateParam,
+      preferredDays: daysStr, targetAge, targetGender,
+      targetLocation, targetInterests, productLogo
+    } = req.query;
+
+    const platforms = platformsStr ? platformsStr.split(',') : ['instagram'];
+    const preferredDays = daysStr ? daysStr.split(',') : ['monday', 'wednesday', 'friday'];
+    const startDate = startDateParam || new Date().toISOString().split('T')[0];
+    const weeks = duration === '2weeks' ? 2 : 1;
+    const totalPosts = Math.min(preferredDays.length * weeks, 14);
+
+    // Deduct credits: 1 text generation + 1 per image
+    const creditCost = 7 + (totalPosts * 5); // 7 for text gen + 5 per image
+    const creditResult = await deductCredits(userId, 'campaign_full', totalPosts, `AI campaign generation (${totalPosts} posts with images)`);
+    if (!creditResult.success) {
+      sendEvent('error', { message: creditResult.error, creditsExhausted: true });
+      return res.end();
+    }
+
+    sendEvent('status', { message: 'Generating campaign content...', totalPosts });
+
+    // Generate schedule dates
+    const scheduleDates = [];
+    const start = new Date(startDate);
+    let postsCreated = 0;
+    let currentDay = 0;
+    while (postsCreated < totalPosts && currentDay < 100) {
+      const checkDate = new Date(start);
+      checkDate.setDate(start.getDate() + currentDay);
+      const dayName = checkDate.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+      if (preferredDays.includes(dayName)) {
+        scheduleDates.push({
+          date: checkDate.toISOString().split('T')[0],
+          time: '10:00',
+          week: postsCreated < preferredDays.length ? 1 : 2
+        });
+        postsCreated++;
+      }
+      currentDay++;
+    }
+
+    // Step 1: Generate all captions via Gemini
+    const captionPrompt = `You are an expert social media marketing strategist. Create ${totalPosts} engaging posts for a marketing campaign.
+
+CAMPAIGN: "${campaignName}" - ${campaignDescription || 'Marketing campaign'}
+OBJECTIVE: ${objective || 'awareness'}
+TARGET: ${targetAge || '18-35'} age, ${targetGender || 'all'} gender${targetLocation ? ', ' + targetLocation : ''}${targetInterests ? ', interests: ' + targetInterests : ''}
+PLATFORMS: ${platforms.join(', ')}
+TONE: ${tone || 'professional'}
+KEY MESSAGES: ${keyMessages || 'Not specified'}
+BRAND: ${bp.companyName || bp.name || 'Brand'} (${bp.industry || 'General'})
+
+REQUIREMENTS:
+1. Create exactly ${totalPosts} unique posts
+2. Vary themes: educational, promotional, engagement, storytelling, behind-the-scenes
+3. Include emojis, platform-appropriate hashtags
+4. Posts should build a cohesive brand narrative across the campaign
+5. For each post, provide a DETAILED imageDescription — describe the visual: subject, colors, mood, style, text overlays, composition. This will be used for AI image generation.
+
+Return ONLY valid JSON:
+{
+  "posts": [
+    {
+      "platform": "platform_name",
+      "caption": "Full caption with emojis",
+      "hashtags": ["#tag1", "#tag2"],
+      "contentTheme": "educational|promotional|engagement|storytelling",
+      "imageDescription": "Detailed visual description for image generation — be specific about colors, composition, text overlays, mood, subjects"
+    }
+  ]
+}`;
+
+    const textResponse = await callGemini(captionPrompt, { maxTokens: 4000, temperature: 0.8, skipCache: true });
+    const parsed = parseGeminiJSON(textResponse);
+
+    if (!parsed?.posts?.length) {
+      sendEvent('error', { message: 'Failed to generate campaign content' });
+      return res.end();
+    }
+
+    if (aborted) return res.end();
+
+    sendEvent('status', { message: 'Content generated! Now creating images...', totalPosts });
+
+    // Step 2: Generate images one by one and stream each
+    const postsToProcess = parsed.posts.slice(0, totalPosts);
+
+    for (let i = 0; i < postsToProcess.length; i++) {
+      if (aborted) break;
+
+      const post = postsToProcess[i];
+      const schedule = scheduleDates[i] || { date: startDate, time: '10:00', week: 1 };
+
+      sendEvent('generating', { index: i, total: postsToProcess.length, message: `Generating image ${i + 1} of ${postsToProcess.length}...` });
+
+      // Generate image with Nano Banana 2
+      const imageResult = await generateCampaignImageNanoBanana(post.imageDescription, {
+        aspectRatio: aspectRatio || '1:1',
+        brandName: bp.companyName || bp.name || '',
+        brandLogo: productLogo || null,
+        industry: bp.industry || '',
+        tone: tone || 'professional',
+        postIndex: i,
+        totalPosts: postsToProcess.length,
+        campaignTheme: campaignName,
+        keyMessages: keyMessages || ''
+      });
+
+      const postData = {
+        id: `post-${i + 1}`,
+        index: i,
+        week: schedule.week,
+        platform: post.platform?.toLowerCase() || platforms[i % platforms.length],
+        caption: post.caption,
+        hashtags: Array.isArray(post.hashtags)
+          ? post.hashtags.map(h => h.startsWith('#') ? h : `#${h}`)
+          : ['#marketing'],
+        imageUrl: imageResult.success ? imageResult.imageUrl : '',
+        imageDescription: post.imageDescription || '',
+        suggestedDate: schedule.date,
+        suggestedTime: schedule.time,
+        contentTheme: post.contentTheme || 'promotional',
+        status: 'pending',
+        model: imageResult.success ? imageResult.model : 'failed'
+      };
+
+      sendEvent('post', postData);
+    }
+
+    // Done
+    const updatedUser = await User.findById(userId).select('credits.balance');
+    sendEvent('complete', {
+      totalPosts: postsToProcess.length,
+      creditsRemaining: updatedUser?.credits?.balance ?? 0
+    });
+
+    res.end();
+
+  } catch (error) {
+    console.error('SSE campaign generation error:', error);
+    sendEvent('error', { message: error.message || 'Failed to generate campaign' });
+    res.end();
   }
 });
 

@@ -2811,6 +2811,7 @@ interface GeneratedPost {
   status: 'pending' | 'accepted' | 'edited' | 'regenerating';
   editPrompt?: string;
   isRegenerating?: boolean;
+  week?: number;
 }
 
 const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campaign) => void; isDarkMode: boolean; theme: ReturnType<typeof getThemeClasses> }> = ({ onClose, onSuccess, isDarkMode, theme }) => {
@@ -2874,13 +2875,18 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
     };
 
     // Generate AI posts based on campaign details
+    const [activeWeekTab, setActiveWeekTab] = useState(1);
+    const [generationStatus, setGenerationStatus] = useState('');
+
     const handleGeneratePosts = async () => {
-      // Flat 7 credits for campaign text generation (no bulk images)
+      const totalPosts = preferredDays.length * (campaignDuration === '2weeks' ? 2 : 1);
+      const creditCost = 7 + (totalPosts * 5);
+
       try {
         const creditData = await apiService.getCredits();
         const balance = creditData?.credits?.balance ?? 0;
-        if (balance < 7) {
-          alert(`⚠️ Insufficient credits. You have ${balance} credits but need 7.`);
+        if (balance < creditCost) {
+          alert(`⚠️ Insufficient credits. You have ${balance} credits but need ${creditCost} (7 for text + ${totalPosts * 5} for ${totalPosts} images).`);
           return;
         }
       } catch (err) {
@@ -2889,65 +2895,85 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
 
       setIsGenerating(true);
       setGeneratedPosts([]);
-      
-      // Use relative URL in production, localhost in development
-      const apiBaseUrl = window.location.hostname !== 'localhost' ? '/api' : 'http://localhost:5000/api';
-      
+      setActiveWeekTab(1);
+      setGenerationStatus('Starting campaign generation...');
+      setStep(5);
+
+      const apiBaseUrl = window.location.hostname !== 'localhost' ? '' : 'http://localhost:5000';
+      const token = localStorage.getItem('authToken');
+
+      const params = new URLSearchParams({
+        campaignName: campaignName || '',
+        campaignDescription: campaignDescription || '',
+        objective: objective || 'awareness',
+        platforms: platforms.join(','),
+        tone: contentTone || 'professional',
+        aspectRatio: contentType || '1:1',
+        keyMessages: keyMessages || '',
+        duration: campaignDuration || '1week',
+        startDate: startDate || new Date().toISOString().split('T')[0],
+        preferredDays: preferredDays.join(','),
+        targetAge: targetAge || '18-35',
+        targetGender: targetGender || 'all',
+        targetLocation: targetLocation || '',
+        targetInterests: targetInterests || '',
+      });
+
       try {
-        const response = await fetch(`${apiBaseUrl}/campaigns/generate-campaign-posts`, {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-          },
-          body: JSON.stringify({
-            campaignName,
-            campaignDescription,
-            objective,
-            targetAudience: {
-              age: targetAge,
-              gender: targetGender,
-              location: targetLocation,
-              interests: targetInterests,
-              description: audienceDescription
-            },
-            content: {
-              platforms,
-              tone: contentTone,
-              type: contentType,
-              keyMessages,
-              callToAction,
-              productLogo // Pass the product logo to backend for image generation
-            },
-            scheduling: {
-              duration: campaignDuration,
-              postsPerWeek,
-              preferredDays,
-              preferredTimes,
-              startDate
-            },
-            budget,
-            kpis
-          })
+        const response = await fetch(`${apiBaseUrl}/api/campaigns/generate-campaign-stream?${params.toString()}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
         });
-        
-        const data = await response.json();
-        
-        if (data.success && data.posts) {
-          setGeneratedPosts(data.posts.map((post: any, idx: number) => ({
-            ...post,
-            id: post.id || `post-${idx}`,
-            status: 'pending'
-          })));
-          setStep(5); // Go to review step
-        } else {
-          throw new Error(data.message || 'Failed to generate posts');
+
+        if (!response.ok) {
+          throw new Error('Failed to connect to generation stream');
+        }
+
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        if (!reader) throw new Error('No response body');
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          let currentEvent = '';
+          for (const line of lines) {
+            if (line.startsWith('event: ')) {
+              currentEvent = line.slice(7).trim();
+            } else if (line.startsWith('data: ') && currentEvent) {
+              try {
+                const data = JSON.parse(line.slice(6));
+
+                if (currentEvent === 'status') {
+                  setGenerationStatus(data.message);
+                } else if (currentEvent === 'generating') {
+                  setGenerationStatus(data.message);
+                } else if (currentEvent === 'post') {
+                  setGeneratedPosts(prev => [...prev, { ...data, status: 'pending' }]);
+                } else if (currentEvent === 'complete') {
+                  setGenerationStatus('');
+                } else if (currentEvent === 'error') {
+                  alert(data.message || 'Generation failed');
+                }
+              } catch (e) {
+                // skip malformed JSON
+              }
+              currentEvent = '';
+            }
+          }
         }
       } catch (error) {
         console.error('Error generating posts:', error);
         alert('Failed to generate posts. Please try again.');
       } finally {
         setIsGenerating(false);
+        setGenerationStatus('');
       }
     };
 
@@ -3500,11 +3526,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                                       placeholder="Select or enter custom duration"
                                       options={[
                                         { value: '1week', label: '1 Week' },
-                                        { value: '2weeks', label: '2 Weeks' },
-                                        { value: '1month', label: '1 Month' },
-                                        { value: '3months', label: '3 Months' },
-                                        { value: '6months', label: '6 Months' },
-                                        { value: '1year', label: '1 Year' }
+                                        { value: '2weeks', label: '2 Weeks' }
                                       ]}
                                     />
                                   </div>
@@ -3551,36 +3573,6 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                                   <p className={`text-sm ${theme.textSecondary} mt-1`}>Define your success metrics for this campaign</p>
                                 </div>
                                 
-                                <div>
-                                  <label className={labelClasses}>Key Performance Indicators (KPIs)</label>
-                                  <div className="grid grid-cols-3 gap-2">
-                                    {[
-                                      { id: 'impressions', label: 'Impressions', icon: '👁️' },
-                                      { id: 'engagement', label: 'Engagement', icon: '💬' },
-                                      { id: 'clicks', label: 'Clicks', icon: '🔗' },
-                                      { id: 'conversions', label: 'Conversions', icon: '✅' },
-                                      { id: 'followers', label: 'New Followers', icon: '👥' },
-                                      { id: 'shares', label: 'Shares', icon: '📤' }
-                                    ].map(kpi => (
-                                      <button
-                                        key={kpi.id}
-                                        onClick={() => toggleKpi(kpi.id)}
-                                        className={`flex items-center gap-2 p-3 rounded-lg border text-sm transition-all ${
-                                          kpis.includes(kpi.id)
-                                            ? 'bg-[#ffcc29]/20 border-[#ffcc29] text-[#ffcc29]'
-                                            : isDarkMode
-                                              ? 'border-slate-700 text-slate-400 hover:border-[#ffcc29]/50'
-                                              : 'border-slate-200 text-slate-600 hover:border-[#ffcc29]/50'
-                                        }`}
-                                      >
-                                        <span>{kpi.icon}</span>
-                                        <span>{kpi.label}</span>
-                                        {kpis.includes(kpi.id) && <Check className="w-4 h-4 ml-auto" />}
-                                      </button>
-                                    ))}
-                                  </div>
-                                </div>
-                                
                                 {/* Summary Card */}
                                 <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-[#161b22] border-slate-700/50' : 'bg-slate-50 border-slate-200'}`}>
                                   <h4 className={`font-bold ${theme.text} mb-3`}>📋 Campaign Summary</h4>
@@ -3588,8 +3580,8 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                                     <div><span className={theme.textMuted}>Name:</span> <span className={theme.text}>{campaignName || '—'}</span></div>
                                     <div><span className={theme.textMuted}>Objective:</span> <span className={theme.text}>{objective}</span></div>
                                     <div><span className={theme.textMuted}>Platforms:</span> <span className={theme.text}>{platforms.join(', ') || '—'}</span></div>
-                                    <div><span className={theme.textMuted}>Duration:</span> <span className={theme.text}>{campaignDuration}</span></div>
-                                    <div><span className={theme.textMuted}>Posts/Week:</span> <span className={theme.text}>{postsPerWeek}</span></div>
+                                    <div><span className={theme.textMuted}>Duration:</span> <span className={theme.text}>{campaignDuration === '2weeks' ? '2 Weeks' : '1 Week'}</span></div>
+                                    <div><span className={theme.textMuted}>Total Posts:</span> <span className={theme.text}>{preferredDays.length * (campaignDuration === '2weeks' ? 2 : 1)}</span></div>
                                     <div><span className={theme.textMuted}>Target:</span> <span className={theme.text}>{targetAge}, {targetGender}</span></div>
                                   </div>
                                 </div>
@@ -3598,201 +3590,269 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
 
                         {/* Step 5: Review Generated Posts */}
                         {step === 5 && (
-                            <div className="space-y-6 animate-in fade-in duration-300">
+                            <div className="space-y-4 animate-in fade-in duration-300">
+                                {/* Header */}
                                 <div className="flex items-center justify-between">
                                   <div>
                                     <h3 className={`text-xl font-bold ${theme.text}`}>Review Generated Posts</h3>
-                                    <p className={`text-sm ${theme.textSecondary} mt-1`}>
-                                      AI has created {generatedPosts.length} posts for your campaign. Review and customize them.
-                                    </p>
+                                    {generationStatus ? (
+                                      <p className="text-sm text-[#ffcc29] mt-1 flex items-center gap-2">
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                        {generationStatus}
+                                      </p>
+                                    ) : (
+                                      <p className={`text-sm ${theme.textSecondary} mt-1`}>
+                                        {generatedPosts.length} posts generated. Review, refine, and schedule.
+                                      </p>
+                                    )}
                                   </div>
-                                  <div className="flex gap-2">
+                                  {!isGenerating && generatedPosts.length > 0 && (
                                     <button
                                       onClick={() => setGeneratedPosts(prev => prev.map(p => ({ ...p, status: 'accepted' })))}
-                                      disabled={generatedPosts.every(p => p.status === 'accepted') || generatedPosts.some(p => p.isRegenerating)}
+                                      disabled={generatedPosts.every(p => p.status === 'accepted')}
                                       className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-green-500/20 text-green-600 hover:bg-green-500/30 disabled:opacity-50 transition-colors"
                                     >
                                       <Check className="w-4 h-4" />
                                       Accept All
                                     </button>
-                                    <button
-                                      onClick={handleGeneratePosts}
-                                      disabled={isGenerating}
-                                      className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium ${isDarkMode ? 'bg-slate-700 hover:bg-slate-600' : 'bg-slate-200 hover:bg-slate-300'} ${theme.text}`}
-                                    >
-                                      <RefreshCw className={`w-4 h-4 ${isGenerating ? 'animate-spin' : ''}`} />
-                                      Regenerate All
-                                      <span className="flex items-center gap-0.5 text-xs opacity-70"><Zap className="w-3 h-3" />7</span>
-                                    </button>
-                                  </div>
+                                  )}
                                 </div>
-                                
-                                <div className="space-y-4 max-h-[50vh] overflow-y-auto pr-2">
-                                  {generatedPosts.map((post, idx) => (
-                                    <div 
-                                      key={post.id}
-                                      className={`p-4 rounded-xl border transition-all ${
-                                        post.isRegenerating || post.status === 'regenerating'
-                                          ? 'opacity-70 border-[#ffcc29]/50 bg-[#ffcc29]/5' 
-                                          : post.status === 'accepted' || post.status === 'edited'
-                                            ? isDarkMode ? 'bg-green-900/10 border-green-500/30' : 'bg-green-50 border-green-200'
-                                            : isDarkMode ? 'bg-[#161b22] border-slate-700/50' : 'bg-white border-slate-200'
-                                      }`}
-                                    >
-                                      <div className="flex gap-4">
-                                        {/* Image Preview with Edit Option */}
-                                        <div className="w-32 shrink-0">
-                                          <div className="relative w-32 h-32 rounded-lg overflow-hidden group">
-                                            {post.isRegenerating ? (
-                                              <div className="w-full h-full flex items-center justify-center bg-slate-800">
-                                                <Loader2 className="w-6 h-6 animate-spin text-[#ffcc29]" />
-                                              </div>
-                                            ) : (
-                                              <>
-                                                <img src={post.imageUrl} alt="" className="w-full h-full object-cover" />
-                                                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                  <button
-                                                    onClick={() => {
-                                                      setEditingImageId(editingImageId === post.id ? null : post.id);
-                                                      setImageEditPrompt('');
-                                                    }}
-                                                    className="p-2 bg-white/20 rounded-full hover:bg-white/30 transition-colors"
-                                                    title="Edit Image"
-                                                  >
-                                                    <Wand2 className="w-4 h-4 text-white" />
-                                                  </button>
+
+                                {/* Week Tabs (only for 2-week campaigns) */}
+                                {campaignDuration === '2weeks' && generatedPosts.length > 0 && (
+                                  <div className="flex gap-2">
+                                    {[1, 2].map(week => {
+                                      const weekPosts = generatedPosts.filter(p => p.week === week);
+                                      return (
+                                        <button
+                                          key={week}
+                                          onClick={() => setActiveWeekTab(week)}
+                                          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                                            activeWeekTab === week
+                                              ? 'bg-[#ffcc29] text-black'
+                                              : isDarkMode
+                                                ? 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                          }`}
+                                        >
+                                          Week {week} ({weekPosts.length} posts)
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+
+                                {/* Post Cards */}
+                                <div className="space-y-4 max-h-[55vh] overflow-y-auto pr-2">
+                                  {/* Loading skeletons for posts still being generated */}
+                                  {(() => {
+                                    const totalExpected = preferredDays.length * (campaignDuration === '2weeks' ? 2 : 1);
+                                    const currentWeekPosts = campaignDuration === '2weeks'
+                                      ? generatedPosts.filter(p => p.week === activeWeekTab)
+                                      : generatedPosts;
+                                    const expectedThisWeek = campaignDuration === '2weeks' ? preferredDays.length : totalExpected;
+                                    const remainingSkeletons = isGenerating ? Math.max(0, expectedThisWeek - currentWeekPosts.length) : 0;
+
+                                    return (
+                                      <>
+                                        {currentWeekPosts.map((post: any) => (
+                                          <div
+                                            key={post.id}
+                                            className={`p-4 rounded-xl border transition-all ${
+                                              post.status === 'accepted'
+                                                ? isDarkMode ? 'bg-green-900/10 border-green-500/30' : 'bg-green-50 border-green-200'
+                                                : isDarkMode ? 'bg-[#161b22] border-slate-700/50' : 'bg-white border-slate-200'
+                                            }`}
+                                          >
+                                            <div className="flex gap-4">
+                                              {/* Image */}
+                                              <div className="w-40 shrink-0">
+                                                <div className="relative w-40 h-40 rounded-lg overflow-hidden group">
+                                                  {post.isRegenerating ? (
+                                                    <div className="w-full h-full flex items-center justify-center bg-slate-800">
+                                                      <Loader2 className="w-6 h-6 animate-spin text-[#ffcc29]" />
+                                                    </div>
+                                                  ) : post.imageUrl ? (
+                                                    <>
+                                                      <img src={post.imageUrl} alt="" className="w-full h-full object-cover" />
+                                                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                                        <button
+                                                          onClick={() => window.open(post.imageUrl, '_blank')}
+                                                          className="p-2 bg-white/20 rounded-full hover:bg-white/30"
+                                                          title="Preview"
+                                                        >
+                                                          <Eye className="w-4 h-4 text-white" />
+                                                        </button>
+                                                        <button
+                                                          onClick={() => {
+                                                            setEditingImageId(editingImageId === post.id ? null : post.id);
+                                                            setImageEditPrompt('');
+                                                          }}
+                                                          className="p-2 bg-white/20 rounded-full hover:bg-white/30"
+                                                          title="Refine with prompt"
+                                                        >
+                                                          <Wand2 className="w-4 h-4 text-white" />
+                                                        </button>
+                                                      </div>
+                                                    </>
+                                                  ) : (
+                                                    <div className="w-full h-full flex items-center justify-center bg-slate-800/50">
+                                                      <ImageIcon className="w-8 h-8 text-slate-500" />
+                                                    </div>
+                                                  )}
                                                 </div>
-                                              </>
-                                            )}
-                                          </div>
-                                          {/* Image Edit Prompt */}
-                                          {editingImageId === post.id && (
-                                            <div className="mt-2 space-y-2">
-                                              <input
-                                                type="text"
-                                                placeholder="Describe changes..."
-                                                value={imageEditPrompt}
-                                                onChange={e => setImageEditPrompt(e.target.value)}
-                                                className={`w-full p-2 text-xs rounded-lg border ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50 text-white placeholder-slate-500' : 'bg-white border-slate-200'}`}
-                                              />
-                                              <button
-                                                onClick={() => handleEditImage(post.id)}
-                                                disabled={!imageEditPrompt.trim() || post.isRegenerating}
-                                                className="w-full p-1.5 bg-[#ffcc29] text-black text-xs font-medium rounded-lg hover:bg-[#e6b825] disabled:opacity-50 flex items-center justify-center gap-1"
-                                              >
-                                                <Wand2 className="w-3 h-3" />
-                                                Apply
-                                              </button>
-                                            </div>
-                                          )}
-                                        </div>
-                                        
-                                        {/* Content */}
-                                        <div className="flex-1 min-w-0">
-                                          <div className="flex items-center gap-2 mb-2">
-                                            <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                                              post.platform === 'instagram' ? 'bg-pink-100 text-pink-700' :
-                                              post.platform === 'facebook' ? 'bg-blue-100 text-blue-700' :
-                                              post.platform === 'twitter' ? 'bg-sky-100 text-sky-700' :
-                                              post.platform === 'linkedin' ? 'bg-blue-100 text-blue-800' :
-                                              'bg-slate-100 text-slate-700'
-                                            }`}>
-                                              {post.platform}
-                                            </span>
-                                            <span className={`text-xs ${theme.textMuted}`}>
-                                              📅 {post.suggestedDate} at {post.suggestedTime}
-                                            </span>
-                                            {post.status === 'accepted' && (
-                                              <span className="text-xs px-2 py-0.5 rounded bg-green-100 text-green-700">
-                                                ✓ Accepted
-                                              </span>
-                                            )}
-                                            {post.isRegenerating && (
-                                              <span className="text-xs px-2 py-0.5 rounded bg-[#ffcc29]/20 text-[#ffcc29]">
-                                                Regenerating...
-                                              </span>
-                                            )}
-                                          </div>
-                                          
-                                          {editingPostId === post.id ? (
-                                            <div className="space-y-2">
-                                              <textarea
-                                                className={`${inputClasses} text-sm resize-none ${post.caption.length > (PLATFORM_LIMITS[post.platform?.toLowerCase()]?.charLimit || 99999) ? 'border-red-500 focus:ring-red-500' : ''}`}
-                                                rows={3}
-                                                value={post.caption}
-                                                onChange={e => handleUpdatePost(post.id, { caption: e.target.value })}
-                                              />
-                                              <CaptionCharCounter caption={post.caption} platforms={[post.platform || '']} isDarkMode={isDarkMode} />
-                                              <input
-                                                className={`${inputClasses} text-sm`}
-                                                value={post.hashtags.join(' ')}
-                                                onChange={e => handleUpdatePost(post.id, { hashtags: e.target.value.split(' ') })}
-                                                placeholder="Hashtags..."
-                                              />
-                                              <div className="grid grid-cols-2 gap-2">
-                                                <input
-                                                  type="date"
-                                                  className={`${inputClasses} text-sm`}
-                                                  value={post.suggestedDate}
-                                                  onChange={e => handleUpdatePost(post.id, { suggestedDate: e.target.value })}
-                                                />
-                                                <input
-                                                  type="time"
-                                                  className={`${inputClasses} text-sm`}
-                                                  value={post.suggestedTime}
-                                                  onChange={e => handleUpdatePost(post.id, { suggestedTime: e.target.value })}
-                                                />
+                                                {/* Refine with prompt */}
+                                                {editingImageId === post.id && (
+                                                  <div className="mt-2 space-y-2">
+                                                    <input
+                                                      type="text"
+                                                      placeholder="Describe changes..."
+                                                      value={imageEditPrompt}
+                                                      onChange={e => setImageEditPrompt(e.target.value)}
+                                                      className={`w-full p-2 text-xs rounded-lg border ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50 text-white placeholder-slate-500' : 'bg-white border-slate-200'}`}
+                                                      onKeyDown={e => e.key === 'Enter' && imageEditPrompt.trim() && handleRegenerateImage(post.id, imageEditPrompt)}
+                                                    />
+                                                    <button
+                                                      onClick={() => handleRegenerateImage(post.id, imageEditPrompt)}
+                                                      disabled={!imageEditPrompt.trim() || post.isRegenerating}
+                                                      className="w-full p-1.5 bg-[#ffcc29] text-black text-xs font-medium rounded-lg hover:bg-[#e6b825] disabled:opacity-50 flex items-center justify-center gap-1"
+                                                    >
+                                                      <Wand2 className="w-3 h-3" />
+                                                      Refine Image
+                                                    </button>
+                                                  </div>
+                                                )}
                                               </div>
-                                              <button
-                                                onClick={() => setEditingPostId(null)}
-                                                className="text-xs text-[#ffcc29] font-medium"
-                                              >
-                                                Done Editing
-                                              </button>
+
+                                              {/* Content */}
+                                              <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                                  <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                                                    post.platform === 'instagram' ? 'bg-pink-100 text-pink-700' :
+                                                    post.platform === 'facebook' ? 'bg-blue-100 text-blue-700' :
+                                                    post.platform === 'twitter' ? 'bg-sky-100 text-sky-700' :
+                                                    post.platform === 'linkedin' ? 'bg-blue-100 text-blue-800' :
+                                                    'bg-slate-100 text-slate-700'
+                                                  }`}>
+                                                    {post.platform}
+                                                  </span>
+                                                  <span className={`text-xs ${theme.textMuted}`}>
+                                                    {post.suggestedDate} at {post.suggestedTime}
+                                                  </span>
+                                                  {post.contentTheme && (
+                                                    <span className={`text-xs px-2 py-0.5 rounded ${isDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-slate-100 text-slate-600'}`}>
+                                                      {post.contentTheme}
+                                                    </span>
+                                                  )}
+                                                  {post.status === 'accepted' && (
+                                                    <span className="text-xs px-2 py-0.5 rounded bg-green-100 text-green-700 font-medium">Accepted</span>
+                                                  )}
+                                                </div>
+
+                                                {editingPostId === post.id ? (
+                                                  <div className="space-y-2">
+                                                    <textarea
+                                                      className={`${inputClasses} text-sm resize-none`}
+                                                      rows={3}
+                                                      value={post.caption}
+                                                      onChange={e => handleUpdatePost(post.id, { caption: e.target.value })}
+                                                    />
+                                                    <input
+                                                      className={`${inputClasses} text-sm`}
+                                                      value={post.hashtags?.join(' ') || ''}
+                                                      onChange={e => handleUpdatePost(post.id, { hashtags: e.target.value.split(' ') })}
+                                                      placeholder="Hashtags..."
+                                                    />
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                      <input type="date" className={`${inputClasses} text-sm`} value={post.suggestedDate} onChange={e => handleUpdatePost(post.id, { suggestedDate: e.target.value })} />
+                                                      <input type="time" className={`${inputClasses} text-sm`} value={post.suggestedTime} onChange={e => handleUpdatePost(post.id, { suggestedTime: e.target.value })} />
+                                                    </div>
+                                                    <button onClick={() => setEditingPostId(null)} className="text-xs text-[#ffcc29] font-medium">Done Editing</button>
+                                                  </div>
+                                                ) : (
+                                                  <>
+                                                    <p className={`text-sm ${theme.textSecondary} line-clamp-3 mb-1`}>{post.caption}</p>
+                                                    <p className="text-xs text-[#ffcc29] mb-2">{(post.hashtags || []).slice(0, 5).join(' ')}</p>
+                                                  </>
+                                                )}
+                                              </div>
+
+                                              {/* Actions */}
+                                              <div className="flex flex-col gap-1.5 shrink-0">
+                                                {!post.isRegenerating && editingPostId !== post.id && (
+                                                  <>
+                                                    <button
+                                                      onClick={() => handleUpdatePost(post.id, { status: post.status === 'accepted' ? 'pending' : 'accepted' })}
+                                                      className={`p-2 rounded-lg transition-colors ${
+                                                        post.status === 'accepted' ? 'bg-green-500 text-white' : 'bg-green-500/20 text-green-500 hover:bg-green-500/30'
+                                                      }`}
+                                                      title={post.status === 'accepted' ? 'Undo accept' : 'Accept'}
+                                                    >
+                                                      <Check className="w-4 h-4" />
+                                                    </button>
+                                                    <button
+                                                      onClick={() => handleRegenerateImage(post.id)}
+                                                      className="p-2 rounded-lg bg-red-500/20 text-red-500 hover:bg-red-500/30 transition-colors"
+                                                      title="Reject & regenerate image"
+                                                    >
+                                                      <X className="w-4 h-4" />
+                                                    </button>
+                                                    <button
+                                                      onClick={() => setEditingPostId(post.id)}
+                                                      className={`p-2 rounded-lg ${isDarkMode ? 'bg-slate-700 hover:bg-slate-600' : 'bg-slate-100 hover:bg-slate-200'} transition-colors`}
+                                                      title="Edit caption & schedule"
+                                                    >
+                                                      <Edit3 className="w-4 h-4" />
+                                                    </button>
+                                                    <button
+                                                      onClick={async () => {
+                                                        setGeneratedPosts(prev => prev.map(p => p.id === post.id ? { ...p, isRegenerating: true } : p));
+                                                        try {
+                                                          const apiBaseUrl = window.location.hostname !== 'localhost' ? '/api' : 'http://localhost:5000/api';
+                                                          const resp = await fetch(`${apiBaseUrl}/campaigns/generate-caption`, {
+                                                            method: 'POST',
+                                                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('authToken')}` },
+                                                            body: JSON.stringify({ platform: post.platform, imageDescription: post.imageDescription, campaignName, objective, tone: contentTone })
+                                                          });
+                                                          const data = await resp.json();
+                                                          if (data.success) {
+                                                            handleUpdatePost(post.id, { caption: data.caption, hashtags: data.hashtags || post.hashtags, isRegenerating: false });
+                                                          }
+                                                        } catch (e) { console.error(e); }
+                                                        setGeneratedPosts(prev => prev.map(p => p.id === post.id ? { ...p, isRegenerating: false } : p));
+                                                      }}
+                                                      className={`p-2 rounded-lg ${isDarkMode ? 'bg-purple-900/30 hover:bg-purple-900/50' : 'bg-purple-50 hover:bg-purple-100'} transition-colors`}
+                                                      title="Generate caption with AI"
+                                                    >
+                                                      <Sparkles className="w-4 h-4 text-purple-500" />
+                                                    </button>
+                                                  </>
+                                                )}
+                                              </div>
                                             </div>
-                                          ) : (
-                                            <>
-                                              <p className={`text-sm ${theme.textSecondary} line-clamp-2 mb-1`}>{post.caption}</p>
-                                              <p className="text-xs text-[#ffcc29]">{post.hashtags.slice(0, 5).join(' ')}</p>
-                                            </>
-                                          )}
-                                        </div>
-                                        
-                                        {/* Actions */}
-                                        <div className="flex flex-col gap-2 shrink-0">
-                                          {editingPostId !== post.id && !post.isRegenerating && (
-                                            <>
-                                              <button
-                                                onClick={() => handleUpdatePost(post.id, { status: 'accepted' })}
-                                                className={`p-2 rounded-lg transition-colors ${
-                                                  post.status === 'accepted' 
-                                                    ? 'bg-green-500 text-white' 
-                                                    : 'bg-green-500/20 text-green-500 hover:bg-green-500/30'
-                                                }`}
-                                                title={post.status === 'accepted' ? 'Accepted' : 'Accept'}
-                                              >
-                                                <Check className="w-4 h-4" />
-                                              </button>
-                                              <button
-                                                onClick={() => handleRegenerateImage(post.id)}
-                                                className="p-2 rounded-lg bg-red-500/20 text-red-500 hover:bg-red-500/30 transition-colors"
-                                                title="Regenerate Image (Don't like this one)"
-                                              >
-                                                <X className="w-4 h-4" />
-                                              </button>
-                                              <button
-                                                onClick={() => setEditingPostId(post.id)}
-                                                className={`p-2 rounded-lg ${isDarkMode ? 'bg-slate-700 hover:bg-slate-600' : 'bg-slate-100 hover:bg-slate-200'} transition-colors`}
-                                                title="Edit Caption & Schedule"
-                                              >
-                                                <Edit3 className="w-4 h-4" />
-                                              </button>
-                                            </>
-                                          )}
-                                        </div>
-                                      </div>
-                                    </div>
-                                  ))}
+                                          </div>
+                                        ))}
+
+                                        {/* Loading skeletons */}
+                                        {Array.from({ length: remainingSkeletons }).map((_, i) => (
+                                          <div
+                                            key={`skeleton-${i}`}
+                                            className={`p-4 rounded-xl border animate-pulse ${isDarkMode ? 'bg-[#161b22] border-slate-700/50' : 'bg-white border-slate-200'}`}
+                                          >
+                                            <div className="flex gap-4">
+                                              <div className={`w-40 h-40 rounded-lg ${isDarkMode ? 'bg-slate-800' : 'bg-slate-200'}`} />
+                                              <div className="flex-1 space-y-3">
+                                                <div className={`h-4 w-24 rounded ${isDarkMode ? 'bg-slate-800' : 'bg-slate-200'}`} />
+                                                <div className={`h-3 w-full rounded ${isDarkMode ? 'bg-slate-800' : 'bg-slate-200'}`} />
+                                                <div className={`h-3 w-3/4 rounded ${isDarkMode ? 'bg-slate-800' : 'bg-slate-200'}`} />
+                                                <div className={`h-3 w-1/2 rounded ${isDarkMode ? 'bg-slate-800' : 'bg-slate-200'}`} />
+                                              </div>
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </>
+                                    );
+                                  })()}
                                 </div>
                             </div>
                         )}
@@ -3833,7 +3893,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                               <>
                                 <Sparkles className="w-4 h-4" />
                                 Generate AI Posts
-                                <span className="flex items-center gap-0.5 text-xs opacity-80"><Zap className="w-3 h-3" />7</span>
+                                <span className="flex items-center gap-0.5 text-xs opacity-80"><Zap className="w-3 h-3" />{7 + (preferredDays.length * (campaignDuration === '2weeks' ? 2 : 1) * 5)}</span>
                               </>
                             )}
                           </button>

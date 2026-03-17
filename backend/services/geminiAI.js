@@ -3935,6 +3935,181 @@ IMPORTANT RULES:
   }
 }
 
+/**
+ * Generate campaign post image using Nano Banana 2 (gemini-3.1-flash-image-preview)
+ * Supports aspect ratios and brand logo integration in the design
+ */
+async function generateCampaignImageNanoBanana(imageDescription, options = {}) {
+  const {
+    aspectRatio = '1:1',
+    brandName = '',
+    brandLogo = null, // base64 logo
+    industry = '',
+    tone = 'professional',
+    postIndex = 0,
+    totalPosts = 1,
+    campaignTheme = '',
+    keyMessages = '',
+  } = options;
+
+  // Aspect ratio to pixel dimensions for the prompt
+  const ratioDimensions = {
+    '1:1': { desc: 'square (1080x1080)', w: 1080, h: 1080 },
+    '3:4': { desc: 'portrait 3:4 (1080x1440)', w: 1080, h: 1440 },
+    '4:3': { desc: 'landscape 4:3 (1440x1080)', w: 1440, h: 1080 },
+    '4:5': { desc: 'Instagram portrait 4:5 (1080x1350)', w: 1080, h: 1350 },
+    '9:16': { desc: 'story/reel 9:16 (1080x1920)', w: 1080, h: 1920 },
+    '16:9': { desc: 'widescreen 16:9 (1920x1080)', w: 1920, h: 1080 },
+  };
+
+  const dims = ratioDimensions[aspectRatio] || ratioDimensions['1:1'];
+
+  const logoInstruction = brandName
+    ? `BRAND INTEGRATION: Incorporate the brand name "${brandName}" naturally into the design. Place a professional brand watermark, logo area, or brand bar in the composition — it can be a bottom bar with the brand name, a corner badge, or subtly embedded into the design. Make it look like an official branded post, not a generic image with a slapped-on watermark.`
+    : '';
+
+  const consistencyInstruction = totalPosts > 1
+    ? `VISUAL CONSISTENCY: This is post ${postIndex + 1} of ${totalPosts} in a campaign series themed "${campaignTheme}". Maintain a consistent visual style, color palette, and design language across all posts. Use similar typography style, color scheme, and composition approach.`
+    : '';
+
+  const prompt = `Create a professional, stunning social media marketing post image.
+
+DESIGN BRIEF:
+${imageDescription}
+
+FORMAT: ${dims.desc} — the image MUST be in ${aspectRatio} aspect ratio.
+STYLE: ${tone} tone, modern design, visually striking, social media optimized.
+INDUSTRY: ${industry || 'general business'}
+${keyMessages ? `KEY MESSAGE: ${keyMessages}` : ''}
+${logoInstruction}
+${consistencyInstruction}
+
+IMPORTANT RULES:
+1. The image must be publication-ready for social media
+2. Use bold, clean typography if including text overlays
+3. Create a cohesive color palette that feels premium
+4. The design should immediately grab attention in a social feed
+5. Output the image in exactly ${aspectRatio} aspect ratio
+6. Make it look like it was designed by a professional graphic designer`;
+
+  try {
+    console.log(`🎨 [NanoBanana2] Generating post ${postIndex + 1}/${totalPosts} in ${aspectRatio}...`);
+
+    const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image-preview:generateContent';
+
+    const parts = [];
+
+    // If brand logo provided, include it as reference
+    if (brandLogo) {
+      let logoData = brandLogo;
+      let logoMime = 'image/png';
+      if (brandLogo.startsWith('data:')) {
+        const matches = brandLogo.match(/^data:([^;]+);base64,(.+)$/);
+        if (matches) {
+          logoMime = matches[1];
+          logoData = matches[2];
+        }
+      }
+      parts.push({
+        inlineData: { mimeType: logoMime, data: logoData }
+      });
+      parts.push({ text: `This is the brand logo. Incorporate it naturally into the post design.\n\n${prompt}` });
+    } else {
+      parts.push({ text: prompt });
+    }
+
+    const requestBody = {
+      contents: [{ parts }],
+      generationConfig: {
+        temperature: 0.8,
+        responseModalities: ["TEXT", "IMAGE"]
+      }
+    };
+
+    const response = await fetchWithTimeout(`${apiUrl}?key=${GEMINI_API_KEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody)
+    }, 120000);
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error?.message || 'Nano Banana 2 failed');
+    }
+
+    // Extract the generated image
+    const candidates = data.candidates || [];
+    for (const candidate of candidates) {
+      const parts = candidate.content?.parts || [];
+      for (const part of parts) {
+        const imgData = part.inlineData || part.inline_data;
+        if (imgData?.data) {
+          const mime = imgData.mimeType || imgData.mime_type || 'image/png';
+          console.log(`✅ [NanoBanana2] Post ${postIndex + 1} generated successfully`);
+
+          // Upload to Cloudinary
+          const base64Image = `data:${mime};base64,${imgData.data}`;
+          try {
+            const uploadResult = await uploadBase64Image(base64Image, 'nebula-campaign-posts');
+            if (uploadResult.success && uploadResult.url) {
+              return { success: true, imageUrl: uploadResult.url, model: 'nano-banana-2' };
+            }
+          } catch (uploadErr) {
+            console.warn('⚠️ Cloudinary upload failed, returning base64:', uploadErr.message);
+          }
+          return { success: true, imageUrl: base64Image, model: 'nano-banana-2' };
+        }
+      }
+    }
+
+    throw new Error('Nano Banana 2 returned no image');
+
+  } catch (error) {
+    console.error(`❌ [NanoBanana2] Post ${postIndex + 1} failed:`, error.message);
+
+    // Fallback to gemini-2.5-flash-image
+    try {
+      console.log(`🔄 [NanoBanana2] Trying fallback gemini-2.5-flash-image...`);
+      const fallbackUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent';
+      const fallbackBody = {
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.8, responseModalities: ["TEXT", "IMAGE"] }
+      };
+
+      const fbResponse = await fetchWithTimeout(`${fallbackUrl}?key=${GEMINI_API_KEY}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(fallbackBody)
+      }, 120000);
+
+      const fbData = await fbResponse.json();
+      if (fbResponse.ok) {
+        for (const candidate of (fbData.candidates || [])) {
+          for (const part of (candidate.content?.parts || [])) {
+            const imgData = part.inlineData || part.inline_data;
+            if (imgData?.data) {
+              const mime = imgData.mimeType || imgData.mime_type || 'image/png';
+              const base64Image = `data:${mime};base64,${imgData.data}`;
+              try {
+                const uploadResult = await uploadBase64Image(base64Image, 'nebula-campaign-posts');
+                if (uploadResult.success && uploadResult.url) {
+                  return { success: true, imageUrl: uploadResult.url, model: 'gemini-2.5-flash-image' };
+                }
+              } catch (e) { /* fallthrough */ }
+              return { success: true, imageUrl: base64Image, model: 'gemini-2.5-flash-image' };
+            }
+          }
+        }
+      }
+    } catch (fbErr) {
+      console.error('❌ Fallback also failed:', fbErr.message);
+    }
+
+    return { success: false, error: error.message };
+  }
+}
+
 module.exports = {
   callGemini,
   parseGeminiJSON,
@@ -3969,5 +4144,7 @@ module.exports = {
   // Logo detection for auto-replacement
   detectLogoInImage,
   // ICP and Channel Strategy
-  generateICPAndStrategy
+  generateICPAndStrategy,
+  // Nano Banana 2 campaign image generation
+  generateCampaignImageNanoBanana
 };
