@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { apiService } from '../services/api';
-import { Loader2, Zap, Check, X as XIcon, ShieldCheck, Sun, Moon, Mail, ArrowLeft, RefreshCw, KeyRound, Lock } from 'lucide-react';
+import { Loader2, Zap, Check, X as XIcon, ShieldCheck, Sun, Moon, Mail, ArrowLeft, RefreshCw, KeyRound, Lock, Eye, EyeOff } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 
 interface AuthProps {
@@ -19,6 +19,8 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
   // Form State
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showFpPassword, setShowFpPassword] = useState(false);
   const [firstName, setFirstName] = useState('');
   const [companyName, setCompanyName] = useState('');
 
@@ -463,17 +465,26 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
               <div className="space-y-4">
                 <div>
                   <label className={`block text-xs font-bold uppercase mb-1 ${theme === 'dark' ? 'text-[#ededed]/70' : 'text-gray-600'}`}>New Password</label>
+                  <div className="relative">
                   <input
-                    type="password"
+                    type={showFpPassword ? 'text' : 'password'}
                     value={fpNewPassword}
                     onChange={(e) => setFpNewPassword(e.target.value)}
                     placeholder="••••••••"
-                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 outline-none transition-all ${
+                    className={`w-full px-4 py-2 pr-10 border rounded-lg focus:ring-2 outline-none transition-all ${
                       !isFpPwdValid && fpNewPassword.length > 0
                         ? 'border-red-400/50 focus:ring-red-400/30'
                         : theme === 'dark' ? 'border-[#ffcc29]/30 focus:ring-[#ffcc29]/50 focus:border-[#ffcc29]' : 'border-gray-300 focus:ring-[#ffcc29]/50 focus:border-[#ffcc29]'
                     } ${theme === 'dark' ? 'bg-[#070A12] text-[#ededed] placeholder-[#ededed]/40' : 'bg-gray-50 text-gray-900 placeholder-gray-400'}`}
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowFpPassword(!showFpPassword)}
+                    className={`absolute right-3 top-1/2 -translate-y-1/2 ${theme === 'dark' ? 'text-[#ededed]/50 hover:text-[#ededed]' : 'text-gray-400 hover:text-gray-600'} transition-colors`}
+                  >
+                    {showFpPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                  </div>
                 </div>
                 <div className={`p-3 rounded-lg text-xs ${theme === 'dark' ? 'bg-[#070A12] border border-slate-700/50' : 'bg-gray-50 border border-gray-200'}`}>
                   <p className="font-semibold text-[#ffcc29] mb-2 flex items-center gap-1"><ShieldCheck className="w-3 h-3" /> Password Requirements:</p>
@@ -714,12 +725,13 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
                 
                 <div>
                     <label className={`block text-xs font-bold uppercase mb-1 ${theme === 'dark' ? 'text-[#ededed]/70' : 'text-gray-600'}`}>Password</label>
-                    <input 
-                        type="password"
-                        required 
-                        className={`w-full px-4 py-2 border rounded-lg focus:ring-2 outline-none transition-all ${
-                            !isLogin && !isPasswordValid && password.length > 0 
-                              ? 'border-red-400/50 focus:ring-red-400/30' 
+                    <div className="relative">
+                    <input
+                        type={showPassword ? 'text' : 'password'}
+                        required
+                        className={`w-full px-4 py-2 pr-10 border rounded-lg focus:ring-2 outline-none transition-all ${
+                            !isLogin && !isPasswordValid && password.length > 0
+                              ? 'border-red-400/50 focus:ring-red-400/30'
                               : theme === 'dark'
                                 ? 'border-[#ffcc29]/30 focus:ring-[#ffcc29]/50 focus:border-[#ffcc29]'
                                 : 'border-gray-300 focus:ring-[#ffcc29]/50 focus:border-[#ffcc29]'
@@ -728,6 +740,14 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder="••••••••"
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className={`absolute right-3 top-1/2 -translate-y-1/2 ${theme === 'dark' ? 'text-[#ededed]/50 hover:text-[#ededed]' : 'text-gray-400 hover:text-gray-600'} transition-colors`}
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                    </div>
                     {isLogin && (
                       <div className="text-right mt-1">
                         <button
