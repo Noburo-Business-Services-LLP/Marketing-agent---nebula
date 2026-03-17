@@ -1,6 +1,6 @@
 import { AuthResponse, BusinessProfile, Campaign, DashboardData, SocialConnection, User } from '../types';
 
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:5000/api';
 const DEFAULT_TIMEOUT = 10000; // 10 second default timeout
 const AI_TIMEOUT = 30000; // 30 seconds for AI operations (campaign generation, etc.)
 

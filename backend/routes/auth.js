@@ -1,9 +1,29 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
+const mongoose = require('mongoose');
 const User = require('../models/User');
 const { generateToken, protect } = require('../middleware/auth');
 
 const router = express.Router();
+
+// Demo mode flag: when MONGODB_URI is missing or clearly a placeholder, skip DB and use in-memory users
+const isDemoMode =
+  !process.env.MONGODB_URI ||
+  process.env.MONGODB_URI.includes('your_mongodb_connection_string_here');
+const demoUsers = new Map(); // email -> { email, password, firstName, lastName, companyName, onboardingCompleted, businessProfile, connectedSocials }
+
+// Fail-fast when DB isn't connected (prevents Mongoose buffering timeouts)
+// In demo mode (no MONGODB_URI), we allow requests through and handle them in-memory.
+const requireDb = (req, res, next) => {
+  if (isDemoMode) {
+    return next();
+  }
+  if (mongoose.connection.readyState === 1) return next(); // connected
+  return res.status(503).json({
+    success: false,
+    message: 'Database not connected. Please configure MONGODB_URI and restart the backend.'
+  });
+};
 
 // Validation middleware
 const handleValidationErrors = (req, res, next) => {
@@ -44,10 +64,43 @@ router.post('/signup', [
     .trim()
     .isLength({ max: 100 })
     .withMessage('Company name cannot exceed 100 characters'),
+  requireDb,
   handleValidationErrors
 ], async (req, res) => {
   try {
     const { email, password, firstName, lastName, companyName } = req.body;
+
+    // Demo-mode auth: store users in memory without MongoDB
+    if (isDemoMode) {
+      const lowerEmail = email.toLowerCase();
+      if (demoUsers.has(lowerEmail)) {
+        return res.status(400).json({
+          success: false,
+          message: 'An account with this email already exists. Please sign in.'
+        });
+      }
+
+      const demoUser = {
+        _id: lowerEmail,
+        email: lowerEmail,
+        firstName,
+        lastName: lastName || '',
+        companyName: companyName || '',
+        onboardingCompleted: false,
+        businessProfile: {},
+        connectedSocials: [],
+      };
+      demoUsers.set(lowerEmail, { ...demoUser, password });
+
+      const token = `demo:${lowerEmail}`;
+
+      return res.status(201).json({
+        success: true,
+        message: 'Account created successfully! (demo mode)',
+        token,
+        user: demoUser
+      });
+    }
 
     // Check if user already exists
     const existingUser = await User.findOne({ email: email.toLowerCase() });
@@ -118,10 +171,32 @@ router.post('/login', [
   body('password')
     .notEmpty()
     .withMessage('Password is required'),
+  requireDb,
   handleValidationErrors
 ], async (req, res) => {
   try {
     const { email, password } = req.body;
+
+    // Demo-mode auth: validate against in-memory users
+    if (isDemoMode) {
+      const lowerEmail = email.toLowerCase();
+      const stored = demoUsers.get(lowerEmail);
+      if (!stored || stored.password !== password) {
+        return res.status(401).json({
+          success: false,
+          message: 'Invalid email or password. Please try again.'
+        });
+      }
+
+      const { password: _pw, ...publicUser } = stored;
+      const token = `demo:${lowerEmail}`;
+      return res.status(200).json({
+        success: true,
+        message: 'Welcome back! (demo mode)',
+        token,
+        user: publicUser
+      });
+    }
 
     // Find user and include password for comparison
     const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
@@ -175,8 +250,24 @@ router.post('/login', [
 // @route   GET /api/auth/me
 // @desc    Get current logged in user
 // @access  Private
-router.get('/me', protect, async (req, res) => {
+router.get('/me', protect, requireDb, async (req, res) => {
   try {
+    if (isDemoMode) {
+      const email = req.demoEmail || (req.user && req.user.email);
+      const stored = email ? demoUsers.get(email.toLowerCase()) : null;
+      if (!stored) {
+        return res.status(404).json({
+          success: false,
+          message: 'User not found (demo mode)'
+        });
+      }
+      const { password, ...publicUser } = stored;
+      return res.status(200).json({
+        success: true,
+        user: publicUser
+      });
+    }
+
     const user = await User.findById(req.user._id);
     
     if (!user) {
@@ -218,6 +309,7 @@ router.put('/update-profile', protect, [
     .trim()
     .isLength({ max: 100 })
     .withMessage('Company name cannot exceed 100 characters'),
+  requireDb,
   handleValidationErrors
 ], async (req, res) => {
   try {
@@ -253,9 +345,46 @@ router.put('/update-profile', protect, [
 // @route   PUT /api/auth/complete-onboarding
 // @desc    Complete onboarding and save business profile
 // @access  Private
-router.put('/complete-onboarding', protect, async (req, res) => {
+router.put('/complete-onboarding', protect, requireDb, async (req, res) => {
   try {
     const { businessProfile, connectedSocials } = req.body;
+
+    if (isDemoMode) {
+      const email = req.demoEmail || (req.user && req.user.email);
+      const key = email ? email.toLowerCase() : null;
+      const stored = key ? demoUsers.get(key) : null;
+      if (!stored) {
+        return res.status(404).json({
+          success: false,
+          message: 'User not found (demo mode)'
+        });
+      }
+
+      const updated = {
+        ...stored,
+        onboardingCompleted: true,
+        businessProfile: businessProfile || stored.businessProfile || {},
+        connectedSocials: Array.isArray(connectedSocials) && connectedSocials.length > 0
+          ? connectedSocials.map(social => ({
+              platform: social.platform,
+              accountName: social.username || social.accountName,
+              connectedAt: new Date()
+            }))
+          : (stored.connectedSocials || []),
+      };
+
+      demoUsers.set(key, updated);
+      const { password, ...publicUser } = updated;
+
+      console.log('Onboarding completed for demo user:', publicUser.email);
+      console.log('Business Profile (demo):', JSON.stringify(publicUser.businessProfile, null, 2));
+
+      return res.status(200).json({
+        success: true,
+        message: 'Onboarding completed successfully (demo mode)',
+        user: publicUser
+      });
+    }
 
     const updateData = {
       onboardingCompleted: true,
@@ -308,6 +437,7 @@ router.put('/change-password', protect, [
     .withMessage('New password must contain at least one number')
     .matches(/[a-zA-Z]/)
     .withMessage('New password must contain at least one letter'),
+  requireDb,
   handleValidationErrors
 ], async (req, res) => {
   try {

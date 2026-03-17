@@ -9,7 +9,7 @@ interface Message {
   timestamp: Date;
 }
 
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
 // Helper to get auth token
 const getToken = (): string | null => localStorage.getItem('authToken');
@@ -29,8 +29,8 @@ const ChatBot: React.FC = () => {
   ]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [suggestions, setSuggestions] = useState<string[]>([]);
-  const [isPersonalized, setIsPersonalized] = useState(false);
+  const [userName, setUserName] = useState('');
+  const [userEmail, setUserEmail] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -40,55 +40,13 @@ const ChatBot: React.FC = () => {
       setIsOpen(true);
       setIsMinimized(false);
       
-      // Add a small delay to ensure the chat is open, then send the message
+      // Add a small delay to ensure the chat is open, then prefill the input.
+      // IMPORTANT: Do not auto-send (support email should only send on user submit).
       setTimeout(() => {
         const { message } = event.detail;
         if (message) {
-          // Create user message
-          const userMessage: Message = {
-            id: Date.now().toString(),
-            role: 'user',
-            content: message,
-            timestamp: new Date()
-          };
-          setMessages(prev => [...prev, userMessage]);
-          
-          // Send to API
-          setIsLoading(true);
-          const token = getToken();
-          const headers: Record<string, string> = {
-            'Content-Type': 'application/json'
-          };
-          if (token) {
-            headers['Authorization'] = `Bearer ${token}`;
-          }
-
-          fetch(`${API_BASE_URL}/chat/message`, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({
-              message,
-              conversationHistory: messages.slice(-10).map(m => ({
-                role: m.role,
-                content: m.content
-              }))
-            })
-          })
-            .then(res => res.json())
-            .then(data => {
-              if (data.success) {
-                const assistantMessage: Message = {
-                  id: (Date.now() + 1).toString(),
-                  role: 'assistant',
-                  content: data.response,
-                  timestamp: new Date()
-                };
-                setMessages(prev => [...prev, assistantMessage]);
-                setIsPersonalized(data.personalized || false);
-              }
-            })
-            .catch(console.error)
-            .finally(() => setIsLoading(false));
+          setInputValue(message);
+          inputRef.current?.focus();
         }
       }, 300);
     };
@@ -97,27 +55,31 @@ const ChatBot: React.FC = () => {
     return () => {
       window.removeEventListener('openChatWithMessage', handleOpenChatWithMessage as EventListener);
     };
-  }, [messages]);
+  }, []);
 
-  // Load suggestions on mount (with auth for personalization)
+  // Load current user details (to include name/email in support email)
   useEffect(() => {
+    if (!isOpen) return;
     const token = getToken();
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json'
-    };
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
+    if (!token) return;
 
-    fetch(`${API_BASE_URL}/chat/suggestions`, { headers })
-      .then(res => res.json())
+    fetch(`${API_BASE_URL}/auth/me`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      }
+    })
+      .then(res => res.ok ? res.json() : null)
       .then(data => {
-        if (data.success) {
-          setSuggestions(data.suggestions);
-          setIsPersonalized(data.personalized || false);
+        if (data?.success && data.user) {
+          const name = `${data.user.firstName || ''} ${data.user.lastName || ''}`.trim() || data.user.companyName || '';
+          const email = data.user.email || '';
+          if (name) setUserName(name);
+          if (email) setUserEmail(email);
         }
       })
-      .catch(console.error);
+      .catch(() => {});
   }, [isOpen]);
 
   // Scroll to bottom when new messages arrive
@@ -148,13 +110,6 @@ const ChatBot: React.FC = () => {
     setIsLoading(true);
 
     try {
-      // Prepare conversation history for context
-      const conversationHistory = messages.slice(-10).map(m => ({
-        role: m.role,
-        content: m.content
-      }));
-
-      // Include auth token for personalization
       const token = getToken();
       const headers: Record<string, string> = {
         'Content-Type': 'application/json'
@@ -163,34 +118,34 @@ const ChatBot: React.FC = () => {
         headers['Authorization'] = `Bearer ${token}`;
       }
 
-      const response = await fetch(`${API_BASE_URL}/chat/message`, {
+      const response = await fetch(`${API_BASE_URL}/support/query`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
-          message: text,
-          conversationHistory
+          name: userName,
+          email: userEmail,
+          message: text
         })
       });
 
       const data = await response.json();
 
-      if (data.success) {
+      if (response.ok && data.success) {
         const assistantMessage: Message = {
           id: (Date.now() + 1).toString(),
           role: 'assistant',
-          content: data.response,
+          content: 'Your query has been sent to our support team. We will contact you soon.',
           timestamp: new Date()
         };
         setMessages(prev => [...prev, assistantMessage]);
-        setIsPersonalized(data.personalized || false);
       } else {
-        throw new Error(data.message || 'Failed to get response');
+        throw new Error(data.message || 'Failed to send query');
       }
     } catch (error: any) {
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: "I'm sorry, I couldn't process your request. Please try again.",
+        content: 'Failed to send query. Please try again later.',
         timestamp: new Date()
       };
       setMessages(prev => [...prev, errorMessage]);
@@ -204,10 +159,6 @@ const ChatBot: React.FC = () => {
       e.preventDefault();
       sendMessage();
     }
-  };
-
-  const handleSuggestionClick = (suggestion: string) => {
-    sendMessage(suggestion);
   };
 
   // Closed state - just the floating button
@@ -304,26 +255,28 @@ const ChatBot: React.FC = () => {
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Suggestions - show only if few messages */}
-            {messages.length <= 2 && suggestions.length > 0 && (
-              <div className={`px-4 py-2 ${theme.bgCard} border-t ${isDarkMode ? 'border-[#ffcc29]/20' : 'border-[#ededed]'}`}>
-                <p className={`text-xs mb-2 ${theme.textMuted}`}>Suggested questions:</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {suggestions.slice(0, 3).map((suggestion, index) => (
-                    <button
-                      key={index}
-                      onClick={() => handleSuggestionClick(suggestion)}
-                      className={`text-xs px-2.5 py-1.5 ${isDarkMode ? 'bg-[#0d1117] text-[#ededed]/70' : 'bg-[#ededed] text-slate-600'} hover:bg-[#ffcc29]/20 hover:text-[#ffcc29] rounded-full transition-colors truncate max-w-full`}
-                    >
-                      {suggestion}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {/* Input */}
             <div className={`p-3 ${theme.bgCard} border-t ${isDarkMode ? 'border-[#ffcc29]/20' : 'border-[#ededed]'}`}>
+              {(!userName || !userEmail) && (
+                <div className="mb-2 grid grid-cols-1 gap-2">
+                  <input
+                    type="text"
+                    value={userName}
+                    onChange={(e) => setUserName(e.target.value)}
+                    placeholder="Your name"
+                    disabled={isLoading}
+                    className={`w-full px-4 py-2.5 ${isDarkMode ? 'bg-[#070A12] text-[#ededed] placeholder-[#ededed]/50 border border-[#ffcc29]/20' : 'bg-[#f5f5f5] text-[#070A12] placeholder-gray-400 border border-gray-200'} rounded-full text-sm outline-none focus:ring-2 focus:ring-[#ffcc29] transition-all disabled:opacity-50`}
+                  />
+                  <input
+                    type="email"
+                    value={userEmail}
+                    onChange={(e) => setUserEmail(e.target.value)}
+                    placeholder="Your email"
+                    disabled={isLoading}
+                    className={`w-full px-4 py-2.5 ${isDarkMode ? 'bg-[#070A12] text-[#ededed] placeholder-[#ededed]/50 border border-[#ffcc29]/20' : 'bg-[#f5f5f5] text-[#070A12] placeholder-gray-400 border border-gray-200'} rounded-full text-sm outline-none focus:ring-2 focus:ring-[#ffcc29] transition-all disabled:opacity-50`}
+                  />
+                </div>
+              )}
               <div className="flex items-center gap-2">
                 <input
                   ref={inputRef}
@@ -347,9 +300,7 @@ const ChatBot: React.FC = () => {
                   )}
                 </button>
               </div>
-              <p className={`text-[10px] text-center mt-2 ${theme.textMuted}`}>
-                {isPersonalized ? '✨ Personalized for your business' : 'Powered by Groq AI'}
-              </p>
+              <p className={`text-[10px] text-center mt-2 ${theme.textMuted}`}>Support</p>
             </div>
           </>
         )}

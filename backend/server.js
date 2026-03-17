@@ -33,6 +33,7 @@ console.log('');
 const authRoutes = require('./routes/auth');
 const socialRoutes = require('./routes/social');
 const chatRoutes = require('./routes/chat');
+const supportRoutes = require('./routes/support');
 const dashboardRoutes = require('./routes/dashboard');
 const campaignRoutes = require('./routes/campaigns');
 const competitorRoutes = require('./routes/competitors');
@@ -91,6 +92,7 @@ app.use((req, res, next) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/social', socialRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/support', supportRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/campaigns', campaignRoutes);
 app.use('/api/competitors', competitorRoutes);
@@ -175,24 +177,38 @@ const PORT = process.env.PORT || 5000;
 const startServer = async () => {
   let mongoConnected = false;
   try {
-    console.log('Connecting to MongoDB...');
-    await mongoose.connect(process.env.MONGODB_URI, {
-      serverSelectionTimeoutMS: 5000,
-      socketTimeoutMS: 45000,
-    });
-    console.log('✅ MongoDB connected successfully');
-    mongoConnected = true;
+    if (process.env.MONGODB_URI && !process.env.MONGODB_URI.includes('your_mongodb_connection_string_here')) {
+      console.log('Connecting to MongoDB...');
+      await mongoose.connect(process.env.MONGODB_URI, {
+        serverSelectionTimeoutMS: 5000,
+        socketTimeoutMS: 45000,
+      });
+      console.log('✅ MongoDB connected successfully');
+      mongoConnected = true;
+    } else {
+      console.warn('⚠️  MONGODB_URI not set');
+      console.warn('   Server will start in demo mode (no database persistence)');
+    }
   } catch (error) {
     console.warn('⚠️  MongoDB not available:', error.message);
     console.warn('   Server will start in demo mode (no database persistence)');
   }
 
-  app.listen(PORT, () => {
+  const server = app.listen(PORT, () => {
     console.log(`✅ Gravity API server running on http://localhost:${PORT}`);
     console.log(`   Health check: http://localhost:${PORT}/api/health`);
     if (!mongoConnected) {
       console.log('   ⚠️  Running in DEMO MODE (MongoDB unavailable)');
     }
+  });
+
+  server.on('error', (err) => {
+    if (err && err.code === 'EADDRINUSE') {
+      console.error(`❌ Port ${PORT} is already in use. Stop the other process or set PORT to a different value.`);
+      process.exit(1);
+    }
+    console.error('Server listen error:', err);
+    process.exit(1);
   });
 };
 
@@ -208,7 +224,13 @@ mongoose.connection.on('error', (err) => {
 // Graceful shutdown
 process.on('SIGINT', async () => {
   console.log('\nShutting down gracefully...');
-  await mongoose.connection.close();
+  try {
+    if (mongoose.connection?.readyState === 1) {
+      await mongoose.connection.close();
+    }
+  } catch (e) {
+    // ignore
+  }
   process.exit(0);
 });
 

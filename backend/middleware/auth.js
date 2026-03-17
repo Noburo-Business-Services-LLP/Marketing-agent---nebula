@@ -1,6 +1,11 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
+// Demo mode when MONGODB_URI is missing or clearly a placeholder
+const isDemoMode =
+  !process.env.MONGODB_URI ||
+  process.env.MONGODB_URI.includes('your_mongodb_connection_string_here');
+
 // Generate JWT Token
 const generateToken = (userId) => {
   return jwt.sign(
@@ -27,7 +32,21 @@ const protect = async (req, res, next) => {
       });
     }
 
-    // Verify token
+    // Demo mode: accept simple "demo:<email>" token without JWT/Mongo
+    if (isDemoMode) {
+      if (!token.startsWith('demo:')) {
+        return res.status(401).json({
+          success: false,
+          message: 'Invalid token. Please log in again.'
+        });
+      }
+      const email = token.slice(5);
+      req.demoEmail = email;
+      req.user = { email, isActive: true };
+      return next();
+    }
+
+    // Normal mode: verify JWT and load user from DB
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     // Check if user still exists
@@ -86,7 +105,19 @@ const optionalAuth = async (req, res, next) => {
       return next();
     }
 
-    // Verify token
+    // Demo mode: accept simple "demo:<email>" token without JWT/Mongo
+    if (isDemoMode) {
+      if (token.startsWith('demo:')) {
+        const email = token.slice(5);
+        req.demoEmail = email;
+        req.user = { email, isActive: true };
+      } else {
+        req.user = null;
+      }
+      return next();
+    }
+
+    // Normal mode: verify token via JWT and DB
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     // Check if user still exists
