@@ -11,7 +11,7 @@ const Campaign = require('../models/Campaign');
 const User = require('../models/User');
 const { callGemini, parseGeminiJSON, generateICPAndStrategy, generateCampaignImageNanoBanana } = require('../services/geminiAI');
 // Import Ayrshare for social media posting
-const { postToSocialMedia, getPostStatus } = require('../services/socialMediaAPI');
+const { postToSocialMedia, getPostStatus, deletePost: deleteAyrsharePost } = require('../services/socialMediaAPI');
 
 // Import image uploader for converting base64 to hosted URLs
 const { ensurePublicUrl, isBase64DataUrl } = require('../services/imageUploader');
@@ -308,19 +308,45 @@ router.put('/:id', protect, async (req, res) => {
 
 /**
  * DELETE /api/campaigns/:id
- * Delete a campaign
+ * Delete a campaign — also removes from Ayrshare & social platforms if posted/scheduled
  */
 router.delete('/:id', protect, async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
-    
-    const campaign = await Campaign.findOneAndDelete({ _id: req.params.id, userId });
-    
+
+    const campaign = await Campaign.findOne({ _id: req.params.id, userId });
+
     if (!campaign) {
       return res.status(404).json({ success: false, message: 'Campaign not found' });
     }
-    
-    res.json({ success: true, message: 'Campaign deleted' });
+
+    let ayrshareDeleted = false;
+
+    // If this campaign was posted/scheduled on Ayrshare, delete it there first
+    if (campaign.socialPostId) {
+      const user = await User.findById(userId);
+      const profileKey = user?.ayrshare?.profileKey;
+
+      console.log(`🗑️ Deleting post ${campaign.socialPostId} from Ayrshare (campaign: ${campaign.name})`);
+      const deleteResult = await deleteAyrsharePost(campaign.socialPostId, { profileKey });
+
+      if (deleteResult.success) {
+        console.log(`✅ Ayrshare post ${campaign.socialPostId} deleted successfully`);
+        ayrshareDeleted = true;
+      } else {
+        // Log but don't block — still delete from our DB
+        console.warn(`⚠️ Ayrshare delete failed for ${campaign.socialPostId}:`, deleteResult.error);
+      }
+    }
+
+    await Campaign.findByIdAndDelete(campaign._id);
+
+    res.json({
+      success: true,
+      message: 'Campaign deleted',
+      ayrshareDeleted,
+      socialPostId: campaign.socialPostId || null
+    });
   } catch (error) {
     console.error('Delete campaign error:', error);
     res.status(500).json({ success: false, message: 'Failed to delete campaign', error: error.message });

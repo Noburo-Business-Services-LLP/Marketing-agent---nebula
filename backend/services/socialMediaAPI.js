@@ -270,19 +270,28 @@ async function getPostStatus(postId, options = {}) {
 /**
  * Delete a scheduled post
  */
-async function deletePost(postId) {
+async function deletePost(postId, options = {}) {
   if (!AYRSHARE_API_KEY) {
     return { success: false, error: 'API not configured' };
   }
+  if (!postId) {
+    return { success: false, error: 'No post ID provided' };
+  }
 
   try {
+    const headers = {
+      'Authorization': `Bearer ${AYRSHARE_API_KEY}`
+    };
+    if (options.profileKey) {
+      headers['Profile-Key'] = options.profileKey;
+    }
+
     const response = await makeRequest(`https://api.ayrshare.com/api/post/${postId}`, {
       method: 'DELETE',
-      headers: {
-        'Authorization': `Bearer ${AYRSHARE_API_KEY}`
-      }
+      headers
     });
 
+    console.log(`🗑️ Ayrshare delete for ${postId}:`, JSON.stringify(response.data, null, 2));
     return { success: response.status === 200, data: response.data };
   } catch (error) {
     console.error('Ayrshare delete error:', error);
