@@ -2083,7 +2083,7 @@ const Dashboard: React.FC = () => {
                       <img 
                         src={getCurrentImageUrl()} 
                         alt="Post image" 
-                        className="w-full h-64 object-cover"
+                        className="w-full object-contain max-h-[500px]"
                       />
                       <button
                         onClick={handleDownloadImage}
