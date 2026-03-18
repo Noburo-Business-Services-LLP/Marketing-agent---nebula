@@ -3135,8 +3135,10 @@ async function generateTemplatePoster(templateImageBase64, content, options = {}
     }
   }
   
+  const aspectRatio = options.aspectRatio || null;
+
   // PRIMARY: Use Nano Banana Pro Preview for image generation
-  const prompt = `You are a professional graphic designer. 
+  const prompt = `You are a professional graphic designer.
 
 Look at this template/poster image carefully. Your task is to recreate it with NEW text content.
 
@@ -3148,7 +3150,8 @@ Instructions:
 2. Preserve all logos, images, and visual elements exactly as they appear
 3. Replace the existing text with the new content provided above
 4. Match the original fonts and text styling as closely as possible
-5. Output a high-quality, print-ready poster image`;
+${aspectRatio && aspectRatio !== 'original' ? `5. Generate the output image in ${aspectRatio} aspect ratio — adjust the layout accordingly while keeping the design intact` : '5. Maintain the original aspect ratio'}
+6. Output a high-quality, print-ready poster image`;
 
   try {
     console.log('🎨 Generating template poster with Nano Banana Pro...');
@@ -3551,6 +3554,8 @@ async function generatePosterFromReference(referenceImageBase64, content, option
     }
   }
   
+  const aspectRatio = options.aspectRatio || null;
+
   const prompt = `You are a professional graphic designer. I'm showing you a REFERENCE poster/design for STYLE INSPIRATION.
 
 YOUR TASK: Create a BRAND NEW poster that:
@@ -3570,6 +3575,7 @@ IMPORTANT GUIDELINES:
 - Keep similar spacing, margins, and visual hierarchy
 - If the reference has logos/emblems, create similar placeholder shapes in the same positions
 - Adapt the layout to fit the new content while maintaining the reference's style
+${aspectRatio && aspectRatio !== 'original' ? `- Generate the output image in ${aspectRatio} aspect ratio — adjust the layout accordingly while keeping the design style intact` : ''}
 
 QUALITY REQUIREMENTS:
 - Ultra-sharp, print-ready resolution
