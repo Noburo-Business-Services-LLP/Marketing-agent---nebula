@@ -2030,7 +2030,7 @@ function generatePostUrl(platform, competitorName) {
  * Creates a viral-optimized post with caption, hashtags, and AI-generated image
  */
 async function generateRivalPost(competitorData, brandProfile) {
-  const { competitorName, competitorContent, platform, sentiment, likes, comments, brandLogo } = competitorData;
+  const { competitorName, competitorContent, platform, sentiment, likes, comments, brandLogo, aspectRatio } = competitorData;
   const bp = brandProfile || {};
   
   // Extract comprehensive brand context
@@ -2167,6 +2167,7 @@ Return ONLY valid JSON (no markdown, no explanations):
     const imagePrompt = `${parsed.imageDescription}. Brand: ${brandContext.companyName}. Industry: ${brandContext.industry}. Products: ${brandContext.products || 'premium products'}. Style: modern, premium, commercial photography, high-end advertising quality.`;
 
     const imageResult = await generateCampaignImageNanoBanana(imagePrompt, {
+      aspectRatio: aspectRatio || '1:1',
       brandName: brandContext.companyName,
       brandLogo: brandLogo || null,
       industry: brandContext.industry,

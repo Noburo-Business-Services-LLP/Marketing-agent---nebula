@@ -51,6 +51,9 @@ const Competitors: React.FC = () => {
   const [showRivalPostModal, setShowRivalPostModal] = useState(false);
   const [rivalPostLoading, setRivalPostLoading] = useState(false);
   const [showLogoSelector, setShowLogoSelector] = useState(false);
+  const [showAspectRatioModal, setShowAspectRatioModal] = useState(false);
+  const [selectedAspectRatio, setSelectedAspectRatio] = useState<string>('1:1');
+  const [pendingLogoUrl, setPendingLogoUrl] = useState<string | null>(null);
   const [pendingRivalPost, setPendingRivalPost] = useState<CompetitorPost | null>(null);
   const [rivalPost, setRivalPost] = useState<{
     caption: string;
@@ -197,8 +200,8 @@ const Competitors: React.FC = () => {
     setShowLogoSelector(true);
   };
 
-  // Actually generate rival post after logo selection
-  const executeRivalPostGeneration = async (post: CompetitorPost, logoUrl: string | null) => {
+  // Actually generate rival post after logo + aspect ratio selection
+  const executeRivalPostGeneration = async (post: CompetitorPost, logoUrl: string | null, aspectRatio: string) => {
     setRivalPostLoading(true);
     setShowRivalPostModal(true);
     setRivalPost(null);
@@ -211,7 +214,8 @@ const Competitors: React.FC = () => {
         sentiment: post.sentiment,
         likes: post.likes,
         comments: post.comments,
-        brandLogo: logoUrl
+        brandLogo: logoUrl,
+        aspectRatio
       });
       
       setRivalPost({
@@ -855,12 +859,77 @@ const Competitors: React.FC = () => {
         onClose={() => { setShowLogoSelector(false); setPendingRivalPost(null); }}
         onConfirm={(logoUrl) => {
           setShowLogoSelector(false);
-          if (pendingRivalPost) {
-            executeRivalPostGeneration(pendingRivalPost, logoUrl);
-            setPendingRivalPost(null);
-          }
+          setPendingLogoUrl(logoUrl);
+          setSelectedAspectRatio('1:1');
+          setShowAspectRatioModal(true);
         }}
       />
+
+      {/* Aspect Ratio Selector Modal */}
+      {showAspectRatioModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className={`${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-slate-200'} border rounded-2xl shadow-2xl w-full max-w-md p-6`}>
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-yellow-400 to-yellow-600 flex items-center justify-center">
+                <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><rect x="3" y="3" width="18" height="18" rx="2" strokeWidth="2"/><path d="M3 9h18M9 3v18" strokeWidth="2"/></svg>
+              </div>
+              <div>
+                <h3 className={`text-lg font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Select Aspect Ratio</h3>
+                <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Choose the image dimensions</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3 mb-6">
+              {[
+                { value: '1:1', label: 'Square', desc: '1:1', icon: '⬜' },
+                { value: '4:5', label: 'Portrait', desc: '4:5', icon: '📱' },
+                { value: '16:9', label: 'Landscape', desc: '16:9', icon: '🖥️' },
+                { value: '9:16', label: 'Story', desc: '9:16', icon: '📲' },
+                { value: '4:3', label: 'Standard', desc: '4:3', icon: '📺' },
+                { value: '3:4', label: 'Tall', desc: '3:4', icon: '🗂️' },
+              ].map((ratio) => (
+                <button
+                  key={ratio.value}
+                  onClick={() => setSelectedAspectRatio(ratio.value)}
+                  className={`p-3 rounded-xl border-2 transition-all text-center ${
+                    selectedAspectRatio === ratio.value
+                      ? 'border-yellow-500 bg-yellow-50 dark:bg-yellow-500/10 shadow-md'
+                      : isDarkMode
+                        ? 'border-slate-700 hover:border-slate-600 bg-slate-800/50'
+                        : 'border-slate-200 hover:border-slate-300 bg-slate-50'
+                  }`}
+                >
+                  <div className="text-2xl mb-1">{ratio.icon}</div>
+                  <div className={`text-sm font-semibold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{ratio.label}</div>
+                  <div className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{ratio.desc}</div>
+                </button>
+              ))}
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setShowAspectRatioModal(false); setPendingRivalPost(null); setPendingLogoUrl(null); }}
+                className={`flex-1 py-2.5 rounded-xl font-medium border ${isDarkMode ? 'border-slate-700 text-slate-300 hover:bg-slate-800' : 'border-slate-200 text-slate-700 hover:bg-slate-50'}`}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setShowAspectRatioModal(false);
+                  if (pendingRivalPost) {
+                    executeRivalPostGeneration(pendingRivalPost, pendingLogoUrl, selectedAspectRatio);
+                    setPendingRivalPost(null);
+                    setPendingLogoUrl(null);
+                  }
+                }}
+                className="flex-1 py-2.5 rounded-xl font-medium bg-gradient-to-r from-yellow-400 to-yellow-500 text-black hover:from-yellow-500 hover:to-yellow-600 shadow-md"
+              >
+                Generate Image
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Rival Post Modal */}
       {showRivalPostModal && (
