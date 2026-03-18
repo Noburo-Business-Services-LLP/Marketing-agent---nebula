@@ -4958,15 +4958,40 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                     <div className="space-y-4">
                                         <div>
                                             <label className={`text-sm font-semibold ${theme.text} mb-2 block`}>Generated Image</label>
-                                            <div className={`relative aspect-square rounded-xl overflow-hidden ${isDarkMode ? 'bg-[#161b22]' : 'bg-slate-100'}`}>
+                                            <div className={`relative rounded-xl overflow-hidden ${isDarkMode ? 'bg-[#161b22]' : 'bg-slate-100'} group`}>
                                                 {eventPostImageUrl ? (
-                                                    <img 
-                                                        src={eventPostImageUrl} 
-                                                        alt="Generated post" 
-                                                        className="w-full h-full object-cover"
-                                                    />
+                                                    <>
+                                                        <img
+                                                            src={eventPostImageUrl}
+                                                            alt="Generated post"
+                                                            className="w-full object-contain max-h-[500px]"
+                                                        />
+                                                        <div className="absolute inset-0 bg-black/40 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                            <button
+                                                                onClick={async () => {
+                                                                    try {
+                                                                        const response = await fetch(eventPostImageUrl);
+                                                                        const blob = await response.blob();
+                                                                        const url = URL.createObjectURL(blob);
+                                                                        const a = document.createElement('a');
+                                                                        a.href = url;
+                                                                        a.download = `event-post-${selectedHoliday?.name?.replace(/\s+/g, '-') || 'post'}-${Date.now()}.png`;
+                                                                        document.body.appendChild(a);
+                                                                        a.click();
+                                                                        document.body.removeChild(a);
+                                                                        URL.revokeObjectURL(url);
+                                                                    } catch (err) {
+                                                                        console.error('Download failed:', err);
+                                                                    }
+                                                                }}
+                                                                className="px-4 py-2 bg-white/90 text-slate-800 text-sm font-medium rounded-lg hover:bg-white transition-colors flex items-center gap-2"
+                                                            >
+                                                                <Download className="w-4 h-4" /> Download
+                                                            </button>
+                                                        </div>
+                                                    </>
                                                 ) : (
-                                                    <div className="w-full h-full flex items-center justify-center">
+                                                    <div className="w-full h-64 flex items-center justify-center">
                                                         <ImageIcon className={`w-16 h-16 ${theme.textMuted}`} />
                                                     </div>
                                                 )}
