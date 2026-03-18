@@ -3994,9 +3994,10 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
     const [showTemplatePreview, setShowTemplatePreview] = useState(false);
     
     // Aspect ratio and caption state
-    const [selectedAspectRatio, setSelectedAspectRatio] = useState<string>('original');
+    const [selectedAspectRatio, setSelectedAspectRatio] = useState<string>('1:1');
     const [customAspectRatio, setCustomAspectRatio] = useState<string>('');
     const [aspectRatioError, setAspectRatioError] = useState<string | null>(null);
+    const [showAspectRatioModal, setShowAspectRatioModal] = useState(false);
     const [caption, setCaption] = useState('');
     const [isGeneratingCaption, setIsGeneratingCaption] = useState(false);
     const [isProcessingImage, setIsProcessingImage] = useState(false);
@@ -4131,21 +4132,18 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
       ));
     };
 
-    // Generate posters
-    const handleGeneratePosters = async () => {
+    // Show aspect ratio modal before generating
+    const handleGeneratePosters = () => {
       const pendingPosters = posters.filter(p => p.content.trim().length > 0);
       if (pendingPosters.length === 0) {
         alert('Please add content to at least one template');
         return;
       }
+      setShowAspectRatioModal(true);
+    };
 
-      const ratioError = validateAspectRatio();
-      if (ratioError) {
-        setAspectRatioError(ratioError);
-        alert(ratioError);
-        return;
-      }
-
+    // Actually generate posters after aspect ratio is selected
+    const executeGeneratePosters = async () => {
       const effectiveAspectRatio = getEffectiveAspectRatio();
 
       setIsGenerating(true);
@@ -4295,13 +4293,6 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
     const handleRegenerate = async () => {
       const currentPoster = posters[currentPosterIndex];
       if (!currentPoster.content.trim()) return;
-
-      const ratioError = validateAspectRatio();
-      if (ratioError) {
-        setAspectRatioError(ratioError);
-        alert(ratioError);
-        return;
-      }
 
       const effectiveAspectRatio = getEffectiveAspectRatio();
 
@@ -4875,58 +4866,69 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
                   </div>
                 </div>
 
-                {/* Aspect Ratio Selection */}
-                <div>
-                  <label className={`block text-sm font-medium mb-3 ${theme.text}`}>
-                    Image Aspect Ratio
-                  </label>
-                  <p className={`text-xs mb-3 ${theme.textSecondary}`}>
-                    Image will be padded (not cropped) to fit the selected ratio
-                  </p>
-                  <div className="grid grid-cols-5 gap-2">
-                    {aspectRatioOptions.map(option => (
-                      <button
-                        key={option.id}
-                        onClick={() => {
-                          setSelectedAspectRatio(option.id);
-                          setAspectRatioError(null);
-                        }}
-                        className={`p-3 rounded-xl border text-center transition-all ${
-                          selectedAspectRatio === option.id
-                            ? 'bg-[#ffcc29]/20 border-[#ffcc29] text-[#ffcc29]'
-                            : isDarkMode 
-                              ? 'border-slate-700 text-slate-400 hover:border-slate-600' 
-                              : 'border-slate-200 text-slate-600 hover:border-slate-300'
-                        }`}
-                      >
-                        <span className="text-lg font-bold block">{option.label}</span>
-                        <span className="text-[10px] block mt-1">{option.desc}</span>
-                      </button>
-                    ))}
-                  </div>
-                  {selectedAspectRatio === 'custom' && (
-                    <div className="mt-3">
-                      <input
-                        type="text"
-                        value={customAspectRatio}
-                        onChange={(e) => {
-                          setCustomAspectRatio(e.target.value);
-                          if (aspectRatioError) setAspectRatioError(null);
-                        }}
-                        placeholder="Enter custom ratio, e.g. 3:2 or 9:16"
-                        className={inputClasses}
-                      />
-                      <p className={`text-xs mt-1 ${theme.textSecondary}`}>
-                        Use the format number:number (e.g. 3:2, 4:5, 9:16)
-                      </p>
+                {/* Aspect Ratio Modal */}
+                {showAspectRatioModal && (
+                  <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setShowAspectRatioModal(false)}>
+                    <div className={`${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white'} border rounded-2xl shadow-2xl w-full max-w-md p-6`} onClick={e => e.stopPropagation()}>
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-[#ffcc29]/20 flex items-center justify-center">
+                            <ImageIcon className="w-5 h-5 text-[#ffcc29]" />
+                          </div>
+                          <div>
+                            <h3 className={`text-lg font-bold ${theme.text}`}>Select Aspect Ratio</h3>
+                            <p className={`text-sm ${theme.textMuted}`}>Choose the image dimensions</p>
+                          </div>
+                        </div>
+                        <button onClick={() => setShowAspectRatioModal(false)} className={`${theme.textMuted} hover:text-slate-600`}>
+                          <X className="w-5 h-5" />
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-3 mb-6">
+                        {[
+                          { value: '1:1', label: '1:1', desc: 'Square' },
+                          { value: '4:5', label: '4:5', desc: 'Portrait' },
+                          { value: '9:16', label: '9:16', desc: 'Story/Reel' },
+                          { value: '16:9', label: '16:9', desc: 'Landscape' },
+                          { value: '3:4', label: '3:4', desc: 'Portrait' },
+                          { value: '4:3', label: '4:3', desc: 'Landscape' },
+                        ].map(ratio => (
+                          <button
+                            key={ratio.value}
+                            onClick={() => setSelectedAspectRatio(ratio.value)}
+                            className={`p-3 rounded-xl border-2 transition-all flex flex-col items-center gap-1 ${
+                              selectedAspectRatio === ratio.value
+                                ? 'border-[#ffcc29] bg-[#ffcc29]/10'
+                                : `${isDarkMode ? 'border-slate-700 hover:border-slate-600' : 'border-slate-200 hover:border-slate-300'}`
+                            }`}
+                          >
+                            <span className={`text-sm font-bold ${theme.text}`}>{ratio.label}</span>
+                            <span className={`text-xs ${theme.textMuted}`}>{ratio.desc}</span>
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="flex gap-3">
+                        <button
+                          onClick={() => setShowAspectRatioModal(false)}
+                          className={`flex-1 py-2.5 rounded-xl border ${isDarkMode ? 'border-slate-700 text-slate-400 hover:bg-[#161b22]' : 'border-slate-200 text-slate-600 hover:bg-slate-50'} font-medium`}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={() => {
+                            setShowAspectRatioModal(false);
+                            executeGeneratePosters();
+                          }}
+                          className="flex-1 py-2.5 rounded-xl bg-[#ffcc29] text-[#070A12] font-semibold hover:bg-[#e6b825]"
+                        >
+                          Generate Posters
+                        </button>
+                      </div>
                     </div>
-                  )}
-                  {aspectRatioError && (
-                    <p className="text-xs text-red-500 mt-2">
-                      {aspectRatioError}
-                    </p>
-                  )}
-                </div>
+                  </div>
+                )}
 
                 {/* Caption Input */}
                 <div>
@@ -5022,10 +5024,7 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
                   <ul className={`text-sm space-y-1 ${theme.textSecondary}`}>
                     <li>• {posters.filter(p => p.status === 'generated').length} poster(s) ready</li>
                     <li>• Platforms: {selectedPlatforms.length > 0 ? selectedPlatforms.join(', ') : 'None selected'}</li>
-                    <li>• Aspect Ratio: {selectedAspectRatio === 'custom'
-                      ? (customAspectRatio.trim() ? `Custom (${customAspectRatio.trim()})` : 'Custom')
-                      : (aspectRatioOptions.find(o => o.id === selectedAspectRatio)?.label || 'Original')}
-                    </li>
+                    <li>• Aspect Ratio: {selectedAspectRatio || '1:1'}</li>
                     <li>• {isScheduleMode ? `Scheduled for ${scheduleDate} ${scheduleTime}` : 'Post immediately'}</li>
                   </ul>
                 </div>
