@@ -3331,9 +3331,9 @@ Instructions:
   
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      console.log(`🎨 Editing poster with Nano Banana Pro (attempt ${attempt}/${maxRetries})...`);
-      
-      const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/nano-banana-pro-preview:generateContent';
+      console.log(`🎨 Editing poster with Nano Banana 2 (attempt ${attempt}/${maxRetries})...`);
+
+      const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image-preview:generateContent';
       
       const response = await fetchWithTimeout(`${apiUrl}?key=${GEMINI_API_KEY}`, {
         method: 'POST',
