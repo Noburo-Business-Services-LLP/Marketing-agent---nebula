@@ -1250,24 +1250,29 @@ export const apiService = {
   generatePosterFromReference: async (
     referenceImage: string,
     content: string,
-    platform?: string
-  ): Promise<{ 
-    success: boolean; 
-    imageBase64?: string; 
-    imageUrl?: string; 
-    model?: string; 
+    platform?: string,
+    logoUrl?: string,
+    aspectRatio?: string
+  ): Promise<{
+    success: boolean;
+    imageBase64?: string;
+    imageUrl?: string;
+    model?: string;
     message?: string;
     error?: string;
   }> => {
+    const body: any = {
+      referenceImage,
+      content,
+      platform: platform || 'instagram'
+    };
+    if (logoUrl) body.logoUrl = logoUrl;
+    if (aspectRatio) body.aspectRatio = aspectRatio;
     const response = await apiCall<any>(
       '/campaigns/template-poster/from-reference',
-      { 
-        method: 'POST', 
-        body: JSON.stringify({ 
-          referenceImage, 
-          content, 
-          platform: platform || 'instagram'
-        }) 
+      {
+        method: 'POST',
+        body: JSON.stringify(body)
       },
       true
     );

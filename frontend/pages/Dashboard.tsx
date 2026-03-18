@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
-import { apiService } from '../services/api';
+import { apiService, brandAssetsAPI } from '../services/api';
 import { DashboardData, Campaign, CompetitorPost } from '../types';
 import { TrendingUp, ArrowUpRight, ChevronRight, ChevronLeft, Calendar as CalendarIcon, Calendar, CalendarSync, Info, Activity, Clock, MoreHorizontal, Plus, X, ExternalLink, Edit3, Share2, MessageSquare, FileText, Loader2, Bell, BellRing, Check, AlertCircle, Trash2, Eye, Users, BarChart3, Swords, Sparkles, Download, Copy, Send, Save, Lightbulb, Flame, Target, Zap, Music, Image as ImageIcon, RefreshCw, PenTool, Wand2, Upload, Filter, Unlink } from 'lucide-react';
 import { useTheme, getThemeClasses } from '../context/ThemeContext';
@@ -2333,7 +2333,11 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
     const [posterContent, setPosterContent] = useState('');
     const [posterEditMode, setPosterEditMode] = useState(false);
     const [posterEditInstructions, setPosterEditInstructions] = useState('');
-    const [imageMode, setImageMode] = useState<'upload' | 'reference'>('upload'); // upload = use as-is, reference = generate new poster
+    const [imageMode, setImageMode] = useState<'upload' | 'ai' | 'reference'>('upload'); // upload = use as-is, ai = generate from scratch, reference = generate from reference
+    const [calendarSelectedLogo, setCalendarSelectedLogo] = useState<string | null>(null);
+    const [calendarAspectRatio, setCalendarAspectRatio] = useState<string>('1:1');
+    const [calendarLogos, setCalendarLogos] = useState<Array<{ _id: string; name: string; url: string; isPrimary: boolean }>>([]);
+    const [calendarLogosLoaded, setCalendarLogosLoaded] = useState(false);
 
     // Platform preview state
     const [showCalendarPreview, setShowCalendarPreview] = useState(false);
@@ -2356,6 +2360,25 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
         return () => document.removeEventListener('mousedown', handleClickOutside);
       }
     }, [showPlatformFilter]);
+
+    // Fetch brand logos for calendar poster generation
+    useEffect(() => {
+      const fetchCalendarLogos = async () => {
+        try {
+          const res = await brandAssetsAPI.getLogos();
+          if (res.success && res.logos?.length > 0) {
+            setCalendarLogos(res.logos);
+            const primary = res.logos.find((l: any) => l.isPrimary);
+            if (primary) setCalendarSelectedLogo(primary.url);
+          }
+        } catch (err) {
+          console.error('Failed to fetch logos for calendar:', err);
+        } finally {
+          setCalendarLogosLoaded(true);
+        }
+      };
+      fetchCalendarLogos();
+    }, []);
 
     // Google Calendar sync state
     const [googleCalendarSynced, setGoogleCalendarSynced] = useState(false);
@@ -2819,7 +2842,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
     
     // Generate poster from reference image using Nano Banana Pro
     const handleGeneratePoster = async () => {
-      if (!scheduleImage) {
+      if (imageMode === 'reference' && !scheduleImage) {
         alert('Please upload a reference image first');
         return;
       }
@@ -2830,9 +2853,11 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
       setPosterGenerating(true);
       try {
         const result = await apiService.generatePosterFromReference(
-          scheduleImage,
+          imageMode === 'reference' ? scheduleImage! : '', // empty string for AI-from-scratch
           posterContent,
-          scheduleForm.platform
+          scheduleForm.platform,
+          calendarSelectedLogo || undefined,
+          calendarAspectRatio
         );
         if (result.success && result.imageBase64) {
           setGeneratedPoster(result.imageBase64);
@@ -2851,14 +2876,17 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
     
     // Regenerate/edit poster with new instructions
     const handleEditPoster = async () => {
-      if (!scheduleImage || !posterEditInstructions.trim()) return;
+      if (!posterEditInstructions.trim()) return;
+      if (imageMode === 'reference' && !scheduleImage) return;
       setPosterGenerating(true);
       try {
         const editedContent = posterContent + '\n\nAdditional instruction: ' + posterEditInstructions;
         const result = await apiService.generatePosterFromReference(
-          scheduleImage,
+          imageMode === 'reference' ? scheduleImage! : '',
           editedContent,
-          scheduleForm.platform
+          scheduleForm.platform,
+          calendarSelectedLogo || undefined,
+          calendarAspectRatio
         );
         if (result.success && result.imageBase64) {
           setGeneratedPoster(result.imageBase64);
@@ -4012,133 +4040,387 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                 </select>
                               </div>
                               
-                              {/* Image Upload - Drag & Drop + Click */}
+                              {/* Image / Poster — 3 Tabs: Upload, AI Generate, From Reference */}
                               <div>
                                 <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>Image / Poster</label>
-                                <input 
+                                <input
                                   ref={scheduleFileInputRef}
-                                  type="file" 
-                                  accept="image/*" 
-                                  className="hidden" 
+                                  type="file"
+                                  accept="image/*"
+                                  className="hidden"
                                   onChange={(e) => { const f = e.target.files?.[0]; if (f) handleScheduleImageSelect(f); }}
                                 />
-                                
-                                {scheduleImage ? (
-                                  <>
-                                    {/* Mode toggle: Use as-is or as Reference */}
-                                    <div className="flex gap-2 mt-1.5 mb-2">
-                                      <button
-                                        onClick={() => { setImageMode('upload'); setGeneratedPoster(null); }}
-                                        className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-1.5 ${
-                                          imageMode === 'upload' 
-                                            ? 'bg-[#ffcc29]/20 text-[#ffcc29] border border-[#ffcc29]' 
-                                            : `${isDarkMode ? 'bg-[#161b22] text-slate-400 border-slate-700/50' : 'bg-slate-100 text-slate-500 border-slate-200'} border hover:border-[#ffcc29]/50`
-                                        }`}
-                                      >
-                                        <Upload className="w-3.5 h-3.5" /> Use as Poster
-                                      </button>
-                                      <button
-                                        onClick={() => setImageMode('reference')}
-                                        className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-1.5 ${
-                                          imageMode === 'reference' 
-                                            ? 'bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-purple-400 border border-purple-400' 
-                                            : `${isDarkMode ? 'bg-[#161b22] text-slate-400 border-slate-700/50' : 'bg-slate-100 text-slate-500 border-slate-200'} border hover:border-purple-400/50`
-                                        }`}
-                                      >
-                                        <Sparkles className="w-3.5 h-3.5" /> Create from Reference
-                                      </button>
-                                    </div>
-                                    
-                                    {/* Show generated poster or original image */}
-                                    <div className="relative group">
-                                      <img 
-                                        src={generatedPoster || scheduleImage} 
-                                        alt={generatedPoster ? 'Generated poster' : 'Upload preview'} 
-                                        className={`w-full max-h-80 object-contain rounded-xl border ${isDarkMode ? 'border-slate-700/50 bg-[#161b22]' : 'border-slate-200 bg-slate-50'}`}
-                                      />
-                                      {generatedPoster && (
-                                        <span className="absolute top-2 left-2 bg-purple-500/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-md">AI Generated</span>
-                                      )}
-                                      <div className="absolute inset-0 bg-black/40 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
-                                        <button 
-                                          onClick={() => scheduleFileInputRef.current?.click()}
-                                          className="px-3 py-2 bg-white/90 text-slate-800 text-xs font-medium rounded-lg hover:bg-white transition-colors flex items-center gap-1.5"
-                                        >
-                                          <RefreshCw className="w-3.5 h-3.5" /> Replace
-                                        </button>
-                                        <button 
-                                          onClick={() => { setScheduleImage(null); setScheduleImageFile(null); setGeneratedPoster(null); setImageMode('upload'); setPosterContent(''); }}
-                                          className="px-3 py-2 bg-red-500/90 text-white text-xs font-medium rounded-lg hover:bg-red-500 transition-colors flex items-center gap-1.5"
-                                        >
-                                          <Trash2 className="w-3.5 h-3.5" /> Remove
-                                        </button>
 
-                                      </div>
-                                    </div>
-                                    
-                                    {/* Reference mode: prompt input (always visible) */}
-                                    {imageMode === 'reference' && (
-                                      <div className="mt-3 space-y-2">
-                                        <div className="flex items-center gap-2">
-                                          <Sparkles className={`w-3.5 h-3.5 ${generatedPoster ? 'text-purple-400' : theme.textMuted}`} />
-                                          <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>
-                                            {generatedPoster ? 'Refine with a prompt' : 'Describe your poster'}
-                                          </label>
-                                        </div>
-                                        <div className="flex gap-2">
-                                          <textarea
-                                            value={generatedPoster ? posterEditInstructions : posterContent}
-                                            onChange={(e) => generatedPoster ? setPosterEditInstructions(e.target.value) : setPosterContent(e.target.value)}
-                                            placeholder={generatedPoster 
-                                              ? 'Tell AI what to change... e.g., Make the title bigger, use blue theme, add my phone number' 
-                                              : 'Tell AI what poster to create... e.g., Make a dark-themed marketing poster for a ChatGPT workshop on March 15 with topics and registration details'
-                                            }
-                                            rows={2}
-                                            className={`flex-1 px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:border-purple-400 resize-none ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
-                                            onKeyDown={(e) => {
-                                              if (e.key === 'Enter' && !e.shiftKey) {
-                                                e.preventDefault();
-                                                if (generatedPoster) {
-                                                  if (posterEditInstructions.trim()) handleEditPoster();
-                                                } else {
-                                                  if (posterContent.trim()) handleGeneratePoster();
-                                                }
-                                              }
-                                            }}
-                                          />
+                                {/* Tab switcher */}
+                                <div className="flex gap-1 mt-1.5 mb-3">
+                                  {([
+                                    { key: 'upload' as const, label: 'Upload', icon: <Upload className="w-3.5 h-3.5" /> },
+                                    { key: 'ai' as const, label: 'AI Generate', icon: <Sparkles className="w-3.5 h-3.5" /> },
+                                    { key: 'reference' as const, label: 'From Reference', icon: <ImageIcon className="w-3.5 h-3.5" /> },
+                                  ]).map(tab => (
+                                    <button
+                                      key={tab.key}
+                                      onClick={() => { setImageMode(tab.key); if (tab.key === 'upload') { setGeneratedPoster(null); setPosterContent(''); setPosterEditInstructions(''); } }}
+                                      className={`flex-1 py-2 px-2 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-1.5 ${
+                                        imageMode === tab.key
+                                          ? tab.key === 'upload'
+                                            ? 'bg-[#ffcc29]/20 text-[#ffcc29] border border-[#ffcc29]'
+                                            : 'bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-purple-400 border border-purple-400'
+                                          : `${isDarkMode ? 'bg-[#161b22] text-slate-400 border-slate-700/50' : 'bg-slate-100 text-slate-500 border-slate-200'} border hover:border-[#ffcc29]/50`
+                                      }`}
+                                    >
+                                      {tab.icon} {tab.label}
+                                    </button>
+                                  ))}
+                                </div>
+
+                                {/* ===== UPLOAD TAB ===== */}
+                                {imageMode === 'upload' && (
+                                  <>
+                                    {scheduleImage ? (
+                                      <div className="relative group">
+                                        <img
+                                          src={scheduleImage}
+                                          alt="Upload preview"
+                                          className={`w-full max-h-80 object-contain rounded-xl border ${isDarkMode ? 'border-slate-700/50 bg-[#161b22]' : 'border-slate-200 bg-slate-50'}`}
+                                        />
+                                        <div className="absolute inset-0 bg-black/40 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
                                           <button
-                                            onClick={generatedPoster ? handleEditPoster : handleGeneratePoster}
-                                            disabled={posterGenerating || (generatedPoster ? !posterEditInstructions.trim() : !posterContent.trim())}
-                                            className={`self-end p-3 rounded-xl transition-all flex items-center justify-center ${
-                                              (generatedPoster ? posterEditInstructions.trim() : posterContent.trim())
-                                                ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600 shadow-md' 
-                                                : `${isDarkMode ? 'bg-slate-800 text-slate-500' : 'bg-slate-200 text-slate-400'} cursor-not-allowed`
-                                            }`}
-                                            title={generatedPoster ? 'Refine poster' : 'Generate poster'}
+                                            onClick={() => scheduleFileInputRef.current?.click()}
+                                            className="px-3 py-2 bg-white/90 text-slate-800 text-xs font-medium rounded-lg hover:bg-white transition-colors flex items-center gap-1.5"
                                           >
-                                            {posterGenerating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+                                            <RefreshCw className="w-3.5 h-3.5" /> Replace
+                                          </button>
+                                          <button
+                                            onClick={() => { setScheduleImage(null); setScheduleImageFile(null); setGeneratedPoster(null); setPosterContent(''); }}
+                                            className="px-3 py-2 bg-red-500/90 text-white text-xs font-medium rounded-lg hover:bg-red-500 transition-colors flex items-center gap-1.5"
+                                          >
+                                            <Trash2 className="w-3.5 h-3.5" /> Remove
                                           </button>
                                         </div>
-                                        {!generatedPoster && (
-                                          <p className={`text-[10px] ${theme.textMuted}`}>AI creates a new poster inspired by your reference image · Press Enter to send</p>
-                                        )}
+                                      </div>
+                                    ) : (
+                                      <div
+                                        ref={scheduleDragRef}
+                                        onClick={() => scheduleFileInputRef.current?.click()}
+                                        onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                                        onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                                        onDrop={handleScheduleDrop}
+                                        className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all hover:border-[#ffcc29] ${isDarkMode ? 'border-slate-700 hover:bg-[#161b22]' : 'border-slate-300 hover:bg-slate-50'}`}
+                                      >
+                                        <Upload className={`w-8 h-8 mx-auto mb-2 ${theme.textMuted}`} />
+                                        <p className={`text-sm font-medium ${theme.text}`}>Upload your poster</p>
+                                        <p className={`text-xs ${theme.textMuted} mt-1`}>Drag & drop or click to browse · Max 10MB</p>
                                       </div>
                                     )}
                                   </>
-                                ) : !scheduleImage ? (
-                                  <div 
-                                    ref={scheduleDragRef}
-                                    onClick={() => scheduleFileInputRef.current?.click()}
-                                    onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                                    onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                                    onDrop={handleScheduleDrop}
-                                    className={`mt-1.5 border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all hover:border-[#ffcc29] ${isDarkMode ? 'border-slate-700 hover:bg-[#161b22]' : 'border-slate-300 hover:bg-slate-50'}`}
-                                  >
-                                    <Upload className={`w-8 h-8 mx-auto mb-2 ${theme.textMuted}`} />
-                                    <p className={`text-sm font-medium ${theme.text}`}>Upload your poster or reference image</p>
-                                    <p className={`text-xs ${theme.textMuted} mt-1`}>Drag & drop or click to browse · Max 10MB</p>
+                                )}
+
+                                {/* ===== AI GENERATE TAB ===== */}
+                                {imageMode === 'ai' && (
+                                  <div className="space-y-3">
+                                    {/* Generated poster preview */}
+                                    {generatedPoster && (
+                                      <div className="relative group">
+                                        <img
+                                          src={generatedPoster}
+                                          alt="Generated poster"
+                                          className={`w-full max-h-80 object-contain rounded-xl border ${isDarkMode ? 'border-slate-700/50 bg-[#161b22]' : 'border-slate-200 bg-slate-50'}`}
+                                        />
+                                        <span className="absolute top-2 left-2 bg-purple-500/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-md">AI Generated</span>
+                                        <div className="absolute inset-0 bg-black/40 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                          <button
+                                            onClick={() => { setGeneratedPoster(null); setPosterContent(''); setPosterEditInstructions(''); }}
+                                            className="px-3 py-2 bg-red-500/90 text-white text-xs font-medium rounded-lg hover:bg-red-500 transition-colors flex items-center gap-1.5"
+                                          >
+                                            <Trash2 className="w-3.5 h-3.5" /> Remove
+                                          </button>
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* Prompt input */}
+                                    <div>
+                                      <div className="flex items-center gap-2 mb-1.5">
+                                        <Sparkles className={`w-3.5 h-3.5 ${generatedPoster ? 'text-purple-400' : theme.textMuted}`} />
+                                        <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>
+                                          {generatedPoster ? 'Refine with a prompt' : 'Describe your poster'}
+                                        </label>
+                                      </div>
+                                      <div className="flex gap-2">
+                                        <textarea
+                                          value={generatedPoster ? posterEditInstructions : posterContent}
+                                          onChange={(e) => generatedPoster ? setPosterEditInstructions(e.target.value) : setPosterContent(e.target.value)}
+                                          placeholder={generatedPoster
+                                            ? 'Tell AI what to change... e.g., Make the title bigger, use blue theme'
+                                            : 'Describe what poster to create... e.g., Dark-themed marketing poster for a ChatGPT workshop'
+                                          }
+                                          rows={2}
+                                          className={`flex-1 px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:border-purple-400 resize-none ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
+                                          onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && !e.shiftKey) {
+                                              e.preventDefault();
+                                              if (generatedPoster) {
+                                                if (posterEditInstructions.trim()) handleEditPoster();
+                                              } else {
+                                                if (posterContent.trim()) handleGeneratePoster();
+                                              }
+                                            }
+                                          }}
+                                        />
+                                        <button
+                                          onClick={generatedPoster ? handleEditPoster : handleGeneratePoster}
+                                          disabled={posterGenerating || (generatedPoster ? !posterEditInstructions.trim() : !posterContent.trim())}
+                                          className={`self-end p-3 rounded-xl transition-all flex items-center justify-center ${
+                                            (generatedPoster ? posterEditInstructions.trim() : posterContent.trim())
+                                              ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600 shadow-md'
+                                              : `${isDarkMode ? 'bg-slate-800 text-slate-500' : 'bg-slate-200 text-slate-400'} cursor-not-allowed`
+                                          }`}
+                                          title={generatedPoster ? 'Refine poster' : 'Generate poster'}
+                                        >
+                                          {posterGenerating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+                                        </button>
+                                      </div>
+                                    </div>
+
+                                    {/* Logo selector */}
+                                    <div>
+                                      <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>Brand Logo</label>
+                                      <div className="flex gap-2 mt-1.5 flex-wrap">
+                                        <button
+                                          onClick={() => setCalendarSelectedLogo(null)}
+                                          className={`w-14 h-14 rounded-xl border-2 flex items-center justify-center text-[10px] font-medium transition-all ${
+                                            calendarSelectedLogo === null
+                                              ? 'border-[#ffcc29] bg-[#ffcc29]/10 text-[#ffcc29]'
+                                              : isDarkMode ? 'border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-500' : 'border-gray-200 bg-gray-50 text-slate-500 hover:border-gray-300'
+                                          }`}
+                                        >
+                                          No Logo
+                                        </button>
+                                        {calendarLogos.map(logo => (
+                                          <button
+                                            key={logo._id}
+                                            onClick={() => setCalendarSelectedLogo(calendarSelectedLogo === logo.url ? null : logo.url)}
+                                            className={`relative w-14 h-14 rounded-xl border-2 p-1.5 flex items-center justify-center transition-all ${
+                                              calendarSelectedLogo === logo.url
+                                                ? 'border-[#ffcc29] bg-[#ffcc29]/10 scale-105'
+                                                : isDarkMode ? 'border-slate-700 bg-slate-800/50 hover:border-slate-500' : 'border-gray-200 bg-gray-50 hover:border-gray-300'
+                                            }`}
+                                          >
+                                            <img src={logo.url} alt={logo.name} className="max-w-full max-h-full object-contain" />
+                                            {calendarSelectedLogo === logo.url && (
+                                              <div className="absolute -top-1 -right-1 w-4 h-4 bg-[#ffcc29] rounded-full flex items-center justify-center">
+                                                <svg className="w-2.5 h-2.5 text-[#070A12]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                                </svg>
+                                              </div>
+                                            )}
+                                          </button>
+                                        ))}
+                                        {calendarLogos.length === 0 && calendarLogosLoaded && (
+                                          <p className={`text-xs ${theme.textMuted} self-center ml-1`}>No logos uploaded yet</p>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    {/* Aspect ratio picker */}
+                                    <div>
+                                      <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>Aspect Ratio</label>
+                                      <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                                        {[
+                                          { value: '1:1', desc: 'Square' },
+                                          { value: '4:5', desc: 'Portrait' },
+                                          { value: '9:16', desc: 'Story' },
+                                          { value: '16:9', desc: 'Landscape' },
+                                          { value: '3:4', desc: 'Portrait' },
+                                          { value: '4:3', desc: 'Landscape' },
+                                        ].map(ratio => (
+                                          <button
+                                            key={ratio.value}
+                                            onClick={() => setCalendarAspectRatio(ratio.value)}
+                                            className={`px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all flex flex-col items-center ${
+                                              calendarAspectRatio === ratio.value
+                                                ? 'border-[#ffcc29] bg-[#ffcc29]/10 text-[#ffcc29]'
+                                                : isDarkMode ? 'border-slate-700 text-slate-400 hover:border-slate-500' : 'border-gray-200 text-slate-500 hover:border-gray-300'
+                                            }`}
+                                          >
+                                            <span className="font-bold">{ratio.value}</span>
+                                            <span className={`text-[9px] ${calendarAspectRatio === ratio.value ? 'text-[#ffcc29]/70' : theme.textMuted}`}>{ratio.desc}</span>
+                                          </button>
+                                        ))}
+                                      </div>
+                                    </div>
+
+                                    {!generatedPoster && (
+                                      <p className={`text-[10px] ${theme.textMuted}`}>AI generates a poster from your description · Press Enter to send</p>
+                                    )}
                                   </div>
-                                ) : null}
+                                )}
+
+                                {/* ===== FROM REFERENCE TAB ===== */}
+                                {imageMode === 'reference' && (
+                                  <div className="space-y-3">
+                                    {/* Reference image upload */}
+                                    {scheduleImage ? (
+                                      <div className="relative group">
+                                        <img
+                                          src={generatedPoster || scheduleImage}
+                                          alt={generatedPoster ? 'Generated poster' : 'Reference image'}
+                                          className={`w-full max-h-80 object-contain rounded-xl border ${isDarkMode ? 'border-slate-700/50 bg-[#161b22]' : 'border-slate-200 bg-slate-50'}`}
+                                        />
+                                        {generatedPoster && (
+                                          <span className="absolute top-2 left-2 bg-purple-500/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-md">AI Generated</span>
+                                        )}
+                                        {!generatedPoster && (
+                                          <span className={`absolute top-2 left-2 ${isDarkMode ? 'bg-slate-800/90 text-slate-300' : 'bg-white/90 text-slate-600'} text-[10px] font-bold px-2 py-0.5 rounded-md`}>Reference</span>
+                                        )}
+                                        <div className="absolute inset-0 bg-black/40 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                                          <button
+                                            onClick={() => scheduleFileInputRef.current?.click()}
+                                            className="px-3 py-2 bg-white/90 text-slate-800 text-xs font-medium rounded-lg hover:bg-white transition-colors flex items-center gap-1.5"
+                                          >
+                                            <RefreshCw className="w-3.5 h-3.5" /> Replace
+                                          </button>
+                                          <button
+                                            onClick={() => { setScheduleImage(null); setScheduleImageFile(null); setGeneratedPoster(null); setPosterContent(''); setPosterEditInstructions(''); }}
+                                            className="px-3 py-2 bg-red-500/90 text-white text-xs font-medium rounded-lg hover:bg-red-500 transition-colors flex items-center gap-1.5"
+                                          >
+                                            <Trash2 className="w-3.5 h-3.5" /> Remove
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <div
+                                        ref={scheduleDragRef}
+                                        onClick={() => scheduleFileInputRef.current?.click()}
+                                        onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                                        onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                                        onDrop={handleScheduleDrop}
+                                        className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all hover:border-purple-400 ${isDarkMode ? 'border-slate-700 hover:bg-[#161b22]' : 'border-slate-300 hover:bg-slate-50'}`}
+                                      >
+                                        <ImageIcon className={`w-8 h-8 mx-auto mb-2 ${theme.textMuted}`} />
+                                        <p className={`text-sm font-medium ${theme.text}`}>Upload a reference image</p>
+                                        <p className={`text-xs ${theme.textMuted} mt-1`}>AI will create a new poster inspired by this · Max 10MB</p>
+                                      </div>
+                                    )}
+
+                                    {/* Prompt input */}
+                                    <div>
+                                      <div className="flex items-center gap-2 mb-1.5">
+                                        <Sparkles className={`w-3.5 h-3.5 ${generatedPoster ? 'text-purple-400' : theme.textMuted}`} />
+                                        <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>
+                                          {generatedPoster ? 'Refine with a prompt' : 'Describe your poster'}
+                                        </label>
+                                      </div>
+                                      <div className="flex gap-2">
+                                        <textarea
+                                          value={generatedPoster ? posterEditInstructions : posterContent}
+                                          onChange={(e) => generatedPoster ? setPosterEditInstructions(e.target.value) : setPosterContent(e.target.value)}
+                                          placeholder={generatedPoster
+                                            ? 'Tell AI what to change... e.g., Make the title bigger, use blue theme, add my phone number'
+                                            : 'Tell AI what poster to create from this reference... e.g., Dark-themed marketing poster for a ChatGPT workshop'
+                                          }
+                                          rows={2}
+                                          className={`flex-1 px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:border-purple-400 resize-none ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
+                                          onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && !e.shiftKey) {
+                                              e.preventDefault();
+                                              if (generatedPoster) {
+                                                if (posterEditInstructions.trim()) handleEditPoster();
+                                              } else {
+                                                if (posterContent.trim() && scheduleImage) handleGeneratePoster();
+                                              }
+                                            }
+                                          }}
+                                        />
+                                        <button
+                                          onClick={generatedPoster ? handleEditPoster : handleGeneratePoster}
+                                          disabled={posterGenerating || (generatedPoster ? !posterEditInstructions.trim() : (!posterContent.trim() || !scheduleImage))}
+                                          className={`self-end p-3 rounded-xl transition-all flex items-center justify-center ${
+                                            (generatedPoster ? posterEditInstructions.trim() : (posterContent.trim() && scheduleImage))
+                                              ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600 shadow-md'
+                                              : `${isDarkMode ? 'bg-slate-800 text-slate-500' : 'bg-slate-200 text-slate-400'} cursor-not-allowed`
+                                          }`}
+                                          title={generatedPoster ? 'Refine poster' : 'Generate poster'}
+                                        >
+                                          {posterGenerating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+                                        </button>
+                                      </div>
+                                    </div>
+
+                                    {/* Logo selector */}
+                                    <div>
+                                      <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>Brand Logo</label>
+                                      <div className="flex gap-2 mt-1.5 flex-wrap">
+                                        <button
+                                          onClick={() => setCalendarSelectedLogo(null)}
+                                          className={`w-14 h-14 rounded-xl border-2 flex items-center justify-center text-[10px] font-medium transition-all ${
+                                            calendarSelectedLogo === null
+                                              ? 'border-[#ffcc29] bg-[#ffcc29]/10 text-[#ffcc29]'
+                                              : isDarkMode ? 'border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-500' : 'border-gray-200 bg-gray-50 text-slate-500 hover:border-gray-300'
+                                          }`}
+                                        >
+                                          No Logo
+                                        </button>
+                                        {calendarLogos.map(logo => (
+                                          <button
+                                            key={logo._id}
+                                            onClick={() => setCalendarSelectedLogo(calendarSelectedLogo === logo.url ? null : logo.url)}
+                                            className={`relative w-14 h-14 rounded-xl border-2 p-1.5 flex items-center justify-center transition-all ${
+                                              calendarSelectedLogo === logo.url
+                                                ? 'border-[#ffcc29] bg-[#ffcc29]/10 scale-105'
+                                                : isDarkMode ? 'border-slate-700 bg-slate-800/50 hover:border-slate-500' : 'border-gray-200 bg-gray-50 hover:border-gray-300'
+                                            }`}
+                                          >
+                                            <img src={logo.url} alt={logo.name} className="max-w-full max-h-full object-contain" />
+                                            {calendarSelectedLogo === logo.url && (
+                                              <div className="absolute -top-1 -right-1 w-4 h-4 bg-[#ffcc29] rounded-full flex items-center justify-center">
+                                                <svg className="w-2.5 h-2.5 text-[#070A12]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                                </svg>
+                                              </div>
+                                            )}
+                                          </button>
+                                        ))}
+                                        {calendarLogos.length === 0 && calendarLogosLoaded && (
+                                          <p className={`text-xs ${theme.textMuted} self-center ml-1`}>No logos uploaded yet</p>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    {/* Aspect ratio picker */}
+                                    <div>
+                                      <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>Aspect Ratio</label>
+                                      <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                                        {[
+                                          { value: '1:1', desc: 'Square' },
+                                          { value: '4:5', desc: 'Portrait' },
+                                          { value: '9:16', desc: 'Story' },
+                                          { value: '16:9', desc: 'Landscape' },
+                                          { value: '3:4', desc: 'Portrait' },
+                                          { value: '4:3', desc: 'Landscape' },
+                                        ].map(ratio => (
+                                          <button
+                                            key={ratio.value}
+                                            onClick={() => setCalendarAspectRatio(ratio.value)}
+                                            className={`px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all flex flex-col items-center ${
+                                              calendarAspectRatio === ratio.value
+                                                ? 'border-[#ffcc29] bg-[#ffcc29]/10 text-[#ffcc29]'
+                                                : isDarkMode ? 'border-slate-700 text-slate-400 hover:border-slate-500' : 'border-gray-200 text-slate-500 hover:border-gray-300'
+                                            }`}
+                                          >
+                                            <span className="font-bold">{ratio.value}</span>
+                                            <span className={`text-[9px] ${calendarAspectRatio === ratio.value ? 'text-[#ffcc29]/70' : theme.textMuted}`}>{ratio.desc}</span>
+                                          </button>
+                                        ))}
+                                      </div>
+                                    </div>
+
+                                    {!generatedPoster && (
+                                      <p className={`text-[10px] ${theme.textMuted}`}>AI creates a new poster inspired by your reference image · Press Enter to send</p>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                               
                               {/* Caption with AI Generate Button */}
