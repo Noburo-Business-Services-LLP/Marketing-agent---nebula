@@ -3289,10 +3289,23 @@ Instructions:
 async function editTemplatePoster(currentImageBase64, originalContent, editInstructions, templateImageBase64 = null) {
   const startTime = Date.now();
   
-  // Extract base64 data from current image
+  // Extract base64 data from current image (supports URL, data URI, or raw base64)
   let imageData = currentImageBase64;
   let mimeType = 'image/png';
-  if (currentImageBase64.startsWith('data:')) {
+  if (currentImageBase64.startsWith('http://') || currentImageBase64.startsWith('https://')) {
+    // Download image from URL and convert to base64
+    console.log('📥 Downloading image from URL for editing...');
+    const imageResponse = await fetchWithTimeout(currentImageBase64, {}, 30000);
+    if (imageResponse.ok) {
+      const buffer = await imageResponse.arrayBuffer();
+      imageData = Buffer.from(buffer).toString('base64');
+      const contentType = imageResponse.headers.get('content-type');
+      if (contentType) mimeType = contentType.split(';')[0];
+      console.log(`✅ Image downloaded (${Math.round(buffer.byteLength / 1024)}KB, ${mimeType})`);
+    } else {
+      throw new Error('Failed to download image for editing');
+    }
+  } else if (currentImageBase64.startsWith('data:')) {
     const matches = currentImageBase64.match(/^data:([^;]+);base64,(.+)$/);
     if (matches) {
       mimeType = matches[1];
