@@ -63,7 +63,6 @@ const Analytics: React.FC = () => {
       ]);
 
       if (accountRes.status === 'fulfilled' && accountRes.value?.success) {
-        console.log('[Analytics] Raw accountAnalytics:', JSON.stringify(accountRes.value.analytics, null, 2));
         setAccountAnalytics(accountRes.value.analytics);
       }
       if (campaignsRes.status === 'fulfilled') {
@@ -86,12 +85,20 @@ const Analytics: React.FC = () => {
       ]);
       if (adsRes.status === 'fulfilled' && adsRes.value?.success) {
         setBoostedAds(Array.isArray(adsRes.value.ads) ? adsRes.value.ads : []);
+      } else if (adsRes.status === 'fulfilled' && adsRes.value && adsRes.value?.success === false) {
+        setAdLoadError('Unable to load ad data. Please reconnect your account or try again later.');
+      } else if (adsRes.status === 'rejected') {
+        setAdLoadError('Unable to load ad data. Please reconnect your account or try again later.');
       }
       if (historyRes.status === 'fulfilled' && historyRes.value?.success) {
         setAdHistory(historyRes.value.history);
+      } else if (historyRes.status === 'fulfilled' && historyRes.value && historyRes.value?.success === false) {
+        setAdLoadError('Unable to load ad data. Please reconnect your account or try again later.');
+      } else if (historyRes.status === 'rejected') {
+        setAdLoadError('Unable to load ad data. Please reconnect your account or try again later.');
       }
     } catch (err: any) {
-      setAdLoadError(err.message || 'Failed to load ads data');
+      setAdLoadError('Unable to load ad data. Please reconnect your account or try again later.');
     }
   };
 
@@ -160,7 +167,6 @@ const Analytics: React.FC = () => {
     try {
       // Use campaign's actual platforms so we don't request analytics for platforms the post wasn't sent to
       const res = await apiService.getPostAnalytics(postId, platforms);
-      console.log('Post analytics response for', postId, ':', res);
       if (res?.success) {
         setPostAnalytics(prev => ({ ...prev, [postId]: res.analytics }));
       }
@@ -305,6 +311,7 @@ const Analytics: React.FC = () => {
       {activeTab === 'history' && (
         <HistoryTab
           adHistory={adHistory}
+          error={adLoadError}
           isDarkMode={isDarkMode}
           tc={tc}
           formatNumber={formatNumber}
@@ -1540,18 +1547,33 @@ const AdsTab: React.FC<{
 
 const HistoryTab: React.FC<{
   adHistory: any;
+  error?: string;
   isDarkMode: boolean;
   tc: any;
   formatNumber: (n: number) => string;
-}> = ({ adHistory, isDarkMode, tc, formatNumber }) => {
+}> = ({ adHistory, error, isDarkMode, tc, formatNumber }) => {
+
+  if (error) {
+    return (
+      <div className={`rounded-xl p-6 ${tc.card}`}>
+        <div className="flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-amber-400 mt-0.5" />
+          <div>
+            <p className={`font-medium ${tc.text}`}>
+              Unable to load ad data. Please reconnect your account or try again later.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!adHistory) {
     return (
       <div className={`rounded-xl p-8 text-center ${tc.card}`}>
         <DollarSign className={`w-12 h-12 mx-auto mb-3 ${tc.textMuted}`} />
-        <p className={`font-medium ${tc.text}`}>No ad spend history</p>
-        <p className={`text-sm mt-1 ${tc.textSecondary}`}>
-          Once you boost posts, daily spend data will appear here
+        <p className={`text-sm ${tc.textSecondary}`}>
+          No ad history available. Run your first boosted ad to see performance insights.
         </p>
       </div>
     );
@@ -1611,14 +1633,12 @@ const HistoryTab: React.FC<{
         </div>
       )}
 
-      {entries.length === 0 && !Array.isArray(adHistory) && (
-        <div className={`rounded-xl p-5 ${tc.card}`}>
+      {entries.length === 0 && (
+        <div className={`rounded-xl p-8 text-center ${tc.card}`}>
+          <DollarSign className={`w-12 h-12 mx-auto mb-3 ${tc.textMuted}`} />
           <p className={`text-sm ${tc.textSecondary}`}>
-            Raw history data received. Check back after your first boosted ad runs for detailed daily breakdowns.
+            No ad history available. Run your first boosted ad to see performance insights.
           </p>
-          <pre className={`mt-3 text-xs p-3 rounded-lg overflow-auto max-h-48 ${isDarkMode ? 'bg-[#070A12] text-slate-400' : 'bg-gray-50 text-gray-600'}`}>
-            {JSON.stringify(adHistory, null, 2)}
-          </pre>
         </div>
       )}
     </div>
