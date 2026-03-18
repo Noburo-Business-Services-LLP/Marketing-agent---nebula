@@ -1,11 +1,13 @@
 export interface BusinessProfile {
   name: string;
   website: string;
+  gstNumber: string;
   industry: string;
   niche: string;
   businessType: 'B2B' | 'B2C' | 'Both' | '';
+  businessLocation: string; // City, State/Region where business operates
   targetAudience: string;
-  brandVoice: string; // e.g., Professional, Witty, Empathetic
+  brandVoice: string | string[]; // e.g., Professional, Witty, Empathetic - can be multiple
   marketingGoals: string[]; // e.g., Brand Awareness, Sales, Leads
   description: string;
   competitors?: string[]; // Competitor names/brands to track
@@ -16,8 +18,24 @@ export interface User {
   email: string;
   firstName: string;
   lastName: string;
+  isVerified?: boolean;
   onboardingCompleted: boolean;
   businessProfile?: BusinessProfile;
+  trial?: {
+    startDate?: string;
+    expiresAt?: string;
+    isExpired?: boolean;
+    migratedToProd?: boolean;
+  };
+  subscription?: {
+    plan: 'free' | 'pro' | 'enterprise';
+    status: 'active' | 'cancelled' | 'expired';
+    expiresAt?: string;
+  };
+  credits?: {
+    balance: number;
+    totalUsed: number;
+  };
   brandScore?: {
     score: number;
     metrics: {
@@ -31,11 +49,31 @@ export interface User {
   };
 }
 
+export interface Payment {
+  orderId: string;
+  paymentId: string;
+  amount: number;
+  currency: string;
+  credits?: number;
+  status: 'paid' | 'failed' | 'refunded';
+  invoiceUrl?: string | null;
+  paidAt: string;
+}
+
+export interface BillingData {
+  success: boolean;
+  subscription: { plan: string; status: string; expiresAt?: string };
+  credits: { balance: number; totalUsed: number };
+  payments: Payment[];
+}
+
 export interface AuthResponse {
   success: boolean;
   token?: string;
   user?: User;
   error?: string;
+  message?: string;
+  requiresVerification?: boolean;
 }
 
 export interface Campaign {
@@ -46,6 +84,11 @@ export interface Campaign {
   status: 'draft' | 'scheduled' | 'active' | 'paused' | 'completed' | 'archived' | 'posted';
   priority?: 'low' | 'medium' | 'high';
   notes?: string;
+  // Convenience top-level properties (aliases for nested values)
+  description?: string;
+  startDate?: string;
+  endDate?: string;
+  content?: string;
   creative: {
     type: 'text' | 'image' | 'video' | 'carousel' | 'story' | 'reel';
     textContent: string;
@@ -80,6 +123,10 @@ export interface Campaign {
     engagement: number;
     spend: number;
   };
+  publishedAt?: string;
+  scheduledFor?: string;
+  socialPostId?: string;
+  ayrshareStatus?: string;
   createdAt: string;
 }
 
@@ -90,8 +137,6 @@ export interface CompetitorPost {
   content: string;
   sentiment: 'positive' | 'neutral' | 'negative';
   postedAt: string;
-  postedAtRaw?: string; // Original date for filtering
-  postedAtDisplay?: string; // Formatted display string
   likes: number;
   comments: number;
   platform: string;
@@ -115,13 +160,18 @@ export interface Competitor {
 export interface Influencer {
   _id: string;
   name: string;
-  platform: 'instagram' | 'linkedin' | 'youtube' | 'twitter' | 'facebook';
+  platform: 'instagram' | 'linkedin' | 'youtube' | 'twitter' | 'facebook' | 'x' | 'tiktok';
   handle: string;
   followerCount: number;
   reach: number;
   engagementRate: number;
   niche: string[];
   type: 'nano' | 'micro' | 'mid-tier' | 'macro' | 'mega' | 'celebrity' | 'Nano' | 'Micro' | 'Mid-Tier' | 'Macro' | 'Mega';
+  tier?: 'nano' | 'micro' | 'macro' | 'mega'; // New tier field
+  location?: string; // Influencer's location
+  contentType?: string; // Type of content they create
+  audienceType?: string; // Their audience demographics
+  estimatedCost?: string; // Estimated cost per post
   aiMatchScore: {
     score: number;
     reason: string;
@@ -158,6 +208,20 @@ export interface SocialConnection {
   profileId?: string;
   lastSync?: string;
   status: 'active' | 'expired' | 'connecting' | 'disconnected';
+  profileUrl?: string;
+  userImage?: string;
+  source?: 'oauth' | 'ayrshare';
+  analytics?: {
+    followers: number;
+    following: number;
+    posts: number;
+    engagement: number;
+  };
+  channelData?: {
+    subscriberCount?: number;
+    videoCount?: number;
+    viewCount?: number;
+  };
 }
 
 export interface Trend {
@@ -166,6 +230,17 @@ export interface Trend {
   description: string;
   category: string;
   relevanceScore?: number;
+}
+
+export interface SocialProfile {
+  platform: string;
+  accountName: string;
+  profileImage?: string;
+  followers: number;
+  posts: number;
+  engagementRate: number;
+  followersGrowth: number;
+  connectedAt?: string;
 }
 
 export interface DashboardMetrics {
@@ -177,6 +252,7 @@ export interface DashboardMetrics {
   activeCampaignsChange: number;
   engagementRate: number;
   connectedPlatforms?: number;
+  socialProfiles?: SocialProfile[];
 }
 
 export interface SuggestedAction {

@@ -1,8 +1,10 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { apiService } from '../services/api';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
+import { apiService, brandAssetsAPI } from '../services/api';
 import { DashboardData, Campaign, CompetitorPost } from '../types';
-import { TrendingUp, ArrowUpRight, ChevronRight, ChevronLeft, Calendar as CalendarIcon, Calendar, Info, Activity, Clock, MoreHorizontal, Plus, X, ExternalLink, Edit3, Share2, MessageSquare, FileText, Loader2, Bell, BellRing, Check, AlertCircle, Trash2, Eye, Users, BarChart3, Swords, Sparkles, Download, Copy, Send, Save } from 'lucide-react';
+import { TrendingUp, ArrowUpRight, ChevronRight, ChevronLeft, Calendar as CalendarIcon, Calendar, CalendarSync, Info, Activity, Clock, MoreHorizontal, Plus, X, ExternalLink, Edit3, Share2, MessageSquare, FileText, Loader2, Bell, BellRing, Check, AlertCircle, Trash2, Eye, Users, BarChart3, Swords, Sparkles, Download, Copy, Send, Save, Lightbulb, Flame, Target, Zap, Music, Image as ImageIcon, RefreshCw, PenTool, Wand2, Upload, Filter, Unlink } from 'lucide-react';
 import { useTheme, getThemeClasses } from '../context/ThemeContext';
+import PlatformPreview from '../components/PlatformPreview';
+import LogoSelector from '../components/LogoSelector';
 
 // Section info descriptions
 const sectionInfo: Record<string, { title: string; description: string }> = {
@@ -14,6 +16,10 @@ const sectionInfo: Record<string, { title: string; description: string }> = {
     title: 'Budget Spent',
     description: 'This tracks your total marketing spend across all active and completed campaigns. The graph shows your daily spending pattern over the past week, helping you understand your budget allocation and pacing.'
   },
+  socialProfiles: {
+    title: 'Social Profiles',
+    description: 'View your connected social media accounts at a glance. Track followers, engagement rates, and growth across all your platforms. Connect more accounts to unlock full analytics and one-click posting.'
+  },
   brandScore: {
     title: 'AI Brand Score',
     description: 'Your Brand Score (0-100) is an AI-calculated metric that measures your overall marketing health based on engagement rates, content consistency, audience growth, and campaign performance across all connected platforms.'
@@ -22,9 +28,9 @@ const sectionInfo: Record<string, { title: string; description: string }> = {
     title: 'Competitor Radar',
     description: 'This section monitors your competitors\' social media activity in real-time. It shows their recent posts, engagement metrics, and AI-powered sentiment analysis to help you stay ahead of market trends.'
   },
-  recommendedActions: {
-    title: 'Recommended Actions',
-    description: 'AI-generated suggestions based on your current marketing performance, competitor activity, and industry trends. These actionable recommendations help you optimize your marketing strategy.'
+  strategicAdvisor: {
+    title: 'Strategic Advisor',
+    description: 'Your AI-powered content strategist that suggests viral content topics based on trending events, competitor activity, holidays, festivals, and moment marketing opportunities. Get personalized post ideas that align with your brand and maximize engagement.'
   },
   calendar: {
     title: 'Campaign Calendar',
@@ -39,26 +45,8 @@ const SectionButtons: React.FC<{
   variant?: 'light' | 'dark';
 }> = ({ sectionType, sectionData, variant = 'light' }) => {
   const [showSynopsis, setShowSynopsis] = useState(false);
-  const [synopsis, setSynopsis] = useState<{ synopsis: string; insights: string[]; trend: 'up' | 'down' | 'stable' } | null>(null);
-  const [loadingSynopsis, setLoadingSynopsis] = useState(false);
   const [isHoveringInfo, setIsHoveringInfo] = useState(false);
-  const [isHoveringD, setIsHoveringD] = useState(false);
   const infoRef = useRef<HTMLDivElement>(null);
-  const dRef = useRef<HTMLDivElement>(null);
-
-  const handleSynopsisHover = async () => {
-    setIsHoveringD(true);
-    if (!synopsis && !loadingSynopsis) {
-      setLoadingSynopsis(true);
-      try {
-        const result = await apiService.getSynopsis(sectionType, sectionData);
-        setSynopsis(result);
-      } catch (error) {
-        setSynopsis({ synopsis: 'Unable to generate synopsis.', insights: [], trend: 'stable' });
-      }
-      setLoadingSynopsis(false);
-    }
-  };
 
   const info = sectionInfo[sectionType];
   const isDark = variant === 'dark';
@@ -225,112 +213,6 @@ const SectionButtons: React.FC<{
         )}
       </div>
       
-      {/* Synopsis Button with Hover Tooltip - Click to chat */}
-      <div 
-        className="relative"
-        ref={dRef}
-        onMouseEnter={handleSynopsisHover}
-        onMouseLeave={() => setIsHoveringD(false)}
-      >
-        <button
-          onClick={() => {
-            if (synopsis) {
-              // Dispatch custom event to open chatbot with this synopsis
-              const message = `Tell me more about my ${info?.title || sectionType}: ${synopsis.synopsis}`;
-              window.dispatchEvent(new CustomEvent('openChatWithMessage', { detail: { message, synopsis: synopsis.synopsis, insights: synopsis.insights } }));
-            }
-          }}
-          className={`group relative w-6 h-6 rounded-full flex items-center justify-center transition-all duration-300 text-xs font-bold shadow-sm cursor-pointer ${
-            isDark 
-              ? 'bg-gradient-to-br from-[#ffcc29]/30 to-pink-400/20 hover:from-[#ffcc29]/40 hover:to-pink-400/30 text-white border border-purple-300/30 hover:border-purple-300/50 hover:scale-110' 
-              : 'bg-gradient-to-br from-[#ffcc29]/10 to-pink-100 hover:from-[#ffcc29]/20 hover:to-pink-200 text-[#ffcc29] border border-purple-200/50 hover:border-purple-300 hover:scale-110 hover:shadow-md'
-          }`}
-          title="Click to discuss with Daddy"
-        >
-          <span className="relative z-10">d</span>
-          <div className={`absolute inset-0 rounded-full transition-opacity duration-300 ${isDark ? 'bg-[#ffcc29]/10' : 'bg-[#ffcc29]/10'} opacity-0 group-hover:opacity-100`}></div>
-          {loadingSynopsis && (
-            <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-[#ffcc29] animate-spin"></div>
-          )}
-        </button>
-        
-        {/* Synopsis Hover Tooltip */}
-        {isHoveringD && (
-          <div className="absolute z-50 top-full right-0 mt-2 w-80 animate-in fade-in zoom-in-95 duration-200">
-            <div className="bg-white rounded-xl shadow-xl border border-slate-200 p-4 relative">
-              {/* Arrow */}
-              <div className="absolute -top-2 right-4 w-4 h-4 bg-white border-l border-t border-slate-200 rotate-45"></div>
-              
-              <div className="relative">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <div className="p-1.5 bg-[#ffcc29]/20 rounded-lg">
-                      <FileText className="w-3.5 h-3.5 text-[#ffcc29]" />
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-semibold text-[#0a0f1a]">AI Synopsis</h4>
-                      <p className="text-[10px] text-slate-400">{info?.title}</p>
-                    </div>
-                  </div>
-                  {synopsis && (
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const message = `Tell me more about my ${info?.title || sectionType}: ${synopsis.synopsis}`;
-                        window.dispatchEvent(new CustomEvent('openChatWithMessage', { detail: { message, synopsis: synopsis.synopsis, insights: synopsis.insights } }));
-                      }}
-                      className="text-[10px] bg-[#ffcc29] text-[#070A12] px-2 py-1 rounded-full font-semibold hover:bg-[#e6b825] transition-colors"
-                    >
-                      💬 Ask Daddy
-                    </button>
-                  )}
-                </div>
-                
-                {loadingSynopsis ? (
-                  <div className="flex items-center gap-2 py-4">
-                    <Loader2 className="w-4 h-4 text-[#ffcc29] animate-spin" />
-                    <p className="text-xs text-slate-500">AI is analyzing...</p>
-                  </div>
-                ) : synopsis ? (
-                  <>
-                    {/* Trend Badge */}
-                    <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold mb-2 ${
-                      synopsis.trend === 'up' ? 'bg-emerald-100 text-emerald-700' :
-                      synopsis.trend === 'down' ? 'bg-red-100 text-red-700' :
-                      'bg-gray-100 text-slate-600'
-                    }`}>
-                      {synopsis.trend === 'up' ? '↑ Trending Up' : synopsis.trend === 'down' ? '↓ Trending Down' : '→ Stable'}
-                    </div>
-                    
-                    {/* Synopsis */}
-                    <p className="text-xs text-slate-600 leading-relaxed mb-3">
-                      {synopsis.synopsis}
-                    </p>
-                    
-                    {/* Quick Insights */}
-                    {synopsis.insights && synopsis.insights.length > 0 && (
-                      <div className="border-t border-gray-100 pt-2">
-                        <p className="text-[10px] text-slate-400 uppercase tracking-wide mb-1.5">Key Insights</p>
-                        <ul className="space-y-1">
-                          {synopsis.insights.slice(0, 3).map((insight, idx) => (
-                            <li key={idx} className="text-xs text-slate-600 flex items-start gap-1.5">
-                              <span className="text-[#ffcc29]">💡</span>
-                              <span>{insight}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                    
-                    {/* Click hint */}
-                    <p className="text-[10px] text-slate-400 mt-3 text-center">Click to discuss with Daddy 💬</p>
-                  </>
-                ) : null}
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
     </div>
   );
 };
@@ -346,6 +228,28 @@ const Dashboard: React.FC = () => {
   const [dismissedActions, setDismissedActions] = useState<Set<string>>(new Set());
   const [loadingMoreActions, setLoadingMoreActions] = useState(false);
   
+  // Social Followers Bar Chart State
+  const [followerData, setFollowerData] = useState<Array<{
+    platform: string;
+    name: string;
+    followers: number;
+    color: string;
+    bgColor: string;
+    logo: string;
+  }>>([]);
+  const [followerLoading, setFollowerLoading] = useState(true);
+  const [hoveredBar, setHoveredBar] = useState<string | null>(null);
+  
+  // Logo Selector State
+  const [showLogoSelector, setShowLogoSelector] = useState(false);
+  const [pendingRivalCompetitor, setPendingRivalCompetitor] = useState<any>(null);
+  const [selectedLogoUrl, setSelectedLogoUrl] = useState<string | null>(null);
+
+  // Aspect Ratio Selector State
+  const [showAspectRatioModal, setShowAspectRatioModal] = useState(false);
+  const [selectedAspectRatio, setSelectedAspectRatio] = useState<string>('1:1');
+  const [pendingLogoUrl, setPendingLogoUrl] = useState<string | null>(null);
+
   // Rival Post State
   const [showRivalPostModal, setShowRivalPostModal] = useState(false);
   const [rivalPostLoading, setRivalPostLoading] = useState(false);
@@ -362,26 +266,320 @@ const Dashboard: React.FC = () => {
   const [savingDraft, setSavingDraft] = useState(false);
   const [postingDirectly, setPostingDirectly] = useState(false);
   
+  // Image editing states
+  const [imageMode, setImageMode] = useState<'ai' | 'upload'>('ai');
+  const [customImagePrompt, setCustomImagePrompt] = useState('');
+  const [regeneratingImage, setRegeneratingImage] = useState(false);
+  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
+  const [rivalImagePrompt, setRivalImagePrompt] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Cache flags — prevent re-fetching on tab switch
+  const hasFetchedDashboard = useRef(false);
+  const hasFetchedStrategic = useRef(false);
+  const hasFetchedFollowers = useRef(false);
+
+  // Strategic Advisor State
+  const [strategicSuggestions, setStrategicSuggestions] = useState<any[]>([]);
+  const [trendingNow, setTrendingNow] = useState<string[]>([]);
+  const [upcomingEvents, setUpcomingEvents] = useState<any[]>([]);
+  const [competitorInsight, setCompetitorInsight] = useState<string>('');
+  const [strategicLoading, setStrategicLoading] = useState(false);
+  const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<string>>(new Set());
+  const [showPostCreator, setShowPostCreator] = useState(false);
+  const [selectedSuggestion, setSelectedSuggestion] = useState<any>(null);
+  const [generatingPost, setGeneratingPost] = useState(false);
+  const [generatedPost, setGeneratedPost] = useState<any>(null);
+  const [postCaption, setPostCaption] = useState('');
+  const [postHashtags, setPostHashtags] = useState<string[]>([]);
+  const [postImageUrl, setPostImageUrl] = useState('');
+  const [postImagePrompt, setPostImagePrompt] = useState('');
+  const [refiningImage, setRefiningImage] = useState(false);
+  const [imageRefinementPrompt, setImageRefinementPrompt] = useState('');
+  const [scheduling, setScheduling] = useState(false);
+  const [scheduleDate, setScheduleDate] = useState('');
+  const [scheduleTime, setScheduleTime] = useState('');
+  const [selectedPlatform, setSelectedPlatform] = useState('instagram');
+  const [showPreview, setShowPreview] = useState(false);
+  const [playingAudio, setPlayingAudio] = useState<string | null>(null);
+  const [audioVolume, setAudioVolume] = useState(0.7);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  
+  // Sample audio URLs for trending sounds (royalty-free samples)
+  const sampleAudioUrls: Record<string, string> = {
+    'Epic Cinematic Trailer Music': 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
+    'Vroom Vroom (Sound effect)': 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3',
+    'Upbeat Corporate': 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3',
+    'Energetic Pop': 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3',
+    'Motivational Beats': 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3',
+    'default': 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3'
+  };
+  
+  // Handle audio playback
+  const handlePlayAudio = (audioName: string) => {
+    const audioUrl = sampleAudioUrls[audioName] || sampleAudioUrls['default'];
+    
+    if (playingAudio === audioName) {
+      // Stop playing
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+      setPlayingAudio(null);
+    } else {
+      // Stop any currently playing audio
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+      
+      // Play new audio
+      const audio = new Audio(audioUrl);
+      audio.volume = audioVolume;
+      audio.play().catch(err => console.error('Audio play error:', err));
+      audio.onended = () => setPlayingAudio(null);
+      audioRef.current = audio;
+      setPlayingAudio(audioName);
+    }
+  };
+  
+  // Cleanup audio on component unmount
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
+  }, []);
+  
   // Sample budget data points for the graph - use real data if available
-  const budgetData = data?.overview?.dailySpend?.map((d: any) => d.spend) || [0, 0, 0, 0, 0, 0, 0];
-  const days = data?.overview?.dailySpend?.map((d: any) => d.day) || ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const budgetData = (data?.overview as any)?.dailySpend?.map((d: any) => d.spend) || [0, 0, 0, 0, 0, 0, 0];
+  const days = (data?.overview as any)?.dailySpend?.map((d: any) => d.day) || ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   const hasRealData = data?.dataSource === 'real';
   const hasCampaigns = (data?.overview?.totalCampaigns || 0) > 0;
   const hasSpend = (data?.overview?.totalSpent || 0) > 0;
   
-  const fetchData = async () => {
+  // Fetch dashboard data
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchData = async (refresh = false) => {
+    const startTime = Date.now();
+    if (refresh) {
+      setRefreshing(true);
+      hasFetchedDashboard.current = false;
+      hasFetchedStrategic.current = false;
+      hasFetchedFollowers.current = false;
+    }
+
     try {
-      const dashboardData = await apiService.getDashboardOverview();
+      const dashboardData = await apiService.getDashboardOverview(refresh);
       setData(dashboardData);
+      hasFetchedDashboard.current = true;
+      console.log(`Dashboard ${refresh ? 'refreshed' : 'loaded'} in ${Date.now() - startTime}ms`);
     } catch (error) {
       console.error("Failed to load dashboard", error);
     } finally {
       setLoading(false);
+      setRefreshing(false);
+    }
+
+    // Also refresh strategic suggestions and follower data
+    if (refresh) {
+      fetchStrategicSuggestions(true);
+      fetchFollowerData(true);
+    }
+  };
+  
+  // Fetch Strategic Advisor suggestions (lazy load after dashboard is ready)
+  const fetchStrategicSuggestions = async (force = false) => {
+    if (hasFetchedStrategic.current && !force) return;
+    console.log('[Strategic] Fetching suggestions...');
+    setStrategicLoading(true);
+    try {
+      const result = await apiService.getStrategicSuggestions(force);
+      console.log('[Strategic] API result:', result);
+      if (result.success) {
+        console.log('[Strategic] Setting suggestions:', result.suggestions?.length, 'items');
+        setStrategicSuggestions(result.suggestions || []);
+        setTrendingNow(result.trendingNow || []);
+        setUpcomingEvents(result.upcomingEvents || []);
+        setCompetitorInsight(result.competitorInsight || '');
+        hasFetchedStrategic.current = true;
+      } else {
+        console.error('[Strategic] API returned success: false');
+      }
+    } catch (error) {
+      console.error('Failed to fetch strategic suggestions:', error);
+    } finally {
+      setStrategicLoading(false);
+    }
+  };
+  
+  // Handle creating a post from suggestion
+  const handleCreatePost = async (suggestion: any) => {
+    // Upfront credit check
+    try {
+      const creditData = await apiService.getCredits();
+      const balance = creditData?.credits?.balance ?? 0;
+      if (balance < 7) {
+        alert(`Insufficient credits. You need 7 credits to create a post but you only have ${balance}. Please wait for your next credit cycle or upgrade your plan.`);
+        return;
+      }
+    } catch (e) {
+      console.error('Credit check failed:', e);
+    }
+    setSelectedSuggestion(suggestion);
+    setShowPostCreator(true);
+    setGeneratingPost(true);
+    setGeneratedPost(null);
+    
+    try {
+      const result = await apiService.generatePostFromSuggestion(suggestion);
+      if (result.success && result.post) {
+        setGeneratedPost(result.post);
+        setPostCaption(result.post.caption || '');
+        setPostHashtags(result.post.hashtags || []);
+        setPostImageUrl(result.post.generatedImageUrl || '');
+        setPostImagePrompt(result.post.imagePrompt || '');
+        setSelectedPlatform((suggestion.platforms || ['instagram'])[0]);
+      }
+    } catch (error) {
+      console.error('Failed to generate post:', error);
+    } finally {
+      setGeneratingPost(false);
+    }
+  };
+  
+  // Handle refining image
+  const handleRefineImage = async () => {
+    if (!imageRefinementPrompt.trim() || !postImagePrompt) return;
+    // Upfront credit check
+    try {
+      const creditData = await apiService.getCredits();
+      const balance = creditData?.credits?.balance ?? 0;
+      if (balance < 3) {
+        alert(`Insufficient credits. You need 3 credits to refine an image but you only have ${balance}. Please wait for your next credit cycle or upgrade your plan.`);
+        return;
+      }
+    } catch (e) {
+      console.error('Credit check failed:', e);
+    }
+    setRefiningImage(true);
+    try {
+      const result = await apiService.refineImage(postImagePrompt, imageRefinementPrompt, undefined, postImageUrl);
+      if (result.success && result.imageUrl) {
+        setPostImageUrl(result.imageUrl);
+        setImageRefinementPrompt('');
+      }
+    } catch (error) {
+      console.error('Failed to refine image:', error);
+    } finally {
+      setRefiningImage(false);
+    }
+  };
+  
+  // Map strategic advisor categories to valid campaign objectives
+  const mapCategoryToObjective = (category?: string): string => {
+    const mapping: Record<string, string> = {
+      'trending': 'awareness',
+      'event': 'awareness',
+      'competitor': 'engagement',
+      'insight': 'engagement',
+      'audience': 'engagement',
+      'moment': 'awareness',
+      'story': 'engagement',
+      'promo': 'sales'
+    };
+    if (!category) return 'engagement';
+    // Handle pipe-separated categories like "event|audience" — take the first one
+    const primary = category.split('|')[0].trim().toLowerCase();
+    return mapping[primary] || 'engagement';
+  };
+
+  // Handle scheduling/posting the content
+  const handleSchedulePost = async () => {
+    setScheduling(true);
+    try {
+      // Build the scheduled datetime in ISO format for Ayrshare
+      let scheduledFor: string | undefined;
+      if (scheduleDate) {
+        const time = scheduleTime || '10:00';
+        const [hours, minutes] = time.split(':');
+        const dt = new Date(scheduleDate);
+        dt.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+        scheduledFor = dt.toISOString();
+      }
+
+      const result = await apiService.createCampaign({
+        name: selectedSuggestion?.title || 'Strategic Post',
+        objective: mapCategoryToObjective(selectedSuggestion?.category),
+        platforms: [selectedPlatform],
+        status: scheduleDate ? 'scheduled' : 'draft',
+        creative: {
+          type: 'image',
+          textContent: postCaption,
+          imageUrls: postImageUrl ? [postImageUrl] : [],
+          captions: postCaption,
+          hashtags: postHashtags
+        },
+        scheduling: scheduleDate ? {
+          startDate: scheduleDate,
+          postTime: scheduleTime || '10:00'
+        } : undefined
+      });
+
+      // Actually publish to social media via Ayrshare
+      if (result.campaign?._id) {
+        try {
+          await apiService.publishCampaign(
+            result.campaign._id,
+            [selectedPlatform],
+            scheduledFor
+          );
+        } catch (publishErr) {
+          console.error('Ayrshare publish failed:', publishErr);
+          // Campaign is saved — warn user about publish failure
+          alert('Post saved but failed to publish to social media. You can retry from the Campaigns page.');
+          setShowPostCreator(false);
+          setSelectedSuggestion(null);
+          setGeneratedPost(null);
+          return;
+        }
+      }
+      
+      alert(scheduleDate ? 'Post scheduled successfully!' : 'Post saved as draft!');
+      setShowPostCreator(false);
+      setSelectedSuggestion(null);
+      setGeneratedPost(null);
+    } catch (error) {
+      console.error('Failed to schedule post:', error);
+      alert('Failed to save post. Please try again.');
+    } finally {
+      setScheduling(false);
+    }
+  };
+  
+  // Fetch Social Followers for bar chart
+  const fetchFollowerData = async (force = false) => {
+    if (hasFetchedFollowers.current && !force) return;
+    setFollowerLoading(true);
+    try {
+      const result = await apiService.getSocialFollowers();
+      if (result.success && result.platforms) {
+        setFollowerData(result.platforms);
+        hasFetchedFollowers.current = true;
+      }
+    } catch (error) {
+      console.error('Failed to fetch follower data:', error);
+    } finally {
+      setFollowerLoading(false);
     }
   };
   
   useEffect(() => {
-    fetchData();
+    if (!hasFetchedDashboard.current) fetchData();
+    if (!hasFetchedStrategic.current) fetchStrategicSuggestions();
+    if (!hasFetchedFollowers.current) fetchFollowerData();
   }, []);
 
   const handlePrevCompetitor = () => {
@@ -396,12 +594,35 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  // Handle creating a rival post
+  // Handle creating a rival post — show logo selector first
   const handleCreateRivalPost = async (competitor: any) => {
+    // Upfront credit check
+    try {
+      const creditData = await apiService.getCredits();
+      const balance = creditData?.credits?.balance ?? 0;
+      if (balance < 7) {
+        alert(`Insufficient credits. You need 7 credits to create a rival post but you only have ${balance}. Please wait for your next credit cycle or upgrade your plan.`);
+        return;
+      }
+    } catch (e) {
+      console.error('Credit check failed:', e);
+    }
+    // Show logo selector before generating
+    setPendingRivalCompetitor(competitor);
+    setShowLogoSelector(true);
+  };
+
+  // Actually generate rival post after logo + aspect ratio selection
+  const executeRivalPostGeneration = async (competitor: any, logoUrl: string | null, aspectRatio: string) => {
+    setSelectedLogoUrl(logoUrl);
     setRivalPostLoading(true);
     setShowRivalPostModal(true);
     setRivalPost(null);
-    
+    // Reset image editing states
+    setImageMode('ai');
+    setCustomImagePrompt('');
+    setUploadedImageUrl(null);
+
     try {
       const result = await apiService.generateRivalPost({
         competitorName: competitor.competitorName,
@@ -409,7 +630,9 @@ const Dashboard: React.FC = () => {
         platform: competitor.platform,
         sentiment: competitor.sentiment,
         likes: competitor.likes,
-        comments: competitor.comments
+        comments: competitor.comments,
+        brandLogo: logoUrl,
+        aspectRatio
       });
       
       setRivalPost({
@@ -420,6 +643,7 @@ const Dashboard: React.FC = () => {
         competitorName: competitor.competitorName,
         originalContent: competitor.content
       });
+      setRivalImagePrompt(result.imagePrompt || '');
       setEditedCaption(result.caption);
       setEditedHashtags(result.hashtags.join(' '));
     } catch (error) {
@@ -475,23 +699,100 @@ const Dashboard: React.FC = () => {
 
   // Download image
   const handleDownloadImage = async () => {
-    if (!rivalPost?.imageUrl) return;
+    const imageUrl = imageMode === 'upload' && uploadedImageUrl ? uploadedImageUrl : rivalPost?.imageUrl;
+    if (!imageUrl) return;
     
     try {
-      const response = await fetch(rivalPost.imageUrl);
+      // For data URLs (uploaded images), create a direct download
+      if (imageUrl.startsWith('data:')) {
+        const a = document.createElement('a');
+        a.href = imageUrl;
+        a.download = `rival-post-${rivalPost?.platform || 'post'}-${Date.now()}.png`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        return;
+      }
+      
+      const response = await fetch(imageUrl);
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `rival-post-${rivalPost.platform}-${Date.now()}.png`;
+      a.download = `rival-post-${rivalPost?.platform || 'post'}-${Date.now()}.png`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (error) {
       // Fallback for CORS issues
-      window.open(rivalPost.imageUrl, '_blank');
+      window.open(imageUrl, '_blank');
     }
+  };
+
+  // Regenerate image with custom prompt
+  const handleRegenerateImage = async () => {
+    if (!customImagePrompt.trim() || !rivalPost) return;
+    
+    setRegeneratingImage(true);
+    try {
+      const result = await apiService.regenerateImage({
+        prompt: customImagePrompt,
+        industry: data?.businessContext?.industry || 'general',
+        platform: rivalPost.platform,
+        originalImagePrompt: rivalImagePrompt || undefined,
+        caption: editedCaption || rivalPost.caption || undefined,
+        currentImageUrl: getCurrentImageUrl()
+      });
+      if (result.imageUrl) {
+        setRivalPost({
+          ...rivalPost,
+          imageUrl: result.imageUrl
+        });
+        setUploadedImageUrl(null);
+        setImageMode('ai');
+        setCustomImagePrompt('');
+      }
+    } catch (error) {
+      console.error('Failed to regenerate image:', error);
+      alert('Failed to regenerate image. Please try again.');
+    } finally {
+      setRegeneratingImage(false);
+    }
+  };
+
+  // Handle file upload
+  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      alert('Please select a valid image file');
+      return;
+    }
+    
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Image size should be less than 5MB');
+      return;
+    }
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      setUploadedImageUrl(dataUrl);
+      setImageMode('upload');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Get current display image
+  const getCurrentImageUrl = () => {
+    if (imageMode === 'upload' && uploadedImageUrl) {
+      return uploadedImageUrl;
+    }
+    return rivalPost?.imageUrl || '';
   };
 
   const getActionButton = (actionType: string, title: string) => {
@@ -644,8 +945,128 @@ const Dashboard: React.FC = () => {
     return actionMap['create_campaign'];
   };
 
+  // Skeleton Loading Component
+  const DashboardSkeleton = () => (
+    <div className="max-w-7xl mx-auto space-y-8 p-1 animate-pulse">
+      {/* Header Skeleton */}
+      <div className="flex justify-between items-center">
+        <div>
+          <div className={`h-7 w-64 rounded-lg ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`}></div>
+          <div className={`h-4 w-80 mt-2 rounded ${isDarkMode ? 'bg-slate-700/60' : 'bg-slate-200/80'}`}></div>
+        </div>
+        <div className={`h-10 w-28 rounded-lg ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`}></div>
+      </div>
+
+      {/* Social Followers Skeleton */}
+      <div className={`${isDarkMode ? 'bg-[#0B0F1A]' : 'bg-white'} rounded-2xl border ${isDarkMode ? 'border-slate-700/50' : 'border-[#ededed]'} p-6`}>
+        <div className="flex justify-between items-center mb-6">
+          <div className="flex items-center gap-3">
+            <div className={`w-5 h-5 rounded ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`}></div>
+            <div className={`h-4 w-32 rounded ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`}></div>
+          </div>
+          <div className={`h-9 w-32 rounded-lg ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`}></div>
+        </div>
+        <div className="space-y-4">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="flex items-center gap-4">
+              <div className={`w-10 h-10 rounded-xl ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`}></div>
+              <div className="flex-1">
+                <div className={`h-3 w-24 rounded mb-2 ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`}></div>
+                <div className={`h-8 rounded-xl ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`} style={{ width: `${80 - i * 15}%` }}></div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className={`mt-8 pt-5 border-t ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'} grid grid-cols-2 gap-4`}>
+          <div className={`text-center p-4 rounded-xl ${isDarkMode ? 'bg-slate-800/50' : 'bg-slate-50'}`}>
+            <div className={`h-8 w-28 mx-auto rounded ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`}></div>
+            <div className={`h-3 w-24 mx-auto mt-2 rounded ${isDarkMode ? 'bg-slate-700/60' : 'bg-slate-200/80'}`}></div>
+          </div>
+          <div className={`text-center p-4 rounded-xl ${isDarkMode ? 'bg-slate-800/50' : 'bg-slate-50'}`}>
+            <div className={`h-8 w-8 mx-auto rounded ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`}></div>
+            <div className={`h-3 w-32 mx-auto mt-2 rounded ${isDarkMode ? 'bg-slate-700/60' : 'bg-slate-200/80'}`}></div>
+          </div>
+        </div>
+      </div>
+
+      {/* Competitor Radar & Strategic Advisor Skeletons */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {/* Competitor Radar Skeleton */}
+        <div className={`${isDarkMode ? 'bg-[#0B0F1A]' : 'bg-white'} rounded-2xl border ${isDarkMode ? 'border-slate-700/50' : 'border-[#ededed]'} p-6 min-h-[420px]`}>
+          <div className="flex justify-between items-center mb-4">
+            <div className={`h-4 w-32 rounded ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`}></div>
+            <div className="flex gap-2">
+              <div className={`h-7 w-20 rounded ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`}></div>
+              <div className={`h-7 w-7 rounded ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`}></div>
+            </div>
+          </div>
+          <div className={`flex items-center gap-2 mb-4 pb-3 border-b ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'}`}>
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className={`h-8 w-24 rounded-lg ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`}></div>
+            ))}
+          </div>
+          <div className="space-y-4">
+            <div className={`h-5 w-40 rounded ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`}></div>
+            <div className={`h-32 w-full rounded-xl ${isDarkMode ? 'bg-slate-700/50' : 'bg-slate-100'}`}></div>
+            <div className="flex gap-4">
+              <div className={`h-10 w-16 rounded-lg ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`}></div>
+              <div className={`h-10 w-16 rounded-lg ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`}></div>
+              <div className={`h-10 w-16 rounded-lg ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`}></div>
+            </div>
+          </div>
+        </div>
+
+        {/* Strategic Advisor Skeleton */}
+        <div className={`${isDarkMode ? 'bg-[#0B0F1A]' : 'bg-white'} rounded-2xl border ${isDarkMode ? 'border-slate-700/50' : 'border-[#ededed]'} p-6 min-h-[420px]`}>
+          <div className="flex justify-between items-center mb-4">
+            <div className="flex items-center gap-2">
+              <div className={`h-4 w-32 rounded ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`}></div>
+            </div>
+            <div className={`h-8 w-24 rounded-lg ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`}></div>
+          </div>
+          <div className="space-y-3 mt-6">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className={`p-4 rounded-xl ${isDarkMode ? 'bg-slate-800/50' : 'bg-slate-50'}`}>
+                <div className="flex items-start gap-3">
+                  <div className={`w-8 h-8 rounded-lg ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`}></div>
+                  <div className="flex-1">
+                    <div className={`h-4 w-3/4 rounded mb-2 ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`}></div>
+                    <div className={`h-3 w-1/2 rounded ${isDarkMode ? 'bg-slate-700/60' : 'bg-slate-200/80'}`}></div>
+                  </div>
+                  <div className={`h-8 w-20 rounded-lg ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`}></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Campaign Calendar Skeleton */}
+      <div className={`${isDarkMode ? 'bg-[#0B0F1A]' : 'bg-white'} rounded-2xl border ${isDarkMode ? 'border-slate-700/50' : 'border-[#ededed]'} p-6`}>
+        <div className="flex justify-between items-center mb-6">
+          <div className={`h-5 w-36 rounded ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`}></div>
+          <div className="flex gap-2">
+            <div className={`h-8 w-8 rounded-lg ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`}></div>
+            <div className={`h-8 w-28 rounded-lg ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`}></div>
+            <div className={`h-8 w-8 rounded-lg ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`}></div>
+          </div>
+        </div>
+        <div className="grid grid-cols-7 gap-2">
+          {[...Array(7)].map((_, i) => (
+            <div key={i} className={`h-4 w-8 mx-auto rounded ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`}></div>
+          ))}
+          {[...Array(35)].map((_, i) => (
+            <div key={i} className={`h-20 rounded-lg ${isDarkMode ? 'bg-slate-800/30' : 'bg-slate-50'} ${i % 7 === 0 || i % 7 === 6 ? 'opacity-50' : ''}`}>
+              <div className={`h-4 w-4 m-2 rounded ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`}></div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
   if (loading) {
-    return <div className="flex h-full items-center justify-center text-slate-400 gap-2"><div className="w-4 h-4 bg-#ffcc29 rounded-full animate-bounce"></div> Loading metrics...</div>;
+    return <DashboardSkeleton />;
   }
 
   const currentCompetitor = data?.competitorActivity?.[competitorIndex];
@@ -661,409 +1082,179 @@ const Dashboard: React.FC = () => {
               {data?.businessContext?.name ? `${data.businessContext.name} Dashboard` : 'Dashboard'}
             </h1>
             <p className={`text-sm mt-0.5 ${theme.textSecondary}`}>
-              {data?.businessContext?.industry 
+              {data?.businessContext?.industry
                 ? `Marketing performance for your ${data.businessContext.industry} business.`
                 : 'Overview of your marketing performance.'
               }
             </p>
         </div>
-        <div className={`${theme.bgCard} border ${isDarkMode ? 'border-[#ffcc29]/20' : 'border-slate-200'} rounded-lg px-4 py-2 text-sm font-medium ${theme.textSecondary} flex items-center gap-2 shadow-sm hover:border-slate-300 transition-colors cursor-pointer`}>
-            Last 7 Days
-            <ChevronRight className={`w-4 h-4 rotate-90 ${theme.textMuted}`} />
-        </div>
+        <button
+          onClick={() => fetchData(true)}
+          disabled={refreshing}
+          className={`px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 transition-all ${
+            isDarkMode
+              ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700/50'
+              : 'bg-white hover:bg-slate-50 text-slate-600 border border-slate-200'
+          } ${refreshing ? 'opacity-60 cursor-not-allowed' : ''}`}
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+          {refreshing ? 'Refreshing...' : 'Refresh'}
+        </button>
       </div>
 
-      {/* Stats Grid - More refined spacing */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        {/* Active Campaigns Card - Cleaner */}
-        <div className={`${theme.bgCard} rounded-2xl border ${isDarkMode ? 'border-[#ffcc29]/20 hover:border-[#ffcc29]/40' : 'border-[#ededed] hover:border-slate-200'} p-6 transition-all duration-200`}>
-            <div className="flex justify-between items-start mb-6">
-                <span className={`font-medium text-xs uppercase tracking-wider ${theme.textSecondary}`}>Active Campaigns</span>
-                <div className="flex items-center gap-2">
-                    <SectionButtons 
-                      sectionType="activeCampaigns" 
-                      sectionData={{ count: data?.overview.activeCampaigns, change: data?.overview.activeCampaignsChange }} 
-                    />
-                </div>
-            </div>
-            <div className={`text-5xl font-bold mb-4 tracking-tight ${theme.text}`}>
-              {data?.overview.activeCampaigns ?? 0}
-            </div>
-            {(data?.overview?.activeCampaigns || 0) === 0 && (
-              <p className={`text-xs mb-4 ${theme.textMuted}`}>No active campaigns yet</p>
-            )}
-            <div className={`flex justify-between items-center pt-4 border-t ${isDarkMode ? 'border-[#ededed]/10' : 'border-[#f5f5f5]'}`}>
-                {(data?.overview?.activeCampaigns || 0) > 0 ? (
-                  <>
-                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-full flex items-center gap-1 ${isDarkMode ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-50 text-emerald-600'}`}>
-                        <ArrowUpRight className="w-3 h-3" /> {data?.overview.activeCampaignsChange || 0}%
-                    </span>
-                    <span className={`text-xs ${theme.textMuted}`}>vs last period</span>
-                  </>
-                ) : (
-                  <button 
-                    onClick={() => { window.location.hash = '/campaigns?action=create'; }}
-                    className="w-full py-2 bg-[#ffcc29] hover:bg-[#e6b825] text-[#070A12] text-xs font-semibold rounded-lg transition-colors flex items-center justify-center gap-1.5"
-                  >
-                    <Plus className="w-3.5 h-3.5" /> Create New Campaign
-                  </button>
-                )}
-            </div>
+      {/* Social Followers Bar Chart */}
+      <div className={`${theme.bgCard} rounded-2xl border ${isDarkMode ? 'border-slate-700/50 hover:border-slate-600' : 'border-[#ededed] hover:border-slate-200'} p-6 transition-all duration-200`}>
+        <div className="flex justify-between items-center mb-6">
+          <div className="flex items-center gap-3">
+            <Users className={`w-5 h-5 ${isDarkMode ? 'text-[#ffcc29]' : 'text-[#ffcc29]'}`} />
+            <span className={`font-semibold text-sm uppercase tracking-wider ${theme.text}`}>Social Followers</span>
+          </div>
+          <button 
+            onClick={() => { window.location.hash = '/connect-socials'; }}
+            className="px-4 py-2 bg-[#ffcc29] hover:bg-[#e6b825] text-black text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Connect Account
+          </button>
         </div>
-
-        {/* Budget Spent Card - Interactive Graph */}
-        <div className={`${theme.bgCard} rounded-2xl border ${isDarkMode ? 'border-[#ffcc29]/20 hover:border-[#ffcc29]/40' : 'border-[#ededed] hover:border-slate-200'} p-6 transition-all duration-200`}>
-            <div className="flex justify-between items-start mb-4">
-                <span className={`font-medium text-xs uppercase tracking-wider ${theme.textSecondary}`}>Budget Spent</span>
-                <div className="flex items-center gap-2">
-                    <SectionButtons 
-                      sectionType="budgetSpent" 
-                      sectionData={{ total: data?.overview.totalSpent, dailyData: budgetData }} 
-                    />
-                </div>
+        
+        {followerLoading ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className={`w-8 h-8 animate-spin ${theme.textMuted}`} />
+          </div>
+        ) : followerData.length === 0 ? (
+          <div className="text-center py-12">
+            <div className={`w-16 h-16 mx-auto mb-4 rounded-full ${isDarkMode ? 'bg-slate-800' : 'bg-slate-100'} flex items-center justify-center`}>
+              <Users className={`w-8 h-8 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`} />
             </div>
-            <div className={`text-5xl font-bold mb-4 tracking-tight ${theme.text}`}>
-              {hasSpend ? `$${(data?.overview.totalSpent || 0).toLocaleString()}` : (
-                <span className={`text-2xl ${theme.textMuted}`}>$0</span>
-              )}
-            </div>
-            
-            {/* Interactive Graph */}
-            {hasSpend ? (
-              <div className="relative h-16 mt-4">
-                <svg 
-                  viewBox="0 0 280 60" 
-                  className="w-full h-full"
-                  onMouseLeave={() => setHoveredPoint(null)}
-                >
-                  {/* Gradient fill */}
-                  <defs>
-                    <linearGradient id="budgetGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                      <stop offset="0%" stopColor="rgb(99, 102, 241)" stopOpacity="0.3" />
-                      <stop offset="100%" stopColor="rgb(99, 102, 241)" stopOpacity="0.02" />
-                    </linearGradient>
-                  </defs>
-                  
-                  {/* Area fill */}
-                  <path
-                    d={`M 0 55 ${budgetData.map((val: number, i: number) => `L ${i * 40 + 20} ${55 - (val / Math.max(...budgetData, 1)) * 45}`).join(' ')} L 280 55 Z`}
-                    fill="url(#budgetGradient)"
-                  />
-                  
-                  {/* Line */}
-                  <path
-                    d={`M ${budgetData.map((val: number, i: number) => `${i * 40 + 20} ${55 - (val / Math.max(...budgetData, 1)) * 45}`).join(' L ')}`}
-                    fill="none"
-                    stroke="rgb(99, 102, 241)"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  
-                  {/* Interactive points */}
-                  {budgetData.map((val: number, i: number) => {
-                    const x = i * 40 + 20;
-                    const y = 55 - (val / Math.max(...budgetData, 1)) * 45;
-                    return (
-                      <g key={i}>
-                        <circle
-                          cx={x}
-                          cy={y}
-                          r="12"
-                          fill="transparent"
-                          className="cursor-pointer"
-                          onMouseEnter={() => setHoveredPoint({ x, y, value: val })}
-                        />
-                        <circle
-                          cx={x}
-                          cy={y}
-                          r={hoveredPoint?.x === x ? 5 : 3}
-                          fill="white"
-                          stroke="rgb(99, 102, 241)"
-                          strokeWidth="2"
-                          className="transition-all duration-150"
-                        />
-                      </g>
-                    );
-                  })}
-                </svg>
-                
-                {/* Tooltip */}
-                {hoveredPoint && (
-                  <div 
-                    className="absolute bg-#0a0f1a text-white text-xs font-semibold px-2.5 py-1.5 rounded-lg shadow-lg pointer-events-none transform -translate-x-1/2 -translate-y-full"
-                    style={{ left: `${(hoveredPoint.x / 280) * 100}%`, top: `${(hoveredPoint.y / 60) * 100 - 10}%` }}
-                  >
-                    ${hoveredPoint.value.toLocaleString()}
-                    <div className="absolute left-1/2 -bottom-1 transform -translate-x-1/2 w-2 h-2 bg-#0a0f1a rotate-45"></div>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="h-16 mt-4 flex items-center justify-center">
-                <p className={`text-xs ${theme.textMuted}`}>No spend data yet</p>
-              </div>
-            )}
-            
-            {/* Day labels */}
-            <div className="flex justify-between mt-1 px-2">
-              {days.map((day: string, i: number) => (
-                <span key={i} className={`text-[10px] ${theme.textMuted}`}>{day}</span>
-              ))}
-            </div>
-        </div>
-
-        {/* Brand Score Card - Matching other cards */}
-        <div className={`${theme.bgCard} rounded-2xl border ${isDarkMode ? 'border-[#ffcc29]/20 hover:border-[#ffcc29]/40' : 'border-[#ededed] hover:border-slate-200'} p-6 transition-all duration-200`}>
-             <div className="flex justify-between items-start mb-6">
-                <span className={`font-medium text-xs uppercase tracking-wider ${theme.textSecondary}`}>AI Brand Score</span>
-                <div className="flex items-center gap-2">
-                   <SectionButtons 
-                     sectionType="brandScore" 
-                     sectionData={{ score: data?.overview.brandScore, change: data?.overview.brandScoreChange, factors: data?.brandScoreFactors }} 
-                   />
-                </div>
-             </div>
-             
-             <div className="flex items-center gap-6">
-                 <div className="relative">
-                     <svg className="w-20 h-20 transform -rotate-90">
-                         <circle cx="40" cy="40" r="32" stroke="currentColor" strokeWidth="6" fill="transparent" className={isDarkMode ? 'text-[#ffcc29]/20' : 'text-[#ffcc29]/20'} />
-                         <circle 
-                           cx="40" cy="40" r="32" 
-                           stroke="currentColor" 
-                           strokeWidth="6" 
-                           fill="transparent" 
-                           strokeDasharray={`${data?.overview.brandScore ? data.overview.brandScore * 2.01 : 0} 201`} 
-                           strokeLinecap="round"
-                           className="text-[#ffcc29] transition-all duration-1000 ease-out" 
-                         />
-                     </svg>
-                     <div className={`absolute inset-0 flex items-center justify-center text-2xl font-bold tracking-tight ${theme.text}`}>
-                         {data?.overview.brandScore ?? 0}
-                     </div>
-                 </div>
-                 <div className="flex-1">
-                     <div className={`text-4xl font-bold mb-1 tracking-tight ${theme.text}`}>
-                       {data?.overview.brandScore ?? 0}<span className={`text-lg ${theme.textMuted}`}>/100</span>
-                     </div>
-                     <p className={`text-xs ${theme.textMuted}`}>Overall brand health</p>
-                 </div>
-             </div>
-             
-             <div className={`flex justify-between items-center pt-4 mt-4 border-t ${isDarkMode ? 'border-[#ededed]/10' : 'border-[#f5f5f5]'}`}>
-                <span className={`text-xs font-semibold px-2.5 py-1 rounded-full flex items-center gap-1 ${isDarkMode ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-50 text-emerald-600'}`}>
-                    <ArrowUpRight className="w-3 h-3" /> {data?.overview.brandScoreChange ?? 0}%
-                </span>
-                <span className={`text-xs ${theme.textMuted}`}>vs last period</span>
-             </div>
-        </div>
-      </div>
-
-      {/* Brand Score Info Modal */}
-      {showBrandScoreInfo && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => setShowBrandScoreInfo(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6 animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-start mb-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-#ffcc2920 rounded-xl">
-                  <Info className="w-5 h-5 text-#ffcc29" />
-                </div>
-                <h3 className="text-lg font-semibold text-#0a0f1a">How AI Brand Score Works</h3>
-              </div>
-              <button onClick={() => setShowBrandScoreInfo(false)} className="p-1.5 hover:bg-#ededed rounded-lg transition-colors">
-                <X className="w-5 h-5 text-slate-400" />
-              </button>
-            </div>
-            
-            <p className="text-slate-600 text-sm leading-relaxed mb-4">
-              Your <strong>AI Brand Score</strong> is a comprehensive metric (0-100) calculated by our AI engine that measures your brand's overall marketing health and effectiveness. The score is updated in real-time based on data from all your connected social platforms.
-              {data?.businessContext?.industry && (
-                <span className="block mt-2 text-#ffcc29 font-medium">
-                  📊 Personalized for {data.businessContext.name || 'your'} {data.businessContext.industry} business.
-                </span>
-              )}
+            <h3 className={`text-lg font-semibold ${theme.text} mb-2`}>No Connected Accounts</h3>
+            <p className={`text-sm ${theme.textMuted} max-w-md mx-auto mb-4`}>
+              Connect your social media accounts to see your follower statistics.
             </p>
-
-            {/* Score Formula */}
-            <div className="mb-5 p-4 bg-gradient-to-r from-slate-50 to-slate-100 rounded-xl border border-slate-200">
-              <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">📐 Score Calculation Formula</h4>
-              <div className="bg-white p-3 rounded-lg border border-slate-200 font-mono text-xs text-slate-700 text-center">
-                Brand Score = (E × 0.30) + (C × 0.25) + (A × 0.25) + (P × 0.20)
-              </div>
-              <p className="text-xs text-slate-500 mt-2 text-center">Where E = Engagement, C = Consistency, A = Audience Growth, P = Performance</p>
-            </div>
-            
-            <div className="space-y-4 mb-5">
-              <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">📊 Weightage Breakdown & Criteria</h4>
-              
-              {/* Engagement Rate - 30% */}
-              <div className="p-4 bg-#f5f5f5 rounded-xl border-l-4 border-#ffcc29">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-10 h-10 bg-#ffcc2920 rounded-lg flex items-center justify-center text-#ffcc29 font-bold text-lg">30%</div>
-                    <h5 className="font-semibold text-#0f1526">Engagement Rate</h5>
-                  </div>
-                  {data?.brandScoreFactors?.engagement && (
-                    <span className="text-sm font-bold text-#ffcc29">Score: {data.brandScoreFactors.engagement.score}/100</span>
-                  )}
-                </div>
-                <p className="text-sm text-slate-600 mb-2">Measures how actively your audience interacts with your content.</p>
-                <div className="bg-white p-3 rounded-lg">
-                  <p className="text-xs font-semibold text-slate-700 mb-1">Criteria Evaluated:</p>
-                  <ul className="text-xs text-slate-500 space-y-1">
-                    <li>• <strong>Likes & Reactions:</strong> Total interactions per post relative to followers</li>
-                    <li>• <strong>Comments:</strong> Quality and quantity of audience responses</li>
-                    <li>• <strong>Shares & Reposts:</strong> Content virality and shareability</li>
-                    <li>• <strong>Saves & Bookmarks:</strong> Content value perception</li>
-                    <li>• <strong>Industry Benchmark:</strong> Compared against {data?.businessContext?.industry || 'your industry'} average (2-5%)</li>
-                  </ul>
-                </div>
-                {data?.brandScoreFactors?.engagement?.reason && (
-                  <p className="text-xs text-#ffcc29 mt-2 italic">💡 {data.brandScoreFactors.engagement.reason}</p>
-                )}
-              </div>
-
-              {/* Content Consistency - 25% */}
-              <div className="p-4 bg-#f5f5f5 rounded-xl border-l-4 border-blue-500">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600 font-bold text-lg">25%</div>
-                    <h5 className="font-semibold text-#0f1526">Content Consistency</h5>
-                  </div>
-                  {data?.brandScoreFactors?.consistency && (
-                    <span className="text-sm font-bold text-blue-600">Score: {data.brandScoreFactors.consistency.score}/100</span>
-                  )}
-                </div>
-                <p className="text-sm text-slate-600 mb-2">Evaluates your posting regularity and schedule adherence.</p>
-                <div className="bg-white p-3 rounded-lg">
-                  <p className="text-xs font-semibold text-slate-700 mb-1">Criteria Evaluated:</p>
-                  <ul className="text-xs text-slate-500 space-y-1">
-                    <li>• <strong>Posting Frequency:</strong> Posts per week across all platforms</li>
-                    <li>• <strong>Schedule Adherence:</strong> Consistency in posting times</li>
-                    <li>• <strong>Platform Coverage:</strong> Activity across connected channels</li>
-                    <li>• <strong>Content Gap Analysis:</strong> Days without any posts</li>
-                    <li>• <strong>Optimal Timing:</strong> Posting during peak engagement hours</li>
-                  </ul>
-                </div>
-                {data?.brandScoreFactors?.consistency?.reason && (
-                  <p className="text-xs text-blue-600 mt-2 italic">💡 {data.brandScoreFactors.consistency.reason}</p>
-                )}
-              </div>
-
-              {/* Audience Growth - 25% */}
-              <div className="p-4 bg-#f5f5f5 rounded-xl border-l-4 border-emerald-500">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center text-emerald-600 font-bold text-lg">25%</div>
-                    <h5 className="font-semibold text-#0f1526">Audience Growth</h5>
-                  </div>
-                  {data?.brandScoreFactors?.audienceGrowth && (
-                    <span className="text-sm font-bold text-emerald-600">Score: {data.brandScoreFactors.audienceGrowth.score}/100</span>
-                  )}
-                </div>
-                <p className="text-sm text-slate-600 mb-2">Tracks your follower growth rate and reach expansion.</p>
-                <div className="bg-white p-3 rounded-lg">
-                  <p className="text-xs font-semibold text-slate-700 mb-1">Criteria Evaluated:</p>
-                  <ul className="text-xs text-slate-500 space-y-1">
-                    <li>• <strong>Follower Growth Rate:</strong> Week-over-week & month-over-month increase</li>
-                    <li>• <strong>Net New Followers:</strong> New followers minus unfollows</li>
-                    <li>• <strong>Reach & Impressions:</strong> Total unique users viewing your content</li>
-                    <li>• <strong>Profile Visits:</strong> Users actively seeking your profile</li>
-                    <li>• <strong>Growth Trajectory:</strong> Trending upward, stable, or declining</li>
-                  </ul>
-                </div>
-                {data?.brandScoreFactors?.audienceGrowth?.reason && (
-                  <p className="text-xs text-emerald-600 mt-2 italic">💡 {data.brandScoreFactors.audienceGrowth.reason}</p>
-                )}
-              </div>
-
-              {/* Campaign Performance - 20% */}
-              <div className="p-4 bg-#f5f5f5 rounded-xl border-l-4 border-amber-500">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center text-amber-600 font-bold text-lg">20%</div>
-                    <h5 className="font-semibold text-#0f1526">Campaign Performance</h5>
-                  </div>
-                  {data?.brandScoreFactors?.contentQuality && (
-                    <span className="text-sm font-bold text-amber-600">Score: {data.brandScoreFactors.contentQuality.score}/100</span>
-                  )}
-                </div>
-                <p className="text-sm text-slate-600 mb-2">Measures your marketing campaign effectiveness and ROI.</p>
-                <div className="bg-white p-3 rounded-lg">
-                  <p className="text-xs font-semibold text-slate-700 mb-1">Criteria Evaluated:</p>
-                  <ul className="text-xs text-slate-500 space-y-1">
-                    <li>• <strong>Click-Through Rate (CTR):</strong> Users taking action on your content</li>
-                    <li>• <strong>Conversion Rate:</strong> Actions leading to desired outcomes</li>
-                    <li>• <strong>ROI Metrics:</strong> Return on marketing investment</li>
-                    <li>• <strong>Link Performance:</strong> Bio link and story link clicks</li>
-                    <li>• <strong>Campaign Goal Achievement:</strong> Meeting set marketing objectives</li>
-                  </ul>
-                </div>
-                {data?.brandScoreFactors?.contentQuality?.reason && (
-                  <p className="text-xs text-amber-600 mt-2 italic">💡 {data.brandScoreFactors.contentQuality.reason}</p>
-                )}
-              </div>
-            </div>
-
-            {/* Score Ranges */}
-            <div className="mb-5 p-4 bg-gradient-to-r from-slate-50 to-slate-100 rounded-xl">
-              <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-3">🎯 Score Interpretation</h4>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="flex items-center gap-2 p-2 bg-white rounded-lg">
-                  <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
-                  <span className="text-xs"><strong>80-100:</strong> Excellent</span>
-                </div>
-                <div className="flex items-center gap-2 p-2 bg-white rounded-lg">
-                  <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-                  <span className="text-xs"><strong>60-79:</strong> Good</span>
-                </div>
-                <div className="flex items-center gap-2 p-2 bg-white rounded-lg">
-                  <div className="w-3 h-3 rounded-full bg-amber-500"></div>
-                  <span className="text-xs"><strong>40-59:</strong> Needs Work</span>
-                </div>
-                <div className="flex items-center gap-2 p-2 bg-white rounded-lg">
-                  <div className="w-3 h-3 rounded-full bg-red-500"></div>
-                  <span className="text-xs"><strong>0-39:</strong> Critical</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Personalized Tips */}
-            {data?.personalizedTips && data.personalizedTips.length > 0 && (
-              <div className="mb-5 p-4 bg-#ffcc2910 rounded-xl border border-#ffcc2930">
-                <h4 className="text-xs font-bold text-#ffcc29 uppercase tracking-wider mb-2">💡 Personalized Tips to Improve</h4>
-                <ul className="space-y-2">
-                  {data.personalizedTips.slice(0, 3).map((tip, idx) => (
-                    <li key={idx} className="text-xs text-slate-600 flex items-start gap-2 bg-white p-2 rounded-lg">
-                      <span className="text-#ffcc29 font-bold">{idx + 1}.</span>
-                      {tip}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {/* Data Sources */}
-            <div className="mb-5 p-3 bg-slate-50 rounded-xl">
-              <p className="text-xs text-slate-500 text-center">
-                📡 Score is calculated using real-time data from your connected platforms and updated every time you visit the dashboard.
-              </p>
-            </div>
-            
             <button 
-              onClick={() => setShowBrandScoreInfo(false)} 
-              className="w-full py-3 bg-#ffcc29 hover:bg-#e6b824 text-#0a0f1a text-sm font-semibold rounded-xl transition-colors"
+              onClick={() => { window.location.hash = '/connect-socials'; }}
+              className="px-6 py-2.5 bg-[#ffcc29] hover:bg-[#e6b825] text-black text-sm font-semibold rounded-lg transition-colors"
             >
-              Got it, thanks!
+              Connect Your Accounts
             </button>
           </div>
-        </div>
-      )}
+        ) : (
+          <div className="relative">
+            {/* Professional Horizontal Bar Chart */}
+            <div className="space-y-4">
+              {(() => {
+                const maxFollowers = Math.max(...followerData.map(p => p.followers), 100);
+                const totalFollowers = followerData.reduce((sum, p) => sum + p.followers, 0);
+                
+                return followerData.map((platform, idx) => {
+                  const percentage = maxFollowers > 0 ? (platform.followers / maxFollowers) * 100 : 15;
+                  const displayPercentage = Math.max(percentage, 15); // Minimum 15% width for visibility
+                  const isHovered = hoveredBar === platform.platform;
+                  
+                  return (
+                    <div 
+                      key={platform.platform}
+                      className={`group cursor-pointer transition-all duration-200 ${isHovered ? 'scale-[1.02]' : ''}`}
+                      onMouseEnter={() => setHoveredBar(platform.platform)}
+                      onMouseLeave={() => setHoveredBar(null)}
+                    >
+                      {/* Platform Row */}
+                      <div className="flex items-center gap-4">
+                        {/* Platform Icon */}
+                        <div 
+                          className={`w-12 h-12 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0 transition-transform ${isHovered ? 'scale-110' : ''}`}
+                          style={{ 
+                            background: platform.bgColor.includes('linear') 
+                              ? platform.bgColor 
+                              : platform.bgColor
+                          }}
+                        >
+                          <img 
+                            src={platform.logo} 
+                            alt={platform.name}
+                            className="w-7 h-7 object-contain"
+                            style={{ 
+                              filter: ['instagram', 'twitter', 'tiktok'].includes(platform.platform) 
+                                ? 'brightness(0) invert(1)' 
+                                : 'none' 
+                            }}
+                          />
+                        </div>
+                        
+                        {/* Bar Container */}
+                        <div className="flex-1">
+                          {/* Platform Name & Follower Count */}
+                          <div className="flex justify-between items-center mb-2">
+                            <span className={`text-sm font-semibold ${theme.text}`}>{platform.name}</span>
+                            <span className={`text-sm font-bold ${isHovered ? 'text-[#ffcc29]' : theme.text}`}>
+                              {platform.followers > 0 
+                                ? platform.followers >= 1000 
+                                  ? `${(platform.followers / 1000).toFixed(1)}K`
+                                  : platform.followers.toLocaleString()
+                                : 'Connected'}
+                            </span>
+                          </div>
+                          
+                          {/* Progress Bar */}
+                          <div className={`h-8 rounded-xl overflow-hidden ${isDarkMode ? 'bg-slate-800' : 'bg-slate-100'}`}>
+                            <div 
+                              className="h-full rounded-xl relative overflow-hidden transition-all duration-500"
+                              style={{ 
+                                width: `${displayPercentage}%`,
+                                background: platform.bgColor.includes('linear') 
+                                  ? platform.bgColor 
+                                  : `linear-gradient(90deg, ${platform.color}dd 0%, ${platform.color} 100%)`
+                              }}
+                            >
+                              {/* Shine effect */}
+                              <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0"></div>
+                              
+                              {/* Animated shine on hover */}
+                              {isHovered && (
+                                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-pulse"></div>
+                              )}
+                              
+                              {/* Follower text inside bar */}
+                              {platform.followers > 0 && (
+                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-white text-xs font-bold drop-shadow-lg">
+                                  {platform.followers.toLocaleString()} followers
+                                </span>
+                              )}
+                              {platform.followers === 0 && (
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/80 text-xs font-medium">
+                                  ✓ Connected
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+            
+            {/* Stats Summary Row */}
+            <div className={`mt-8 pt-5 border-t ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'} grid grid-cols-2 gap-4`}>
+              <div className={`text-center p-4 rounded-xl ${isDarkMode ? 'bg-slate-800/50' : 'bg-slate-50'}`}>
+                <p className={`text-3xl font-bold ${theme.text}`}>
+                  {followerData.reduce((sum, p) => sum + p.followers, 0).toLocaleString()}
+                </p>
+                <p className={`text-xs font-medium ${theme.textMuted} mt-1`}>Total Followers</p>
+              </div>
+              <div className={`text-center p-4 rounded-xl ${isDarkMode ? 'bg-slate-800/50' : 'bg-slate-50'}`}>
+                <p className={`text-3xl font-bold ${theme.text}`}>{followerData.length}</p>
+                <p className={`text-xs font-medium ${theme.textMuted} mt-1`}>Connected Platforms</p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* Competitor Radar - Enhanced with Stats Bar and Better Layout */}
-        <div className={`${theme.bgCard} rounded-2xl border ${isDarkMode ? 'border-[#ffcc29]/20 hover:border-[#ffcc29]/40' : 'border-[#ededed] hover:border-slate-200'} p-6 transition-all duration-200 min-h-[420px] flex flex-col`}>
+        <div className={`${theme.bgCard} rounded-2xl border ${isDarkMode ? 'border-slate-700/50 hover:border-slate-600' : 'border-[#ededed] hover:border-slate-200'} p-6 transition-all duration-200 min-h-[420px] flex flex-col`}>
             <div className="flex justify-between items-center mb-4">
                 <div className="flex items-center gap-2">
                     <h2 className={`text-sm font-semibold ${theme.text}`}>Competitor Radar</h2>
@@ -1097,7 +1288,7 @@ const Dashboard: React.FC = () => {
                   🔄 Live
                 </button>
                 <button 
-                  onClick={() => window.open('/competitors', '_self')}
+                  onClick={() => window.location.hash = '#/competitors'}
                   className="text-[#ffcc29] text-xs font-semibold hover:underline px-3 py-1.5 bg-[#ffcc29]/10 rounded-lg hover:bg-[#ffcc29]/20 transition-colors"
                 >
                   View All
@@ -1106,14 +1297,14 @@ const Dashboard: React.FC = () => {
             </div>
             
             {(!data?.competitorActivity || data.competitorActivity.length === 0) ? (
-              <div className={`${isDarkMode ? 'bg-[#0d1117] border-[#ffcc29]/20' : 'bg-[#f5f5f5] border-[#ededed]'} border rounded-xl p-8 text-center`}>
+              <div className={`${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-[#f5f5f5] border-[#ededed]'} border rounded-xl p-8 text-center`}>
                 <div className={`w-12 h-12 ${isDarkMode ? 'bg-[#070A12]' : 'bg-[#ededed]'} rounded-full flex items-center justify-center mx-auto mb-3`}>
                   <Activity className={`w-6 h-6 ${theme.textMuted}`} />
                 </div>
                 <p className={`text-sm font-medium mb-1 ${theme.textSecondary}`}>No competitor data yet</p>
                 <p className={`text-xs mb-4 ${theme.textMuted}`}>Add competitors to track their activity</p>
                 <button 
-                  onClick={() => window.open('/competitors', '_self')}
+                  onClick={() => window.location.hash = '#/competitors'}
                   className="px-4 py-2 bg-[#ffcc29] hover:bg-[#e6b825] text-[#070A12] text-xs font-semibold rounded-lg transition-colors"
                 >
                   + Add Competitors
@@ -1147,7 +1338,7 @@ const Dashboard: React.FC = () => {
                 <div className="flex-1 min-w-0 flex">
                     {currentCompetitor && (
                         <div 
-                          className={`${isDarkMode ? 'bg-[#0d1117] border-[#ffcc29]/20' : 'bg-[#f5f5f5] border-[#ededed]'} border rounded-xl p-5 relative min-h-[280px] flex flex-col w-full ${currentCompetitor.postUrl ? 'cursor-pointer hover:border-[#ffcc29]/30 hover:shadow-md transition-all' : ''}`}
+                          className={`${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-[#f5f5f5] border-[#ededed]'} border rounded-xl p-5 relative min-h-[280px] flex flex-col w-full ${currentCompetitor.postUrl ? 'cursor-pointer hover:border-[#ffcc29]/30 hover:shadow-md transition-all' : ''}`}
                           onClick={() => currentCompetitor.postUrl && window.open(currentCompetitor.postUrl, '_blank')}
                         >
                             {currentCompetitor.postUrl && (
@@ -1157,7 +1348,7 @@ const Dashboard: React.FC = () => {
                               </div>
                             )}
                             <div className="flex items-center gap-3 mb-3">
-                                <div className={`w-11 h-11 rounded-full ${isDarkMode ? 'bg-[#070A12]' : 'bg-white'} shadow-sm flex items-center justify-center text-sm font-bold ${theme.text} border ${isDarkMode ? 'border-[#ffcc29]/20' : 'border-[#ededed]'}`}>
+                                <div className={`w-11 h-11 rounded-full ${isDarkMode ? 'bg-[#070A12]' : 'bg-white'} shadow-sm flex items-center justify-center text-sm font-bold ${theme.text} border ${isDarkMode ? 'border-slate-700/50' : 'border-[#ededed]'}`}>
                                     {currentCompetitor.competitorLogo || currentCompetitor.competitorName?.charAt(0) || 'C'}
                                 </div>
                                 <div>
@@ -1190,6 +1381,7 @@ const Dashboard: React.FC = () => {
                                   >
                                     <Swords className="w-3.5 h-3.5" />
                                     Create Rival Post
+                                    <span className="flex items-center gap-0.5 text-[10px] bg-black/10 px-1 py-0.5 rounded-full"><Zap className="w-2.5 h-2.5" />7</span>
                                   </button>
                                   <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wide ${
                                       currentCompetitor.sentiment === 'positive' ? 'bg-emerald-100 text-emerald-700' : 
@@ -1244,76 +1436,140 @@ const Dashboard: React.FC = () => {
             )}
         </div>
 
-        {/* Suggested Actions - With Action Buttons and Dismiss */}
-        <div className={`${theme.bgCard} rounded-2xl border ${isDarkMode ? 'border-[#ffcc29]/20 hover:border-[#ffcc29]/40' : 'border-[#ededed] hover:border-slate-200'} p-6 transition-all duration-200 flex flex-col`}>
+        {/* Strategic Advisor - AI Content Suggestions */}
+        <div className={`${theme.bgCard} rounded-2xl border ${isDarkMode ? 'border-slate-700/50 hover:border-slate-600' : 'border-[#ededed] hover:border-slate-200'} p-6 transition-all duration-200 min-h-[420px] flex flex-col`}>
             <div className="flex justify-between items-center mb-4">
                 <div className="flex items-center gap-2">
-                    <TrendingUp className="w-5 h-5 text-[#ffcc29]" />
-                    <h2 className={`text-sm font-semibold ${theme.text}`}>Recommended Actions</h2>
+                    <Lightbulb className="w-5 h-5 text-[#ffcc29]" />
+                    <h2 className={`text-sm font-semibold ${theme.text}`}>Strategic Advisor</h2>
                     <SectionButtons 
-                      sectionType="recommendedActions" 
-                      sectionData={{ actions: data?.suggestedActions }} 
+                      sectionType="strategicAdvisor" 
+                      sectionData={{ suggestions: strategicSuggestions }} 
                     />
                 </div>
-                <span className="text-[10px] bg-[#ffcc29]/20 text-[#ffcc29] px-2.5 py-1 rounded-full font-semibold uppercase tracking-wide">AI Personalized</span>
+                <span className="text-[10px] bg-gradient-to-r from-[#ffcc29]/20 to-orange-500/20 text-[#ffcc29] px-2.5 py-1 rounded-full font-semibold uppercase tracking-wide">AI Content Strategist</span>
             </div>
             
             {/* Business context indicator */}
             {data?.businessContext?.name && (
-              <div className={`mb-4 px-3 py-2 ${isDarkMode ? 'bg-[#ffcc29]/10 border-[#ffcc29]/20' : 'bg-[#ffcc29]/10 border-[#ffcc29]/20'} border rounded-lg`}>
-                <p className="text-[10px] text-[#ffcc29] uppercase tracking-wider mb-0.5">Tailored for</p>
+              <div className={`mb-4 px-3 py-2 ${isDarkMode ? 'bg-[#ffcc29]/10 border-slate-700/50' : 'bg-[#ffcc29]/10 border-slate-700/50'} border rounded-lg`}>
+                <p className="text-[10px] text-[#ffcc29] uppercase tracking-wider mb-0.5">Content Strategy for</p>
                 <p className={`text-xs ${theme.text} font-medium`}>
                   {data.businessContext.name} • {data.businessContext.industry}
                 </p>
               </div>
             )}
+            
+            {/* Trending Now & Upcoming Events */}
+            {(trendingNow.length > 0 || upcomingEvents.length > 0) && (
+              <div className={`mb-4 p-3 rounded-xl ${isDarkMode ? 'bg-[#0d1117]' : 'bg-[#f5f5f5]'}`}>
+                {trendingNow.length > 0 && (
+                  <div className="flex items-center gap-2 flex-wrap mb-2">
+                    <Flame className="w-4 h-4 text-orange-500" />
+                    <span className={`text-xs ${theme.textMuted}`}>Trending:</span>
+                    {trendingNow.slice(0, 3).map((topic, i) => (
+                      <span key={i} className="text-[10px] px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-500">{topic}</span>
+                    ))}
+                  </div>
+                )}
+                {upcomingEvents.length > 0 && (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <CalendarIcon className="w-4 h-4 text-pink-500" />
+                    <span className={`text-xs ${theme.textMuted}`}>Upcoming:</span>
+                    {upcomingEvents.slice(0, 2).map((event, i) => (
+                      <span key={i} className="text-[10px] px-2 py-0.5 rounded-full bg-pink-500/20 text-pink-400">
+                        {event.name} ({event.date})
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
-            <div className="space-y-2.5 flex-1">
+            <div className="space-y-2.5 flex-1 min-h-0 max-h-[600px] overflow-y-auto pr-1">
                 {/* Loading state */}
-                {loadingMoreActions && (
+                {strategicLoading && (
                   <div className="flex items-center justify-center py-8">
                     <Loader2 className="w-6 h-6 animate-spin text-[#ffcc29]" />
-                    <span className={`ml-2 text-sm ${theme.textMuted}`}>Generating personalized recommendations...</span>
+                    <span className={`ml-2 text-sm ${theme.textMuted}`}>Analyzing trends & generating content ideas...</span>
                   </div>
                 )}
                 
-                {/* Show actions if available and not loading */}
-                {!loadingMoreActions && data?.suggestedActions && data.suggestedActions.length > 0 && 
-                  data.suggestedActions
-                    .filter(action => !dismissedActions.has(action.id))
-                    .map((action, idx) => {
-                      const actionBtn = getActionButton(action.actionType || action.type || 'create_campaign', action.title);
+                {/* Show suggestions if available */}
+                {!strategicLoading && strategicSuggestions.length > 0 && 
+                  strategicSuggestions
+                    .filter(sug => !dismissedSuggestions.has(sug.id))
+                    .map((suggestion, idx) => {
+                      const categoryIcons: Record<string, React.ReactNode> = {
+                        'trending': <Flame className="w-4 h-4 text-orange-500" />,
+                        'event': <CalendarIcon className="w-4 h-4 text-pink-500" />,
+                        'competitor': <Swords className="w-4 h-4 text-red-500" />,
+                        'insight': <Lightbulb className="w-4 h-4 text-yellow-500" />,
+                        'audience': <Users className="w-4 h-4 text-blue-500" />,
+                        'moment': <Zap className="w-4 h-4 text-purple-500" />,
+                        'story': <MessageSquare className="w-4 h-4 text-green-500" />,
+                        'promo': <Target className="w-4 h-4 text-indigo-500" />
+                      };
+                      
+                      const urgencyColors: Record<string, string> = {
+                        'immediate': 'bg-red-500/20 text-red-400 border-red-500/30',
+                        'this_week': 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+                        'this_month': 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                      };
+                      
                       return (
-                        <div key={action.id} className={`flex items-center justify-between gap-2 p-3 ${isDarkMode ? 'bg-[#0d1117] border-[#ffcc29]/20 hover:border-[#ffcc29]/40' : 'bg-[#f5f5f5] border-[#ededed] hover:border-slate-300'} border rounded-xl transition-all`}>
-                            <div className="flex items-center gap-3 flex-1 min-w-0">
-                                <span className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                                  action.priority === 'high' ? 'bg-red-100 text-red-600 border border-red-200' :
-                                  action.priority === 'medium' ? 'bg-amber-100 text-amber-600 border border-amber-200' :
-                                  'bg-[#ffcc29]/20 text-[#ffcc29] border border-[#ffcc29]/30'
-                                }`}>
-                                    {idx + 1}
-                                </span>
-                                <div className="min-w-0 flex-1">
-                                  <p className={`text-sm font-medium ${theme.text} truncate`}>{action.title}</p>
-                                  {action.description && (
-                                    <p className={`text-[10px] ${theme.textMuted} mt-0.5 truncate`}>{action.description}</p>
-                                  )}
+                        <div key={suggestion.id} className={`p-3 ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50 hover:border-slate-600' : 'bg-[#f5f5f5] border-[#ededed] hover:border-slate-300'} border rounded-xl transition-all`}>
+                            <div className="flex items-start justify-between gap-2 mb-2">
+                                <div className="flex items-center gap-2">
+                                    {categoryIcons[suggestion.category] || <Sparkles className="w-4 h-4 text-[#ffcc29]" />}
+                                    <span className={`text-[10px] px-2 py-0.5 rounded-full capitalize ${isDarkMode ? 'bg-[#161b22]' : 'bg-white'} ${theme.textMuted}`}>
+                                      {suggestion.category}
+                                    </span>
+                                    {suggestion.urgency && (
+                                      <span className={`text-[10px] px-2 py-0.5 rounded-full border ${urgencyColors[suggestion.urgency] || urgencyColors['this_month']}`}>
+                                        {suggestion.urgency.replace('_', ' ')}
+                                      </span>
+                                    )}
+                                    {suggestion.viralPotential === 'high' && (
+                                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-gradient-to-r from-[#ffcc29]/20 to-orange-500/20 text-[#ffcc29]">
+                                        🔥 Viral
+                                      </span>
+                                    )}
                                 </div>
+                                <button
+                                  onClick={() => setDismissedSuggestions(prev => new Set([...prev, suggestion.id]))}
+                                  className={`p-1 ${isDarkMode ? 'text-slate-500 hover:text-red-400' : 'text-slate-400 hover:text-red-500'} rounded transition-colors`}
+                                  title="Dismiss"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
                             </div>
-                            <div className="flex items-center gap-2 flex-shrink-0">
+                            
+                            <h3 className={`text-sm font-semibold ${theme.text} mb-1`}>{suggestion.title}</h3>
+                            <p className={`text-xs ${theme.textMuted} mb-3 line-clamp-2`}>{suggestion.description}</p>
+                            
+                            {/* Platforms & Content Type */}
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                {(suggestion.platforms || ['instagram']).slice(0, 3).map((p: string) => (
+                                  <span key={p} className={`text-[10px] px-1.5 py-0.5 rounded ${isDarkMode ? 'bg-[#161b22]' : 'bg-white'} ${theme.textMuted} capitalize`}>
+                                    {p}
+                                  </span>
+                                ))}
+                                {suggestion.contentType && (
+                                  <span className={`text-[10px] flex items-center gap-1 ${theme.textMuted}`}>
+                                    <ImageIcon className="w-3 h-3" /> {suggestion.contentType}
+                                  </span>
+                                )}
+                              </div>
+                              
                               <button
-                                onClick={actionBtn.onClick}
+                                onClick={() => handleCreatePost(suggestion)}
                                 className="flex items-center gap-1.5 px-3 py-1.5 bg-[#ffcc29] hover:bg-[#e6b825] text-[#070A12] text-xs font-semibold rounded-lg transition-colors"
                               >
-                                {actionBtn.icon}
-                                {actionBtn.label}
-                              </button>
-                              <button
-                                onClick={() => setDismissedActions(prev => new Set([...prev, action.id]))}
-                                className={`p-1.5 ${isDarkMode ? 'text-slate-500 hover:text-red-400 hover:bg-red-500/20' : 'text-slate-400 hover:text-red-500 hover:bg-red-50'} rounded-lg transition-colors`}
-                                title="Dismiss this recommendation"
-                              >
-                                <X className="w-4 h-4" />
+                                <PenTool className="w-3.5 h-3.5" />
+                                Create Post
+                                <span className="flex items-center gap-0.5 text-[10px] bg-black/10 px-1 py-0.5 rounded"><Zap className="w-2.5 h-2.5" />7</span>
                               </button>
                             </div>
                         </div>
@@ -1321,13 +1577,13 @@ const Dashboard: React.FC = () => {
                   })
                 }
                 
-                {/* Show message when all actions are dismissed */}
-                {!loadingMoreActions && data?.suggestedActions && data.suggestedActions.length > 0 && 
-                  data.suggestedActions.filter(a => !dismissedActions.has(a.id)).length === 0 && (
+                {/* Show message when all suggestions are dismissed */}
+                {!strategicLoading && strategicSuggestions.length > 0 && 
+                  strategicSuggestions.filter(s => !dismissedSuggestions.has(s.id)).length === 0 && (
                   <div className="text-center py-6">
-                    <p className={`text-sm mb-2 ${theme.textMuted}`}>All recommendations dismissed</p>
+                    <p className={`text-sm mb-2 ${theme.textMuted}`}>All suggestions dismissed</p>
                     <button 
-                      onClick={() => setDismissedActions(new Set())}
+                      onClick={() => setDismissedSuggestions(new Set())}
                       className="text-[#ffcc29] text-xs hover:text-[#e6b825] underline"
                     >
                       Restore all
@@ -1335,34 +1591,29 @@ const Dashboard: React.FC = () => {
                   </div>
                 )}
                 
-                {/* No recommendations available */}
-                {!loadingMoreActions && (!data?.suggestedActions || data.suggestedActions.length === 0) && (
+                {/* No suggestions available */}
+                {!strategicLoading && strategicSuggestions.length === 0 && (
                   <div className="text-center py-8">
                     <div className={`w-12 h-12 ${isDarkMode ? 'bg-[#ffcc29]/20' : 'bg-[#ffcc29]/10'} rounded-full flex items-center justify-center mx-auto mb-3`}>
-                      <TrendingUp className="w-6 h-6 text-[#ffcc29]" />
+                      <Lightbulb className="w-6 h-6 text-[#ffcc29]" />
                     </div>
-                    <p className={`text-sm font-medium mb-1 ${theme.textSecondary}`}>No recommendations yet</p>
-                    <p className={`text-xs mb-4 ${theme.textMuted}`}>Click below to generate AI-powered marketing suggestions</p>
+                    <p className={`text-sm font-medium mb-1 ${theme.textSecondary}`}>No content ideas yet</p>
+                    <p className={`text-xs mb-4 ${theme.textMuted}`}>Generate AI-powered content suggestions based on trends & events</p>
                   </div>
                 )}
                 
-                <button 
+                <button
                   onClick={async () => {
-                    setLoadingMoreActions(true);
-                    setDismissedActions(new Set()); // Clear dismissed on refresh
-                    try {
-                      await fetchData();
-                    } finally {
-                      setLoadingMoreActions(false);
-                    }
+                    setDismissedSuggestions(new Set());
+                    await fetchStrategicSuggestions(true);
                   }}
-                  disabled={loadingMoreActions}
+                  disabled={strategicLoading}
                   className={`w-full mt-2 py-3 border border-dashed ${isDarkMode ? 'border-[#ffcc29]/30 hover:border-[#ffcc29]/50' : 'border-slate-300 hover:border-[#ffcc29]'} rounded-xl ${theme.textSecondary} text-sm hover:text-[#ffcc29] hover:bg-[#ffcc29]/10 transition-colors flex items-center justify-center gap-2 disabled:opacity-50`}
                 >
-                    {loadingMoreActions ? (
-                      <><Loader2 className="w-4 h-4 animate-spin" /> Generating...</>
+                    {strategicLoading ? (
+                      <><Loader2 className="w-4 h-4 animate-spin" /> Analyzing...</>
                     ) : (
-                      <><Plus className="w-4 h-4" /> Generate AI Recommendations</>
+                      <><RefreshCw className="w-4 h-4" /> Generate Content Ideas</>
                     )}
                 </button>
             </div>
@@ -1374,15 +1625,377 @@ const Dashboard: React.FC = () => {
          <CalendarWidget campaigns={data?.recentCampaigns || []} dashboardData={data} onCampaignCreated={fetchData} />
       </div>
 
-      {/* Rival Post Modal */}
-      {showRivalPostModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => !rivalPostLoading && setShowRivalPostModal(false)}>
+      {/* Post Creator Modal */}
+      {showPostCreator && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => !generatingPost && !scheduling && setShowPostCreator(false)}>
           <div 
-            className={`${isDarkMode ? 'bg-[#0d1117] border-[#ffcc29]/20' : 'bg-white border-slate-200'} border rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden`}
+            className={`${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-slate-200'} border rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden`}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className={`px-6 py-4 border-b ${isDarkMode ? 'border-[#ffcc29]/20 bg-gradient-to-r from-[#0d1117] to-[#161b22]' : 'border-slate-100 bg-gradient-to-r from-white to-slate-50'}`}>
+            <div className={`px-6 py-4 border-b ${isDarkMode ? 'border-slate-700/50 bg-gradient-to-r from-[#0d1117] to-[#161b22]' : 'border-slate-100 bg-gradient-to-r from-white to-slate-50'}`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-r from-[#ffcc29] to-orange-500 flex items-center justify-center">
+                    <PenTool className="w-5 h-5 text-black" />
+                  </div>
+                  <div>
+                    <h3 className={`text-lg font-bold ${theme.text}`}>Create Post</h3>
+                    <p className={`text-xs ${theme.textMuted}`}>
+                      {selectedSuggestion?.title || 'AI-generated content'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowPostCreator(false)}
+                  disabled={generatingPost || scheduling}
+                  className={`p-2 rounded-lg ${isDarkMode ? 'hover:bg-[#161b22]' : 'hover:bg-slate-100'} transition-colors disabled:opacity-50`}
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-200px)]">
+              {generatingPost ? (
+                <div className="flex flex-col items-center justify-center py-16">
+                  <div className="w-16 h-16 rounded-full bg-gradient-to-r from-[#ffcc29] to-orange-500 flex items-center justify-center mb-4 animate-pulse">
+                    <Sparkles className="w-8 h-8 text-black animate-spin" />
+                  </div>
+                  <p className={`text-lg font-semibold ${theme.text} mb-2`}>Creating Your Post</p>
+                  <p className={`text-sm ${theme.textMuted}`}>Generating caption, hashtags, and image...</p>
+                </div>
+              ) : generatedPost ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Image Section */}
+                  <div>
+                    <label className={`block text-xs font-semibold uppercase tracking-wide mb-2 ${theme.textSecondary}`}>Image</label>
+                    {postImageUrl ? (
+                      <div className="relative rounded-xl overflow-hidden mb-3">
+                        <img src={postImageUrl} alt="Post" className="w-full h-64 object-cover" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+                      </div>
+                    ) : (
+                      <div className={`h-64 rounded-xl flex items-center justify-center ${isDarkMode ? 'bg-[#161b22]' : 'bg-slate-100'}`}>
+                        <ImageIcon className={`w-12 h-12 ${theme.textMuted}`} />
+                      </div>
+                    )}
+                    
+                    {/* Image Refinement */}
+                    <div className={`p-3 rounded-lg ${isDarkMode ? 'bg-[#161b22]' : 'bg-slate-50'}`}>
+                      <label className={`block text-xs mb-2 ${theme.textMuted}`}>Refine image with AI</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={imageRefinementPrompt}
+                          onChange={(e) => setImageRefinementPrompt(e.target.value)}
+                          placeholder="e.g. make it more vibrant, add text overlay..."
+                          className={`flex-1 px-3 py-2 text-sm rounded-lg border ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50 text-white' : 'bg-white border-slate-200'}`}
+                        />
+                        <button
+                          onClick={handleRefineImage}
+                          disabled={refiningImage || !imageRefinementPrompt.trim()}
+                          className="px-3 py-2 bg-[#ffcc29] hover:bg-[#e6b825] text-black text-xs font-semibold rounded-lg disabled:opacity-50 flex items-center gap-1"
+                        >
+                          {refiningImage ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                          Refine
+                        </button>
+                      </div>
+                    </div>
+                    
+                    {/* Trending Audio */}
+                    {generatedPost.trendingAudio && generatedPost.trendingAudio.length > 0 && (
+                      <div className="mt-4">
+                        <label className={`block text-xs font-semibold uppercase tracking-wide mb-2 ${theme.textSecondary}`}>
+                          <Music className="w-4 h-4 inline mr-1" /> Trending Audio
+                        </label>
+                        <div className="space-y-2">
+                          {generatedPost.trendingAudio.slice(0, 3).map((audio: any, i: number) => (
+                            <div 
+                              key={i} 
+                              className={`p-3 rounded-lg flex items-center justify-between group transition-all duration-200 ${isDarkMode ? 'bg-[#161b22] hover:bg-[#1f2937]' : 'bg-slate-50 hover:bg-slate-100'} ${playingAudio === audio.name ? 'ring-2 ring-[#ffcc29]' : ''}`}
+                            >
+                              <div className="flex items-center gap-3 flex-1 min-w-0">
+                                {/* Play/Pause Button */}
+                                <button
+                                  onClick={() => handlePlayAudio(audio.name)}
+                                  className={`w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 flex-shrink-0 ${playingAudio === audio.name ? 'bg-[#ffcc29] text-black' : 'bg-[#ffcc29]/20 text-[#ffcc29] hover:bg-[#ffcc29] hover:text-black'}`}
+                                >
+                                  {playingAudio === audio.name ? (
+                                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                      <rect x="6" y="4" width="4" height="16" rx="1" />
+                                      <rect x="14" y="4" width="4" height="16" rx="1" />
+                                    </svg>
+                                  ) : (
+                                    <svg className="w-4 h-4 ml-0.5" fill="currentColor" viewBox="0 0 24 24">
+                                      <path d="M8 5v14l11-7z" />
+                                    </svg>
+                                  )}
+                                </button>
+                                
+                                {/* Audio Info */}
+                                <div className="min-w-0 flex-1">
+                                  <p className={`text-sm font-medium truncate ${theme.text}`}>{audio.name}</p>
+                                  <p className={`text-xs truncate ${theme.textMuted}`}>by {audio.artist || 'Various Artists'}</p>
+                                </div>
+                              </div>
+                              
+                              {/* Waveform Animation when playing */}
+                              {playingAudio === audio.name && (
+                                <div className="flex items-center gap-0.5 ml-3">
+                                  {[1,2,3,4,5].map((bar) => (
+                                    <div 
+                                      key={bar} 
+                                      className="w-1 bg-[#ffcc29] rounded-full animate-pulse"
+                                      style={{
+                                        height: `${Math.random() * 16 + 8}px`,
+                                        animationDelay: `${bar * 0.1}s`,
+                                        animationDuration: '0.5s'
+                                      }}
+                                    />
+                                  ))}
+                                </div>
+                              )}
+                              
+                              {/* Use Audio Button */}
+                              <button
+                                className={`ml-3 px-2.5 py-1 text-xs rounded-lg font-medium transition-all opacity-0 group-hover:opacity-100 ${isDarkMode ? 'bg-[#ffcc29]/20 text-[#ffcc29] hover:bg-[#ffcc29] hover:text-black' : 'bg-[#ffcc29]/20 text-[#b8941e] hover:bg-[#ffcc29] hover:text-black'}`}
+                              >
+                                Use
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                        
+                        {/* Volume Control */}
+                        {playingAudio && (
+                          <div className="mt-2 flex items-center gap-2">
+                            <Music className={`w-3 h-3 ${theme.textMuted}`} />
+                            <input
+                              type="range"
+                              min="0"
+                              max="1"
+                              step="0.1"
+                              value={audioVolume}
+                              onChange={(e) => {
+                                const vol = parseFloat(e.target.value);
+                                setAudioVolume(vol);
+                                if (audioRef.current) audioRef.current.volume = vol;
+                              }}
+                              className="flex-1 h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-[#ffcc29]"
+                            />
+                            <span className={`text-xs ${theme.textMuted}`}>{Math.round(audioVolume * 100)}%</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Caption & Details */}
+                  <div className="space-y-4">
+                    {/* Platform Selection */}
+                    <div>
+                      <label className={`block text-xs font-semibold uppercase tracking-wide mb-2 ${theme.textSecondary}`}>Platform</label>
+                      <div className="flex gap-2">
+                        {['instagram', 'facebook', 'twitter', 'linkedin'].map(p => (
+                          <button
+                            key={p}
+                            onClick={() => setSelectedPlatform(p)}
+                            className={`px-3 py-1.5 text-xs rounded-lg capitalize ${selectedPlatform === p ? 'bg-[#ffcc29] text-black font-semibold' : isDarkMode ? 'bg-[#161b22] text-white' : 'bg-slate-100'}`}
+                          >
+                            {p}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    
+                    {/* Caption */}
+                    <div>
+                      <label className={`block text-xs font-semibold uppercase tracking-wide mb-2 ${theme.textSecondary}`}>Caption</label>
+                      <textarea
+                        value={postCaption}
+                        onChange={(e) => setPostCaption(e.target.value)}
+                        rows={6}
+                        className={`w-full px-3 py-2 text-sm rounded-lg border resize-none ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50 text-white' : 'bg-white border-slate-200'}`}
+                      />
+                    </div>
+                    
+                    {/* Hashtags */}
+                    <div>
+                      <label className={`block text-xs font-semibold uppercase tracking-wide mb-2 ${theme.textSecondary}`}>Hashtags</label>
+                      <div className="flex flex-wrap gap-1.5">
+                        {postHashtags.map((tag, i) => (
+                          <span key={i} className={`text-xs px-2 py-1 rounded-full ${isDarkMode ? 'bg-[#161b22] text-[#ffcc29]' : 'bg-[#ffcc29]/10 text-[#ffcc29]'}`}>
+                            #{tag.replace('#', '')}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    
+                    {/* Schedule */}
+                    <div>
+                      <label className={`block text-xs font-semibold uppercase tracking-wide mb-2 ${theme.textSecondary}`}>Schedule (optional)</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          type="date"
+                          value={scheduleDate}
+                          onChange={(e) => setScheduleDate(e.target.value)}
+                          className={`px-3 py-2 text-sm rounded-lg border ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50 text-white' : 'bg-white border-slate-200'}`}
+                        />
+                        <input
+                          type="time"
+                          value={scheduleTime}
+                          onChange={(e) => setScheduleTime(e.target.value)}
+                          className={`px-3 py-2 text-sm rounded-lg border ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50 text-white' : 'bg-white border-slate-200'}`}
+                        />
+                      </div>
+                      {generatedPost.bestPostTimes && generatedPost.bestPostTimes[selectedPlatform] && (
+                        <p className={`text-xs mt-1 ${theme.textMuted}`}>
+                          💡 Best time for {selectedPlatform}: {generatedPost.bestPostTimes[selectedPlatform]}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-16">
+                  <p className={theme.textMuted}>Failed to generate post. Please try again.</p>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            {!generatingPost && generatedPost && (
+              <div className={`px-6 py-4 border-t ${isDarkMode ? 'border-slate-700/50' : 'border-slate-100'} flex justify-end gap-3`}>
+                <button
+                  onClick={() => setShowPostCreator(false)}
+                  className={`px-4 py-2 text-sm font-medium rounded-lg ${isDarkMode ? 'bg-[#161b22] text-white hover:bg-[#21262d]' : 'bg-slate-100 hover:bg-slate-200'}`}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => setShowPreview(true)}
+                  className={`px-4 py-2 text-sm font-medium rounded-lg flex items-center gap-2 ${isDarkMode ? 'bg-[#161b22] text-white hover:bg-[#21262d] border border-slate-700/50' : 'bg-white hover:bg-slate-50 border border-slate-200'}`}
+                >
+                  <Eye className="w-4 h-4" /> Preview
+                </button>
+                <button
+                  onClick={handleSchedulePost}
+                  disabled={scheduling}
+                  className="px-6 py-2 bg-[#ffcc29] hover:bg-[#e6b825] text-black text-sm font-semibold rounded-lg flex items-center gap-2 disabled:opacity-50"
+                >
+                  {scheduling ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</>
+                  ) : scheduleDate ? (
+                    <><Calendar className="w-4 h-4" /> Schedule Post</>
+                  ) : (
+                    <><Save className="w-4 h-4" /> Save as Draft</>
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Logo Selector Modal */}
+      <LogoSelector
+        isOpen={showLogoSelector}
+        onClose={() => { setShowLogoSelector(false); setPendingRivalCompetitor(null); }}
+        onConfirm={(logoUrl) => {
+          setShowLogoSelector(false);
+          setPendingLogoUrl(logoUrl);
+          setSelectedAspectRatio('1:1');
+          setShowAspectRatioModal(true);
+        }}
+      />
+
+      {/* Aspect Ratio Selector Modal */}
+      {showAspectRatioModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => { setShowAspectRatioModal(false); setPendingRivalCompetitor(null); setPendingLogoUrl(null); }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-[#ffcc29]/20 flex items-center justify-center">
+                  <ImageIcon className="w-5 h-5 text-[#ffcc29]" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-[#0a0f1a]">Select Aspect Ratio</h3>
+                  <p className="text-sm text-slate-500">Choose the image dimensions</p>
+                </div>
+              </div>
+              <button onClick={() => { setShowAspectRatioModal(false); setPendingRivalCompetitor(null); setPendingLogoUrl(null); }} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3 mb-6">
+              {[
+                { value: '1:1', label: '1:1', desc: 'Square' },
+                { value: '4:5', label: '4:5', desc: 'Portrait' },
+                { value: '9:16', label: '9:16', desc: 'Story/Reel' },
+                { value: '16:9', label: '16:9', desc: 'Landscape' },
+                { value: '3:4', label: '3:4', desc: 'Portrait' },
+                { value: '4:3', label: '4:3', desc: 'Landscape' },
+              ].map(ratio => (
+                <button
+                  key={ratio.value}
+                  onClick={() => setSelectedAspectRatio(ratio.value)}
+                  className={`p-3 rounded-xl border-2 transition-all flex flex-col items-center gap-1 ${
+                    selectedAspectRatio === ratio.value
+                      ? 'border-[#ffcc29] bg-[#ffcc29]/10'
+                      : 'border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  <span className="text-sm font-bold text-[#0a0f1a]">{ratio.label}</span>
+                  <span className="text-xs text-slate-500">{ratio.desc}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setShowAspectRatioModal(false); setPendingRivalCompetitor(null); setPendingLogoUrl(null); }}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-medium hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setShowAspectRatioModal(false);
+                  if (pendingRivalCompetitor) {
+                    executeRivalPostGeneration(pendingRivalCompetitor, pendingLogoUrl, selectedAspectRatio);
+                    setPendingRivalCompetitor(null);
+                    setPendingLogoUrl(null);
+                  }
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-[#ffcc29] text-[#070A12] font-semibold hover:bg-[#e6b825]"
+              >
+                Generate Image
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rival Post Modal */}
+      {showRivalPostModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => {
+            if (rivalPostLoading || rivalPost) {
+              const shouldClose = window.confirm('⚡ 7 credits have already been consumed. Do you want to close?');
+              if (!shouldClose) return;
+            }
+            setShowRivalPostModal(false);
+            setRivalPost(null);
+            setRivalPostLoading(false);
+          }}>
+          <div 
+            className={`${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-slate-200'} border rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className={`px-6 py-4 border-b ${isDarkMode ? 'border-slate-700/50 bg-gradient-to-r from-[#0d1117] to-[#161b22]' : 'border-slate-100 bg-gradient-to-r from-white to-slate-50'}`}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-gradient-to-r from-[#ffcc29] to-[#ffa500] flex items-center justify-center">
@@ -1396,9 +2009,16 @@ const Dashboard: React.FC = () => {
                   </div>
                 </div>
                 <button
-                  onClick={() => setShowRivalPostModal(false)}
-                  disabled={rivalPostLoading}
-                  className={`p-2 rounded-lg ${isDarkMode ? 'hover:bg-[#161b22]' : 'hover:bg-slate-100'} transition-colors disabled:opacity-50`}
+                  onClick={() => {
+                    if (rivalPostLoading || rivalPost) {
+                      const shouldClose = window.confirm('⚡ 7 credits have already been consumed. Do you want to close?');
+                      if (!shouldClose) return;
+                    }
+                    setShowRivalPostModal(false);
+                    setRivalPost(null);
+                    setRivalPostLoading(false);
+                  }}
+                  className={`p-2 rounded-lg ${isDarkMode ? 'hover:bg-[#161b22]' : 'hover:bg-slate-100'} transition-colors`}
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -1432,16 +2052,38 @@ const Dashboard: React.FC = () => {
                     <p className={`text-sm ${theme.textSecondary} italic`}>"{rivalPost.originalContent}"</p>
                   </div>
 
-                  {/* Generated Image */}
-                  <div className="relative">
-                    <p className={`text-xs font-medium ${theme.textMuted} mb-2 flex items-center gap-1.5`}>
-                      <Sparkles className="w-3.5 h-3.5 text-[#ffcc29]" /> AI Generated Image
-                    </p>
-                    <div className="relative rounded-xl overflow-hidden border border-[#ffcc29]/20">
+                  {/* Image Section with Editing Options */}
+                  <div className="space-y-4">
+                    {/* Image Mode Toggle */}
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setImageMode('ai')}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                          imageMode === 'ai' 
+                            ? 'bg-[#ffcc29] text-black' 
+                            : `${isDarkMode ? 'bg-[#161b22] text-white hover:bg-[#21262d]' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`
+                        }`}
+                      >
+                        <Sparkles className="w-3 h-3" /> AI Image
+                      </button>
+                      <button
+                        onClick={() => setImageMode('upload')}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                          imageMode === 'upload' 
+                            ? 'bg-[#ffcc29] text-black' 
+                            : `${isDarkMode ? 'bg-[#161b22] text-white hover:bg-[#21262d]' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`
+                        }`}
+                      >
+                        <Download className="w-3 h-3 rotate-180" /> Upload Image
+                      </button>
+                    </div>
+
+                    {/* Image Display */}
+                    <div className="relative rounded-xl overflow-hidden border border-slate-700/50">
                       <img 
-                        src={rivalPost.imageUrl} 
-                        alt="Generated rival post" 
-                        className="w-full h-64 object-cover"
+                        src={getCurrentImageUrl()} 
+                        alt="Post image" 
+                        className="w-full object-contain max-h-[500px]"
                       />
                       <button
                         onClick={handleDownloadImage}
@@ -1449,7 +2091,82 @@ const Dashboard: React.FC = () => {
                       >
                         <Download className="w-4 h-4" />
                       </button>
+                      {imageMode === 'upload' && uploadedImageUrl && (
+                        <div className="absolute top-3 left-3 px-2 py-1 bg-[#ffcc29] text-black text-xs font-medium rounded-lg">
+                          Custom Image
+                        </div>
+                      )}
                     </div>
+
+                    {/* AI Image Regeneration */}
+                    {imageMode === 'ai' && (
+                      <div className={`p-4 rounded-xl ${isDarkMode ? 'bg-[#161b22] border-[#ffcc29]/10' : 'bg-slate-50 border-slate-200'} border`}>
+                        <p className={`text-xs font-medium ${theme.textMuted} mb-2 flex items-center gap-1.5`}>
+                          <Edit3 className="w-3.5 h-3.5" /> Refine Image
+                        </p>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={customImagePrompt}
+                            onChange={(e) => setCustomImagePrompt(e.target.value)}
+                            placeholder="e.g. make it more vibrant, add warm tones, more professional..."
+                            className={`flex-1 px-3 py-2 rounded-lg text-sm ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50 text-white placeholder-gray-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'} border focus:ring-2 focus:ring-[#ffcc29]/50 focus:border-[#ffcc29] transition-all`}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && !regeneratingImage) {
+                                handleRegenerateImage();
+                              }
+                            }}
+                          />
+                          <button
+                            onClick={handleRegenerateImage}
+                            disabled={regeneratingImage || !customImagePrompt.trim()}
+                            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gradient-to-r from-[#ffcc29] to-[#ffa500] text-black text-sm font-medium hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {regeneratingImage ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Sparkles className="w-4 h-4" />
+                            )}
+                            {regeneratingImage ? 'Generating...' : 'Generate'}
+                          </button>
+                        </div>
+                        <p className={`text-xs ${theme.textMuted} mt-2`}>
+                          Refines the current image — e.g., "more vibrant", "darker background", "add tech elements"
+                        </p>
+                      </div>
+                    )}
+
+                    {/* File Upload */}
+                    {imageMode === 'upload' && (
+                      <div className={`p-4 rounded-xl ${isDarkMode ? 'bg-[#161b22] border-[#ffcc29]/10' : 'bg-slate-50 border-slate-200'} border`}>
+                        <p className={`text-xs font-medium ${theme.textMuted} mb-2 flex items-center gap-1.5`}>
+                          <Download className="w-3.5 h-3.5 rotate-180" /> Upload Your Own Image
+                        </p>
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="image/*"
+                          onChange={handleImageUpload}
+                          className="hidden"
+                        />
+                        <button
+                          onClick={() => fileInputRef.current?.click()}
+                          className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 border-dashed ${
+                            isDarkMode 
+                              ? 'border-[#ffcc29]/30 hover:border-[#ffcc29] bg-[#0d1117]' 
+                              : 'border-slate-300 hover:border-[#ffcc29] bg-white'
+                          } transition-all`}
+                        >
+                          <Plus className="w-5 h-5 text-[#ffcc29]" />
+                          <span className={`text-sm ${theme.text}`}>
+                            {uploadedImageUrl ? 'Change Image' : 'Select Image'}
+                          </span>
+                        </button>
+                        <p className={`text-xs ${theme.textMuted} mt-2`}>
+                          Supported: JPG, PNG, GIF, WebP (max 5MB)
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   {/* Caption */}
@@ -1468,7 +2185,7 @@ const Dashboard: React.FC = () => {
                     <textarea
                       value={editedCaption}
                       onChange={(e) => setEditedCaption(e.target.value)}
-                      className={`w-full p-4 rounded-xl ${isDarkMode ? 'bg-[#161b22] border-[#ffcc29]/20 text-white' : 'bg-slate-50 border-slate-200 text-slate-800'} border focus:ring-2 focus:ring-[#ffcc29]/50 focus:border-[#ffcc29] transition-all resize-none`}
+                      className={`w-full p-4 rounded-xl ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white' : 'bg-slate-50 border-slate-200 text-slate-800'} border focus:ring-2 focus:ring-[#ffcc29]/50 focus:border-[#ffcc29] transition-all resize-none`}
                       rows={4}
                     />
                   </div>
@@ -1482,7 +2199,7 @@ const Dashboard: React.FC = () => {
                       type="text"
                       value={editedHashtags}
                       onChange={(e) => setEditedHashtags(e.target.value)}
-                      className={`w-full p-3 rounded-xl ${isDarkMode ? 'bg-[#161b22] border-[#ffcc29]/20 text-white' : 'bg-slate-50 border-slate-200 text-slate-800'} border focus:ring-2 focus:ring-[#ffcc29]/50 focus:border-[#ffcc29] transition-all`}
+                      className={`w-full p-3 rounded-xl ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white' : 'bg-slate-50 border-slate-200 text-slate-800'} border focus:ring-2 focus:ring-[#ffcc29]/50 focus:border-[#ffcc29] transition-all`}
                       placeholder="#trending #viral #marketing"
                     />
                     <p className={`text-xs ${theme.textMuted} mt-1`}>
@@ -1495,7 +2212,7 @@ const Dashboard: React.FC = () => {
 
             {/* Footer Actions */}
             {rivalPost && !rivalPostLoading && (
-              <div className={`px-6 py-4 border-t ${isDarkMode ? 'border-[#ffcc29]/20 bg-[#0d1117]' : 'border-slate-100 bg-white'}`}>
+              <div className={`px-6 py-4 border-t ${isDarkMode ? 'border-slate-700/50 bg-[#0d1117]' : 'border-slate-100 bg-white'}`}>
                 <div className="flex items-center justify-between gap-3">
                   <button
                     onClick={() => setShowRivalPostModal(false)}
@@ -1504,6 +2221,12 @@ const Dashboard: React.FC = () => {
                     Cancel
                   </button>
                   <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setShowPreview(true)}
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-xl ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 hover:border-[#ffcc29]' : 'bg-white border-slate-200 hover:border-[#ffcc29]'} border ${theme.text} text-sm font-medium transition-all`}
+                    >
+                      <Eye className="w-4 h-4" /> Preview
+                    </button>
                     <button
                       onClick={handleSaveAsDraft}
                       disabled={savingDraft}
@@ -1526,6 +2249,19 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Platform Preview Modal */}
+      {showPreview && (
+        <PlatformPreview
+          platform={rivalPost?.platform || selectedPlatform || 'instagram'}
+          imageUrl={rivalPost?.imageUrl || postImageUrl || null}
+          caption={rivalPost ? editedCaption : postCaption}
+          hashtags={rivalPost ? editedHashtags.split(' ').filter(Boolean) : postHashtags}
+          brandName={data?.businessContext?.name || 'Your Brand'}
+          onClose={() => setShowPreview(false)}
+          isDarkMode={isDarkMode}
+        />
+      )}
     </div>
   );
 };
@@ -1536,7 +2272,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
     const [currentDate, setCurrentDate] = useState(new Date());
     const [selectedEvent, setSelectedEvent] = useState<Campaign | null>(null);
     const [showScheduleModal, setShowScheduleModal] = useState(false);
-    const [selectedSlot, setSelectedSlot] = useState<{ date: Date; hour: number } | null>(null);
+    const [selectedSlot, setSelectedSlot] = useState<{ date: Date; hour: number; minute: number } | null>(null);
     const [calendarEvents, setCalendarEvents] = useState<any[]>([]);
     const [pendingReminders, setPendingReminders] = useState<any[]>([]);
     const [showReminderToast, setShowReminderToast] = useState(false);
@@ -1548,28 +2284,163 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [deleteLoading, setDeleteLoading] = useState(false);
     
+    // Reminder modal state
+    const [selectedReminder, setSelectedReminder] = useState<any | null>(null);
+    const [showDeleteReminderConfirm, setShowDeleteReminderConfirm] = useState(false);
+    const [deleteReminderLoading, setDeleteReminderLoading] = useState(false);
+    
+    // Holiday/Event Post Generation state
+    const [selectedHoliday, setSelectedHoliday] = useState<any | null>(null);
+    const [eventPostLoading, setEventPostLoading] = useState(false);
+    const [eventGeneratedPost, setEventGeneratedPost] = useState<any | null>(null);
+    const [eventPostCaption, setEventPostCaption] = useState('');
+    const [eventPostHashtags, setEventPostHashtags] = useState<string[]>([]);
+    const [eventPostImageUrl, setEventPostImageUrl] = useState('');
+    const [eventPostImagePrompt, setEventPostImagePrompt] = useState('');
+    const [eventImageRefinementPrompt, setEventImageRefinementPrompt] = useState('');
+    const [eventRefiningImage, setEventRefiningImage] = useState(false);
+    const [eventScheduleDate, setEventScheduleDate] = useState('');
+    const [eventScheduleTime, setEventScheduleTime] = useState('');
+    const [eventSelectedPlatform, setEventSelectedPlatform] = useState('instagram');
+    const [eventScheduling, setEventScheduling] = useState(false);
+    const [showEventPostCreator, setShowEventPostCreator] = useState(false);
+    
     // Update allCampaigns when props change
     useEffect(() => {
       setAllCampaigns(campaigns);
     }, [campaigns]);
     
-    // Schedule form state with enhanced campaign fields
+    // Schedule form state — streamlined for quick posting
     const [scheduleForm, setScheduleForm] = useState({
       title: '',
       type: 'reminder' as 'reminder' | 'campaign',
       description: '',
       reminderOffset: 30,
       platform: 'instagram',
-      // Enhanced campaign fields
-      budget: '',
-      targetAudience: '',
-      contentType: 'image' as 'image' | 'video' | 'carousel' | 'story' | 'reel',
       hashtags: '',
-      callToAction: '',
-      objective: 'awareness' as 'awareness' | 'engagement' | 'traffic' | 'conversions' | 'leads',
-      priority: 'medium' as 'low' | 'medium' | 'high',
-      notes: ''
     });
+    
+    // Image upload & AI generation state
+    const [scheduleImage, setScheduleImage] = useState<string | null>(null);
+    const [scheduleImageFile, setScheduleImageFile] = useState<File | null>(null);
+    const [aiGenerating, setAiGenerating] = useState(false);
+    const scheduleFileInputRef = useRef<HTMLInputElement>(null);
+    const scheduleDragRef = useRef<HTMLDivElement>(null);
+    
+    // Poster generation state
+    const [generatedPoster, setGeneratedPoster] = useState<string | null>(null);
+    const [posterGenerating, setPosterGenerating] = useState(false);
+    const [posterContent, setPosterContent] = useState('');
+    const [posterEditMode, setPosterEditMode] = useState(false);
+    const [posterEditInstructions, setPosterEditInstructions] = useState('');
+    const [imageMode, setImageMode] = useState<'upload' | 'ai' | 'reference'>('upload'); // upload = use as-is, ai = generate from scratch, reference = generate from reference
+    const [calendarSelectedLogo, setCalendarSelectedLogo] = useState<string | null>(null);
+    const [calendarAspectRatio, setCalendarAspectRatio] = useState<string>('1:1');
+    const [calendarLogos, setCalendarLogos] = useState<Array<{ _id: string; name: string; url: string; isPrimary: boolean }>>([]);
+    const [calendarLogosLoaded, setCalendarLogosLoaded] = useState(false);
+
+    // Platform preview state
+    const [showCalendarPreview, setShowCalendarPreview] = useState(false);
+    const [calendarPreviewData, setCalendarPreviewData] = useState<{ platform: string; imageUrl: string | null; caption: string; hashtags: string[] }>({ platform: 'instagram', imageUrl: null, caption: '', hashtags: [] });
+
+    // Platform filter state
+    const [platformFilter, setPlatformFilter] = useState<string | null>(null);
+    const [showPlatformFilter, setShowPlatformFilter] = useState(false);
+    const platformFilterRef = useRef<HTMLDivElement>(null);
+
+    // Close platform filter dropdown on outside click
+    useEffect(() => {
+      const handleClickOutside = (e: MouseEvent) => {
+        if (platformFilterRef.current && !platformFilterRef.current.contains(e.target as Node)) {
+          setShowPlatformFilter(false);
+        }
+      };
+      if (showPlatformFilter) {
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+      }
+    }, [showPlatformFilter]);
+
+    // Fetch brand logos for calendar poster generation
+    useEffect(() => {
+      const fetchCalendarLogos = async () => {
+        try {
+          const res = await brandAssetsAPI.getLogos();
+          if (res.success && res.logos?.length > 0) {
+            setCalendarLogos(res.logos);
+            const primary = res.logos.find((l: any) => l.isPrimary);
+            if (primary) setCalendarSelectedLogo(primary.url);
+          }
+        } catch (err) {
+          console.error('Failed to fetch logos for calendar:', err);
+        } finally {
+          setCalendarLogosLoaded(true);
+        }
+      };
+      fetchCalendarLogos();
+    }, []);
+
+    // Google Calendar sync state
+    const [googleCalendarSynced, setGoogleCalendarSynced] = useState(false);
+    const [googleCalSyncLoading, setGoogleCalSyncLoading] = useState(false);
+
+    // Check Google Calendar sync status on mount
+    useEffect(() => {
+      const checkGoogleCalSync = async () => {
+        try {
+          const res = await apiService.getGoogleCalendarStatus();
+          setGoogleCalendarSynced(res.connected || false);
+        } catch {
+          // silently fail
+        }
+      };
+      checkGoogleCalSync();
+    }, []);
+
+    const handleGoogleCalendarSync = async () => {
+      if (googleCalendarSynced) {
+        // Disconnect
+        setGoogleCalSyncLoading(true);
+        try {
+          await apiService.disconnectGoogleCalendar();
+          setGoogleCalendarSynced(false);
+        } catch (e) {
+          console.error('Failed to disconnect Google Calendar:', e);
+          alert('Failed to disconnect Google Calendar.');
+        } finally {
+          setGoogleCalSyncLoading(false);
+        }
+        return;
+      }
+      // Initiate OAuth
+      setGoogleCalSyncLoading(true);
+      try {
+        const res = await apiService.initiateGoogleCalendarAuth();
+        if (res.authUrl) {
+          // Open Google OAuth in a popup
+          const popup = window.open(res.authUrl, 'googleCalAuth', 'width=500,height=600,menubar=no,toolbar=no');
+          // Listen for the popup to close (callback redirects back)
+          const checkClosed = setInterval(() => {
+            if (popup?.closed) {
+              clearInterval(checkClosed);
+              // Re-check sync status
+              apiService.getGoogleCalendarStatus().then(r => {
+                setGoogleCalendarSynced(r.connected || false);
+                setGoogleCalSyncLoading(false);
+              }).catch(() => setGoogleCalSyncLoading(false));
+            }
+          }, 500);
+        }
+      } catch (e) {
+        console.error('Failed to initiate Google Calendar auth:', e);
+        alert('Failed to connect Google Calendar.');
+        setGoogleCalSyncLoading(false);
+      }
+    };
+
+    // Drag-and-drop rescheduling state
+    const [draggedEvent, setDraggedEvent] = useState<any | null>(null);
+    const [dragOverCell, setDragOverCell] = useState<string | null>(null); // "YYYY-MM-DD-HH" key
 
     // Get the start of the week (Monday)
     const getWeekStart = (date: Date) => {
@@ -1588,8 +2459,121 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
         return d;
     });
 
-    // Time slots from 6 AM to 11 PM
-    const timeSlots = Array.from({ length: 18 }, (_, i) => i + 6);
+    // Time slots from 12 AM to 12 PM
+    const timeSlots = Array.from({ length: 13 }, (_, i) => i);
+    const scrollBodyRef = useRef<HTMLDivElement>(null);
+
+    // No auto-scroll needed — all 13 slots (12 AM–12 PM) fit without scrolling
+
+    // Indian Holidays, Festivals & Marketing Events (2025-2026)
+    // This includes national holidays, major festivals, and important marketing dates
+    const getIndianHolidays = (year: number): Array<{
+      date: string;
+      name: string;
+      type: 'national' | 'festival' | 'marketing' | 'international';
+      description: string;
+      marketingTip?: string;
+      emoji: string;
+    }> => {
+      return [
+        // January
+        { date: `${year}-01-01`, name: 'New Year\'s Day', type: 'international', description: 'Start of the new year', marketingTip: 'New Year offers, goal-setting content', emoji: '🎉' },
+        { date: `${year}-01-13`, name: 'Lohri', type: 'festival', description: 'Punjabi harvest festival', marketingTip: 'Winter sales, bonfire themes', emoji: '🔥' },
+        { date: `${year}-01-14`, name: 'Makar Sankranti / Pongal', type: 'festival', description: 'Harvest festival across India', marketingTip: 'Kite flying themes, harvest campaigns', emoji: '🪁' },
+        { date: `${year}-01-26`, name: 'Republic Day', type: 'national', description: 'India adopted the Constitution', marketingTip: 'Patriotic campaigns, tricolor themes', emoji: '🇮🇳' },
+        
+        // February
+        { date: `${year}-02-02`, name: 'World Wetlands Day', type: 'international', description: 'Environmental awareness', marketingTip: 'Eco-friendly product campaigns', emoji: '🌿' },
+        { date: `${year}-02-14`, name: 'Valentine\'s Day', type: 'marketing', description: 'Day of love and romance', marketingTip: 'Couple offers, gift campaigns', emoji: '💕' },
+        { date: `${year}-02-19`, name: 'Shivaji Jayanti', type: 'festival', description: 'Birth anniversary of Chhatrapati Shivaji', marketingTip: 'Maharashtra-focused campaigns', emoji: '⚔️' },
+        { date: `${year}-02-26`, name: 'Maha Shivaratri', type: 'festival', description: 'Night of Lord Shiva', marketingTip: 'Spiritual themes, night campaigns', emoji: '🕉️' },
+        
+        // March
+        { date: `${year}-03-08`, name: 'International Women\'s Day', type: 'international', description: 'Celebrating women globally', marketingTip: 'Women empowerment campaigns, special offers', emoji: '👩' },
+        { date: `${year}-03-14`, name: 'Holi', type: 'festival', description: 'Festival of Colors', marketingTip: 'Colorful campaigns, festive offers', emoji: '🎨' },
+        { date: `${year}-03-22`, name: 'World Water Day', type: 'international', description: 'Water conservation awareness', marketingTip: 'Sustainability campaigns', emoji: '💧' },
+        { date: `${year}-03-30`, name: 'Gudi Padwa / Ugadi', type: 'festival', description: 'Hindu New Year (Maharashtra/South)', marketingTip: 'New beginnings themes, regional campaigns', emoji: '🏵️' },
+        
+        // April
+        { date: `${year}-04-01`, name: 'April Fools\' Day', type: 'marketing', description: 'Day of pranks and jokes', marketingTip: 'Fun campaigns, playful content', emoji: '🃏' },
+        { date: `${year}-04-06`, name: 'Ram Navami', type: 'festival', description: 'Birth of Lord Rama', marketingTip: 'Traditional themes, family values', emoji: '🏹' },
+        { date: `${year}-04-10`, name: 'Mahavir Jayanti', type: 'festival', description: 'Birth of Lord Mahavira', marketingTip: 'Peace and non-violence themes', emoji: '☮️' },
+        { date: `${year}-04-14`, name: 'Ambedkar Jayanti / Baisakhi', type: 'national', description: 'Dr. B.R. Ambedkar birth anniversary & Sikh New Year', marketingTip: 'Equality themes, Punjabi campaigns', emoji: '📚' },
+        { date: `${year}-04-18`, name: 'Good Friday', type: 'festival', description: 'Christian observance', marketingTip: 'Respectful messaging', emoji: '✝️' },
+        { date: `${year}-04-20`, name: 'Easter Sunday', type: 'festival', description: 'Christian celebration', marketingTip: 'Easter egg campaigns, spring themes', emoji: '🐣' },
+        { date: `${year}-04-22`, name: 'Earth Day', type: 'international', description: 'Environmental protection', marketingTip: 'Green initiatives, eco campaigns', emoji: '🌍' },
+        
+        // May
+        { date: `${year}-05-01`, name: 'May Day / Labour Day', type: 'national', description: 'International Workers\' Day', marketingTip: 'Worker appreciation, corporate campaigns', emoji: '👷' },
+        { date: `${year}-05-12`, name: 'Buddha Purnima', type: 'festival', description: 'Buddha\'s birth anniversary', marketingTip: 'Peace and mindfulness themes', emoji: '🧘' },
+        { date: `${year}-05-11`, name: 'Mother\'s Day', type: 'marketing', description: 'Celebrating mothers', marketingTip: 'Gift campaigns, family content', emoji: '👩‍👧' },
+        
+        // June
+        { date: `${year}-06-05`, name: 'World Environment Day', type: 'international', description: 'Environmental awareness', marketingTip: 'Sustainability campaigns', emoji: '🌱' },
+        { date: `${year}-06-15`, name: 'Father\'s Day', type: 'marketing', description: 'Celebrating fathers', marketingTip: 'Gift campaigns, dad appreciation', emoji: '👨‍👧' },
+        { date: `${year}-06-21`, name: 'International Yoga Day', type: 'international', description: 'Global yoga celebration', marketingTip: 'Wellness campaigns, health focus', emoji: '🧘‍♀️' },
+        
+        // July
+        { date: `${year}-07-04`, name: 'Guru Purnima', type: 'festival', description: 'Honoring spiritual teachers', marketingTip: 'Education campaigns, gratitude themes', emoji: '🙏' },
+        { date: `${year}-07-17`, name: 'Muharram', type: 'festival', description: 'Islamic New Year', marketingTip: 'Respectful messaging', emoji: '☪️' },
+        { date: `${year}-07-29`, name: 'International Tiger Day', type: 'international', description: 'Tiger conservation', marketingTip: 'Wildlife campaigns', emoji: '🐯' },
+        
+        // August
+        { date: `${year}-08-07`, name: 'Friendship Day', type: 'marketing', description: 'Celebrating friendships', marketingTip: 'BFF deals, group offers', emoji: '🤝' },
+        { date: `${year}-08-09`, name: 'Raksha Bandhan', type: 'festival', description: 'Brother-sister bond celebration', marketingTip: 'Gift campaigns, family focus', emoji: '🎀' },
+        { date: `${year}-08-15`, name: 'Independence Day', type: 'national', description: 'India\'s Independence', marketingTip: 'Patriotic campaigns, freedom sales', emoji: '🇮🇳' },
+        { date: `${year}-08-16`, name: 'Janmashtami', type: 'festival', description: 'Birth of Lord Krishna', marketingTip: 'Traditional themes, dahi handi', emoji: '🦚' },
+        { date: `${year}-08-27`, name: 'Ganesh Chaturthi', type: 'festival', description: 'Lord Ganesha festival', marketingTip: 'Festive campaigns, modak themes', emoji: '🐘' },
+        
+        // September
+        { date: `${year}-09-05`, name: 'Teachers\' Day', type: 'national', description: 'Honoring teachers', marketingTip: 'Education offers, gratitude content', emoji: '👨‍🏫' },
+        { date: `${year}-09-16`, name: 'Milad-un-Nabi', type: 'festival', description: 'Prophet Muhammad\'s birthday', marketingTip: 'Respectful messaging', emoji: '🌙' },
+        { date: `${year}-09-29`, name: 'World Heart Day', type: 'international', description: 'Heart health awareness', marketingTip: 'Health campaigns', emoji: '❤️' },
+        
+        // October
+        { date: `${year}-10-02`, name: 'Gandhi Jayanti', type: 'national', description: 'Mahatma Gandhi\'s birthday', marketingTip: 'Peace campaigns, swadeshi themes', emoji: '🕊️' },
+        { date: `${year}-10-02`, name: 'Navratri Begins', type: 'festival', description: '9 nights of Durga worship', marketingTip: 'Dandiya themes, festive sales', emoji: '💃' },
+        { date: `${year}-10-12`, name: 'Dussehra / Vijaya Dashami', type: 'festival', description: 'Victory of good over evil', marketingTip: 'Victory themes, Ravan dahan', emoji: '🏹' },
+        { date: `${year}-10-20`, name: 'Karwa Chauth', type: 'festival', description: 'Married women\'s fast', marketingTip: 'Couple campaigns, gift ideas', emoji: '🌙' },
+        { date: `${year}-10-31`, name: 'Halloween', type: 'marketing', description: 'Spooky celebrations', marketingTip: 'Fun campaigns, costume themes', emoji: '🎃' },
+        
+        // November
+        { date: `${year}-11-01`, name: 'Diwali', type: 'festival', description: 'Festival of Lights', marketingTip: 'BIGGEST shopping season, diya themes', emoji: '🪔' },
+        { date: `${year}-11-02`, name: 'Govardhan Puja', type: 'festival', description: 'Day after Diwali', marketingTip: 'Continuation of festive offers', emoji: '🪻' },
+        { date: `${year}-11-03`, name: 'Bhai Dooj', type: 'festival', description: 'Brother-sister celebration', marketingTip: 'Family gift campaigns', emoji: '👫' },
+        { date: `${year}-11-12`, name: 'Chhath Puja', type: 'festival', description: 'Sun worship festival', marketingTip: 'Bihar/UP focused campaigns', emoji: '☀️' },
+        { date: `${year}-11-15`, name: 'Guru Nanak Jayanti', type: 'festival', description: 'Sikh founder\'s birthday', marketingTip: 'Langar themes, community', emoji: '🙏' },
+        { date: `${year}-11-14`, name: 'Children\'s Day', type: 'national', description: 'Jawaharlal Nehru\'s birthday', marketingTip: 'Kids products, fun campaigns', emoji: '👧' },
+        { date: `${year}-11-29`, name: 'Black Friday', type: 'marketing', description: 'Shopping bonanza', marketingTip: 'Massive discounts, flash sales', emoji: '🛒' },
+        
+        // December
+        { date: `${year}-12-02`, name: 'Cyber Monday', type: 'marketing', description: 'Online shopping day', marketingTip: 'E-commerce focused campaigns', emoji: '💻' },
+        { date: `${year}-12-25`, name: 'Christmas', type: 'festival', description: 'Christian celebration', marketingTip: 'Gift campaigns, winter sales', emoji: '🎄' },
+        { date: `${year}-12-26`, name: 'Boxing Day', type: 'marketing', description: 'Post-Christmas sales', marketingTip: 'Clearance sales', emoji: '📦' },
+        { date: `${year}-12-31`, name: 'New Year\'s Eve', type: 'marketing', description: 'Year-end celebrations', marketingTip: 'Party themes, countdown campaigns', emoji: '🥳' },
+        
+        // Additional Marketing Events
+        { date: `${year}-01-15`, name: 'Army Day', type: 'national', description: 'Indian Army celebration', marketingTip: 'Patriotic content, defence themes', emoji: '🎖️' },
+        { date: `${year}-02-28`, name: 'National Science Day', type: 'national', description: 'Science awareness', marketingTip: 'Tech/innovation campaigns', emoji: '🔬' },
+        { date: `${year}-03-15`, name: 'World Consumer Rights Day', type: 'international', description: 'Consumer awareness', marketingTip: 'Customer appreciation', emoji: '🛡️' },
+        { date: `${year}-08-29`, name: 'National Sports Day', type: 'national', description: 'Dhyan Chand\'s birthday', marketingTip: 'Sports campaigns, fitness', emoji: '🏏' },
+        { date: `${year}-10-16`, name: 'World Food Day', type: 'international', description: 'Food awareness', marketingTip: 'Food brand campaigns', emoji: '🍽️' },
+        { date: `${year}-11-26`, name: 'Constitution Day', type: 'national', description: 'Constitution adoption', marketingTip: 'Law/rights awareness', emoji: '📜' },
+      ];
+    };
+
+    // Get holidays for the current year and next year
+    const currentYear = currentDate.getFullYear();
+    const holidays = [...getIndianHolidays(currentYear), ...getIndianHolidays(currentYear + 1)];
+
+    // Get holiday for a specific date
+    const getHolidayForDate = (date: Date) => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const dateStr = `${year}-${month}-${day}`;
+      return holidays.filter(h => h.date === dateStr);
+    };
 
     // Fetch calendar events and pending reminders
     useEffect(() => {
@@ -1671,28 +2655,252 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
         console.error('Failed to refresh campaigns:', e);
       }
     };
+
+    const refreshCalendarEvents = async () => {
+      try {
+        const year = currentDate.getFullYear();
+        const month = currentDate.getMonth() + 1;
+        const { events } = await apiService.getCalendarEvents(year, month);
+        setCalendarEvents(events || []);
+      } catch (e) {
+        console.error('Failed to refresh calendar events:', e);
+      }
+    };
+
+    // --- Drag-and-drop rescheduling handlers ---
+    const handleEventDragStart = (e: React.DragEvent, event: any) => {
+      if (event.eventType === 'holiday') {
+        e.preventDefault();
+        return;
+      }
+      setDraggedEvent(event);
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', event._id || event.id || '');
+      // Make the drag ghost semi-transparent
+      if (e.currentTarget instanceof HTMLElement) {
+        e.currentTarget.style.opacity = '0.5';
+      }
+    };
+
+    const handleEventDragEnd = (e: React.DragEvent) => {
+      setDraggedEvent(null);
+      setDragOverCell(null);
+      if (e.currentTarget instanceof HTMLElement) {
+        e.currentTarget.style.opacity = '1';
+      }
+    };
+
+    const handleCellDragOver = (e: React.DragEvent, cellKey: string) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      setDragOverCell(cellKey);
+    };
+
+    const handleCellDragLeave = (e: React.DragEvent) => {
+      // Only clear if leaving the cell (not entering a child)
+      const relatedTarget = e.relatedTarget as HTMLElement;
+      if (!e.currentTarget.contains(relatedTarget)) {
+        setDragOverCell(null);
+      }
+    };
+
+    const handleCellDrop = async (e: React.DragEvent, targetDate: Date, targetHour: number) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setDragOverCell(null);
+
+      if (!draggedEvent) return;
+
+      const newDateStr = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}`;
+      const newTimeStr = `${String(targetHour).padStart(2, '0')}:00`;
+
+      try {
+        if (draggedEvent.eventType === 'campaign' || draggedEvent.type === 'campaign') {
+          // Update campaign schedule
+          await apiService.updateCampaign(draggedEvent._id, {
+            scheduling: {
+              ...draggedEvent.scheduling,
+              startDate: newDateStr,
+              postTime: newTimeStr
+            }
+          });
+          // Optimistic update
+          setAllCampaigns(prev => prev.map(c => 
+            c._id === draggedEvent._id 
+              ? { ...c, scheduling: { ...c.scheduling, startDate: newDateStr, postTime: newTimeStr } }
+              : c
+          ));
+        } else if (draggedEvent.eventType === 'reminder' || draggedEvent.type === 'reminder') {
+          // Update reminder scheduledFor
+          const newScheduledFor = new Date(targetDate);
+          newScheduledFor.setHours(targetHour, 0, 0, 0);
+          await apiService.updateReminder(draggedEvent._id || draggedEvent.id, {
+            scheduledFor: newScheduledFor.toISOString(),
+            time: newScheduledFor.toISOString()
+          });
+          // Optimistic update
+          setCalendarEvents(prev => prev.map(ev => 
+            (ev._id || ev.id) === (draggedEvent._id || draggedEvent.id)
+              ? { ...ev, scheduledFor: newScheduledFor.toISOString(), time: newScheduledFor.toISOString() }
+              : ev
+          ));
+        }
+      } catch (err) {
+        console.error('Failed to reschedule:', err);
+        // Revert on failure
+        await refreshCampaigns();
+        await refreshCalendarEvents();
+        alert('Failed to reschedule. Please try again.');
+      }
+
+      setDraggedEvent(null);
+    };
+
+    const getCellKey = (date: Date, hour: number) => {
+      return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}-${String(hour).padStart(2, '0')}`;
+    };
     
     // Handle click on time slot to schedule
     const handleSlotClick = (date: Date, hour: number) => {
       const slotDate = new Date(date);
       slotDate.setHours(hour, 0, 0, 0);
-      setSelectedSlot({ date: slotDate, hour });
+      setSelectedSlot({ date: slotDate, hour, minute: 0 });
       setScheduleForm({
         title: '',
-        type: 'reminder',
+        type: 'campaign',
         description: '',
         reminderOffset: 30,
         platform: 'instagram',
-        budget: '',
-        targetAudience: '',
-        contentType: 'image',
         hashtags: '',
-        callToAction: '',
-        objective: 'awareness',
-        priority: 'medium',
-        notes: ''
       });
+      setScheduleImage(null);
+      setScheduleImageFile(null);
+      setGeneratedPoster(null);
+      setPosterGenerating(false);
+      setPosterContent('');
+      setPosterEditMode(false);
+      setPosterEditInstructions('');
+      setImageMode('upload');
       setShowScheduleModal(true);
+    };
+    
+    // Handle image file selection for schedule modal
+    const handleScheduleImageSelect = (file: File) => {
+      if (!file.type.startsWith('image/')) {
+        alert('Please select a valid image file');
+        return;
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        alert('Image size should be less than 10MB');
+        return;
+      }
+      setScheduleImageFile(file);
+      const reader = new FileReader();
+      reader.onload = (e) => setScheduleImage(e.target?.result as string);
+      reader.readAsDataURL(file);
+    };
+    
+    // Handle drag & drop for schedule image
+    const handleScheduleDrop = (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const file = e.dataTransfer.files[0];
+      if (file) handleScheduleImageSelect(file);
+    };
+    
+    // AI Generate caption + hashtags from uploaded image
+    const handleAIGenerateCaption = async () => {
+      const imageToAnalyze = generatedPoster || scheduleImage;
+      if (!imageToAnalyze) {
+        alert('Please upload an image first');
+        return;
+      }
+      setAiGenerating(true);
+      try {
+        const result = await apiService.generateCaptionFromImage(imageToAnalyze, scheduleForm.platform);
+        if (result.success && result.caption) {
+          // Split caption text from hashtags
+          const hashtagRegex = /#\w+/g;
+          const hashtags = result.caption.match(hashtagRegex) || [];
+          const captionWithoutHashtags = result.caption.replace(hashtagRegex, '').trim();
+          
+          setScheduleForm(prev => ({
+            ...prev,
+            description: captionWithoutHashtags,
+            hashtags: hashtags.join(' '),
+          }));
+        } else {
+          alert('Failed to generate caption. Please try again.');
+        }
+      } catch (error) {
+        console.error('AI caption generation failed:', error);
+        alert('Failed to generate caption. Please try again.');
+      } finally {
+        setAiGenerating(false);
+      }
+    };
+    
+    // Generate poster from reference image using Nano Banana Pro
+    const handleGeneratePoster = async () => {
+      if (imageMode === 'reference' && !scheduleImage) {
+        alert('Please upload a reference image first');
+        return;
+      }
+      if (!posterContent.trim()) {
+        alert('Please enter the content/text for your poster');
+        return;
+      }
+      setPosterGenerating(true);
+      try {
+        const result = await apiService.generatePosterFromReference(
+          imageMode === 'reference' ? scheduleImage! : '', // empty string for AI-from-scratch
+          posterContent,
+          scheduleForm.platform,
+          calendarSelectedLogo || undefined,
+          calendarAspectRatio
+        );
+        if (result.success && result.imageBase64) {
+          setGeneratedPoster(result.imageBase64);
+          setPosterEditMode(false);
+          setPosterEditInstructions('');
+        } else {
+          alert(result.error || 'Failed to generate poster. Please try again.');
+        }
+      } catch (error) {
+        console.error('Poster generation failed:', error);
+        alert('Failed to generate poster. Please try again.');
+      } finally {
+        setPosterGenerating(false);
+      }
+    };
+    
+    // Regenerate/edit poster with new instructions
+    const handleEditPoster = async () => {
+      if (!posterEditInstructions.trim()) return;
+      if (imageMode === 'reference' && !scheduleImage) return;
+      setPosterGenerating(true);
+      try {
+        const editedContent = posterContent + '\n\nAdditional instruction: ' + posterEditInstructions;
+        const result = await apiService.generatePosterFromReference(
+          imageMode === 'reference' ? scheduleImage! : '',
+          editedContent,
+          scheduleForm.platform,
+          calendarSelectedLogo || undefined,
+          calendarAspectRatio
+        );
+        if (result.success && result.imageBase64) {
+          setGeneratedPoster(result.imageBase64);
+          setPosterEditInstructions('');
+          setPosterEditMode(false);
+        } else {
+          alert(result.error || 'Failed to edit poster. Please try again.');
+        }
+      } catch (error) {
+        console.error('Poster edit failed:', error);
+        alert('Failed to edit poster. Please try again.');
+      } finally {
+        setPosterGenerating(false);
+      }
     };
     
     // Handle creating a reminder/event
@@ -1702,7 +2910,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
       setLoading(true);
       try {
         const scheduledFor = new Date(selectedSlot.date);
-        scheduledFor.setHours(selectedSlot.hour, 0, 0, 0);
+        scheduledFor.setHours(selectedSlot.hour, selectedSlot.minute, 0, 0);
         
         // Format date as YYYY-MM-DD in local timezone (not UTC)
         const year = scheduledFor.getFullYear();
@@ -1725,28 +2933,37 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
           const { events } = await apiService.getCalendarEvents(calYear, calMonth);
           setCalendarEvents(events || []);
         } else {
-          // Create a campaign with all the enhanced fields
+          // Create a campaign/post with image support
           const result = await apiService.createCampaign({
             name: scheduleForm.title,
-            objective: scheduleForm.objective,
+            objective: 'engagement',
             platforms: [scheduleForm.platform],
             status: 'scheduled',
             creative: { 
-              type: scheduleForm.contentType, 
+              type: 'image', 
               textContent: scheduleForm.description, 
-              imageUrls: [],
-              hashtags: scheduleForm.hashtags ? scheduleForm.hashtags.split(',').map(h => h.trim()) : [],
-              callToAction: scheduleForm.callToAction
+              imageUrls: (generatedPoster || scheduleImage) ? [generatedPoster || scheduleImage!] : [],
+              hashtags: scheduleForm.hashtags ? scheduleForm.hashtags.split(/[\s,]+/).filter(Boolean).map(h => h.startsWith('#') ? h : `#${h}`) : [],
+              captions: scheduleForm.description + (scheduleForm.hashtags ? '\n\n' + scheduleForm.hashtags : '')
             },
             scheduling: {
               startDate: localDateStr,
-              postTime: `${String(selectedSlot.hour).padStart(2, '0')}:00`
+              postTime: `${String(selectedSlot.hour).padStart(2, '0')}:${String(selectedSlot.minute).padStart(2, '0')}`
             },
-            budget: scheduleForm.budget ? { amount: parseFloat(scheduleForm.budget), currency: 'USD' } : undefined,
-            targeting: scheduleForm.targetAudience ? { demographics: scheduleForm.targetAudience } : undefined,
-            priority: scheduleForm.priority,
-            notes: scheduleForm.notes
           });
+
+          // Actually publish to social media via Ayrshare
+          if (result.campaign?._id) {
+            try {
+              await apiService.publishCampaign(
+                result.campaign._id,
+                [scheduleForm.platform],
+                scheduledFor.toISOString()
+              );
+            } catch (publishErr) {
+              console.error('Ayrshare publish failed:', publishErr);
+            }
+          }
           
           // Add the new campaign to local state immediately with proper structure
           if (result.campaign) {
@@ -1756,13 +2973,27 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
               scheduling: {
                 ...result.campaign.scheduling,
                 startDate: localDateStr,
-                postTime: `${String(selectedSlot.hour).padStart(2, '0')}:00`
+                postTime: `${String(selectedSlot.hour).padStart(2, '0')}:${String(selectedSlot.minute).padStart(2, '0')}`
               }
             };
             setAllCampaigns(prev => [newCampaign, ...prev]);
           }
         }
         
+        // Sync to Google Calendar if connected
+        if (googleCalendarSynced) {
+          try {
+            await apiService.createGoogleCalendarEvent({
+              title: scheduleForm.title,
+              description: scheduleForm.description || scheduleForm.title,
+              startTime: scheduledFor.toISOString(),
+              platform: scheduleForm.platform
+            });
+          } catch (gcalErr) {
+            console.warn('Google Calendar sync failed (non-blocking):', gcalErr);
+          }
+        }
+
         setShowScheduleModal(false);
         setSelectedSlot(null);
       } catch (e) {
@@ -1772,7 +3003,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
         setLoading(false);
       }
     };
-    
+
     // Handle dismissing a reminder
     const handleDismissReminder = async (reminderId: string) => {
       try {
@@ -1809,15 +3040,13 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
         description: campaign.creative?.textContent || '',
         reminderOffset: 30,
         platform: campaign.platforms?.[0] || 'instagram',
-        budget: campaign.budget?.amount?.toString() || '',
-        targetAudience: campaign.targeting?.demographics || '',
-        contentType: campaign.creative?.type || 'image',
-        hashtags: campaign.creative?.hashtags?.join(', ') || '',
-        callToAction: campaign.creative?.callToAction || '',
-        objective: campaign.objective || 'awareness',
-        priority: campaign.priority || 'medium',
-        notes: campaign.notes || ''
+        hashtags: campaign.creative?.hashtags?.join(' ') || '',
       });
+      
+      // Restore image if available
+      const existingImage = campaign.creative?.imageUrls?.[0] || null;
+      setScheduleImage(existingImage);
+      setScheduleImageFile(null);
       
       // Set the slot based on campaign schedule
       const startDate = campaign.scheduling?.startDate 
@@ -1826,8 +3055,11 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
       const hour = campaign.scheduling?.postTime 
         ? parseInt(campaign.scheduling.postTime.split(':')[0]) 
         : 9;
+      const minute = campaign.scheduling?.postTime 
+        ? parseInt(campaign.scheduling.postTime.split(':')[1] || '0') 
+        : 0;
       
-      setSelectedSlot({ date: startDate, hour });
+      setSelectedSlot({ date: startDate, hour, minute });
       setShowScheduleModal(true);
       setSelectedEvent(null);
     };
@@ -1839,19 +3071,21 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
       setLoading(true);
       try {
         const scheduledFor = new Date(selectedSlot.date);
-        scheduledFor.setHours(selectedSlot.hour, 0, 0, 0);
+        scheduledFor.setHours(selectedSlot.hour, selectedSlot.minute, 0, 0);
         
         await apiService.updateCampaign(editingCampaign._id, {
           name: scheduleForm.title,
           platforms: [scheduleForm.platform],
           creative: { 
             ...editingCampaign.creative,
-            textContent: scheduleForm.description 
+            textContent: scheduleForm.description,
+            hashtags: scheduleForm.hashtags ? scheduleForm.hashtags.split(',').map((h: string) => h.trim()) : [],
+            ...((generatedPoster || scheduleImage) ? { imageUrls: [generatedPoster || scheduleImage!] } : {})
           },
           scheduling: {
             ...editingCampaign.scheduling,
             startDate: scheduledFor.toISOString().split('T')[0],
-            postTime: `${String(selectedSlot.hour).padStart(2, '0')}:00`
+            postTime: `${String(selectedSlot.hour).padStart(2, '0')}:${String(selectedSlot.minute).padStart(2, '0')}`
           }
         });
         
@@ -1893,14 +3127,52 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
         setDeleteLoading(false);
       }
     };
+    
+    // Handle deleting a reminder
+    const handleDeleteReminder = async () => {
+      if (!selectedReminder) return;
+      
+      // Use _id or id (calendar API returns 'id', direct reminder API returns '_id')
+      const reminderId = selectedReminder._id || selectedReminder.id;
+      
+      if (!reminderId) {
+        alert('Cannot delete: Reminder ID not found');
+        return;
+      }
+      
+      setDeleteReminderLoading(true);
+      try {
+        await apiService.deleteReminder(reminderId);
+        
+        // Remove from calendar events (check both _id and id)
+        setCalendarEvents(prev => prev.filter(e => (e._id || e.id) !== reminderId));
+        
+        setShowDeleteReminderConfirm(false);
+        setSelectedReminder(null);
+      } catch (e) {
+        console.error('Failed to delete reminder:', e);
+        alert('Failed to delete reminder. Please try again.');
+      } finally {
+        setDeleteReminderLoading(false);
+      }
+    };
 
-    // Get all events for a specific day (combining campaigns and reminders)
+    // Get all events for a specific day (combining campaigns, reminders, and holidays)
     const getEventsForDay = (date: Date) => {
         // Format the target date in local timezone
         const targetYear = date.getFullYear();
         const targetMonth = String(date.getMonth() + 1).padStart(2, '0');
         const targetDay = String(date.getDate()).padStart(2, '0');
         const dateStr = `${targetYear}-${targetMonth}-${targetDay}`;
+        
+        // Get holidays for this date
+        const dayHolidays = getHolidayForDate(date).map(h => ({
+          ...h,
+          eventType: 'holiday' as const,
+          _id: `holiday-${h.date}-${h.name}`,
+          name: h.name,
+          scheduling: { startDate: h.date, postTime: '00:00' }
+        }));
         
         // Get campaigns from local state (includes newly created ones)
         const dayCampaigns = allCampaigns.filter(c => {
@@ -1931,7 +3203,20 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
           return eventDate === dateStr;
         });
         
-        return [...dayCampaigns.map(c => ({ ...c, eventType: 'campaign' })), ...dayEvents.map(e => ({ ...e, eventType: 'reminder' }))];
+        // Apply platform filter
+        const filteredCampaigns = platformFilter
+          ? dayCampaigns.filter(c => c.platforms?.includes(platformFilter))
+          : dayCampaigns;
+        const filteredReminders = platformFilter
+          ? dayEvents.filter(e => e.platform === platformFilter)
+          : dayEvents;
+
+        // Return holidays first, then campaigns, then reminders
+        return [
+          ...dayHolidays,
+          ...filteredCampaigns.map(c => ({ ...c, eventType: 'campaign' as const })), 
+          ...filteredReminders.map(e => ({ ...e, eventType: 'reminder' as const }))
+        ];
     };
 
     const formatDateRange = () => {
@@ -1977,11 +3262,11 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
     };
 
     return (
-        <div className={`${theme.bgCard} rounded-2xl border ${isDarkMode ? 'border-[#ffcc29]/20 hover:border-[#ffcc29]/40' : 'border-[#ededed] hover:border-slate-200'} overflow-hidden transition-all duration-200`}>
+        <div className={`${theme.bgCard} rounded-2xl border ${isDarkMode ? 'border-slate-700/50 hover:border-slate-600' : 'border-[#ededed] hover:border-slate-200'} overflow-hidden transition-all duration-200`}>
             {/* Reminder Toast Notification */}
             {showReminderToast && pendingReminders.length > 0 && (
               <div className="fixed top-4 right-4 z-50 animate-in slide-in-from-top-2 duration-300">
-                <div className={`${theme.bgCard} rounded-xl shadow-2xl border ${isDarkMode ? 'border-[#ffcc29]/20' : 'border-slate-200'} p-4 max-w-sm`}>
+                <div className={`${theme.bgCard} rounded-xl shadow-2xl border ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'} p-4 max-w-sm`}>
                   <div className="flex items-start gap-3">
                     <div className={`p-2 ${isDarkMode ? 'bg-amber-900/30' : 'bg-amber-100'} rounded-lg`}>
                       <BellRing className={`w-5 h-5 ${isDarkMode ? 'text-amber-400' : 'text-amber-600'}`} />
@@ -2015,7 +3300,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
             )}
             
             {/* Header */}
-            <div className={`flex items-center justify-between p-5 border-b ${isDarkMode ? 'border-[#ffcc29]/20' : 'border-[#ededed]'}`}>
+            <div className={`flex items-center justify-between p-5 border-b ${isDarkMode ? 'border-slate-700/50' : 'border-[#ededed]'}`}>
                 <div className="flex items-center gap-4">
                     <button 
                         onClick={handleToday}
@@ -2054,6 +3339,62 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                         </span>
                       </button>
                     )}
+                    {/* Platform Filter */}
+                    <div className="relative" ref={platformFilterRef}>
+                      <button
+                        onClick={() => setShowPlatformFilter(!showPlatformFilter)}
+                        className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+                          platformFilter
+                            ? 'bg-[#ffcc29] text-[#070A12]'
+                            : `${isDarkMode ? 'bg-[#0d1117] text-slate-300 hover:bg-[#161b22]' : 'bg-[#ededed] text-slate-600 hover:bg-slate-200'}`
+                        }`}
+                      >
+                        <Filter className="w-3.5 h-3.5" />
+                        {platformFilter ? platformFilter.charAt(0).toUpperCase() + platformFilter.slice(1) : 'Filter'}
+                        {platformFilter && (
+                          <X
+                            className="w-3 h-3 ml-0.5 hover:text-red-500"
+                            onClick={(e) => { e.stopPropagation(); setPlatformFilter(null); setShowPlatformFilter(false); }}
+                          />
+                        )}
+                      </button>
+                      {showPlatformFilter && (
+                        <div className={`absolute right-0 top-full mt-1 z-50 ${isDarkMode ? 'bg-[#161b22] border-slate-700' : 'bg-white border-slate-200'} border rounded-xl shadow-xl py-1 min-w-[160px] animate-in fade-in slide-in-from-top-1 duration-150`}>
+                          <button
+                            onClick={() => { setPlatformFilter(null); setShowPlatformFilter(false); }}
+                            className={`w-full text-left px-4 py-2 text-xs font-medium flex items-center gap-2 transition-colors ${
+                              !platformFilter
+                                ? `${isDarkMode ? 'bg-[#ffcc29]/20 text-[#ffcc29]' : 'bg-[#ffcc29]/10 text-[#b8941a]'}`
+                                : `${isDarkMode ? 'text-slate-300 hover:bg-[#0d1117]' : 'text-slate-600 hover:bg-slate-50'}`
+                            }`}
+                          >
+                            <span className="w-5 h-5 rounded-full bg-gradient-to-br from-slate-400 to-slate-600 flex items-center justify-center text-white text-[10px]">All</span>
+                            All Platforms
+                            {!platformFilter && <Check className="w-3.5 h-3.5 ml-auto text-[#ffcc29]" />}
+                          </button>
+                          {[
+                            { id: 'instagram', label: 'Instagram', color: 'from-pink-500 to-purple-600', icon: '📸' },
+                            { id: 'facebook', label: 'Facebook', color: 'from-blue-500 to-blue-700', icon: '👤' },
+                            { id: 'twitter', label: 'Twitter / X', color: 'from-sky-400 to-sky-600', icon: '𝕏' },
+                            { id: 'linkedin', label: 'LinkedIn', color: 'from-blue-600 to-blue-800', icon: '💼' },
+                          ].map(p => (
+                            <button
+                              key={p.id}
+                              onClick={() => { setPlatformFilter(p.id); setShowPlatformFilter(false); }}
+                              className={`w-full text-left px-4 py-2 text-xs font-medium flex items-center gap-2 transition-colors ${
+                                platformFilter === p.id
+                                  ? `${isDarkMode ? 'bg-[#ffcc29]/20 text-[#ffcc29]' : 'bg-[#ffcc29]/10 text-[#b8941a]'}`
+                                  : `${isDarkMode ? 'text-slate-300 hover:bg-[#0d1117]' : 'text-slate-600 hover:bg-slate-50'}`
+                              }`}
+                            >
+                              <span className={`w-5 h-5 rounded-full bg-gradient-to-br ${p.color} flex items-center justify-center text-white text-[10px]`}>{p.icon}</span>
+                              {p.label}
+                              {platformFilter === p.id && <Check className="w-3.5 h-3.5 ml-auto text-[#ffcc29]" />}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                     {/* View Type Selector */}
                     <div className={`flex items-center ${isDarkMode ? 'bg-[#0d1117]' : 'bg-[#ededed]'} rounded-lg p-0.5`}>
                       {(['day', 'week', 'month'] as const).map((view) => (
@@ -2070,10 +3411,32 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                         </button>
                       ))}
                     </div>
-                    <button 
+                    {/* Google Calendar Sync Button */}
+                    <button
+                      onClick={handleGoogleCalendarSync}
+                      disabled={googleCalSyncLoading}
+                      className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                        googleCalendarSynced
+                          ? `${isDarkMode ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/30' : 'bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-red-50 hover:text-red-600 hover:border-red-200'}`
+                          : `${isDarkMode ? 'bg-[#0d1117] text-slate-300 border border-slate-700/50 hover:border-[#ffcc29]/50 hover:text-[#ffcc29]' : 'bg-[#ededed] text-slate-600 border border-slate-200 hover:border-[#ffcc29] hover:text-[#b8941a]'}`
+                      }`}
+                      title={googleCalendarSynced ? 'Click to disconnect Google Calendar' : 'Sync scheduled posts to Google Calendar'}
+                    >
+                      {googleCalSyncLoading ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : googleCalendarSynced ? (
+                        <Check className="w-3.5 h-3.5" />
+                      ) : (
+                        <CalendarSync className="w-3.5 h-3.5" />
+                      )}
+                      <span className="hidden sm:inline">
+                        {googleCalSyncLoading ? 'Syncing...' : googleCalendarSynced ? 'Google Cal' : 'Sync Calendar'}
+                      </span>
+                    </button>
+                    <button
                         onClick={() => {
                           const now = new Date();
-                          setSelectedSlot({ date: now, hour: now.getHours() + 1 });
+                          setSelectedSlot({ date: now, hour: now.getHours() + 1, minute: 0 });
                           setScheduleForm({
                             title: '',
                             type: 'campaign',
@@ -2101,6 +3464,35 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                       sectionData={{ campaigns, currentWeek: formatDateRange() }} 
                     />
                 </div>
+            </div>
+
+            {/* Color Legend */}
+            <div className={`flex flex-wrap items-center gap-3 px-5 py-2 border-b ${isDarkMode ? 'border-[#ffcc29]/10 bg-[#0d1117]/50' : 'border-[#ededed] bg-[#f5f5f5]/50'}`}>
+              <span className={`text-xs font-medium ${theme.textSecondary}`}>Legend:</span>
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded bg-orange-500"></div>
+                <span className={`text-xs ${theme.textMuted}`}>National</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded bg-pink-500"></div>
+                <span className={`text-xs ${theme.textMuted}`}>Festival</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded bg-green-500"></div>
+                <span className={`text-xs ${theme.textMuted}`}>Marketing</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded bg-blue-500"></div>
+                <span className={`text-xs ${theme.textMuted}`}>International</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded bg-[#ffcc29]"></div>
+                <span className={`text-xs ${theme.textMuted}`}>Campaign</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded bg-purple-500"></div>
+                <span className={`text-xs ${theme.textMuted}`}>Reminder</span>
+              </div>
             </div>
 
             {/* Calendar Grid */}
@@ -2139,8 +3531,11 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                         <div 
                           key={d} 
                           onClick={() => handleSlotClick(date, 9)}
-                          className={`h-24 p-1.5 border ${isDarkMode ? 'border-[#ffcc29]/10' : 'border-[#ededed]'} rounded-lg ${isDarkMode ? 'hover:bg-[#ffcc29]/10' : 'hover:bg-[#ffcc29]/5'} cursor-pointer transition-colors ${
-                            today ? `${isDarkMode ? 'bg-[#ffcc29]/20 border-[#ffcc29]/40' : 'bg-[#ffcc29]/10 border-indigo-200'}` : ''
+                          onDragOver={(e) => handleCellDragOver(e, getCellKey(date, 9))}
+                          onDragLeave={handleCellDragLeave}
+                          onDrop={(e) => handleCellDrop(e, date, 9)}
+                          className={`h-24 p-1.5 border ${isDarkMode ? 'border-[#ffcc29]/10' : 'border-[#ededed]'} rounded-lg ${dragOverCell === getCellKey(date, 9) ? (isDarkMode ? 'bg-[#ffcc29]/30 ring-2 ring-[#ffcc29]/50' : 'bg-[#ffcc29]/20 ring-2 ring-[#ffcc29]/40') : (isDarkMode ? 'hover:bg-[#ffcc29]/10' : 'hover:bg-[#ffcc29]/5')} cursor-pointer transition-colors ${
+                            today ? `${isDarkMode ? 'bg-[#ffcc29]/20 border-slate-600' : 'bg-[#ffcc29]/10 border-indigo-200'}` : ''
                           }`}
                         >
                           <span className={`text-sm font-medium ${
@@ -2152,14 +3547,32 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                             {dayEvents.slice(0, 3).map((event: any, idx) => (
                               <div 
                                 key={event._id || idx} 
-                                onClick={(e) => { e.stopPropagation(); if (event.eventType === 'campaign') setSelectedEvent(event); }}
-                                className={`text-[10px] px-1.5 py-0.5 rounded truncate font-medium shadow-sm ${
-                                  event.eventType === 'reminder' || event.type === 'reminder' 
-                                    ? `${isDarkMode ? 'bg-purple-500/80 text-white' : 'bg-purple-500 text-white'}` 
-                                    : `${isDarkMode ? 'bg-[#ffcc29]/90 text-[#0a0f1a]' : 'bg-[#ffcc29] text-[#0a0f1a]'}`
+                                draggable={event.eventType !== 'holiday'}
+                                onDragStart={(e) => { e.stopPropagation(); handleEventDragStart(e, event); }}
+                                onDragEnd={handleEventDragEnd}
+                                onClick={(e) => { 
+                                  e.stopPropagation(); 
+                                  if (event.eventType === 'campaign') {
+                                    setSelectedEvent(event);
+                                  } else if (event.eventType === 'reminder' || event.type === 'reminder') {
+                                    setSelectedReminder(event);
+                                  } else if (event.eventType === 'holiday') {
+                                    setSelectedHoliday(event);
+                                  }
+                                }}
+                                title={event.eventType === 'holiday' ? `${event.description}${event.marketingTip ? `\n💡 ${event.marketingTip}` : ''}` : undefined}
+                                className={`text-[10px] px-1.5 py-0.5 rounded truncate font-medium shadow-sm hover:opacity-80 ${event.eventType !== 'holiday' ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${draggedEvent && (draggedEvent._id || draggedEvent.id) === (event._id || event.id) ? 'opacity-50 ring-1 ring-[#ffcc29]' : ''} ${
+                                  event.eventType === 'holiday' 
+                                    ? event.type === 'national' ? 'bg-orange-500 text-white' :
+                                      event.type === 'festival' ? 'bg-pink-500 text-white' :
+                                      event.type === 'marketing' ? 'bg-green-500 text-white' :
+                                      'bg-blue-500 text-white'
+                                    : event.eventType === 'reminder' || event.type === 'reminder' 
+                                      ? `${isDarkMode ? 'bg-purple-500/80 text-white' : 'bg-purple-500 text-white'}` 
+                                      : `${isDarkMode ? 'bg-[#ffcc29]/90 text-[#0a0f1a]' : 'bg-[#ffcc29] text-[#0a0f1a]'}`
                                 }`}
                               >
-                                {event.name || event.title}
+                                {event.eventType === 'holiday' ? `${event.emoji} ${event.name}` : (event.name || event.title)}
                               </div>
                             ))}
                             {dayEvents.length > 3 && (
@@ -2176,12 +3589,12 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
               </div>
             ) : viewType === 'day' ? (
               // Day View
-              <div className="flex overflow-hidden" style={{ height: '500px' }}>
+              <div className="flex overflow-y-auto" style={{ height: '520px' }}>
                 {/* Time Column */}
-                <div className={`flex-shrink-0 w-20 border-r ${isDarkMode ? 'border-[#ffcc29]/20 bg-[#0d1117]' : 'border-slate-200 bg-[#f5f5f5]'}`}>
+                <div className={`flex-shrink-0 w-20 border-r ${isDarkMode ? 'border-slate-700/50 bg-[#0d1117]' : 'border-slate-200 bg-[#f5f5f5]'}`}>
                   {timeSlots.map(hour => (
-                    <div key={hour} className={`h-14 border-b ${isDarkMode ? 'border-[#ffcc29]/10' : 'border-[#ededed]'} pr-3 flex items-start justify-end pt-0`}>
-                      <span className={`text-xs ${theme.textMuted} -mt-2`}>
+                    <div key={hour} className={`h-10 border-b ${isDarkMode ? 'border-[#ffcc29]/10' : 'border-[#ededed]'} pr-3 flex items-center justify-end`}>
+                      <span className={`text-xs ${theme.textMuted}`}>
                         {hour === 0 ? '12 AM' : hour < 12 ? `${hour} AM` : hour === 12 ? '12 PM' : `${hour - 12} PM`}
                       </span>
                     </div>
@@ -2189,7 +3602,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                 </div>
                 
                 {/* Single Day Grid */}
-                <div className="flex-1 overflow-y-auto relative">
+                <div className="flex-1 relative">
                   {timeSlots.map(hour => {
                     const dayEvents = getEventsForDay(currentDate).filter((e: any) => {
                       const eventHour = e.scheduling?.postTime 
@@ -2202,20 +3615,52 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                       <div 
                         key={hour}
                         onClick={() => handleSlotClick(currentDate, hour)}
-                        className={`h-14 border-b ${isDarkMode ? 'border-[#ffcc29]/10' : 'border-[#ededed]'} ${isDarkMode ? 'hover:bg-[#ffcc29]/10' : 'hover:bg-[#ffcc29]/5'} transition-colors cursor-pointer px-4 flex items-center gap-3`}
+                        onDragOver={(e) => handleCellDragOver(e, getCellKey(currentDate, hour))}
+                        onDragLeave={handleCellDragLeave}
+                        onDrop={(e) => handleCellDrop(e, currentDate, hour)}
+                        className={`h-10 border-b ${isDarkMode ? 'border-[#ffcc29]/10' : 'border-[#ededed]'} ${dragOverCell === getCellKey(currentDate, hour) ? (isDarkMode ? 'bg-[#ffcc29]/30 ring-1 ring-[#ffcc29]/50' : 'bg-[#ffcc29]/20 ring-1 ring-[#ffcc29]/40') : (isDarkMode ? 'hover:bg-[#ffcc29]/10' : 'hover:bg-[#ffcc29]/5')} transition-colors cursor-pointer px-4 flex items-center gap-3`}
                       >
                         {dayEvents.map((event: any, idx) => (
                           <div 
                             key={event._id || idx}
-                            onClick={(e) => { e.stopPropagation(); if (event.eventType === 'campaign') setSelectedEvent(event); }}
-                            className={`flex-1 py-2 px-3 rounded-lg cursor-pointer shadow-md ${
-                              event.eventType === 'reminder' || event.type === 'reminder' 
-                                ? 'bg-purple-500 text-white' 
-                                : 'bg-[#ffcc29] text-[#0a0f1a]'
+                            draggable={event.eventType !== 'holiday'}
+                            onDragStart={(e) => handleEventDragStart(e, event)}
+                            onDragEnd={handleEventDragEnd}
+                            onClick={(e) => { 
+                              e.stopPropagation(); 
+                              if (event.eventType === 'campaign') {
+                                setSelectedEvent(event);
+                              } else if (event.eventType === 'reminder' || event.type === 'reminder') {
+                                setSelectedReminder(event);
+                              } else if (event.eventType === 'holiday') {
+                                setSelectedHoliday(event);
+                              }
+                            }}
+                            title={event.eventType === 'holiday' ? `${event.description}${event.marketingTip ? `\n💡 ${event.marketingTip}` : ''}` : undefined}
+                            className={`flex-1 py-2 px-3 rounded-lg shadow-md hover:opacity-90 ${event.eventType !== 'holiday' ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${draggedEvent && (draggedEvent._id || draggedEvent.id) === (event._id || event.id) ? 'opacity-50 ring-2 ring-[#ffcc29]' : ''} ${
+                              event.eventType === 'holiday' 
+                                ? event.type === 'national' ? 'bg-orange-500 text-white' :
+                                  event.type === 'festival' ? 'bg-pink-500 text-white' :
+                                  event.type === 'marketing' ? 'bg-green-500 text-white' :
+                                  'bg-blue-500 text-white'
+                                : event.eventType === 'reminder' || event.type === 'reminder' 
+                                  ? 'bg-purple-500 text-white' 
+                                  : 'bg-[#ffcc29] text-[#0a0f1a]'
                             }`}
                           >
-                            <p className="text-sm font-semibold truncate">{event.name || event.title}</p>
-                            <p className={`text-xs ${event.eventType === 'reminder' || event.type === 'reminder' ? 'text-white/80' : 'text-[#0a0f1a]/70'}`}>{event.platforms?.join(', ') || event.platform || ''}</p>
+                            <p className="text-sm font-semibold truncate">
+                              {event.eventType === 'holiday' ? `${event.emoji} ${event.name}` : (event.name || event.title)}
+                            </p>
+                            <p className={`text-xs ${
+                              event.eventType === 'holiday' ? 'text-white/80' :
+                              event.eventType === 'reminder' || event.type === 'reminder' ? 'text-white/80' : 'text-[#0a0f1a]/70'
+                            }`}>
+                              {event.eventType === 'holiday' 
+                                ? (event.type === 'national' ? '🇮🇳 National Holiday' : 
+                                   event.type === 'festival' ? '🎉 Festival' : 
+                                   event.type === 'marketing' ? '📈 Marketing Day' : '🌍 International')
+                                : (event.platforms?.join(', ') || event.platform || '')}
+                            </p>
                           </div>
                         ))}
                         {dayEvents.length === 0 && (
@@ -2231,8 +3676,8 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                       const now = new Date();
                       const currentHour = now.getHours();
                       const currentMinute = now.getMinutes();
-                      if (currentHour >= 6 && currentHour <= 23) {
-                        const topPos = ((currentHour - 6) * 56) + (currentMinute * 0.93);
+                      if (currentHour >= 0 && currentHour <= 12) {
+                        const topPos = (currentHour * 40) + (currentMinute * 0.67);
                         return (
                           <div 
                             className="absolute left-0 right-0 h-0.5 bg-red-500 z-20 pointer-events-none"
@@ -2249,50 +3694,52 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
               </div>
             ) : (
               // Week View (default)
-              <div className="flex overflow-hidden" style={{ height: '500px' }}>
-                {/* Time Column */}
-                <div className={`flex-shrink-0 w-16 border-r ${isDarkMode ? 'border-[#ffcc29]/20 bg-[#0d1117]' : 'border-slate-200 bg-[#f5f5f5]'}`}>
-                    <div className={`h-16 border-b ${isDarkMode ? 'border-[#ffcc29]/20' : 'border-slate-200'}`}></div>
+              <div className="flex flex-col overflow-hidden" style={{ height: '572px' }}>
+                {/* Day Headers - fixed at top */}
+                <div className={`flex border-b flex-shrink-0 ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'} ${theme.bgCard}`}>
+                    <div className={`flex-shrink-0 w-16 border-r ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'}`}></div>
+                    {weekDays.map((day, idx) => {
+                        const dayName = day.toLocaleDateString('en-US', { weekday: 'short' });
+                        const dayNum = day.getDate();
+                        const today = isToday(day);
+
+                        return (
+                            <div
+                                key={idx}
+                                className={`flex-1 h-12 flex flex-col items-center justify-center border-r ${isDarkMode ? 'border-[#ffcc29]/10' : 'border-[#ededed]'} last:border-r-0 ${
+                                    today ? `${isDarkMode ? 'bg-[#ffcc29]/20' : 'bg-[#ffcc29]/10'}` : ''
+                                }`}
+                            >
+                                <span className={`text-xs font-medium ${today ? 'text-[#ffcc29]' : theme.textSecondary}`}>
+                                    {dayName}
+                                </span>
+                                <span className={`text-xl font-bold mt-0.5 ${
+                                    today
+                                        ? 'text-white bg-[#ffcc29] w-8 h-8 rounded-full flex items-center justify-center'
+                                        : theme.text
+                                }`}>
+                                    {dayNum}
+                                </span>
+                            </div>
+                        );
+                    })}
+                </div>
+
+                {/* Scrollable Body: Time Column + Day Grid */}
+                <div className="flex flex-1" ref={scrollBodyRef}>
+                  {/* Time Column */}
+                  <div className={`flex-shrink-0 w-16 border-r ${isDarkMode ? 'border-slate-700/50 bg-[#0d1117]' : 'border-slate-200 bg-[#f5f5f5]'}`}>
                     {timeSlots.map(hour => (
-                        <div key={hour} className={`h-12 border-b ${isDarkMode ? 'border-[#ffcc29]/10' : 'border-[#ededed]'} pr-2 flex items-start justify-end pt-0`}>
-                            <span className={`text-xs ${theme.textMuted} -mt-2`}>
+                        <div key={hour} className={`h-10 border-b ${isDarkMode ? 'border-[#ffcc29]/10' : 'border-[#ededed]'} pr-2 flex items-center justify-end`}>
+                            <span className={`text-xs ${theme.textMuted}`}>
                                 {hour === 0 ? '12 AM' : hour < 12 ? `${hour} AM` : hour === 12 ? '12 PM' : `${hour - 12} PM`}
                             </span>
                         </div>
                     ))}
-                </div>
+                  </div>
 
-                {/* Days Grid */}
-                <div className="flex-1 overflow-y-auto">
-                    {/* Day Headers */}
-                    <div className={`flex border-b ${isDarkMode ? 'border-[#ffcc29]/20' : 'border-slate-200'} ${theme.bgCard} sticky top-0 z-10`}>
-                        {weekDays.map((day, idx) => {
-                            const dayName = day.toLocaleDateString('en-US', { weekday: 'short' });
-                            const dayNum = day.getDate();
-                            const today = isToday(day);
-                            
-                            return (
-                                <div 
-                                    key={idx} 
-                                    className={`flex-1 h-16 flex flex-col items-center justify-center border-r ${isDarkMode ? 'border-[#ffcc29]/10' : 'border-[#ededed]'} last:border-r-0 ${
-                                        today ? `${isDarkMode ? 'bg-[#ffcc29]/20' : 'bg-[#ffcc29]/10'}` : ''
-                                    }`}
-                                >
-                                    <span className={`text-xs font-medium ${today ? 'text-[#ffcc29]' : theme.textSecondary}`}>
-                                        {dayName}
-                                    </span>
-                                    <span className={`text-xl font-bold mt-0.5 ${
-                                        today 
-                                            ? 'text-white bg-[#ffcc29] w-8 h-8 rounded-full flex items-center justify-center' 
-                                            : theme.text
-                                    }`}>
-                                        {dayNum}
-                                    </span>
-                                </div>
-                            );
-                        })}
-                    </div>
-
+                  {/* Days Grid */}
+                  <div className="flex-1">
                     {/* Time Grid */}
                     <div className="flex relative">
                         {weekDays.map((day, dayIdx) => {
@@ -2306,26 +3753,67 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                         today ? `${isDarkMode ? 'bg-[#ffcc29]/10' : 'bg-[#ffcc29]/5'}` : ''
                                     }`}
                                 >
-                                    {timeSlots.map(hour => (
+                                    {timeSlots.map(hour => {
+                                        const cellKey = getCellKey(day, hour);
+                                        const isDropTarget = dragOverCell === cellKey;
+                                        return (
                                         <div 
                                             key={hour} 
                                             onClick={() => handleSlotClick(day, hour)}
-                                            className={`h-12 border-b ${isDarkMode ? 'border-[#ffcc29]/10' : 'border-[#ededed]'} ${isDarkMode ? 'hover:bg-[#ffcc29]/10' : 'hover:bg-[#ffcc29]/5'} transition-colors cursor-pointer group`}
+                                            onDragOver={(e) => handleCellDragOver(e, cellKey)}
+                                            onDragLeave={handleCellDragLeave}
+                                            onDrop={(e) => handleCellDrop(e, day, hour)}
+                                            className={`h-10 border-b ${isDarkMode ? 'border-[#ffcc29]/10' : 'border-[#ededed]'} ${isDropTarget ? (isDarkMode ? 'bg-[#ffcc29]/30 border-[#ffcc29] ring-1 ring-[#ffcc29]/50' : 'bg-[#ffcc29]/20 border-[#ffcc29] ring-1 ring-[#ffcc29]/40') : (isDarkMode ? 'hover:bg-[#ffcc29]/10' : 'hover:bg-[#ffcc29]/5')} transition-colors cursor-pointer group`}
                                         >
                                             <div className="w-full h-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                               <Plus className="w-4 h-4 text-[#ffcc29]" />
                                             </div>
                                         </div>
-                                    ))}
+                                        );
+                                    })}
                                     
                                     {/* Events */}
                                     {dayEvents.map((event: any, idx) => {
+                                        // Holidays show at top of day
+                                        if (event.eventType === 'holiday') {
+                                          return (
+                                            <div
+                                              key={event._id || idx}
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setSelectedHoliday(event);
+                                              }}
+                                              className={`absolute left-1 right-1 rounded-md px-2 py-1 cursor-pointer hover:opacity-90 transition-opacity shadow-md border-l-4 ${
+                                                event.type === 'national' ? 'bg-orange-500 border-orange-600' :
+                                                event.type === 'festival' ? 'bg-pink-500 border-pink-600' :
+                                                event.type === 'marketing' ? 'bg-green-500 border-green-600' :
+                                                'bg-blue-500 border-blue-600'
+                                              }`}
+                                              style={{ 
+                                                top: `${idx * 48}px`,
+                                                height: '36px'
+                                              }}
+                                              title={`${event.description}${event.marketingTip ? `\n💡 ${event.marketingTip}` : ''}`}
+                                            >
+                                              <div className="flex items-center gap-1">
+                                                <span className="text-xs">{event.emoji}</span>
+                                                <p className="text-xs font-semibold truncate text-white">{event.name}</p>
+                                              </div>
+                                              <p className="text-[10px] truncate text-white/80">
+                                                {event.type === 'national' ? 'National' : 
+                                                 event.type === 'festival' ? 'Festival' : 
+                                                 event.type === 'marketing' ? 'Marketing' : 'International'}
+                                              </p>
+                                            </div>
+                                          );
+                                        }
+                                        
                                         const startHour = event.scheduling?.postTime 
                                           ? parseTime(event.scheduling.postTime)
                                           : event.time 
                                             ? new Date(event.time).getHours()
                                             : 9;
-                                        const topOffset = (startHour - 6) * 48;
+                                        const topOffset = startHour * 40;
                                         
                                         const colors: Record<string, string> = {
                                             'active': 'bg-emerald-500 border-emerald-600',
@@ -2344,16 +3832,21 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                         return (
                                             <div
                                                 key={event._id || event.id || idx}
+                                                draggable={event.eventType !== 'holiday'}
+                                                onDragStart={(e) => handleEventDragStart(e, event)}
+                                                onDragEnd={handleEventDragEnd}
                                                 onClick={(e) => {
                                                   e.stopPropagation();
                                                   if (event.eventType === 'campaign' || event.type === 'campaign') {
                                                     setSelectedEvent(event);
+                                                  } else if (event.eventType === 'reminder' || event.type === 'reminder') {
+                                                    setSelectedReminder(event);
                                                   }
                                                 }}
-                                                className={`absolute left-1 right-1 rounded-md px-2 py-1 cursor-pointer hover:opacity-90 transition-opacity shadow-md border-l-4 ${colorClass}`}
+                                                className={`absolute left-1 right-1 rounded-md px-2 py-1 cursor-grab active:cursor-grabbing hover:opacity-90 transition-opacity shadow-md border-l-4 ${colorClass} ${draggedEvent?._id === event._id ? 'opacity-50 ring-2 ring-[#ffcc29]' : ''}`}
                                                 style={{ 
                                                     top: `${topOffset}px`,
-                                                    height: '44px'
+                                                    height: '36px'
                                                 }}
                                             >
                                                 <div className="flex items-center gap-1">
@@ -2377,8 +3870,8 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                 const now = new Date();
                                 const currentHour = now.getHours();
                                 const currentMinute = now.getMinutes();
-                                if (currentHour >= 6 && currentHour <= 23) {
-                                    const topPos = ((currentHour - 6) * 48) + (currentMinute * 0.8);
+                                if (currentHour >= 0 && currentHour <= 12) {
+                                    const topPos = (currentHour * 40) + (currentMinute * 0.67);
                                     const todayIdx = weekDays.findIndex(d => isToday(d));
                                     return (
                                         <div 
@@ -2397,21 +3890,22 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                             })()
                         )}
                     </div>
+                  </div>
                 </div>
               </div>
             )}
 
-            {/* Schedule Modal - Enhanced with all campaign details */}
+            {/* Schedule Modal - Quick Post Scheduler */}
             {showScheduleModal && selectedSlot && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => setShowScheduleModal(false)}>
-                    <div className={`${isDarkMode ? 'bg-[#0d1117] border-[#ffcc29]/20' : 'bg-white border-slate-200'} border rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200`} onClick={e => e.stopPropagation()}>
+                    <div className={`${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-slate-200'} border rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200`} onClick={e => e.stopPropagation()}>
                         {/* Header */}
-                        <div className={`sticky top-0 z-10 ${isDarkMode ? 'bg-[#0d1117] border-[#ffcc29]/20' : 'bg-white border-slate-200'} border-b px-6 py-4`}>
+                        <div className={`sticky top-0 z-10 ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-slate-200'} border-b px-6 py-4`}>
                             <div className="flex justify-between items-center">
                                 <div>
-                                    <h3 className={`text-lg font-bold ${theme.text}`}>{isEditMode ? 'Edit Campaign' : 'Schedule New Event'}</h3>
+                                    <h3 className={`text-lg font-bold ${theme.text}`}>{isEditMode ? 'Edit Post' : 'Quick Schedule'}</h3>
                                     <p className={`text-sm ${theme.textMuted} mt-0.5`}>
-                                      Fill in the details below to {isEditMode ? 'update' : 'schedule'} your {scheduleForm.type}
+                                      {selectedSlot.date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} at {(() => { const h = selectedSlot.hour; const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h; return `${h12}:${String(selectedSlot.minute).padStart(2,'0')} ${h >= 12 ? 'PM' : 'AM'}`; })()}
                                     </p>
                                 </div>
                                 <button onClick={() => { setShowScheduleModal(false); setIsEditMode(false); setEditingCampaign(null); }} className={`p-2 ${isDarkMode ? 'hover:bg-[#161b22]' : 'hover:bg-slate-100'} rounded-lg transition-colors`}>
@@ -2420,277 +3914,618 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                             </div>
                         </div>
                         
-                        <div className="p-6 space-y-5">
-                          {/* Event Type - hide in edit mode */}
+                        <div className="p-6 space-y-4">
+                          {/* Event Type Toggle - hide in edit mode */}
                           {!isEditMode && (
-                          <div>
-                            <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>Event Type</label>
-                            <div className="flex gap-2 mt-2">
-                              <button
-                                onClick={() => setScheduleForm(prev => ({ ...prev, type: 'reminder' }))}
-                                className={`flex-1 py-3 px-4 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-2 ${
-                                  scheduleForm.type === 'reminder' 
-                                    ? 'bg-purple-500/20 text-purple-500 border-2 border-purple-400' 
-                                    : `${isDarkMode ? 'bg-[#161b22] text-slate-400 border-[#ffcc29]/10' : 'bg-slate-100 text-slate-600 border-transparent'} border-2 hover:border-purple-300`
-                                }`}
-                              >
-                                <Bell className="w-4 h-4" /> Reminder
-                              </button>
-                              <button
-                                onClick={() => setScheduleForm(prev => ({ ...prev, type: 'campaign' }))}
-                                className={`flex-1 py-3 px-4 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-2 ${
-                                  scheduleForm.type === 'campaign' 
-                                    ? 'bg-[#ffcc29]/20 text-[#ffcc29] border-2 border-[#ffcc29]' 
-                                    : `${isDarkMode ? 'bg-[#161b22] text-slate-400 border-[#ffcc29]/10' : 'bg-slate-100 text-slate-600 border-transparent'} border-2 hover:border-[#ffcc29]/50`
-                                }`}
-                              >
-                                <Activity className="w-4 h-4" /> Campaign
-                              </button>
-                            </div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => setScheduleForm(prev => ({ ...prev, type: 'campaign' }))}
+                              className={`flex-1 py-2.5 px-4 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-2 ${
+                                scheduleForm.type === 'campaign' 
+                                  ? 'bg-[#ffcc29]/20 text-[#ffcc29] border-2 border-[#ffcc29]' 
+                                  : `${isDarkMode ? 'bg-[#161b22] text-slate-400 border-[#ffcc29]/10' : 'bg-slate-100 text-slate-600 border-transparent'} border-2 hover:border-[#ffcc29]/50`
+                              }`}
+                            >
+                              <Send className="w-4 h-4" /> Post
+                            </button>
+                            <button
+                              onClick={() => setScheduleForm(prev => ({ ...prev, type: 'reminder' }))}
+                              className={`flex-1 py-2.5 px-4 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-2 ${
+                                scheduleForm.type === 'reminder' 
+                                  ? 'bg-purple-500/20 text-purple-500 border-2 border-purple-400' 
+                                  : `${isDarkMode ? 'bg-[#161b22] text-slate-400 border-[#ffcc29]/10' : 'bg-slate-100 text-slate-600 border-transparent'} border-2 hover:border-purple-300`
+                              }`}
+                            >
+                              <Bell className="w-4 h-4" /> Reminder
+                            </button>
                           </div>
                           )}
                           
-                          {/* Date & Time Section */}
-                          <div className={`p-4 rounded-xl ${isDarkMode ? 'bg-[#161b22] border-[#ffcc29]/10' : 'bg-slate-50 border-slate-200'} border`}>
-                            <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide flex items-center gap-2`}>
-                              <CalendarIcon className="w-3.5 h-3.5" /> Date & Time
-                            </label>
-                            <div className="grid grid-cols-2 gap-3 mt-3">
+                          {/* Date & Time - compact */}
+                          <div className={`p-3 rounded-xl ${isDarkMode ? 'bg-[#161b22] border-[#ffcc29]/10' : 'bg-slate-50 border-slate-200'} border`}>
+                            <div className="grid grid-cols-2 gap-3">
                               <div>
-                                <label className={`text-[10px] ${theme.textMuted}`}>Date</label>
+                                <label className={`text-[10px] font-semibold ${theme.textMuted} uppercase`}>Date</label>
                                 <input
                                   type="date"
                                   value={selectedSlot.date.toISOString().split('T')[0]}
                                   onChange={(e) => {
                                     const newDate = new Date(e.target.value);
-                                    newDate.setHours(selectedSlot.hour, 0, 0, 0);
-                                    setSelectedSlot({ date: newDate, hour: selectedSlot.hour });
+                                    newDate.setHours(selectedSlot.hour, selectedSlot.minute, 0, 0);
+                                    setSelectedSlot({ date: newDate, hour: selectedSlot.hour, minute: selectedSlot.minute });
                                   }}
-                                  className={`w-full mt-1 px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#0d1117] border-[#ffcc29]/20 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
+                                  className={`w-full mt-1 px-3 py-2 border rounded-lg text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
                                 />
                               </div>
                               <div>
-                                <label className={`text-[10px] ${theme.textMuted}`}>Time</label>
-                                <select
-                                  value={selectedSlot.hour}
-                                  onChange={(e) => {
-                                    const newHour = parseInt(e.target.value);
-                                    const newDate = new Date(selectedSlot.date);
-                                    newDate.setHours(newHour, 0, 0, 0);
-                                    setSelectedSlot({ date: newDate, hour: newHour });
-                                  }}
-                                  className={`w-full mt-1 px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#0d1117] border-[#ffcc29]/20 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
-                                >
-                                  {Array.from({ length: 24 }, (_, i) => (
-                                    <option key={i} value={i}>
-                                      {i === 0 ? '12:00 AM' : i < 12 ? `${i}:00 AM` : i === 12 ? '12:00 PM' : `${i-12}:00 PM`}
-                                    </option>
-                                  ))}
-                                </select>
+                                <label className={`text-[10px] font-semibold ${theme.textMuted} uppercase`}>Time</label>
+                                <div className="flex gap-1.5 mt-1">
+                                  <input type="number" min="1" max="12"
+                                    value={(() => { const h = selectedSlot.hour; return h === 0 ? 12 : h > 12 ? h - 12 : h; })()}
+                                    onChange={(e) => {
+                                      let hour12 = parseInt(e.target.value) || 1;
+                                      if (hour12 < 1) hour12 = 1; if (hour12 > 12) hour12 = 12;
+                                      const isPM = selectedSlot.hour >= 12;
+                                      let hour24 = hour12;
+                                      if (isPM && hour12 !== 12) hour24 = hour12 + 12;
+                                      if (!isPM && hour12 === 12) hour24 = 0;
+                                      const newDate = new Date(selectedSlot.date); newDate.setHours(hour24, selectedSlot.minute, 0, 0);
+                                      setSelectedSlot({ date: newDate, hour: hour24, minute: selectedSlot.minute });
+                                    }}
+                                    className={`w-12 px-1.5 py-2 border rounded-lg text-sm text-center focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
+                                  />
+                                  <span className={`flex items-center text-xs ${theme.text}`}>:</span>
+                                  <input type="number" min="0" max="59"
+                                    value={String(selectedSlot.minute).padStart(2, '0')}
+                                    onChange={(e) => {
+                                      let minute = parseInt(e.target.value) || 0;
+                                      if (minute < 0) minute = 0; if (minute > 59) minute = 59;
+                                      const newDate = new Date(selectedSlot.date); newDate.setHours(selectedSlot.hour, minute, 0, 0);
+                                      setSelectedSlot({ date: newDate, hour: selectedSlot.hour, minute });
+                                    }}
+                                    className={`w-12 px-1.5 py-2 border rounded-lg text-sm text-center focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
+                                  />
+                                  <select value={selectedSlot.hour >= 12 ? 'PM' : 'AM'}
+                                    onChange={(e) => {
+                                      const newPeriod = e.target.value;
+                                      const currentPeriod = selectedSlot.hour >= 12 ? 'PM' : 'AM';
+                                      if (newPeriod !== currentPeriod) {
+                                        let newHour = selectedSlot.hour;
+                                        if (newPeriod === 'PM' && selectedSlot.hour < 12) newHour += 12;
+                                        else if (newPeriod === 'AM' && selectedSlot.hour >= 12) newHour -= 12;
+                                        const newDate = new Date(selectedSlot.date); newDate.setHours(newHour, selectedSlot.minute, 0, 0);
+                                        setSelectedSlot({ date: newDate, hour: newHour, minute: selectedSlot.minute });
+                                      }
+                                    }}
+                                    className={`w-14 px-0.5 py-2 border rounded-lg text-xs text-center focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
+                                  >
+                                    <option value="AM">AM</option>
+                                    <option value="PM">PM</option>
+                                  </select>
+                                </div>
                               </div>
                             </div>
                           </div>
                           
-                          {/* Title */}
+                          {/* Post Name */}
                           <div>
                             <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>
-                              {scheduleForm.type === 'reminder' ? 'Reminder Title' : 'Campaign Name'} *
+                              {scheduleForm.type === 'reminder' ? 'Reminder Title' : 'Post Title'} *
                             </label>
                             <input
                               type="text"
                               value={scheduleForm.title}
                               onChange={(e) => setScheduleForm(prev => ({ ...prev, title: e.target.value }))}
-                              placeholder={scheduleForm.type === 'reminder' ? 'e.g., Review analytics report' : 'e.g., Holiday Sale Campaign'}
-                              className={`w-full mt-2 px-4 py-3 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#161b22] border-[#ffcc29]/20 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
+                              placeholder={scheduleForm.type === 'reminder' ? 'e.g., Review analytics report' : 'e.g., Weekend Sale Announcement'}
+                              className={`w-full mt-1.5 px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
                             />
                           </div>
                           
-                          {/* Description / Content */}
-                          <div>
-                            <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>
-                              {scheduleForm.type === 'reminder' ? 'Notes' : 'Post Content / Caption'}
-                            </label>
-                            <textarea
-                              value={scheduleForm.description}
-                              onChange={(e) => setScheduleForm(prev => ({ ...prev, description: e.target.value }))}
-                              placeholder={scheduleForm.type === 'reminder' ? 'Add any notes or details...' : 'Write your post caption here... Include emojis, mentions, and your message'}
-                              rows={3}
-                              className={`w-full mt-2 px-4 py-3 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] resize-none ${isDarkMode ? 'bg-[#161b22] border-[#ffcc29]/20 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
-                            />
-                          </div>
-                          
-                          {/* Campaign-specific fields */}
+                          {/* Campaign-only fields */}
                           {scheduleForm.type === 'campaign' && (
                             <>
-                              {/* Platform & Content Type Row */}
-                              <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                  <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>Platform *</label>
-                                  <select
-                                    value={scheduleForm.platform}
-                                    onChange={(e) => setScheduleForm(prev => ({ ...prev, platform: e.target.value }))}
-                                    className={`w-full mt-2 px-4 py-3 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#161b22] border-[#ffcc29]/20 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
-                                  >
-                                    <option value="instagram">📸 Instagram</option>
-                                    <option value="facebook">📘 Facebook</option>
-                                    <option value="twitter">🐦 Twitter/X</option>
-                                    <option value="linkedin">💼 LinkedIn</option>
-                                    <option value="youtube">▶️ YouTube</option>
-                                  </select>
-                                </div>
-                                <div>
-                                  <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>Content Type</label>
-                                  <select
-                                    value={scheduleForm.contentType}
-                                    onChange={(e) => setScheduleForm(prev => ({ ...prev, contentType: e.target.value as any }))}
-                                    className={`w-full mt-2 px-4 py-3 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#161b22] border-[#ffcc29]/20 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
-                                  >
-                                    <option value="image">🖼️ Image Post</option>
-                                    <option value="video">🎬 Video</option>
-                                    <option value="carousel">📱 Carousel</option>
-                                    <option value="story">⏱️ Story</option>
-                                    <option value="reel">🎞️ Reel/Short</option>
-                                  </select>
-                                </div>
+                              {/* Platform */}
+                              <div>
+                                <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>Platform</label>
+                                <select
+                                  value={scheduleForm.platform}
+                                  onChange={(e) => setScheduleForm(prev => ({ ...prev, platform: e.target.value }))}
+                                  className={`w-full mt-1.5 px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
+                                >
+                                  <option value="instagram">📸 Instagram</option>
+                                  <option value="facebook">📘 Facebook</option>
+                                  <option value="twitter">🐦 Twitter/X</option>
+                                  <option value="linkedin">💼 LinkedIn</option>
+                                  <option value="youtube">▶️ YouTube</option>
+                                </select>
                               </div>
+                              
+                              {/* Image / Poster — 3 Tabs: Upload, AI Generate, From Reference */}
+                              <div>
+                                <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>Image / Poster</label>
+                                <input
+                                  ref={scheduleFileInputRef}
+                                  type="file"
+                                  accept="image/*"
+                                  className="hidden"
+                                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handleScheduleImageSelect(f); }}
+                                />
 
-                              {/* Objective & Priority Row */}
-                              <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                  <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>Campaign Objective</label>
-                                  <select
-                                    value={scheduleForm.objective}
-                                    onChange={(e) => setScheduleForm(prev => ({ ...prev, objective: e.target.value as any }))}
-                                    className={`w-full mt-2 px-4 py-3 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#161b22] border-[#ffcc29]/20 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
-                                  >
-                                    <option value="awareness">🌟 Brand Awareness</option>
-                                    <option value="engagement">💬 Engagement</option>
-                                    <option value="traffic">🔗 Website Traffic</option>
-                                    <option value="conversions">🛒 Conversions</option>
-                                    <option value="leads">📧 Lead Generation</option>
-                                  </select>
+                                {/* Tab switcher */}
+                                <div className="flex gap-1 mt-1.5 mb-3">
+                                  {([
+                                    { key: 'upload' as const, label: 'Upload', icon: <Upload className="w-3.5 h-3.5" /> },
+                                    { key: 'ai' as const, label: 'AI Generate', icon: <Sparkles className="w-3.5 h-3.5" /> },
+                                    { key: 'reference' as const, label: 'From Reference', icon: <ImageIcon className="w-3.5 h-3.5" /> },
+                                  ]).map(tab => (
+                                    <button
+                                      key={tab.key}
+                                      onClick={() => { setImageMode(tab.key); if (tab.key === 'upload') { setGeneratedPoster(null); setPosterContent(''); setPosterEditInstructions(''); } }}
+                                      className={`flex-1 py-2 px-2 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-1.5 ${
+                                        imageMode === tab.key
+                                          ? tab.key === 'upload'
+                                            ? 'bg-[#ffcc29]/20 text-[#ffcc29] border border-[#ffcc29]'
+                                            : 'bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-purple-400 border border-purple-400'
+                                          : `${isDarkMode ? 'bg-[#161b22] text-slate-400 border-slate-700/50' : 'bg-slate-100 text-slate-500 border-slate-200'} border hover:border-[#ffcc29]/50`
+                                      }`}
+                                    >
+                                      {tab.icon} {tab.label}
+                                    </button>
+                                  ))}
                                 </div>
-                                <div>
-                                  <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>Priority</label>
-                                  <select
-                                    value={scheduleForm.priority}
-                                    onChange={(e) => setScheduleForm(prev => ({ ...prev, priority: e.target.value as any }))}
-                                    className={`w-full mt-2 px-4 py-3 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#161b22] border-[#ffcc29]/20 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
-                                  >
-                                    <option value="low">🟢 Low</option>
-                                    <option value="medium">🟡 Medium</option>
-                                    <option value="high">🔴 High</option>
-                                  </select>
-                                </div>
+
+                                {/* ===== UPLOAD TAB ===== */}
+                                {imageMode === 'upload' && (
+                                  <>
+                                    {scheduleImage ? (
+                                      <div className="relative group">
+                                        <img
+                                          src={scheduleImage}
+                                          alt="Upload preview"
+                                          className={`w-full max-h-80 object-contain rounded-xl border ${isDarkMode ? 'border-slate-700/50 bg-[#161b22]' : 'border-slate-200 bg-slate-50'}`}
+                                        />
+                                        <div className="absolute inset-0 bg-black/40 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                                          <button
+                                            onClick={() => scheduleFileInputRef.current?.click()}
+                                            className="px-3 py-2 bg-white/90 text-slate-800 text-xs font-medium rounded-lg hover:bg-white transition-colors flex items-center gap-1.5"
+                                          >
+                                            <RefreshCw className="w-3.5 h-3.5" /> Replace
+                                          </button>
+                                          <button
+                                            onClick={() => { setScheduleImage(null); setScheduleImageFile(null); setGeneratedPoster(null); setPosterContent(''); }}
+                                            className="px-3 py-2 bg-red-500/90 text-white text-xs font-medium rounded-lg hover:bg-red-500 transition-colors flex items-center gap-1.5"
+                                          >
+                                            <Trash2 className="w-3.5 h-3.5" /> Remove
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <div
+                                        ref={scheduleDragRef}
+                                        onClick={() => scheduleFileInputRef.current?.click()}
+                                        onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                                        onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                                        onDrop={handleScheduleDrop}
+                                        className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all hover:border-[#ffcc29] ${isDarkMode ? 'border-slate-700 hover:bg-[#161b22]' : 'border-slate-300 hover:bg-slate-50'}`}
+                                      >
+                                        <Upload className={`w-8 h-8 mx-auto mb-2 ${theme.textMuted}`} />
+                                        <p className={`text-sm font-medium ${theme.text}`}>Upload your poster</p>
+                                        <p className={`text-xs ${theme.textMuted} mt-1`}>Drag & drop or click to browse · Max 10MB</p>
+                                      </div>
+                                    )}
+                                  </>
+                                )}
+
+                                {/* ===== AI GENERATE TAB ===== */}
+                                {imageMode === 'ai' && (
+                                  <div className="space-y-3">
+                                    {/* Generated poster preview */}
+                                    {generatedPoster && (
+                                      <div className="relative group">
+                                        <img
+                                          src={generatedPoster}
+                                          alt="Generated poster"
+                                          className={`w-full max-h-80 object-contain rounded-xl border ${isDarkMode ? 'border-slate-700/50 bg-[#161b22]' : 'border-slate-200 bg-slate-50'}`}
+                                        />
+                                        <span className="absolute top-2 left-2 bg-purple-500/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-md">AI Generated</span>
+                                        <div className="absolute inset-0 bg-black/40 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                          <button
+                                            onClick={() => { setGeneratedPoster(null); setPosterContent(''); setPosterEditInstructions(''); }}
+                                            className="px-3 py-2 bg-red-500/90 text-white text-xs font-medium rounded-lg hover:bg-red-500 transition-colors flex items-center gap-1.5"
+                                          >
+                                            <Trash2 className="w-3.5 h-3.5" /> Remove
+                                          </button>
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* Prompt input */}
+                                    <div>
+                                      <div className="flex items-center gap-2 mb-1.5">
+                                        <Sparkles className={`w-3.5 h-3.5 ${generatedPoster ? 'text-purple-400' : theme.textMuted}`} />
+                                        <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>
+                                          {generatedPoster ? 'Refine with a prompt' : 'Describe your poster'}
+                                        </label>
+                                      </div>
+                                      <div className="flex gap-2">
+                                        <textarea
+                                          value={generatedPoster ? posterEditInstructions : posterContent}
+                                          onChange={(e) => generatedPoster ? setPosterEditInstructions(e.target.value) : setPosterContent(e.target.value)}
+                                          placeholder={generatedPoster
+                                            ? 'Tell AI what to change... e.g., Make the title bigger, use blue theme'
+                                            : 'Describe what poster to create... e.g., Dark-themed marketing poster for a ChatGPT workshop'
+                                          }
+                                          rows={2}
+                                          className={`flex-1 px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:border-purple-400 resize-none ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
+                                          onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && !e.shiftKey) {
+                                              e.preventDefault();
+                                              if (generatedPoster) {
+                                                if (posterEditInstructions.trim()) handleEditPoster();
+                                              } else {
+                                                if (posterContent.trim()) handleGeneratePoster();
+                                              }
+                                            }
+                                          }}
+                                        />
+                                        <button
+                                          onClick={generatedPoster ? handleEditPoster : handleGeneratePoster}
+                                          disabled={posterGenerating || (generatedPoster ? !posterEditInstructions.trim() : !posterContent.trim())}
+                                          className={`self-end p-3 rounded-xl transition-all flex items-center justify-center ${
+                                            (generatedPoster ? posterEditInstructions.trim() : posterContent.trim())
+                                              ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600 shadow-md'
+                                              : `${isDarkMode ? 'bg-slate-800 text-slate-500' : 'bg-slate-200 text-slate-400'} cursor-not-allowed`
+                                          }`}
+                                          title={generatedPoster ? 'Refine poster' : 'Generate poster'}
+                                        >
+                                          {posterGenerating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+                                        </button>
+                                      </div>
+                                    </div>
+
+                                    {/* Logo selector */}
+                                    <div>
+                                      <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>Brand Logo</label>
+                                      <div className="flex gap-2 mt-1.5 flex-wrap">
+                                        <button
+                                          onClick={() => setCalendarSelectedLogo(null)}
+                                          className={`w-14 h-14 rounded-xl border-2 flex items-center justify-center text-[10px] font-medium transition-all ${
+                                            calendarSelectedLogo === null
+                                              ? 'border-[#ffcc29] bg-[#ffcc29]/10 text-[#ffcc29]'
+                                              : isDarkMode ? 'border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-500' : 'border-gray-200 bg-gray-50 text-slate-500 hover:border-gray-300'
+                                          }`}
+                                        >
+                                          No Logo
+                                        </button>
+                                        {calendarLogos.map(logo => (
+                                          <button
+                                            key={logo._id}
+                                            onClick={() => setCalendarSelectedLogo(calendarSelectedLogo === logo.url ? null : logo.url)}
+                                            className={`relative w-14 h-14 rounded-xl border-2 p-1.5 flex items-center justify-center transition-all ${
+                                              calendarSelectedLogo === logo.url
+                                                ? 'border-[#ffcc29] bg-[#ffcc29]/10 scale-105'
+                                                : isDarkMode ? 'border-slate-700 bg-slate-800/50 hover:border-slate-500' : 'border-gray-200 bg-gray-50 hover:border-gray-300'
+                                            }`}
+                                          >
+                                            <img src={logo.url} alt={logo.name} className="max-w-full max-h-full object-contain" />
+                                            {calendarSelectedLogo === logo.url && (
+                                              <div className="absolute -top-1 -right-1 w-4 h-4 bg-[#ffcc29] rounded-full flex items-center justify-center">
+                                                <svg className="w-2.5 h-2.5 text-[#070A12]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                                </svg>
+                                              </div>
+                                            )}
+                                          </button>
+                                        ))}
+                                        {calendarLogos.length === 0 && calendarLogosLoaded && (
+                                          <p className={`text-xs ${theme.textMuted} self-center ml-1`}>No logos uploaded yet</p>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    {/* Aspect ratio picker */}
+                                    <div>
+                                      <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>Aspect Ratio</label>
+                                      <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                                        {[
+                                          { value: '1:1', desc: 'Square' },
+                                          { value: '4:5', desc: 'Portrait' },
+                                          { value: '9:16', desc: 'Story' },
+                                          { value: '16:9', desc: 'Landscape' },
+                                          { value: '3:4', desc: 'Portrait' },
+                                          { value: '4:3', desc: 'Landscape' },
+                                        ].map(ratio => (
+                                          <button
+                                            key={ratio.value}
+                                            onClick={() => setCalendarAspectRatio(ratio.value)}
+                                            className={`px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all flex flex-col items-center ${
+                                              calendarAspectRatio === ratio.value
+                                                ? 'border-[#ffcc29] bg-[#ffcc29]/10 text-[#ffcc29]'
+                                                : isDarkMode ? 'border-slate-700 text-slate-400 hover:border-slate-500' : 'border-gray-200 text-slate-500 hover:border-gray-300'
+                                            }`}
+                                          >
+                                            <span className="font-bold">{ratio.value}</span>
+                                            <span className={`text-[9px] ${calendarAspectRatio === ratio.value ? 'text-[#ffcc29]/70' : theme.textMuted}`}>{ratio.desc}</span>
+                                          </button>
+                                        ))}
+                                      </div>
+                                    </div>
+
+                                    {!generatedPoster && (
+                                      <p className={`text-[10px] ${theme.textMuted}`}>AI generates a poster from your description · Press Enter to send</p>
+                                    )}
+                                  </div>
+                                )}
+
+                                {/* ===== FROM REFERENCE TAB ===== */}
+                                {imageMode === 'reference' && (
+                                  <div className="space-y-3">
+                                    {/* Reference image upload */}
+                                    {scheduleImage ? (
+                                      <div className="relative group">
+                                        <img
+                                          src={generatedPoster || scheduleImage}
+                                          alt={generatedPoster ? 'Generated poster' : 'Reference image'}
+                                          className={`w-full max-h-80 object-contain rounded-xl border ${isDarkMode ? 'border-slate-700/50 bg-[#161b22]' : 'border-slate-200 bg-slate-50'}`}
+                                        />
+                                        {generatedPoster && (
+                                          <span className="absolute top-2 left-2 bg-purple-500/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-md">AI Generated</span>
+                                        )}
+                                        {!generatedPoster && (
+                                          <span className={`absolute top-2 left-2 ${isDarkMode ? 'bg-slate-800/90 text-slate-300' : 'bg-white/90 text-slate-600'} text-[10px] font-bold px-2 py-0.5 rounded-md`}>Reference</span>
+                                        )}
+                                        <div className="absolute inset-0 bg-black/40 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                                          <button
+                                            onClick={() => scheduleFileInputRef.current?.click()}
+                                            className="px-3 py-2 bg-white/90 text-slate-800 text-xs font-medium rounded-lg hover:bg-white transition-colors flex items-center gap-1.5"
+                                          >
+                                            <RefreshCw className="w-3.5 h-3.5" /> Replace
+                                          </button>
+                                          <button
+                                            onClick={() => { setScheduleImage(null); setScheduleImageFile(null); setGeneratedPoster(null); setPosterContent(''); setPosterEditInstructions(''); }}
+                                            className="px-3 py-2 bg-red-500/90 text-white text-xs font-medium rounded-lg hover:bg-red-500 transition-colors flex items-center gap-1.5"
+                                          >
+                                            <Trash2 className="w-3.5 h-3.5" /> Remove
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <div
+                                        ref={scheduleDragRef}
+                                        onClick={() => scheduleFileInputRef.current?.click()}
+                                        onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                                        onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                                        onDrop={handleScheduleDrop}
+                                        className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all hover:border-purple-400 ${isDarkMode ? 'border-slate-700 hover:bg-[#161b22]' : 'border-slate-300 hover:bg-slate-50'}`}
+                                      >
+                                        <ImageIcon className={`w-8 h-8 mx-auto mb-2 ${theme.textMuted}`} />
+                                        <p className={`text-sm font-medium ${theme.text}`}>Upload a reference image</p>
+                                        <p className={`text-xs ${theme.textMuted} mt-1`}>AI will create a new poster inspired by this · Max 10MB</p>
+                                      </div>
+                                    )}
+
+                                    {/* Prompt input */}
+                                    <div>
+                                      <div className="flex items-center gap-2 mb-1.5">
+                                        <Sparkles className={`w-3.5 h-3.5 ${generatedPoster ? 'text-purple-400' : theme.textMuted}`} />
+                                        <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>
+                                          {generatedPoster ? 'Refine with a prompt' : 'Describe your poster'}
+                                        </label>
+                                      </div>
+                                      <div className="flex gap-2">
+                                        <textarea
+                                          value={generatedPoster ? posterEditInstructions : posterContent}
+                                          onChange={(e) => generatedPoster ? setPosterEditInstructions(e.target.value) : setPosterContent(e.target.value)}
+                                          placeholder={generatedPoster
+                                            ? 'Tell AI what to change... e.g., Make the title bigger, use blue theme, add my phone number'
+                                            : 'Tell AI what poster to create from this reference... e.g., Dark-themed marketing poster for a ChatGPT workshop'
+                                          }
+                                          rows={2}
+                                          className={`flex-1 px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:border-purple-400 resize-none ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
+                                          onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && !e.shiftKey) {
+                                              e.preventDefault();
+                                              if (generatedPoster) {
+                                                if (posterEditInstructions.trim()) handleEditPoster();
+                                              } else {
+                                                if (posterContent.trim() && scheduleImage) handleGeneratePoster();
+                                              }
+                                            }
+                                          }}
+                                        />
+                                        <button
+                                          onClick={generatedPoster ? handleEditPoster : handleGeneratePoster}
+                                          disabled={posterGenerating || (generatedPoster ? !posterEditInstructions.trim() : (!posterContent.trim() || !scheduleImage))}
+                                          className={`self-end p-3 rounded-xl transition-all flex items-center justify-center ${
+                                            (generatedPoster ? posterEditInstructions.trim() : (posterContent.trim() && scheduleImage))
+                                              ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600 shadow-md'
+                                              : `${isDarkMode ? 'bg-slate-800 text-slate-500' : 'bg-slate-200 text-slate-400'} cursor-not-allowed`
+                                          }`}
+                                          title={generatedPoster ? 'Refine poster' : 'Generate poster'}
+                                        >
+                                          {posterGenerating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+                                        </button>
+                                      </div>
+                                    </div>
+
+                                    {/* Logo selector */}
+                                    <div>
+                                      <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>Brand Logo</label>
+                                      <div className="flex gap-2 mt-1.5 flex-wrap">
+                                        <button
+                                          onClick={() => setCalendarSelectedLogo(null)}
+                                          className={`w-14 h-14 rounded-xl border-2 flex items-center justify-center text-[10px] font-medium transition-all ${
+                                            calendarSelectedLogo === null
+                                              ? 'border-[#ffcc29] bg-[#ffcc29]/10 text-[#ffcc29]'
+                                              : isDarkMode ? 'border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-500' : 'border-gray-200 bg-gray-50 text-slate-500 hover:border-gray-300'
+                                          }`}
+                                        >
+                                          No Logo
+                                        </button>
+                                        {calendarLogos.map(logo => (
+                                          <button
+                                            key={logo._id}
+                                            onClick={() => setCalendarSelectedLogo(calendarSelectedLogo === logo.url ? null : logo.url)}
+                                            className={`relative w-14 h-14 rounded-xl border-2 p-1.5 flex items-center justify-center transition-all ${
+                                              calendarSelectedLogo === logo.url
+                                                ? 'border-[#ffcc29] bg-[#ffcc29]/10 scale-105'
+                                                : isDarkMode ? 'border-slate-700 bg-slate-800/50 hover:border-slate-500' : 'border-gray-200 bg-gray-50 hover:border-gray-300'
+                                            }`}
+                                          >
+                                            <img src={logo.url} alt={logo.name} className="max-w-full max-h-full object-contain" />
+                                            {calendarSelectedLogo === logo.url && (
+                                              <div className="absolute -top-1 -right-1 w-4 h-4 bg-[#ffcc29] rounded-full flex items-center justify-center">
+                                                <svg className="w-2.5 h-2.5 text-[#070A12]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                                </svg>
+                                              </div>
+                                            )}
+                                          </button>
+                                        ))}
+                                        {calendarLogos.length === 0 && calendarLogosLoaded && (
+                                          <p className={`text-xs ${theme.textMuted} self-center ml-1`}>No logos uploaded yet</p>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    {/* Aspect ratio picker */}
+                                    <div>
+                                      <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>Aspect Ratio</label>
+                                      <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                                        {[
+                                          { value: '1:1', desc: 'Square' },
+                                          { value: '4:5', desc: 'Portrait' },
+                                          { value: '9:16', desc: 'Story' },
+                                          { value: '16:9', desc: 'Landscape' },
+                                          { value: '3:4', desc: 'Portrait' },
+                                          { value: '4:3', desc: 'Landscape' },
+                                        ].map(ratio => (
+                                          <button
+                                            key={ratio.value}
+                                            onClick={() => setCalendarAspectRatio(ratio.value)}
+                                            className={`px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all flex flex-col items-center ${
+                                              calendarAspectRatio === ratio.value
+                                                ? 'border-[#ffcc29] bg-[#ffcc29]/10 text-[#ffcc29]'
+                                                : isDarkMode ? 'border-slate-700 text-slate-400 hover:border-slate-500' : 'border-gray-200 text-slate-500 hover:border-gray-300'
+                                            }`}
+                                          >
+                                            <span className="font-bold">{ratio.value}</span>
+                                            <span className={`text-[9px] ${calendarAspectRatio === ratio.value ? 'text-[#ffcc29]/70' : theme.textMuted}`}>{ratio.desc}</span>
+                                          </button>
+                                        ))}
+                                      </div>
+                                    </div>
+
+                                    {!generatedPoster && (
+                                      <p className={`text-[10px] ${theme.textMuted}`}>AI creates a new poster inspired by your reference image · Press Enter to send</p>
+                                    )}
+                                  </div>
+                                )}
                               </div>
-
-                              {/* Hashtags */}
+                              
+                              {/* Caption with AI Generate Button */}
+                              <div>
+                                <div className="flex items-center justify-between">
+                                  <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>Caption</label>
+                                  <button 
+                                    onClick={handleAIGenerateCaption}
+                                    disabled={aiGenerating || (!scheduleImage && !generatedPoster)}
+                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                                      (scheduleImage || generatedPoster)
+                                        ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600 shadow-sm' 
+                                        : `${isDarkMode ? 'bg-slate-800 text-slate-500' : 'bg-slate-100 text-slate-400'} cursor-not-allowed`
+                                    }`}
+                                    title={(!scheduleImage && !generatedPoster) ? 'Upload an image first to generate AI caption' : 'Generate caption & hashtags from image'}
+                                  >
+                                    {aiGenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wand2 className="w-3.5 h-3.5" />}
+                                    {aiGenerating ? 'Generating...' : 'AI Generate'}
+                                  </button>
+                                </div>
+                                <textarea
+                                  value={scheduleForm.description}
+                                  onChange={(e) => setScheduleForm(prev => ({ ...prev, description: e.target.value }))}
+                                  placeholder="Write your caption or let AI generate one from your image..."
+                                  rows={3}
+                                  className={`w-full mt-1.5 px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] resize-none ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
+                                />
+                              </div>
+                              
+                              {/* Hashtags (AI-filled or manual edit) */}
                               <div>
                                 <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>Hashtags</label>
                                 <input
                                   type="text"
                                   value={scheduleForm.hashtags}
                                   onChange={(e) => setScheduleForm(prev => ({ ...prev, hashtags: e.target.value }))}
-                                  placeholder="#marketing, #socialmedia, #business"
-                                  className={`w-full mt-2 px-4 py-3 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#161b22] border-[#ffcc29]/20 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
+                                  placeholder={aiGenerating ? 'Generating...' : '#marketing #brand #growth'}
+                                  className={`w-full mt-1.5 px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
                                 />
-                                <p className={`text-[10px] mt-1 ${theme.textMuted}`}>Separate hashtags with commas</p>
-                              </div>
-
-                              {/* Call to Action */}
-                              <div>
-                                <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>Call to Action</label>
-                                <select
-                                  value={scheduleForm.callToAction}
-                                  onChange={(e) => setScheduleForm(prev => ({ ...prev, callToAction: e.target.value }))}
-                                  className={`w-full mt-2 px-4 py-3 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#161b22] border-[#ffcc29]/20 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
-                                >
-                                  <option value="">None</option>
-                                  <option value="learn_more">Learn More</option>
-                                  <option value="shop_now">Shop Now</option>
-                                  <option value="sign_up">Sign Up</option>
-                                  <option value="contact_us">Contact Us</option>
-                                  <option value="book_now">Book Now</option>
-                                  <option value="download">Download</option>
-                                  <option value="get_quote">Get Quote</option>
-                                  <option value="watch_more">Watch More</option>
-                                </select>
-                              </div>
-
-                              {/* Budget & Target Audience Row */}
-                              <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                  <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>Budget (USD)</label>
-                                  <div className="relative mt-2">
-                                    <span className={`absolute left-4 top-1/2 -translate-y-1/2 ${theme.textMuted}`}>$</span>
-                                    <input
-                                      type="number"
-                                      value={scheduleForm.budget}
-                                      onChange={(e) => setScheduleForm(prev => ({ ...prev, budget: e.target.value }))}
-                                      placeholder="0.00"
-                                      className={`w-full pl-8 pr-4 py-3 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#161b22] border-[#ffcc29]/20 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
-                                    />
-                                  </div>
-                                </div>
-                                <div>
-                                  <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>Target Audience</label>
-                                  <input
-                                    type="text"
-                                    value={scheduleForm.targetAudience}
-                                    onChange={(e) => setScheduleForm(prev => ({ ...prev, targetAudience: e.target.value }))}
-                                    placeholder="e.g., 18-35, Females"
-                                    className={`w-full mt-2 px-4 py-3 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#161b22] border-[#ffcc29]/20 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
-                                  />
-                                </div>
-                              </div>
-
-                              {/* Additional Notes */}
-                              <div>
-                                <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>Internal Notes</label>
-                                <textarea
-                                  value={scheduleForm.notes}
-                                  onChange={(e) => setScheduleForm(prev => ({ ...prev, notes: e.target.value }))}
-                                  placeholder="Any internal notes or reminders for this campaign..."
-                                  rows={2}
-                                  className={`w-full mt-2 px-4 py-3 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] resize-none ${isDarkMode ? 'bg-[#161b22] border-[#ffcc29]/20 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
-                                />
+                                <p className={`text-[10px] mt-1 ${theme.textMuted}`}>Auto-generated by AI or edit manually</p>
                               </div>
                             </>
                           )}
                           
-                          {/* Reminder offset */}
+                          {/* Reminder-only fields */}
                           {scheduleForm.type === 'reminder' && (
-                            <div>
-                              <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>Remind me</label>
-                              <select
-                                value={scheduleForm.reminderOffset}
-                                onChange={(e) => setScheduleForm(prev => ({ ...prev, reminderOffset: parseInt(e.target.value) }))}
-                                className={`w-full mt-2 px-4 py-3 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#161b22] border-[#ffcc29]/20 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
-                              >
-                                <option value={5}>5 minutes before</option>
-                                <option value={15}>15 minutes before</option>
-                                <option value={30}>30 minutes before</option>
-                                <option value={60}>1 hour before</option>
-                                <option value={1440}>1 day before</option>
-                              </select>
-                            </div>
+                            <>
+                              <div>
+                                <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>Notes</label>
+                                <textarea
+                                  value={scheduleForm.description}
+                                  onChange={(e) => setScheduleForm(prev => ({ ...prev, description: e.target.value }))}
+                                  placeholder="Add any notes or details..."
+                                  rows={2}
+                                  className={`w-full mt-1.5 px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] resize-none ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
+                                />
+                              </div>
+                              <div>
+                                <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>Remind me</label>
+                                <select
+                                  value={scheduleForm.reminderOffset}
+                                  onChange={(e) => setScheduleForm(prev => ({ ...prev, reminderOffset: parseInt(e.target.value) }))}
+                                  className={`w-full mt-1.5 px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
+                                >
+                                  <option value={5}>5 minutes before</option>
+                                  <option value={15}>15 minutes before</option>
+                                  <option value={30}>30 minutes before</option>
+                                  <option value={60}>1 hour before</option>
+                                  <option value={1440}>1 day before</option>
+                                </select>
+                              </div>
+                            </>
                           )}
                         </div>
                         
-                        {/* Footer with actions */}
-                        <div className={`sticky bottom-0 ${isDarkMode ? 'bg-[#0d1117] border-[#ffcc29]/20' : 'bg-white border-slate-200'} border-t px-6 py-4`}>
+                        {/* Footer */}
+                        <div className={`sticky bottom-0 ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-slate-200'} border-t px-6 py-4`}>
                             <div className="flex gap-3">
+                                {scheduleForm.type === 'campaign' && (
+                                  <button 
+                                    onClick={() => {
+                                      setCalendarPreviewData({
+                                        platform: scheduleForm.platform,
+                                        imageUrl: generatedPoster || scheduleImage || null,
+                                        caption: scheduleForm.description,
+                                        hashtags: scheduleForm.hashtags ? scheduleForm.hashtags.split(',').map((h: string) => h.trim()) : []
+                                      });
+                                      setShowCalendarPreview(true);
+                                    }}
+                                    className={`px-4 py-3 border ${isDarkMode ? 'border-slate-700/50 text-slate-300 hover:border-[#ffcc29] hover:text-[#ffcc29]' : 'border-slate-200 text-slate-600 hover:border-[#ffcc29] hover:text-[#b8941a]'} text-sm font-semibold rounded-xl transition-colors flex items-center gap-2`}
+                                  >
+                                    <Eye className="w-4 h-4" /> Preview
+                                  </button>
+                                )}
                                 <button 
                                   onClick={isEditMode ? handleUpdateCampaign : handleCreateEvent}
                                   disabled={!scheduleForm.title.trim() || loading}
                                   className="flex-1 py-3 bg-[#ffcc29] hover:bg-[#e6b825] disabled:bg-slate-300 disabled:cursor-not-allowed text-[#070A12] text-sm font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
                                 >
                                     {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                                    {isEditMode ? 'Update Campaign' : (scheduleForm.type === 'reminder' ? 'Set Reminder' : 'Schedule Campaign')}
+                                    {isEditMode ? 'Update' : (scheduleForm.type === 'reminder' ? 'Set Reminder' : 'Schedule Post')}
                                 </button>
                                 <button 
                                   onClick={() => { setShowScheduleModal(false); setIsEditMode(false); setEditingCampaign(null); }} 
-                                  className={`px-5 py-3 border ${isDarkMode ? 'border-[#ffcc29]/20 text-slate-400 hover:bg-[#161b22]' : 'border-slate-200 text-slate-600 hover:bg-slate-50'} text-sm font-semibold rounded-xl transition-colors`}
+                                  className={`px-5 py-3 border ${isDarkMode ? 'border-slate-700/50 text-slate-400 hover:bg-[#161b22]' : 'border-slate-200 text-slate-600 hover:bg-slate-50'} text-sm font-semibold rounded-xl transition-colors`}
                                 >
                                     Cancel
                                 </button>
@@ -2807,6 +4642,507 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                         )}
                     </div>
                 </div>
+            )}
+            
+            {/* Selected Reminder Modal */}
+            {selectedReminder && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => setSelectedReminder(null)}>
+                    <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-between items-start mb-4">
+                            <div>
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded uppercase bg-purple-100 text-purple-700">
+                                    Reminder
+                                </span>
+                                <h3 className="text-lg font-bold text-[#070A12] mt-2">{selectedReminder.title || selectedReminder.name}</h3>
+                            </div>
+                            <button onClick={() => setSelectedReminder(null)} className="p-1 hover:bg-slate-100 rounded-lg">
+                                <Plus className="w-5 h-5 text-slate-400 rotate-45" />
+                            </button>
+                        </div>
+                        <div className="space-y-3 text-sm">
+                            <div className="flex items-center gap-3 text-slate-600">
+                                <CalendarIcon className="w-4 h-4 text-slate-400" />
+                                <span>
+                                  {selectedReminder.scheduledFor 
+                                    ? new Date(selectedReminder.scheduledFor).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) 
+                                    : selectedReminder.time 
+                                    ? new Date(selectedReminder.time).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) 
+                                    : 'No date set'}
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-3 text-slate-600">
+                                <Clock className="w-4 h-4 text-slate-400" />
+                                <span>
+                                  {selectedReminder.scheduledFor 
+                                    ? new Date(selectedReminder.scheduledFor).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+                                    : selectedReminder.time 
+                                    ? new Date(selectedReminder.time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+                                    : 'No time set'}
+                                </span>
+                            </div>
+                            {selectedReminder.platform && (
+                              <div className="flex items-center gap-3 text-slate-600">
+                                  <Activity className="w-4 h-4 text-slate-400" />
+                                  <span className="capitalize">{selectedReminder.platform}</span>
+                              </div>
+                            )}
+                            
+                            {/* Description if available */}
+                            {selectedReminder.description && (
+                              <div className="mt-3 p-3 bg-purple-50 rounded-lg">
+                                <p className="text-xs font-semibold text-purple-500 uppercase mb-1">Description</p>
+                                <p className="text-sm text-slate-600">{selectedReminder.description}</p>
+                              </div>
+                            )}
+                        </div>
+                        
+                        {/* Delete Confirmation */}
+                        {showDeleteReminderConfirm ? (
+                          <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+                            <p className="text-sm text-red-800 font-medium mb-3">Are you sure you want to delete this reminder? This action cannot be undone.</p>
+                            <div className="flex gap-2">
+                              <button 
+                                onClick={handleDeleteReminder}
+                                disabled={deleteReminderLoading}
+                                className="flex-1 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-300 text-white text-sm font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
+                              >
+                                {deleteReminderLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                                Yes, Delete
+                              </button>
+                              <button 
+                                onClick={() => setShowDeleteReminderConfirm(false)} 
+                                className="flex-1 py-2 bg-white border border-slate-200 text-slate-600 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex gap-3 mt-6">
+                            <button 
+                              onClick={() => setShowDeleteReminderConfirm(true)}
+                              className="flex-1 py-2 bg-red-50 hover:bg-red-100 text-red-600 text-sm font-semibold rounded-lg transition-colors flex items-center justify-center gap-2 border border-red-200"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                              Delete
+                            </button>
+                            <button onClick={() => { setSelectedReminder(null); setShowDeleteReminderConfirm(false); }} className="flex-1 py-2 border border-slate-200 text-slate-600 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors">
+                              Close
+                            </button>
+                          </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* Holiday/Event Modal */}
+            {selectedHoliday && !showEventPostCreator && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => setSelectedHoliday(null)}>
+                    <div className={`${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white'} border rounded-xl shadow-xl max-w-md w-full p-6 animate-in zoom-in-95 duration-200`} onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-between items-start mb-4">
+                            <div>
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${
+                                    selectedHoliday.type === 'national' ? 'bg-orange-100 text-orange-700' :
+                                    selectedHoliday.type === 'festival' ? 'bg-pink-100 text-pink-700' :
+                                    selectedHoliday.type === 'marketing' ? 'bg-green-100 text-green-700' :
+                                    'bg-blue-100 text-blue-700'
+                                }`}>
+                                    {selectedHoliday.type === 'national' ? 'National Holiday' :
+                                     selectedHoliday.type === 'festival' ? 'Festival' :
+                                     selectedHoliday.type === 'marketing' ? 'Marketing Day' : 'International Day'}
+                                </span>
+                                <h3 className={`text-lg font-bold ${theme.text} mt-2 flex items-center gap-2`}>
+                                    <span className="text-2xl">{selectedHoliday.emoji}</span>
+                                    {selectedHoliday.name}
+                                </h3>
+                            </div>
+                            <button onClick={() => setSelectedHoliday(null)} className={`p-1 ${isDarkMode ? 'hover:bg-[#161b22]' : 'hover:bg-slate-100'} rounded-lg`}>
+                                <Plus className={`w-5 h-5 ${theme.textMuted} rotate-45`} />
+                            </button>
+                        </div>
+                        <div className="space-y-3 text-sm">
+                            <div className={`flex items-center gap-3 ${theme.textSecondary}`}>
+                                <CalendarIcon className="w-4 h-4" />
+                                <span>{selectedHoliday.date ? new Date(selectedHoliday.date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) : 'Upcoming'}</span>
+                            </div>
+                            
+                            {/* Description */}
+                            <div className={`p-3 rounded-lg ${isDarkMode ? 'bg-[#161b22]' : 'bg-slate-50'}`}>
+                                <p className={`text-xs font-semibold uppercase mb-1 ${theme.textMuted}`}>About this day</p>
+                                <p className={`text-sm ${theme.text}`}>{selectedHoliday.description || `Celebrate ${selectedHoliday.name} with your audience!`}</p>
+                            </div>
+                            
+                            {/* Marketing Tip */}
+                            {selectedHoliday.marketingTip && (
+                              <div className={`p-3 rounded-lg bg-[#ffcc29]/10 border border-[#ffcc29]/30`}>
+                                <p className="text-xs font-semibold uppercase mb-1 text-[#ffcc29]">💡 Marketing Tip</p>
+                                <p className={`text-sm ${theme.text}`}>{selectedHoliday.marketingTip}</p>
+                              </div>
+                            )}
+                        </div>
+                        
+                        {/* Create Post Button */}
+                        <div className="mt-6">
+                            <button 
+                              onClick={async () => {
+                                setShowEventPostCreator(true);
+                                setEventPostLoading(true);
+                                setEventGeneratedPost(null);
+                                
+                                try {
+                                  const result = await apiService.generateEventPost(selectedHoliday);
+                                  if (result.success && result.post) {
+                                    setEventGeneratedPost(result.post);
+                                    setEventPostCaption(result.post.caption || '');
+                                    setEventPostHashtags(result.post.hashtags || []);
+                                    setEventPostImageUrl(result.post.generatedImageUrl || '');
+                                    setEventPostImagePrompt(result.post.imagePrompt || '');
+                                    // Set default schedule date to the event date
+                                    if (selectedHoliday.date) {
+                                      setEventScheduleDate(selectedHoliday.date.split('T')[0]);
+                                    }
+                                  }
+                                } catch (error) {
+                                  console.error('Failed to generate event post:', error);
+                                } finally {
+                                  setEventPostLoading(false);
+                                }
+                              }}
+                              className="w-full py-3 bg-[#ffcc29] hover:bg-[#e6b825] text-black font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
+                            >
+                              <Sparkles className="w-5 h-5" />
+                              Create Post for This Event
+                              <span className="flex items-center gap-0.5 text-xs bg-black/10 px-1.5 py-0.5 rounded-full"><Zap className="w-3 h-3" />7</span>
+                            </button>
+                            <button 
+                              onClick={() => setSelectedHoliday(null)} 
+                              className={`w-full mt-2 py-2 border ${theme.border} ${theme.textSecondary} text-sm font-semibold rounded-lg ${isDarkMode ? 'hover:bg-[#161b22]' : 'hover:bg-slate-50'} transition-colors`}
+                            >
+                              Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Event Post Creator Modal */}
+            {showEventPostCreator && selectedHoliday && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => { setShowEventPostCreator(false); setSelectedHoliday(null); }}>
+                    <div className={`${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white'} border rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200`} onClick={e => e.stopPropagation()}>
+                        {/* Header */}
+                        <div className={`sticky top-0 z-10 ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-slate-200'} border-b px-6 py-4 flex justify-between items-center`}>
+                            <div className="flex items-center gap-3">
+                                <span className="text-3xl">{selectedHoliday.emoji}</span>
+                                <div>
+                                    <h2 className={`text-xl font-bold ${theme.text}`}>Create Post for {selectedHoliday.name}</h2>
+                                    <p className={`text-sm ${theme.textMuted}`}>AI-generated content ready for your review</p>
+                                </div>
+                            </div>
+                            <button onClick={() => { setShowEventPostCreator(false); setSelectedHoliday(null); }} className={`p-2 ${isDarkMode ? 'hover:bg-[#161b22]' : 'hover:bg-slate-100'} rounded-lg`}>
+                                <Plus className={`w-5 h-5 ${theme.textMuted} rotate-45`} />
+                            </button>
+                        </div>
+                        
+                        {eventPostLoading ? (
+                            <div className="flex flex-col items-center justify-center py-16">
+                                <Loader2 className="w-12 h-12 text-[#ffcc29] animate-spin mb-4" />
+                                <p className={`text-lg font-medium ${theme.text}`}>Generating your post...</p>
+                                <p className={`text-sm ${theme.textMuted}`}>Creating caption, image, and suggestions</p>
+                            </div>
+                        ) : eventGeneratedPost ? (
+                            <div className="p-6 space-y-6">
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                    {/* Left Column: Image */}
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className={`text-sm font-semibold ${theme.text} mb-2 block`}>Generated Image</label>
+                                            <div className={`relative aspect-square rounded-xl overflow-hidden ${isDarkMode ? 'bg-[#161b22]' : 'bg-slate-100'}`}>
+                                                {eventPostImageUrl ? (
+                                                    <img 
+                                                        src={eventPostImageUrl} 
+                                                        alt="Generated post" 
+                                                        className="w-full h-full object-cover"
+                                                    />
+                                                ) : (
+                                                    <div className="w-full h-full flex items-center justify-center">
+                                                        <ImageIcon className={`w-16 h-16 ${theme.textMuted}`} />
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                        
+                                        {/* Image Refinement */}
+                                        <div className={`p-4 rounded-lg ${isDarkMode ? 'bg-[#161b22]' : 'bg-slate-50'}`}>
+                                            <label className={`text-xs font-semibold uppercase ${theme.textMuted} mb-2 block`}>Edit Image with AI</label>
+                                            <div className="flex gap-2">
+                                                <input
+                                                    type="text"
+                                                    value={eventImageRefinementPrompt}
+                                                    onChange={(e) => setEventImageRefinementPrompt(e.target.value)}
+                                                    placeholder="E.g., Add more festive colors, include brand logo..."
+                                                    className={`flex-1 px-3 py-2 text-sm rounded-lg ${isDarkMode ? 'bg-[#0d1117] text-white border-slate-700/50' : 'bg-white text-slate-900 border-slate-200'} border focus:outline-none focus:ring-2 focus:ring-[#ffcc29]`}
+                                                />
+                                                <button 
+                                                    onClick={async () => {
+                                                        if (!eventImageRefinementPrompt.trim() || !eventPostImagePrompt) return;
+                                                        setEventRefiningImage(true);
+                                                        try {
+                                                            const result = await apiService.refineImage(eventPostImagePrompt, eventImageRefinementPrompt, eventGeneratedPost.imageStyle, eventPostImageUrl);
+                                                            if (result.success && result.imageUrl) {
+                                                                setEventPostImageUrl(result.imageUrl);
+                                                                setEventImageRefinementPrompt('');
+                                                            }
+                                                        } catch (error) {
+                                                            console.error('Failed to refine image:', error);
+                                                        } finally {
+                                                            setEventRefiningImage(false);
+                                                        }
+                                                    }}
+                                                    disabled={eventRefiningImage || !eventImageRefinementPrompt.trim()}
+                                                    className="px-4 py-2 bg-[#ffcc29] hover:bg-[#e6b825] disabled:bg-gray-400 text-black text-sm font-semibold rounded-lg transition-colors flex items-center gap-1"
+                                                >
+                                                    {eventRefiningImage ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
+                                                    Refine
+                                                </button>
+                                            </div>
+                                        </div>
+                                        
+                                        {/* Trending Audio */}
+                                        {eventGeneratedPost.trendingAudio && eventGeneratedPost.trendingAudio.length > 0 && (
+                                            <div className={`p-4 rounded-lg ${isDarkMode ? 'bg-[#161b22]' : 'bg-slate-50'}`}>
+                                                <label className={`text-xs font-semibold uppercase ${theme.textMuted} mb-2 block flex items-center gap-1`}>
+                                                    <Music className="w-3 h-3" /> Trending Audio Suggestions
+                                                </label>
+                                                <div className="space-y-2">
+                                                    {eventGeneratedPost.trendingAudio.slice(0, 3).map((audio: any, idx: number) => (
+                                                        <div key={idx} className={`flex items-center justify-between p-2 rounded-lg ${isDarkMode ? 'bg-[#0d1117]' : 'bg-white'}`}>
+                                                            <div>
+                                                                <p className={`text-sm font-medium ${theme.text}`}>{audio.name}</p>
+                                                                <p className={`text-xs ${theme.textMuted}`}>{audio.artist} • {audio.mood}</p>
+                                                            </div>
+                                                            <span className={`text-xs px-2 py-0.5 rounded ${audio.platform === 'instagram' ? 'bg-pink-500/20 text-pink-500' : 'bg-blue-500/20 text-blue-500'}`}>
+                                                                {audio.platform}
+                                                            </span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                    
+                                    {/* Right Column: Caption & Details */}
+                                    <div className="space-y-4">
+                                        {/* Caption */}
+                                        <div>
+                                            <label className={`text-sm font-semibold ${theme.text} mb-2 block`}>Caption</label>
+                                            <textarea
+                                                value={eventPostCaption}
+                                                onChange={(e) => setEventPostCaption(e.target.value)}
+                                                rows={8}
+                                                className={`w-full px-4 py-3 rounded-lg text-sm ${isDarkMode ? 'bg-[#161b22] text-white border-slate-700/50' : 'bg-slate-50 text-slate-900 border-slate-200'} border focus:outline-none focus:ring-2 focus:ring-[#ffcc29] resize-none`}
+                                            />
+                                        </div>
+                                        
+                                        {/* Hashtags */}
+                                        <div>
+                                            <label className={`text-sm font-semibold ${theme.text} mb-2 block`}>Hashtags</label>
+                                            <div className="flex flex-wrap gap-1.5">
+                                                {eventPostHashtags.map((tag, idx) => (
+                                                    <span 
+                                                        key={idx} 
+                                                        className={`text-xs px-2 py-1 rounded-full ${isDarkMode ? 'bg-[#ffcc29]/20 text-[#ffcc29]' : 'bg-[#ffcc29]/10 text-[#b8941f]'} cursor-pointer hover:opacity-70`}
+                                                        onClick={() => setEventPostHashtags(prev => prev.filter((_, i) => i !== idx))}
+                                                        title="Click to remove"
+                                                    >
+                                                        {tag}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        
+                                        {/* Platform Selection */}
+                                        <div>
+                                            <label className={`text-sm font-semibold ${theme.text} mb-2 block`}>Platform</label>
+                                            <div className="flex gap-2">
+                                                {['instagram', 'facebook', 'twitter', 'linkedin'].map(platform => (
+                                                    <button
+                                                        key={platform}
+                                                        onClick={() => setEventSelectedPlatform(platform)}
+                                                        className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium capitalize transition-all ${
+                                                            eventSelectedPlatform === platform
+                                                                ? 'bg-[#ffcc29] text-black'
+                                                                : `${isDarkMode ? 'bg-[#161b22] text-slate-400 hover:bg-[#1f2937]' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`
+                                                        }`}
+                                                    >
+                                                        {platform}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        
+                                        {/* Best Posting Time */}
+                                        {eventGeneratedPost.bestPostTimes && eventGeneratedPost.bestPostTimes[eventSelectedPlatform] && (
+                                            <div className={`p-3 rounded-lg ${isDarkMode ? 'bg-green-500/10 border-green-500/20' : 'bg-green-50 border-green-200'} border`}>
+                                                <p className={`text-xs font-semibold ${isDarkMode ? 'text-green-400' : 'text-green-700'}`}>
+                                                    ⏰ Best time to post on {eventSelectedPlatform}: {eventGeneratedPost.bestPostTimes[eventSelectedPlatform]}
+                                                </p>
+                                            </div>
+                                        )}
+                                        
+                                        {/* Schedule Date & Time */}
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div>
+                                                <label className={`text-xs font-semibold uppercase ${theme.textMuted} mb-1 block`}>Schedule Date</label>
+                                                <input
+                                                    type="date"
+                                                    value={eventScheduleDate}
+                                                    onChange={(e) => setEventScheduleDate(e.target.value)}
+                                                    className={`w-full px-3 py-2 text-sm rounded-lg ${isDarkMode ? 'bg-[#161b22] text-white border-slate-700/50' : 'bg-slate-50 text-slate-900 border-slate-200'} border focus:outline-none focus:ring-2 focus:ring-[#ffcc29]`}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className={`text-xs font-semibold uppercase ${theme.textMuted} mb-1 block`}>Time</label>
+                                                <input
+                                                    type="time"
+                                                    value={eventScheduleTime}
+                                                    onChange={(e) => setEventScheduleTime(e.target.value)}
+                                                    className={`w-full px-3 py-2 text-sm rounded-lg ${isDarkMode ? 'bg-[#161b22] text-white border-slate-700/50' : 'bg-slate-50 text-slate-900 border-slate-200'} border focus:outline-none focus:ring-2 focus:ring-[#ffcc29]`}
+                                                />
+                                            </div>
+                                        </div>
+                                        
+                                        {/* Content Notes */}
+                                        {eventGeneratedPost.contentNotes && (
+                                            <div className={`p-3 rounded-lg ${isDarkMode ? 'bg-blue-500/10 border-blue-500/20' : 'bg-blue-50 border-blue-200'} border`}>
+                                                <p className={`text-xs font-semibold mb-1 ${isDarkMode ? 'text-blue-400' : 'text-blue-700'}`}>💡 Content Tips</p>
+                                                <p className={`text-xs ${theme.textSecondary}`}>{eventGeneratedPost.contentNotes}</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                                
+                                {/* Action Buttons */}
+                                <div className={`flex gap-3 pt-4 border-t ${theme.border}`}>
+                                    <button
+                                      onClick={() => {
+                                        setCalendarPreviewData({
+                                          platform: eventSelectedPlatform,
+                                          imageUrl: eventPostImageUrl || null,
+                                          caption: eventPostCaption,
+                                          hashtags: eventPostHashtags
+                                        });
+                                        setShowCalendarPreview(true);
+                                      }}
+                                      className={`px-4 py-3 border ${isDarkMode ? 'border-slate-700/50 text-slate-300 hover:border-[#ffcc29] hover:text-[#ffcc29]' : 'border-slate-200 text-slate-600 hover:border-[#ffcc29] hover:text-[#b8941a]'} text-sm font-semibold rounded-lg transition-colors flex items-center gap-2`}
+                                    >
+                                      <Eye className="w-4 h-4" /> Preview
+                                    </button>
+                                    <button 
+                                        onClick={async () => {
+                                            setEventScheduling(true);
+                                            try {
+                                                await apiService.createCampaign({
+                                                    name: `${selectedHoliday.name} Post`,
+                                                    objective: 'engagement',
+                                                    platforms: [eventSelectedPlatform],
+                                                    status: 'draft',
+                                                    creative: {
+                                                        type: 'image',
+                                                        textContent: eventPostCaption,
+                                                        imageUrls: eventPostImageUrl ? [eventPostImageUrl] : [],
+                                                        captions: eventPostCaption,
+                                                        hashtags: eventPostHashtags
+                                                    }
+                                                });
+                                                alert('Post saved as draft!');
+                                                setShowEventPostCreator(false);
+                                                setSelectedHoliday(null);
+                                                if (onCampaignCreated) onCampaignCreated();
+                                            } catch (error) {
+                                                console.error('Failed to save draft:', error);
+                                                alert('Failed to save draft. Please try again.');
+                                            } finally {
+                                                setEventScheduling(false);
+                                            }
+                                        }}
+                                        disabled={eventScheduling}
+                                        className={`flex-1 py-3 ${isDarkMode ? 'bg-[#161b22] hover:bg-[#1f2937] text-white border-slate-700/50' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'} border font-semibold rounded-lg transition-colors flex items-center justify-center gap-2`}
+                                    >
+                                        <FileText className="w-4 h-4" />
+                                        Save as Draft
+                                    </button>
+                                    <button 
+                                        onClick={async () => {
+                                            if (!eventScheduleDate) {
+                                                alert('Please select a schedule date');
+                                                return;
+                                            }
+                                            setEventScheduling(true);
+                                            try {
+                                                await apiService.createCampaign({
+                                                    name: `${selectedHoliday.name} Post`,
+                                                    objective: 'engagement',
+                                                    platforms: [eventSelectedPlatform],
+                                                    status: 'scheduled',
+                                                    creative: {
+                                                        type: 'image',
+                                                        textContent: eventPostCaption,
+                                                        imageUrls: eventPostImageUrl ? [eventPostImageUrl] : [],
+                                                        captions: eventPostCaption,
+                                                        hashtags: eventPostHashtags
+                                                    },
+                                                    scheduling: {
+                                                        startDate: eventScheduleDate,
+                                                        postTime: eventScheduleTime || '10:00'
+                                                    }
+                                                });
+                                                alert('Post scheduled successfully!');
+                                                setShowEventPostCreator(false);
+                                                setSelectedHoliday(null);
+                                                if (onCampaignCreated) onCampaignCreated();
+                                            } catch (error) {
+                                                console.error('Failed to schedule post:', error);
+                                                alert('Failed to schedule post. Please try again.');
+                                            } finally {
+                                                setEventScheduling(false);
+                                            }
+                                        }}
+                                        disabled={eventScheduling}
+                                        className="flex-1 py-3 bg-[#ffcc29] hover:bg-[#e6b825] text-black font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
+                                    >
+                                        {eventScheduling ? <Loader2 className="w-4 h-4 animate-spin" /> : <CalendarIcon className="w-4 h-4" />}
+                                        Schedule Post
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="flex flex-col items-center justify-center py-16">
+                                <AlertCircle className="w-12 h-12 text-red-500 mb-4" />
+                                <p className={`text-lg font-medium ${theme.text}`}>Failed to generate post</p>
+                                <p className={`text-sm ${theme.textMuted}`}>Please try again</p>
+                                <button
+                                    onClick={() => { setShowEventPostCreator(false); }}
+                                    className="mt-4 px-6 py-2 bg-[#ffcc29] text-black font-semibold rounded-lg"
+                                >
+                                    Go Back
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* Calendar Platform Preview */}
+            {showCalendarPreview && (
+              <PlatformPreview
+                platform={calendarPreviewData.platform}
+                imageUrl={calendarPreviewData.imageUrl}
+                caption={calendarPreviewData.caption}
+                hashtags={calendarPreviewData.hashtags}
+                brandName={dashboardData?.businessContext?.name || 'Your Brand'}
+                onClose={() => setShowCalendarPreview(false)}
+                isDarkMode={isDarkMode}
+              />
             )}
         </div>
     );

@@ -79,7 +79,7 @@ const LandingPage: React.FC = () => {
       <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
         scrollY > 50 
           ? theme === 'dark'
-            ? 'bg-[#070A12]/90 backdrop-blur-xl border-b border-[#ffcc29]/20 shadow-sm'
+            ? 'bg-[#070A12]/90 backdrop-blur-xl border-b border-slate-700/50 shadow-sm'
             : 'bg-white/90 backdrop-blur-xl border-b border-gray-200 shadow-sm'
           : ''
       }`}>
@@ -106,7 +106,7 @@ const LandingPage: React.FC = () => {
                 Sign in
               </button>
               <button 
-                onClick={() => navigate('/login')}
+                onClick={() => navigate('/login?mode=signup')}
                 className="px-5 py-2.5 bg-[#ffcc29] hover:bg-[#e6b825] text-[#070A12] text-sm font-medium rounded-full transition-all duration-300 shadow-lg shadow-[#ffcc29]/20 hover:shadow-[#ffcc29]/30"
               >
                 Sign Up
@@ -161,14 +161,6 @@ const LandingPage: React.FC = () => {
               >
                 Start free trial
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-              </button>
-              <button className={`group w-full sm:w-auto px-8 py-4 font-medium rounded-full border transition-all duration-300 flex items-center justify-center gap-2 ${
-                theme === 'dark' 
-                  ? 'bg-[#0d1117] hover:bg-[#161b22] text-[#ededed] border-[#ffcc29]/30'
-                  : 'bg-white hover:bg-gray-50 text-gray-900 border-gray-300'
-              }`}>
-                <Play className="w-4 h-4 text-[#ffcc29]" />
-                Watch demo
               </button>
             </div>
 
@@ -274,7 +266,7 @@ const LandingPage: React.FC = () => {
       </section>
 
       {/* Trusted By */}
-      <section className={`py-16 border-y ${theme === 'dark' ? 'border-[#ededed]/10 bg-[#0d1117]/50' : 'border-gray-200 bg-gray-50'}`}>
+      <section className={`py-16 border-y ${theme === 'dark' ? 'border-slate-700/50 bg-[#0d1117]/50' : 'border-gray-200 bg-gray-50'}`}>
         <div className="max-w-6xl mx-auto px-6">
           <p className={`text-center text-sm font-medium mb-8 ${theme === 'dark' ? 'text-[#ededed]/50' : 'text-gray-500'}`}>TRUSTED BY LEADING COMPANIES WORLDWIDE</p>
           <div className="flex flex-wrap items-center justify-center gap-x-12 gap-y-6">
@@ -356,7 +348,7 @@ const LandingPage: React.FC = () => {
                 key={index}
                 className={`group p-8 rounded-2xl border transition-all duration-500 ${
                   theme === 'dark' 
-                    ? 'bg-[#0d1117] border-[#ededed]/10 hover:border-[#ffcc29]/30 hover:shadow-xl hover:shadow-[#ffcc29]/5' 
+                    ? 'bg-[#0d1117] border-slate-700/50 hover:border-[#ffcc29]/30 hover:shadow-xl hover:shadow-[#ffcc29]/5' 
                     : 'bg-white border-gray-200 hover:border-gray-300 hover:shadow-xl hover:shadow-gray-200'
                 }`}
               >
@@ -375,7 +367,7 @@ const LandingPage: React.FC = () => {
       <section id="how-it-works" className={`py-24 md:py-32 ${theme === 'dark' ? 'bg-[#0d1117]' : 'bg-gray-50'}`}>
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center mb-16">
-            <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full mb-6 shadow-sm ${theme === 'dark' ? 'bg-[#1a1f2e] border border-[#ededed]/10' : 'bg-white border border-gray-200'}`}>
+            <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full mb-6 shadow-sm ${theme === 'dark' ? 'bg-[#1a1f2e] border border-slate-700/50' : 'bg-white border border-gray-200'}`}>
               <MousePointer2 className={`w-4 h-4 ${theme === 'dark' ? 'text-[#ededed]/70' : 'text-gray-600'}`} />
               <span className={`text-sm font-medium ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>How it works</span>
             </div>
@@ -409,7 +401,7 @@ const LandingPage: React.FC = () => {
                 {index < 2 && (
                   <div className={`hidden md:block absolute top-12 left-full w-full h-px -translate-x-1/2 z-0 ${theme === 'dark' ? 'bg-gradient-to-r from-[#ededed]/20 to-transparent' : 'bg-gradient-to-r from-gray-300 to-transparent'}`}></div>
                 )}
-                <div className={`relative rounded-2xl p-8 border shadow-sm ${theme === 'dark' ? 'bg-[#070A12] border-[#ededed]/10' : 'bg-white border-gray-200'}`}>
+                <div className={`relative rounded-2xl p-8 border shadow-sm ${theme === 'dark' ? 'bg-[#070A12] border-slate-700/50' : 'bg-white border-gray-200'}`}>
                   <div className={`text-5xl font-bold mb-4 ${theme === 'dark' ? 'text-[#ededed]/10' : 'text-gray-200'}`}>{item.step}</div>
                   <h3 className={`text-xl font-semibold mb-3 ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>{item.title}</h3>
                   <p className={theme === 'dark' ? 'text-[#ededed]/70' : 'text-gray-600'}>{item.description}</p>
@@ -492,7 +484,7 @@ const LandingPage: React.FC = () => {
       <section id="pricing" className={`py-24 md:py-32 ${theme === 'dark' ? 'bg-[#0d1117]' : 'bg-gray-50'}`}>
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center mb-16">
-            <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full mb-6 shadow-sm ${theme === 'dark' ? 'bg-[#1a1f2e] border border-[#ededed]/10' : 'bg-white border border-gray-200'}`}>
+            <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full mb-6 shadow-sm ${theme === 'dark' ? 'bg-[#1a1f2e] border border-slate-700/50' : 'bg-white border border-gray-200'}`}>
               <PieChart className={`w-4 h-4 ${theme === 'dark' ? 'text-[#ededed]/70' : 'text-gray-600'}`} />
               <span className={`text-sm font-medium ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Pricing</span>
             </div>
@@ -506,7 +498,7 @@ const LandingPage: React.FC = () => {
 
           <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
             {/* Starter */}
-            <div className={`rounded-2xl p-8 border shadow-sm ${theme === 'dark' ? 'bg-[#070A12] border-[#ededed]/10' : 'bg-white border-gray-200'}`}>
+            <div className={`rounded-2xl p-8 border shadow-sm ${theme === 'dark' ? 'bg-[#070A12] border-slate-700/50' : 'bg-white border-gray-200'}`}>
               <div className={`text-sm font-medium mb-2 ${theme === 'dark' ? 'text-[#ededed]/60' : 'text-gray-500'}`}>Starter</div>
               <div className={`text-4xl font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>Free</div>
               <div className={`text-sm mb-6 ${theme === 'dark' ? 'text-[#ededed]/60' : 'text-gray-500'}`}>Forever free</div>
@@ -555,7 +547,7 @@ const LandingPage: React.FC = () => {
             </div>
 
             {/* Enterprise */}
-            <div className={`rounded-2xl p-8 border shadow-sm ${theme === 'dark' ? 'bg-[#070A12] border-[#ededed]/10' : 'bg-white border-gray-200'}`}>
+            <div className={`rounded-2xl p-8 border shadow-sm ${theme === 'dark' ? 'bg-[#070A12] border-slate-700/50' : 'bg-white border-gray-200'}`}>
               <div className={`text-sm font-medium mb-2 ${theme === 'dark' ? 'text-[#ededed]/60' : 'text-gray-500'}`}>Enterprise</div>
               <div className={`text-4xl font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>Custom</div>
               <div className={`text-sm mb-6 ${theme === 'dark' ? 'text-[#ededed]/60' : 'text-gray-500'}`}>For large teams</div>
@@ -596,15 +588,15 @@ const LandingPage: React.FC = () => {
                 : 'bg-[#070A12] hover:bg-[#0a0f1a] text-white shadow-[#070A12]/10 hover:shadow-[#070A12]/20'
             }`}
           >
-            Sign up for free
+            Start Your 7-Day Free Trial
             <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
           </button>
-          <p className={`text-sm mt-4 ${theme === 'dark' ? 'text-[#ededed]/50' : 'text-gray-500'}`}>No credit card required</p>
+          <p className={`text-sm mt-4 ${theme === 'dark' ? 'text-[#ededed]/50' : 'text-gray-500'}`}>No credit card required · 100 credits included</p>
         </div>
       </section>
 
       {/* Footer */}
-      <footer className={`py-12 border-t ${theme === 'dark' ? 'border-[#ededed]/10 bg-[#0d1117]' : 'border-gray-200 bg-gray-50'}`}>
+      <footer className={`py-12 border-t ${theme === 'dark' ? 'border-slate-700/50 bg-[#0d1117]' : 'border-gray-200 bg-gray-50'}`}>
         <div className="max-w-6xl mx-auto px-6">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-3">
@@ -614,8 +606,8 @@ const LandingPage: React.FC = () => {
               <span className={`text-lg font-semibold ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>Nebulaa Gravity</span>
             </div>
             <div className={`flex items-center gap-8 text-sm ${theme === 'dark' ? 'text-[#ededed]/70' : 'text-gray-600'}`}>
-              <a href="#" className={`transition-colors ${theme === 'dark' ? 'hover:text-[#ffcc29]' : 'hover:text-[#070A12]'}`}>Privacy</a>
-              <a href="#" className={`transition-colors ${theme === 'dark' ? 'hover:text-[#ffcc29]' : 'hover:text-[#070A12]'}`}>Terms</a>
+              <a href="/#/privacy-policy" className={`transition-colors ${theme === 'dark' ? 'hover:text-[#ffcc29]' : 'hover:text-[#070A12]'}`}>Privacy</a>
+              <a href="/#/terms" className={`transition-colors ${theme === 'dark' ? 'hover:text-[#ffcc29]' : 'hover:text-[#070A12]'}`}>Terms</a>
               <a href="#" className={`transition-colors ${theme === 'dark' ? 'hover:text-[#ffcc29]' : 'hover:text-[#070A12]'}`}>Contact</a>
             </div>
             <div className={`text-sm ${theme === 'dark' ? 'text-[#ededed]/50' : 'text-gray-500'}`}>

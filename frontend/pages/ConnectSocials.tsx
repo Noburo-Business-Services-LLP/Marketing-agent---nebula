@@ -38,7 +38,7 @@ const ConnectSocials: React.FC = () => {
     const account = searchParams.get('account');
     
     // Check for successful connections for each platform
-    const platforms = ['youtube', 'instagram', 'facebook', 'x', 'linkedin', 'pinterest', 'reddit'];
+    const platforms = ['instagram', 'facebook', 'x', 'linkedin'];
     for (const platform of platforms) {
       const status = searchParams.get(platform);
       if (status === 'connected') {
@@ -112,8 +112,25 @@ const ConnectSocials: React.FC = () => {
       const response = await apiService.getPlatformAuthUrl(platform);
       
       if (response.success && response.authUrl) {
-        // Redirect to the auth page (either platform OAuth or Ayrshare dashboard)
-        window.location.href = response.authUrl;
+        // For Ayrshare JWT flow, open in a new tab/window as recommended by Ayrshare docs
+        // This allows the Close button to work properly and return the user to our app
+        if (response.method === 'ayrshare_jwt') {
+          // Open Ayrshare social linking page in a new tab
+          const newWindow = window.open(response.authUrl, '_blank', 'noopener,noreferrer');
+          if (newWindow) {
+            newWindow.focus();
+          }
+          // Reset loading state since user will return via redirect
+          setLoadingPlatform(null);
+          setConnectingPlatform(null);
+          setNotification({
+            type: 'success',
+            message: `A new tab has opened. Connect your ${platform} account there and return here when done.`
+          });
+        } else {
+          // For direct OAuth (like YouTube), redirect in the same window
+          window.location.href = response.authUrl;
+        }
       } else {
         // Some error occurred
         setNotification({ 
@@ -239,7 +256,7 @@ const ConnectSocials: React.FC = () => {
               <div key={social.platform} className={`rounded-xl p-5 shadow-sm border transition-all duration-200 relative overflow-hidden group ${theme.bgCard} ${
                 social.connected 
                   ? isDarkMode ? 'border-green-500/30 ring-1 ring-green-500/20' : 'border-green-200 ring-1 ring-green-100' 
-                  : isDarkMode ? 'border-[#ffcc29]/20 hover:border-[#ffcc29]/40 hover:shadow-md' : 'border-slate-200 hover:border-[#ffcc29]/30 hover:shadow-md'
+                  : isDarkMode ? 'border-slate-700/50 hover:border-slate-600 hover:shadow-md' : 'border-slate-200 hover:border-[#ffcc29]/30 hover:shadow-md'
               }`}>
                   {social.connected && (
                       <div className="absolute top-0 right-0 bg-green-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-bl-lg">
@@ -265,12 +282,31 @@ const ConnectSocials: React.FC = () => {
                           ) : (
                               <p className="text-xs text-slate-400">Not connected</p>
                           )}
+                          {/* Show analytics for connected accounts */}
+                          {social.connected && social.analytics && (
+                              <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1.5 text-[10px] text-slate-400">
+                                  <span>{Number(social.analytics.followers).toLocaleString()} followers</span>
+                                  {/* LinkedIn doesn't provide following/posts count */}
+                                  {social.platform !== 'LinkedIn' && (
+                                    <>
+                                      <span>•</span>
+                                      <span>{Number(social.analytics.following).toLocaleString()} following</span>
+                                    </>
+                                  )}
+                                  {social.platform !== 'LinkedIn' && social.platform !== 'Facebook' && (
+                                    <>
+                                      <span>•</span>
+                                      <span>{Number(social.analytics.posts).toLocaleString()} posts</span>
+                                    </>
+                                  )}
+                              </div>
+                          )}
                           {/* Show YouTube stats if connected */}
-                          {social.platform === 'YouTube' && social.connected && (social as any).channelData && (
+                          {social.platform === 'YouTube' && social.connected && social.channelData && (
                               <div className="flex gap-2 mt-1.5 text-[10px] text-slate-400">
-                                  <span>{Number((social as any).channelData.subscriberCount).toLocaleString()} subs</span>
+                                  <span>{Number(social.channelData.subscriberCount).toLocaleString()} subs</span>
                                   <span>•</span>
-                                  <span>{Number((social as any).channelData.videoCount).toLocaleString()} videos</span>
+                                  <span>{Number(social.channelData.videoCount).toLocaleString()} videos</span>
                               </div>
                           )}
                       </div>
@@ -288,7 +324,7 @@ const ConnectSocials: React.FC = () => {
                                 onClick={() => handleDisconnect(social.platform)}
                                 className={`px-3 py-2 text-xs font-bold rounded-lg transition-colors ${
                                   isDarkMode 
-                                    ? 'bg-[#0f1419] border border-[#ffcc29]/20 text-slate-400 hover:text-red-400 hover:border-red-400/30' 
+                                    ? 'bg-[#0f1419] border border-slate-700/50 text-slate-400 hover:text-red-400 hover:border-red-400/30' 
                                     : 'bg-white border border-slate-200 text-slate-400 hover:text-red-500 hover:border-red-200'
                                 }`}
                              >
@@ -321,7 +357,7 @@ const ConnectSocials: React.FC = () => {
               <div className={`w-full max-w-md rounded-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 flex flex-col max-h-[90vh] ${theme.bgCard}`}>
                   {/* Fake Browser Header */}
                   <div className={`border-b p-3 flex items-center gap-2 flex-shrink-0 ${
-                    isDarkMode ? 'bg-[#0d1117] border-[#ffcc29]/20' : 'bg-slate-100 border-slate-200'
+                    isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-slate-100 border-slate-200'
                   }`}>
                       <div className="flex gap-1.5">
                           <div className="w-3 h-3 rounded-full bg-red-400"></div>
@@ -329,7 +365,7 @@ const ConnectSocials: React.FC = () => {
                           <div className="w-3 h-3 rounded-full bg-green-400"></div>
                       </div>
                       <div className={`flex-1 border rounded text-[10px] px-2 py-1 text-center truncate mx-4 flex items-center justify-center gap-1 ${
-                        isDarkMode ? 'bg-[#0f1419] border-[#ffcc29]/20 text-slate-400' : 'bg-white border-slate-200 text-slate-500'
+                        isDarkMode ? 'bg-[#0f1419] border-slate-700/50 text-slate-400' : 'bg-white border-slate-200 text-slate-500'
                       }`}>
                           <div className="w-2 h-2 rounded-full bg-green-500"></div>
                           https://api.{connectingPlatform?.toLowerCase()}.com/oauth/v2/authorize
@@ -364,14 +400,14 @@ const ConnectSocials: React.FC = () => {
                               </div>
 
                               <div className={`text-left p-4 rounded-lg border text-sm ${
-                                isDarkMode ? 'bg-[#0d1117] border-[#ffcc29]/20' : 'bg-slate-50 border-slate-200'
+                                isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-slate-50 border-slate-200'
                               }`}>
                                   <label className={`block text-xs font-bold uppercase mb-1 ${theme.textSecondary}`}>Enter {connectingPlatform} Username</label>
                                   <input 
                                     type="text" 
                                     autoFocus
                                     className={`w-full p-2 border rounded focus:ring-2 focus:ring-[#ffcc29] outline-none ${
-                                      isDarkMode ? 'bg-[#0f1419] border-[#ffcc29]/20 text-white' : 'bg-white border-slate-300 text-slate-900'
+                                      isDarkMode ? 'bg-[#0f1419] border-slate-700/50 text-white' : 'bg-white border-slate-300 text-slate-900'
                                     }`}
                                     placeholder="e.g. gravity_official"
                                     value={usernameInput}
@@ -390,14 +426,14 @@ const ConnectSocials: React.FC = () => {
                                   <button 
                                     onClick={() => setShowFakeAuthWindow(false)}
                                     className={`w-full border font-bold py-3 rounded-lg transition-colors ${
-                                      isDarkMode ? 'bg-[#0f1419] border-[#ffcc29]/20 text-slate-400 hover:bg-slate-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                                      isDarkMode ? 'bg-[#0f1419] border-slate-700/50 text-slate-400 hover:bg-slate-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
                                     }`}
                                   >
                                       Cancel
                                   </button>
                               </div>
                               <p className="text-[10px] text-slate-400">
-                                  By authorizing, you agree to our Terms of Service.
+                                  By authorizing, you agree to our <a href="/#/terms" className="text-[#ffcc29] hover:underline">Terms of Service</a>.
                               </p>
                           </div>
                       )}

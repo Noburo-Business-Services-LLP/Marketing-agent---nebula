@@ -107,6 +107,28 @@ const campaignSchema = new mongoose.Schema({
     hashtags: [String],
     bestTime: String,
     estimatedReach: String
+  },
+  // Ayrshare integration fields
+  socialPostId: {
+    type: String,
+    default: null
+  },
+  scheduledFor: {
+    type: Date,
+    default: null
+  },
+  publishedAt: {
+    type: Date,
+    default: null
+  },
+  ayrshareStatus: {
+    type: String,
+    enum: ['pending', 'scheduled', 'success', 'error', null],
+    default: null
+  },
+  publishResult: {
+    type: mongoose.Schema.Types.Mixed,
+    default: null
   }
 }, {
   timestamps: true

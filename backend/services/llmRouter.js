@@ -7,7 +7,7 @@
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const GROK_API_KEY = process.env.GROK_API_KEY;
 
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent';
 const GROK_API_URL = 'https://api.x.ai/v1/chat/completions';
 
 // Structured logging for LLM calls (no keys logged)
@@ -61,7 +61,7 @@ function validateSchema(data, schema) {
 }
 
 /**
- * Parse JSON from LLM response (handles markdown code blocks)
+ * Parse JSON from LLM response (handles markdown code blocks and truncated JSON)
  */
 function parseJSON(text) {
   let cleaned = text.trim();
@@ -75,8 +75,45 @@ function parseJSON(text) {
   if (cleaned.endsWith('```')) {
     cleaned = cleaned.slice(0, -3);
   }
+  cleaned = cleaned.trim();
   
-  return JSON.parse(cleaned.trim());
+  try {
+    return JSON.parse(cleaned);
+  } catch (err) {
+    // Try to repair truncated JSON
+    if (err.message.includes('Unterminated string') || err.message.includes('Unexpected end')) {
+      console.log('Attempting to repair truncated JSON in llmRouter...');
+      
+      // Find the last complete object in an array
+      const lastCompleteIndex = cleaned.lastIndexOf('},');
+      if (lastCompleteIndex > 0) {
+        let repaired = cleaned.substring(0, lastCompleteIndex + 1);
+        
+        // Count open brackets to close properly
+        const openBrackets = (repaired.match(/\[/g) || []).length;
+        const closeBrackets = (repaired.match(/]/g) || []).length;
+        const openBraces = (repaired.match(/{/g) || []).length;
+        const closeBraces = (repaired.match(/}/g) || []).length;
+        
+        // Add missing closing brackets
+        for (let i = 0; i < openBrackets - closeBrackets; i++) {
+          repaired += ']';
+        }
+        for (let i = 0; i < openBraces - closeBraces; i++) {
+          repaired += '}';
+        }
+        
+        try {
+          const parsed = JSON.parse(repaired);
+          console.log('✅ Successfully repaired truncated JSON in llmRouter');
+          return parsed;
+        } catch (repairErr) {
+          // Repair failed, throw original error
+        }
+      }
+    }
+    throw err;
+  }
 }
 
 /**
@@ -93,7 +130,7 @@ async function callGemini(prompt, options = {}) {
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
           temperature: options.temperature || 0.7,
-          maxOutputTokens: options.maxTokens || 4096,
+          maxOutputTokens: options.maxTokens || 8192, // Increased default for longer responses
           topP: 0.9
         }
       })

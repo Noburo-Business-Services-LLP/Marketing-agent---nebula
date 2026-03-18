@@ -36,20 +36,38 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
         return null;
     };
     
+    // Get company name from registration if available
+    const getRegistrationCompany = () => {
+        try {
+            const company = sessionStorage.getItem('nebulaa_registration_company');
+            if (company) {
+                // Clear it after reading so it's only used once
+                sessionStorage.removeItem('nebulaa_registration_company');
+                return company;
+            }
+        } catch (e) {
+            console.error('Failed to get registration company:', e);
+        }
+        return '';
+    };
+    
     const savedState = getSavedState();
+    const registrationCompany = getRegistrationCompany();
     
     const [step, setStep] = useState(savedState?.step || 1);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
     const [formData, setFormData] = useState<BusinessProfile>(savedState?.formData || {
-        name: '',
+        name: registrationCompany || '',
         website: '',
+        gstNumber: '',
         industry: '',
         niche: '',
         businessType: '',
+        businessLocation: '',
         targetAudience: '',
-        brandVoice: 'Professional',
+        brandVoice: [] as string[],
         marketingGoals: [],
         description: '',
         competitors: []
@@ -77,6 +95,19 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
     const [analyzingWebsite, setAnalyzingWebsite] = useState(false);
     const [websiteStatus, setWebsiteStatus] = useState<'idle' | 'valid' | 'invalid' | 'analyzed'>(savedState?.websiteStatus || 'idle');
     const [websiteError, setWebsiteError] = useState<string | null>(null);
+
+    // GST verification state
+    const [verifyingGST, setVerifyingGST] = useState(false);
+    const [gstStatus, setGstStatus] = useState<'idle' | 'valid' | 'invalid'>(savedState?.gstStatus || 'idle');
+    const [gstError, setGstError] = useState<string | null>(null);
+    const [gstInfo, setGstInfo] = useState<{ legalName?: string; tradeName?: string } | null>(null);
+
+    // Duplicate detection state
+    const [duplicateCheck, setDuplicateCheck] = useState<{
+        show: boolean;
+        matchedFields: string[];
+        existingEmail: string;
+    }>({ show: false, matchedFields: [], existingEmail: '' });
 
     // Save state to sessionStorage whenever it changes
     useEffect(() => {
@@ -156,7 +187,43 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
             setWebsiteStatus('idle');
             setWebsiteError(null);
         }
+        // Reset GST status when number changes
+        if (field === 'gstNumber') {
+            setGstStatus('idle');
+            setGstError(null);
+            setGstInfo(null);
+        }
     };
+
+    // Verify GST number against government database
+    const verifyGSTNumber = useCallback(async () => {
+        if (!formData.gstNumber || formData.gstNumber.length !== 15) return;
+        setVerifyingGST(true);
+        setGstError(null);
+        try {
+            const result = await apiService.verifyGST(formData.gstNumber);
+            if (result.valid) {
+                setGstStatus('valid');
+                setGstInfo({ legalName: result.legalName, tradeName: result.tradeName });
+                if (result.legalName && !formData.name) {
+                    setFormData(prev => ({ ...prev, name: result.tradeName || result.legalName }));
+                }
+                if (result.fallback) {
+                    setNotification({ type: 'success', message: 'GST format valid. Live verification unavailable — will retry later.' });
+                } else {
+                    setNotification({ type: 'success', message: `GST verified! Registered: ${result.tradeName || result.legalName}` });
+                }
+            } else {
+                setGstStatus('invalid');
+                setGstError(result.error || 'Invalid GST number');
+            }
+        } catch {
+            setGstStatus('idle');
+            setGstError('Could not verify GST. Please check and try again.');
+        } finally {
+            setVerifyingGST(false);
+        }
+    }, [formData.gstNumber, formData.name]);
 
     // Analyze website and auto-fill form
     const analyzeWebsite = useCallback(async () => {
@@ -168,19 +235,52 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
         try {
             const result = await apiService.analyzeWebsite(formData.website);
             
+            console.log('Website analysis result:', result);
+            
             if (result.success && result.data) {
-                // Auto-fill form with analyzed data
-                setFormData(prev => ({
-                    ...prev,
-                    name: result.data.companyName || prev.name,
-                    industry: result.data.industry || prev.industry,
-                    niche: result.data.niche || prev.niche,
-                    description: result.data.description || prev.description,
-                    targetAudience: result.data.targetAudience || prev.targetAudience,
-                    brandVoice: result.data.brandVoice || prev.brandVoice,
-                    marketingGoals: result.data.suggestedGoals?.length > 0 ? result.data.suggestedGoals : prev.marketingGoals
-                }));
+                console.log('Extracted data:', result.data);
+                
+                // Auto-fill form with analyzed data including businessType and businessLocation
+                // Handle brandVoice - ensure it's always an array
+                const analyzedBrandVoice = result.data.brandVoice;
+                let brandVoiceArray: string[] = [];
+                if (Array.isArray(analyzedBrandVoice)) {
+                    brandVoiceArray = analyzedBrandVoice;
+                } else if (typeof analyzedBrandVoice === 'string' && analyzedBrandVoice) {
+                    brandVoiceArray = [analyzedBrandVoice];
+                } else if (Array.isArray(formData.brandVoice)) {
+                    brandVoiceArray = formData.brandVoice;
+                } else if (typeof formData.brandVoice === 'string' && formData.brandVoice) {
+                    brandVoiceArray = [formData.brandVoice];
+                }
+                
+                const newFormData = {
+                    ...formData,
+                    name: result.data.companyName || formData.name,
+                    industry: result.data.industry || formData.industry,
+                    niche: result.data.niche || formData.niche,
+                    businessType: result.data.businessType || formData.businessType,
+                    businessLocation: result.data.businessLocation || formData.businessLocation,
+                    description: result.data.description || formData.description,
+                    targetAudience: result.data.targetAudience || formData.targetAudience,
+                    brandVoice: brandVoiceArray,
+                    marketingGoals: result.data.suggestedGoals?.length > 0 ? result.data.suggestedGoals : formData.marketingGoals
+                };
+                
+                console.log('New form data:', newFormData);
+                setFormData(newFormData);
+                
+                // Store the full analysis for use throughout the app
+                if (result.data) {
+                    sessionStorage.setItem('nebulaa_website_analysis', JSON.stringify({
+                        ...result.data,
+                        analyzedAt: new Date().toISOString(),
+                        websiteUrl: result.url
+                    }));
+                }
+                
                 setWebsiteStatus('analyzed');
+                setNotification({ type: 'success', message: 'Website analyzed! Fields have been auto-filled.' });
             } else if (result.validUrl === false) {
                 setWebsiteStatus('invalid');
                 setWebsiteError(result.error || 'Invalid URL');
@@ -194,7 +294,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
         } finally {
             setAnalyzingWebsite(false);
         }
-    }, [formData.website]);
+    }, [formData]);
 
     const toggleGoal = (goal: string) => {
         const current = formData.marketingGoals;
@@ -207,15 +307,20 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
 
     const validateStep = (currentStep: number) => {
         if (currentStep === 1) {
-            if (!formData.name || !formData.industry) return "Company Name and Industry are required.";
+            if (!formData.name || !formData.niche) return "Company Name and Niche are required.";
             if (!formData.businessType) return "Please select your business type (B2B, B2C, or Both).";
+            if (!formData.businessLocation) return "Please enter your business location.";
+            if (formData.gstNumber && formData.gstNumber.trim().length > 0) {
+                if (formData.gstNumber.trim().length !== 15) return "GST number must be exactly 15 characters.";
+                if (gstStatus === 'invalid') return "GST number is invalid. Please enter a valid GST number.";
+            }
         }
         if (currentStep === 2) {
-            if (!formData.targetAudience) return "Please describe your target audience.";
+            // Brand voice is optional, no required fields
         }
         if (currentStep === 3) {
             if (formData.marketingGoals.length === 0) return "Please select at least one marketing goal.";
-            if (!formData.competitors || formData.competitors.length === 0) return "Please add at least one competitor to track.";
+            // Competitors are optional - AI will auto-discover them
         }
         // Step 4 (socials) is optional - no validation needed
         return null;
@@ -302,18 +407,33 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
         }
     };
 
-    const handleSubmit = async () => {
+    // Run duplicate check before completing onboarding
+    const runDuplicateCheck = async (connectedSocials?: {platform: string; username?: string}[]) => {
         setSubmitting(true);
         try {
-            // Get connected socials to save
-            const connectedSocials = socialConnections
-                .filter(s => s.connected)
-                .map(s => ({ platform: s.platform, username: s.username }));
-            
-            // Complete onboarding with business profile and connected socials
+            const dupResult = await apiService.checkDuplicate(formData.name, formData.website, formData.gstNumber);
+            if (dupResult.duplicate) {
+                setDuplicateCheck({
+                    show: true,
+                    matchedFields: dupResult.matchedFields || [],
+                    existingEmail: dupResult.existingEmail || ''
+                });
+                setSubmitting(false);
+                return; // Block — don't complete onboarding
+            }
+            // No duplicate — proceed
+            await finishOnboarding(connectedSocials);
+        } catch (error) {
+            console.error("Duplicate check failed", error);
+            setError("Could not verify business details. Please try again.");
+            setSubmitting(false);
+        }
+    };
+
+    const finishOnboarding = async (connectedSocials?: {platform: string; username?: string}[]) => {
+        try {
             const response = await apiService.completeOnboarding(formData, connectedSocials);
             if (response.success && response.user) {
-                // Clear saved onboarding state on successful completion
                 sessionStorage.removeItem(ONBOARDING_STATE_KEY);
                 onComplete(response.user);
             }
@@ -325,22 +445,23 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
         }
     };
 
+    const handleSubmit = async () => {
+        const connectedSocials = socialConnections
+            .filter(s => s.connected)
+            .map(s => ({ platform: s.platform, username: s.username }));
+        await runDuplicateCheck(connectedSocials);
+    };
+
     const handleSkipSocials = async () => {
-        // Skip socials and just complete onboarding
-        setSubmitting(true);
-        try {
-            const response = await apiService.completeOnboarding(formData);
-            if (response.success && response.user) {
-                // Clear saved onboarding state on successful completion
-                sessionStorage.removeItem(ONBOARDING_STATE_KEY);
-                onComplete(response.user);
-            }
-        } catch (error) {
-            console.error("Onboarding failed", error);
-            setError("Failed to save data. Please try again.");
-        } finally {
-            setSubmitting(false);
-        }
+        await runDuplicateCheck();
+    };
+
+    // Handle "Switch account" from duplicate modal
+    const handleSwitchAccount = () => {
+        localStorage.removeItem('authToken');
+        sessionStorage.removeItem(ONBOARDING_STATE_KEY);
+        window.location.href = '/#/login';
+        window.location.reload();
     };
 
     const steps = [
@@ -352,6 +473,49 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
 
     return (
         <div className={`min-h-screen flex items-center justify-center p-4 ${theme === 'dark' ? 'bg-[#070A12]' : 'bg-gray-100'}`}>
+            {/* Duplicate Account Modal */}
+            {duplicateCheck.show && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                    <div className={`max-w-md w-full mx-4 rounded-2xl p-8 shadow-2xl ${
+                        theme === 'dark' ? 'bg-[#0d1117] border border-[#ffcc29]/20' : 'bg-white border border-gray-200'
+                    }`}>
+                        <div className="text-center mb-6">
+                            <div className="w-16 h-16 rounded-full bg-amber-500/10 flex items-center justify-center mx-auto mb-4">
+                                <AlertCircle className="w-8 h-8 text-amber-500" />
+                            </div>
+                            <h3 className={`text-xl font-bold mb-2 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+                                Account Already Exists
+                            </h3>
+                            <p className={`text-sm ${theme === 'dark' ? 'text-[#ededed]/60' : 'text-gray-600'}`}>
+                                A business with the same <strong>{duplicateCheck.matchedFields.join(', ')}</strong> is already registered
+                                {duplicateCheck.existingEmail && <> under <strong>{duplicateCheck.existingEmail}</strong></>}.
+                            </p>
+                            <p className={`text-sm mt-2 ${theme === 'dark' ? 'text-[#ededed]/60' : 'text-gray-600'}`}>
+                                Would you like to switch to that account?
+                            </p>
+                        </div>
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setDuplicateCheck({ show: false, matchedFields: [], existingEmail: '' })}
+                                className={`flex-1 py-3 rounded-xl font-semibold text-sm transition-colors ${
+                                    theme === 'dark'
+                                        ? 'bg-white/5 hover:bg-white/10 text-[#ededed]/70 border border-white/10'
+                                        : 'bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-200'
+                                }`}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleSwitchAccount}
+                                className="flex-1 py-3 rounded-xl font-semibold text-sm bg-[#ffcc29] hover:bg-[#e6b825] text-[#070A12] transition-colors"
+                            >
+                                Switch Account
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Theme Toggle Button */}
             <button
                 onClick={toggleTheme}
@@ -484,40 +648,19 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                         </p>
                                     )}
                                 </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Industry <span className="text-red-500">*</span></label>
-                                        <select 
-                                            className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#ffcc29] ${
-                                                theme === 'dark' 
-                                                    ? 'bg-[#070A12] border-[#ffcc29]/30 text-[#ededed]' 
-                                                    : 'bg-white border-gray-300 text-gray-900'
-                                            }`}
-                                            value={formData.industry}
-                                            onChange={e => handleChange('industry', e.target.value)}
-                                        >
-                                            <option value="">Select...</option>
-                                            <option value="Ecommerce">E-commerce</option>
-                                            <option value="SaaS">SaaS / Tech</option>
-                                            <option value="Service">Service Business</option>
-                                            <option value="Content">Content Creator</option>
-                                            <option value="Other">Other</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Niche</label>
-                                        <input 
-                                            type="text" 
-                                            className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#ffcc29] ${
-                                                theme === 'dark' 
-                                                    ? 'bg-[#070A12] border-[#ffcc29]/30 text-[#ededed] placeholder-[#ededed]/40' 
-                                                    : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
-                                            }`}
-                                            placeholder="e.g. Sustainable Fashion"
-                                            value={formData.niche}
-                                            onChange={e => handleChange('niche', e.target.value)}
-                                        />
-                                    </div>
+                                <div>
+                                    <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Niche <span className="text-red-500">*</span></label>
+                                    <input
+                                        type="text"
+                                        className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#ffcc29] ${
+                                            theme === 'dark'
+                                                ? 'bg-[#070A12] border-[#ffcc29]/30 text-[#ededed] placeholder-[#ededed]/40'
+                                                : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
+                                        }`}
+                                        placeholder="e.g. Sustainable Fashion, AI SaaS, Organic Skincare"
+                                        value={formData.niche}
+                                        onChange={e => handleChange('niche', e.target.value)}
+                                    />
                                 </div>
                                 <div>
                                     <label className={`block text-sm font-bold mb-2 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Business Type <span className="text-red-500">*</span></label>
@@ -546,6 +689,74 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                     </div>
                                 </div>
                                 <div>
+                                    <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Business Location <span className="text-red-500">*</span></label>
+                                    <input 
+                                        type="text" 
+                                        className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#ffcc29] ${
+                                            theme === 'dark' 
+                                                ? 'bg-[#070A12] border-[#ffcc29]/30 text-[#ededed] placeholder-[#ededed]/40' 
+                                                : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
+                                        }`}
+                                        placeholder="e.g. Chennai, Tamil Nadu or New York, USA"
+                                        value={formData.businessLocation}
+                                        onChange={e => handleChange('businessLocation', e.target.value)}
+                                    />
+                                    <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-[#ededed]/50' : 'text-gray-500'}`}>
+                                        Enter the city/region where your business primarily operates
+                                    </p>
+                                </div>
+                                <div>
+                                    <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>GST Number <span className={`text-xs font-normal ${theme === 'dark' ? 'text-[#ededed]/40' : 'text-gray-400'}`}>(optional)</span></label>
+                                    <div className="flex gap-2">
+                                        <div className="flex-1 relative">
+                                            <input 
+                                                type="text" 
+                                                maxLength={15}
+                                                className={`w-full p-3 pr-10 border rounded-lg outline-none focus:ring-2 focus:ring-[#ffcc29] uppercase ${
+                                                    theme === 'dark' 
+                                                        ? 'bg-[#070A12] border-[#ffcc29]/30 text-[#ededed] placeholder-[#ededed]/40' 
+                                                        : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
+                                                } ${gstStatus === 'invalid' ? 'border-red-500' : gstStatus === 'valid' ? 'border-emerald-500' : ''}`}
+                                                placeholder="e.g. 22AAAAA0000A1Z5"
+                                                value={formData.gstNumber}
+                                                onChange={e => handleChange('gstNumber', e.target.value.toUpperCase())}
+                                            />
+                                            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                                                {verifyingGST && <Loader2 className="w-5 h-5 animate-spin text-[#ffcc29]" />}
+                                                {!verifyingGST && gstStatus === 'valid' && <CheckCircle className="w-5 h-5 text-emerald-500" />}
+                                                {!verifyingGST && gstStatus === 'invalid' && <XCircle className="w-5 h-5 text-red-500" />}
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={verifyGSTNumber}
+                                            disabled={!formData.gstNumber || formData.gstNumber.length !== 15 || verifyingGST}
+                                            className={`px-4 py-3 rounded-lg font-semibold text-sm flex items-center gap-2 transition-colors ${
+                                                !formData.gstNumber || formData.gstNumber.length !== 15 || verifyingGST
+                                                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                                    : 'bg-[#ffcc29] text-[#070A12] hover:bg-[#e6b825]'
+                                            }`}
+                                        >
+                                            {verifyingGST ? <Loader2 className="w-4 h-4 animate-spin" /> : <>Verify</>}
+                                        </button>
+                                    </div>
+                                    {gstStatus === 'valid' && gstInfo?.legalName && (
+                                        <p className="text-xs text-emerald-600 mt-1 flex items-center gap-1">
+                                            <CheckCircle className="w-3 h-3" /> Registered: {gstInfo.tradeName || gstInfo.legalName}
+                                        </p>
+                                    )}
+                                    {gstError && (
+                                        <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                                            <AlertCircle className="w-3 h-3" /> {gstError}
+                                        </p>
+                                    )}
+                                    {gstStatus === 'idle' && !gstError && (
+                                        <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-[#ededed]/50' : 'text-gray-500'}`}>
+                                            Optional — enter your 15-character GST number for business verification
+                                        </p>
+                                    )}
+                                </div>
+                                <div>
                                     <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Short Description</label>
                                     <textarea 
                                         className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#ffcc29] h-24 resize-none ${
@@ -563,38 +774,38 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
 
                         {step === 2 && (
                             <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-500">
-                                <h3 className={`text-xl font-bold ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>Target Audience</h3>
+                                <h3 className={`text-xl font-bold ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>Brand Voice</h3>
                                 <div>
-                                    <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Describe your ideal customer <span className="text-red-500">*</span></label>
-                                    <textarea 
-                                        className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#ffcc29] h-32 resize-none ${
-                                            theme === 'dark' 
-                                                ? 'bg-[#070A12] border-[#ffcc29]/30 text-[#ededed] placeholder-[#ededed]/40' 
-                                                : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
-                                        }`}
-                                        placeholder="e.g. Females aged 25-34 interested in eco-friendly living, yoga, and sustainable fashion. They value transparency and organic materials."
-                                        value={formData.targetAudience}
-                                        onChange={e => handleChange('targetAudience', e.target.value)}
-                                    />
-                                </div>
-                                <div>
-                                    <label className={`block text-sm font-bold mb-2 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Brand Voice</label>
+                                    <label className={`block text-sm font-bold mb-2 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Brand Voice <span className="text-xs font-normal opacity-60">(select multiple)</span></label>
                                     <div className="grid grid-cols-2 gap-3">
-                                        {['Professional', 'Friendly', 'Witty', 'Empathetic', 'Bold', 'Educational'].map(voice => (
-                                            <button
-                                                key={voice}
-                                                onClick={() => handleChange('brandVoice', voice)}
-                                                className={`p-3 rounded-lg border text-sm font-medium transition-all ${
-                                                    formData.brandVoice === voice 
-                                                    ? 'border-[#ffcc29] bg-[#ffcc29]/10 text-[#ffcc29]' 
-                                                    : theme === 'dark' 
-                                                        ? 'border-[#ededed]/20 hover:border-[#ffcc29]/50 text-[#ededed]/70'
-                                                        : 'border-gray-200 hover:border-[#ffcc29]/50 text-gray-600'
-                                                }`}
-                                            >
-                                                {voice}
-                                            </button>
-                                        ))}
+                                        {['Professional', 'Friendly', 'Witty', 'Empathetic', 'Bold', 'Educational'].map(voice => {
+                                            const isSelected = Array.isArray(formData.brandVoice) 
+                                                ? formData.brandVoice.includes(voice)
+                                                : formData.brandVoice === voice;
+                                            return (
+                                                <button
+                                                    key={voice}
+                                                    onClick={() => {
+                                                        const currentVoices = Array.isArray(formData.brandVoice) 
+                                                            ? formData.brandVoice 
+                                                            : formData.brandVoice ? [formData.brandVoice] : [];
+                                                        const newVoices = isSelected
+                                                            ? currentVoices.filter(v => v !== voice)
+                                                            : [...currentVoices, voice];
+                                                        handleChange('brandVoice', newVoices);
+                                                    }}
+                                                    className={`p-3 rounded-lg border text-sm font-medium transition-all ${
+                                                        isSelected 
+                                                        ? 'border-[#ffcc29] bg-[#ffcc29]/10 text-[#ffcc29]' 
+                                                        : theme === 'dark' 
+                                                            ? 'border-[#ededed]/20 hover:border-[#ffcc29]/50 text-[#ededed]/70'
+                                                            : 'border-gray-200 hover:border-[#ffcc29]/50 text-gray-600'
+                                                    }`}
+                                                >
+                                                    {isSelected && <span className="mr-1">✓</span>}{voice}
+                                                </button>
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             </div>
@@ -637,13 +848,19 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                 </div>
 
                                 {/* Competitors Section */}
-                                <div className="mt-6 pt-6 border-t border-[#ededed]/10">
+                                <div className="mt-6 pt-6 border-t border-slate-700/50">
                                     <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>
-                                        Your Competitors <span className="text-red-500">*</span>
+                                        Your Competitors <span className={`text-xs font-normal ${theme === 'dark' ? 'text-[#ededed]/50' : 'text-gray-400'}`}>(optional)</span>
                                     </label>
                                     <p className={`text-xs mb-3 ${theme === 'dark' ? 'text-[#ededed]/50' : 'text-gray-500'}`}>
-                                        Enter at least one competitor name/brand you'd like to track. Press Enter or click Add to add each one.
+                                        Add specific competitors you'd like to track, or skip this — our AI will automatically discover competitors based on your business and location.
                                     </p>
+                                    <div className={`mb-3 p-3 rounded-lg flex items-start gap-2 ${theme === 'dark' ? 'bg-[#ffcc29]/10 border border-slate-700/50' : 'bg-yellow-50 border border-yellow-200'}`}>
+                                        <span className="text-[#ffcc29] text-lg">✨</span>
+                                        <p className={`text-xs ${theme === 'dark' ? 'text-[#ededed]/70' : 'text-gray-600'}`}>
+                                            <strong>AI-Powered Discovery:</strong> We'll automatically find and track your top competitors in {formData.businessLocation || 'your location'} based on your industry and target audience.
+                                        </p>
+                                    </div>
                                     <div className="flex gap-2">
                                         <input 
                                             type="text" 
@@ -787,7 +1004,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                         )}
                     </div>
 
-                    <div className={`pt-6 mt-4 border-t flex justify-between items-center ${theme === 'dark' ? 'border-[#ededed]/10' : 'border-gray-200'}`}>
+                    <div className={`pt-6 mt-4 border-t flex justify-between items-center ${theme === 'dark' ? 'border-slate-700/50' : 'border-gray-200'}`}>
                         {step === 4 ? (
                             <>
                                 <button 

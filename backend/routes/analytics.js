@@ -7,7 +7,131 @@ const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
 const AnalyticsSnapshot = require('../models/AnalyticsSnapshot');
+const SocialSnapshot = require('../models/SocialSnapshot');
+const User = require('../models/User');
 const { analyzeMetrics, generateWithLLM } = require('../services/llmRouter');
+const { getPostAnalytics, getSocialAnalyticsDetailed, getAyrshareUserProfile, getUserSocialAnalytics } = require('../services/socialMediaAPI');
+
+/**
+ * Helper: Get user's Ayrshare profile key
+ */
+async function getProfileKey(userId) {
+  const user = await User.findById(userId);
+  return user?.ayrshare?.profileKey || null;
+}
+
+// ============================================
+// AYRSHARE POST ANALYTICS
+// ============================================
+
+/**
+ * POST /api/analytics/post-analytics
+ * Get analytics for a specific Ayrshare post
+ * Body: { postId, platforms }
+ */
+router.post('/post-analytics', protect, async (req, res) => {
+  try {
+    const profileKey = await getProfileKey(req.user.userId || req.user.id);
+    const { postId, platforms } = req.body;
+
+    if (!postId) {
+      return res.status(400).json({ success: false, error: 'Post ID is required' });
+    }
+
+    // Use provided platforms; if none, let Ayrshare use whatever platforms the post was sent to
+    // by NOT sending platforms param at all (Ayrshare auto-detects)
+    let platformList = platforms;
+    if (!platformList || platformList.length === 0) {
+      platformList = null; // null = let Ayrshare auto-detect from post history
+    }
+
+    console.log('Post analytics request - postId:', postId, 'platforms:', platformList || 'auto-detect');
+    const result = await getPostAnalytics(postId, platformList, profileKey);
+
+    if (!result.success) {
+      console.log('Post analytics failed:', result.error);
+      return res.status(400).json({ success: false, error: result.error || 'Failed to get post analytics' });
+    }
+
+    console.log('Post analytics result keys:', JSON.stringify(result.data).substring(0, 500));
+    res.json({ success: true, analytics: result.data });
+  } catch (error) {
+    console.error('Post analytics error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/analytics/social-analytics
+ * Get account-level social analytics (followers, demographics, etc.)
+ * Body: { platforms, quarters }
+ */
+router.post('/social-analytics', protect, async (req, res) => {
+  try {
+    const userId = req.user.userId || req.user.id;
+    const user = await User.findById(userId);
+    const profileKey = user?.ayrshare?.profileKey || null;
+
+    if (!profileKey) {
+      return res.json({ success: true, analytics: {}, message: 'No social accounts connected yet' });
+    }
+
+    // Get actual connected platforms from Ayrshare (same as dashboard does)
+    const userProfile = await getAyrshareUserProfile(profileKey);
+    
+    if (!userProfile.success || !userProfile.data?.activeSocialAccounts?.length) {
+      return res.json({ success: true, analytics: {}, message: 'No connected accounts found' });
+    }
+
+    const connectedPlatforms = userProfile.data.activeSocialAccounts;
+    console.log('Social analytics request for connected platforms:', connectedPlatforms);
+
+    // Use the same function as dashboard (getUserSocialAnalytics)
+    const result = await getUserSocialAnalytics(profileKey, connectedPlatforms);
+
+    console.log('Social analytics raw keys:', Object.keys(result.data || {}));
+
+    if (!result.success) {
+      console.log('Social analytics not available:', result.error);
+      return res.json({ success: true, analytics: {}, message: result.error || 'Social analytics not available' });
+    }
+
+    res.json({ success: true, analytics: result.data });
+  } catch (error) {
+    console.error('Social analytics error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/analytics/daily-analytics
+ * Get daily time-series analytics data
+ * Body: { platforms }
+ */
+router.post('/daily-analytics', protect, async (req, res) => {
+  try {
+    const profileKey = await getProfileKey(req.user.userId || req.user.id);
+    const { platforms } = req.body;
+
+    // Note: Ayrshare's /analytics/social doesn't natively support daily time-series.
+    // We return the standard analytics data and the frontend handles display.
+    const result = await getSocialAnalyticsDetailed(
+      profileKey,
+      platforms || ['instagram', 'facebook']
+    );
+
+    if (!result.success) {
+      // Return empty analytics instead of an error - daily breakdown is optional
+      return res.json({ success: true, analytics: {} });
+    }
+
+    res.json({ success: true, analytics: result.data });
+  } catch (error) {
+    console.error('Daily analytics error:', error);
+    // Don't 500 for optional daily data - return empty
+    res.json({ success: true, analytics: {} });
+  }
+});
 
 /**
  * POST /api/analytics/import/csv
@@ -318,6 +442,148 @@ router.get('/snapshots', protect, async (req, res) => {
   }
 });
 
+// ============================================
+// NAMED ROUTES (must be above /:id wildcard)
+// ============================================
+
+/**
+ * GET /api/analytics/summary
+ * Get aggregated analytics summary across all snapshots
+ */
+router.get('/summary', protect, async (req, res) => {
+  try {
+    const userId = req.user.userId || req.user.id;
+    const { days = 30 } = req.query;
+    
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - parseInt(days));
+    
+    const snapshots = await AnalyticsSnapshot.find({
+      userId,
+      'dateRange.start': { $gte: startDate }
+    });
+    
+    // Aggregate metrics
+    const summary = {
+      totalSessions: 0,
+      totalImpressions: 0,
+      totalClicks: 0,
+      totalConversions: 0,
+      totalSpend: 0,
+      totalRevenue: 0,
+      avgCTR: 0,
+      avgConversionRate: 0,
+      snapshotCount: snapshots.length
+    };
+    
+    for (const s of snapshots) {
+      summary.totalSessions += s.traffic?.sessions || 0;
+      summary.totalImpressions += s.engagement?.impressions || s.advertising?.impressions || 0;
+      summary.totalClicks += s.engagement?.clicks || s.advertising?.clicks || 0;
+      summary.totalConversions += s.conversions?.totalConversions || 0;
+      summary.totalSpend += s.advertising?.totalSpend || 0;
+      summary.totalRevenue += s.revenue?.totalRevenue || 0;
+    }
+    
+    if (summary.totalImpressions > 0) {
+      summary.avgCTR = (summary.totalClicks / summary.totalImpressions * 100).toFixed(2);
+    }
+    if (summary.totalSessions > 0) {
+      summary.avgConversionRate = (summary.totalConversions / summary.totalSessions * 100).toFixed(2);
+    }
+    
+    res.json({
+      success: true,
+      summary,
+      dateRange: {
+        start: startDate,
+        end: new Date()
+      }
+    });
+    
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================
+// HISTORICAL SNAPSHOTS 
+// ============================================
+
+/**
+ * GET /api/analytics/history
+ * Get historical social analytics snapshots for trend charts
+ * Query: ?days=30 (default 30, max 365)
+ */
+router.get('/history', protect, async (req, res) => {
+  try {
+    const userId = req.user.userId || req.user.id;
+    const days = Math.min(parseInt(req.query.days) || 30, 365);
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+    since.setHours(0, 0, 0, 0);
+
+    const snapshots = await SocialSnapshot.find({
+      userId,
+      date: { $gte: since }
+    }).sort({ date: 1 }).lean();
+
+    // Transform Map to plain object for JSON serialization
+    const history = snapshots.map(s => ({
+      date: s.date,
+      platforms: s.platforms instanceof Map ? Object.fromEntries(s.platforms) : s.platforms,
+      totals: s.totals,
+    }));
+
+    res.json({ success: true, history, days });
+  } catch (error) {
+    console.error('Analytics history error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/analytics/snapshot-now
+ * Manually trigger a snapshot for the current user (useful for first-time / testing)
+ */
+router.post('/snapshot-now', protect, async (req, res) => {
+  try {
+    const userId = req.user.userId || req.user.id;
+    const user = await User.findById(userId);
+    const profileKey = user?.ayrshare?.profileKey;
+
+    if (!profileKey) {
+      return res.status(400).json({ success: false, error: 'No social accounts connected' });
+    }
+
+    const snapshotScheduler = require('../services/snapshotScheduler');
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    await snapshotScheduler.collectForUser(userId, profileKey, today);
+
+    // Return the snapshot we just created
+    const snapshot = await SocialSnapshot.findOne({ userId, date: today }).lean();
+
+    res.json({
+      success: true,
+      message: 'Snapshot collected',
+      snapshot: snapshot ? {
+        date: snapshot.date,
+        platforms: snapshot.platforms instanceof Map ? Object.fromEntries(snapshot.platforms) : snapshot.platforms,
+        totals: snapshot.totals,
+      } : null,
+    });
+  } catch (error) {
+    console.error('Manual snapshot error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================
+// WILDCARD :id ROUTES (must be last)
+// ============================================
+
 /**
  * GET /api/analytics/:id
  * Get single analytics snapshot with insights
@@ -423,66 +689,6 @@ router.delete('/:id', protect, async (req, res) => {
     }
     
     res.json({ success: true, message: 'Analytics snapshot deleted' });
-    
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-/**
- * GET /api/analytics/summary
- * Get aggregated analytics summary across all snapshots
- */
-router.get('/summary', protect, async (req, res) => {
-  try {
-    const userId = req.user.userId || req.user.id;
-    const { days = 30 } = req.query;
-    
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - parseInt(days));
-    
-    const snapshots = await AnalyticsSnapshot.find({
-      userId,
-      'dateRange.start': { $gte: startDate }
-    });
-    
-    // Aggregate metrics
-    const summary = {
-      totalSessions: 0,
-      totalImpressions: 0,
-      totalClicks: 0,
-      totalConversions: 0,
-      totalSpend: 0,
-      totalRevenue: 0,
-      avgCTR: 0,
-      avgConversionRate: 0,
-      snapshotCount: snapshots.length
-    };
-    
-    for (const s of snapshots) {
-      summary.totalSessions += s.traffic?.sessions || 0;
-      summary.totalImpressions += s.engagement?.impressions || s.advertising?.impressions || 0;
-      summary.totalClicks += s.engagement?.clicks || s.advertising?.clicks || 0;
-      summary.totalConversions += s.conversions?.totalConversions || 0;
-      summary.totalSpend += s.advertising?.totalSpend || 0;
-      summary.totalRevenue += s.revenue?.totalRevenue || 0;
-    }
-    
-    if (summary.totalImpressions > 0) {
-      summary.avgCTR = (summary.totalClicks / summary.totalImpressions * 100).toFixed(2);
-    }
-    if (summary.totalSessions > 0) {
-      summary.avgConversionRate = (summary.totalConversions / summary.totalSessions * 100).toFixed(2);
-    }
-    
-    res.json({
-      success: true,
-      summary,
-      dateRange: {
-        start: startDate,
-        end: new Date()
-      }
-    });
     
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });

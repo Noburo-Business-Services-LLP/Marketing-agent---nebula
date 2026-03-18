@@ -14,6 +14,8 @@ const platformIcons: Record<string, React.ReactNode> = {
   twitter: <Twitter className="w-4 h-4 text-blue-400" />,
   linkedin: <span className="text-sm font-bold text-blue-600">in</span>,
   facebook: <span className="text-sm font-bold text-blue-700">f</span>,
+  x: <Twitter className="w-4 h-4 text-slate-800" />,
+  tiktok: <span className="text-sm font-bold text-black">TT</span>,
 };
 
 const platformColors: Record<string, string> = {
@@ -22,6 +24,25 @@ const platformColors: Record<string, string> = {
   twitter: 'from-blue-400 to-blue-500',
   linkedin: 'from-blue-600 to-blue-700',
   facebook: 'from-blue-600 to-blue-800',
+  x: 'from-slate-800 to-slate-900',
+  tiktok: 'from-black to-pink-500',
+};
+
+// Tier badge colors
+const tierColors: Record<string, { bg: string; text: string; border: string }> = {
+  mega: { bg: 'bg-purple-100', text: 'text-purple-700', border: 'border-purple-200' },
+  macro: { bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-200' },
+  micro: { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-200' },
+  nano: { bg: 'bg-orange-100', text: 'text-orange-700', border: 'border-orange-200' },
+  'mid-tier': { bg: 'bg-cyan-100', text: 'text-cyan-700', border: 'border-cyan-200' },
+};
+
+const tierColorsDark: Record<string, { bg: string; text: string; border: string }> = {
+  mega: { bg: 'bg-purple-900/30', text: 'text-purple-400', border: 'border-purple-500/30' },
+  macro: { bg: 'bg-blue-900/30', text: 'text-blue-400', border: 'border-blue-500/30' },
+  micro: { bg: 'bg-green-900/30', text: 'text-green-400', border: 'border-green-500/30' },
+  nano: { bg: 'bg-orange-900/30', text: 'text-orange-400', border: 'border-orange-500/30' },
+  'mid-tier': { bg: 'bg-cyan-900/30', text: 'text-cyan-400', border: 'border-cyan-500/30' },
 };
 
 type SortOption = 'relevance' | 'followers' | 'engagement' | 'recent' | 'trending';
@@ -59,27 +80,31 @@ const Influencers: React.FC = () => {
 
   const discoverNewInfluencers = async (forceRefresh = false) => {
     setDiscovering(true);
-    setDiscoveryMessage('Searching social media for relevant influencers...');
+    setDiscoveryMessage('🔍 Finding influencers across Instagram, YouTube, Facebook & more...');
     try {
       const res = await apiService.discoverInfluencers({
-        platforms: ['instagram', 'twitter', 'youtube', 'linkedin', 'facebook'],
+        platforms: ['instagram', 'youtube', 'facebook', 'twitter', 'linkedin'],
         limit: 15,
         forceRefresh
       });
       
       if (res.success && res.influencers) {
         setInfluencers(res.influencers);
-        setDiscoveryMessage(res.message || `Found ${res.discovered || res.influencers.length} influencers!`);
+        const breakdown = res.breakdown || {};
+        setDiscoveryMessage(
+          `✅ Found ${res.discovered || res.influencers.length} influencers! ` +
+          `(${breakdown.mega || 0} Mega, ${breakdown.macro || 0} Macro, ${breakdown.micro || 0} Micro)`
+        );
         
-        // Clear message after 3 seconds
-        setTimeout(() => setDiscoveryMessage(''), 3000);
+        // Clear message after 5 seconds
+        setTimeout(() => setDiscoveryMessage(''), 5000);
       } else {
-        setDiscoveryMessage(res.message || 'No influencers found. Please complete your brand profile.');
+        setDiscoveryMessage(res.message || '⚠️ No influencers found. Please complete your onboarding first.');
         setTimeout(() => setDiscoveryMessage(''), 5000);
       }
     } catch (e: any) {
       console.error(e);
-      setDiscoveryMessage('Discovery failed. Please try again.');
+      setDiscoveryMessage('❌ Discovery failed. Please try again.');
       setTimeout(() => setDiscoveryMessage(''), 3000);
     } finally {
       setDiscovering(false);
@@ -199,7 +224,7 @@ const Influencers: React.FC = () => {
               onChange={(e) => setSearchTerm(e.target.value)}
               className={`pl-9 pr-4 py-2 border rounded-lg text-sm outline-none focus:border-[#ffcc29] w-52 ${
                 isDarkMode 
-                  ? 'bg-[#0f1419] border-[#ffcc29]/20 text-white placeholder-slate-500' 
+                  ? 'bg-[#0f1419] border-slate-700/50 text-white placeholder-slate-500' 
                   : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
               }`}
             />
@@ -211,7 +236,7 @@ const Influencers: React.FC = () => {
             onChange={(e) => setSelectedPlatform(e.target.value)}
             className={`px-3 py-2 border rounded-lg text-sm outline-none focus:border-[#ffcc29] ${
               isDarkMode 
-                ? 'bg-[#0f1419] border-[#ffcc29]/20 text-white' 
+                ? 'bg-[#0f1419] border-slate-700/50 text-white' 
                 : 'bg-white border-slate-300 text-slate-900'
             }`}
           >
@@ -227,7 +252,7 @@ const Influencers: React.FC = () => {
             onChange={(e) => setSelectedNiche(e.target.value)}
             className={`px-3 py-2 border rounded-lg text-sm outline-none focus:border-[#ffcc29] ${
               isDarkMode 
-                ? 'bg-[#0f1419] border-[#ffcc29]/20 text-white' 
+                ? 'bg-[#0f1419] border-slate-700/50 text-white' 
                 : 'bg-white border-slate-300 text-slate-900'
             }`}
           >
@@ -243,7 +268,7 @@ const Influencers: React.FC = () => {
               onClick={() => setShowSortDropdown(!showSortDropdown)}
               className={`flex items-center gap-2 px-3 py-2 border rounded-lg text-sm ${
                 isDarkMode 
-                  ? 'border-[#ffcc29]/20 hover:bg-[#ffcc29]/10 text-white' 
+                  ? 'border-slate-700/50 hover:bg-[#ffcc29]/10 text-white' 
                   : 'border-slate-300 hover:bg-slate-50 text-slate-900'
               }`}
             >
@@ -254,7 +279,7 @@ const Influencers: React.FC = () => {
             
             {showSortDropdown && (
               <div className={`absolute right-0 mt-2 w-48 rounded-lg shadow-lg border z-50 ${
-                isDarkMode ? 'bg-[#0f1419] border-[#ffcc29]/20' : 'bg-white border-slate-200'
+                isDarkMode ? 'bg-[#0f1419] border-slate-700/50' : 'bg-white border-slate-200'
               }`}>
                 {sortOptions.map(option => (
                   <button
@@ -308,14 +333,14 @@ const Influencers: React.FC = () => {
       {/* Stats Bar */}
       {sortedInfluencers.length > 0 && (
         <div className={`grid grid-cols-2 md:grid-cols-4 gap-4 mb-6`}>
-          <div className={`p-4 rounded-lg border ${theme.bgCard} ${isDarkMode ? 'border-[#ffcc29]/20' : 'border-slate-200'}`}>
+          <div className={`p-4 rounded-lg border ${theme.bgCard} ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'}`}>
             <div className="flex items-center gap-2 mb-1">
               <Users className="w-4 h-4 text-[#ffcc29]" />
               <span className={`text-xs uppercase font-bold ${theme.textSecondary}`}>Total Found</span>
             </div>
             <p className={`text-2xl font-bold ${theme.text}`}>{sortedInfluencers.length}</p>
           </div>
-          <div className={`p-4 rounded-lg border ${theme.bgCard} ${isDarkMode ? 'border-[#ffcc29]/20' : 'border-slate-200'}`}>
+          <div className={`p-4 rounded-lg border ${theme.bgCard} ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'}`}>
             <div className="flex items-center gap-2 mb-1">
               <Award className="w-4 h-4 text-green-500" />
               <span className={`text-xs uppercase font-bold ${theme.textSecondary}`}>High Match (80+)</span>
@@ -324,7 +349,7 @@ const Influencers: React.FC = () => {
               {sortedInfluencers.filter(i => (i.aiMatchScore?.score || 0) >= 80).length}
             </p>
           </div>
-          <div className={`p-4 rounded-lg border ${theme.bgCard} ${isDarkMode ? 'border-[#ffcc29]/20' : 'border-slate-200'}`}>
+          <div className={`p-4 rounded-lg border ${theme.bgCard} ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'}`}>
             <div className="flex items-center gap-2 mb-1">
               <TrendingUp className="w-4 h-4 text-blue-500" />
               <span className={`text-xs uppercase font-bold ${theme.textSecondary}`}>Avg Engagement</span>
@@ -333,7 +358,7 @@ const Influencers: React.FC = () => {
               {(sortedInfluencers.reduce((acc, i) => acc + (i.engagementRate || 0), 0) / sortedInfluencers.length).toFixed(1)}%
             </p>
           </div>
-          <div className={`p-4 rounded-lg border ${theme.bgCard} ${isDarkMode ? 'border-[#ffcc29]/20' : 'border-slate-200'}`}>
+          <div className={`p-4 rounded-lg border ${theme.bgCard} ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'}`}>
             <div className="flex items-center gap-2 mb-1">
               <Target className="w-4 h-4 text-purple-500" />
               <span className={`text-xs uppercase font-bold ${theme.textSecondary}`}>Total Reach</span>
@@ -348,7 +373,7 @@ const Influencers: React.FC = () => {
       {/* Influencer Grid */}
       {sortedInfluencers.length === 0 ? (
         <div className={`text-center py-16 rounded-xl border ${theme.bgCard} ${
-          isDarkMode ? 'border-[#ffcc29]/20' : 'border-slate-200'
+          isDarkMode ? 'border-slate-700/50' : 'border-slate-200'
         }`}>
           <Users className={`w-16 h-16 mx-auto mb-4 ${theme.textSecondary}`} />
           <h3 className={`text-xl font-bold mb-2 ${theme.text}`}>No Influencers Found</h3>
@@ -389,7 +414,7 @@ const Influencers: React.FC = () => {
               target="_blank"
               rel="noopener noreferrer"
               className={`rounded-xl shadow-sm border overflow-hidden flex flex-col transition-all hover:scale-[1.02] hover:shadow-lg cursor-pointer ${theme.bgCard} ${
-                isDarkMode ? 'border-[#ffcc29]/20 hover:border-[#ffcc29]/40' : 'border-slate-200 hover:border-slate-300'
+                isDarkMode ? 'border-slate-700/50 hover:border-slate-600' : 'border-slate-200 hover:border-slate-300'
               }`}
               onClick={(e) => {
                 // Don't navigate if clicking on buttons
@@ -440,11 +465,11 @@ const Influencers: React.FC = () => {
                 <div className="mt-8 mb-4">
                   <div className="flex items-center gap-2 mb-1">
                     <h3 className={`font-bold text-base ${theme.text} truncate`}>{inf.name}</h3>
-                    <span className={`text-[9px] px-1.5 py-0.5 rounded uppercase font-bold tracking-wide ${
-                      isDarkMode ? 'bg-[#ffcc29]/20 text-[#ffcc29]' : 'bg-slate-100 text-slate-600'
-                    }`}>
-                      {inf.type}
-                    </span>
+                    {inf.isVerified && (
+                      <span className="text-blue-500" title="Verified">
+                        <Check className="w-4 h-4" />
+                      </span>
+                    )}
                   </div>
                   <p className="text-[#ffcc29] font-medium text-sm mb-1">{inf.handle}</p>
                   <p className={`text-xs capitalize line-clamp-1 ${theme.textSecondary}`}>
@@ -454,13 +479,13 @@ const Influencers: React.FC = () => {
 
                 {/* Stats Grid */}
                 <div className={`grid grid-cols-3 gap-1 border-t border-b py-3 mb-3 text-center ${
-                  isDarkMode ? 'border-[#ffcc29]/20' : 'border-slate-200'
+                  isDarkMode ? 'border-slate-700/50' : 'border-slate-200'
                 }`}>
                   <div>
                     <p className="text-[9px] text-slate-400 uppercase font-bold mb-0.5">Followers</p>
                     <p className={`text-sm font-bold ${theme.text}`}>{formatNumber(inf.followerCount || 0)}</p>
                   </div>
-                  <div className={`border-l border-r ${isDarkMode ? 'border-[#ffcc29]/20' : 'border-slate-200'}`}>
+                  <div className={`border-l border-r ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'}`}>
                     <p className="text-[9px] text-slate-400 uppercase font-bold mb-0.5">Reach</p>
                     <p className={`text-sm font-bold ${theme.text}`}>{formatNumber(inf.reach || 0)}</p>
                   </div>

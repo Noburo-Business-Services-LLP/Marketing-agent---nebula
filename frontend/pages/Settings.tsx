@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Save, AlertCircle, Check, Loader2, Eye, EyeOff, Zap, RefreshCw } from 'lucide-react';
-import { User } from '../types';
+import { Save, AlertCircle, Check, Loader2, Eye, EyeOff, Zap, RefreshCw, CreditCard, Download, ExternalLink } from 'lucide-react';
+import { User, BillingData } from '../types';
 import { apiService } from '../services/api';
 import { useTheme, getThemeClasses } from '../context/ThemeContext';
 
@@ -45,6 +45,21 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
       new: false,
       confirm: false
   });
+
+  // Billing State
+  const [billingData, setBillingData] = useState<BillingData | null>(null);
+  const [loadingBilling, setLoadingBilling] = useState(false);
+
+  // Fetch billing data when Billing tab is active
+  useEffect(() => {
+    if (activeTab === 'Billing' && !billingData) {
+      setLoadingBilling(true);
+      apiService.getBillingData()
+        .then((res: BillingData) => setBillingData(res))
+        .catch(() => {})
+        .finally(() => setLoadingBilling(false));
+    }
+  }, [activeTab]);
 
   // Load user data when component mounts or user changes
   useEffect(() => {
@@ -164,9 +179,9 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
           {/* Sidebar Tabs */}
           <div className="w-full md:w-64 flex-shrink-0">
              <div className={`rounded-xl shadow-sm border p-2 space-y-1 ${theme.bgCard} ${
-               isDarkMode ? 'border-[#ffcc29]/20' : 'border-slate-200'
+               isDarkMode ? 'border-slate-700/50' : 'border-slate-200'
              }`}>
-                {['Profile', 'Integrations', 'Notifications', 'Security', 'Billing'].map(tab => (
+                {['Profile', 'Notifications', 'Security', 'Billing'].map(tab => (
                     <button
                         key={tab}
                         onClick={() => setActiveTab(tab)}
@@ -185,7 +200,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
           {/* Content */}
           <div className="flex-1">
               <div className={`rounded-xl shadow-sm border p-8 ${theme.bgCard} ${
-                isDarkMode ? 'border-[#ffcc29]/20' : 'border-slate-200'
+                isDarkMode ? 'border-slate-700/50' : 'border-slate-200'
               }`}>
                   {activeTab === 'Profile' && (
                       <div className="animate-in fade-in duration-300">
@@ -203,7 +218,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                           errors.firstName 
                                             ? 'border-red-300 focus:ring-red-200' 
                                             : isDarkMode 
-                                              ? 'bg-[#0d1117] border-[#ffcc29]/20 text-white focus:ring-[#ffcc29]/30' 
+                                              ? 'bg-[#0d1117] border-slate-700/50 text-white focus:ring-[#ffcc29]/30' 
                                               : 'bg-white border-slate-300 text-slate-900 focus:ring-[#ffcc29]'
                                         }`}
                                       />
@@ -219,7 +234,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                           errors.lastName 
                                             ? 'border-red-300 focus:ring-red-200' 
                                             : isDarkMode 
-                                              ? 'bg-[#0d1117] border-[#ffcc29]/20 text-white focus:ring-[#ffcc29]/30' 
+                                              ? 'bg-[#0d1117] border-slate-700/50 text-white focus:ring-[#ffcc29]/30' 
                                               : 'bg-white border-slate-300 text-slate-900 focus:ring-[#ffcc29]'
                                         }`}
                                       />
@@ -236,7 +251,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                         onChange={e => handleChange('companyName', e.target.value)}
                                         className={`w-full p-3 border rounded-lg outline-none focus:ring-2 transition-all ${
                                           isDarkMode 
-                                            ? 'bg-[#0d1117] border-[#ffcc29]/20 text-white focus:ring-[#ffcc29]/30' 
+                                            ? 'bg-[#0d1117] border-slate-700/50 text-white focus:ring-[#ffcc29]/30' 
                                             : 'bg-white border-slate-300 text-slate-900 focus:ring-[#ffcc29]'
                                         }`}
                                       />
@@ -249,7 +264,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                         onChange={e => handleChange('industry', e.target.value)}
                                         className={`w-full p-3 border rounded-lg outline-none focus:ring-2 transition-all ${
                                           isDarkMode 
-                                            ? 'bg-[#0d1117] border-[#ffcc29]/20 text-white focus:ring-[#ffcc29]/30' 
+                                            ? 'bg-[#0d1117] border-slate-700/50 text-white focus:ring-[#ffcc29]/30' 
                                             : 'bg-white border-slate-300 text-slate-900 focus:ring-[#ffcc29]'
                                         }`}
                                       />
@@ -266,7 +281,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                       errors.email 
                                         ? 'border-red-300 focus:ring-red-200' 
                                         : isDarkMode 
-                                          ? 'bg-[#0d1117] border-[#ffcc29]/20 text-white focus:ring-[#ffcc29]/30' 
+                                          ? 'bg-[#0d1117] border-slate-700/50 text-white focus:ring-[#ffcc29]/30' 
                                           : 'bg-white border-slate-300 text-slate-900 focus:ring-[#ffcc29]'
                                     }`}
                                   />
@@ -274,10 +289,10 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                               </div>
                           </div>
 
-                          <div className={`border-t pt-8 mb-8 ${isDarkMode ? 'border-[#ffcc29]/20' : 'border-slate-200'}`}>
+                          <div className={`border-t pt-8 mb-8 ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'}`}>
                               <h3 className={`text-lg font-bold mb-6 ${theme.text}`}>Preferences</h3>
                               <div className={`flex items-center justify-between p-4 rounded-lg border ${
-                                isDarkMode ? 'bg-[#0d1117] border-[#ffcc29]/20' : 'bg-slate-50 border-slate-200'
+                                isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-slate-50 border-slate-200'
                               }`}>
                                   <div>
                                       <p className={`font-bold ${theme.text}`}>Email Notifications</p>
@@ -339,7 +354,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                           passwordErrors.currentPassword 
                                             ? 'border-red-300 focus:ring-red-200' 
                                             : isDarkMode 
-                                              ? 'bg-[#0d1117] border-[#ffcc29]/20 text-white focus:ring-[#ffcc29]/30' 
+                                              ? 'bg-[#0d1117] border-slate-700/50 text-white focus:ring-[#ffcc29]/30' 
                                               : 'bg-white border-slate-300 text-slate-900 focus:ring-[#ffcc29]'
                                         }`}
                                       />
@@ -365,7 +380,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                           passwordErrors.newPassword 
                                             ? 'border-red-300 focus:ring-red-200' 
                                             : isDarkMode 
-                                              ? 'bg-[#0d1117] border-[#ffcc29]/20 text-white focus:ring-[#ffcc29]/30' 
+                                              ? 'bg-[#0d1117] border-slate-700/50 text-white focus:ring-[#ffcc29]/30' 
                                               : 'bg-white border-slate-300 text-slate-900 focus:ring-[#ffcc29]'
                                         }`}
                                       />
@@ -392,7 +407,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                           passwordErrors.confirmPassword 
                                             ? 'border-red-300 focus:ring-red-200' 
                                             : isDarkMode 
-                                              ? 'bg-[#0d1117] border-[#ffcc29]/20 text-white focus:ring-[#ffcc29]/30' 
+                                              ? 'bg-[#0d1117] border-slate-700/50 text-white focus:ring-[#ffcc29]/30' 
                                               : 'bg-white border-slate-300 text-slate-900 focus:ring-[#ffcc29]'
                                         }`}
                                       />
@@ -433,145 +448,151 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                       </div>
                   )}
 
-                  {activeTab === 'Integrations' && (
-                      <div className="animate-in fade-in duration-300">
-                          <div className="flex items-center justify-between mb-6">
-                              <div className="flex items-center gap-2">
-                                  <Zap className="w-5 h-5 text-[#ffcc29]" />
-                                  <h2 className={`text-lg font-bold ${theme.text}`}>API Integrations</h2>
-                              </div>
-                              <button
-                                onClick={async () => {
-                                  setLoadingApiStatus(true);
-                                  try {
-                                    const status = await apiService.checkApiStatus();
-                                    setApiStatus(status.apis);
-                                  } catch (e) {
-                                    console.error('Failed to check API status:', e);
-                                  }
-                                  setLoadingApiStatus(false);
-                                }}
-                                disabled={loadingApiStatus}
-                                className="px-4 py-2 rounded-lg font-semibold text-sm flex items-center gap-2 bg-[#ffcc29] text-black hover:bg-[#e6b825] transition-colors disabled:opacity-50"
-                              >
-                                {loadingApiStatus ? (
-                                  <><Loader2 className="w-4 h-4 animate-spin" /> Checking...</>
-                                ) : (
-                                  <><RefreshCw className="w-4 h-4" /> Check Status</>
-                                )}
-                              </button>
-                          </div>
-
-                          <p className={`text-sm mb-6 ${theme.textSecondary}`}>
-                            These APIs power real-time data fetching for competitor tracking, social media posting, and trend analysis.
-                          </p>
-
-                          <div className="space-y-4">
-                            {/* Ayrshare */}
-                            <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-[#0d1117] border-[#ffcc29]/20' : 'bg-white border-slate-200'}`}>
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm">A</div>
-                                  <div>
-                                    <p className={`font-semibold ${theme.text}`}>Ayrshare</p>
-                                    <p className={`text-xs ${theme.textMuted}`}>Social media posting & scheduling</p>
-                                  </div>
-                                </div>
-                                <div className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                                  apiStatus?.ayrshare?.connected 
-                                    ? 'bg-emerald-100 text-emerald-700' 
-                                    : apiStatus?.ayrshare 
-                                      ? 'bg-red-100 text-red-700'
-                                      : 'bg-slate-100 text-slate-500'
-                                }`}>
-                                  {apiStatus?.ayrshare?.connected ? '● Connected' : apiStatus?.ayrshare ? '○ Error' : '○ Not Checked'}
-                                </div>
-                              </div>
-                              {apiStatus?.ayrshare?.error && (
-                                <p className="text-xs text-red-500 mt-2">{apiStatus.ayrshare.error}</p>
-                              )}
-                            </div>
-
-                            {/* Apify */}
-                            <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-[#0d1117] border-[#ffcc29]/20' : 'bg-white border-slate-200'}`}>
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-green-500 to-teal-600 flex items-center justify-center text-white font-bold text-sm">AP</div>
-                                  <div>
-                                    <p className={`font-semibold ${theme.text}`}>Apify</p>
-                                    <p className={`text-xs ${theme.textMuted}`}>Web scraping for Instagram, Twitter, Facebook</p>
-                                  </div>
-                                </div>
-                                <div className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                                  apiStatus?.apify?.connected 
-                                    ? 'bg-emerald-100 text-emerald-700' 
-                                    : apiStatus?.apify 
-                                      ? 'bg-red-100 text-red-700'
-                                      : 'bg-slate-100 text-slate-500'
-                                }`}>
-                                  {apiStatus?.apify?.connected ? '● Connected' : apiStatus?.apify ? '○ Error' : '○ Not Checked'}
-                                </div>
-                              </div>
-                              {apiStatus?.apify?.error && (
-                                <p className="text-xs text-red-500 mt-2">{apiStatus.apify.error}</p>
-                              )}
-                            </div>
-
-                            {/* SearchAPI */}
-                            <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-[#0d1117] border-[#ffcc29]/20' : 'bg-white border-slate-200'}`}>
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center text-white font-bold text-sm">S</div>
-                                  <div>
-                                    <p className={`font-semibold ${theme.text}`}>SearchAPI</p>
-                                    <p className={`text-xs ${theme.textMuted}`}>Google trends & search results</p>
-                                  </div>
-                                </div>
-                                <div className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                                  apiStatus?.searchapi?.connected 
-                                    ? 'bg-emerald-100 text-emerald-700' 
-                                    : apiStatus?.searchapi 
-                                      ? 'bg-red-100 text-red-700'
-                                      : 'bg-slate-100 text-slate-500'
-                                }`}>
-                                  {apiStatus?.searchapi?.connected ? '● Connected' : apiStatus?.searchapi ? '○ Error' : '○ Not Checked'}
-                                </div>
-                              </div>
-                              {apiStatus?.searchapi?.error && (
-                                <p className="text-xs text-red-500 mt-2">{apiStatus.searchapi.error}</p>
-                              )}
-                            </div>
-
-                            {/* Gemini AI */}
-                            <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-[#0d1117] border-[#ffcc29]/20' : 'bg-white border-slate-200'}`}>
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center text-white font-bold text-sm">G</div>
-                                  <div>
-                                    <p className={`font-semibold ${theme.text}`}>Google Gemini AI</p>
-                                    <p className={`text-xs ${theme.textMuted}`}>Content generation & analysis</p>
-                                  </div>
-                                </div>
-                                <div className="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">
-                                  ● Active
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className={`mt-6 p-4 rounded-lg ${isDarkMode ? 'bg-[#ffcc29]/10' : 'bg-[#ffcc29]/10'}`}>
-                            <p className={`text-sm ${theme.text}`}>
-                              <strong>💡 Tip:</strong> Click "Check Status" to verify all API connections are working. If any API shows an error, the system will fall back to AI-generated data.
-                            </p>
-                          </div>
+                  {activeTab === 'Notifications' && (
+                      <div className={`text-center py-12 rounded-lg border border-dashed ${
+                        isDarkMode ? 'bg-[#0d1117] border-slate-700/50 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-400'
+                      }`}>
+                          <p>Advanced notification settings coming soon.</p>
                       </div>
                   )}
 
-                  {(activeTab === 'Notifications' || activeTab === 'Billing') && (
-                      <div className={`text-center py-12 rounded-lg border border-dashed ${
-                        isDarkMode ? 'bg-[#0d1117] border-[#ffcc29]/20 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-400'
-                      }`}>
-                          <p>Advanced settings for {activeTab} coming soon.</p>
+                  {activeTab === 'Billing' && (
+                      <div className="animate-in fade-in duration-300">
+                          <h2 className={`text-lg font-bold mb-6 ${theme.text}`}>Billing & Invoices</h2>
+
+                          {loadingBilling ? (
+                            <div className="flex items-center justify-center py-16">
+                              <Loader2 className="w-6 h-6 animate-spin text-[#ffcc29]" />
+                              <span className={`ml-3 ${theme.textSecondary}`}>Loading billing info...</span>
+                            </div>
+                          ) : billingData ? (
+                            <div className="space-y-6">
+                              {/* Current Plan */}
+                              <div className={`p-5 rounded-lg border ${
+                                isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-slate-50 border-slate-200'
+                              }`}>
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-1">Current Plan</p>
+                                    <div className="flex items-center gap-3">
+                                      <span className={`text-xl font-bold ${theme.text}`}>
+                                        {billingData.subscription.plan.charAt(0).toUpperCase() + billingData.subscription.plan.slice(1)}
+                                      </span>
+                                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                                        billingData.subscription.status === 'active'
+                                          ? 'bg-green-500/20 text-green-400'
+                                          : billingData.subscription.status === 'cancelled'
+                                          ? 'bg-red-500/20 text-red-400'
+                                          : 'bg-slate-500/20 text-slate-400'
+                                      }`}>
+                                        {billingData.subscription.status}
+                                      </span>
+                                    </div>
+                                    {billingData.subscription.expiresAt && (
+                                      <p className={`text-xs mt-1 ${theme.textSecondary}`}>
+                                        Expires: {new Date(billingData.subscription.expiresAt).toLocaleDateString()}
+                                      </p>
+                                    )}
+                                  </div>
+                                  <CreditCard className={`w-8 h-8 ${isDarkMode ? 'text-slate-600' : 'text-slate-300'}`} />
+                                </div>
+                              </div>
+
+                              {/* Credits */}
+                              <div className={`p-5 rounded-lg border ${
+                                isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-slate-50 border-slate-200'
+                              }`}>
+                                <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3">Credits</p>
+                                <div className="grid grid-cols-2 gap-4">
+                                  <div>
+                                    <p className={`text-2xl font-bold ${theme.text}`}>{billingData.credits.balance}</p>
+                                    <p className={`text-xs ${theme.textSecondary}`}>Remaining</p>
+                                  </div>
+                                  <div>
+                                    <p className={`text-2xl font-bold ${theme.text}`}>{billingData.credits.totalUsed}</p>
+                                    <p className={`text-xs ${theme.textSecondary}`}>Used</p>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Payment History */}
+                              <div>
+                                <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3">Payment History</p>
+                                {billingData.payments.length > 0 ? (
+                                  <div className={`rounded-lg border overflow-hidden ${
+                                    isDarkMode ? 'border-slate-700/50' : 'border-slate-200'
+                                  }`}>
+                                    <table className="w-full text-sm">
+                                      <thead>
+                                        <tr className={isDarkMode ? 'bg-slate-800/50' : 'bg-slate-50'}>
+                                          <th className={`text-left px-4 py-3 font-medium ${theme.textSecondary}`}>Date</th>
+                                          <th className={`text-left px-4 py-3 font-medium ${theme.textSecondary}`}>Amount</th>
+                                          <th className={`text-left px-4 py-3 font-medium ${theme.textSecondary}`}>Credits</th>
+                                          <th className={`text-left px-4 py-3 font-medium ${theme.textSecondary}`}>Status</th>
+                                          <th className={`text-left px-4 py-3 font-medium ${theme.textSecondary}`}>Invoice</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {billingData.payments.map((payment, idx) => (
+                                          <tr key={payment.paymentId || idx} className={`border-t ${
+                                            isDarkMode ? 'border-slate-700/50' : 'border-slate-200'
+                                          }`}>
+                                            <td className={`px-4 py-3 ${theme.text}`}>
+                                              {new Date(payment.paidAt).toLocaleDateString()}
+                                            </td>
+                                            <td className={`px-4 py-3 ${theme.text}`}>
+                                              {payment.currency === 'INR' ? '\u20B9' : payment.currency} {payment.amount?.toLocaleString()}
+                                            </td>
+                                            <td className={`px-4 py-3 ${theme.text}`}>
+                                              {payment.credits || '—'}
+                                            </td>
+                                            <td className="px-4 py-3">
+                                              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                                                payment.status === 'paid'
+                                                  ? 'bg-green-500/20 text-green-400'
+                                                  : payment.status === 'refunded'
+                                                  ? 'bg-amber-500/20 text-amber-400'
+                                                  : 'bg-red-500/20 text-red-400'
+                                              }`}>
+                                                {payment.status}
+                                              </span>
+                                            </td>
+                                            <td className="px-4 py-3">
+                                              {payment.invoiceUrl ? (
+                                                <a
+                                                  href={payment.invoiceUrl}
+                                                  target="_blank"
+                                                  rel="noopener noreferrer"
+                                                  className="text-[#ffcc29] hover:text-[#ffcc29]/80 flex items-center gap-1 text-xs font-medium"
+                                                >
+                                                  <ExternalLink className="w-3 h-3" /> View
+                                                </a>
+                                              ) : (
+                                                <span className={theme.textSecondary}>—</span>
+                                              )}
+                                            </td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                ) : (
+                                  <div className={`text-center py-8 rounded-lg border border-dashed ${
+                                    isDarkMode ? 'bg-[#0d1117] border-slate-700/50 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-400'
+                                  }`}>
+                                    <CreditCard className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                                    <p>No payments yet.</p>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className={`text-center py-12 rounded-lg border border-dashed ${
+                              isDarkMode ? 'bg-[#0d1117] border-slate-700/50 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-400'
+                            }`}>
+                              <p>Could not load billing data. Try again later.</p>
+                            </div>
+                          )}
                       </div>
                   )}
               </div>

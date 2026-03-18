@@ -4,23 +4,41 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Nebulaa AI - Marketing Agent</title>
+    <!-- Tailwind CSS via Play CDN - more reliable -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script>
-      tailwind.config = {
-        darkMode: 'class',
-        theme: {
-          extend: {
-            colors: {
-              nebula: {
-                dark: '#070A12',
-                gold: '#ffcc29',
-                silver: '#ededed',
+      // Configure tailwind when it loads
+      function configureTailwind() {
+        if (typeof tailwind !== 'undefined' && tailwind.config) {
+          tailwind.config = {
+            darkMode: 'class',
+            theme: {
+              extend: {
+                colors: {
+                  nebula: {
+                    dark: '#070A12',
+                    gold: '#ffcc29',
+                    silver: '#ededed',
+                  }
+                }
               }
             }
-          }
+          };
+          return true;
+        }
+        return false;
+      }
+      
+      // Retry configuration
+      var configRetries = 0;
+      function tryConfigureTailwind() {
+        if (!configureTailwind() && configRetries < 100) {
+          configRetries++;
+          setTimeout(tryConfigureTailwind, 50);
         }
       }
+      tryConfigureTailwind();
     </script>
     <style>
       body {
@@ -70,6 +88,20 @@
       ::-webkit-scrollbar-thumb:hover {
         background: #1a1f2e;
       }
+      /* Skeleton shimmer animation */
+      @keyframes shimmer {
+        0% { background-position: -200% 0; }
+        100% { background-position: 200% 0; }
+      }
+      .skeleton-shimmer {
+        background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.08) 50%, transparent 100%);
+        background-size: 200% 100%;
+        animation: shimmer 1.5s infinite;
+      }
+      .dark .skeleton-shimmer {
+        background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.05) 50%, transparent 100%);
+        background-size: 200% 100%;
+      }
     </style>
   <script type="importmap">
 {
@@ -85,7 +117,6 @@
 </script>
 </head>
   <body>
-    <div id="root"></div>
-    <script type="module" src="/index.tsx"></script>
+    <div id="root"></div>    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>    <script type="module" src="/index.tsx"></script>
   </body>
 </html>

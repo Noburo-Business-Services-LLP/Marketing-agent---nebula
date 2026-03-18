@@ -18,9 +18,14 @@ const competitorPostSchema = new mongoose.Schema({
     default: 'neutral'
   },
   postedAt: Date,
+  postedAtTimestamp: Number,
   fetchedAt: {
     type: Date,
     default: Date.now
+  },
+  isRealData: {
+    type: Boolean,
+    default: false
   }
 });
 
@@ -46,6 +51,7 @@ const competitorSchema = new mongoose.Schema({
   },
   logo: String,
   description: String,
+  location: String,
   posts: [competitorPostSchema],
   analysis: {
     strengths: [String],
@@ -58,11 +64,28 @@ const competitorSchema = new mongoose.Schema({
     avgEngagement: { type: Number, default: 0 },
     postFrequency: String,
     topPerformingContent: String,
-    audienceSize: { type: Number, default: 0 }
+    audienceSize: { type: Number, default: 0 },
+    followers: { type: Number, default: 0 },
+    following: { type: Number, default: 0 },
+    lastFetched: Date,
+    realTimeData: mongoose.Schema.Types.Mixed
   },
   isActive: {
     type: Boolean,
     default: true
+  },
+  isAutoDiscovered: {
+    type: Boolean,
+    default: false
+  },
+  isIgnored: {
+    type: Boolean,
+    default: false
+  },
+  competitorType: {
+    type: String,
+    enum: ['local', 'regional', 'national', 'global', 'startup', 'emerging', 'direct', 'indirect', 'market_leader', 'unknown'],
+    default: 'unknown'
   }
 }, {
   timestamps: true

@@ -2,12 +2,13 @@ require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const path = require('path');
 
 // ============================================
 // Environment Validation (Fail Fast)
 // ============================================
 const requiredEnvVars = ['GEMINI_API_KEY'];
-const optionalEnvVars = ['GROK_API_KEY', 'MONGODB_URI', 'JWT_SECRET'];
+const optionalEnvVars = ['GROK_API_KEY', 'MONGODB_URI', 'JWT_SECRET', 'SES_AWS_ACCESS_KEY_ID', 'SES_AWS_SECRET_ACCESS_KEY', 'SES_SENDER_EMAIL'];
 
 console.log('\n🔍 Validating environment...');
 for (const envVar of requiredEnvVars) {
@@ -37,50 +38,81 @@ const supportRoutes = require('./routes/support');
 const dashboardRoutes = require('./routes/dashboard');
 const campaignRoutes = require('./routes/campaigns');
 const competitorRoutes = require('./routes/competitors');
-const influencerRoutes = require('./routes/influencers');
 const reminderRoutes = require('./routes/reminders');
 
 // New real-data routes
 const brandRoutes = require('./routes/brand');
-const trendRoutes = require('./routes/trends');
-const contentRoutes = require('./routes/content');
-const campaignBuilderRoutes = require('./routes/campaignBuilder');
 const analyticsRoutes = require('./routes/analytics');
+
+// Reachouts CRM routes - REMOVED
+
+// Notification routes
+const notificationRoutes = require('./routes/notifications');
+
+// Brand Assets routes
+const brandAssetsRoutes = require('./routes/brandAssets');
+
+// Ads / Boost routes
+const adsRoutes = require('./routes/ads');
+
+// Credits / Trial routes
+const creditsRoutes = require('./routes/credits');
+
+// Payment / Razorpay routes
+const paymentRoutes = require('./routes/payment');
+
+// Trial guard middleware
+const { checkTrial } = require('./middleware/trialGuard');
+
+// Content routes
+const contentRoutes = require('./routes/content');
+
+// Google Calendar routes
+const googleCalendarRoutes = require('./routes/googleCalendar');
+
+// Notification scheduler service
+const notificationScheduler = require('./services/notificationScheduler');
+// Analytics snapshot scheduler
+const snapshotScheduler = require('./services/snapshotScheduler');
 
 const app = express();
 
-// Middleware
+// CORS configuration for production and development
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'http://127.0.0.1:3000',
+  'http://127.0.0.1:5173',
+  'https://marketing-agent-nebula.onrender.com',
+  'https://www.marketing-agent-nebula.onrender.com'
+];
+
+// In production on Render, trust proxy for proper HTTPS handling
+if (process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+}
+
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:5173', 'http://127.0.0.1:3000', 'http://127.0.0.1:5173'],
+  origin: function(origin, callback) {
+    // Allow requests with no origin (mobile apps, Postman, same-origin requests)
+    if (!origin) return callback(null, true);
+    
+    // Check if origin is in allowed list
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else if (process.env.NODE_ENV === 'production') {
+      // In production, be more permissive for Render deployment
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-
-// Response time monitoring middleware - warn if > 3 seconds
-app.use((req, res, next) => {
-  const start = Date.now();
-  const originalEnd = res.end;
-  
-  res.end = function(...args) {
-    const duration = Date.now() - start;
-    const threshold = 3000; // 3 seconds
-    
-    if (duration > threshold) {
-      console.warn(`⚠️  SLOW REQUEST: ${req.method} ${req.path} took ${duration}ms (>${threshold}ms threshold)`);
-    } else if (duration > 1000) {
-      console.log(`⏱️  ${req.method} ${req.path} - ${duration}ms`);
-    }
-    
-    // Add response time header
-    res.setHeader('X-Response-Time', `${duration}ms`);
-    return originalEnd.apply(this, args);
-  };
-  
-  next();
-});
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Request logging middleware
 app.use((req, res, next) => {
@@ -96,15 +128,32 @@ app.use('/api/support', supportRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/campaigns', campaignRoutes);
 app.use('/api/competitors', competitorRoutes);
-app.use('/api/influencers', influencerRoutes);
 app.use('/api/reminders', reminderRoutes);
 
 // Routes - Real Data Features
 app.use('/api/brand', brandRoutes);
-app.use('/api/trends', trendRoutes);
-app.use('/api/content', contentRoutes);
-app.use('/api/campaign-builder', campaignBuilderRoutes);
 app.use('/api/analytics', analyticsRoutes);
+
+// Routes - Reachouts CRM - REMOVED
+
+// Routes - Notifications
+app.use('/api/notifications', notificationRoutes);
+
+// Routes - Brand Assets
+app.use('/api/brand-assets', brandAssetsRoutes);
+
+// Routes - Ads / Boost
+app.use('/api/ads', adsRoutes);
+
+// Routes - Credits / Trial
+app.use('/api/credits', creditsRoutes);
+
+// Routes - Payment / Razorpay
+app.use('/api/payment', paymentRoutes);
+
+// Routes - Content
+app.use('/api/content', contentRoutes);
+app.use('/api/google-calendar', googleCalendarRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -154,11 +203,24 @@ app.get('/api/demo/dashboard', (req, res) => {
   });
 });
 
-// 404 handler
+// Serve static files from React frontend build
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Catch-all handler for React Router - serve index.html for any non-API routes
+app.get('*', (req, res, next) => {
+  // If it's an API route, pass to 404 handler
+  if (req.path.startsWith('/api')) {
+    return next();
+  }
+  // Otherwise serve React app
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// API 404 handler
 app.use((req, res) => {
   res.status(404).json({
     success: false,
-    message: 'Endpoint not found'
+    message: 'API endpoint not found'
   });
 });
 
@@ -177,17 +239,34 @@ const PORT = process.env.PORT || 5000;
 const startServer = async () => {
   let mongoConnected = false;
   try {
-    if (process.env.MONGODB_URI && !process.env.MONGODB_URI.includes('your_mongodb_connection_string_here')) {
-      console.log('Connecting to MongoDB...');
-      await mongoose.connect(process.env.MONGODB_URI, {
-        serverSelectionTimeoutMS: 5000,
-        socketTimeoutMS: 45000,
-      });
-      console.log('✅ MongoDB connected successfully');
-      mongoConnected = true;
-    } else {
-      console.warn('⚠️  MONGODB_URI not set');
-      console.warn('   Server will start in demo mode (no database persistence)');
+    console.log('Connecting to MongoDB...');
+    await mongoose.connect(process.env.MONGODB_URI, {
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 45000,
+    });
+    console.log('✅ MongoDB connected successfully');
+    mongoConnected = true;
+
+    // Start notification scheduler for campaign reminders
+    try {
+      notificationScheduler.start();
+    } catch (schedulerError) {
+      console.warn('⚠️  Notification scheduler failed to start:', schedulerError.message);
+    }
+
+    // Start analytics snapshot scheduler (every 12 hours)
+    try {
+      snapshotScheduler.start();
+    } catch (schedulerError) {
+      console.warn('⚠️  Snapshot scheduler failed to start:', schedulerError.message);
+    }
+
+    // Initialize OTP email service
+    try {
+      const otpService = require('./services/otpService');
+      otpService.initialize();
+    } catch (otpError) {
+      console.warn('⚠️  OTP service failed to initialize:', otpError.message);
     }
   } catch (error) {
     console.warn('⚠️  MongoDB not available:', error.message);
@@ -224,13 +303,9 @@ mongoose.connection.on('error', (err) => {
 // Graceful shutdown
 process.on('SIGINT', async () => {
   console.log('\nShutting down gracefully...');
-  try {
-    if (mongoose.connection?.readyState === 1) {
-      await mongoose.connection.close();
-    }
-  } catch (e) {
-    // ignore
-  }
+  notificationScheduler.stop();
+  snapshotScheduler.stop();
+  await mongoose.connection.close();
   process.exit(0);
 });
 

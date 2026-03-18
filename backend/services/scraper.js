@@ -253,16 +253,20 @@ async function scrape(url, options = {}) {
     return { success: true, data: cached, cached: true, url };
   }
   
-  // Check robots.txt
-  const allowCheck = await isAllowed(url);
-  if (!allowCheck.allowed) {
-    logScrape(url, false, false, Date.now() - startTime, new Error(allowCheck.reason));
-    return { 
-      success: false, 
-      error: allowCheck.reason, 
-      errorType: 'robots_blocked',
-      url 
-    };
+  // Check robots.txt (SKIP if ignoreRobots is true - for user's own websites)
+  if (!options.ignoreRobots) {
+    const allowCheck = await isAllowed(url);
+    if (!allowCheck.allowed) {
+      logScrape(url, false, false, Date.now() - startTime, new Error(allowCheck.reason));
+      return { 
+        success: false, 
+        error: allowCheck.reason, 
+        errorType: 'robots_blocked',
+        url 
+      };
+    }
+  } else {
+    console.log('🔓 Bypassing robots.txt check (user analyzing own website)');
   }
   
   const parsedUrl = new URL(url);
@@ -271,8 +275,8 @@ async function scrape(url, options = {}) {
   let lastError;
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
-      // Rate limit
-      await rateLimitDomain(domain, allowCheck.crawlDelay);
+      // Rate limit (shorter delay when ignoring robots)
+      await rateLimitDomain(domain, options.ignoreRobots ? 0 : 0);
       
       const data = await fetchUrl(url, options);
       
@@ -324,7 +328,7 @@ async function scrape(url, options = {}) {
 /**
  * Parse HTML and extract content
  */
-function parseHTML(html) {
+function parseHTML(html, baseUrl = '') {
   // Remove scripts, styles, and comments
   let cleaned = html
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
@@ -344,6 +348,72 @@ function parseHTML(html) {
   // Extract meta keywords
   const keywordsMatch = cleaned.match(/<meta[^>]*name=["']keywords["'][^>]*content=["']([^"']*)["']/i);
   const keywords = keywordsMatch ? keywordsMatch[1].split(',').map(k => k.trim()) : [];
+  
+  // Extract Open Graph image (often the logo or main brand image)
+  const ogImageMatch = cleaned.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']*)["']/i) ||
+                       cleaned.match(/<meta[^>]*content=["']([^"']*)["'][^>]*property=["']og:image["']/i);
+  const ogImage = ogImageMatch ? ogImageMatch[1].trim() : '';
+  
+  // Extract favicon/logo
+  const faviconMatch = cleaned.match(/<link[^>]*rel=["'](?:icon|shortcut icon|apple-touch-icon)["'][^>]*href=["']([^"']*)["']/i) ||
+                       cleaned.match(/<link[^>]*href=["']([^"']*)["'][^>]*rel=["'](?:icon|shortcut icon|apple-touch-icon)["']/i);
+  const favicon = faviconMatch ? faviconMatch[1].trim() : '';
+  
+  // Extract all images with their alt text and src
+  const images = [];
+  const imgMatches = cleaned.matchAll(/<img[^>]*>/gi);
+  for (const match of imgMatches) {
+    const imgTag = match[0];
+    const srcMatch = imgTag.match(/src=["']([^"']+)["']/i);
+    const altMatch = imgTag.match(/alt=["']([^"']*)["']/i);
+    const classMatch = imgTag.match(/class=["']([^"']*)["']/i);
+    
+    if (srcMatch) {
+      let src = srcMatch[1];
+      // Make relative URLs absolute
+      if (src.startsWith('/') && baseUrl) {
+        try {
+          const base = new URL(baseUrl);
+          src = `${base.protocol}//${base.host}${src}`;
+        } catch (e) {}
+      } else if (!src.startsWith('http') && !src.startsWith('data:') && baseUrl) {
+        try {
+          const base = new URL(baseUrl);
+          src = `${base.protocol}//${base.host}/${src}`;
+        } catch (e) {}
+      }
+      
+      const alt = altMatch ? altMatch[1].trim() : '';
+      const className = classMatch ? classMatch[1].toLowerCase() : '';
+      
+      // Identify potential logos
+      const isLogo = className.includes('logo') || 
+                     alt.toLowerCase().includes('logo') ||
+                     src.toLowerCase().includes('logo');
+      
+      images.push({ src, alt, isLogo });
+    }
+  }
+  
+  // Find the most likely logo
+  let logoUrl = ogImage; // OG image is often the brand image
+  const logoImage = images.find(img => img.isLogo);
+  if (logoImage) {
+    logoUrl = logoImage.src;
+  }
+  
+  // Extract brand colors from inline styles or CSS
+  const colorMatches = cleaned.matchAll(/(?:background-color|color|border-color):\s*([#][0-9a-fA-F]{3,6}|rgb[a]?\([^)]+\))/gi);
+  const brandColors = new Set();
+  for (const match of colorMatches) {
+    brandColors.add(match[1]);
+  }
+  
+  // Also check for CSS variables or theme colors
+  const themeColorMatch = cleaned.match(/<meta[^>]*name=["']theme-color["'][^>]*content=["']([^"']*)["']/i);
+  if (themeColorMatch) {
+    brandColors.add(themeColorMatch[1]);
+  }
   
   // Extract headings
   const headings = [];
@@ -400,7 +470,13 @@ function parseHTML(html) {
     paragraphs: paragraphs.slice(0, 50), // Limit paragraphs
     listItems: listItems.slice(0, 50),
     fullText,
-    wordCount: fullText.split(/\s+/).length
+    wordCount: fullText.split(/\s+/).length,
+    // NEW: Brand assets
+    logoUrl,
+    ogImage,
+    favicon,
+    images: images.slice(0, 20), // Top 20 images
+    brandColors: Array.from(brandColors).slice(0, 10)
   };
 }
 
@@ -421,7 +497,7 @@ async function scrapeWebsite(url, options = {}) {
     return result;
   }
   
-  const parsed = parseHTML(result.data);
+  const parsed = parseHTML(result.data, url);
   
   return {
     ...result,
@@ -556,6 +632,277 @@ async function fetchRSS(feedUrl) {
 }
 
 /**
+ * Enhanced website scraping using Apify Website Content Crawler
+ * This handles JavaScript-rendered sites that basic HTTP can't scrape
+ */
+async function scrapeWebsiteWithApify(url, options = {}) {
+  const APIFY_API_KEY = process.env.APIFY_API_KEY;
+  
+  if (!APIFY_API_KEY) {
+    console.log('⚠️ Apify API key not configured, falling back to basic scraper');
+    return null;
+  }
+
+  console.log(`🔧 Using Apify Website Content Crawler for: ${url}`);
+
+  try {
+    // Use Apify's Website Content Crawler actor
+    const startResponse = await new Promise((resolve, reject) => {
+      const postData = JSON.stringify({
+        startUrls: [{ url }],
+        maxCrawlPages: 5,
+        maxCrawlDepth: 1,
+        crawlerType: 'cheerio', // Fast HTML parsing
+        includeUrlGlobs: [],
+        excludeUrlGlobs: [],
+        keepUrlFragments: false,
+        removeElementsCssSelector: 'nav, footer, script, style, noscript, iframe',
+        proxyConfiguration: { useApifyProxy: true },
+        maxRequestRetries: 2,
+        requestTimeoutSecs: 30
+      });
+
+      const reqOptions = {
+        hostname: 'api.apify.com',
+        port: 443,
+        path: `/v2/acts/apify~website-content-crawler/runs?token=${APIFY_API_KEY}`,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(postData)
+        },
+        timeout: 10000
+      };
+
+      const req = https.request(reqOptions, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
+          try {
+            resolve({ status: res.statusCode, data: JSON.parse(data) });
+          } catch (e) {
+            resolve({ status: res.statusCode, data: data });
+          }
+        });
+      });
+
+      req.on('error', reject);
+      req.on('timeout', () => {
+        req.destroy();
+        reject(new Error('Request timeout'));
+      });
+
+      req.write(postData);
+      req.end();
+    });
+
+    if (startResponse.status !== 201) {
+      console.log('❌ Failed to start Apify actor:', startResponse.data);
+      return null;
+    }
+
+    const runId = startResponse.data?.data?.id;
+    if (!runId) {
+      console.log('❌ No run ID returned from Apify');
+      return null;
+    }
+
+    console.log(`⏳ Apify run started: ${runId}`);
+
+    // Poll for completion (max 60 seconds)
+    const maxWait = options.maxWait || 60000;
+    const pollInterval = 3000;
+    let elapsed = 0;
+
+    while (elapsed < maxWait) {
+      await new Promise(resolve => setTimeout(resolve, pollInterval));
+      elapsed += pollInterval;
+
+      const statusResponse = await new Promise((resolve, reject) => {
+        const req = https.request({
+          hostname: 'api.apify.com',
+          port: 443,
+          path: `/v2/actor-runs/${runId}?token=${APIFY_API_KEY}`,
+          method: 'GET',
+          timeout: 10000
+        }, (res) => {
+          let data = '';
+          res.on('data', chunk => data += chunk);
+          res.on('end', () => {
+            try {
+              resolve({ status: res.statusCode, data: JSON.parse(data) });
+            } catch (e) {
+              resolve({ status: res.statusCode, data: data });
+            }
+          });
+        });
+        req.on('error', reject);
+        req.on('timeout', () => {
+          req.destroy();
+          reject(new Error('Request timeout'));
+        });
+        req.end();
+      });
+
+      const status = statusResponse.data?.data?.status;
+      console.log(`⏳ Apify run status: ${status} (${elapsed}ms elapsed)`);
+
+      if (status === 'SUCCEEDED') {
+        const datasetId = statusResponse.data?.data?.defaultDatasetId;
+        if (datasetId) {
+          const resultsResponse = await new Promise((resolve, reject) => {
+            const req = https.request({
+              hostname: 'api.apify.com',
+              port: 443,
+              path: `/v2/datasets/${datasetId}/items?token=${APIFY_API_KEY}`,
+              method: 'GET',
+              timeout: 15000
+            }, (res) => {
+              let data = '';
+              res.on('data', chunk => data += chunk);
+              res.on('end', () => {
+                try {
+                  resolve({ status: res.statusCode, data: JSON.parse(data) });
+                } catch (e) {
+                  resolve({ status: res.statusCode, data: data });
+                }
+              });
+            });
+            req.on('error', reject);
+            req.on('timeout', () => {
+              req.destroy();
+              reject(new Error('Request timeout'));
+            });
+            req.end();
+          });
+
+          const items = resultsResponse.data || [];
+          console.log(`✅ Apify returned ${items.length} pages`);
+
+          if (items.length > 0) {
+            // Combine all scraped content
+            const combinedContent = {
+              title: items[0]?.metadata?.title || '',
+              description: items[0]?.metadata?.description || '',
+              text: items.map(item => item.text || '').join('\n\n').substring(0, 50000),
+              headings: items.flatMap(item => {
+                const headings = [];
+                if (item.metadata?.title) headings.push({ level: 1, text: item.metadata.title });
+                return headings;
+              }),
+              links: items.flatMap(item => {
+                try {
+                  return (item.metadata?.canonicalUrl ? [{ href: item.metadata.canonicalUrl }] : []);
+                } catch (e) {
+                  return [];
+                }
+              }),
+              paragraphs: items.map(item => item.text?.substring(0, 500)).filter(Boolean),
+              keywords: [],
+              fullText: items.map(item => item.text || '').join('\n\n').substring(0, 50000),
+              wordCount: items.reduce((sum, item) => sum + (item.text?.split(/\s+/).length || 0), 0)
+            };
+
+            const sourceId = registerDataSource(url, 'apify_crawler', combinedContent);
+
+            return {
+              success: true,
+              data: combinedContent.fullText,
+              parsed: combinedContent,
+              cached: false,
+              url,
+              sourceId,
+              fetchedAt: new Date().toISOString(),
+              source: 'apify'
+            };
+          }
+        }
+        return null;
+      } else if (status === 'FAILED' || status === 'ABORTED' || status === 'TIMED-OUT') {
+        console.log(`❌ Apify run ${status}`);
+        return null;
+      }
+    }
+
+    console.log('❌ Apify run timeout');
+    return null;
+  } catch (error) {
+    console.error('❌ Apify scrape error:', error.message);
+    return null;
+  }
+}
+
+/**
+ * Deep website scrape for user's own websites
+ * Bypasses robots.txt since users are analyzing their own sites
+ * Tries multiple pages to get comprehensive content
+ */
+async function deepScrapeWebsite(url, options = {}) {
+  console.log(`🌐 Deep scraping website: ${url}`);
+
+  // ALWAYS bypass robots.txt for quick-analyze (user's own website)
+  const scrapeOptions = { ...options, ignoreRobots: true };
+
+  // First try basic scraping on the main page
+  const basicResult = await scrapeWebsite(url, scrapeOptions);
+
+  // Check if we got meaningful content
+  const hasGoodContent = basicResult.success && 
+    basicResult.parsed && 
+    (basicResult.parsed.fullText?.length > 500 || 
+     basicResult.parsed.text?.length > 500 || 
+     basicResult.parsed.description?.length > 50 ||
+     basicResult.parsed.paragraphs?.length > 3);
+
+  if (hasGoodContent) {
+    console.log(`✅ Basic scraping successful, got ${basicResult.parsed.fullText?.length || basicResult.parsed.text?.length || 0} chars`);
+    return { ...basicResult, source: 'basic' };
+  }
+
+  console.log(`⚠️ Main page had insufficient content, trying additional pages...`);
+
+  // Try scraping additional pages for more content
+  const additionalPages = ['/about', '/about-us', '/services', '/products', '/company'];
+  let combinedContent = basicResult.parsed || {};
+  let additionalText = '';
+
+  for (const page of additionalPages) {
+    try {
+      const pageUrl = new URL(page, url).toString();
+      console.log(`📄 Trying: ${pageUrl}`);
+      const pageResult = await scrapeWebsite(pageUrl, scrapeOptions);
+      
+      if (pageResult.success && pageResult.parsed) {
+        additionalText += ' ' + (pageResult.parsed.fullText || pageResult.parsed.text || '');
+        if (pageResult.parsed.description && !combinedContent.description) {
+          combinedContent.description = pageResult.parsed.description;
+        }
+        // Add headings
+        if (pageResult.parsed.headings) {
+          combinedContent.headings = [...(combinedContent.headings || []), ...pageResult.parsed.headings];
+        }
+      }
+    } catch (e) {
+      // Ignore errors for additional pages
+    }
+  }
+
+  // Combine all content
+  combinedContent.fullText = ((combinedContent.fullText || combinedContent.text || '') + additionalText).substring(0, 50000);
+  combinedContent.text = combinedContent.fullText;
+
+  console.log(`✅ Combined scraping got ${combinedContent.fullText?.length || 0} chars total`);
+
+  return {
+    success: true,
+    parsed: combinedContent,
+    cached: false,
+    url,
+    source: 'multi-page'
+  };
+}
+
+/**
  * Clear cache
  */
 function clearCache(url = null) {
@@ -587,6 +934,8 @@ module.exports = {
   scrape,
   scrapeWebsite,
   scrapeWebsitePages,
+  deepScrapeWebsite,
+  scrapeWebsiteWithApify,
   parseHTML,
   searchNews,
   fetchRSS,

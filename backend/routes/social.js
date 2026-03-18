@@ -7,9 +7,15 @@ const { protect } = require('../middleware/auth');
 const { 
   postToSocialMedia, 
   getAyrshareAnalytics,
+  getUserSocialAnalytics,
   getAPIStatus,
   getAyrshareProfile,
-  getAyrshareConnectUrl
+  getAyrshareConnectUrl,
+  // Ayrshare Business Plan functions
+  createAyrshareProfile,
+  generateAyrshareJWT,
+  getAyrshareUserProfile,
+  deleteAyrshareProfile
 } = require('../services/socialMediaAPI');
 
 // ============================================
@@ -17,6 +23,38 @@ const {
 // ============================================
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
+
+const SOCIAL_CONNECT_REWARD = 5; // credits awarded for first-time social connection
+
+/**
+ * Award credits for first-time social connection
+ * Checks if platform was already connected before rewarding
+ */
+async function rewardSocialConnect(user, platform) {
+  const normalizedPlatform = platform.toLowerCase();
+  const alreadyConnected = user.connectedSocials?.some(
+    s => s.platform.toLowerCase() === normalizedPlatform ||
+         (normalizedPlatform === 'x' && s.platform.toLowerCase() === 'twitter') ||
+         (normalizedPlatform === 'twitter' && s.platform.toLowerCase() === 'x')
+  );
+
+  if (alreadyConnected) return false;
+
+  // First time connecting this platform — award credits
+  user.credits = user.credits || { balance: 0, totalUsed: 0, history: [] };
+  user.credits.balance = Number(user.credits.balance || 0) + SOCIAL_CONNECT_REWARD;
+  user.credits.history = (user.credits.history || []).slice(-50);
+  user.credits.history.push({
+    action: `social_connect_${normalizedPlatform}`,
+    cost: -SOCIAL_CONNECT_REWARD,
+    balanceAfter: user.credits.balance,
+    description: `Reward for connecting ${platform}`,
+    timestamp: new Date()
+  });
+
+  console.log(`🎁 Awarded ${SOCIAL_CONNECT_REWARD} credits to user ${user.email} for connecting ${platform}`);
+  return true;
+}
 
 // Google/YouTube OAuth
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
@@ -153,43 +191,120 @@ const AYRSHARE_PLATFORM_MAP = {
 /**
  * GET /api/social/:platform/auth
  * Universal OAuth initiation for any platform
- * Uses direct OAuth if configured, otherwise redirects to Ayrshare dashboard
+ * Uses Ayrshare JWT/SSO for social account linking (Business Plan)
+ * If user doesn't have an Ayrshare profile yet, creates one first
  */
 router.get('/:platform/auth', protect, async (req, res) => {
   const { platform } = req.params;
   const platformLower = platform.toLowerCase();
   
   try {
-    // For YouTube, always use Google OAuth if configured
-    if (platformLower === 'youtube' && isOAuthConfigured('youtube')) {
-      const state = generateStateToken(req.user._id.toString(), platform);
-      const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
-      authUrl.searchParams.set('client_id', GOOGLE_CLIENT_ID);
-      authUrl.searchParams.set('redirect_uri', GOOGLE_REDIRECT_URI);
-      authUrl.searchParams.set('response_type', 'code');
-      authUrl.searchParams.set('scope', YOUTUBE_SCOPES);
-      authUrl.searchParams.set('access_type', 'offline');
-      authUrl.searchParams.set('prompt', 'consent');
-      authUrl.searchParams.set('state', state);
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    // Use Ayrshare JWT/SSO flow for ALL platforms (Business Plan approach)
+    // Step 1: Check if user has an Ayrshare profile, if not create one
+    let profileKey = user.ayrshare?.profileKey;
+    
+    if (!profileKey) {
+      console.log(`Creating Ayrshare profile for user: ${user.email}`);
       
-      return res.json({
-        success: true,
-        configured: true,
-        authUrl: authUrl.toString()
+      // Create a unique title for this user's Ayrshare profile
+      const profileTitle = `Nebula-${user._id.toString().slice(-8)}-${user.email.split('@')[0]}`;
+      
+      // Configure which social networks to show (hide those not relevant)
+      const disableSocial = ['gmb', 'snapchat', 'telegram', 'threads']; // Hide less common ones
+      
+      const createResult = await createAyrshareProfile(profileTitle, {
+        hideTopHeader: false,
+        topHeader: `Connect Social Accounts for ${user.businessProfile?.name || user.firstName || 'Your Business'}`,
+        subHeader: 'Click an icon below to securely connect your social media account',
+        disableSocial: disableSocial
+      });
+      
+      if (!createResult.success) {
+        // Check if profile already exists (code 146)
+        if (createResult.code === 146) {
+          console.log('Ayrshare profile already exists, title conflict');
+          // Try with a more unique title
+          const uniqueTitle = `Nebula-${Date.now()}-${user._id.toString().slice(-6)}`;
+          const retryResult = await createAyrshareProfile(uniqueTitle, {
+            hideTopHeader: false,
+            disableSocial: disableSocial
+          });
+          
+          if (!retryResult.success) {
+            return res.status(500).json({
+              success: false,
+              message: 'Failed to create social linking profile. Please try again.',
+              error: retryResult.error
+            });
+          }
+          
+          profileKey = retryResult.profileKey;
+          user.ayrshare = {
+            profileKey: retryResult.profileKey,
+            refId: retryResult.refId,
+            title: uniqueTitle,
+            createdAt: new Date()
+          };
+        } else {
+          return res.status(500).json({
+            success: false,
+            message: 'Failed to create social linking profile',
+            error: createResult.error
+          });
+        }
+      } else {
+        profileKey = createResult.profileKey;
+        user.ayrshare = {
+          profileKey: createResult.profileKey,
+          refId: createResult.refId,
+          title: profileTitle,
+          createdAt: new Date()
+        };
+      }
+      
+      await user.save();
+      console.log(`Ayrshare profile created for user: ${user.email}, profileKey: ${profileKey?.slice(0, 8)}...`);
+    }
+    
+    // Step 2: Generate JWT URL for SSO to social linking page
+    const redirectUrl = `${FRONTEND_URL}/#/connect-socials?${platformLower}=connected`;
+    
+    // Map platform to Ayrshare's expected format for allowedSocial
+    const ayrshareplatform = AYRSHARE_PLATFORM_MAP[platformLower] || platformLower;
+    
+    const jwtResult = await generateAyrshareJWT(profileKey, {
+      redirect: redirectUrl,
+      logout: false, // Don't force logout for faster UX
+      // Only show the specific platform the user clicked on
+      allowedSocial: [ayrshareplatform]
+    });
+    
+    if (!jwtResult.success) {
+      console.error('Failed to generate Ayrshare JWT:', jwtResult.error);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to generate social linking URL',
+        error: jwtResult.error
       });
     }
     
-    // For other platforms, use Ayrshare dashboard for social account linking
-    // This is the recommended approach with the Ayrshare free/starter tier
-    const ayrshareplatform = AYRSHARE_PLATFORM_MAP[platformLower] || platformLower;
-    const ayrshareConnectUrl = `https://app.ayrshare.com/social-accounts?network=${ayrshareplatform}`;
+    // The JWT URL uses domain + privateKey for Business Plan SSO
+    // User will be redirected directly to the social platform's OAuth page
+    let authUrl = jwtResult.url;
+    
+    console.log(`Generated Ayrshare JWT URL for ${platform}:`, authUrl.slice(0, 80) + '...');
     
     return res.json({
       success: true,
       configured: true,
-      authUrl: ayrshareConnectUrl,
-      method: 'ayrshare',
-      message: `Connect your ${platform} account through Ayrshare`
+      authUrl: authUrl,
+      method: 'ayrshare_jwt',
+      message: `Connect your ${platform} account securely`
     });
 
   } catch (error) {
@@ -424,9 +539,12 @@ router.get('/youtube/callback', async (req, res) => {
       return res.redirect(`${FRONTEND_URL}/#/connect-socials?error=user_not_found`);
     }
 
+    // Award credits for first-time connection (must check before filter)
+    await rewardSocialConnect(user, 'YouTube');
+
     // Remove existing YouTube connection if any
     user.connectedSocials = user.connectedSocials.filter(s => s.platform !== 'YouTube');
-    
+
     // Add new connection
     user.connectedSocials.push(channelInfo);
     await user.save();
@@ -540,6 +658,7 @@ router.get('/meta/callback', async (req, res) => {
       return res.redirect(`${FRONTEND_URL}/#/connect-socials?error=user_not_found`);
     }
 
+    await rewardSocialConnect(user, connectionInfo.platform);
     user.connectedSocials = user.connectedSocials.filter(s => s.platform !== connectionInfo.platform);
     user.connectedSocials.push(connectionInfo);
     await user.save();
@@ -625,6 +744,7 @@ router.get('/twitter/callback', async (req, res) => {
       return res.redirect(`${FRONTEND_URL}/#/connect-socials?error=user_not_found`);
     }
 
+    await rewardSocialConnect(user, 'X');
     user.connectedSocials = user.connectedSocials.filter(s => s.platform !== 'X' && s.platform !== 'Twitter');
     user.connectedSocials.push(connectionInfo);
     await user.save();
@@ -705,6 +825,7 @@ router.get('/linkedin/callback', async (req, res) => {
       return res.redirect(`${FRONTEND_URL}/#/connect-socials?error=user_not_found`);
     }
 
+    await rewardSocialConnect(user, 'LinkedIn');
     user.connectedSocials = user.connectedSocials.filter(s => s.platform !== 'LinkedIn');
     user.connectedSocials.push(connectionInfo);
     await user.save();
@@ -786,6 +907,7 @@ router.get('/pinterest/callback', async (req, res) => {
       return res.redirect(`${FRONTEND_URL}/#/connect-socials?error=user_not_found`);
     }
 
+    await rewardSocialConnect(user, 'Pinterest');
     user.connectedSocials = user.connectedSocials.filter(s => s.platform !== 'Pinterest');
     user.connectedSocials.push(connectionInfo);
     await user.save();
@@ -835,19 +957,49 @@ router.get('/status', protect, async (req, res) => {
     const user = await User.findById(req.user._id);
     
     // Build status for all platforms (removed TikTok and Snapchat, renamed Twitter to X)
-    const platforms = ['Instagram', 'Facebook', 'X', 'LinkedIn', 'YouTube', 'Pinterest', 'Reddit'];
+    const platforms = ['Instagram', 'Facebook', 'X', 'LinkedIn'];
     
-    // Also get Ayrshare connected accounts
+    // Get user's Ayrshare connected accounts using their profile key
     let ayrshareAccounts = [];
     let ayrshareDisplayNames = [];
-    try {
-      const ayrshareProfile = await getAyrshareProfile();
-      if (ayrshareProfile.success) {
-        ayrshareAccounts = ayrshareProfile.data?.activeSocialAccounts || [];
-        ayrshareDisplayNames = ayrshareProfile.data?.displayNames || [];
+    let socialAnalytics = {};
+    
+    if (user.ayrshare?.profileKey) {
+      try {
+        // Use user's specific profile key to get their connected accounts
+        const userProfile = await getAyrshareUserProfile(user.ayrshare.profileKey);
+        if (userProfile.success) {
+          ayrshareAccounts = userProfile.data?.activeSocialAccounts || [];
+          ayrshareDisplayNames = userProfile.data?.displayNames || [];
+          console.log(`User ${user.email} Ayrshare accounts:`, ayrshareAccounts);
+          
+          // Fetch social analytics for connected platforms
+          if (ayrshareAccounts.length > 0) {
+            try {
+              const analyticsResult = await getUserSocialAnalytics(user.ayrshare.profileKey, ayrshareAccounts);
+              if (analyticsResult.success && analyticsResult.data) {
+                socialAnalytics = analyticsResult.data;
+                console.log('Social analytics fetched:', Object.keys(socialAnalytics));
+              }
+            } catch (analyticsError) {
+              console.log('Could not fetch social analytics:', analyticsError.message);
+            }
+          }
+        }
+      } catch (e) {
+        console.log('Ayrshare user profile check failed:', e.message);
       }
-    } catch (e) {
-      console.log('Ayrshare profile check failed:', e.message);
+    } else {
+      // Fallback to primary profile check for backwards compatibility
+      try {
+        const ayrshareProfile = await getAyrshareProfile();
+        if (ayrshareProfile.success) {
+          ayrshareAccounts = ayrshareProfile.data?.activeSocialAccounts || [];
+          ayrshareDisplayNames = ayrshareProfile.data?.displayNames || [];
+        }
+      } catch (e) {
+        console.log('Ayrshare profile check failed:', e.message);
+      }
     }
     
     const connections = platforms.map(platform => {
@@ -882,6 +1034,44 @@ router.get('/status', protect, async (req, res) => {
       const ayrshareKey = ayrshareMapping[platform];
       if (ayrshareAccounts.includes(ayrshareKey)) {
         const displayInfo = ayrshareDisplayNames.find(d => d.platform === ayrshareKey);
+        
+        // Get analytics for this platform - Ayrshare returns nested structure like { instagram: { analytics: {...} } }
+        const platformData = socialAnalytics[ayrshareKey] || null;
+        const platformAnalytics = platformData?.analytics || null;
+        
+        // Map platform-specific field names to common format
+        let followers = 0, following = 0, posts = 0, engagement = 0;
+        
+        if (platformAnalytics) {
+          switch (ayrshareKey) {
+            case 'instagram':
+              followers = platformAnalytics.followersCount || 0;
+              following = platformAnalytics.followsCount || 0;
+              posts = platformAnalytics.mediaCount || 0;
+              break;
+            case 'facebook':
+              followers = platformAnalytics.followersCount || platformAnalytics.fanCount || 0;
+              following = platformAnalytics.pageFollows || 0;
+              posts = platformAnalytics.mediaCount || 0;
+              break;
+            case 'twitter':
+              followers = platformAnalytics.followersCount || 0;
+              following = platformAnalytics.friendsCount || 0;
+              posts = platformAnalytics.tweetCount || 0;
+              break;
+            case 'linkedin':
+              followers = platformAnalytics.followers?.totalFollowerCount || 0;
+              following = 0; // LinkedIn doesn't expose following count
+              posts = 0; // LinkedIn doesn't expose post count in analytics
+              engagement = platformAnalytics.engagement || 0;
+              break;
+            default:
+              followers = platformAnalytics.followersCount || platformAnalytics.followers || 0;
+              following = platformAnalytics.followingCount || platformAnalytics.followsCount || 0;
+              posts = platformAnalytics.postsCount || platformAnalytics.mediaCount || 0;
+          }
+        }
+        
         return {
           platform,
           connected: true,
@@ -890,7 +1080,13 @@ router.get('/status', protect, async (req, res) => {
           connectedAt: displayInfo?.created || null,
           profileUrl: displayInfo?.profileUrl || null,
           userImage: displayInfo?.userImage || null,
-          source: 'ayrshare'
+          source: 'ayrshare',
+          analytics: platformAnalytics ? {
+            followers,
+            following,
+            posts,
+            engagement
+          } : null
         };
       }
       
@@ -1108,13 +1304,16 @@ router.post('/connect/:platform', protect, async (req, res) => {
     const { username, accessToken, refreshToken, profileData } = req.body;
     
     const user = await User.findById(req.user._id);
-    
+
+    // Award credits for first-time connection
+    await rewardSocialConnect(user, platform);
+
     // Remove existing connection for this platform
-    user.connectedSocials = user.connectedSocials.filter(s => 
+    user.connectedSocials = user.connectedSocials.filter(s =>
       s.platform.toLowerCase() !== platform.toLowerCase() &&
       !(platform.toLowerCase() === 'x' && s.platform.toLowerCase() === 'twitter')
     );
-    
+
     // Add new connection
     user.connectedSocials.push({
       platform: platform === 'twitter' ? 'X' : platform,

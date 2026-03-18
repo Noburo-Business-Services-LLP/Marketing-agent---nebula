@@ -1,6 +1,6 @@
 /**
  * Social Media API Service
- * Integrates Ayrshare, Apify, and SearchAPI for real-time social media data
+ * Integrates Ayrshare and Apify for real-time social media data
  */
 
 const https = require('https');
@@ -9,7 +9,6 @@ const http = require('http');
 // API Configuration
 const AYRSHARE_API_KEY = process.env.AYRSHARE_API_KEY;
 const APIFY_API_KEY = process.env.APIFY_API_KEY;
-const SEARCHAPI_API_KEY = process.env.SEARCHAPI_API_KEY;
 
 // Cache for API responses
 const apiCache = new Map();
@@ -95,11 +94,21 @@ async function postToSocialMedia(platforms, content, options = {}) {
   }
 
   try {
-    const response = await makeRequest('https://app.ayrshare.com/api/post', {
+    // Build headers - include Profile-Key if provided for user-specific accounts
+    const headers = {
+      'Authorization': `Bearer ${AYRSHARE_API_KEY}`
+    };
+    
+    // If profileKey is provided, add it to headers for user-specific posting
+    if (options.profileKey) {
+      headers['Profile-Key'] = options.profileKey;
+      console.log('Using Profile-Key for posting:', options.profileKey.substring(0, 20) + '...');
+    }
+    
+    const response = await makeRequest('https://api.ayrshare.com/api/post', {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${AYRSHARE_API_KEY}`
-      },
+      headers: headers,
+      timeout: 120000, // 2 minutes timeout for posts with media
       body: {
         post: content,
         platforms: platforms, // ['instagram', 'twitter', 'facebook', 'linkedin']
@@ -110,6 +119,16 @@ async function postToSocialMedia(platforms, content, options = {}) {
     });
 
     console.log('Ayrshare post response:', response.status);
+    console.log('Ayrshare FULL response:', JSON.stringify(response.data, null, 2));
+    
+    // Log full error details if there's an error
+    if (response.data?.errors) {
+      console.log('Ayrshare errors (full):', JSON.stringify(response.data.errors, null, 2));
+    }
+    if (response.data?.posts) {
+      console.log('Ayrshare posts details:', JSON.stringify(response.data.posts, null, 2));
+    }
+    
     return { success: response.status === 200, data: response.data };
   } catch (error) {
     console.error('Ayrshare post error:', error);
@@ -130,7 +149,7 @@ async function getAyrshareAnalytics(platforms = ['instagram', 'twitter', 'facebo
   if (cached) return cached;
 
   try {
-    const response = await makeRequest(`https://app.ayrshare.com/api/analytics/social?platforms=${platforms.join(',')}`, {
+    const response = await makeRequest(`https://api.ayrshare.com/api/analytics/social?platforms=${platforms.join(',')}`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${AYRSHARE_API_KEY}`
@@ -147,19 +166,65 @@ async function getAyrshareAnalytics(platforms = ['instagram', 'twitter', 'facebo
 }
 
 /**
- * Get posting history from Ayrshare
+ * Get social analytics with user's profile key (for followers, following, posts)
+ * @param {string} profileKey - The user's Ayrshare Profile Key
+ * @param {string[]} platforms - Array of platforms to get analytics for
+ * @returns {Promise<{success: boolean, data?: object, error?: string}>}
  */
-async function getPostHistory() {
+async function getUserSocialAnalytics(profileKey, platforms = ['instagram', 'facebook', 'twitter', 'linkedin']) {
   if (!AYRSHARE_API_KEY) {
     return { success: false, error: 'API not configured' };
   }
 
   try {
-    const response = await makeRequest('https://app.ayrshare.com/api/history', {
+    const headers = {
+      'Authorization': `Bearer ${AYRSHARE_API_KEY}`,
+      'Content-Type': 'application/json'
+    };
+    
+    if (profileKey) {
+      headers['Profile-Key'] = profileKey;
+    }
+    
+    // Ayrshare social analytics endpoint uses POST method - use longer timeout
+    const response = await makeRequest('https://api.ayrshare.com/api/analytics/social', {
+      method: 'POST',
+      headers: headers,
+      body: JSON.stringify({ platforms }),
+      timeout: 60000 // 60 second timeout for analytics
+    });
+
+    console.log('Ayrshare social analytics response:', response.status, JSON.stringify(response.data).substring(0, 500));
+    
+    return { 
+      success: response.status === 200, 
+      data: response.data 
+    };
+  } catch (error) {
+    console.error('Ayrshare user social analytics error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Get posting history from Ayrshare
+ */
+async function getPostHistory(options = {}) {
+  if (!AYRSHARE_API_KEY) {
+    return { success: false, error: 'API not configured' };
+  }
+
+  try {
+    const headers = {
+      'Authorization': `Bearer ${AYRSHARE_API_KEY}`
+    };
+    if (options.profileKey) {
+      headers['Profile-Key'] = options.profileKey;
+    }
+
+    const response = await makeRequest('https://api.ayrshare.com/api/history', {
       method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${AYRSHARE_API_KEY}`
-      }
+      headers
     });
 
     return { success: response.status === 200, data: response.data };
@@ -170,21 +235,63 @@ async function getPostHistory() {
 }
 
 /**
- * Delete a scheduled post
+ * Get status of a specific post from Ayrshare by post ID
+ * Returns actual posting status from Ayrshare (not our DB)
  */
-async function deletePost(postId) {
+async function getPostStatus(postId, options = {}) {
   if (!AYRSHARE_API_KEY) {
     return { success: false, error: 'API not configured' };
   }
+  if (!postId) {
+    return { success: false, error: 'No post ID provided' };
+  }
 
   try {
-    const response = await makeRequest(`https://app.ayrshare.com/api/post/${postId}`, {
-      method: 'DELETE',
-      headers: {
-        'Authorization': `Bearer ${AYRSHARE_API_KEY}`
-      }
+    const headers = {
+      'Authorization': `Bearer ${AYRSHARE_API_KEY}`
+    };
+    if (options.profileKey) {
+      headers['Profile-Key'] = options.profileKey;
+    }
+
+    const response = await makeRequest(`https://api.ayrshare.com/api/post/${postId}`, {
+      method: 'GET',
+      headers
     });
 
+    console.log(`📡 Ayrshare post status for ${postId}:`, JSON.stringify(response.data, null, 2));
+    return { success: response.status === 200, data: response.data };
+  } catch (error) {
+    console.error('Ayrshare post status error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Delete a scheduled post
+ */
+async function deletePost(postId, options = {}) {
+  if (!AYRSHARE_API_KEY) {
+    return { success: false, error: 'API not configured' };
+  }
+  if (!postId) {
+    return { success: false, error: 'No post ID provided' };
+  }
+
+  try {
+    const headers = {
+      'Authorization': `Bearer ${AYRSHARE_API_KEY}`
+    };
+    if (options.profileKey) {
+      headers['Profile-Key'] = options.profileKey;
+    }
+
+    const response = await makeRequest(`https://api.ayrshare.com/api/post/${postId}`, {
+      method: 'DELETE',
+      headers
+    });
+
+    console.log(`🗑️ Ayrshare delete for ${postId}:`, JSON.stringify(response.data, null, 2));
     return { success: response.status === 200, data: response.data };
   } catch (error) {
     console.error('Ayrshare delete error:', error);
@@ -201,7 +308,7 @@ async function getAyrshareProfile() {
   }
 
   try {
-    const response = await makeRequest('https://app.ayrshare.com/api/user', {
+    const response = await makeRequest('https://api.ayrshare.com/api/user', {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${AYRSHARE_API_KEY}`
@@ -226,10 +333,201 @@ async function getAyrshareProfile() {
 function getAyrshareConnectUrl(platform, redirectUrl) {
   try {
     // Ayrshare dashboard URL for connecting accounts
-    const baseUrl = 'https://app.ayrshare.com/social-accounts';
+    const baseUrl = 'https://api.ayrshare.com/social-accounts';
     const connectUrl = `${baseUrl}?platform=${platform.toLowerCase()}&redirect=${encodeURIComponent(redirectUrl || '')}`;
     return { success: true, connectUrl };
   } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Create a new Ayrshare User Profile
+ * Required for Business Plan integration - each user needs their own profile
+ * @param {string} title - Unique title for the profile (e.g., user's email or company name)
+ * @param {object} options - Optional settings (disableSocial, hideTopHeader, etc.)
+ * @returns {Promise<{success: boolean, profileKey?: string, refId?: string, error?: string}>}
+ */
+async function createAyrshareProfile(title, options = {}) {
+  if (!AYRSHARE_API_KEY) {
+    console.warn('Ayrshare API key not configured');
+    return { success: false, error: 'API not configured' };
+  }
+
+  try {
+    const body = {
+      title: title,
+      ...options
+    };
+
+    const response = await makeRequest('https://api.ayrshare.com/api/profiles', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${AYRSHARE_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: body
+    });
+
+    console.log('Ayrshare create profile response:', response.status, response.data);
+
+    if (response.status === 200 && response.data?.status === 'success') {
+      return {
+        success: true,
+        profileKey: response.data.profileKey,
+        refId: response.data.refId,
+        title: response.data.title
+      };
+    } else {
+      return {
+        success: false,
+        error: response.data?.message || 'Failed to create Ayrshare profile',
+        code: response.data?.code
+      };
+    }
+  } catch (error) {
+    console.error('Ayrshare create profile error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Generate JWT for Ayrshare Single Sign-On
+ * This creates a secure URL that redirects users to Ayrshare's social linking page
+ * @param {string} profileKey - The user's Ayrshare Profile Key
+ * @param {object} options - Optional settings (redirect URL, logout, allowedSocial)
+ * @returns {Promise<{success: boolean, url?: string, error?: string}>}
+ */
+async function generateAyrshareJWT(profileKey, options = {}) {
+  const domain = process.env.AYRSHARE_DOMAIN;
+  const privateKey = process.env.AYRSHARE_PRIVATE_KEY;
+  
+  if (!AYRSHARE_API_KEY) {
+    console.warn('Ayrshare API key not configured');
+    return { success: false, error: 'API not configured' };
+  }
+
+  if (!domain || !privateKey) {
+    console.warn('Ayrshare domain or private key not configured');
+    return { success: false, error: 'Ayrshare Business Plan credentials not configured (domain/privateKey)' };
+  }
+
+  if (!profileKey) {
+    return { success: false, error: 'Profile key is required' };
+  }
+
+  try {
+    // Build request body for Business Plan JWT SSO
+    const body = {
+      domain: domain,
+      privateKey: privateKey,
+      profileKey: profileKey
+    };
+    
+    // Add optional parameters
+    if (options.redirect) {
+      body.redirect = options.redirect;
+    }
+    if (options.logout) {
+      body.logout = true;
+    }
+    // Filter to only show specific social platforms
+    if (options.allowedSocial && Array.isArray(options.allowedSocial)) {
+      body.allowedSocial = options.allowedSocial;
+    }
+
+    console.log('Generating Ayrshare JWT for profileKey:', profileKey, 'domain:', domain);
+
+    const response = await makeRequest('https://api.ayrshare.com/api/profiles/generateJWT', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${AYRSHARE_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: body
+    });
+
+    console.log('Ayrshare generate JWT response:', response.status, response.data);
+
+    if (response.status === 200 && response.data?.url) {
+      return {
+        success: true,
+        url: response.data.url
+      };
+    } else {
+      return {
+        success: false,
+        error: response.data?.message || response.data?.error || 'Failed to generate JWT URL'
+      };
+    }
+  } catch (error) {
+    console.error('Ayrshare generate JWT error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Get User Profile details from Ayrshare (with Profile Key)
+ * @param {string} profileKey - The user's Ayrshare Profile Key
+ * @returns {Promise<{success: boolean, data?: object, error?: string}>}
+ */
+async function getAyrshareUserProfile(profileKey) {
+  if (!AYRSHARE_API_KEY) {
+    return { success: false, error: 'API not configured' };
+  }
+
+  try {
+    const response = await makeRequest('https://api.ayrshare.com/api/user', {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${AYRSHARE_API_KEY}`,
+        'Profile-Key': profileKey
+      }
+    });
+
+    if (response.status === 200) {
+      return {
+        success: true,
+        data: response.data,
+        activeSocialAccounts: response.data?.activeSocialAccounts || []
+      };
+    } else {
+      return {
+        success: false,
+        error: response.data?.message || 'Failed to get user profile'
+      };
+    }
+  } catch (error) {
+    console.error('Ayrshare get user profile error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Delete an Ayrshare User Profile
+ * @param {string} profileKey - The user's Ayrshare Profile Key
+ * @returns {Promise<{success: boolean, error?: string}>}
+ */
+async function deleteAyrshareProfile(profileKey) {
+  if (!AYRSHARE_API_KEY) {
+    return { success: false, error: 'API not configured' };
+  }
+
+  try {
+    const response = await makeRequest('https://api.ayrshare.com/api/profiles', {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${AYRSHARE_API_KEY}`,
+        'Profile-Key': profileKey
+      }
+    });
+
+    return {
+      success: response.status === 200,
+      error: response.status !== 200 ? (response.data?.message || 'Failed to delete profile') : undefined
+    };
+  } catch (error) {
+    console.error('Ayrshare delete profile error:', error);
     return { success: false, error: error.message };
   }
 }
@@ -268,7 +566,7 @@ async function runApifyActor(actorId, input, options = {}) {
     }
 
     // Wait for the run to complete (with timeout)
-    const maxWait = options.maxWait || 120000; // 2 minutes
+    const maxWait = options.maxWait || 120000; // 2 minutes for reliable scraping
     const pollInterval = 3000; // 3 seconds
     let elapsed = 0;
 
@@ -404,8 +702,105 @@ async function scrapeCompetitor(competitorName, platforms = ['instagram']) {
 }
 
 /**
- * Fetch REAL competitor posts from social media using Apify
- * This fetches actual posts from competitor Instagram/Twitter/TikTok accounts
+ * Search Instagram for a business/brand by name using Apify
+ * Returns the best matching username with posts
+ */
+async function searchInstagramByName(businessName, context = {}) {
+  const cacheKey = `instagram_search_${businessName.toLowerCase().replace(/\s+/g, '_')}`;
+  const cached = getCached(cacheKey);
+  if (cached) return cached;
+
+  try {
+    console.log(`  🔍 Instagram search for: "${businessName}"`);
+    const result = await runApifyActor('apify~instagram-scraper', {
+      search: businessName,
+      searchType: 'user',
+      resultsLimit: 5,
+      searchLimit: 5
+    }, { maxWait: 60000 });
+
+    if (result?.success && result?.data?.length > 0) {
+      // Filter to profiles that are likely the real business
+      const nameWords = businessName.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+      
+      // Score each result by how well it matches
+      const scored = result.data
+        .filter(p => p.username || p.ownerUsername)
+        .map(p => {
+          const username = (p.username || p.ownerUsername || '').toLowerCase();
+          const fullName = (p.fullName || p.ownerFullName || '').toLowerCase();
+          const bio = (p.biography || '').toLowerCase();
+          let score = 0;
+          
+          // Full name match is strongest signal
+          if (fullName.includes(businessName.toLowerCase())) score += 10;
+          
+          // Individual word matches
+          for (const word of nameWords) {
+            if (username.includes(word)) score += 3;
+            if (fullName.includes(word)) score += 2;
+            if (bio.includes(word)) score += 1;
+          }
+          
+          // Verified accounts get a boost
+          if (p.verified || p.isVerified) score += 5;
+          
+          // Higher follower count = more likely the real one
+          const followers = p.followersCount || p.followers || 0;
+          if (followers > 10000) score += 3;
+          if (followers > 1000) score += 1;
+          
+          // Industry keyword matching (if context provided)
+          if (context.industry) {
+            const industryWords = context.industry.toLowerCase().split(/[\s,]+/).filter(w => w.length > 3);
+            for (const word of industryWords) {
+              if (bio.includes(word)) score += 3;
+            }
+          }
+
+          // Website domain cross-reference
+          if (context.website) {
+            const compDomain = context.website.toLowerCase().replace(/https?:\/\//, '').replace(/www\./, '').split('/')[0];
+            const profileUrl = (p.externalUrl || '').toLowerCase().replace(/https?:\/\//, '').replace(/www\./, '').split('/')[0];
+            if (compDomain && profileUrl && (compDomain.includes(profileUrl) || profileUrl.includes(compDomain))) {
+              score += 8;
+            }
+          }
+
+          // Non-English bio penalty for English-named businesses
+          if (nameWords.length > 0 && nameWords.every(w => /^[a-z]+$/.test(w)) && bio.length > 20) {
+            const latinChars = (bio.match(/[a-z]/g) || []).length;
+            const totalChars = bio.replace(/[\s\d@#.,!?:;'"()\-]/g, '').length;
+            if (totalChars > 10 && latinChars / totalChars < 0.3) {
+              score -= 5;
+            }
+          }
+
+          return { username, fullName, score, followers, profile: p };
+        })
+        .filter(s => s.score >= 5)
+        .sort((a, b) => b.score - a.score);
+
+      if (scored.length > 0) {
+        const best = scored[0];
+        console.log(`  ✅ Search found @${best.username} (${best.fullName}, score: ${best.score}, followers: ${best.followers})`);
+        const searchResult = { success: true, username: best.username, fullName: best.fullName, score: best.score };
+        setCache(cacheKey, searchResult);
+        return searchResult;
+      }
+    }
+    
+    console.log(`  ⚠️ Instagram search returned no good matches for "${businessName}"`);
+    return { success: false, error: 'No matching profile found' };
+  } catch (error) {
+    console.error(`  ❌ Instagram search error for "${businessName}":`, error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Fetch REAL competitor posts from Instagram using Apify
+ * Only Instagram — no Twitter/TikTok/LinkedIn/Facebook
  */
 async function fetchRealCompetitorPosts(competitorHandles, options = {}) {
   if (!APIFY_API_KEY) {
@@ -419,9 +814,9 @@ async function fetchRealCompetitorPosts(competitorHandles, options = {}) {
   console.log('Fetching REAL competitor posts for:', competitorHandles);
 
   for (const competitor of competitorHandles) {
-    const { name, instagram, twitter, tiktok, facebook, linkedin } = competitor;
+    const { name, instagram } = competitor;
     
-    // Try Instagram first (most reliable with Apify)
+    // Instagram ONLY — no other platforms
     if (instagram) {
       try {
         console.log(`Scraping Instagram for ${name}: @${instagram}`);
@@ -440,21 +835,42 @@ async function fetchRealCompetitorPosts(competitorHandles, options = {}) {
           
           if (result.success && result.data && result.data.length > 0) {
             const profile = result.data[0];
-            const posts = (profile.latestPosts || profile.posts || []).slice(0, limit).map((post, idx) => ({
-              id: `real_ig_${instagram}_${idx}_${Date.now()}`,
-              competitorName: name,
-              competitorLogo: name?.charAt(0)?.toUpperCase() || 'C',
-              content: post.caption || post.text || post.description || 'No caption',
-              platform: 'instagram',
-              likes: post.likesCount || post.likes || 0,
-              comments: post.commentsCount || post.comments || 0,
-              sentiment: analyzeSentiment(post.caption || ''),
-              postType: detectPostType(post.caption || ''),
-              postedAt: formatPostDate(post.timestamp || post.takenAt),
-              postUrl: post.url || `https://instagram.com/p/${post.shortCode || post.id}`,
-              imageUrl: post.displayUrl || post.imageUrl || null,
-              isReal: true
-            }));
+            const threeMonthsAgo = Date.now() - (30 * 24 * 60 * 60 * 1000); // 1 month filter
+            
+            const posts = (profile.latestPosts || profile.posts || [])
+              .map((post, idx) => {
+                // Extract timestamp from all possible Apify fields
+                let rawTs = null;
+                if (post.timestamp) rawTs = post.timestamp;
+                else if (post.takenAt) rawTs = post.takenAt;
+                else if (post.takenAtTimestamp && !isNaN(post.takenAtTimestamp)) rawTs = post.takenAtTimestamp * 1000;
+                else if (post.taken_at_timestamp && !isNaN(post.taken_at_timestamp)) rawTs = post.taken_at_timestamp * 1000;
+                else if (post.date) rawTs = post.date;
+
+                if (!rawTs) return null; // Skip posts with no timestamp
+
+                const timeInfo = formatPostDate(rawTs);
+                if (isNaN(timeInfo.timestamp) || timeInfo.timestamp < threeMonthsAgo) return null; // Skip old/invalid
+
+                return {
+                  id: `real_ig_${instagram}_${idx}_${Date.now()}`,
+                  competitorName: name,
+                  competitorLogo: name?.charAt(0)?.toUpperCase() || 'C',
+                  content: post.caption || post.text || post.description || 'No caption',
+                  platform: 'instagram',
+                  likes: post.likesCount || post.likes || 0,
+                  comments: post.commentsCount || post.comments || 0,
+                  sentiment: analyzeSentiment(post.caption || ''),
+                  postType: detectPostType(post.caption || ''),
+                  postedAt: new Date(timeInfo.timestamp).toISOString(),
+                  postedAtTimestamp: timeInfo.timestamp,
+                  postUrl: post.url || `https://instagram.com/p/${post.shortCode || post.id}`,
+                  imageUrl: post.displayUrl || post.imageUrl || null,
+                  isReal: true
+                };
+              })
+              .filter(Boolean) // Remove nulls (no timestamp or too old)
+              .slice(0, limit);
             
             allPosts.push(...posts);
             setCache(cacheKey, { posts });
@@ -465,98 +881,13 @@ async function fetchRealCompetitorPosts(competitorHandles, options = {}) {
         console.error(`Instagram scrape error for ${instagram}:`, error.message);
       }
     }
-    
-    // Try Twitter/X
-    if (twitter) {
-      try {
-        console.log(`Scraping Twitter for ${name}: @${twitter}`);
-        const cacheKey = `real_tw_posts_${twitter}_${limit}`;
-        const cached = getCached(cacheKey);
-        
-        if (cached && cached.posts) {
-          allPosts.push(...cached.posts);
-        } else {
-          const result = await runApifyActor('apify~twitter-scraper', {
-            searchTerms: [`from:${twitter.replace('@', '')}`],
-            maxTweets: limit,
-            addUserInfo: true
-          }, { timeout: 60000 });
-          
-          if (result.success && result.data && result.data.length > 0) {
-            const posts = result.data.slice(0, limit).map((tweet, idx) => ({
-              id: `real_tw_${twitter}_${idx}_${Date.now()}`,
-              competitorName: name,
-              competitorLogo: name?.charAt(0)?.toUpperCase() || 'C',
-              content: tweet.text || tweet.full_text || 'No content',
-              platform: 'twitter',
-              likes: tweet.favorite_count || tweet.likes || 0,
-              comments: tweet.reply_count || tweet.replies || 0,
-              retweets: tweet.retweet_count || 0,
-              sentiment: analyzeSentiment(tweet.text || ''),
-              postType: detectPostType(tweet.text || ''),
-              postedAt: formatPostDate(tweet.created_at),
-              postUrl: tweet.url || `https://twitter.com/${twitter}/status/${tweet.id_str || tweet.id}`,
-              isReal: true
-            }));
-            
-            allPosts.push(...posts);
-            setCache(cacheKey, { posts });
-            console.log(`Fetched ${posts.length} real Twitter posts for ${twitter}`);
-          }
-        }
-      } catch (error) {
-        console.error(`Twitter scrape error for ${twitter}:`, error.message);
-      }
-    }
-    
-    // Try TikTok
-    if (tiktok) {
-      try {
-        console.log(`Scraping TikTok for ${name}: @${tiktok}`);
-        const cacheKey = `real_tt_posts_${tiktok}_${limit}`;
-        const cached = getCached(cacheKey);
-        
-        if (cached && cached.posts) {
-          allPosts.push(...cached.posts);
-        } else {
-          const result = await runApifyActor('clockworks~tiktok-scraper', {
-            profiles: [tiktok.replace('@', '')],
-            resultsPerPage: limit
-          }, { timeout: 60000 });
-          
-          if (result.success && result.data && result.data.length > 0) {
-            const posts = result.data.slice(0, limit).map((video, idx) => ({
-              id: `real_tt_${tiktok}_${idx}_${Date.now()}`,
-              competitorName: name,
-              competitorLogo: name?.charAt(0)?.toUpperCase() || 'C',
-              content: video.text || video.desc || video.description || 'No description',
-              platform: 'tiktok',
-              likes: video.diggCount || video.likes || 0,
-              comments: video.commentCount || video.comments || 0,
-              views: video.playCount || video.views || 0,
-              sentiment: analyzeSentiment(video.text || video.desc || ''),
-              postType: 'video',
-              postedAt: formatPostDate(video.createTime * 1000),
-              postUrl: video.webVideoUrl || `https://tiktok.com/@${tiktok}/video/${video.id}`,
-              isReal: true
-            }));
-            
-            allPosts.push(...posts);
-            setCache(cacheKey, { posts });
-            console.log(`Fetched ${posts.length} real TikTok posts for ${tiktok}`);
-          }
-        }
-      } catch (error) {
-        console.error(`TikTok scrape error for ${tiktok}:`, error.message);
-      }
-    }
   }
   
-  // Sort by most recent
+  // Sort by most recent (using postedAtTimestamp for accurate sorting)
   allPosts.sort((a, b) => {
-    const dateA = new Date(a.postedAt || 0);
-    const dateB = new Date(b.postedAt || 0);
-    return dateB - dateA;
+    const timestampA = a.postedAtTimestamp || 0;
+    const timestampB = b.postedAtTimestamp || 0;
+    return timestampB - timestampA; // Most recent first
   });
   
   return { 
@@ -600,157 +931,31 @@ function detectPostType(text) {
 }
 
 /**
- * Format post date to relative time
+ * Format post date to relative time and return both display string and timestamp
  */
 function formatPostDate(timestamp) {
-  if (!timestamp) return 'Recently';
+  if (!timestamp) return null; // No fallback — caller must skip this post
   
   const date = new Date(timestamp);
+  if (isNaN(date.getTime())) return null; // Invalid date — skip
   const now = new Date();
   const diffMs = now - date;
   const diffMins = Math.floor(diffMs / 60000);
   const diffHours = Math.floor(diffMs / 3600000);
   const diffDays = Math.floor(diffMs / 86400000);
   
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffDays === 1) return '1d ago';
-  if (diffDays < 7) return `${diffDays}d ago`;
-  if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
-  return date.toLocaleDateString();
-}
-
-// ============================================
-// SEARCHAPI - Search and Trends
-// ============================================
-
-/**
- * Search Google for topics/trends
- */
-async function searchGoogle(query, options = {}) {
-  if (!SEARCHAPI_API_KEY) {
-    console.warn('SearchAPI key not configured');
-    return { success: false, error: 'API not configured' };
-  }
-
-  const cacheKey = `google_search_${query}_${options.num || 10}`;
-  const cached = getCached(cacheKey);
-  if (cached) return cached;
-
-  try {
-    const params = new URLSearchParams({
-      api_key: SEARCHAPI_API_KEY,
-      engine: 'google',
-      q: query,
-      num: options.num || 10,
-      gl: options.country || 'us',
-      hl: options.language || 'en'
-    });
-
-    const response = await makeRequest(`https://www.searchapi.io/api/v1/search?${params}`);
-    
-    const result = { 
-      success: response.status === 200, 
-      data: response.data?.organic_results || response.data 
-    };
-    
-    if (result.success) setCache(cacheKey, result);
-    return result;
-  } catch (error) {
-    console.error('SearchAPI error:', error);
-    return { success: false, error: error.message };
-  }
-}
-
-/**
- * Get Google Trends data
- */
-async function getGoogleTrends(keyword, options = {}) {
-  if (!SEARCHAPI_API_KEY) {
-    return { success: false, error: 'API not configured' };
-  }
-
-  const cacheKey = `google_trends_${keyword}`;
-  const cached = getCached(cacheKey);
-  if (cached) return cached;
-
-  try {
-    const params = new URLSearchParams({
-      api_key: SEARCHAPI_API_KEY,
-      engine: 'google_trends',
-      q: keyword,
-      data_type: options.dataType || 'TIMESERIES',
-      geo: options.geo || 'US'
-    });
-
-    const response = await makeRequest(`https://www.searchapi.io/api/v1/search?${params}`);
-    
-    const result = { success: response.status === 200, data: response.data };
-    if (result.success) setCache(cacheKey, result);
-    return result;
-  } catch (error) {
-    console.error('Google Trends error:', error);
-    return { success: false, error: error.message };
-  }
-}
-
-/**
- * Search for industry news
- */
-async function searchIndustryNews(industry, options = {}) {
-  if (!SEARCHAPI_API_KEY) {
-    return { success: false, error: 'API not configured' };
-  }
-
-  const cacheKey = `news_${industry}`;
-  const cached = getCached(cacheKey);
-  if (cached) return cached;
-
-  try {
-    const params = new URLSearchParams({
-      api_key: SEARCHAPI_API_KEY,
-      engine: 'google_news',
-      q: `${industry} marketing trends ${new Date().getFullYear()}`,
-      gl: options.country || 'us',
-      hl: options.language || 'en'
-    });
-
-    const response = await makeRequest(`https://www.searchapi.io/api/v1/search?${params}`);
-    
-    const result = { 
-      success: response.status === 200, 
-      data: response.data?.news_results || response.data 
-    };
-    
-    if (result.success) setCache(cacheKey, result);
-    return result;
-  } catch (error) {
-    console.error('Industry news error:', error);
-    return { success: false, error: error.message };
-  }
-}
-
-/**
- * Get trending topics for an industry
- */
-async function getTrendingTopics(industry) {
-  const queries = [
-    `${industry} trends 2025`,
-    `${industry} marketing strategies`,
-    `${industry} social media trends`
-  ];
-
-  const results = [];
+  let displayString;
+  if (diffMins < 60) displayString = `${diffMins}m ago`;
+  else if (diffHours < 24) displayString = `${diffHours}h ago`;
+  else if (diffDays === 1) displayString = '1d ago';
+  else if (diffDays < 7) displayString = `${diffDays}d ago`;
+  else if (diffDays < 30) displayString = `${Math.floor(diffDays / 7)}w ago`;
+  else displayString = date.toLocaleDateString();
   
-  for (const query of queries) {
-    const searchResult = await searchGoogle(query, { num: 5 });
-    if (searchResult.success && Array.isArray(searchResult.data)) {
-      results.push(...searchResult.data);
-    }
-  }
-
-  return { success: true, data: results };
+  return { displayString, timestamp: date.getTime() };
 }
+
+
 
 // ============================================
 // COMBINED FUNCTIONS
@@ -780,39 +985,10 @@ async function getCompetitorAnalysis(competitorName, platforms = ['instagram']) 
     }
   }
 
-  // Search for news about the competitor
-  const newsResult = await searchGoogle(`${competitorName} company news`, { num: 5 });
-  if (newsResult.success) {
-    analysis.recentNews = newsResult.data;
-  }
-
   return analysis;
 }
 
-/**
- * Get real-time marketing insights
- */
-async function getMarketingInsights(industry, niche) {
-  const insights = {
-    industry,
-    niche,
-    fetchedAt: new Date().toISOString()
-  };
 
-  // Get trending topics
-  const trends = await getTrendingTopics(industry);
-  insights.trendingTopics = trends.data || [];
-
-  // Get industry news
-  const news = await searchIndustryNews(industry);
-  insights.industryNews = news.data || [];
-
-  // Get Google Trends data
-  const googleTrends = await getGoogleTrends(industry);
-  insights.googleTrends = googleTrends.data || null;
-
-  return insights;
-}
 
 /**
  * Check API configuration status
@@ -828,129 +1004,10 @@ function getAPIStatus() {
       features: ['instagram-scraping', 'twitter-scraping', 'tiktok-scraping']
     },
     searchapi: {
-      configured: !!SEARCHAPI_API_KEY,
-      features: ['google-search', 'google-trends', 'news-search']
+      configured: false,
+      features: []
     }
   };
-}
-
-// ============================================
-// GOOGLE SEARCH BASED INFLUENCER DISCOVERY
-// ============================================
-
-/**
- * Search for influencers using Google Search (SearchAPI)
- * This provides a reliable fallback when Apify scrapers are limited
- */
-async function searchInfluencersViaGoogle(keyword, platform, options = {}) {
-  if (!SEARCHAPI_API_KEY) {
-    return { success: false, error: 'SearchAPI not configured', influencers: [] };
-  }
-
-  const limit = options.limit || 10;
-  const platformSite = {
-    instagram: 'instagram.com',
-    twitter: 'twitter.com OR x.com',
-    youtube: 'youtube.com',
-    linkedin: 'linkedin.com/in',
-    facebook: 'facebook.com'
-  };
-
-  const site = platformSite[platform] || '';
-  const searchQuery = `site:${site} "${keyword}" influencer OR creator followers`;
-
-  console.log(`🔍 Google searching for ${platform} influencers: ${searchQuery}`);
-
-  try {
-    const params = new URLSearchParams({
-      api_key: SEARCHAPI_API_KEY,
-      engine: 'google',
-      q: searchQuery,
-      num: limit.toString(),
-      gl: 'us',
-      hl: 'en'
-    });
-
-    const response = await makeRequest(`https://www.searchapi.io/api/v1/search?${params}`);
-    
-    if (response.status !== 200 || !response.data?.organic_results) {
-      return { success: false, error: 'No search results', influencers: [] };
-    }
-
-    const influencers = [];
-    
-    for (const result of response.data.organic_results) {
-      const profileUrl = result.link || '';
-      const title = result.title || '';
-      const snippet = result.snippet || '';
-      
-      // Extract username from URL
-      let username = '';
-      if (platform === 'instagram') {
-        const match = profileUrl.match(/instagram\.com\/([^\/\?]+)/);
-        username = match ? match[1] : '';
-      } else if (platform === 'twitter') {
-        const match = profileUrl.match(/(?:twitter|x)\.com\/([^\/\?]+)/);
-        username = match ? match[1] : '';
-      } else if (platform === 'youtube') {
-        const match = profileUrl.match(/youtube\.com\/(?:@|channel\/|c\/|user\/)([^\/\?]+)/);
-        username = match ? match[1] : '';
-      } else if (platform === 'linkedin') {
-        const match = profileUrl.match(/linkedin\.com\/in\/([^\/\?]+)/);
-        username = match ? match[1] : '';
-      } else if (platform === 'facebook') {
-        const match = profileUrl.match(/facebook\.com\/([^\/\?]+)/);
-        username = match ? match[1] : '';
-      }
-
-      // Skip if no username or if it's a generic page
-      if (!username || ['explore', 'search', 'watch', 'trending', 'login', 'signup'].includes(username.toLowerCase())) {
-        continue;
-      }
-
-      // Extract name from title
-      let name = title.split(/[-–|•@]/)[0].trim();
-      if (name.length > 50) name = name.substring(0, 50);
-
-      // Estimate follower count from snippet
-      let followerCount = 0;
-      const followerMatch = snippet.match(/(\d+(?:\.\d+)?)\s*([KMB]?)\s*(?:followers|subscribers)/i);
-      if (followerMatch) {
-        let num = parseFloat(followerMatch[1]);
-        const suffix = (followerMatch[2] || '').toUpperCase();
-        if (suffix === 'K') num *= 1000;
-        else if (suffix === 'M') num *= 1000000;
-        else if (suffix === 'B') num *= 1000000000;
-        followerCount = Math.round(num);
-      } else {
-        // Default estimate based on appearing in search
-        followerCount = Math.floor(Math.random() * 50000) + 5000;
-      }
-
-      influencers.push({
-        platform,
-        username,
-        handle: platform === 'twitter' ? `@${username}` : username,
-        name: name || username,
-        profileImage: null,
-        bio: snippet.substring(0, 200),
-        followerCount,
-        engagementRate: (Math.random() * 5 + 1).toFixed(2),
-        avgLikes: Math.floor(followerCount * 0.03),
-        avgComments: Math.floor(followerCount * 0.005),
-        isVerified: false,
-        profileUrl,
-        scrapedAt: new Date().toISOString(),
-        source: 'google_search'
-      });
-    }
-
-    console.log(`✅ Google found ${influencers.length} ${platform} influencers`);
-    return { success: influencers.length > 0, influencers, source: 'google_search' };
-  } catch (error) {
-    console.error(`Google search error for ${platform}:`, error);
-    return { success: false, error: error.message, influencers: [] };
-  }
 }
 
 // ============================================
@@ -1497,29 +1554,9 @@ async function discoverInfluencers(brandProfile, options = {}) {
     return true;
   });
 
-  // If Apify returned no results, try Google Search fallback
-  if (uniqueInfluencers.length === 0 && SEARCHAPI_API_KEY) {
-    console.log('\n🔄 Apify returned no results, trying Google Search fallback...');
-    
-    const googleSearchPromises = platforms.map(async (platform) => {
-      const keyword = keywords[0] || brandProfile.industry;
-      const result = await searchInfluencersViaGoogle(keyword, platform, { limit: Math.ceil(limit / platforms.length) });
-      if (result.success && result.influencers?.length > 0) {
-        allInfluencers.push(...result.influencers);
-        successfulPlatforms.push(platform);
-      }
-    });
-    
-    await Promise.allSettled(googleSearchPromises);
-    
-    // Re-dedupe after Google search
-    seenKeys.clear();
-    uniqueInfluencers = allInfluencers.filter(inf => {
-      const key = `${inf.platform}_${inf.username}`;
-      if (seenKeys.has(key)) return false;
-      seenKeys.add(key);
-      return true;
-    });
+  // If Apify returned no results, log a warning
+  if (uniqueInfluencers.length === 0) {
+    console.log('\n⚠️ Apify returned no influencer results for the given criteria');
   }
 
   // Sort by follower count (highest first) and limit
@@ -1543,55 +1580,91 @@ async function discoverInfluencers(brandProfile, options = {}) {
 
 /**
  * Build search keywords based on brand profile
+ * Optimized for finding LARGE, RELEVANT influencers
  */
 function buildInfluencerSearchKeywords(brandProfile) {
   const keywords = [];
   const { industry, niche, targetAudience, products, services, marketingGoals, name } = brandProfile;
 
-  // Add industry-based keywords
+  // Add industry-based keywords - FOCUSED on finding BIG influencers
   if (industry) {
-    keywords.push(industry.toLowerCase());
+    const industryLower = industry.toLowerCase();
     
-    // Industry-specific influencer keywords
+    // Industry-specific influencer keywords - prioritize high-follower niches
     const industryKeywords = {
-      'ecommerce': ['shopping', 'fashion', 'lifestyle', 'haul', 'unboxing'],
-      'saas': ['tech', 'software', 'productivity', 'startup', 'business'],
-      'fashion': ['style', 'outfit', 'ootd', 'fashionblogger', 'streetwear'],
-      'beauty': ['makeup', 'skincare', 'beauty', 'cosmetics', 'beautytips'],
-      'fitness': ['fitness', 'workout', 'gym', 'health', 'nutrition'],
-      'food': ['foodie', 'cooking', 'recipe', 'chef', 'restaurant'],
-      'travel': ['travel', 'wanderlust', 'explore', 'adventure', 'travelblogger'],
-      'tech': ['technology', 'gadgets', 'reviews', 'tech', 'innovation'],
-      'gaming': ['gaming', 'gamer', 'esports', 'streamer', 'gameplay'],
-      'education': ['education', 'learning', 'study', 'teacher', 'edtech'],
-      'finance': ['finance', 'investing', 'money', 'stocks', 'crypto'],
-      'healthcare': ['health', 'wellness', 'medical', 'healthcare', 'doctor'],
-      'sports': ['sports', 'athlete', 'fitness', 'training', 'soccer', 'basketball']
+      'ecommerce': ['top fashion influencer', 'lifestyle blogger 100k', 'product reviewer verified', 'shopping haul creator'],
+      'saas': ['tech startup founder', 'software CEO', 'SaaS influencer', 'tech entrepreneur'],
+      'fashion': ['fashion model verified', 'celebrity stylist', 'fashion week influencer', 'style icon'],
+      'beauty': ['celebrity makeup artist', 'beauty guru verified', 'skincare expert', 'beauty brand founder'],
+      'fitness': ['celebrity trainer', 'fitness model verified', 'gym owner influencer', 'bodybuilding champion'],
+      'food': ['celebrity chef', 'michelin star chef', 'food network star', 'restaurant owner influencer'],
+      'travel': ['luxury travel blogger', 'travel photographer verified', 'adventure influencer', 'world traveler'],
+      'tech': ['tech CEO', 'silicon valley influencer', 'gadget reviewer verified', 'tech founder'],
+      'gaming': ['pro gamer', 'esports champion', 'gaming youtuber verified', 'twitch partner'],
+      'education': ['education entrepreneur', 'online course creator', 'edtech founder', 'professor influencer'],
+      'finance': ['wealth advisor', 'investment banker influencer', 'finance CEO', 'crypto whale'],
+      'healthcare': ['celebrity doctor', 'medical influencer verified', 'wellness founder', 'health entrepreneur'],
+      'sports': ['professional athlete', 'olympic athlete', 'sports commentator', 'fitness celebrity'],
+      'construction': ['celebrity architect', 'interior design celebrity', 'luxury home builder', 'real estate mogul', 'property developer', 'home renovation expert', 'architectural designer'],
+      'real estate': ['luxury realtor celebrity', 'real estate investor millionaire', 'property mogul', 'mansion tour creator', 'real estate entrepreneur'],
+      'service': ['business mogul', 'entrepreneur verified', 'CEO influencer', 'industry leader'],
+      'luxury': ['billionaire lifestyle', 'luxury brand ambassador', 'affluent influencer', 'high society influencer', 'luxury car collector']
     };
 
-    const normalizedIndustry = industry.toLowerCase();
+    // Find matching keywords - collect from multiple matching categories
     for (const [key, values] of Object.entries(industryKeywords)) {
-      if (normalizedIndustry.includes(key)) {
-        keywords.push(...values.slice(0, 3));
-        break;
+      if (industryLower.includes(key)) {
+        keywords.push(...values);
       }
+    }
+    
+    // If no specific match, use high-profile generic keywords
+    if (keywords.length === 0) {
+      keywords.push('business mogul', 'entrepreneur verified', 'industry leader', 'CEO influencer');
     }
   }
 
-  // Add niche keywords
-  if (niche) {
-    keywords.push(niche.toLowerCase().replace(/\s+/g, ''));
+  // For construction specifically, add India-focused keywords if relevant
+  if (industry && industry.toLowerCase().includes('construction')) {
+    keywords.push('indian architect', 'india interior designer', 'luxury villa india', 'south indian architect');
   }
 
-  // Add target audience keywords
-  if (targetAudience) {
-    const audienceStr = typeof targetAudience === 'string' ? targetAudience : JSON.stringify(targetAudience);
-    const audienceKeywords = audienceStr.match(/\b[a-zA-Z]{4,}\b/g) || [];
-    keywords.push(...audienceKeywords.slice(0, 2).map(k => k.toLowerCase()));
+  // Extract meaningful words from niche for targeted search
+  if (niche && typeof niche === 'string') {
+    const nicheWords = niche
+      .replace(/[^\w\s]/g, ' ')
+      .split(/\s+/)
+      .filter(word => word.length > 3 && !['focus', 'with', 'that', 'this', 'from', 'have', 'been', 'their', 'building'].includes(word.toLowerCase()))
+      .slice(0, 2);
+    
+    nicheWords.forEach(word => {
+      keywords.push(`${word.toLowerCase()} expert verified`);
+    });
   }
 
-  // Remove duplicates and limit
-  return [...new Set(keywords)].slice(0, 5);
+  // Add luxury/HNI focused keywords if targeting affluent audience
+  if (targetAudience && typeof targetAudience === 'string') {
+    const taLower = targetAudience.toLowerCase();
+    if (taLower.includes('hni') || taLower.includes('high-net-worth') || taLower.includes('luxury') || taLower.includes('affluent')) {
+      keywords.push('luxury lifestyle influencer', 'millionaire lifestyle', 'high net worth influencer', 'affluent living');
+    }
+    if (taLower.includes('home') || taLower.includes('villa') || taLower.includes('property')) {
+      keywords.push('luxury home tour', 'mansion tour', 'dream home builder', 'celebrity home designer');
+    }
+    if (taLower.includes('nri') || taLower.includes('overseas')) {
+      keywords.push('NRI influencer', 'indian diaspora lifestyle', 'overseas indian entrepreneur');
+    }
+  }
+
+  // Remove duplicates and prioritize specific searches
+  const uniqueKeywords = [...new Set(keywords)];
+  
+  // Sort by specificity (longer keywords first - they're usually more specific)
+  uniqueKeywords.sort((a, b) => b.length - a.length);
+  
+  console.log('🎯 Generated search keywords:', uniqueKeywords.slice(0, 8));
+  
+  return uniqueKeywords.slice(0, 8);
 }
 
 /**
@@ -1613,14 +1686,398 @@ function calculateEngagementRate(likes, comments, followers) {
   return (((likes + comments) / followers) * 100).toFixed(2);
 }
 
+// ============================================
+// AYRSHARE POST-LEVEL ANALYTICS
+// ============================================
+
+/**
+ * Get analytics for a specific post (by Ayrshare post ID)
+ * @param {string} postId - Ayrshare post ID
+ * @param {string[]} platforms - Platforms to get analytics for
+ * @param {string} profileKey - User's Ayrshare profile key
+ */
+async function getPostAnalytics(postId, platforms = null, profileKey = null) {
+  if (!AYRSHARE_API_KEY) {
+    return { success: false, error: 'API not configured' };
+  }
+
+  try {
+    const headers = {
+      'Authorization': `Bearer ${AYRSHARE_API_KEY}`,
+      'Content-Type': 'application/json'
+    };
+    if (profileKey) headers['Profile-Key'] = profileKey;
+
+    // Build body: only include platforms if explicitly provided
+    // If null/empty, Ayrshare auto-detects from the post's actual platforms
+    const body = { id: postId };
+    if (platforms && Array.isArray(platforms) && platforms.length > 0) {
+      body.platforms = platforms;
+    }
+
+    const response = await makeRequest('https://api.ayrshare.com/api/analytics/post', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+      timeout: 60000
+    });
+
+    console.log('Ayrshare post analytics response:', response.status, JSON.stringify(response.data).substring(0, 1000));
+    return { success: response.status === 200, data: response.data };
+  } catch (error) {
+    console.error('Ayrshare post analytics error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Get detailed social / account-level analytics (with daily, quarters support)
+ * @param {string} profileKey - User's Ayrshare profile key
+ * @param {string[]} platforms - Platforms to get analytics for
+ * @param {object} options - { daily: boolean, quarters: number }
+ */
+async function getSocialAnalyticsDetailed(profileKey, platforms = ['instagram', 'facebook'], options = {}) {
+  if (!AYRSHARE_API_KEY) {
+    return { success: false, error: 'API not configured' };
+  }
+
+  try {
+    const headers = {
+      'Authorization': `Bearer ${AYRSHARE_API_KEY}`,
+      'Content-Type': 'application/json'
+    };
+    if (profileKey) headers['Profile-Key'] = profileKey;
+
+    const body = { platforms };
+
+    const response = await makeRequest('https://api.ayrshare.com/api/analytics/social', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+      timeout: 60000
+    });
+
+    console.log('Ayrshare detailed social analytics response:', response.status, 'for platforms:', platforms);
+    if (response.status !== 200) {
+      console.log('Ayrshare analytics error response:', JSON.stringify(response.data).substring(0, 500));
+    }
+    return { success: response.status === 200, data: response.data };
+  } catch (error) {
+    console.error('Ayrshare detailed social analytics error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// ============================================
+// AYRSHARE ADS / BOOST API
+// ============================================
+
+/**
+ * Get Facebook/Instagram ad accounts
+ */
+async function getAdAccounts(profileKey = null) {
+  if (!AYRSHARE_API_KEY) {
+    return { success: false, error: 'API not configured' };
+  }
+
+  try {
+    const headers = {
+      'Authorization': `Bearer ${AYRSHARE_API_KEY}`
+    };
+    if (profileKey) headers['Profile-Key'] = profileKey;
+
+    const response = await makeRequest('https://api.ayrshare.com/api/ads/facebook/accounts', {
+      method: 'GET',
+      headers,
+      timeout: 30000
+    });
+
+    console.log('Ayrshare ad accounts response:', response.status, JSON.stringify(response.data).substring(0, 500));
+    return { success: response.status === 200, data: response.data };
+  } catch (error) {
+    console.error('Ayrshare get ad accounts error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Boost a post on Facebook/Instagram
+ * @param {object} params - All Ayrshare boost params (flat, matching their API)
+ */
+async function boostPost(profileKey, params = {}) {
+  if (!AYRSHARE_API_KEY) {
+    return { success: false, error: 'API not configured' };
+  }
+
+  try {
+    const headers = {
+      'Authorization': `Bearer ${AYRSHARE_API_KEY}`,
+      'Content-Type': 'application/json'
+    };
+    if (profileKey) headers['Profile-Key'] = profileKey;
+
+    // Build the body matching Ayrshare's flat API schema
+    const body = {
+      postId: params.postId,
+      accountId: params.adAccountId,
+      adName: params.adName || `Gravity Boost - ${params.postId}`,
+      goal: params.goal || 'engagement',
+      budget: params.dailyBudget || params.budget || 1,
+      bidAmount: params.bidAmount || 1,
+      status: params.status || 'active',
+      locations: params.locations || { countries: ['US'] },
+    };
+
+    // Dates (omit endDate for ongoing ads)
+    if (params.startDate) body.startDate = params.startDate;
+    if (params.endDate) body.endDate = params.endDate;
+
+    // Excluded locations
+    if (params.excludedLocations) body.excludedLocations = params.excludedLocations;
+
+    // Targeting — flat params as Ayrshare expects
+    if (params.minAge) body.minAge = params.minAge;
+    if (params.maxAge && params.maxAge !== 65) body.maxAge = params.maxAge;
+    if (params.gender && params.gender !== 'all') body.gender = params.gender;
+    if (params.interests && Array.isArray(params.interests) && params.interests.length > 0) {
+      body.interests = params.interests.map(i => typeof i === 'object' ? i.id : i);
+    }
+
+    // Special Ad Categories (housing, finance, employment, politics)
+    if (params.specialAdCategories && Array.isArray(params.specialAdCategories) && params.specialAdCategories.length > 0) {
+      body.specialAdCategories = params.specialAdCategories;
+    }
+
+    // Facebook Pixel tracking
+    if (params.tracking && params.tracking.pixelId) {
+      body.tracking = { pixelId: params.tracking.pixelId };
+    }
+
+    // UTM tags
+    if (params.urlTags && Array.isArray(params.urlTags) && params.urlTags.length > 0) {
+      body.urlTags = params.urlTags;
+    }
+
+    // DSA compliance (EU)
+    if (params.dsaBeneficiary) body.dsaBeneficiary = params.dsaBeneficiary;
+    if (params.dsaPayor) body.dsaPayor = params.dsaPayor;
+
+    // Legacy support: handle old nested targeting format
+    if (params.targeting) {
+      if (params.targeting.age_min) body.minAge = body.minAge || params.targeting.age_min;
+      if (params.targeting.age_max) body.maxAge = body.maxAge || params.targeting.age_max;
+      if (params.targeting.gender) body.gender = body.gender || params.targeting.gender;
+      if (params.targeting.interests && Array.isArray(params.targeting.interests)) {
+        body.interests = body.interests || params.targeting.interests.map(i => typeof i === 'object' ? i.id : i);
+      }
+      if (params.targeting.locations) body.locations = params.targeting.locations;
+    }
+
+    console.log('Ayrshare boost request body:', JSON.stringify(body, null, 2));
+
+    const response = await makeRequest('https://api.ayrshare.com/api/ads/facebook/boost', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+      timeout: 60000
+    });
+
+    console.log('Ayrshare boost response:', response.status, JSON.stringify(response.data));
+    if (response.status !== 200) {
+      // Extract the most descriptive error — prefer details over generic message
+      const rd = response.data;
+      const detail = rd?.details || '';
+      const msg = rd?.message || rd?.error || '';
+      const errMsg = (typeof rd === 'string' ? rd : null)
+        || (detail ? (msg ? `${msg} — ${detail}` : detail) : msg)
+        || (rd?.errors ? JSON.stringify(rd.errors) : null)
+        || `Ayrshare returned status ${response.status}`;
+      return { success: false, error: errMsg, data: response.data };
+    }
+    return { success: true, data: response.data };
+  } catch (error) {
+    console.error('Ayrshare boost post error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Get all boosted ads
+ */
+async function getBoostedAds(profileKey = null, params = {}) {
+  if (!AYRSHARE_API_KEY) {
+    return { success: false, error: 'API not configured' };
+  }
+
+  try {
+    const headers = {
+      'Authorization': `Bearer ${AYRSHARE_API_KEY}`
+    };
+    if (profileKey) headers['Profile-Key'] = profileKey;
+
+    // Ayrshare requires at least one of: accountId, adId, fbPostId, postId
+    // If none provided, fetch ad accounts first and query each
+    let accountIds = [];
+    if (params.accountId) {
+      accountIds = [params.accountId];
+    } else {
+      const accountsResult = await getAdAccounts(profileKey);
+      if (accountsResult.success && accountsResult.data?.adAccounts) {
+        accountIds = accountsResult.data.adAccounts.map(a => a.id || a.accountId);
+      }
+    }
+
+    if (accountIds.length === 0) {
+      return { success: true, data: { ads: [], count: 0 } };
+    }
+
+    // Fetch ads for each account and merge
+    let allAds = [];
+    for (const accId of accountIds) {
+      let url = `https://api.ayrshare.com/api/ads/facebook/ads?accountId=${accId}`;
+      if (params.status) url += `&status=${params.status}`;
+      if (params.limit) url += `&limit=${params.limit}`;
+
+      console.log('Fetching boosted ads for account:', accId, 'URL:', url);
+
+      const response = await makeRequest(url, {
+        method: 'GET',
+        headers,
+        timeout: 30000
+      });
+
+      console.log('Boosted ads response for account', accId, ':', response.status, JSON.stringify(response.data).substring(0, 500));
+
+      if (response.status === 200 && response.data?.ads) {
+        allAds = allAds.concat(response.data.ads);
+      }
+    }
+
+    return { success: true, data: { ads: allAds, count: allAds.length } };
+  } catch (error) {
+    console.error('Ayrshare get boosted ads error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Get ad spend history
+ */
+async function getAdHistory(profileKey = null, params = {}) {
+  if (!AYRSHARE_API_KEY) {
+    return { success: false, error: 'API not configured' };
+  }
+
+  try {
+    const headers = {
+      'Authorization': `Bearer ${AYRSHARE_API_KEY}`
+    };
+    if (profileKey) headers['Profile-Key'] = profileKey;
+
+    let url = 'https://api.ayrshare.com/api/ads/facebook/history';
+    const queryParams = [];
+    if (params.startDate) queryParams.push(`startDate=${params.startDate}`);
+    if (params.endDate) queryParams.push(`endDate=${params.endDate}`);
+    if (queryParams.length) url += '?' + queryParams.join('&');
+
+    const response = await makeRequest(url, {
+      method: 'GET',
+      headers,
+      timeout: 30000
+    });
+
+    return { success: response.status === 200, data: response.data };
+  } catch (error) {
+    console.error('Ayrshare get ad history error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Search interests for ad targeting
+ */
+async function getAdInterests(profileKey = null, query = '') {
+  if (!AYRSHARE_API_KEY) {
+    return { success: false, error: 'API not configured' };
+  }
+
+  try {
+    const headers = {
+      'Authorization': `Bearer ${AYRSHARE_API_KEY}`
+    };
+    if (profileKey) headers['Profile-Key'] = profileKey;
+
+    const response = await makeRequest(`https://api.ayrshare.com/api/ads/facebook/interests?search=${encodeURIComponent(query)}`, {
+      method: 'GET',
+      headers,
+      timeout: 30000
+    });
+
+    return { success: response.status === 200, data: response.data };
+  } catch (error) {
+    console.error('Ayrshare get ad interests error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Update/pause/resume an ad
+ * @param {string} adId - The ad ID to update
+ * @param {object} params - { status: 'PAUSED' | 'ACTIVE', dailyBudget, endDate }
+ */
+async function updateAd(profileKey, adId, params = {}) {
+  if (!AYRSHARE_API_KEY) {
+    return { success: false, error: 'API not configured' };
+  }
+
+  try {
+    const headers = {
+      'Authorization': `Bearer ${AYRSHARE_API_KEY}`,
+      'Content-Type': 'application/json'
+    };
+    if (profileKey) headers['Profile-Key'] = profileKey;
+
+    const body = { adId, ...params };
+
+    const response = await makeRequest('https://api.ayrshare.com/api/ads/facebook/update', {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(body),
+      timeout: 30000
+    });
+
+    return { success: response.status === 200, data: response.data };
+  } catch (error) {
+    console.error('Ayrshare update ad error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
 module.exports = {
   // Ayrshare functions
   postToSocialMedia,
   getAyrshareAnalytics,
+  getUserSocialAnalytics,
   getPostHistory,
+  getPostStatus,
   deletePost,
   getAyrshareProfile,
   getAyrshareConnectUrl,
+  // Ayrshare Business Plan functions (profile & JWT)
+  createAyrshareProfile,
+  generateAyrshareJWT,
+  getAyrshareUserProfile,
+  deleteAyrshareProfile,
+  // Ayrshare Analytics (detailed)
+  getPostAnalytics,
+  getSocialAnalyticsDetailed,
+  // Ayrshare Ads / Boost
+  getAdAccounts,
+  boostPost,
+  getBoostedAds,
+  getAdHistory,
+  getAdInterests,
+  updateAd,
   
   // Apify functions
   runApifyActor,
@@ -1629,6 +2086,7 @@ module.exports = {
   scrapeTwitterProfile,
   scrapeTikTokProfile,
   scrapeCompetitor,
+  searchInstagramByName,
   fetchRealCompetitorPosts,
   
   // Influencer Discovery functions (REAL-TIME SCRAPING)
@@ -1637,17 +2095,9 @@ module.exports = {
   searchYouTubeInfluencers,
   searchLinkedInInfluencers,
   searchFacebookInfluencers,
-  searchInfluencersViaGoogle,
   discoverInfluencers,
-  
-  // SearchAPI functions
-  searchGoogle,
-  getGoogleTrends,
-  searchIndustryNews,
-  getTrendingTopics,
   
   // Combined functions
   getCompetitorAnalysis,
-  getMarketingInsights,
   getAPIStatus
 };

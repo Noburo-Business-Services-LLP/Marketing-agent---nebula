@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: marketing-agent-nebula
+    runtime: node
+    buildCommand: npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: AYRSHARE_API_KEY
+        sync: false
+      - key: AYRSHARE_DOMAIN
+        sync: false
+      - key: AYRSHARE_PRIVATE_KEY
+        sync: false
+      - key: SES_AWS_ACCESS_KEY_ID
+        sync: false
+      - key: SES_AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: SES_SENDER_EMAIL
+        sync: false
+      - key: APIFY_API_KEY
+        sync: false

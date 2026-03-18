@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nebulaa AI - Marketing Agent</title>
+    <!-- Tailwind CSS via Play CDN - more reliable -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+      // Configure tailwind when it loads
+      function configureTailwind() {
+        if (typeof tailwind !== 'undefined' && tailwind.config) {
+          tailwind.config = {
+            darkMode: 'class',
+            theme: {
+              extend: {
+                colors: {
+                  nebula: {
+                    dark: '#070A12',
+                    gold: '#ffcc29',
+                    silver: '#ededed',
+                  }
+                }
+              }
+            }
+          };
+          return true;
+        }
+        return false;
+      }
+      
+      // Retry configuration
+      var configRetries = 0;
+      function tryConfigureTailwind() {
+        if (!configureTailwind() && configRetries < 100) {
+          configRetries++;
+          setTimeout(tryConfigureTailwind, 50);
+        }
+      }
+      tryConfigureTailwind();
+    </script>
+    <style>
+      body {
+        font-family: 'Inter', sans-serif;
+      }
+      /* Dark mode styles */
+      .dark body {
+        background-color: #070A12;
+        color: #ededed;
+      }
+      /* Light mode styles */
+      body {
+        background-color: #ededed;
+        color: #070A12;
+      }
+      html.dark body {
+        background-color: #070A12;
+        color: #ededed;
+      }
+      /* Custom scrollbar for webkit - Dark mode */
+      .dark ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      .dark ::-webkit-scrollbar-track {
+        background: #070A12;
+      }
+      .dark ::-webkit-scrollbar-thumb {
+        background: #ffcc29;
+        border-radius: 4px;
+      }
+      .dark ::-webkit-scrollbar-thumb:hover {
+        background: #e6b825;
+      }
+      /* Light mode scrollbar */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #ededed;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #070A12;
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #1a1f2e;
+      }
+      /* Skeleton shimmer animation */
+      @keyframes shimmer {
+        0% { background-position: -200% 0; }
+        100% { background-position: 200% 0; }
+      }
+      .skeleton-shimmer {
+        background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.08) 50%, transparent 100%);
+        background-size: 200% 100%;
+        animation: shimmer 1.5s infinite;
+      }
+      .dark .skeleton-shimmer {
+        background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.05) 50%, transparent 100%);
+        background-size: 200% 100%;
+      }
+    </style>
+
+  <script type="importmap">
+{
+  "imports": {
+    "recharts": "https://esm.sh/recharts@^3.5.1",
+    "react/": "https://esm.sh/react@^19.2.1/",
+    "react": "https://esm.sh/react@^19.2.1",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.1/",
+    "lucide-react": "https://esm.sh/lucide-react@^0.560.0",
+    "react-router-dom": "https://esm.sh/react-router-dom@^7.10.1"
+  }
+}
+</script>
+  <script type="module" crossorigin src="/assets/index-Ptybmzk3.js"></script>
+</head>
+  <body>
+    <div id="root"></div>    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>    
+  </body>
+</html>

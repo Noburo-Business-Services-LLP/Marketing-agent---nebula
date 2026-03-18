@@ -115,28 +115,60 @@ cachedCampaignSchema.statics.saveCampaigns = async function(userId, businessProf
   );
   
   // Save new campaigns
-  const docs = campaigns.map(camp => ({
-    userId,
-    businessProfileHash,
-    campaignId: camp.id || camp.campaignId,
-    name: camp.name || camp.title,
-    tagline: camp.tagline,
-    objective: camp.objective?.toLowerCase() || 'awareness',
-    platform: camp.platforms?.[0] || camp.platform || 'instagram',
-    platforms: camp.platforms || [camp.platform || 'instagram'],
-    description: camp.description,
-    caption: camp.caption,
-    hashtags: camp.hashtags || [],
-    imageUrl: camp.imageUrl,
-    imageSearchQuery: camp.imageSearchQuery,
-    bestPostTime: camp.bestPostTime,
-    estimatedReach: camp.expectedReach || camp.estimatedReach,
-    duration: camp.duration,
-    estimatedBudget: camp.estimatedBudget,
-    contentIdeas: camp.contentIdeas || [],
-    generatedAt: new Date(),
-    expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
-  }));
+  const validObjectives = ['awareness', 'engagement', 'traffic', 'sales', 'conversion', 'trust', 'authority'];
+  
+  // Deduplicate campaigns before saving to cache — check BOTH title AND caption start
+  const seenTitles = new Set();
+  const seenCaptionStarts = new Set();
+  const dedupedCampaigns = campaigns.filter(camp => {
+    const title = (camp.name || camp.title || '').toLowerCase().trim();
+    const captionStart = (camp.caption || '').toLowerCase().trim().substring(0, 60);
+    if (!title || seenTitles.has(title)) {
+      console.log(`🚫 Not caching duplicate title: "${title}"`);
+      return false;
+    }
+    if (captionStart.length > 20 && seenCaptionStarts.has(captionStart)) {
+      console.log(`🚫 Not caching duplicate caption: "${captionStart}..."`);
+      return false;
+    }
+    seenTitles.add(title);
+    if (captionStart.length > 20) seenCaptionStarts.add(captionStart);
+    return true;
+  });
+  
+  const docs = dedupedCampaigns.map(camp => {
+    // Sanitize objective - AI sometimes returns "awareness|engagement|sales" instead of single value
+    let objective = (camp.objective || 'awareness').toLowerCase().trim();
+    if (objective.includes('|')) {
+      objective = objective.split('|')[0].trim(); // Take first one
+    }
+    if (!validObjectives.includes(objective)) {
+      objective = 'awareness'; // Default fallback
+    }
+    
+    return {
+      userId,
+      businessProfileHash,
+      campaignId: camp.id || camp.campaignId,
+      name: camp.name || camp.title,
+      tagline: camp.tagline,
+      objective,
+      platform: camp.platforms?.[0] || camp.platform || 'instagram',
+      platforms: camp.platforms || [camp.platform || 'instagram'],
+      description: camp.description,
+      caption: camp.caption,
+      hashtags: camp.hashtags || [],
+      imageUrl: camp.imageUrl,
+      imageSearchQuery: camp.imageSearchQuery,
+      bestPostTime: camp.bestPostTime,
+      estimatedReach: camp.expectedReach || camp.estimatedReach,
+      duration: camp.duration,
+      estimatedBudget: camp.estimatedBudget,
+      contentIdeas: camp.contentIdeas || [],
+      generatedAt: new Date(),
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
+    };
+  });
   
   return this.insertMany(docs);
 };

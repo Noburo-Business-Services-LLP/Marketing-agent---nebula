@@ -8,13 +8,24 @@
     "dev": "node server.js"
   },
   "dependencies": {
+    "@aws-sdk/client-ses": "^3.958.0",
+    "@sendgrid/mail": "^8.1.6",
     "bcryptjs": "^2.4.3",
+    "canvas": "^3.2.1",
+    "cloudinary": "^2.9.0",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
-    "nodemailer": "^7.0.6",
+    "express-validator": "^7.0.1",
+    "google-auth-library": "^10.5.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.0.3",
-    "express-validator": "^7.0.1"
+    "multer": "^2.0.2",
+    "node-fetch": "^2.7.0",
+    "nodemailer": "^7.0.12",
+    "razorpay": "^2.9.6",
+    "resend": "^6.9.2",
+    "sharp": "^0.33.5",
+    "xlsx": "^0.18.5"
   }
 }
