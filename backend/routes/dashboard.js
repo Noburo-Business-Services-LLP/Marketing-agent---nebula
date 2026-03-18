@@ -26,8 +26,8 @@ const { generateWithLLM } = require('../services/llmRouter');
 const { getAyrshareUserProfile, getUserSocialAnalytics } = require('../services/socialMediaAPI');
 const DashboardCache = require('../models/DashboardCache');
 
-function clearCachedDashboard(userId) {
-  dashboardCache.delete(userId);
+async function clearCachedDashboard(userId) {
+  await DashboardCache.clearCache(userId);
 }
 
 // Import socialMediaAPI for real competitor scraping (Instagram only)
