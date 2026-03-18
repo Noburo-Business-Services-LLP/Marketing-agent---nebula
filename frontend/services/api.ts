@@ -1464,7 +1464,7 @@ export const apiService = {
     }
   },
 
-  generatePostFromSuggestion: async (suggestion: any): Promise<{
+  generatePostFromSuggestion: async (suggestion: any, logoUrl?: string | null, aspectRatio?: string): Promise<{
     success: boolean;
     post: {
       caption: string;
@@ -1486,7 +1486,7 @@ export const apiService = {
         '/dashboard/strategic-advisor/generate-post',
         { 
           method: 'POST', 
-          body: JSON.stringify({ suggestion }) 
+          body: JSON.stringify({ suggestion, logoUrl: logoUrl || null, aspectRatio: aspectRatio || '1:1' })
         },
         true
       );

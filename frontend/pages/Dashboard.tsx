@@ -290,6 +290,11 @@ const Dashboard: React.FC = () => {
   const [selectedSuggestion, setSelectedSuggestion] = useState<any>(null);
   const [generatingPost, setGeneratingPost] = useState(false);
   const [generatedPost, setGeneratedPost] = useState<any>(null);
+  const [showStrategicLogoModal, setShowStrategicLogoModal] = useState(false);
+  const [showStrategicAspectModal, setShowStrategicAspectModal] = useState(false);
+  const [strategicSelectedLogo, setStrategicSelectedLogo] = useState<string | null>(null);
+  const [strategicAspectRatio, setStrategicAspectRatio] = useState<string>('1:1');
+  const [pendingStrategicSuggestion, setPendingStrategicSuggestion] = useState<any>(null);
   const [postCaption, setPostCaption] = useState('');
   const [postHashtags, setPostHashtags] = useState<string[]>([]);
   const [postImageUrl, setPostImageUrl] = useState('');
@@ -415,8 +420,8 @@ const Dashboard: React.FC = () => {
     }
   };
   
-  // Handle creating a post from suggestion
-  const handleCreatePost = async (suggestion: any) => {
+  // Handle creating a post from suggestion (called after logo + aspect ratio selection)
+  const handleCreatePost = async (suggestion: any, logoUrl?: string | null, aspectRatio?: string) => {
     // Upfront credit check
     try {
       const creditData = await apiService.getCredits();
@@ -432,9 +437,9 @@ const Dashboard: React.FC = () => {
     setShowPostCreator(true);
     setGeneratingPost(true);
     setGeneratedPost(null);
-    
+
     try {
-      const result = await apiService.generatePostFromSuggestion(suggestion);
+      const result = await apiService.generatePostFromSuggestion(suggestion, logoUrl, aspectRatio);
       if (result.success && result.post) {
         setGeneratedPost(result.post);
         setPostCaption(result.post.caption || '');
@@ -1564,7 +1569,10 @@ const Dashboard: React.FC = () => {
                               </div>
                               
                               <button
-                                onClick={() => handleCreatePost(suggestion)}
+                                onClick={() => {
+                                  setPendingStrategicSuggestion(suggestion);
+                                  setShowStrategicLogoModal(true);
+                                }}
                                 className="flex items-center gap-1.5 px-3 py-1.5 bg-[#ffcc29] hover:bg-[#e6b825] text-[#070A12] text-xs font-semibold rounded-lg transition-colors"
                               >
                                 <PenTool className="w-3.5 h-3.5" />
@@ -1626,6 +1634,85 @@ const Dashboard: React.FC = () => {
       </div>
 
       {/* Post Creator Modal */}
+      {/* Strategic Advisor Logo Selector Modal */}
+      <LogoSelector
+        isOpen={showStrategicLogoModal}
+        onClose={() => { setShowStrategicLogoModal(false); setPendingStrategicSuggestion(null); }}
+        onConfirm={(logoUrl) => {
+          setShowStrategicLogoModal(false);
+          setStrategicSelectedLogo(logoUrl);
+          setStrategicAspectRatio('1:1');
+          setShowStrategicAspectModal(true);
+        }}
+      />
+
+      {/* Strategic Advisor Aspect Ratio Modal */}
+      {showStrategicAspectModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => { setShowStrategicAspectModal(false); setPendingStrategicSuggestion(null); }}>
+          <div className={`${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white'} border rounded-2xl shadow-2xl w-full max-w-md p-6`} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-[#ffcc29]/20 flex items-center justify-center">
+                  <ImageIcon className="w-5 h-5 text-[#ffcc29]" />
+                </div>
+                <div>
+                  <h3 className={`text-lg font-bold ${theme.text}`}>Select Aspect Ratio</h3>
+                  <p className={`text-sm ${theme.textMuted}`}>Choose the image dimensions</p>
+                </div>
+              </div>
+              <button onClick={() => { setShowStrategicAspectModal(false); setPendingStrategicSuggestion(null); }} className={`${theme.textMuted} hover:text-slate-600`}>
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3 mb-6">
+              {[
+                { value: '1:1', label: '1:1', desc: 'Square' },
+                { value: '4:5', label: '4:5', desc: 'Portrait' },
+                { value: '9:16', label: '9:16', desc: 'Story/Reel' },
+                { value: '16:9', label: '16:9', desc: 'Landscape' },
+                { value: '3:4', label: '3:4', desc: 'Portrait' },
+                { value: '4:3', label: '4:3', desc: 'Landscape' },
+              ].map(ratio => (
+                <button
+                  key={ratio.value}
+                  onClick={() => setStrategicAspectRatio(ratio.value)}
+                  className={`p-3 rounded-xl border-2 transition-all flex flex-col items-center gap-1 ${
+                    strategicAspectRatio === ratio.value
+                      ? 'border-[#ffcc29] bg-[#ffcc29]/10'
+                      : `${isDarkMode ? 'border-slate-700 hover:border-slate-600' : 'border-slate-200 hover:border-slate-300'}`
+                  }`}
+                >
+                  <span className={`text-sm font-bold ${theme.text}`}>{ratio.label}</span>
+                  <span className={`text-xs ${theme.textMuted}`}>{ratio.desc}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setShowStrategicAspectModal(false); setPendingStrategicSuggestion(null); }}
+                className={`flex-1 py-2.5 rounded-xl border ${isDarkMode ? 'border-slate-700 text-slate-400 hover:bg-[#161b22]' : 'border-slate-200 text-slate-600 hover:bg-slate-50'} font-medium`}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setShowStrategicAspectModal(false);
+                  if (pendingStrategicSuggestion) {
+                    handleCreatePost(pendingStrategicSuggestion, strategicSelectedLogo, strategicAspectRatio);
+                    setPendingStrategicSuggestion(null);
+                  }
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-[#ffcc29] text-[#070A12] font-semibold hover:bg-[#e6b825]"
+              >
+                Generate Post
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showPostCreator && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => !generatingPost && !scheduling && setShowPostCreator(false)}>
           <div 

@@ -2776,7 +2776,7 @@ Make suggestions SPECIFIC, ACTIONABLE, and TIMELY. Include actual trending hasht
  * Generate a complete post from a content suggestion
  * Includes: caption, hashtags, image, trending audio suggestion
  */
-async function generatePostFromSuggestion(suggestion, businessProfile) {
+async function generatePostFromSuggestion(suggestion, businessProfile, logoUrl = null, aspectRatio = '1:1') {
   const companyName = businessProfile.name || 'Your Company';
   const industry = businessProfile.industry || 'General';
   const brandVoice = businessProfile.brandVoice || 'Professional';
@@ -2836,11 +2836,24 @@ Return ONLY valid JSON:
     });
     const parsed = parseGeminiJSON(response);
     
-    // Generate AI image based on the image prompt
+    // Generate AI image based on the image prompt using Nano Banana 2
     if (parsed && parsed.imagePrompt) {
       try {
-        const imageUrl = await generateImageFromCustomPrompt(parsed.imagePrompt);
-        parsed.generatedImageUrl = imageUrl;
+        console.log('🎨 Generating strategic post image with Nano Banana 2...');
+        const imageResult = await generateCampaignImageNanoBanana(parsed.imagePrompt, {
+          aspectRatio: aspectRatio || '1:1',
+          brandName: companyName,
+          brandLogo: logoUrl || null,
+          industry: industry,
+          tone: brandVoice
+        });
+        const finalUrl = typeof imageResult === 'string' ? imageResult : imageResult?.imageUrl;
+        if (finalUrl) {
+          parsed.generatedImageUrl = finalUrl;
+          console.log('✅ Strategic post image generated with Nano Banana 2');
+        } else {
+          throw new Error('Nano Banana 2 returned no image');
+        }
       } catch (imgError) {
         console.error('Image generation error:', imgError);
         // Fallback to relevant stock image

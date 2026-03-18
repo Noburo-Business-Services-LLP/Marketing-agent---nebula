@@ -1578,9 +1578,9 @@ router.get('/strategic-advisor', protect, async (req, res) => {
  */
 router.post('/strategic-advisor/generate-post', protect, async (req, res) => {
   try {
-    const { suggestion } = req.body;
+    const { suggestion, logoUrl, aspectRatio } = req.body;
     const userId = req.user._id;
-    
+
     if (!suggestion) {
       return res.status(400).json({ success: false, message: 'Suggestion is required' });
     }
@@ -1604,7 +1604,7 @@ router.post('/strategic-advisor/generate-post', protect, async (req, res) => {
     };
     
     // Generate complete post
-    const post = await generatePostFromSuggestion(suggestion, businessProfile);
+    const post = await generatePostFromSuggestion(suggestion, businessProfile, logoUrl || null, aspectRatio || '1:1');
     
     // Deduct credits
     const creditResult = await deductCredits(userId, 'strategic_post', 1, 'Strategic advisor post');
