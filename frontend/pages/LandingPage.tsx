@@ -124,11 +124,6 @@ const LandingPage: React.FC = () => {
         
         <div className="relative max-w-6xl mx-auto px-6">
           <div className="max-w-3xl mx-auto text-center">
-            {/* Badge */}
-            <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full mb-8 ${theme === 'dark' ? 'bg-[#ffcc29]/10 border border-[#ffcc29]/30' : 'bg-[#ffcc29]/10 border border-[#ffcc29]/30'}`}>
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-              <span className="text-sm font-medium text-[#ffcc29]">Now with GPT-4 Integration</span>
-            </div>
 
             {/* Headline */}
             <h1 className={`text-4xl md:text-6xl lg:text-7xl font-bold tracking-tight leading-[1.1] mb-6 ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>
