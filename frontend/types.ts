@@ -132,6 +132,9 @@ export interface Campaign {
 
 export interface CompetitorPost {
   id: string;
+  _id?: string;
+  competitorId?: string;
+  competitorType?: string;
   competitorName: string;
   competitorLogo?: string;
   content: string;

@@ -1362,12 +1362,13 @@ router.post('/template-poster', protect, checkTrial, requireCredits('image_gener
     // Always use AI (Gemini) for poster generation - it produces better results
     const result = await generateTemplatePoster(templateImage, content, {
       platform: platform || 'instagram',
-      style: style
+      style: style,
+      aspectRatio: aspectRatio || null
     });
-    
+
     if (result.success) {
       console.log('✅ Template poster generated successfully with', result.model || result.method);
-      
+
       let finalImageBase64 = result.imageBase64;
       let hostedUrl = null;
       let logoReplaced = false;
@@ -1628,110 +1629,62 @@ router.post('/template-poster/edit', protect, checkTrial, requireCredits('image_
  */
 router.post('/template-poster/from-reference', protect, checkTrial, requireCredits('image_generated'), async (req, res) => {
   try {
-    const { referenceImage, content, platform, aspectRatio } = req.body;
-    
-    if (!referenceImage) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Reference image is required' 
-      });
-    }
-    
+    const { referenceImage, content, platform, logoUrl, aspectRatio } = req.body;
+
     if (!content || content.trim().length === 0) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Content is required for the new poster' 
+      return res.status(400).json({
+        success: false,
+        message: 'Content is required for the poster'
       });
     }
-    
+
+    const userId = req.user.userId || req.user.id || req.user._id;
+
+    // AI Generate from scratch (no reference image)
+    if (!referenceImage) {
+      console.log('🎨 Generating poster from scratch with AI (Nano Banana 2)...');
+      console.log('📝 Content:', content.substring(0, 100) + (content.length > 100 ? '...' : ''));
+
+      const imageResult = await generateCampaignImageNanoBanana(content, {
+        aspectRatio: aspectRatio || '1:1',
+        brandName: req.user.companyName || '',
+        brandLogo: logoUrl || null,
+        industry: req.user.industry || '',
+        tone: 'professional'
+      });
+
+      // imageResult can be a string (URL) or object { success, imageUrl }
+      const finalImageUrl = typeof imageResult === 'string' ? imageResult : imageResult?.imageUrl;
+
+      if (finalImageUrl) {
+        const creditResult = await deductCredits(userId, 'image_generated', 1, 'Generated poster from prompt');
+        return res.json({
+          success: true,
+          imageBase64: finalImageUrl,
+          imageUrl: finalImageUrl,
+          model: 'nano-banana-2',
+          creditsRemaining: creditResult.creditsRemaining
+        });
+      } else {
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to generate poster',
+          error: 'Image generation returned no result'
+        });
+      }
+    }
+
+    // Generate from reference image
     console.log('🎨 Generating poster from reference image with AI...');
     console.log('📝 Content:', content.substring(0, 100) + (content.length > 100 ? '...' : ''));
-    
+
     const result = await generatePosterFromReference(referenceImage, content, {
-      platform: platform || 'instagram'
+      platform: platform || 'instagram',
+      aspectRatio: aspectRatio || null
     });
-    
+
     if (result.success) {
       let finalImageBase64 = result.imageBase64;
-
-      // Apply requested aspect ratio before upload, if any
-      if (aspectRatio && aspectRatio !== 'original' && finalImageBase64) {
-        try {
-          console.log('📐 Applying aspect ratio for reference-based poster:', aspectRatio);
-
-          const ratioMap = {
-            '1:1': 1,
-            '4:5': 4/5,
-            '16:9': 16/9,
-            '9:16': 9/16,
-            '3:4': 3/4,
-            '4:3': 4/3
-          };
-
-          const targetRatio = ratioMap[aspectRatio];
-
-          if (targetRatio) {
-            let imageData = finalImageBase64;
-            let mimeType = 'image/png';
-            if (imageData.startsWith('data:')) {
-              const matches = imageData.match(/^data:([^;]+);base64,(.+)$/);
-              if (matches) {
-                mimeType = matches[1];
-                imageData = matches[2];
-              }
-            }
-
-            const sharp = require('sharp');
-            const buffer = Buffer.from(imageData, 'base64');
-            const metadata = await sharp(buffer).metadata();
-            const originalWidth = metadata.width;
-            const originalHeight = metadata.height;
-
-            if (originalWidth && originalHeight) {
-              const originalRatio = originalWidth / originalHeight;
-              let newWidth, newHeight;
-
-              if (originalRatio > targetRatio) {
-                newWidth = originalWidth;
-                newHeight = Math.round(originalWidth / targetRatio);
-              } else {
-                newHeight = originalHeight;
-                newWidth = Math.round(originalHeight * targetRatio);
-              }
-
-              const edgePixels = await sharp(buffer)
-                .resize(1, 1)
-                .raw()
-                .toBuffer();
-
-              const bgColor = {
-                r: edgePixels[0] || 0,
-                g: edgePixels[1] || 0,
-                b: edgePixels[2] || 0
-              };
-
-              const processedBuffer = await sharp({
-                create: {
-                  width: newWidth,
-                  height: newHeight,
-                  channels: 3,
-                  background: bgColor
-                }
-              })
-              .composite([{
-                input: buffer,
-                gravity: 'center'
-              }])
-              .toFormat(mimeType.includes('jpeg') ? 'jpeg' : 'png')
-              .toBuffer();
-
-              finalImageBase64 = `data:${mimeType.includes('jpeg') ? 'image/jpeg' : 'image/png'};base64,${processedBuffer.toString('base64')}`;
-            }
-          }
-        } catch (ratioError) {
-          console.warn('⚠️ Aspect ratio adjustment for reference-based poster failed, using original image:', ratioError.message);
-        }
-      }
 
       // Upload to Cloudinary for public URL
       let hostedUrl = null;
@@ -1746,9 +1699,8 @@ router.post('/template-poster/from-reference', protect, checkTrial, requireCredi
       }
 
       // Deduct credits for image generation from reference
-      const userId = req.user.userId || req.user.id || req.user._id;
       const refCreditResult = await deductCredits(userId, 'image_generated', 1, 'Generated poster from reference');
-      
+
       return res.json({
         success: true,
         imageBase64: finalImageBase64,

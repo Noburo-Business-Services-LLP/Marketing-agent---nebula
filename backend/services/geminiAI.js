@@ -2776,7 +2776,7 @@ Make suggestions SPECIFIC, ACTIONABLE, and TIMELY. Include actual trending hasht
  * Generate a complete post from a content suggestion
  * Includes: caption, hashtags, image, trending audio suggestion
  */
-async function generatePostFromSuggestion(suggestion, businessProfile) {
+async function generatePostFromSuggestion(suggestion, businessProfile, logoUrl = null, aspectRatio = '1:1') {
   const companyName = businessProfile.name || 'Your Company';
   const industry = businessProfile.industry || 'General';
   const brandVoice = businessProfile.brandVoice || 'Professional';
@@ -2836,11 +2836,24 @@ Return ONLY valid JSON:
     });
     const parsed = parseGeminiJSON(response);
     
-    // Generate AI image based on the image prompt
+    // Generate AI image based on the image prompt using Nano Banana 2
     if (parsed && parsed.imagePrompt) {
       try {
-        const imageUrl = await generateImageFromCustomPrompt(parsed.imagePrompt);
-        parsed.generatedImageUrl = imageUrl;
+        console.log('🎨 Generating strategic post image with Nano Banana 2...');
+        const imageResult = await generateCampaignImageNanoBanana(parsed.imagePrompt, {
+          aspectRatio: aspectRatio || '1:1',
+          brandName: companyName,
+          brandLogo: logoUrl || null,
+          industry: industry,
+          tone: brandVoice
+        });
+        const finalUrl = typeof imageResult === 'string' ? imageResult : imageResult?.imageUrl;
+        if (finalUrl) {
+          parsed.generatedImageUrl = finalUrl;
+          console.log('✅ Strategic post image generated with Nano Banana 2');
+        } else {
+          throw new Error('Nano Banana 2 returned no image');
+        }
       } catch (imgError) {
         console.error('Image generation error:', imgError);
         // Fallback to relevant stock image
@@ -2986,7 +2999,7 @@ Keep the overall composition and subject matter the same. Only apply the request
  * Generate a complete post for a holiday/festival/event
  * Combines business context with event details
  */
-async function generateEventPost(event, businessProfile) {
+async function generateEventPost(event, businessProfile, logoUrl = null, aspectRatio = '1:1') {
   const companyName = businessProfile.name || 'Your Company';
   const industry = businessProfile.industry || 'General';
   const brandVoice = businessProfile.brandVoice || 'Professional';
@@ -3065,13 +3078,24 @@ Return ONLY valid JSON:
     });
     const parsed = parseGeminiJSON(response);
     
-    // Generate AI image based on the image prompt
+    // Generate AI image based on the image prompt using Nano Banana 2
     if (parsed && parsed.imagePrompt) {
       try {
-        console.log('🎨 Generating event image for:', eventName);
-        const imageUrl = await generateImageFromCustomPrompt(parsed.imagePrompt);
-        parsed.generatedImageUrl = imageUrl;
-        console.log('✅ Event image generated successfully');
+        console.log('🎨 Generating event image with Nano Banana 2 for:', eventName);
+        const imageResult = await generateCampaignImageNanoBanana(parsed.imagePrompt, {
+          aspectRatio: aspectRatio || '1:1',
+          brandName: companyName,
+          brandLogo: logoUrl || null,
+          industry: industry,
+          tone: brandVoice
+        });
+        const finalUrl = typeof imageResult === 'string' ? imageResult : imageResult?.imageUrl;
+        if (finalUrl) {
+          parsed.generatedImageUrl = finalUrl;
+          console.log('✅ Event image generated with Nano Banana 2 successfully');
+        } else {
+          throw new Error('Nano Banana 2 returned no image');
+        }
       } catch (imgError) {
         console.error('Event image generation error:', imgError);
         // Fallback to relevant stock image
@@ -3124,8 +3148,10 @@ async function generateTemplatePoster(templateImageBase64, content, options = {}
     }
   }
   
+  const aspectRatio = options.aspectRatio || null;
+
   // PRIMARY: Use Nano Banana Pro Preview for image generation
-  const prompt = `You are a professional graphic designer. 
+  const prompt = `You are a professional graphic designer.
 
 Look at this template/poster image carefully. Your task is to recreate it with NEW text content.
 
@@ -3137,7 +3163,8 @@ Instructions:
 2. Preserve all logos, images, and visual elements exactly as they appear
 3. Replace the existing text with the new content provided above
 4. Match the original fonts and text styling as closely as possible
-5. Output a high-quality, print-ready poster image`;
+${aspectRatio && aspectRatio !== 'original' ? `5. Generate the output image in ${aspectRatio} aspect ratio — adjust the layout accordingly while keeping the design intact` : '5. Maintain the original aspect ratio'}
+6. Output a high-quality, print-ready poster image`;
 
   try {
     console.log('🎨 Generating template poster with Nano Banana Pro...');
@@ -3289,10 +3316,23 @@ Instructions:
 async function editTemplatePoster(currentImageBase64, originalContent, editInstructions, templateImageBase64 = null) {
   const startTime = Date.now();
   
-  // Extract base64 data from current image
+  // Extract base64 data from current image (supports URL, data URI, or raw base64)
   let imageData = currentImageBase64;
   let mimeType = 'image/png';
-  if (currentImageBase64.startsWith('data:')) {
+  if (currentImageBase64.startsWith('http://') || currentImageBase64.startsWith('https://')) {
+    // Download image from URL and convert to base64
+    console.log('📥 Downloading image from URL for editing...');
+    const imageResponse = await fetchWithTimeout(currentImageBase64, {}, 30000);
+    if (imageResponse.ok) {
+      const buffer = await imageResponse.arrayBuffer();
+      imageData = Buffer.from(buffer).toString('base64');
+      const contentType = imageResponse.headers.get('content-type');
+      if (contentType) mimeType = contentType.split(';')[0];
+      console.log(`✅ Image downloaded (${Math.round(buffer.byteLength / 1024)}KB, ${mimeType})`);
+    } else {
+      throw new Error('Failed to download image for editing');
+    }
+  } else if (currentImageBase64.startsWith('data:')) {
     const matches = currentImageBase64.match(/^data:([^;]+);base64,(.+)$/);
     if (matches) {
       mimeType = matches[1];
@@ -3331,9 +3371,9 @@ Instructions:
   
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      console.log(`🎨 Editing poster with Nano Banana Pro (attempt ${attempt}/${maxRetries})...`);
-      
-      const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/nano-banana-pro-preview:generateContent';
+      console.log(`🎨 Editing poster with Nano Banana 2 (attempt ${attempt}/${maxRetries})...`);
+
+      const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image-preview:generateContent';
       
       const response = await fetchWithTimeout(`${apiUrl}?key=${GEMINI_API_KEY}`, {
         method: 'POST',
@@ -3527,6 +3567,8 @@ async function generatePosterFromReference(referenceImageBase64, content, option
     }
   }
   
+  const aspectRatio = options.aspectRatio || null;
+
   const prompt = `You are a professional graphic designer. I'm showing you a REFERENCE poster/design for STYLE INSPIRATION.
 
 YOUR TASK: Create a BRAND NEW poster that:
@@ -3546,6 +3588,7 @@ IMPORTANT GUIDELINES:
 - Keep similar spacing, margins, and visual hierarchy
 - If the reference has logos/emblems, create similar placeholder shapes in the same positions
 - Adapt the layout to fit the new content while maintaining the reference's style
+${aspectRatio && aspectRatio !== 'original' ? `- Generate the output image in ${aspectRatio} aspect ratio — adjust the layout accordingly while keeping the design style intact` : ''}
 
 QUALITY REQUIREMENTS:
 - Ultra-sharp, print-ready resolution

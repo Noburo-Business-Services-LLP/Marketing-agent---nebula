@@ -1464,7 +1464,7 @@ export const apiService = {
     }
   },
 
-  generatePostFromSuggestion: async (suggestion: any): Promise<{
+  generatePostFromSuggestion: async (suggestion: any, logoUrl?: string | null, aspectRatio?: string): Promise<{
     success: boolean;
     post: {
       caption: string;
@@ -1486,7 +1486,7 @@ export const apiService = {
         '/dashboard/strategic-advisor/generate-post',
         { 
           method: 'POST', 
-          body: JSON.stringify({ suggestion }) 
+          body: JSON.stringify({ suggestion, logoUrl: logoUrl || null, aspectRatio: aspectRatio || '1:1' })
         },
         true
       );
@@ -1539,7 +1539,7 @@ export const apiService = {
     }
   },
 
-  generateEventPost: async (event: any): Promise<{
+  generateEventPost: async (event: any, logoUrl?: string | null, aspectRatio?: string): Promise<{
     success: boolean;
     post: {
       caption: string;
@@ -1561,7 +1561,7 @@ export const apiService = {
         '/dashboard/generate-event-post',
         { 
           method: 'POST', 
-          body: JSON.stringify({ event }) 
+          body: JSON.stringify({ event, logoUrl: logoUrl || null, aspectRatio: aspectRatio || '1:1' })
         },
         true
       );

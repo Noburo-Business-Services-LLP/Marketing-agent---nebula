@@ -290,6 +290,11 @@ const Dashboard: React.FC = () => {
   const [selectedSuggestion, setSelectedSuggestion] = useState<any>(null);
   const [generatingPost, setGeneratingPost] = useState(false);
   const [generatedPost, setGeneratedPost] = useState<any>(null);
+  const [showStrategicLogoModal, setShowStrategicLogoModal] = useState(false);
+  const [showStrategicAspectModal, setShowStrategicAspectModal] = useState(false);
+  const [strategicSelectedLogo, setStrategicSelectedLogo] = useState<string | null>(null);
+  const [strategicAspectRatio, setStrategicAspectRatio] = useState<string>('1:1');
+  const [pendingStrategicSuggestion, setPendingStrategicSuggestion] = useState<any>(null);
   const [postCaption, setPostCaption] = useState('');
   const [postHashtags, setPostHashtags] = useState<string[]>([]);
   const [postImageUrl, setPostImageUrl] = useState('');
@@ -415,8 +420,8 @@ const Dashboard: React.FC = () => {
     }
   };
   
-  // Handle creating a post from suggestion
-  const handleCreatePost = async (suggestion: any) => {
+  // Handle creating a post from suggestion (called after logo + aspect ratio selection)
+  const handleCreatePost = async (suggestion: any, logoUrl?: string | null, aspectRatio?: string) => {
     // Upfront credit check
     try {
       const creditData = await apiService.getCredits();
@@ -432,9 +437,9 @@ const Dashboard: React.FC = () => {
     setShowPostCreator(true);
     setGeneratingPost(true);
     setGeneratedPost(null);
-    
+
     try {
-      const result = await apiService.generatePostFromSuggestion(suggestion);
+      const result = await apiService.generatePostFromSuggestion(suggestion, logoUrl, aspectRatio);
       if (result.success && result.post) {
         setGeneratedPost(result.post);
         setPostCaption(result.post.caption || '');
@@ -1564,7 +1569,10 @@ const Dashboard: React.FC = () => {
                               </div>
                               
                               <button
-                                onClick={() => handleCreatePost(suggestion)}
+                                onClick={() => {
+                                  setPendingStrategicSuggestion(suggestion);
+                                  setShowStrategicLogoModal(true);
+                                }}
                                 className="flex items-center gap-1.5 px-3 py-1.5 bg-[#ffcc29] hover:bg-[#e6b825] text-[#070A12] text-xs font-semibold rounded-lg transition-colors"
                               >
                                 <PenTool className="w-3.5 h-3.5" />
@@ -1626,6 +1634,85 @@ const Dashboard: React.FC = () => {
       </div>
 
       {/* Post Creator Modal */}
+      {/* Strategic Advisor Logo Selector Modal */}
+      <LogoSelector
+        isOpen={showStrategicLogoModal}
+        onClose={() => { setShowStrategicLogoModal(false); setPendingStrategicSuggestion(null); }}
+        onConfirm={(logoUrl) => {
+          setShowStrategicLogoModal(false);
+          setStrategicSelectedLogo(logoUrl);
+          setStrategicAspectRatio('1:1');
+          setShowStrategicAspectModal(true);
+        }}
+      />
+
+      {/* Strategic Advisor Aspect Ratio Modal */}
+      {showStrategicAspectModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => { setShowStrategicAspectModal(false); setPendingStrategicSuggestion(null); }}>
+          <div className={`${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white'} border rounded-2xl shadow-2xl w-full max-w-md p-6`} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-[#ffcc29]/20 flex items-center justify-center">
+                  <ImageIcon className="w-5 h-5 text-[#ffcc29]" />
+                </div>
+                <div>
+                  <h3 className={`text-lg font-bold ${theme.text}`}>Select Aspect Ratio</h3>
+                  <p className={`text-sm ${theme.textMuted}`}>Choose the image dimensions</p>
+                </div>
+              </div>
+              <button onClick={() => { setShowStrategicAspectModal(false); setPendingStrategicSuggestion(null); }} className={`${theme.textMuted} hover:text-slate-600`}>
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3 mb-6">
+              {[
+                { value: '1:1', label: '1:1', desc: 'Square' },
+                { value: '4:5', label: '4:5', desc: 'Portrait' },
+                { value: '9:16', label: '9:16', desc: 'Story/Reel' },
+                { value: '16:9', label: '16:9', desc: 'Landscape' },
+                { value: '3:4', label: '3:4', desc: 'Portrait' },
+                { value: '4:3', label: '4:3', desc: 'Landscape' },
+              ].map(ratio => (
+                <button
+                  key={ratio.value}
+                  onClick={() => setStrategicAspectRatio(ratio.value)}
+                  className={`p-3 rounded-xl border-2 transition-all flex flex-col items-center gap-1 ${
+                    strategicAspectRatio === ratio.value
+                      ? 'border-[#ffcc29] bg-[#ffcc29]/10'
+                      : `${isDarkMode ? 'border-slate-700 hover:border-slate-600' : 'border-slate-200 hover:border-slate-300'}`
+                  }`}
+                >
+                  <span className={`text-sm font-bold ${theme.text}`}>{ratio.label}</span>
+                  <span className={`text-xs ${theme.textMuted}`}>{ratio.desc}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setShowStrategicAspectModal(false); setPendingStrategicSuggestion(null); }}
+                className={`flex-1 py-2.5 rounded-xl border ${isDarkMode ? 'border-slate-700 text-slate-400 hover:bg-[#161b22]' : 'border-slate-200 text-slate-600 hover:bg-slate-50'} font-medium`}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setShowStrategicAspectModal(false);
+                  if (pendingStrategicSuggestion) {
+                    handleCreatePost(pendingStrategicSuggestion, strategicSelectedLogo, strategicAspectRatio);
+                    setPendingStrategicSuggestion(null);
+                  }
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-[#ffcc29] text-[#070A12] font-semibold hover:bg-[#e6b825]"
+              >
+                Generate Post
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showPostCreator && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => !generatingPost && !scheduling && setShowPostCreator(false)}>
           <div 
@@ -1673,8 +1760,33 @@ const Dashboard: React.FC = () => {
                     <label className={`block text-xs font-semibold uppercase tracking-wide mb-2 ${theme.textSecondary}`}>Image</label>
                     {postImageUrl ? (
                       <div className="relative rounded-xl overflow-hidden mb-3">
-                        <img src={postImageUrl} alt="Post" className="w-full h-64 object-cover" />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+                        <img src={postImageUrl} alt="Post" className="w-full object-contain max-h-[500px]" />
+                        {/* Download button */}
+                        <a
+                          href={postImageUrl}
+                          download="strategic-post.png"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="absolute top-2 right-2 p-2 bg-black/60 hover:bg-black/80 rounded-lg text-white transition-colors"
+                          title="Download image"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            fetch(postImageUrl)
+                              .then(res => res.blob())
+                              .then(blob => {
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = 'strategic-post.png';
+                                a.click();
+                                URL.revokeObjectURL(url);
+                              })
+                              .catch(() => window.open(postImageUrl, '_blank'));
+                            e.preventDefault();
+                          }}
+                        >
+                          <Download className="w-4 h-4" />
+                        </a>
                       </div>
                     ) : (
                       <div className={`h-64 rounded-xl flex items-center justify-center ${isDarkMode ? 'bg-[#161b22]' : 'bg-slate-100'}`}>
@@ -2304,7 +2416,11 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
     const [eventSelectedPlatform, setEventSelectedPlatform] = useState('instagram');
     const [eventScheduling, setEventScheduling] = useState(false);
     const [showEventPostCreator, setShowEventPostCreator] = useState(false);
-    
+    const [showEventLogoModal, setShowEventLogoModal] = useState(false);
+    const [showEventAspectModal, setShowEventAspectModal] = useState(false);
+    const [eventSelectedLogo, setEventSelectedLogo] = useState<string | null>(null);
+    const [eventAspectRatio, setEventAspectRatio] = useState<string>('1:1');
+
     // Update allCampaigns when props change
     useEffect(() => {
       setAllCampaigns(campaigns);
@@ -2318,6 +2434,13 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
       reminderOffset: 30,
       platform: 'instagram',
       hashtags: '',
+      budget: '',
+      targetAudience: '',
+      contentType: 'image',
+      callToAction: '',
+      objective: 'awareness',
+      priority: 'medium',
+      notes: ''
     });
     
     // Image upload & AI generation state
@@ -2338,6 +2461,12 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
     const [calendarAspectRatio, setCalendarAspectRatio] = useState<string>('1:1');
     const [calendarLogos, setCalendarLogos] = useState<Array<{ _id: string; name: string; url: string; isPrimary: boolean }>>([]);
     const [calendarLogosLoaded, setCalendarLogosLoaded] = useState(false);
+
+    // Calendar step-by-step modal flow state
+    const [showCalendarLogoModal, setShowCalendarLogoModal] = useState(false);
+    const [showCalendarAspectModal, setShowCalendarAspectModal] = useState(false);
+    const [calendarAIReady, setCalendarAIReady] = useState(false);
+    const [calendarRefReady, setCalendarRefReady] = useState(false);
 
     // Platform preview state
     const [showCalendarPreview, setShowCalendarPreview] = useState(false);
@@ -2874,22 +3003,18 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
       }
     };
     
-    // Regenerate/edit poster with new instructions
+    // Edit/refine poster with instructions (sends current image to AI for actual editing)
     const handleEditPoster = async () => {
-      if (!posterEditInstructions.trim()) return;
-      if (imageMode === 'reference' && !scheduleImage) return;
+      if (!posterEditInstructions.trim() || !generatedPoster) return;
       setPosterGenerating(true);
       try {
-        const editedContent = posterContent + '\n\nAdditional instruction: ' + posterEditInstructions;
-        const result = await apiService.generatePosterFromReference(
-          imageMode === 'reference' ? scheduleImage! : '',
-          editedContent,
-          scheduleForm.platform,
-          calendarSelectedLogo || undefined,
-          calendarAspectRatio
+        const result = await apiService.editTemplatePoster(
+          generatedPoster,
+          posterContent,
+          posterEditInstructions
         );
-        if (result.success && result.imageBase64) {
-          setGeneratedPoster(result.imageBase64);
+        if (result.success && (result.imageBase64 || result.imageUrl)) {
+          setGeneratedPoster(result.imageUrl || result.imageBase64 || '');
           setPosterEditInstructions('');
           setPosterEditMode(false);
         } else {
@@ -2995,6 +3120,8 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
         }
 
         setShowScheduleModal(false);
+        setCalendarAIReady(false);
+        setCalendarRefReady(false);
         setSelectedSlot(null);
       } catch (e) {
         console.error('Failed to create event:', e);
@@ -3093,6 +3220,8 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
         await refreshCampaigns();
         
         setShowScheduleModal(false);
+        setCalendarAIReady(false);
+        setCalendarRefReady(false);
         setSelectedSlot(null);
         setIsEditMode(false);
         setEditingCampaign(null);
@@ -3897,7 +4026,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
 
             {/* Schedule Modal - Quick Post Scheduler */}
             {showScheduleModal && selectedSlot && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => setShowScheduleModal(false)}>
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => { setShowScheduleModal(false); setCalendarAIReady(false); setCalendarRefReady(false); }}>
                     <div className={`${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-slate-200'} border rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200`} onClick={e => e.stopPropagation()}>
                         {/* Header */}
                         <div className={`sticky top-0 z-10 ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-slate-200'} border-b px-6 py-4`}>
@@ -3908,7 +4037,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                       {selectedSlot.date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} at {(() => { const h = selectedSlot.hour; const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h; return `${h12}:${String(selectedSlot.minute).padStart(2,'0')} ${h >= 12 ? 'PM' : 'AM'}`; })()}
                                     </p>
                                 </div>
-                                <button onClick={() => { setShowScheduleModal(false); setIsEditMode(false); setEditingCampaign(null); }} className={`p-2 ${isDarkMode ? 'hover:bg-[#161b22]' : 'hover:bg-slate-100'} rounded-lg transition-colors`}>
+                                <button onClick={() => { setShowScheduleModal(false); setIsEditMode(false); setEditingCampaign(null); setCalendarAIReady(false); setCalendarRefReady(false); }} className={`p-2 ${isDarkMode ? 'hover:bg-[#161b22]' : 'hover:bg-slate-100'} rounded-lg transition-colors`}>
                                     <X className={`w-5 h-5 ${theme.textMuted}`} />
                                 </button>
                             </div>
@@ -4060,7 +4189,28 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                   ]).map(tab => (
                                     <button
                                       key={tab.key}
-                                      onClick={() => { setImageMode(tab.key); if (tab.key === 'upload') { setGeneratedPoster(null); setPosterContent(''); setPosterEditInstructions(''); } }}
+                                      onClick={() => {
+                                        if (tab.key === 'ai') {
+                                          if (!calendarAIReady) {
+                                            setImageMode('ai');
+                                            setShowCalendarLogoModal(true);
+                                            return;
+                                          }
+                                        } else if (tab.key === 'reference') {
+                                          if (!calendarRefReady) {
+                                            setImageMode('reference');
+                                            setShowCalendarLogoModal(true);
+                                            return;
+                                          }
+                                        } else if (tab.key === 'upload') {
+                                          setCalendarAIReady(false);
+                                          setCalendarRefReady(false);
+                                          setGeneratedPoster(null);
+                                          setPosterContent('');
+                                          setPosterEditInstructions('');
+                                        }
+                                        setImageMode(tab.key);
+                                      }}
                                       className={`flex-1 py-2 px-2 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-1.5 ${
                                         imageMode === tab.key
                                           ? tab.key === 'upload'
@@ -4117,7 +4267,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                 )}
 
                                 {/* ===== AI GENERATE TAB ===== */}
-                                {imageMode === 'ai' && (
+                                {imageMode === 'ai' && calendarAIReady && (
                                   <div className="space-y-3">
                                     {/* Generated poster preview */}
                                     {generatedPoster && (
@@ -4128,7 +4278,28 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                           className={`w-full max-h-80 object-contain rounded-xl border ${isDarkMode ? 'border-slate-700/50 bg-[#161b22]' : 'border-slate-200 bg-slate-50'}`}
                                         />
                                         <span className="absolute top-2 left-2 bg-purple-500/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-md">AI Generated</span>
-                                        <div className="absolute inset-0 bg-black/40 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                        <div className="absolute inset-0 bg-black/40 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                                          <button
+                                            onClick={async () => {
+                                              try {
+                                                const response = await fetch(generatedPoster);
+                                                const blob = await response.blob();
+                                                const url = URL.createObjectURL(blob);
+                                                const a = document.createElement('a');
+                                                a.href = url;
+                                                a.download = `poster-${Date.now()}.png`;
+                                                document.body.appendChild(a);
+                                                a.click();
+                                                document.body.removeChild(a);
+                                                URL.revokeObjectURL(url);
+                                              } catch (err) {
+                                                console.error('Download failed:', err);
+                                              }
+                                            }}
+                                            className="px-3 py-2 bg-white/90 text-slate-800 text-xs font-medium rounded-lg hover:bg-white transition-colors flex items-center gap-1.5"
+                                          >
+                                            <Download className="w-3.5 h-3.5" /> Download
+                                          </button>
                                           <button
                                             onClick={() => { setGeneratedPoster(null); setPosterContent(''); setPosterEditInstructions(''); }}
                                             className="px-3 py-2 bg-red-500/90 text-white text-xs font-medium rounded-lg hover:bg-red-500 transition-colors flex items-center gap-1.5"
@@ -4183,82 +4354,18 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                       </div>
                                     </div>
 
-                                    {/* Logo selector */}
-                                    <div>
-                                      <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>Brand Logo</label>
-                                      <div className="flex gap-2 mt-1.5 flex-wrap">
-                                        <button
-                                          onClick={() => setCalendarSelectedLogo(null)}
-                                          className={`w-14 h-14 rounded-xl border-2 flex items-center justify-center text-[10px] font-medium transition-all ${
-                                            calendarSelectedLogo === null
-                                              ? 'border-[#ffcc29] bg-[#ffcc29]/10 text-[#ffcc29]'
-                                              : isDarkMode ? 'border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-500' : 'border-gray-200 bg-gray-50 text-slate-500 hover:border-gray-300'
-                                          }`}
-                                        >
-                                          No Logo
-                                        </button>
-                                        {calendarLogos.map(logo => (
-                                          <button
-                                            key={logo._id}
-                                            onClick={() => setCalendarSelectedLogo(calendarSelectedLogo === logo.url ? null : logo.url)}
-                                            className={`relative w-14 h-14 rounded-xl border-2 p-1.5 flex items-center justify-center transition-all ${
-                                              calendarSelectedLogo === logo.url
-                                                ? 'border-[#ffcc29] bg-[#ffcc29]/10 scale-105'
-                                                : isDarkMode ? 'border-slate-700 bg-slate-800/50 hover:border-slate-500' : 'border-gray-200 bg-gray-50 hover:border-gray-300'
-                                            }`}
-                                          >
-                                            <img src={logo.url} alt={logo.name} className="max-w-full max-h-full object-contain" />
-                                            {calendarSelectedLogo === logo.url && (
-                                              <div className="absolute -top-1 -right-1 w-4 h-4 bg-[#ffcc29] rounded-full flex items-center justify-center">
-                                                <svg className="w-2.5 h-2.5 text-[#070A12]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                                                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                                </svg>
-                                              </div>
-                                            )}
-                                          </button>
-                                        ))}
-                                        {calendarLogos.length === 0 && calendarLogosLoaded && (
-                                          <p className={`text-xs ${theme.textMuted} self-center ml-1`}>No logos uploaded yet</p>
-                                        )}
-                                      </div>
-                                    </div>
-
-                                    {/* Aspect ratio picker */}
-                                    <div>
-                                      <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>Aspect Ratio</label>
-                                      <div className="flex gap-1.5 mt-1.5 flex-wrap">
-                                        {[
-                                          { value: '1:1', desc: 'Square' },
-                                          { value: '4:5', desc: 'Portrait' },
-                                          { value: '9:16', desc: 'Story' },
-                                          { value: '16:9', desc: 'Landscape' },
-                                          { value: '3:4', desc: 'Portrait' },
-                                          { value: '4:3', desc: 'Landscape' },
-                                        ].map(ratio => (
-                                          <button
-                                            key={ratio.value}
-                                            onClick={() => setCalendarAspectRatio(ratio.value)}
-                                            className={`px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all flex flex-col items-center ${
-                                              calendarAspectRatio === ratio.value
-                                                ? 'border-[#ffcc29] bg-[#ffcc29]/10 text-[#ffcc29]'
-                                                : isDarkMode ? 'border-slate-700 text-slate-400 hover:border-slate-500' : 'border-gray-200 text-slate-500 hover:border-gray-300'
-                                            }`}
-                                          >
-                                            <span className="font-bold">{ratio.value}</span>
-                                            <span className={`text-[9px] ${calendarAspectRatio === ratio.value ? 'text-[#ffcc29]/70' : theme.textMuted}`}>{ratio.desc}</span>
-                                          </button>
-                                        ))}
-                                      </div>
-                                    </div>
-
                                     {!generatedPoster && (
-                                      <p className={`text-[10px] ${theme.textMuted}`}>AI generates a poster from your description · Press Enter to send</p>
+                                      <p className={`text-[10px] ${theme.textMuted}`}>
+                                        AI generates a poster from your description · Press Enter to send
+                                        {calendarSelectedLogo && <span className="ml-1">· Logo: selected</span>}
+                                        {calendarAspectRatio !== '1:1' && <span className="ml-1">· {calendarAspectRatio}</span>}
+                                      </p>
                                     )}
                                   </div>
                                 )}
 
                                 {/* ===== FROM REFERENCE TAB ===== */}
-                                {imageMode === 'reference' && (
+                                {imageMode === 'reference' && calendarRefReady && (
                                   <div className="space-y-3">
                                     {/* Reference image upload */}
                                     {scheduleImage ? (
@@ -4275,6 +4382,29 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                           <span className={`absolute top-2 left-2 ${isDarkMode ? 'bg-slate-800/90 text-slate-300' : 'bg-white/90 text-slate-600'} text-[10px] font-bold px-2 py-0.5 rounded-md`}>Reference</span>
                                         )}
                                         <div className="absolute inset-0 bg-black/40 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                                          {generatedPoster && (
+                                            <button
+                                              onClick={async () => {
+                                                try {
+                                                  const response = await fetch(generatedPoster);
+                                                  const blob = await response.blob();
+                                                  const url = URL.createObjectURL(blob);
+                                                  const a = document.createElement('a');
+                                                  a.href = url;
+                                                  a.download = `poster-${Date.now()}.png`;
+                                                  document.body.appendChild(a);
+                                                  a.click();
+                                                  document.body.removeChild(a);
+                                                  URL.revokeObjectURL(url);
+                                                } catch (err) {
+                                                  console.error('Download failed:', err);
+                                                }
+                                              }}
+                                              className="px-3 py-2 bg-white/90 text-slate-800 text-xs font-medium rounded-lg hover:bg-white transition-colors flex items-center gap-1.5"
+                                            >
+                                              <Download className="w-3.5 h-3.5" /> Download
+                                            </button>
+                                          )}
                                           <button
                                             onClick={() => scheduleFileInputRef.current?.click()}
                                             className="px-3 py-2 bg-white/90 text-slate-800 text-xs font-medium rounded-lg hover:bg-white transition-colors flex items-center gap-1.5"
@@ -4348,76 +4478,12 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                       </div>
                                     </div>
 
-                                    {/* Logo selector */}
-                                    <div>
-                                      <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>Brand Logo</label>
-                                      <div className="flex gap-2 mt-1.5 flex-wrap">
-                                        <button
-                                          onClick={() => setCalendarSelectedLogo(null)}
-                                          className={`w-14 h-14 rounded-xl border-2 flex items-center justify-center text-[10px] font-medium transition-all ${
-                                            calendarSelectedLogo === null
-                                              ? 'border-[#ffcc29] bg-[#ffcc29]/10 text-[#ffcc29]'
-                                              : isDarkMode ? 'border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-500' : 'border-gray-200 bg-gray-50 text-slate-500 hover:border-gray-300'
-                                          }`}
-                                        >
-                                          No Logo
-                                        </button>
-                                        {calendarLogos.map(logo => (
-                                          <button
-                                            key={logo._id}
-                                            onClick={() => setCalendarSelectedLogo(calendarSelectedLogo === logo.url ? null : logo.url)}
-                                            className={`relative w-14 h-14 rounded-xl border-2 p-1.5 flex items-center justify-center transition-all ${
-                                              calendarSelectedLogo === logo.url
-                                                ? 'border-[#ffcc29] bg-[#ffcc29]/10 scale-105'
-                                                : isDarkMode ? 'border-slate-700 bg-slate-800/50 hover:border-slate-500' : 'border-gray-200 bg-gray-50 hover:border-gray-300'
-                                            }`}
-                                          >
-                                            <img src={logo.url} alt={logo.name} className="max-w-full max-h-full object-contain" />
-                                            {calendarSelectedLogo === logo.url && (
-                                              <div className="absolute -top-1 -right-1 w-4 h-4 bg-[#ffcc29] rounded-full flex items-center justify-center">
-                                                <svg className="w-2.5 h-2.5 text-[#070A12]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                                                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                                </svg>
-                                              </div>
-                                            )}
-                                          </button>
-                                        ))}
-                                        {calendarLogos.length === 0 && calendarLogosLoaded && (
-                                          <p className={`text-xs ${theme.textMuted} self-center ml-1`}>No logos uploaded yet</p>
-                                        )}
-                                      </div>
-                                    </div>
-
-                                    {/* Aspect ratio picker */}
-                                    <div>
-                                      <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>Aspect Ratio</label>
-                                      <div className="flex gap-1.5 mt-1.5 flex-wrap">
-                                        {[
-                                          { value: '1:1', desc: 'Square' },
-                                          { value: '4:5', desc: 'Portrait' },
-                                          { value: '9:16', desc: 'Story' },
-                                          { value: '16:9', desc: 'Landscape' },
-                                          { value: '3:4', desc: 'Portrait' },
-                                          { value: '4:3', desc: 'Landscape' },
-                                        ].map(ratio => (
-                                          <button
-                                            key={ratio.value}
-                                            onClick={() => setCalendarAspectRatio(ratio.value)}
-                                            className={`px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all flex flex-col items-center ${
-                                              calendarAspectRatio === ratio.value
-                                                ? 'border-[#ffcc29] bg-[#ffcc29]/10 text-[#ffcc29]'
-                                                : isDarkMode ? 'border-slate-700 text-slate-400 hover:border-slate-500' : 'border-gray-200 text-slate-500 hover:border-gray-300'
-                                            }`}
-                                          >
-                                            <span className="font-bold">{ratio.value}</span>
-                                            <span className={`text-[9px] ${calendarAspectRatio === ratio.value ? 'text-[#ffcc29]/70' : theme.textMuted}`}>{ratio.desc}</span>
-                                          </button>
-                                        ))}
-                                      </div>
-                                    </div>
-
                                     {!generatedPoster && (
-                                      <p className={`text-[10px] ${theme.textMuted}`}>AI creates a new poster inspired by your reference image · Press Enter to send</p>
+                                      <p className={`text-[10px] ${theme.textMuted}`}>
+                                        AI creates a new poster inspired by your reference image · Press Enter to send
+                                        {calendarSelectedLogo && <span className="ml-1">· Logo: selected</span>}
+                                        {calendarAspectRatio !== '1:1' && <span className="ml-1">· {calendarAspectRatio}</span>}
+                                      </p>
                                     )}
                                   </div>
                                 )}
@@ -4524,7 +4590,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                     {isEditMode ? 'Update' : (scheduleForm.type === 'reminder' ? 'Set Reminder' : 'Schedule Post')}
                                 </button>
                                 <button 
-                                  onClick={() => { setShowScheduleModal(false); setIsEditMode(false); setEditingCampaign(null); }} 
+                                  onClick={() => { setShowScheduleModal(false); setIsEditMode(false); setEditingCampaign(null); setCalendarAIReady(false); setCalendarRefReady(false); }} 
                                   className={`px-5 py-3 border ${isDarkMode ? 'border-slate-700/50 text-slate-400 hover:bg-[#161b22]' : 'border-slate-200 text-slate-600 hover:bg-slate-50'} text-sm font-semibold rounded-xl transition-colors`}
                                 >
                                     Cancel
@@ -4533,6 +4599,86 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* Calendar Logo Selector Modal (step 1 of AI/Reference flow) */}
+            <LogoSelector
+              isOpen={showCalendarLogoModal}
+              onClose={() => { setShowCalendarLogoModal(false); setImageMode('upload'); }}
+              onConfirm={(logoUrl) => {
+                setShowCalendarLogoModal(false);
+                setCalendarSelectedLogo(logoUrl);
+                setCalendarAspectRatio('1:1');
+                setShowCalendarAspectModal(true);
+              }}
+            />
+
+            {/* Calendar Aspect Ratio Selector Modal (step 2 of AI/Reference flow) */}
+            {showCalendarAspectModal && (
+              <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => { setShowCalendarAspectModal(false); setImageMode('upload'); }}>
+                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-[#ffcc29]/20 flex items-center justify-center">
+                        <ImageIcon className="w-5 h-5 text-[#ffcc29]" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-bold text-[#0a0f1a]">Select Aspect Ratio</h3>
+                        <p className="text-sm text-slate-500">Choose the image dimensions</p>
+                      </div>
+                    </div>
+                    <button onClick={() => { setShowCalendarAspectModal(false); setImageMode('upload'); }} className="text-slate-400 hover:text-slate-600">
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-3 mb-6">
+                    {[
+                      { value: '1:1', label: '1:1', desc: 'Square' },
+                      { value: '4:5', label: '4:5', desc: 'Portrait' },
+                      { value: '9:16', label: '9:16', desc: 'Story/Reel' },
+                      { value: '16:9', label: '16:9', desc: 'Landscape' },
+                      { value: '3:4', label: '3:4', desc: 'Portrait' },
+                      { value: '4:3', label: '4:3', desc: 'Landscape' },
+                    ].map(ratio => (
+                      <button
+                        key={ratio.value}
+                        onClick={() => setCalendarAspectRatio(ratio.value)}
+                        className={`p-3 rounded-xl border-2 transition-all flex flex-col items-center gap-1 ${
+                          calendarAspectRatio === ratio.value
+                            ? 'border-[#ffcc29] bg-[#ffcc29]/10'
+                            : 'border-slate-200 hover:border-slate-300'
+                        }`}
+                      >
+                        <span className="text-sm font-bold text-[#0a0f1a]">{ratio.label}</span>
+                        <span className="text-xs text-slate-500">{ratio.desc}</span>
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => { setShowCalendarAspectModal(false); setImageMode('upload'); }}
+                      className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-medium hover:bg-slate-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowCalendarAspectModal(false);
+                        if (imageMode === 'ai') {
+                          setCalendarAIReady(true);
+                        } else if (imageMode === 'reference') {
+                          setCalendarRefReady(true);
+                        }
+                      }}
+                      className="flex-1 py-2.5 rounded-xl bg-[#ffcc29] text-[#070A12] font-semibold hover:bg-[#e6b825]"
+                    >
+                      Continue
+                    </button>
+                  </div>
+                </div>
+              </div>
             )}
 
             {/* Selected Event Modal */}
@@ -4783,30 +4929,9 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                         
                         {/* Create Post Button */}
                         <div className="mt-6">
-                            <button 
-                              onClick={async () => {
-                                setShowEventPostCreator(true);
-                                setEventPostLoading(true);
-                                setEventGeneratedPost(null);
-                                
-                                try {
-                                  const result = await apiService.generateEventPost(selectedHoliday);
-                                  if (result.success && result.post) {
-                                    setEventGeneratedPost(result.post);
-                                    setEventPostCaption(result.post.caption || '');
-                                    setEventPostHashtags(result.post.hashtags || []);
-                                    setEventPostImageUrl(result.post.generatedImageUrl || '');
-                                    setEventPostImagePrompt(result.post.imagePrompt || '');
-                                    // Set default schedule date to the event date
-                                    if (selectedHoliday.date) {
-                                      setEventScheduleDate(selectedHoliday.date.split('T')[0]);
-                                    }
-                                  }
-                                } catch (error) {
-                                  console.error('Failed to generate event post:', error);
-                                } finally {
-                                  setEventPostLoading(false);
-                                }
+                            <button
+                              onClick={() => {
+                                setShowEventLogoModal(true);
                               }}
                               className="w-full py-3 bg-[#ffcc29] hover:bg-[#e6b825] text-black font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
                             >
@@ -4823,6 +4948,102 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* Event Logo Selector Modal */}
+            <LogoSelector
+              isOpen={showEventLogoModal}
+              onClose={() => setShowEventLogoModal(false)}
+              onConfirm={(logoUrl) => {
+                setShowEventLogoModal(false);
+                setEventSelectedLogo(logoUrl);
+                setEventAspectRatio('1:1');
+                setShowEventAspectModal(true);
+              }}
+            />
+
+            {/* Event Aspect Ratio Modal */}
+            {showEventAspectModal && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setShowEventAspectModal(false)}>
+                <div className={`${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white'} border rounded-2xl shadow-2xl w-full max-w-md p-6`} onClick={e => e.stopPropagation()}>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-[#ffcc29]/20 flex items-center justify-center">
+                        <ImageIcon className="w-5 h-5 text-[#ffcc29]" />
+                      </div>
+                      <div>
+                        <h3 className={`text-lg font-bold ${theme.text}`}>Select Aspect Ratio</h3>
+                        <p className={`text-sm ${theme.textMuted}`}>Choose the image dimensions</p>
+                      </div>
+                    </div>
+                    <button onClick={() => setShowEventAspectModal(false)} className={`${theme.textMuted} hover:text-slate-600`}>
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-3 mb-6">
+                    {[
+                      { value: '1:1', label: '1:1', desc: 'Square' },
+                      { value: '4:5', label: '4:5', desc: 'Portrait' },
+                      { value: '9:16', label: '9:16', desc: 'Story/Reel' },
+                      { value: '16:9', label: '16:9', desc: 'Landscape' },
+                      { value: '3:4', label: '3:4', desc: 'Portrait' },
+                      { value: '4:3', label: '4:3', desc: 'Landscape' },
+                    ].map(ratio => (
+                      <button
+                        key={ratio.value}
+                        onClick={() => setEventAspectRatio(ratio.value)}
+                        className={`p-3 rounded-xl border-2 transition-all flex flex-col items-center gap-1 ${
+                          eventAspectRatio === ratio.value
+                            ? 'border-[#ffcc29] bg-[#ffcc29]/10'
+                            : `${isDarkMode ? 'border-slate-700 hover:border-slate-600' : 'border-slate-200 hover:border-slate-300'}`
+                        }`}
+                      >
+                        <span className={`text-sm font-bold ${theme.text}`}>{ratio.label}</span>
+                        <span className={`text-xs ${theme.textMuted}`}>{ratio.desc}</span>
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setShowEventAspectModal(false)}
+                      className={`flex-1 py-2.5 rounded-xl border ${isDarkMode ? 'border-slate-700 text-slate-400 hover:bg-[#161b22]' : 'border-slate-200 text-slate-600 hover:bg-slate-50'} font-medium`}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={async () => {
+                        setShowEventAspectModal(false);
+                        if (!selectedHoliday) return;
+                        setShowEventPostCreator(true);
+                        setEventPostLoading(true);
+                        setEventGeneratedPost(null);
+                        try {
+                          const result = await apiService.generateEventPost(selectedHoliday, eventSelectedLogo, eventAspectRatio);
+                          if (result.success && result.post) {
+                            setEventGeneratedPost(result.post);
+                            setEventPostCaption(result.post.caption || '');
+                            setEventPostHashtags(result.post.hashtags || []);
+                            setEventPostImageUrl(result.post.generatedImageUrl || '');
+                            setEventPostImagePrompt(result.post.imagePrompt || '');
+                            if (selectedHoliday.date) {
+                              setEventScheduleDate(selectedHoliday.date.split('T')[0]);
+                            }
+                          }
+                        } catch (error) {
+                          console.error('Failed to generate event post:', error);
+                        } finally {
+                          setEventPostLoading(false);
+                        }
+                      }}
+                      className="flex-1 py-2.5 rounded-xl bg-[#ffcc29] text-[#070A12] font-semibold hover:bg-[#e6b825]"
+                    >
+                      Generate Post
+                    </button>
+                  </div>
+                </div>
+              </div>
             )}
 
             {/* Event Post Creator Modal */}
@@ -4856,15 +5077,40 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                     <div className="space-y-4">
                                         <div>
                                             <label className={`text-sm font-semibold ${theme.text} mb-2 block`}>Generated Image</label>
-                                            <div className={`relative aspect-square rounded-xl overflow-hidden ${isDarkMode ? 'bg-[#161b22]' : 'bg-slate-100'}`}>
+                                            <div className={`relative rounded-xl overflow-hidden ${isDarkMode ? 'bg-[#161b22]' : 'bg-slate-100'} group`}>
                                                 {eventPostImageUrl ? (
-                                                    <img 
-                                                        src={eventPostImageUrl} 
-                                                        alt="Generated post" 
-                                                        className="w-full h-full object-cover"
-                                                    />
+                                                    <>
+                                                        <img
+                                                            src={eventPostImageUrl}
+                                                            alt="Generated post"
+                                                            className="w-full object-contain max-h-[500px]"
+                                                        />
+                                                        <div className="absolute inset-0 bg-black/40 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                            <button
+                                                                onClick={async () => {
+                                                                    try {
+                                                                        const response = await fetch(eventPostImageUrl);
+                                                                        const blob = await response.blob();
+                                                                        const url = URL.createObjectURL(blob);
+                                                                        const a = document.createElement('a');
+                                                                        a.href = url;
+                                                                        a.download = `event-post-${selectedHoliday?.name?.replace(/\s+/g, '-') || 'post'}-${Date.now()}.png`;
+                                                                        document.body.appendChild(a);
+                                                                        a.click();
+                                                                        document.body.removeChild(a);
+                                                                        URL.revokeObjectURL(url);
+                                                                    } catch (err) {
+                                                                        console.error('Download failed:', err);
+                                                                    }
+                                                                }}
+                                                                className="px-4 py-2 bg-white/90 text-slate-800 text-sm font-medium rounded-lg hover:bg-white transition-colors flex items-center gap-2"
+                                                            >
+                                                                <Download className="w-4 h-4" /> Download
+                                                            </button>
+                                                        </div>
+                                                    </>
                                                 ) : (
-                                                    <div className="w-full h-full flex items-center justify-center">
+                                                    <div className="w-full h-64 flex items-center justify-center">
                                                         <ImageIcon className={`w-16 h-16 ${theme.textMuted}`} />
                                                     </div>
                                                 )}
