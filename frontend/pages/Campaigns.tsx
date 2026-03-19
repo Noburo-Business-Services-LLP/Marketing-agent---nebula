@@ -3336,7 +3336,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
     const [contentTone, setContentTone] = useState<'professional' | 'casual' | 'humorous' | 'inspirational' | 'educational'>('professional');
     const [contentType, setContentType] = useState<'image' | 'video' | 'carousel' | 'story'>('image');
     const [selectedAspectRatio, setSelectedAspectRatio] = useState<string>('1:1');
-    const [keyMessages, setKeyMessages] = useState('');
+    const [platformContents, setPlatformContents] = useState<Record<string, string>>({});
     const [callToAction, setCallToAction] = useState('');
     const [productLogo, setProductLogo] = useState<string | null>(null);
     const [productLogoName, setProductLogoName] = useState<string>('');
@@ -3361,6 +3361,37 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
     }`;
     
     const labelClasses = `block text-xs font-bold uppercase tracking-wide mb-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`;
+
+    const getTemplateForPlatform = (platform: string, name: string, desc: string, obj: string) => {
+      const pName = name || '[Campaign Name]';
+      const pDesc = desc || '[Description]';
+      const pObj = obj || '[Objective]';
+      
+      switch(platform) {
+        case 'instagram': return `🎯 CAMPAIGN: ${pName}\n• About: ${pDesc}\n• Goal: ${pObj}\n\n📸 KEY HIGHLIGHTS:\n• \n• \n\n🔗 CTA:\n`;
+        case 'linkedin': return `💼 CAMPAIGN: ${pName}\n• Overview: ${pDesc}\n• Strategy: ${pObj}\n\n📊 DISCUSSION POINTS:\n1. \n2. \n\n🚀 OUTCOMES:\n• \n\n🔗 CTA:\n`;
+        case 'twitter': return `🐦 CAMPAIGN: ${pName}\n🎯 Goal: ${pObj}\n\n✨ HIGHLIGHTS:\n• \n• \n\n🔗 CTA:\n`;
+        case 'facebook': return `👍 CAMPAIGN: ${pName}\n• About: ${pDesc}\n• Goal: ${pObj}\n\n🌟 VALUE PROPOSITION:\n• \n• \n\n💬 QUESTION FOR COMMUNITY:\n\n🔗 CTA:\n`;
+        case 'youtube': return `▶️ VIDEO CAMPAIGN: ${pName}\n• Focus: ${pObj}\n• Overview: ${pDesc}\n\n📝 OUTLINE:\n1. Hook (0:00-0:15):\n2. Core (0:15-1:00):\n3. Outro (1:00-1:30):\n\n🔗 CTA:\n`;
+        default: return `Campaign: ${pName}\nDescription: ${pDesc}\nObjective: ${pObj}\n\nNotes:\n`;
+      }
+    };
+
+    useEffect(() => {
+      if (step === 2) {
+        setPlatformContents(curr => {
+          let updated = false;
+          const next = { ...curr };
+          platforms.forEach(p => {
+            if (next[p] === undefined) {
+              next[p] = getTemplateForPlatform(p, campaignName, campaignDescription, objective);
+              updated = true;
+            }
+          });
+          return updated ? next : curr;
+        });
+      }
+    }, [step, platforms, campaignName, campaignDescription, objective]);
 
     const togglePlatform = (platform: string) => {
       setPlatforms(prev => prev.includes(platform) ? prev.filter(p => p !== platform) : [...prev, platform]);
@@ -3409,7 +3440,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
         platforms,
         tone: contentTone || 'professional',
         aspectRatio: selectedAspectRatio || '1:1',
-        keyMessages: keyMessages || '',
+        keyMessages: platforms.map(p => `[${p.toUpperCase()} CONTENT FORMAT]\n${platformContents[p] || ''}`).join('\n\n---\n\n'),
         duration: campaignDuration || '1week',
         startDate: startDate || new Date().toISOString().split('T')[0],
         preferredDays,
@@ -3924,14 +3955,42 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                                 </div>
 
                                 <div>
-                                  <label className={labelClasses}>Key Messages to Convey</label>
-                                  <textarea
-                                    className={`${inputClasses} resize-none`}
-                                    rows={3}
-                                    placeholder="What are the main points you want to communicate? e.g., Quality, value for money, innovation..."
-                                    value={keyMessages}
-                                    onChange={e => setKeyMessages(e.target.value)}
-                                  />
+                                  <label className={labelClasses}>Platform Content Strategy</label>
+                                  <p className={`text-xs mb-3 ${theme.textSecondary}`}>
+                                    Customize the content structure for each platform. AI will use this to generate the final posts.
+                                  </p>
+                                  <div className="space-y-4">
+                                    {platforms.map(p => {
+                                      const charLimit = PLATFORM_LIMITS[p]?.charLimit || 2200;
+                                      const count = (platformContents[p] || '').length;
+                                      const isOver = count > charLimit;
+                                      return (
+                                        <div key={p} className={`border rounded-xl overflow-hidden shadow-sm transition-all focus-within:ring-2 ${isOver ? 'focus-within:ring-red-500' : 'focus-within:ring-[#ffcc29]'} ${isDarkMode ? 'border-slate-700 bg-[#161b22]' : 'border-slate-200 bg-slate-50'}`}>
+                                          <div className={`px-3 py-2 border-b flex items-center justify-between ${isDarkMode ? 'border-slate-700 bg-slate-800/50' : 'border-slate-200 bg-slate-100'}`}>
+                                            <div className="flex items-center gap-2">
+                                              {p === 'instagram' ? <Instagram className="w-4 h-4 text-pink-500" /> :
+                                               p === 'linkedin' ? <Linkedin className="w-4 h-4 text-blue-600" /> :
+                                               p === 'twitter' ? <Twitter className="w-4 h-4 text-sky-500" /> :
+                                               p === 'facebook' ? <Facebook className="w-4 h-4 text-blue-500" /> :
+                                               <Youtube className="w-4 h-4 text-red-500" />}
+                                              <span className={`text-xs font-bold capitalize ${theme.text}`}>{p} Template</span>
+                                            </div>
+                                            <span className={`text-[10px] font-mono whitespace-nowrap px-2 py-0.5 rounded-full ${isOver ? 'bg-red-500/10 text-red-500 font-bold' : isDarkMode ? 'bg-slate-700 text-slate-300' : 'bg-slate-200 text-slate-600'}`}>
+                                              {count.toLocaleString()} / {charLimit.toLocaleString()} chars
+                                              {isOver && ' ⚠️'}
+                                            </span>
+                                          </div>
+                                          <textarea
+                                            className={`w-full p-4 text-sm resize-none outline-none ${isDarkMode ? 'bg-[#0d1117] text-white' : 'bg-white text-slate-800'}`}
+                                            rows={9}
+                                            value={platformContents[p] || ''}
+                                            onChange={e => setPlatformContents(curr => ({ ...curr, [p]: e.target.value }))}
+                                            placeholder="Write out your template structure here..."
+                                          />
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
                                 </div>
                                 
                                 {/* Product Logo Upload */}
