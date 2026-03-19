@@ -439,9 +439,19 @@ router.post('/', protect, async (req, res) => {
       ...req.body,
       userId
     };
-    
+
+    console.log('📝 Creating campaign with data:', JSON.stringify({
+      name: campaignData.name,
+      status: campaignData.status,
+      socialPostId: campaignData.socialPostId || 'NOT SET',
+      scheduledFor: campaignData.scheduledFor || 'NOT SET',
+      platforms: campaignData.platforms
+    }));
+
     const campaign = new Campaign(campaignData);
     await campaign.save();
+
+    console.log('✅ Campaign saved. socialPostId in DB:', campaign.socialPostId || 'NULL');
     
     // Notifications are automatically scheduled by the background scheduler
     if (campaign.status === 'scheduled' && campaign.scheduling?.startDate) {
