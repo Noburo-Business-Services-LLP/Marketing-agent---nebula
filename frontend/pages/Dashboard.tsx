@@ -451,7 +451,12 @@ const Dashboard: React.FC = () => {
         setPostHashtags(result.post.hashtags || []);
         setPostImageUrl(result.post.generatedImageUrl || '');
         setPostImagePrompt(result.post.imagePrompt || '');
-        setSelectedPlatform(suggestion.platforms || ['instagram']);
+        const suggestedPlatforms = suggestion.platforms || ['instagram'];
+        const connectedNames = followerData.map(f => f.platform.toLowerCase());
+        const validPlatforms = suggestedPlatforms.filter((p: string) =>
+          connectedNames.includes(p) || (p === 'twitter' && connectedNames.includes('x')) || (p === 'x' && connectedNames.includes('twitter'))
+        );
+        setSelectedPlatform(validPlatforms.length > 0 ? validPlatforms : connectedNames.length > 0 ? [connectedNames[0]] : []);
       }
     } catch (error) {
       console.error('Failed to generate post:', error);
@@ -632,7 +637,10 @@ const Dashboard: React.FC = () => {
     setImageMode('ai');
     setCustomImagePrompt('');
     setUploadedImageUrl(null);
-    setRivalSelectedPlatform([competitor.platform || 'instagram']);
+    const rivalPlatform = competitor.platform || 'instagram';
+    const connectedNames = followerData.map(f => f.platform.toLowerCase());
+    const isRivalPlatformConnected = connectedNames.includes(rivalPlatform) || (rivalPlatform === 'twitter' && connectedNames.includes('x')) || (rivalPlatform === 'x' && connectedNames.includes('twitter'));
+    setRivalSelectedPlatform(isRivalPlatformConnected ? [rivalPlatform] : connectedNames.length > 0 ? [connectedNames[0]] : []);
     setRivalScheduleDate('');
     setRivalScheduleTime('');
 
@@ -1875,7 +1883,15 @@ const Dashboard: React.FC = () => {
                   </div>
                 </div>
                 <button
-                  onClick={() => setShowPostCreator(false)}
+                  onClick={() => {
+                    if (generatingPost) {
+                      if (window.confirm('7 credits have been consumed for this generation. Are you sure you want to close?')) {
+                        setShowPostCreator(false);
+                      }
+                    } else {
+                      setShowPostCreator(false);
+                    }
+                  }}
                   className={`p-2 rounded-lg ${isDarkMode ? 'hover:bg-[#161b22]' : 'hover:bg-slate-100'} transition-colors`}
                 >
                   <X className="w-5 h-5" />
