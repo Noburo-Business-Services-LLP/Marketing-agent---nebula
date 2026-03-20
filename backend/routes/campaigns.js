@@ -301,7 +301,13 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
     // Step 1: Generate all captions via Gemini (ROCI format prompt)
     const captionPrompt = `ROLE: You are a senior social media strategist and copywriter at a leading digital marketing agency. You craft high-converting, scroll-stopping social media campaigns for premium brands.
 
-OBJECTIVE: Create exactly ${totalPosts} unique, varied social media posts for a marketing campaign. Each post must feel distinct — different angles, hooks, and content themes — while maintaining a cohesive brand voice across the series. Also provide a detailed image description for each post that will be used to generate AI ad creatives.
+OBJECTIVE: You are a strict content generator. Your job is to ONLY fill the provided template structures.
+DO NOT:
+- Add any introduction or conversational filler.
+- Convert structured lists into paragraphs.
+- Add extra text before, between, or after the template sections.
+- Change the provided structure, headings, or symbols.
+ONLY fill inside the provided template using the campaign data while keeping it unique for each post. Also provide a detailed image description for each post.
 
 CONTEXT:
 - Brand: ${bp.companyName || bp.name || 'Brand'} (${bp.industry || 'General'} industry)
@@ -310,16 +316,16 @@ CONTEXT:
 - Target audience: ${targetAge || '18-35'} age, ${targetGender || 'all'} gender${targetLocation ? ', located in ' + targetLocation : ''}${targetInterests ? ', interested in ' + targetInterests : ''}
 - Platforms: ${platforms.join(', ')}
 - Tone: ${tone || 'professional'}
-${keyMessages ? `- Core message (use as UNDERLYING THEME, do NOT repeat verbatim in every post): ${keyMessages}` : ''}
+${keyMessages ? `- MANDATORY CONTENT STRUCTURES (STRICTLY FOLLOW THESE):\n${keyMessages}` : ''}
 
 INSTRUCTIONS:
-1. Create exactly ${totalPosts} posts. Each post MUST have a DIFFERENT content angle. Distribute across these themes: problem/solution (2-3 posts), social proof/testimonial (1-2 posts), educational/tips (2-3 posts), behind-the-scenes/story (1-2 posts), promotional/CTA (1-2 posts), engagement/question (1 post). Adjust distribution based on total count.
-2. Captions must be platform-native: ${platforms.includes('twitter') ? 'Twitter posts under 280 chars.' : ''} ${platforms.includes('instagram') ? 'Instagram captions with hook in first line.' : ''} ${platforms.includes('linkedin') ? 'LinkedIn posts that open with a bold statement or question.' : ''} Use natural language, not corporate jargon.
-3. Each caption should open with a strong hook (question, bold claim, statistic, or story opener) — the first line must make someone stop scrolling.
-4. Include 3-5 relevant hashtags per post. Mix broad and niche hashtags. Never use generic tags like #marketing or #business alone.
-5. Include appropriate emojis but don't overdo it (2-4 per post max).
-6. The imageDescription for each post should describe a PROFESSIONAL AD CREATIVE — describe the visual style (photography, illustration, graphic design), subjects, colors, mood, lighting, and composition. Do NOT mention aspect ratios, post numbers, "Brand" labels, or any metadata. Do NOT use placeholder text like [Date] or [Name]. Describe it as if briefing a professional designer.
-7. The key message should influence the overall campaign narrative but each post should express it differently — through stories, statistics, questions, tips, or social proof. NEVER copy-paste the same message across posts.
+1. Create exactly ${totalPosts} posts. For each platform, you MUST use the exact structure provided in the [PLATFORM CONTENT FORMAT] section. 
+2. Do NOT convert structured content into paragraphs. Keep all headings, bullet points, special characters, and emojis from the provided structures exactly as they are.
+3. Within the structure, provide unique and engaging content for each post (e.g., different hooks, different industry-specific tips, different social proof details) so the campaign remains fresh while keeping the format consistent.
+4. Captions must be platform-native: ${platforms.includes('twitter') ? 'Twitter posts under 280 chars.' : ''} ${platforms.includes('instagram') ? 'Instagram captions with hook in first line.' : ''} ${platforms.includes('linkedin') ? 'LinkedIn posts that open with a bold statement or question.' : ''} Use natural language, not corporate jargon.
+5. Each caption should open with a strong hook (question, bold claim, statistic, or story opener) — the first line must make someone stop scrolling.
+6. Include 3-5 relevant hashtags per post. Mix broad and niche hashtags. Never use generic tags like #marketing or #business alone.
+7. The imageDescription for each post should describe a PROFESSIONAL AD CREATIVE — describe the visual style (photography, illustration, graphic design), subjects, colors, mood, lighting, and composition. Do NOT mention aspect ratios, post numbers, "Brand" labels, or any metadata. Describe it as if briefing a professional designer.
 
 Return ONLY valid JSON (no markdown, no backticks):
 {
@@ -334,11 +340,73 @@ Return ONLY valid JSON (no markdown, no backticks):
   ]
 }`;
 
-    const textResponse = await callGemini(captionPrompt, { maxTokens: 8000, temperature: 0.85, skipCache: true });
-    const parsed = parseGeminiJSON(textResponse);
+    // Helper to validate captains against template structure markers
+    const validateCaptionsSchema = (posts, keyMessages) => {
+      if (!keyMessages) return { isValid: true };
+      
+      const pTemplates = {};
+      const blocks = keyMessages.split(/\n\n---\n\n/);
+      blocks.forEach(block => {
+        const match = block.match(/\[([A-Z]+) CONTENT FORMAT\]\n([\s\S]*)/);
+        if (match) {
+          const platform = match[1].toLowerCase();
+          const lines = match[2].split('\n').filter(l => l.trim().length > 0);
+          const mkrs = lines.map(l => {
+            const cIdx = l.indexOf(':');
+            return cIdx !== -1 ? l.substring(0, cIdx + 1).trim() : l.trim();
+          }).filter(m => m.length > 2);
+          pTemplates[platform] = mkrs;
+        }
+      });
+
+      const errs = [];
+      posts.forEach((post, i) => {
+        const mkrs = pTemplates[post.platform?.toLowerCase()];
+        if (mkrs) {
+          const miss = mkrs.filter(m => !post.caption.includes(m));
+          if (miss.length > 0) {
+            errs.push(`Post ${i + 1} (${post.platform}) is missing markers: ${miss.join(', ')}`);
+          }
+        }
+      });
+
+      return { isValid: errs.length === 0, errorDetails: errs.join('; ') };
+    };
+
+    let attempts = 0;
+    let maxAttempts = 3;
+    let parsed = null;
+    let currentPrompt = captionPrompt;
+
+    while (attempts < maxAttempts) {
+      if (aborted) return res.end();
+      attempts++;
+      
+      if (attempts > 1) {
+        sendEvent('status', { message: `Regenerating to fix formatting (Attempt ${attempts})...` });
+      }
+
+      const textRes = await callGemini(currentPrompt, { maxTokens: 8000, temperature: 0.85, skipCache: true });
+      parsed = parseGeminiJSON(textRes);
+
+      if (parsed?.posts?.length) {
+        const validation = validateCaptionsSchema(parsed.posts, keyMessages);
+        if (validation.isValid) {
+          console.log(`✅ Content generation passed validation on attempt ${attempts}`);
+          break;
+        } else {
+          console.log(`⚠️ Attempt ${attempts} failed validation: ${validation.errorDetails}`);
+          // Update prompt with feedback for next attempt
+          currentPrompt = `${captionPrompt}\n\nCRITICAL FIX: Your previous response failed to follow the template structure. The following errors were found: ${validation.errorDetails}. You MUST include all bullet points, headings, and colon-marked labels exactly as provided. Do NOT use paragraphs!`;
+        }
+      } else if (attempts === maxAttempts) {
+        sendEvent('error', { message: 'Failed to generate campaign content after multiple attempts' });
+        return res.end();
+      }
+    }
 
     if (!parsed?.posts?.length) {
-      sendEvent('error', { message: 'Failed to generate campaign content' });
+      sendEvent('error', { message: 'Failed to generate valid campaign content' });
       return res.end();
     }
 

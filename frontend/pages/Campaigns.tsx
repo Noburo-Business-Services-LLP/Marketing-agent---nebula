@@ -3406,6 +3406,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
     const [generatedPosts, setGeneratedPosts] = useState<GeneratedPost[]>([]);
     const [editingPostId, setEditingPostId] = useState<string | null>(null);
     const [savingPosts, setSavingPosts] = useState(false);
+    const [previewPost, setPreviewPost] = useState<{ platform: string, caption: string, imageUrl: string } | null>(null);
     
     // Step 1: Campaign Details
     const [campaignName, setCampaignName] = useState('');
@@ -3815,6 +3816,11 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
       }
     };
 
+    const getPreviewUrl = (platform: string) => {
+      // Return campaign image if available, else placeholder
+      return productLogo || null;
+    };
+
     const stepTitles = [
       'Campaign Details',
       'Content Preferences',
@@ -3891,7 +3897,8 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                 
                 {/* Main Content */}
                 <div className="flex-1 flex flex-col overflow-hidden">
-                    <div className="flex-1 overflow-y-auto p-8">
+                    <div className="flex-1 flex overflow-hidden">
+                        <div className="flex-1 overflow-y-auto p-8">
                         {/* Step 1: Campaign Details */}
                         {step === 1 && (
                             <div className="space-y-6 animate-in fade-in duration-300">
@@ -4517,6 +4524,13 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                                                     >
                                                       <Sparkles className="w-4 h-4 text-purple-500" />
                                                     </button>
+                                                    <button
+                                                      onClick={() => setPreviewPost({ platform: post.platform, caption: post.caption, imageUrl: post.imageUrl || getPreviewUrl(post.platform) || '' })}
+                                                      className={`p-2 rounded-lg ${isDarkMode ? 'bg-blue-900/30 hover:bg-blue-900/50' : 'bg-blue-50 hover:bg-blue-100'} transition-colors`}
+                                                      title="Preview exactly how this looks on the platform"
+                                                    >
+                                                      <Eye className="w-4 h-4 text-blue-500" />
+                                                    </button>
                                                   </>
                                                 )}
                                               </div>
@@ -4548,26 +4562,41 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                             </div>
                         )}
                     </div>
-                    
-                    {/* Footer */}
-                    <div className={`flex justify-between items-center p-6 border-t ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'}`}>
-                        <button 
-                          onClick={step === 1 ? onClose : () => setStep(s => s - 1)} 
-                          className={`px-4 py-2 rounded-lg font-medium ${theme.textSecondary} hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors`}
-                        >
-                          {step === 1 ? 'Cancel' : 'Back'}
-                        </button>
-                        
-                        {step < 4 && (
+                </div>
+                
+                {/* Modal Footer */}
+                <div className={`p-6 border-t flex items-center justify-between ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'}`}>
                           <button 
-                            onClick={() => setStep(s => s + 1)} 
-                            disabled={step === 1 && !campaignName}
-                            className="px-6 py-2.5 bg-[#ffcc29] text-black rounded-lg font-semibold hover:bg-[#e6b825] transition-colors disabled:opacity-50 flex items-center gap-2"
+                            onClick={step === 1 ? onClose : () => setStep(s => s - 1)} 
+                            className={`px-4 py-2 rounded-lg font-medium ${theme.textSecondary} hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors mr-auto`}
                           >
-                            Next
-                            <ChevronRight className="w-4 h-4" />
+                            {step === 1 ? 'Cancel' : 'Back'}
                           </button>
-                        )}
+                          
+                          {step >= 2 && step <= 4 && platforms.length > 0 && (
+                            <button
+                              onClick={() => setPreviewPost({
+                                platform: platforms[0],
+                                caption: platformContents[platforms[0]] || '',
+                                imageUrl: getPreviewUrl(platforms[0]) || ''
+                              })}
+                              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium mr-4 border ${isDarkMode ? 'border-slate-700/50 hover:bg-slate-800 text-slate-300' : 'border-slate-200 hover:bg-slate-100 text-slate-700'} transition-colors`}
+                            >
+                              <Eye className="w-4 h-4 text-[#ffcc29]" />
+                              Preview Layout
+                            </button>
+                          )}
+                          
+                          {step < 4 && (
+                            <button 
+                              onClick={() => setStep(s => s + 1)} 
+                              disabled={step === 1 && !campaignName}
+                              className="px-6 py-2.5 bg-[#ffcc29] text-black rounded-lg font-semibold hover:bg-[#e6b825] transition-colors disabled:opacity-50 flex items-center gap-2"
+                            >
+                              Next
+                              <ChevronRight className="w-4 h-4" />
+                            </button>
+                          )}
                         
                         {step === 4 && (
                           <button 
@@ -4621,10 +4650,8 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                           </div>
                         )}
                     </div>
-                </div>
-            </div>
-
-            {/* Logo Selector for Campaign */}
+                    
+                    {/* Footer */}
             <LogoSelector
               isOpen={showBrandLogoSelector}
               onClose={() => setShowBrandLogoSelector(false)}
@@ -4639,6 +4666,20 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
               subtitle="Choose a logo from your Brand Assets"
             />
 
+            {/* Popup Real-Time Platform Preview */}
+            {previewPost && (
+              <PlatformPreview
+                platform={previewPost.platform}
+                caption={previewPost.caption}
+                brandName={campaignName || 'Your Brand'}
+                imageUrl={previewPost.imageUrl}
+                isDarkMode={isDarkMode}
+                inline={false}
+                onClose={() => setPreviewPost(null)}
+              />
+            )}
+                </div>
+            </div>
         </div>
     );
 };

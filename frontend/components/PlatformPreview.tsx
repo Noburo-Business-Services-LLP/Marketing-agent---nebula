@@ -9,6 +9,7 @@ interface PlatformPreviewProps {
   brandName?: string;
   onClose: () => void;
   isDarkMode?: boolean;
+  inline?: boolean;
 }
 
 const PlatformPreview: React.FC<PlatformPreviewProps> = ({
@@ -19,6 +20,7 @@ const PlatformPreview: React.FC<PlatformPreviewProps> = ({
   brandName = 'Your Brand',
   onClose,
   isDarkMode = false,
+  inline = false,
 }) => {
   const [activeTab, setActiveTab] = useState(platform.toLowerCase());
 
@@ -286,6 +288,58 @@ const PlatformPreview: React.FC<PlatformPreviewProps> = ({
       default: return renderInstagram();
     }
   };
+
+  if (inline) {
+    return (
+      <div className={`${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-slate-200'} border rounded-2xl shadow-sm w-full overflow-hidden flex flex-col`}>
+        {/* Header */}
+        <div className={`sticky top-0 z-10 ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-slate-50 border-slate-200'} border-b px-4 py-3 flex items-center justify-between`}>
+          <h3 className={`text-xs font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Post Preview</h3>
+          <div className="flex items-center gap-1.5">
+            {platforms.filter(p => p.id === activeTab).map(p => (
+              <span key={p.id} className={`w-2 h-2 rounded-full bg-gradient-to-r ${p.color}`} />
+            ))}
+            <span className={`text-[10px] font-bold uppercase tracking-wider ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>{activeTab}</span>
+          </div>
+        </div>
+
+        {/* Platform tabs (Internal toggle) */}
+        <div className={`px-4 py-2 border-b flex items-center gap-2 overflow-x-auto no-scrollbar ${isDarkMode ? 'bg-slate-900/50 border-slate-700/30' : 'bg-slate-100/50 border-slate-200'}`}>
+          {platforms.map((p) => (
+            <button
+              key={p.id}
+              onClick={() => setActiveTab(p.id)}
+              className={`whitespace-nowrap px-2.5 py-1 text-[10px] font-bold rounded-full transition-all border ${
+                activeTab === p.id
+                  ? `bg-gradient-to-r ${p.color} text-white border-transparent shadow-sm`
+                  : `${isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-500 hover:text-slate-300' : 'bg-white border-slate-200 text-slate-500 hover:text-slate-700'}`
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Preview content */}
+        <div className="p-4 bg-slate-50/30 dark:bg-slate-900/10 flex-1 overflow-y-auto">
+          <div className="transform scale-[0.85] origin-top">
+            {renderPreview()}
+          </div>
+        </div>
+
+        {/* Character count warning */}
+        {activeTab === 'twitter' && fullCaption.length > 280 && (
+          <div className="px-4 pb-3">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30 rounded-lg">
+              <span className="text-[10px] text-red-600 dark:text-red-400 font-medium">
+                ⚠️ Over 280 character limit ({fullCaption.length}/280)
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
