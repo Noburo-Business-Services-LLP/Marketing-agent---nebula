@@ -112,10 +112,12 @@ router.get('/', protect, async (req, res) => {
       }
     }
     
-    // For scheduled campaigns past due WITHOUT a socialPostId, keep as scheduled
-    // (they were never actually sent to Ayrshare)
-    
-    // Get counts by status
+    // After verification, filter out campaigns whose status changed and no longer matches the query
+    const filteredCampaigns = (status && status !== 'all')
+      ? campaigns.filter(c => c.status === status)
+      : campaigns;
+
+    // Get counts by status (re-fetch after potential updates)
     const mongoose = require('mongoose');
     const statusCounts = await Campaign.aggregate([
       { $match: { userId: new mongoose.Types.ObjectId(userId) } },
@@ -138,7 +140,7 @@ router.get('/', protect, async (req, res) => {
     
     res.json({
       success: true,
-      campaigns,
+      campaigns: filteredCampaigns,
       counts
     });
   } catch (error) {
