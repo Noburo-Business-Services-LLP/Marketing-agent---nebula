@@ -272,6 +272,11 @@ const Dashboard: React.FC = () => {
   const [regeneratingImage, setRegeneratingImage] = useState(false);
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
   const [rivalImagePrompt, setRivalImagePrompt] = useState('');
+  const [rivalScheduleDate, setRivalScheduleDate] = useState('');
+  const [rivalScheduleTime, setRivalScheduleTime] = useState('');
+  const [rivalSelectedPlatform, setRivalSelectedPlatform] = useState('instagram');
+  const [rivalPostingNow, setRivalPostingNow] = useState(false);
+  const [rivalScheduling, setRivalScheduling] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Cache flags — prevent re-fetching on tab switch
@@ -627,6 +632,9 @@ const Dashboard: React.FC = () => {
     setImageMode('ai');
     setCustomImagePrompt('');
     setUploadedImageUrl(null);
+    setRivalSelectedPlatform(competitor.platform || 'instagram');
+    setRivalScheduleDate('');
+    setRivalScheduleTime('');
 
     try {
       const result = await apiService.generateRivalPost({
@@ -669,7 +677,7 @@ const Dashboard: React.FC = () => {
       await apiService.createCampaign({
         name: `Rival to ${rivalPost.competitorName}`,
         objective: 'engagement',
-        platforms: [rivalPost.platform],
+        platforms: [rivalSelectedPlatform],
         status: 'draft',
         creative: {
           type: 'image',
@@ -700,6 +708,139 @@ const Dashboard: React.FC = () => {
     const fullCaption = `${editedCaption}\n\n${editedHashtags}`;
     navigator.clipboard.writeText(fullCaption);
     alert('Caption and hashtags copied to clipboard!');
+  };
+
+  // Rival Post — Post Now
+  const handleRivalPostNow = async () => {
+    if (!rivalPost) return;
+    setRivalPostingNow(true);
+    try {
+      const imageUrl = imageMode === 'upload' && uploadedImageUrl ? uploadedImageUrl : rivalPost.imageUrl;
+      const result = await apiService.createCampaign({
+        name: `Rival to ${rivalPost.competitorName}`,
+        objective: 'engagement',
+        platforms: [rivalSelectedPlatform],
+        status: 'posted',
+        creative: {
+          type: 'image',
+          textContent: editedCaption,
+          imageUrls: imageUrl ? [imageUrl] : [],
+          captions: editedCaption,
+          hashtags: editedHashtags.split(/[\s#]+/).filter(t => t.trim())
+        }
+      });
+      if (result.campaign?._id) {
+        try {
+          await apiService.publishCampaign(result.campaign._id, [rivalSelectedPlatform]);
+        } catch (publishErr) {
+          console.error('Ayrshare publish failed:', publishErr);
+          alert('Post saved but failed to publish to social media. You can retry from the Campaigns page.');
+          setShowRivalPostModal(false);
+          setRivalPost(null);
+          return;
+        }
+      }
+      alert('Post published successfully!');
+      setShowRivalPostModal(false);
+      setRivalPost(null);
+    } catch (error) {
+      console.error('Failed to post:', error);
+      alert('Failed to post. Please try again.');
+    } finally {
+      setRivalPostingNow(false);
+    }
+  };
+
+  // Rival Post — Schedule
+  const handleRivalSchedule = async () => {
+    if (!rivalPost || !rivalScheduleDate) return;
+    setRivalScheduling(true);
+    try {
+      const time = rivalScheduleTime || '10:00';
+      const [hours, minutes] = time.split(':');
+      const dt = new Date(rivalScheduleDate);
+      dt.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+      const scheduledFor = dt.toISOString();
+      const imageUrl = imageMode === 'upload' && uploadedImageUrl ? uploadedImageUrl : rivalPost.imageUrl;
+
+      const result = await apiService.createCampaign({
+        name: `Rival to ${rivalPost.competitorName}`,
+        objective: 'engagement',
+        platforms: [rivalSelectedPlatform],
+        status: 'scheduled',
+        creative: {
+          type: 'image',
+          textContent: editedCaption,
+          imageUrls: imageUrl ? [imageUrl] : [],
+          captions: editedCaption,
+          hashtags: editedHashtags.split(/[\s#]+/).filter(t => t.trim())
+        },
+        scheduling: {
+          startDate: rivalScheduleDate,
+          postTime: time
+        }
+      });
+      if (result.campaign?._id) {
+        try {
+          await apiService.publishCampaign(result.campaign._id, [rivalSelectedPlatform], scheduledFor);
+        } catch (publishErr) {
+          console.error('Ayrshare schedule failed:', publishErr);
+          alert('Post saved but failed to schedule on social media. You can retry from the Campaigns page.');
+          setShowRivalPostModal(false);
+          setRivalPost(null);
+          return;
+        }
+      }
+      alert('Post scheduled successfully!');
+      setShowRivalPostModal(false);
+      setRivalPost(null);
+    } catch (error) {
+      console.error('Failed to schedule:', error);
+      alert('Failed to schedule. Please try again.');
+    } finally {
+      setRivalScheduling(false);
+    }
+  };
+
+  // Strategic Advisor — Post Now
+  const handleStrategicPostNow = async () => {
+    setScheduling(true);
+    try {
+      const result = await apiService.createCampaign({
+        name: selectedSuggestion?.title || 'Strategic Post',
+        objective: mapCategoryToObjective(selectedSuggestion?.category),
+        platforms: [selectedPlatform],
+        status: 'posted',
+        creative: {
+          type: 'image',
+          textContent: postCaption,
+          imageUrls: postImageUrl ? [postImageUrl] : [],
+          captions: postCaption,
+          hashtags: postHashtags
+        }
+      });
+      if (result.campaign?._id) {
+        try {
+          await apiService.publishCampaign(result.campaign._id, [selectedPlatform]);
+        } catch (publishErr) {
+          console.error('Ayrshare publish failed:', publishErr);
+          alert('Post saved but failed to publish to social media. You can retry from the Campaigns page.');
+          setShowPostCreator(false);
+          setSelectedSuggestion(null);
+          setGeneratedPost(null);
+          return;
+        }
+      }
+      alert('Post published successfully!');
+      setShowPostCreator(false);
+      setSelectedSuggestion(null);
+      setGeneratedPost(null);
+    } catch (error) {
+      console.error('Failed to post:', error);
+      alert('Failed to post. Please try again.');
+    } finally {
+      setScheduling(false);
+    }
   };
 
   // Download image
@@ -1993,17 +2134,30 @@ const Dashboard: React.FC = () => {
                   <Eye className="w-4 h-4" /> Preview
                 </button>
                 <button
-                  onClick={handleSchedulePost}
+                  onClick={() => { setScheduleDate(''); handleSchedulePost(); }}
                   disabled={scheduling}
-                  className="px-6 py-2 bg-[#ffcc29] hover:bg-[#e6b825] text-black text-sm font-semibold rounded-lg flex items-center gap-2 disabled:opacity-50"
+                  className={`px-4 py-2 text-sm font-medium rounded-lg flex items-center gap-2 ${isDarkMode ? 'bg-[#161b22] text-white hover:bg-[#21262d] border border-slate-700/50' : 'bg-white hover:bg-slate-50 border border-slate-200'} disabled:opacity-50`}
                 >
-                  {scheduling ? (
-                    <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</>
-                  ) : scheduleDate ? (
-                    <><Calendar className="w-4 h-4" /> Schedule Post</>
-                  ) : (
-                    <><Save className="w-4 h-4" /> Save as Draft</>
-                  )}
+                  {scheduling && !scheduleDate ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  Save as Draft
+                </button>
+                {scheduleDate && (
+                  <button
+                    onClick={handleSchedulePost}
+                    disabled={scheduling}
+                    className="px-4 py-2 bg-[#ffcc29]/80 hover:bg-[#ffcc29] text-black text-sm font-semibold rounded-lg flex items-center gap-2 disabled:opacity-50"
+                  >
+                    {scheduling ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calendar className="w-4 h-4" />}
+                    Schedule
+                  </button>
+                )}
+                <button
+                  onClick={handleStrategicPostNow}
+                  disabled={scheduling}
+                  className="px-6 py-2 bg-gradient-to-r from-[#ffcc29] to-[#ffa500] text-black text-sm font-semibold rounded-lg flex items-center gap-2 hover:shadow-lg hover:scale-105 transition-all disabled:opacity-50"
+                >
+                  {scheduling ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  Post Now
                 </button>
               </div>
             )}
@@ -2318,6 +2472,45 @@ const Dashboard: React.FC = () => {
                       {editedHashtags.split(/[\s#]+/).filter(t => t.trim()).length} hashtags
                     </p>
                   </div>
+
+                  {/* Platform Selector */}
+                  <div>
+                    <p className={`text-xs font-medium ${theme.textMuted} mb-2`}>PLATFORM</p>
+                    <div className="flex gap-2 flex-wrap">
+                      {['instagram', 'facebook', 'twitter', 'linkedin'].map(p => (
+                        <button
+                          key={p}
+                          onClick={() => setRivalSelectedPlatform(p)}
+                          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                            rivalSelectedPlatform === p
+                              ? 'bg-[#ffcc29] text-black'
+                              : isDarkMode ? 'bg-[#161b22] text-white border border-slate-700/50' : 'bg-white text-slate-700 border border-slate-200'
+                          }`}
+                        >
+                          {p.charAt(0).toUpperCase() + p.slice(1)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Schedule (Optional) */}
+                  <div>
+                    <p className={`text-xs font-medium ${theme.textMuted} mb-2`}>SCHEDULE (OPTIONAL)</p>
+                    <div className="flex gap-2">
+                      <input
+                        type="date"
+                        value={rivalScheduleDate}
+                        onChange={(e) => setRivalScheduleDate(e.target.value)}
+                        className={`flex-1 p-2.5 rounded-lg text-sm ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white' : 'bg-slate-50 border-slate-200 text-slate-800'} border`}
+                      />
+                      <input
+                        type="time"
+                        value={rivalScheduleTime}
+                        onChange={(e) => setRivalScheduleTime(e.target.value)}
+                        className={`w-32 p-2.5 rounded-lg text-sm ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white' : 'bg-slate-50 border-slate-200 text-slate-800'} border`}
+                      />
+                    </div>
+                  </div>
                 </div>
               ) : null}
             </div>
@@ -2347,12 +2540,23 @@ const Dashboard: React.FC = () => {
                       {savingDraft ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                       Save as Draft
                     </button>
+                    {rivalScheduleDate && (
+                      <button
+                        onClick={handleRivalSchedule}
+                        disabled={rivalScheduling}
+                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#ffcc29]/80 hover:bg-[#ffcc29] text-black text-sm font-semibold transition-all disabled:opacity-50"
+                      >
+                        {rivalScheduling ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calendar className="w-4 h-4" />}
+                        Schedule
+                      </button>
+                    )}
                     <button
-                      onClick={handleCopyCaption}
-                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#ffcc29] to-[#ffa500] text-black text-sm font-semibold hover:shadow-lg hover:scale-105 transition-all"
+                      onClick={handleRivalPostNow}
+                      disabled={rivalPostingNow}
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#ffcc29] to-[#ffa500] text-black text-sm font-semibold hover:shadow-lg hover:scale-105 transition-all disabled:opacity-50"
                     >
-                      <Copy className="w-4 h-4" />
-                      Copy & Post
+                      {rivalPostingNow ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                      Post Now
                     </button>
                   </div>
                 </div>
