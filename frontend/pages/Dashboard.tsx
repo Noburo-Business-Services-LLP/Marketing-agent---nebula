@@ -274,7 +274,7 @@ const Dashboard: React.FC = () => {
   const [rivalImagePrompt, setRivalImagePrompt] = useState('');
   const [rivalScheduleDate, setRivalScheduleDate] = useState('');
   const [rivalScheduleTime, setRivalScheduleTime] = useState('');
-  const [rivalSelectedPlatform, setRivalSelectedPlatform] = useState('instagram');
+  const [rivalSelectedPlatform, setRivalSelectedPlatform] = useState<string[]>(['instagram']);
   const [rivalPostingNow, setRivalPostingNow] = useState(false);
   const [rivalScheduling, setRivalScheduling] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -309,7 +309,7 @@ const Dashboard: React.FC = () => {
   const [scheduling, setScheduling] = useState(false);
   const [scheduleDate, setScheduleDate] = useState('');
   const [scheduleTime, setScheduleTime] = useState('');
-  const [selectedPlatform, setSelectedPlatform] = useState('instagram');
+  const [selectedPlatform, setSelectedPlatform] = useState<string[]>([]);
   const [showPreview, setShowPreview] = useState(false);
   const [playingAudio, setPlayingAudio] = useState<string | null>(null);
   const [audioVolume, setAudioVolume] = useState(0.7);
@@ -451,7 +451,7 @@ const Dashboard: React.FC = () => {
         setPostHashtags(result.post.hashtags || []);
         setPostImageUrl(result.post.generatedImageUrl || '');
         setPostImagePrompt(result.post.imagePrompt || '');
-        setSelectedPlatform((suggestion.platforms || ['instagram'])[0]);
+        setSelectedPlatform(suggestion.platforms || ['instagram']);
       }
     } catch (error) {
       console.error('Failed to generate post:', error);
@@ -523,7 +523,7 @@ const Dashboard: React.FC = () => {
       const result = await apiService.createCampaign({
         name: selectedSuggestion?.title || 'Strategic Post',
         objective: mapCategoryToObjective(selectedSuggestion?.category),
-        platforms: [selectedPlatform],
+        platforms: selectedPlatform,
         status: scheduleDate ? 'scheduled' : 'draft',
         creative: {
           type: 'image',
@@ -543,7 +543,7 @@ const Dashboard: React.FC = () => {
         try {
           await apiService.publishCampaign(
             result.campaign._id,
-            [selectedPlatform],
+            selectedPlatform,
             scheduledFor
           );
         } catch (publishErr) {
@@ -632,7 +632,7 @@ const Dashboard: React.FC = () => {
     setImageMode('ai');
     setCustomImagePrompt('');
     setUploadedImageUrl(null);
-    setRivalSelectedPlatform(competitor.platform || 'instagram');
+    setRivalSelectedPlatform([competitor.platform || 'instagram']);
     setRivalScheduleDate('');
     setRivalScheduleTime('');
 
@@ -677,7 +677,7 @@ const Dashboard: React.FC = () => {
       await apiService.createCampaign({
         name: `Rival to ${rivalPost.competitorName}`,
         objective: 'engagement',
-        platforms: [rivalSelectedPlatform],
+        platforms: rivalSelectedPlatform,
         status: 'draft',
         creative: {
           type: 'image',
@@ -719,7 +719,7 @@ const Dashboard: React.FC = () => {
       const result = await apiService.createCampaign({
         name: `Rival to ${rivalPost.competitorName}`,
         objective: 'engagement',
-        platforms: [rivalSelectedPlatform],
+        platforms: rivalSelectedPlatform,
         status: 'posted',
         creative: {
           type: 'image',
@@ -731,7 +731,7 @@ const Dashboard: React.FC = () => {
       });
       if (result.campaign?._id) {
         try {
-          await apiService.publishCampaign(result.campaign._id, [rivalSelectedPlatform]);
+          await apiService.publishCampaign(result.campaign._id, rivalSelectedPlatform);
         } catch (publishErr) {
           console.error('Ayrshare publish failed:', publishErr);
           alert('Post saved but failed to publish to social media. You can retry from the Campaigns page.');
@@ -766,7 +766,7 @@ const Dashboard: React.FC = () => {
       const result = await apiService.createCampaign({
         name: `Rival to ${rivalPost.competitorName}`,
         objective: 'engagement',
-        platforms: [rivalSelectedPlatform],
+        platforms: rivalSelectedPlatform,
         status: 'scheduled',
         creative: {
           type: 'image',
@@ -782,7 +782,7 @@ const Dashboard: React.FC = () => {
       });
       if (result.campaign?._id) {
         try {
-          await apiService.publishCampaign(result.campaign._id, [rivalSelectedPlatform], scheduledFor);
+          await apiService.publishCampaign(result.campaign._id, rivalSelectedPlatform, scheduledFor);
         } catch (publishErr) {
           console.error('Ayrshare schedule failed:', publishErr);
           alert('Post saved but failed to schedule on social media. You can retry from the Campaigns page.');
@@ -809,7 +809,7 @@ const Dashboard: React.FC = () => {
       const result = await apiService.createCampaign({
         name: selectedSuggestion?.title || 'Strategic Post',
         objective: mapCategoryToObjective(selectedSuggestion?.category),
-        platforms: [selectedPlatform],
+        platforms: selectedPlatform,
         status: 'posted',
         creative: {
           type: 'image',
@@ -821,7 +821,7 @@ const Dashboard: React.FC = () => {
       });
       if (result.campaign?._id) {
         try {
-          await apiService.publishCampaign(result.campaign._id, [selectedPlatform]);
+          await apiService.publishCampaign(result.campaign._id, selectedPlatform);
         } catch (publishErr) {
           console.error('Ayrshare publish failed:', publishErr);
           alert('Post saved but failed to publish to social media. You can retry from the Campaigns page.');
@@ -1771,7 +1771,7 @@ const Dashboard: React.FC = () => {
 
       <div className="grid grid-cols-1 gap-5">
          {/* Interactive Calendar */}
-         <CalendarWidget campaigns={data?.recentCampaigns || []} dashboardData={data} onCampaignCreated={fetchData} />
+         <CalendarWidget campaigns={data?.recentCampaigns || []} dashboardData={data} onCampaignCreated={fetchData} followerData={followerData} />
       </div>
 
       {/* Post Creator Modal */}
@@ -1876,8 +1876,7 @@ const Dashboard: React.FC = () => {
                 </div>
                 <button
                   onClick={() => setShowPostCreator(false)}
-                  disabled={generatingPost || scheduling}
-                  className={`p-2 rounded-lg ${isDarkMode ? 'hover:bg-[#161b22]' : 'hover:bg-slate-100'} transition-colors disabled:opacity-50`}
+                  className={`p-2 rounded-lg ${isDarkMode ? 'hover:bg-[#161b22]' : 'hover:bg-slate-100'} transition-colors`}
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -1964,16 +1963,30 @@ const Dashboard: React.FC = () => {
                     {/* Platform Selection */}
                     <div>
                       <label className={`block text-xs font-semibold uppercase tracking-wide mb-2 ${theme.textSecondary}`}>Platform</label>
-                      <div className="flex gap-2">
-                        {['instagram', 'facebook', 'twitter', 'linkedin'].map(p => (
-                          <button
-                            key={p}
-                            onClick={() => setSelectedPlatform(p)}
-                            className={`px-3 py-1.5 text-xs rounded-lg capitalize ${selectedPlatform === p ? 'bg-[#ffcc29] text-black font-semibold' : isDarkMode ? 'bg-[#161b22] text-white' : 'bg-slate-100'}`}
-                          >
-                            {p}
-                          </button>
-                        ))}
+                      <div className="flex gap-2 flex-wrap">
+                        {['instagram', 'facebook', 'twitter', 'linkedin'].map(p => {
+                          const isConnected = followerData.some(f => f.platform.toLowerCase() === p || (p === 'twitter' && f.platform.toLowerCase() === 'x') || (p === 'x' && f.platform.toLowerCase() === 'twitter'));
+                          const isSelected = selectedPlatform.includes(p);
+                          return (
+                            <button
+                              key={p}
+                              onClick={() => isConnected && setSelectedPlatform(prev =>
+                                prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]
+                              )}
+                              disabled={!isConnected}
+                              className={`px-3 py-1.5 text-xs rounded-lg capitalize flex items-center gap-1 ${
+                                isSelected
+                                  ? 'bg-[#ffcc29] text-black font-semibold'
+                                  : isConnected
+                                    ? isDarkMode ? 'bg-[#161b22] text-white hover:bg-[#1f2937]' : 'bg-slate-100 hover:bg-slate-200'
+                                    : 'opacity-50 cursor-not-allowed bg-slate-200 text-slate-400'
+                              }`}
+                            >
+                              {p}
+                              {!isConnected && <span className="text-[10px]">(N/A)</span>}
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
                     
@@ -2017,9 +2030,9 @@ const Dashboard: React.FC = () => {
                           className={`px-3 py-2 text-sm rounded-lg border ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50 text-white' : 'bg-white border-slate-200'}`}
                         />
                       </div>
-                      {generatedPost.bestPostTimes && generatedPost.bestPostTimes[selectedPlatform] && (
+                      {generatedPost.bestPostTimes && selectedPlatform.length > 0 && generatedPost.bestPostTimes[selectedPlatform[0]] && (
                         <p className={`text-xs mt-1 ${theme.textMuted}`}>
-                          💡 Best time for {selectedPlatform}: {generatedPost.bestPostTimes[selectedPlatform]}
+                          💡 Best time for {selectedPlatform[0]}: {generatedPost.bestPostTimes[selectedPlatform[0]]}
                         </p>
                       )}
                     </div>
@@ -2320,19 +2333,29 @@ const Dashboard: React.FC = () => {
                     <div>
                       <label className={`block text-xs font-semibold uppercase tracking-wide mb-2 ${theme.textSecondary}`}>Platform</label>
                       <div className="flex gap-2 flex-wrap">
-                        {['instagram', 'facebook', 'twitter', 'linkedin'].map(p => (
-                          <button
-                            key={p}
-                            onClick={() => setRivalSelectedPlatform(p)}
-                            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                              rivalSelectedPlatform === p
-                                ? 'bg-[#ffcc29] text-black'
-                                : isDarkMode ? 'bg-[#161b22] text-white border border-slate-700/50' : 'bg-white text-slate-700 border border-slate-200'
-                            }`}
-                          >
-                            {p.charAt(0).toUpperCase() + p.slice(1)}
-                          </button>
-                        ))}
+                        {['instagram', 'facebook', 'twitter', 'linkedin'].map(p => {
+                          const isConnected = followerData.some(f => f.platform.toLowerCase() === p || (p === 'twitter' && f.platform.toLowerCase() === 'x') || (p === 'x' && f.platform.toLowerCase() === 'twitter'));
+                          const isSelected = rivalSelectedPlatform.includes(p);
+                          return (
+                            <button
+                              key={p}
+                              onClick={() => isConnected && setRivalSelectedPlatform(prev =>
+                                prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]
+                              )}
+                              disabled={!isConnected}
+                              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1 ${
+                                isSelected
+                                  ? 'bg-[#ffcc29] text-black'
+                                  : isConnected
+                                    ? isDarkMode ? 'bg-[#161b22] text-white border border-slate-700/50' : 'bg-white text-slate-700 border border-slate-200'
+                                    : 'opacity-50 cursor-not-allowed bg-slate-200 text-slate-400'
+                              }`}
+                            >
+                              {p.charAt(0).toUpperCase() + p.slice(1)}
+                              {!isConnected && <span className="text-[10px]">(N/A)</span>}
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
 
@@ -2389,7 +2412,7 @@ const Dashboard: React.FC = () => {
                       </div>
                       <p className={`text-xs ${theme.textMuted} mt-1`}>
                         <Lightbulb className="w-3 h-3 inline mr-1 text-[#ffcc29]" />
-                        Best time for {rivalSelectedPlatform}: {rivalSelectedPlatform === 'linkedin' ? '9:30 AM IST' : rivalSelectedPlatform === 'instagram' ? '11:00 AM IST' : '10:00 AM IST'}
+                        Best time for {rivalSelectedPlatform[0] || 'instagram'}: {rivalSelectedPlatform.includes('linkedin') ? '9:30 AM IST' : rivalSelectedPlatform.includes('instagram') ? '11:00 AM IST' : '10:00 AM IST'}
                       </p>
                     </div>
                   </div>
@@ -2452,7 +2475,7 @@ const Dashboard: React.FC = () => {
       {/* Platform Preview Modal */}
       {showPreview && (
         <PlatformPreview
-          platform={rivalPost?.platform || selectedPlatform || 'instagram'}
+          platform={rivalPost?.platform || selectedPlatform[0] || 'instagram'}
           imageUrl={rivalPost?.imageUrl || postImageUrl || null}
           caption={rivalPost ? editedCaption : postCaption}
           hashtags={rivalPost ? editedHashtags.split(' ').filter(Boolean) : postHashtags}
@@ -2465,7 +2488,7 @@ const Dashboard: React.FC = () => {
   );
 };
 
-const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: DashboardData | null; onCampaignCreated?: () => void }> = ({ campaigns, dashboardData, onCampaignCreated }) => {
+const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: DashboardData | null; onCampaignCreated?: () => void; followerData?: Array<{ platform: string; name: string; followers: number; color: string; bgColor: string; logo: string }> }> = ({ campaigns, dashboardData, onCampaignCreated, followerData = [] }) => {
     const { isDarkMode } = useTheme();
     const theme = getThemeClasses(isDarkMode);
     const [currentDate, setCurrentDate] = useState(new Date());
@@ -2500,7 +2523,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
     const [eventRefiningImage, setEventRefiningImage] = useState(false);
     const [eventScheduleDate, setEventScheduleDate] = useState('');
     const [eventScheduleTime, setEventScheduleTime] = useState('');
-    const [eventSelectedPlatform, setEventSelectedPlatform] = useState('instagram');
+    const [eventSelectedPlatform, setEventSelectedPlatform] = useState<string[]>(['instagram']);
     const [eventScheduling, setEventScheduling] = useState(false);
     const [showEventPostCreator, setShowEventPostCreator] = useState(false);
     const [showEventLogoModal, setShowEventLogoModal] = useState(false);
@@ -5268,28 +5291,38 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                         {/* Platform Selection */}
                                         <div>
                                             <label className={`text-sm font-semibold ${theme.text} mb-2 block`}>Platform</label>
-                                            <div className="flex gap-2">
-                                                {['instagram', 'facebook', 'twitter', 'linkedin'].map(platform => (
-                                                    <button
-                                                        key={platform}
-                                                        onClick={() => setEventSelectedPlatform(platform)}
-                                                        className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium capitalize transition-all ${
-                                                            eventSelectedPlatform === platform
-                                                                ? 'bg-[#ffcc29] text-black'
-                                                                : `${isDarkMode ? 'bg-[#161b22] text-slate-400 hover:bg-[#1f2937]' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`
-                                                        }`}
-                                                    >
-                                                        {platform}
-                                                    </button>
-                                                ))}
+                                            <div className="flex gap-2 flex-wrap">
+                                                {['instagram', 'facebook', 'twitter', 'linkedin'].map(platform => {
+                                                    const isConnected = followerData.some(f => f.platform.toLowerCase() === platform || (platform === 'twitter' && f.platform.toLowerCase() === 'x') || (platform === 'x' && f.platform.toLowerCase() === 'twitter'));
+                                                    const isSelected = eventSelectedPlatform.includes(platform);
+                                                    return (
+                                                        <button
+                                                            key={platform}
+                                                            onClick={() => isConnected && setEventSelectedPlatform(prev =>
+                                                                prev.includes(platform) ? prev.filter(x => x !== platform) : [...prev, platform]
+                                                            )}
+                                                            disabled={!isConnected}
+                                                            className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium capitalize transition-all flex items-center justify-center gap-1 ${
+                                                                isSelected
+                                                                    ? 'bg-[#ffcc29] text-black'
+                                                                    : isConnected
+                                                                        ? `${isDarkMode ? 'bg-[#161b22] text-slate-400 hover:bg-[#1f2937]' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`
+                                                                        : 'opacity-50 cursor-not-allowed bg-slate-200 text-slate-400'
+                                                            }`}
+                                                        >
+                                                            {platform}
+                                                            {!isConnected && <span className="text-[10px]">(N/A)</span>}
+                                                        </button>
+                                                    );
+                                                })}
                                             </div>
                                         </div>
                                         
                                         {/* Best Posting Time */}
-                                        {eventGeneratedPost.bestPostTimes && eventGeneratedPost.bestPostTimes[eventSelectedPlatform] && (
+                                        {eventGeneratedPost.bestPostTimes && eventSelectedPlatform.length > 0 && eventGeneratedPost.bestPostTimes[eventSelectedPlatform[0]] && (
                                             <div className={`p-3 rounded-lg ${isDarkMode ? 'bg-green-500/10 border-green-500/20' : 'bg-green-50 border-green-200'} border`}>
                                                 <p className={`text-xs font-semibold ${isDarkMode ? 'text-green-400' : 'text-green-700'}`}>
-                                                    ⏰ Best time to post on {eventSelectedPlatform}: {eventGeneratedPost.bestPostTimes[eventSelectedPlatform]}
+                                                    ⏰ Best time to post on {eventSelectedPlatform[0]}: {eventGeneratedPost.bestPostTimes[eventSelectedPlatform[0]]}
                                                 </p>
                                             </div>
                                         )}
@@ -5331,7 +5364,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                     <button
                                       onClick={() => {
                                         setCalendarPreviewData({
-                                          platform: eventSelectedPlatform,
+                                          platform: eventSelectedPlatform[0] || 'instagram',
                                           imageUrl: eventPostImageUrl || null,
                                           caption: eventPostCaption,
                                           hashtags: eventPostHashtags
@@ -5349,7 +5382,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                                 await apiService.createCampaign({
                                                     name: `${selectedHoliday.name} Post`,
                                                     objective: 'engagement',
-                                                    platforms: [eventSelectedPlatform],
+                                                    platforms: eventSelectedPlatform,
                                                     status: 'draft',
                                                     creative: {
                                                         type: 'image',
@@ -5387,7 +5420,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                                 await apiService.createCampaign({
                                                     name: `${selectedHoliday.name} Post`,
                                                     objective: 'engagement',
-                                                    platforms: [eventSelectedPlatform],
+                                                    platforms: eventSelectedPlatform,
                                                     status: 'scheduled',
                                                     creative: {
                                                         type: 'image',
