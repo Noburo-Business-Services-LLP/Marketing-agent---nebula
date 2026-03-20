@@ -2257,7 +2257,7 @@ const Dashboard: React.FC = () => {
             setRivalPostLoading(false);
           }}>
           <div 
-            className={`${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-slate-200'} border rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden`}
+            className={`${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-slate-200'} border rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden`}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
@@ -2309,206 +2309,163 @@ const Dashboard: React.FC = () => {
                   </div>
                 </div>
               ) : rivalPost ? (
-                <div className="space-y-6">
-                  {/* Original Post Reference */}
-                  <div className={`p-4 rounded-xl ${isDarkMode ? 'bg-[#161b22] border-[#ffcc29]/10' : 'bg-slate-50 border-slate-200'} border`}>
-                    <p className={`text-xs font-medium ${theme.textMuted} mb-2 flex items-center gap-1.5`}>
-                      <Eye className="w-3.5 h-3.5" /> Original Competitor Post
-                    </p>
-                    <p className={`text-sm ${theme.textSecondary} italic`}>"{rivalPost.originalContent}"</p>
-                  </div>
-
-                  {/* Image Section with Editing Options */}
-                  <div className="space-y-4">
-                    {/* Image Mode Toggle */}
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => setImageMode('ai')}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                          imageMode === 'ai' 
-                            ? 'bg-[#ffcc29] text-black' 
-                            : `${isDarkMode ? 'bg-[#161b22] text-white hover:bg-[#21262d]' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`
-                        }`}
-                      >
-                        <Sparkles className="w-3 h-3" /> Generate Image
-                      </button>
-                      <button
-                        onClick={() => setImageMode('upload')}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                          imageMode === 'upload' 
-                            ? 'bg-[#ffcc29] text-black' 
-                            : `${isDarkMode ? 'bg-[#161b22] text-white hover:bg-[#21262d]' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`
-                        }`}
-                      >
-                        <Download className="w-3 h-3 rotate-180" /> Upload Image
-                      </button>
-                    </div>
-
-                    {/* Image Display */}
-                    <div className="relative rounded-xl overflow-hidden border border-slate-700/50">
-                      <img 
-                        src={getCurrentImageUrl()} 
-                        alt="Post image" 
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Left Column — Image */}
+                  <div>
+                    <label className={`block text-xs font-semibold uppercase tracking-wide mb-2 ${theme.textSecondary}`}>Image</label>
+                    <div className="relative rounded-xl overflow-hidden mb-3">
+                      <img
+                        src={getCurrentImageUrl()}
+                        alt="Post image"
                         className="w-full object-contain max-h-[500px]"
                       />
-                      <button
-                        onClick={handleDownloadImage}
-                        className="absolute bottom-3 right-3 p-2 bg-black/60 hover:bg-black/80 rounded-lg text-white transition-colors"
+                      <a
+                        href={getCurrentImageUrl()}
+                        download="rival-post.png"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="absolute top-2 right-2 p-2 bg-black/60 hover:bg-black/80 rounded-lg text-white transition-colors"
+                        title="Download image"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          fetch(getCurrentImageUrl())
+                            .then(res => res.blob())
+                            .then(blob => {
+                              const url = URL.createObjectURL(blob);
+                              const a = document.createElement('a');
+                              a.href = url;
+                              a.download = 'rival-post.png';
+                              a.click();
+                              URL.revokeObjectURL(url);
+                            })
+                            .catch(() => window.open(getCurrentImageUrl(), '_blank'));
+                          e.preventDefault();
+                        }}
                       >
                         <Download className="w-4 h-4" />
-                      </button>
+                      </a>
                       {imageMode === 'upload' && uploadedImageUrl && (
-                        <div className="absolute top-3 left-3 px-2 py-1 bg-[#ffcc29] text-black text-xs font-medium rounded-lg">
+                        <div className="absolute top-2 left-2 px-2 py-1 bg-[#ffcc29] text-black text-xs font-medium rounded-lg">
                           Custom Image
                         </div>
                       )}
                     </div>
 
-                    {/* AI Image Regeneration */}
-                    {imageMode === 'ai' && (
-                      <div className={`p-4 rounded-xl ${isDarkMode ? 'bg-[#161b22] border-[#ffcc29]/10' : 'bg-slate-50 border-slate-200'} border`}>
-                        <p className={`text-xs font-medium ${theme.textMuted} mb-2 flex items-center gap-1.5`}>
-                          <Edit3 className="w-3.5 h-3.5" /> Refine Image
-                        </p>
-                        <div className="flex gap-2">
-                          <input
-                            type="text"
-                            value={customImagePrompt}
-                            onChange={(e) => setCustomImagePrompt(e.target.value)}
-                            placeholder="e.g. make it more vibrant, add warm tones, more professional..."
-                            className={`flex-1 px-3 py-2 rounded-lg text-sm ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50 text-white placeholder-gray-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'} border focus:ring-2 focus:ring-[#ffcc29]/50 focus:border-[#ffcc29] transition-all`}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' && !regeneratingImage) {
-                                handleRegenerateImage();
-                              }
-                            }}
-                          />
-                          <button
-                            onClick={handleRegenerateImage}
-                            disabled={regeneratingImage || !customImagePrompt.trim()}
-                            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gradient-to-r from-[#ffcc29] to-[#ffa500] text-black text-sm font-medium hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            {regeneratingImage ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                              <Sparkles className="w-4 h-4" />
-                            )}
-                            {regeneratingImage ? 'Generating...' : 'Generate'}
-                          </button>
-                        </div>
-                        <p className={`text-xs ${theme.textMuted} mt-2`}>
-                          Refines the current image — e.g., "more vibrant", "darker background", "add tech elements"
-                        </p>
-                      </div>
-                    )}
-
-                    {/* File Upload */}
-                    {imageMode === 'upload' && (
-                      <div className={`p-4 rounded-xl ${isDarkMode ? 'bg-[#161b22] border-[#ffcc29]/10' : 'bg-slate-50 border-slate-200'} border`}>
-                        <p className={`text-xs font-medium ${theme.textMuted} mb-2 flex items-center gap-1.5`}>
-                          <Download className="w-3.5 h-3.5 rotate-180" /> Upload Your Own Image
-                        </p>
+                    {/* Refine Image */}
+                    <div className={`p-3 rounded-lg ${isDarkMode ? 'bg-[#161b22]' : 'bg-slate-50'}`}>
+                      <label className={`block text-xs mb-2 ${theme.textMuted}`}>Refine image</label>
+                      <div className="flex gap-2">
                         <input
-                          ref={fileInputRef}
-                          type="file"
-                          accept="image/*"
-                          onChange={handleImageUpload}
-                          className="hidden"
+                          type="text"
+                          value={customImagePrompt}
+                          onChange={(e) => setCustomImagePrompt(e.target.value)}
+                          placeholder="e.g. make it more vibrant, add text overlay..."
+                          className={`flex-1 px-3 py-2 text-sm rounded-lg border ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50 text-white' : 'bg-white border-slate-200'}`}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !regeneratingImage) handleRegenerateImage();
+                          }}
                         />
                         <button
-                          onClick={() => fileInputRef.current?.click()}
-                          className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 border-dashed ${
-                            isDarkMode 
-                              ? 'border-[#ffcc29]/30 hover:border-[#ffcc29] bg-[#0d1117]' 
-                              : 'border-slate-300 hover:border-[#ffcc29] bg-white'
-                          } transition-all`}
+                          onClick={handleRegenerateImage}
+                          disabled={regeneratingImage || !customImagePrompt.trim()}
+                          className="px-3 py-2 bg-[#ffcc29] hover:bg-[#e6b825] text-black text-xs font-semibold rounded-lg disabled:opacity-50 flex items-center gap-1"
                         >
-                          <Plus className="w-5 h-5 text-[#ffcc29]" />
-                          <span className={`text-sm ${theme.text}`}>
-                            {uploadedImageUrl ? 'Change Image' : 'Select Image'}
-                          </span>
+                          {regeneratingImage ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                          Refine
                         </button>
-                        <p className={`text-xs ${theme.textMuted} mt-2`}>
-                          Supported: JPG, PNG, GIF, WebP (max 5MB)
-                        </p>
                       </div>
-                    )}
-                  </div>
+                    </div>
 
-                  {/* Caption */}
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <p className={`text-xs font-medium ${theme.textMuted} flex items-center gap-1.5`}>
-                        <MessageSquare className="w-3.5 h-3.5" /> Caption
-                      </p>
+                    {/* Upload option */}
+                    <div className="mt-3">
+                      <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
                       <button
-                        onClick={handleCopyCaption}
-                        className={`flex items-center gap-1 text-xs ${theme.textMuted} hover:text-[#ffcc29] transition-colors`}
+                        onClick={() => fileInputRef.current?.click()}
+                        className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium ${isDarkMode ? 'bg-[#161b22] text-white hover:bg-[#21262d] border border-slate-700/50' : 'bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200'} transition-all`}
                       >
-                        <Copy className="w-3 h-3" /> Copy
+                        <Upload className="w-3 h-3" />
+                        {uploadedImageUrl ? 'Change Upload' : 'Upload Your Own'}
                       </button>
                     </div>
-                    <textarea
-                      value={editedCaption}
-                      onChange={(e) => setEditedCaption(e.target.value)}
-                      className={`w-full p-4 rounded-xl ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white' : 'bg-slate-50 border-slate-200 text-slate-800'} border focus:ring-2 focus:ring-[#ffcc29]/50 focus:border-[#ffcc29] transition-all resize-none`}
-                      rows={4}
-                    />
                   </div>
 
-                  {/* Hashtags */}
-                  <div>
-                    <p className={`text-xs font-medium ${theme.textMuted} mb-2 flex items-center gap-1.5`}>
-                      <FileText className="w-3.5 h-3.5" /> Hashtags
-                    </p>
-                    <input
-                      type="text"
-                      value={editedHashtags}
-                      onChange={(e) => setEditedHashtags(e.target.value)}
-                      className={`w-full p-3 rounded-xl ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white' : 'bg-slate-50 border-slate-200 text-slate-800'} border focus:ring-2 focus:ring-[#ffcc29]/50 focus:border-[#ffcc29] transition-all`}
-                      placeholder="#trending #viral #marketing"
-                    />
-                    <p className={`text-xs ${theme.textMuted} mt-1`}>
-                      {editedHashtags.split(/[\s#]+/).filter(t => t.trim()).length} hashtags
-                    </p>
-                  </div>
-
-                  {/* Platform Selector */}
-                  <div>
-                    <p className={`text-xs font-medium ${theme.textMuted} mb-2`}>PLATFORM</p>
-                    <div className="flex gap-2 flex-wrap">
-                      {['instagram', 'facebook', 'twitter', 'linkedin'].map(p => (
-                        <button
-                          key={p}
-                          onClick={() => setRivalSelectedPlatform(p)}
-                          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                            rivalSelectedPlatform === p
-                              ? 'bg-[#ffcc29] text-black'
-                              : isDarkMode ? 'bg-[#161b22] text-white border border-slate-700/50' : 'bg-white text-slate-700 border border-slate-200'
-                          }`}
-                        >
-                          {p.charAt(0).toUpperCase() + p.slice(1)}
-                        </button>
-                      ))}
+                  {/* Right Column — Platform, Caption, Hashtags, Schedule */}
+                  <div className="space-y-4">
+                    {/* Platform */}
+                    <div>
+                      <label className={`block text-xs font-semibold uppercase tracking-wide mb-2 ${theme.textSecondary}`}>Platform</label>
+                      <div className="flex gap-2 flex-wrap">
+                        {['instagram', 'facebook', 'twitter', 'linkedin'].map(p => (
+                          <button
+                            key={p}
+                            onClick={() => setRivalSelectedPlatform(p)}
+                            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                              rivalSelectedPlatform === p
+                                ? 'bg-[#ffcc29] text-black'
+                                : isDarkMode ? 'bg-[#161b22] text-white border border-slate-700/50' : 'bg-white text-slate-700 border border-slate-200'
+                            }`}
+                          >
+                            {p.charAt(0).toUpperCase() + p.slice(1)}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  </div>
 
-                  {/* Schedule (Optional) */}
-                  <div>
-                    <p className={`text-xs font-medium ${theme.textMuted} mb-2`}>SCHEDULE (OPTIONAL)</p>
-                    <div className="flex gap-2">
-                      <input
-                        type="date"
-                        value={rivalScheduleDate}
-                        onChange={(e) => setRivalScheduleDate(e.target.value)}
-                        className={`flex-1 p-2.5 rounded-lg text-sm ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white' : 'bg-slate-50 border-slate-200 text-slate-800'} border`}
+                    {/* Caption */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className={`block text-xs font-semibold uppercase tracking-wide ${theme.textSecondary}`}>Caption</label>
+                        <button
+                          onClick={handleCopyCaption}
+                          className={`flex items-center gap-1 text-xs ${theme.textMuted} hover:text-[#ffcc29] transition-colors`}
+                        >
+                          <Copy className="w-3 h-3" /> Copy
+                        </button>
+                      </div>
+                      <textarea
+                        value={editedCaption}
+                        onChange={(e) => setEditedCaption(e.target.value)}
+                        className={`w-full p-3 rounded-lg text-sm ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white' : 'bg-slate-50 border-slate-200 text-slate-800'} border focus:ring-2 focus:ring-[#ffcc29]/50 focus:border-[#ffcc29] transition-all resize-none`}
+                        rows={5}
                       />
+                    </div>
+
+                    {/* Hashtags */}
+                    <div>
+                      <label className={`block text-xs font-semibold uppercase tracking-wide mb-2 ${theme.textSecondary}`}>Hashtags</label>
                       <input
-                        type="time"
-                        value={rivalScheduleTime}
-                        onChange={(e) => setRivalScheduleTime(e.target.value)}
-                        className={`w-32 p-2.5 rounded-lg text-sm ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white' : 'bg-slate-50 border-slate-200 text-slate-800'} border`}
+                        type="text"
+                        value={editedHashtags}
+                        onChange={(e) => setEditedHashtags(e.target.value)}
+                        className={`w-full p-3 rounded-lg text-sm ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white' : 'bg-slate-50 border-slate-200 text-slate-800'} border focus:ring-2 focus:ring-[#ffcc29]/50 focus:border-[#ffcc29] transition-all`}
+                        placeholder="#trending #viral #marketing"
                       />
+                      <p className={`text-xs ${theme.textMuted} mt-1`}>
+                        {editedHashtags.split(/[\s#]+/).filter(t => t.trim()).length} hashtags
+                      </p>
+                    </div>
+
+                    {/* Schedule (Optional) */}
+                    <div>
+                      <label className={`block text-xs font-semibold uppercase tracking-wide mb-2 ${theme.textSecondary}`}>Schedule (Optional)</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="date"
+                          value={rivalScheduleDate}
+                          onChange={(e) => setRivalScheduleDate(e.target.value)}
+                          className={`flex-1 p-2.5 rounded-lg text-sm ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white' : 'bg-slate-50 border-slate-200 text-slate-800'} border`}
+                        />
+                        <input
+                          type="time"
+                          value={rivalScheduleTime}
+                          onChange={(e) => setRivalScheduleTime(e.target.value)}
+                          className={`w-32 p-2.5 rounded-lg text-sm ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white' : 'bg-slate-50 border-slate-200 text-slate-800'} border`}
+                        />
+                      </div>
+                      <p className={`text-xs ${theme.textMuted} mt-1`}>
+                        <Lightbulb className="w-3 h-3 inline mr-1 text-[#ffcc29]" />
+                        Best time for {rivalSelectedPlatform}: {rivalSelectedPlatform === 'linkedin' ? '9:30 AM IST' : rivalSelectedPlatform === 'instagram' ? '11:00 AM IST' : '10:00 AM IST'}
+                      </p>
                     </div>
                   </div>
                 </div>
