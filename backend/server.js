@@ -2,6 +2,8 @@ require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const path = require('path');
 
 // ============================================
@@ -77,33 +79,45 @@ const snapshotScheduler = require('./services/snapshotScheduler');
 
 const app = express();
 
-// CORS configuration for production and development
+// ============================================
+// Security: Trust Proxy (for Render / Cloudflare)
+// ============================================
+if (process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+}
+
+// ============================================
+// Security: Helmet — Secure HTTP Headers
+// ============================================
+app.use(helmet({
+  contentSecurityPolicy: false, // Disabled — frontend is served separately
+  crossOriginEmbedderPolicy: false, // Allow loading external images/resources
+}));
+
+// ============================================
+// Security: CORS — Locked to Allowed Origins
+// ============================================
 const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:5173',
   'http://127.0.0.1:3000',
   'http://127.0.0.1:5173',
   'https://marketing-agent-nebula.onrender.com',
-  'https://www.marketing-agent-nebula.onrender.com'
+  'https://www.marketing-agent-nebula.onrender.com',
+  'https://nebulaa.ai',
+  'https://www.nebulaa.ai',
+  'https://demo.nebulaa.ai',
+  'https://www.demo.nebulaa.ai'
 ];
-
-// In production on Render, trust proxy for proper HTTPS handling
-if (process.env.NODE_ENV === 'production') {
-  app.set('trust proxy', 1);
-}
 
 app.use(cors({
   origin: function(origin, callback) {
     // Allow requests with no origin (mobile apps, Postman, same-origin requests)
     if (!origin) return callback(null, true);
-    
-    // Check if origin is in allowed list
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
-    } else if (process.env.NODE_ENV === 'production') {
-      // In production, be more permissive for Render deployment
-      callback(null, true);
     } else {
+      console.warn(`⛔ CORS blocked origin: ${origin}`);
       callback(new Error('Not allowed by CORS'));
     }
   },
@@ -111,6 +125,49 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
+
+// ============================================
+// Security: Rate Limiting
+// ============================================
+// General API rate limit — 100 requests per 15 minutes per IP
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later.' }
+});
+
+// Auth rate limit — 20 requests per 15 minutes (login, register, OTP)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many authentication attempts, please try again later.' }
+});
+
+// AI generation rate limit — 30 requests per 15 minutes (expensive API calls)
+const aiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many AI generation requests, please try again later.' }
+});
+
+// Social media posting rate limit — 30 requests per 15 minutes
+const socialLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many social media requests, please try again later.' }
+});
+
+// Apply general limiter to all API routes
+app.use('/api', generalLimiter);
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
@@ -120,13 +177,13 @@ app.use((req, res, next) => {
   next();
 });
 
-// Routes - Core
-app.use('/api/auth', authRoutes);
-app.use('/api/social', socialRoutes);
-app.use('/api/chat', chatRoutes);
+// Routes - Core (with specific rate limiters on sensitive routes)
+app.use('/api/auth', authLimiter, authRoutes);
+app.use('/api/social', socialLimiter, socialRoutes);
+app.use('/api/chat', aiLimiter, chatRoutes);
 app.use('/api/support', supportRoutes);
 app.use('/api/dashboard', dashboardRoutes);
-app.use('/api/campaigns', campaignRoutes);
+app.use('/api/campaigns', aiLimiter, campaignRoutes);
 app.use('/api/competitors', competitorRoutes);
 app.use('/api/reminders', reminderRoutes);
 
