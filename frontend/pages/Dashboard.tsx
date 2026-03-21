@@ -4146,7 +4146,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
             {/* Schedule Modal - Quick Post Scheduler */}
             {showScheduleModal && selectedSlot && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => { setShowScheduleModal(false); setCalendarAIReady(false); setCalendarRefReady(false); }}>
-                    <div className={`${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-slate-200'} border rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200`} onClick={e => e.stopPropagation()}>
+                    <div className={`${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-slate-200'} border rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200`} onClick={e => e.stopPropagation()}>
                         {/* Header */}
                         <div className={`sticky top-0 z-10 ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-slate-200'} border-b px-6 py-4`}>
                             <div className="flex justify-between items-center">
@@ -4169,8 +4169,8 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                             <button
                               onClick={() => setScheduleForm(prev => ({ ...prev, type: 'campaign' }))}
                               className={`flex-1 py-2.5 px-4 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-2 ${
-                                scheduleForm.type === 'campaign' 
-                                  ? 'bg-[#ffcc29]/20 text-[#ffcc29] border-2 border-[#ffcc29]' 
+                                scheduleForm.type === 'campaign'
+                                  ? 'bg-[#ffcc29]/20 text-[#ffcc29] border-2 border-[#ffcc29]'
                                   : `${isDarkMode ? 'bg-[#161b22] text-slate-400 border-[#ffcc29]/10' : 'bg-slate-100 text-slate-600 border-transparent'} border-2 hover:border-[#ffcc29]/50`
                               }`}
                             >
@@ -4179,8 +4179,8 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                             <button
                               onClick={() => setScheduleForm(prev => ({ ...prev, type: 'reminder' }))}
                               className={`flex-1 py-2.5 px-4 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-2 ${
-                                scheduleForm.type === 'reminder' 
-                                  ? 'bg-purple-500/20 text-purple-500 border-2 border-purple-400' 
+                                scheduleForm.type === 'reminder'
+                                  ? 'bg-purple-500/20 text-purple-500 border-2 border-purple-400'
                                   : `${isDarkMode ? 'bg-[#161b22] text-slate-400 border-[#ffcc29]/10' : 'bg-slate-100 text-slate-600 border-transparent'} border-2 hover:border-purple-300`
                               }`}
                             >
@@ -4188,105 +4188,26 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                             </button>
                           </div>
                           )}
-                          
-                          {/* Date & Time - compact */}
-                          <div className={`p-3 rounded-xl ${isDarkMode ? 'bg-[#161b22] border-[#ffcc29]/10' : 'bg-slate-50 border-slate-200'} border`}>
-                            <div className="grid grid-cols-2 gap-3">
-                              <div>
-                                <label className={`text-[10px] font-semibold ${theme.textMuted} uppercase`}>Date</label>
-                                <input
-                                  type="date"
-                                  value={selectedSlot.date.toISOString().split('T')[0]}
-                                  onChange={(e) => {
-                                    const newDate = new Date(e.target.value);
-                                    newDate.setHours(selectedSlot.hour, selectedSlot.minute, 0, 0);
-                                    setSelectedSlot({ date: newDate, hour: selectedSlot.hour, minute: selectedSlot.minute });
-                                  }}
-                                  className={`w-full mt-1 px-3 py-2 border rounded-lg text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
-                                />
-                              </div>
-                              <div>
-                                <label className={`text-[10px] font-semibold ${theme.textMuted} uppercase`}>Time</label>
-                                <div className="flex gap-1.5 mt-1">
-                                  <input type="number" min="1" max="12"
-                                    value={(() => { const h = selectedSlot.hour; return h === 0 ? 12 : h > 12 ? h - 12 : h; })()}
-                                    onChange={(e) => {
-                                      let hour12 = parseInt(e.target.value) || 1;
-                                      if (hour12 < 1) hour12 = 1; if (hour12 > 12) hour12 = 12;
-                                      const isPM = selectedSlot.hour >= 12;
-                                      let hour24 = hour12;
-                                      if (isPM && hour12 !== 12) hour24 = hour12 + 12;
-                                      if (!isPM && hour12 === 12) hour24 = 0;
-                                      const newDate = new Date(selectedSlot.date); newDate.setHours(hour24, selectedSlot.minute, 0, 0);
-                                      setSelectedSlot({ date: newDate, hour: hour24, minute: selectedSlot.minute });
-                                    }}
-                                    className={`w-12 px-1.5 py-2 border rounded-lg text-sm text-center focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
-                                  />
-                                  <span className={`flex items-center text-xs ${theme.text}`}>:</span>
-                                  <input type="number" min="0" max="59"
-                                    value={String(selectedSlot.minute).padStart(2, '0')}
-                                    onChange={(e) => {
-                                      let minute = parseInt(e.target.value) || 0;
-                                      if (minute < 0) minute = 0; if (minute > 59) minute = 59;
-                                      const newDate = new Date(selectedSlot.date); newDate.setHours(selectedSlot.hour, minute, 0, 0);
-                                      setSelectedSlot({ date: newDate, hour: selectedSlot.hour, minute });
-                                    }}
-                                    className={`w-12 px-1.5 py-2 border rounded-lg text-sm text-center focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
-                                  />
-                                  <select value={selectedSlot.hour >= 12 ? 'PM' : 'AM'}
-                                    onChange={(e) => {
-                                      const newPeriod = e.target.value;
-                                      const currentPeriod = selectedSlot.hour >= 12 ? 'PM' : 'AM';
-                                      if (newPeriod !== currentPeriod) {
-                                        let newHour = selectedSlot.hour;
-                                        if (newPeriod === 'PM' && selectedSlot.hour < 12) newHour += 12;
-                                        else if (newPeriod === 'AM' && selectedSlot.hour >= 12) newHour -= 12;
-                                        const newDate = new Date(selectedSlot.date); newDate.setHours(newHour, selectedSlot.minute, 0, 0);
-                                        setSelectedSlot({ date: newDate, hour: newHour, minute: selectedSlot.minute });
-                                      }
-                                    }}
-                                    className={`w-14 px-0.5 py-2 border rounded-lg text-xs text-center focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
-                                  >
-                                    <option value="AM">AM</option>
-                                    <option value="PM">PM</option>
-                                  </select>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                          
-                          {/* Post Name */}
+
+                          {/* Two-column layout for campaign mode */}
+                          {scheduleForm.type === 'campaign' ? (
+                          <>
+                          {/* Post Title */}
                           <div>
                             <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>
-                              {scheduleForm.type === 'reminder' ? 'Reminder Title' : 'Post Title'} *
+                              Post Title *
                             </label>
                             <input
                               type="text"
                               value={scheduleForm.title}
                               onChange={(e) => setScheduleForm(prev => ({ ...prev, title: e.target.value }))}
-                              placeholder={scheduleForm.type === 'reminder' ? 'e.g., Review analytics report' : 'e.g., Weekend Sale Announcement'}
+                              placeholder="e.g., Weekend Sale Announcement"
                               className={`w-full mt-1.5 px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
                             />
                           </div>
-                          
-                          {/* Campaign-only fields */}
-                          {scheduleForm.type === 'campaign' && (
-                            <>
-                              {/* Platform */}
-                              <div>
-                                <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>Platform</label>
-                                <select
-                                  value={scheduleForm.platform}
-                                  onChange={(e) => setScheduleForm(prev => ({ ...prev, platform: e.target.value }))}
-                                  className={`w-full mt-1.5 px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
-                                >
-                                  <option value="instagram">📸 Instagram</option>
-                                  <option value="facebook">📘 Facebook</option>
-                                  <option value="twitter">🐦 Twitter/X</option>
-                                  <option value="linkedin">💼 LinkedIn</option>
-                                  <option value="youtube">▶️ YouTube</option>
-                                </select>
-                              </div>
+                          <div className="grid grid-cols-2 gap-6">
+                            {/* LEFT COLUMN — Image */}
+                            <div className="space-y-4">
                               
                               {/* Image / Poster — 3 Tabs: Upload, AI Generate, From Reference */}
                               <div>
@@ -4608,16 +4529,53 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                 )}
                               </div>
                               
+                            </div>
+
+                            {/* RIGHT COLUMN — Platform, Caption, Hashtags, Schedule */}
+                            <div className="space-y-4">
+                              {/* Platform - multi-select buttons */}
+                              <div>
+                                <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>Platform</label>
+                                <div className="flex flex-wrap gap-2 mt-1.5">
+                                  {['instagram', 'facebook', 'twitter', 'linkedin'].map(p => {
+                                    const isConnected = followerData.some(f => f.platform.toLowerCase() === p || (p === 'twitter' && f.platform.toLowerCase() === 'x') || (p === 'x' && f.platform.toLowerCase() === 'twitter'));
+                                    const isSelected = scheduleForm.platform.split(',').filter(Boolean).includes(p);
+                                    const label = p === 'twitter' ? 'Twitter' : p.charAt(0).toUpperCase() + p.slice(1);
+                                    return (
+                                      <button
+                                        key={p}
+                                        onClick={() => {
+                                          if (!isConnected) return;
+                                          const current = scheduleForm.platform.split(',').filter(Boolean);
+                                          const updated = isSelected ? current.filter(x => x !== p) : [...current, p];
+                                          if (updated.length > 0) setScheduleForm(prev => ({ ...prev, platform: updated.join(',') }));
+                                        }}
+                                        disabled={!isConnected}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                                          !isConnected
+                                            ? `${isDarkMode ? 'bg-slate-800/50 text-slate-600' : 'bg-slate-100 text-slate-400'} cursor-not-allowed opacity-60`
+                                            : isSelected
+                                              ? 'bg-[#ffcc29]/20 text-[#ffcc29] border border-[#ffcc29]'
+                                              : `${isDarkMode ? 'bg-[#161b22] text-slate-400 border-slate-700/50' : 'bg-slate-100 text-slate-600 border-slate-200'} border hover:border-[#ffcc29]/50`
+                                        }`}
+                                      >
+                                        {label}{!isConnected && ' (N/A)'}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+
                               {/* Caption with AI Generate Button */}
                               <div>
                                 <div className="flex items-center justify-between">
                                   <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>Caption</label>
-                                  <button 
+                                  <button
                                     onClick={handleAIGenerateCaption}
                                     disabled={aiGenerating || (!scheduleImage && !generatedPoster)}
                                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                                       (scheduleImage || generatedPoster)
-                                        ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600 shadow-sm' 
+                                        ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600 shadow-sm'
                                         : `${isDarkMode ? 'bg-slate-800 text-slate-500' : 'bg-slate-100 text-slate-400'} cursor-not-allowed`
                                     }`}
                                     title={(!scheduleImage && !generatedPoster) ? 'Upload an image first to generate caption' : 'Generate caption & hashtags from image'}
@@ -4634,8 +4592,8 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                   className={`w-full mt-1.5 px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] resize-none ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
                                 />
                               </div>
-                              
-                              {/* Hashtags (AI-filled or manual edit) */}
+
+                              {/* Hashtags */}
                               <div>
                                 <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>Hashtags</label>
                                 <input
@@ -4645,11 +4603,86 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                   placeholder={aiGenerating ? 'Generating...' : '#marketing #brand #growth'}
                                   className={`w-full mt-1.5 px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
                                 />
-                                <p className={`text-[10px] mt-1 ${theme.textMuted}`}>Auto-generated or edit manually</p>
                               </div>
-                            </>
-                          )}
-                          
+
+                              {/* Schedule (Optional) */}
+                              <div>
+                                <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>Schedule (Optional)</label>
+                                <div className="grid grid-cols-2 gap-3 mt-1.5">
+                                  <input
+                                    type="date"
+                                    value={selectedSlot.date.toISOString().split('T')[0]}
+                                    onChange={(e) => {
+                                      const newDate = new Date(e.target.value);
+                                      newDate.setHours(selectedSlot.hour, selectedSlot.minute, 0, 0);
+                                      setSelectedSlot({ date: newDate, hour: selectedSlot.hour, minute: selectedSlot.minute });
+                                    }}
+                                    className={`px-3 py-2 border rounded-lg text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
+                                  />
+                                  <div className="flex gap-1.5">
+                                    <input type="number" min="1" max="12"
+                                      value={(() => { const h = selectedSlot.hour; return h === 0 ? 12 : h > 12 ? h - 12 : h; })()}
+                                      onChange={(e) => {
+                                        let hour12 = parseInt(e.target.value) || 1;
+                                        if (hour12 < 1) hour12 = 1; if (hour12 > 12) hour12 = 12;
+                                        const isPM = selectedSlot.hour >= 12;
+                                        let hour24 = hour12;
+                                        if (isPM && hour12 !== 12) hour24 = hour12 + 12;
+                                        if (!isPM && hour12 === 12) hour24 = 0;
+                                        const newDate = new Date(selectedSlot.date); newDate.setHours(hour24, selectedSlot.minute, 0, 0);
+                                        setSelectedSlot({ date: newDate, hour: hour24, minute: selectedSlot.minute });
+                                      }}
+                                      className={`w-12 px-1.5 py-2 border rounded-lg text-sm text-center focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
+                                    />
+                                    <span className={`flex items-center text-xs ${theme.text}`}>:</span>
+                                    <input type="number" min="0" max="59"
+                                      value={String(selectedSlot.minute).padStart(2, '0')}
+                                      onChange={(e) => {
+                                        let minute = parseInt(e.target.value) || 0;
+                                        if (minute < 0) minute = 0; if (minute > 59) minute = 59;
+                                        const newDate = new Date(selectedSlot.date); newDate.setHours(selectedSlot.hour, minute, 0, 0);
+                                        setSelectedSlot({ date: newDate, hour: selectedSlot.hour, minute });
+                                      }}
+                                      className={`w-12 px-1.5 py-2 border rounded-lg text-sm text-center focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
+                                    />
+                                    <select value={selectedSlot.hour >= 12 ? 'PM' : 'AM'}
+                                      onChange={(e) => {
+                                        const newPeriod = e.target.value;
+                                        const currentPeriod = selectedSlot.hour >= 12 ? 'PM' : 'AM';
+                                        if (newPeriod !== currentPeriod) {
+                                          let newHour = selectedSlot.hour;
+                                          if (newPeriod === 'PM' && selectedSlot.hour < 12) newHour += 12;
+                                          else if (newPeriod === 'AM' && selectedSlot.hour >= 12) newHour -= 12;
+                                          const newDate = new Date(selectedSlot.date); newDate.setHours(newHour, selectedSlot.minute, 0, 0);
+                                          setSelectedSlot({ date: newDate, hour: newHour, minute: selectedSlot.minute });
+                                        }
+                                      }}
+                                      className={`w-14 px-0.5 py-2 border rounded-lg text-xs text-center focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
+                                    >
+                                      <option value="AM">AM</option>
+                                      <option value="PM">PM</option>
+                                    </select>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          </>
+                          ) : (
+                          <>
+                          {/* Reminder title */}
+                          <div>
+                            <label className={`text-xs font-semibold ${theme.textSecondary} uppercase tracking-wide`}>
+                              Reminder Title *
+                            </label>
+                            <input
+                              type="text"
+                              value={scheduleForm.title}
+                              onChange={(e) => setScheduleForm(prev => ({ ...prev, title: e.target.value }))}
+                              placeholder="e.g., Review analytics report"
+                              className={`w-full mt-1.5 px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:border-[#ffcc29] ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
+                            />
+                          </div>
                           {/* Reminder-only fields */}
                           {scheduleForm.type === 'reminder' && (
                             <>
@@ -4679,8 +4712,10 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                               </div>
                             </>
                           )}
+                          </>
+                          )}
                         </div>
-                        
+
                         {/* Footer */}
                         <div className={`sticky bottom-0 ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-slate-200'} border-t px-6 py-4`}>
                             <div className="flex gap-3">
@@ -4700,13 +4735,13 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                     <Eye className="w-4 h-4" /> Preview
                                   </button>
                                 )}
-                                <button 
+                                <button
                                   onClick={isEditMode ? handleUpdateCampaign : handleCreateEvent}
                                   disabled={!scheduleForm.title.trim() || loading}
                                   className="flex-1 py-3 bg-[#ffcc29] hover:bg-[#e6b825] disabled:bg-slate-300 disabled:cursor-not-allowed text-[#070A12] text-sm font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
                                 >
-                                    {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                                    {isEditMode ? 'Update' : (scheduleForm.type === 'reminder' ? 'Set Reminder' : 'Schedule Post')}
+                                    {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : isEditMode ? <Check className="w-4 h-4" /> : scheduleForm.type === 'reminder' ? <Bell className="w-4 h-4" /> : <Send className="w-4 h-4" />}
+                                    {isEditMode ? 'Update' : (scheduleForm.type === 'reminder' ? 'Set Reminder' : 'Post Now')}
                                 </button>
                                 <button 
                                   onClick={() => { setShowScheduleModal(false); setIsEditMode(false); setEditingCampaign(null); setCalendarAIReady(false); setCalendarRefReady(false); }} 
