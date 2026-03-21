@@ -3412,7 +3412,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
     const [audienceDescription, setAudienceDescription] = useState('');
     
     // Step 3: Content Preferences
-    const [platforms, setPlatforms] = useState<string[]>(['instagram']);
+    const [platforms, setPlatforms] = useState<string[]>(connectedPlatforms.length > 0 ? [connectedPlatforms[0]] : []);
     const [contentTone, setContentTone] = useState<'professional' | 'casual' | 'humorous' | 'inspirational' | 'educational'>('professional');
     const [contentType, setContentType] = useState<'image' | 'video' | 'carousel' | 'story'>('image');
     const [selectedAspectRatio, setSelectedAspectRatio] = useState<string>('1:1');
@@ -3520,6 +3520,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
 
         if (!reader) throw new Error('No response body');
 
+        let currentEvent = '';
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
@@ -3528,7 +3529,6 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
           const lines = buffer.split('\n');
           buffer = lines.pop() || '';
 
-          let currentEvent = '';
           for (const line of lines) {
             if (line.startsWith('event: ')) {
               currentEvent = line.slice(7).trim();
