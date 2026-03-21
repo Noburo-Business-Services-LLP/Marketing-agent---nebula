@@ -5469,6 +5469,62 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                         {eventScheduling ? <Loader2 className="w-4 h-4 animate-spin" /> : <CalendarIcon className="w-4 h-4" />}
                                         Schedule Post
                                     </button>
+                                    <button
+                                        onClick={async () => {
+                                            if (!eventPostImageUrl) {
+                                                alert('Please wait for image generation to complete');
+                                                return;
+                                            }
+                                            const connectedSelected = eventSelectedPlatform.filter(p =>
+                                                followerData.some(f => f.platform.toLowerCase() === p || (p === 'twitter' && f.platform.toLowerCase() === 'x') || (p === 'x' && f.platform.toLowerCase() === 'twitter'))
+                                            );
+                                            if (connectedSelected.length === 0) {
+                                                alert('Please select at least one connected platform');
+                                                return;
+                                            }
+                                            setEventScheduling(true);
+                                            try {
+                                                const createResult = await apiService.createCampaign({
+                                                    name: `${selectedHoliday.name} Post`,
+                                                    objective: 'engagement',
+                                                    platforms: connectedSelected,
+                                                    status: 'draft',
+                                                    creative: {
+                                                        type: 'image',
+                                                        textContent: eventPostCaption,
+                                                        imageUrls: eventPostImageUrl ? [eventPostImageUrl] : [],
+                                                        captions: eventPostCaption,
+                                                        hashtags: eventPostHashtags
+                                                    }
+                                                });
+                                                const campaign = createResult.campaign;
+                                                if (campaign?._id) {
+                                                    const publishResult = await apiService.publishCampaign(
+                                                        campaign._id,
+                                                        connectedSelected
+                                                    );
+                                                    if (publishResult.success) {
+                                                        alert('Post published successfully!');
+                                                    } else {
+                                                        alert(publishResult.message || 'Failed to publish');
+                                                    }
+                                                }
+                                                setShowEventPostCreator(false);
+                                                setSelectedHoliday(null);
+                                                if (onCampaignCreated) onCampaignCreated();
+                                            } catch (error) {
+                                                console.error('Failed to post:', error);
+                                                alert('Failed to post. Please try again.');
+                                            } finally {
+                                                setEventScheduling(false);
+                                            }
+                                        }}
+                                        disabled={eventScheduling || !eventPostImageUrl}
+                                        className="flex-1 py-3 bg-[#ffcc29] hover:bg-[#e6b825] text-black font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
+                                    >
+                                        {eventScheduling ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                                        Post Now
+                                    </button>
                                 </div>
                             </div>
                         ) : (
