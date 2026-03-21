@@ -669,7 +669,10 @@ const Campaigns: React.FC = () => {
         const res = await apiService.getSocials();
         const connected = (res.connections || [])
           .filter((c: any) => c.connected)
-          .map((c: any) => c.platform.toLowerCase());
+          .map((c: any) => {
+            const p = c.platform.toLowerCase();
+            return p === 'x' ? 'twitter' : p;
+          });
         setConnectedPlatforms(connected);
       } catch (e) {
         console.error('Failed to load socials:', e);
