@@ -3987,7 +3987,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                 {/* Scrollable Body: Time Column + Day Grid */}
                 <div className="flex flex-1 overflow-y-auto" ref={scrollBodyRef}>
                   {/* Time Column */}
-                  <div className={`flex-shrink-0 w-16 border-r ${isDarkMode ? 'border-slate-700/50 bg-[#0d1117]' : 'border-slate-200 bg-[#f5f5f5]'}`}>
+                  <div className={`flex-shrink-0 w-16 border-r ${isDarkMode ? 'border-slate-700/50 bg-[#0d1117]' : 'border-slate-200 bg-[#f5f5f5]'}`} style={{ minHeight: `${timeSlots.length * 40}px` }}>
                     {timeSlots.map(hour => (
                         <div key={hour} className={`h-10 border-b ${isDarkMode ? 'border-[#ffcc29]/10' : 'border-[#ededed]'} pr-2 flex items-center justify-end`}>
                             <span className={`text-xs ${theme.textMuted}`}>
@@ -4000,16 +4000,17 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                   {/* Days Grid */}
                   <div className="flex-1">
                     {/* Time Grid */}
-                    <div className="flex relative">
+                    <div className="flex relative" style={{ minHeight: `${timeSlots.length * 40}px` }}>
                         {weekDays.map((day, dayIdx) => {
                             const dayEvents = getEventsForDay(day);
                             const today = isToday(day);
-                            
+                            const isWeekend = day.getDay() === 0 || day.getDay() === 6;
+
                             return (
-                                <div 
-                                    key={dayIdx} 
+                                <div
+                                    key={dayIdx}
                                     className={`flex-1 border-r ${isDarkMode ? 'border-[#ffcc29]/10' : 'border-[#ededed]'} last:border-r-0 relative ${
-                                        today ? `${isDarkMode ? 'bg-[#ffcc29]/10' : 'bg-[#ffcc29]/5'}` : ''
+                                        today ? `${isDarkMode ? 'bg-[#ffcc29]/10' : 'bg-[#ffcc29]/5'}` : isWeekend ? `${isDarkMode ? 'bg-slate-800/30' : 'bg-[#fffbeb]'}` : ''
                                     }`}
                                 >
                                     {timeSlots.map(hour => {
