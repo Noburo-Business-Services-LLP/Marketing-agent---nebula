@@ -514,11 +514,11 @@ Requirements:
 }
 
 // Generate hashtags (Gemini)
-async function generateHashtags(content, platform, count = 15, options = {}) {
+async function generateHashtags(content, platform, count = 4, options = {}) {
   return generateWithLLM({
     provider: 'gemini',
     taskType: 'hashtag_generation',
-    prompt: `Generate ${count} relevant hashtags for this ${platform} content:
+    prompt: `Generate exactly 4 relevant hashtags for this ${platform} content:
 
 ${content}
 

@@ -318,7 +318,7 @@ INSTRUCTIONS:
 1. Create exactly ${totalPosts} posts. Each post MUST have a DIFFERENT content angle. Distribute across these themes: problem/solution (2-3 posts), social proof/testimonial (1-2 posts), educational/tips (2-3 posts), behind-the-scenes/story (1-2 posts), promotional/CTA (1-2 posts), engagement/question (1 post). Adjust distribution based on total count.
 2. Captions must be platform-native: ${platforms.includes('twitter') ? 'Twitter posts under 280 chars.' : ''} ${platforms.includes('instagram') ? 'Instagram captions with hook in first line.' : ''} ${platforms.includes('linkedin') ? 'LinkedIn posts that open with a bold statement or question.' : ''} Use natural language, not corporate jargon.
 3. Each caption should open with a strong hook (question, bold claim, statistic, or story opener) — the first line must make someone stop scrolling.
-4. Include 3-5 relevant hashtags per post. Mix broad and niche hashtags. Never use generic tags like #marketing or #business alone.
+4. Include exactly 4 relevant hashtags per post. Mix broad and niche hashtags. Never use generic tags like #marketing or #business alone.
 5. Include appropriate emojis but don't overdo it (2-4 per post max).
 6. The imageDescription for each post should describe a PROFESSIONAL AD CREATIVE — describe the visual style (photography, illustration, graphic design), subjects, colors, mood, lighting, and composition. Do NOT mention aspect ratios, post numbers, "Brand" labels, or any metadata. Do NOT use placeholder text like [Date] or [Name]. Describe it as if briefing a professional designer.
 7. The key message should influence the overall campaign narrative but each post should express it differently — through stories, statistics, questions, tips, or social proof. NEVER copy-paste the same message across posts.
@@ -1133,7 +1133,7 @@ Requirements:
 1. Write a catchy, engaging caption that matches the image content
 2. Include relevant emojis
 3. Add a clear call-to-action
-4. Include 5-8 relevant hashtags at the end
+4. Include exactly 4 relevant hashtags at the end
 5. Keep it concise but impactful (2-4 sentences + hashtags)
 6. Match the tone appropriate for ${platform || 'Instagram'}
 
@@ -1200,7 +1200,7 @@ Return ONLY the caption text with hashtags. No JSON, no explanations.`;
     res.json({
       success: true,
       caption: caption.trim(),
-      hashtags: hashtags,
+      hashtags: hashtags.slice(0, 4),
       creditsRemaining: captionCreditResult.creditsRemaining
     });
     

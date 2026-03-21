@@ -344,11 +344,11 @@ function parseGeminiJSON(text) {
 // Platform-specific caption rules for AI prompt injection
 function getPlatformCaptionRules(platform) {
   const rules = {
-    'twitter': '- STRICT 280 character limit (including hashtags). Keep it punchy and concise.\n- Use 1-3 hashtags MAX, placed at the end.\n- No line breaks or long paragraphs — single impactful statement.\n- Threads are OK but each tweet must be under 280 chars.',
-    'x': '- STRICT 280 character limit (including hashtags). Keep it punchy and concise.\n- Use 1-3 hashtags MAX, placed at the end.\n- No line breaks or long paragraphs — single impactful statement.',
-    'instagram': '- Caption can be up to 2200 characters but keep it engaging (150-300 chars ideal for feed).\n- Use 5-15 relevant hashtags.\n- Include line breaks for readability.\n- Start with a hook in the first line (visible before "more").\n- Use emojis generously.',
-    'linkedin': '- Professional tone, 150-300 words ideal.\n- No excessive emojis (1-2 max).\n- Use line breaks every 1-2 sentences for readability.\n- Include a thought-provoking question or CTA at the end.\n- 3-5 hashtags max, lowercase preferred.',
-    'facebook': '- Medium length (100-250 chars ideal for engagement).\n- Conversational and relatable tone.\n- 1-3 hashtags max.\n- Include a question or CTA to drive comments.\n- Emojis OK but moderate.',
+    'twitter': '- STRICT 280 character limit (including hashtags). Keep it punchy and concise.\n- Use exactly 4 hashtags, placed at the end.\n- No line breaks or long paragraphs — single impactful statement.\n- Threads are OK but each tweet must be under 280 chars.',
+    'x': '- STRICT 280 character limit (including hashtags). Keep it punchy and concise.\n- Use exactly 4 hashtags, placed at the end.\n- No line breaks or long paragraphs — single impactful statement.',
+    'instagram': '- Caption can be up to 2200 characters but keep it engaging (150-300 chars ideal for feed).\n- Use exactly 4 relevant hashtags.\n- Include line breaks for readability.\n- Start with a hook in the first line (visible before "more").\n- Use emojis generously.',
+    'linkedin': '- Professional tone, 150-300 words ideal.\n- No excessive emojis (1-2 max).\n- Use line breaks every 1-2 sentences for readability.\n- Include a thought-provoking question or CTA at the end.\n- Exactly 4 hashtags, lowercase preferred.',
+    'facebook': '- Medium length (100-250 chars ideal for engagement).\n- Conversational and relatable tone.\n- Exactly 4 hashtags.\n- Include a question or CTA to drive comments.\n- Emojis OK but moderate.',
   };
   return rules[platform.toLowerCase()] || rules['instagram'];
 }
@@ -2148,7 +2148,7 @@ The image MUST visually one-up the competitor. Describe an image that:
 Return ONLY valid JSON (no markdown, no explanations):
 {
   "caption": "Your SAVAGE yet professional caption that mocks ${competitorName} while making ${brandContext.companyName} look superior. Include emojis and a killer CTA.",
-  "hashtags": ["#YourBrand", "#Trending", "#Niche", "#Industry", "#Viral"],
+  "hashtags": ["#YourBrand", "#Trending", "#Niche", "#Industry"],
   "imageDescription": "Ultra-detailed image description: [Exact scene, subjects, products, colors, mood, lighting, style] that directly competes with ${competitorName}'s ${contentThemes[0]} content and showcases ${brandContext.companyName}'s superiority in ${brandContext.industry}"
 }`;
 
@@ -2186,7 +2186,7 @@ Return ONLY valid JSON (no markdown, no explanations):
     
     return {
       caption: parsed.caption,
-      hashtags: cleanHashtags,
+      hashtags: cleanHashtags.slice(0, 4),
       imageUrl,
       imagePrompt
     };
@@ -2262,7 +2262,7 @@ Create ${count} DISTINCTLY DIFFERENT variations. Each should test a different ap
 For EACH variation, provide:
 - A unique name (e.g., "Emotional Story", "Bold CTA", "Curiosity Hook")
 - Caption (matching brand voice but with the specific angle)
-- Hashtags (5-8 relevant hashtags)
+- Hashtags (exactly 4 relevant hashtags)
 - Call to action
 - Predicted engagement metrics (score 0-100 for each):
   * engagementRate: Likelihood of likes/comments
@@ -2800,7 +2800,7 @@ Industry: ${industry}
 === GENERATE ===
 Create the following:
 1. A viral-worthy caption (with emojis, line breaks for readability)
-2. 15-20 relevant hashtags (mix of popular and niche)
+2. Exactly 4 relevant hashtags (mix of popular and niche)
 3. A detailed image prompt that could be used with AI image generators
 4. Trending audio/music suggestions for reels (actual song names)
 5. Best posting times for each platform
@@ -2867,6 +2867,9 @@ Return ONLY valid JSON:
       }
     }
     
+    if (Array.isArray(parsed.hashtags)) {
+      parsed.hashtags = parsed.hashtags.slice(0, 4);
+    }
     return {
       ...parsed,
       suggestion: suggestion,
@@ -2876,7 +2879,7 @@ Return ONLY valid JSON:
     console.error('Post generation error:', error);
     return {
       caption: suggestion.suggestedCaption || `${suggestion.title}\n\n${suggestion.description}`,
-      hashtags: suggestion.trendingTopics || [],
+      hashtags: (suggestion.trendingTopics || []).slice(0, 4),
       imagePrompt: `Professional ${industry} marketing image for: ${suggestion.title}`,
       error: error.message
     };
@@ -3040,7 +3043,7 @@ Create content that:
 === GENERATE ===
 Create:
 1. A heartfelt, engaging caption (with emojis, line breaks, emotional hooks)
-2. 15-20 relevant hashtags (event-specific + brand + trending)
+2. Exactly 4 relevant hashtags (event-specific + brand + trending)
 3. A detailed AI image prompt that captures the event's spirit with brand elements
 4. Trending audio suggestions for reels
 5. Best posting times
@@ -3109,6 +3112,9 @@ Return ONLY valid JSON:
       }
     }
     
+    if (Array.isArray(parsed.hashtags)) {
+      parsed.hashtags = parsed.hashtags.slice(0, 4);
+    }
     return {
       ...parsed,
       event: event,
