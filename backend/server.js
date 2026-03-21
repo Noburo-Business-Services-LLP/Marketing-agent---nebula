@@ -4,6 +4,9 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const mongoSanitize = require('express-mongo-sanitize');
+const hpp = require('hpp');
+const sanitizeHtml = require('sanitize-html');
 const path = require('path');
 
 // ============================================
@@ -170,6 +173,35 @@ app.use('/api', generalLimiter);
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// ============================================
+// Security: NoSQL Injection Prevention
+// ============================================
+app.use(mongoSanitize());
+
+// ============================================
+// Security: HTTP Parameter Pollution Prevention
+// ============================================
+app.use(hpp());
+
+// ============================================
+// Security: XSS Prevention — sanitize all string inputs
+// ============================================
+app.use((req, res, next) => {
+  if (req.body) {
+    const sanitize = (obj) => {
+      for (const key in obj) {
+        if (typeof obj[key] === 'string') {
+          obj[key] = sanitizeHtml(obj[key], { allowedTags: [], allowedAttributes: {} });
+        } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+          sanitize(obj[key]);
+        }
+      }
+    };
+    sanitize(req.body);
+  }
+  next();
+});
 
 // Request logging middleware
 app.use((req, res, next) => {
