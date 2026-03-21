@@ -874,6 +874,15 @@ router.post('/login', [
       });
     }
 
+    // Check if account is locked
+    if (user.lockUntil && user.lockUntil > Date.now()) {
+      const minsLeft = Math.ceil((user.lockUntil - Date.now()) / 60000);
+      return res.status(423).json({
+        success: false,
+        message: `Account locked due to too many failed attempts. Try again in ${minsLeft} minute(s).`
+      });
+    }
+
     // Check if account is active
     if (!user.isActive) {
       return res.status(401).json({
@@ -885,10 +894,31 @@ router.post('/login', [
     // Check password
     const isPasswordValid = await user.comparePassword(password);
     if (!isPasswordValid) {
+      // Increment failed attempts
+      const attempts = (user.failedLoginAttempts || 0) + 1;
+      const update = { failedLoginAttempts: attempts };
+
+      // Lock account after 5 failed attempts for 30 minutes
+      if (attempts >= 5) {
+        update.lockUntil = new Date(Date.now() + 30 * 60 * 1000);
+        update.failedLoginAttempts = 0;
+        await User.findByIdAndUpdate(user._id, update);
+        return res.status(423).json({
+          success: false,
+          message: 'Account locked due to too many failed attempts. Try again in 30 minutes.'
+        });
+      }
+
+      await User.findByIdAndUpdate(user._id, update);
       return res.status(401).json({
         success: false,
-        message: 'Invalid email or password. Please try again.'
+        message: `Invalid email or password. ${5 - attempts} attempt(s) remaining.`
       });
+    }
+
+    // Reset failed attempts on successful login
+    if (user.failedLoginAttempts > 0 || user.lockUntil) {
+      await User.findByIdAndUpdate(user._id, { failedLoginAttempts: 0, lockUntil: null });
     }
 
     // Check if email is verified
