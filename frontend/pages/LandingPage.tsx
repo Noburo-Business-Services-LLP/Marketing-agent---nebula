@@ -430,79 +430,29 @@ const LandingPage: React.FC = () => {
               Simple, transparent pricing
             </h2>
             <p className={`text-lg max-w-2xl mx-auto ${theme === 'dark' ? 'text-[#ededed]/70' : 'text-gray-600'}`}>
-              Start free and upgrade as you grow. No hidden fees, no surprises.
+              Everything you need to automate your marketing. No hidden fees, no surprises.
             </p>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
-            {/* Starter */}
-            <div className={`rounded-2xl p-8 border shadow-sm ${theme === 'dark' ? 'bg-[#070A12] border-slate-700/50' : 'bg-white border-gray-200'}`}>
-              <div className={`text-sm font-medium mb-2 ${theme === 'dark' ? 'text-[#ededed]/60' : 'text-gray-500'}`}>Starter</div>
-              <div className={`text-4xl font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>Free</div>
-              <div className={`text-sm mb-6 ${theme === 'dark' ? 'text-[#ededed]/60' : 'text-gray-500'}`}>Forever free</div>
-              <ul className="space-y-3 mb-8">
-                {['1 social account', '5 campaigns/month', 'Basic analytics', 'Email support'].map((item, i) => (
-                  <li key={i} className="flex items-center gap-3 text-sm">
-                    <CheckCircle2 className={`w-4 h-4 shrink-0 ${theme === 'dark' ? 'text-[#ededed]/40' : 'text-gray-400'}`} />
-                    <span className={theme === 'dark' ? 'text-[#ededed]/70' : 'text-gray-600'}>{item}</span>
-                  </li>
-                ))}
-              </ul>
-              <button 
-                onClick={() => navigate('/login')}
-                className={`w-full py-3 font-medium rounded-xl transition-colors ${
-                  theme === 'dark' 
-                    ? 'bg-[#1a1f2e] hover:bg-[#252b3d] text-[#ededed]'
-                    : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
-                }`}
-              >
-                Sign up free
-              </button>
-            </div>
-
-            {/* Pro */}
+          <div className="max-w-md mx-auto">
             <div className="bg-[#070A12] rounded-2xl p-8 text-white relative shadow-xl">
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-[#ffcc29] rounded-full text-xs font-medium text-[#070A12]">
-                Most popular
+              <div className="text-center mb-6">
+                <div className="text-4xl font-bold mb-1">₹7,500</div>
+                <div className="text-slate-400 text-sm">1,000 credits included</div>
               </div>
-              <div className="text-sm font-medium text-slate-400 mb-2">Pro</div>
-              <div className="text-4xl font-bold mb-1">$49<span className="text-lg text-slate-400 font-normal">/mo</span></div>
-              <div className="text-slate-400 text-sm mb-6">Billed annually</div>
               <ul className="space-y-3 mb-8">
-                {['10 social accounts', 'Unlimited campaigns', 'Advanced analytics', 'Influencer discovery', 'Priority support'].map((item, i) => (
+                {['AI-powered campaign generation', 'Multi-platform posting', 'Competitor analysis', 'Influencer discovery', 'Advanced analytics', 'Priority support'].map((item, i) => (
                   <li key={i} className="flex items-center gap-3 text-sm">
                     <CheckCircle2 className="w-4 h-4 text-[#ffcc29] shrink-0" />
                     <span className="text-slate-300">{item}</span>
                   </li>
                 ))}
               </ul>
-              <button 
-                onClick={() => navigate('/login')}
-                className="w-full py-3 bg-white hover:bg-gray-100 text-[#070A12] font-medium rounded-xl transition-colors"
+              <button
+                onClick={() => navigate('/login?mode=signup')}
+                className="w-full py-3 bg-[#ffcc29] hover:bg-[#e6b800] text-[#070A12] font-medium rounded-xl transition-colors"
               >
                 Start free trial
-              </button>
-            </div>
-
-            {/* Enterprise */}
-            <div className={`rounded-2xl p-8 border shadow-sm ${theme === 'dark' ? 'bg-[#070A12] border-slate-700/50' : 'bg-white border-gray-200'}`}>
-              <div className={`text-sm font-medium mb-2 ${theme === 'dark' ? 'text-[#ededed]/60' : 'text-gray-500'}`}>Enterprise</div>
-              <div className={`text-4xl font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>Custom</div>
-              <div className={`text-sm mb-6 ${theme === 'dark' ? 'text-[#ededed]/60' : 'text-gray-500'}`}>For large teams</div>
-              <ul className="space-y-3 mb-8">
-                {['Unlimited everything', 'Custom integrations', 'Dedicated manager', 'SLA & compliance', 'White label'].map((item, i) => (
-                  <li key={i} className="flex items-center gap-3 text-sm">
-                    <CheckCircle2 className={`w-4 h-4 shrink-0 ${theme === 'dark' ? 'text-[#ededed]/40' : 'text-gray-400'}`} />
-                    <span className={theme === 'dark' ? 'text-[#ededed]/70' : 'text-gray-600'}>{item}</span>
-                  </li>
-                ))}
-              </ul>
-              <button className={`w-full py-3 font-medium rounded-xl transition-colors ${
-                theme === 'dark' 
-                  ? 'bg-[#1a1f2e] hover:bg-[#252b3d] text-[#ededed]'
-                  : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
-              }`}>
-                Contact sales
               </button>
             </div>
           </div>
