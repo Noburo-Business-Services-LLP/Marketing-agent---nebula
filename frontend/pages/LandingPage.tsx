@@ -392,31 +392,6 @@ const LandingPage: React.FC = () => {
         </div>
       </section>
 
-      {/* Testimonial */}
-      <section className={`py-24 md:py-32 ${theme === 'dark' ? 'bg-[#070A12]' : 'bg-white'}`}>
-        <div className="max-w-4xl mx-auto px-6 text-center">
-          <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full mb-8 ${theme === 'dark' ? 'bg-amber-500/10 border border-amber-500/20' : 'bg-amber-50 border border-amber-100'}`}>
-            <Award className="w-4 h-4 text-amber-600" />
-            <span className={`text-sm font-medium ${theme === 'dark' ? 'text-amber-400' : 'text-amber-700'}`}>Customer Story</span>
-          </div>
-          <blockquote className={`text-2xl md:text-4xl font-medium leading-relaxed mb-8 ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>
-            "Nebulaa Gravity transformed how we approach marketing. We've seen a 
-            <span className="text-[#ffcc29]"> 340% increase in engagement</span> 
-            {" "}and saved countless hours on campaign management."
-          </blockquote>
-          <div className="flex items-center justify-center gap-4">
-            <img 
-              src="https://i.pravatar.cc/100?img=32" 
-              alt="Sarah Chen" 
-              className="w-14 h-14 rounded-full object-cover"
-            />
-            <div className="text-left">
-              <div className={`font-semibold ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>Sarah Chen</div>
-              <div className={`text-sm ${theme === 'dark' ? 'text-[#ededed]/60' : 'text-gray-500'}`}>CMO at TechFlow</div>
-            </div>
-          </div>
-        </div>
-      </section>
 
       {/* Pricing */}
       <section id="pricing" className={`py-24 md:py-32 ${theme === 'dark' ? 'bg-[#0d1117]' : 'bg-gray-50'}`}>
