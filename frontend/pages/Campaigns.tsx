@@ -4456,7 +4456,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                         {step === 4 && (
                           <button 
                             onClick={handleGeneratePosts}
-                            disabled={isGenerating || !campaignName || platforms.length === 0}
+                            disabled={isGenerating || !campaignName}
                             className="px-6 py-2.5 bg-gradient-to-r from-[#ffcc29] to-[#ffa500] text-black rounded-lg font-semibold hover:shadow-lg transition-all disabled:opacity-50 flex items-center gap-2"
                           >
                             {isGenerating ? (
