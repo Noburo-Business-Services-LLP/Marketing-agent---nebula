@@ -171,6 +171,11 @@ const socialLimiter = rateLimit({
   message: { error: 'Too many social media requests, please try again later.' }
 });
 
+// Health check endpoint (exempt from rate limiting)
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ status: 'ok' });
+});
+
 // Apply general limiter to all API routes
 app.use('/api', generalLimiter);
 
@@ -247,14 +252,7 @@ app.use('/api/payment', paymentRoutes);
 app.use('/api/content', contentRoutes);
 app.use('/api/google-calendar', googleCalendarRoutes);
 
-// Health check endpoint
-app.get('/api/health', (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: 'Gravity API is running',
-    timestamp: new Date().toISOString()
-  });
-});
+// Health check endpoint (handled before rate limiter above)
 
 // Demo dashboard endpoint (no auth, for UI testing)
 app.get('/api/demo/dashboard', (req, res) => {
