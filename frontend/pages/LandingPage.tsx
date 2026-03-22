@@ -146,34 +146,6 @@ const LandingPage: React.FC = () => {
               </button>
             </div>
 
-            {/* Social proof */}
-            <div className="flex flex-col items-center gap-4">
-              <div className="flex -space-x-3">
-                {[1, 2, 3, 4, 5].map((i) => (
-                  <div key={i} className={`w-10 h-10 rounded-full border-2 overflow-hidden ${theme === 'dark' ? 'border-[#070A12] bg-gradient-to-br from-[#1a1f2e] to-[#0d1117]' : 'border-white bg-gradient-to-br from-gray-100 to-gray-200'}`}>
-                    <img 
-                      src={`https://i.pravatar.cc/100?img=${i + 10}`} 
-                      alt="" 
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                ))}
-                <div className={`w-10 h-10 rounded-full border-2 bg-[#ffcc29] flex items-center justify-center text-[#070A12] text-xs font-medium ${theme === 'dark' ? 'border-[#070A12]' : 'border-white'}`}>
-                  +2k
-                </div>
-              </div>
-              <div className={`flex items-center gap-2 text-sm ${theme === 'dark' ? 'text-[#ededed]/70' : 'text-gray-600'}`}>
-                <div className="flex gap-0.5">
-                  {[...Array(5)].map((_, i) => (
-                    <svg key={i} className="w-4 h-4 text-[#ffcc29] fill-current" viewBox="0 0 20 20">
-                      <path d="M10 15l-5.878 3.09 1.123-6.545L.489 6.91l6.572-.955L10 0l2.939 5.955 6.572.955-4.756 4.635 1.123 6.545z"/>
-                    </svg>
-                  ))}
-                </div>
-                <span className={`font-medium ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>4.9/5</span>
-                <span>from 2,000+ reviews</span>
-              </div>
-            </div>
           </div>
 
           {/* Dashboard Preview */}
