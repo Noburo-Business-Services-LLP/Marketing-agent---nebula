@@ -343,47 +343,6 @@ const LandingPage: React.FC = () => {
         </div>
       </section>
 
-      {/* Stats Section */}
-      <section className="py-24 md:py-32 bg-[#070A12] text-white">
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="grid md:grid-cols-2 gap-16 items-center">
-            <div>
-              <h2 className="text-3xl md:text-5xl font-bold tracking-tight mb-6">
-                Results that speak for themselves
-              </h2>
-              <p className="text-lg text-slate-400 mb-8">
-                Our customers see measurable improvements within the first month of using Nebulaa Gravity.
-              </p>
-              <div className="space-y-4">
-                {[
-                  "Average 340% increase in engagement",
-                  "Save 20+ hours per week on marketing",
-                  "10x faster campaign deployment"
-                ].map((item, i) => (
-                  <div key={i} className="flex items-center gap-3">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-                    <span className="text-slate-300">{item}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-6">
-              {[
-                { value: "10K+", label: "Active Users", icon: <Users className="w-5 h-5" /> },
-                { value: "500M+", label: "Impressions", icon: <TrendingUp className="w-5 h-5" /> },
-                { value: "99.9%", label: "Uptime", icon: <Shield className="w-5 h-5" /> },
-                { value: "24/7", label: "Support", icon: <Clock className="w-5 h-5" /> }
-              ].map((stat, i) => (
-                <div key={i} className="bg-[#0a0f1a]/50 rounded-2xl p-6 border border-[#0f1526]/50">
-                  <div className="text-slate-400 mb-2">{stat.icon}</div>
-                  <div className="text-3xl md:text-4xl font-bold mb-1">{stat.value}</div>
-                  <div className="text-slate-400 text-sm">{stat.label}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
 
 
       {/* Pricing */}
