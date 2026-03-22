@@ -56,9 +56,6 @@ const LandingPage: React.FC = () => {
     return () => observer.disconnect();
   }, []);
 
-  const brands = [
-    "Google", "Microsoft", "Spotify", "Slack", "Notion", "Figma"
-  ];
 
   return (
     <div className={`min-h-screen overflow-x-hidden antialiased ${theme === 'dark' ? 'bg-[#070A12] text-[#ededed]' : 'bg-white text-gray-900'}`}>
@@ -219,19 +216,6 @@ const LandingPage: React.FC = () => {
         </div>
       </section>
 
-      {/* Trusted By */}
-      <section className={`py-16 border-y ${theme === 'dark' ? 'border-slate-700/50 bg-[#0d1117]/50' : 'border-gray-200 bg-gray-50'}`}>
-        <div className="max-w-6xl mx-auto px-6">
-          <p className={`text-center text-sm font-medium mb-8 ${theme === 'dark' ? 'text-[#ededed]/50' : 'text-gray-500'}`}>TRUSTED BY LEADING COMPANIES WORLDWIDE</p>
-          <div className="flex flex-wrap items-center justify-center gap-x-12 gap-y-6">
-            {brands.map((brand, i) => (
-              <div key={i} className={`text-2xl font-semibold cursor-default transition-colors ${theme === 'dark' ? 'text-slate-300 hover:text-slate-400' : 'text-gray-400 hover:text-gray-500'}`}>
-                {brand}
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
 
       {/* Features Section */}
       <section id="features" className="py-24 md:py-32">
