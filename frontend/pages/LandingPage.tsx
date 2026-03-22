@@ -62,19 +62,6 @@ const LandingPage: React.FC = () => {
 
   return (
     <div className={`min-h-screen overflow-x-hidden antialiased ${theme === 'dark' ? 'bg-[#070A12] text-[#ededed]' : 'bg-white text-gray-900'}`}>
-      {/* Theme Toggle Button */}
-      <button
-        onClick={toggleTheme}
-        className={`fixed top-24 right-6 p-3 rounded-full transition-all duration-300 z-50 ${
-          theme === 'dark' 
-            ? 'bg-[#1a1f2e] hover:bg-[#252b3d] text-yellow-400' 
-            : 'bg-white hover:bg-gray-100 text-gray-700 shadow-md'
-        }`}
-        title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
-      >
-        {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-      </button>
-
       {/* Navigation */}
       <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
         scrollY > 50 
