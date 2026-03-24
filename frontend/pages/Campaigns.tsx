@@ -22,75 +22,194 @@ const PLATFORM_LIMITS: Record<string, { charLimit: number; label: string; imageM
   youtube:   { charLimit: 5000,   label: 'YouTube',    imageMaxMB: 2,  videoMaxMB: 12800, bestRatio: '16:9' },
 };
 
-const PLATFORM_CONTENT_TEMPLATES: Record<string, { id: string; label: string; structure: string }[]> = {
+const PLATFORM_CONTENT_TEMPLATES: Record<string, { id: string; label: string; structure: string; tone: string }[]> = {
   instagram: [
+    // PROFESSIONAL
     { 
-      id: 'standard', 
-      label: 'Standard Post', 
-      structure: "🎯 CAMPAIGN: {name}\n• About: {desc}\n• Goal: {obj}\n\n📸 KEY HIGHLIGHTS:\n• [Key Point 1]\n• [Key Point 2]\n\n🔗 CTA:\n[Your CTA Link]" 
+      id: 'ig_prof_1', 
+      tone: 'professional',
+      label: 'Strategic Standard', 
+      structure: "🎯 STRATEGIC OVERVIEW: {name}\n• Core Mission: {desc}\n• Key Objective: {obj}\n\n📸 KEY HIGHLIGHTS:\n• [Strategic Point 1]\n• [Business Value 2]\n\n🔗 LEARN MORE: [Link]" 
     },
     { 
-      id: 'promotional', 
-      label: 'Promo/Sale', 
-      structure: "🔥 LIMITED TIME: {name}\n\n✨ WHAT'S NEW:\n{desc}\n\n⏳ DON'T MISS OUT:\n• [Offer 1]\n• [Offer 2]\n\n🔗 SHOP NOW: [Link]" 
+      id: 'ig_prof_2', 
+      tone: 'professional',
+      label: 'Executive Summary', 
+      structure: "📊 EXECUTIVE ANALYSIS: {name}\n\nSummary:\n{desc}\n\n🚀 PROJECTED OUTCOMES:\n• [Impact 1]\n• [Impact 2]\n\nGoal: {obj}\n\n🔗 VIEW DETAILS: [Your CTA Link]" 
     },
     { 
-      id: 'educational', 
-      label: 'Tips & Value', 
-      structure: "💡 DID YOU KNOW? \n\n{name}\n\n🚀 3 TIPS TO {obj}:\n1. [Tip 1]\n2. [Tip 2]\n3. [Tip 3]\n\n💬 Save this for later!" 
+      id: 'ig_prof_3', 
+      tone: 'professional',
+      label: 'Corporate Update', 
+      structure: "💼 OFFICIAL ANNOUNCEMENT: {name}\n\nWe are focusing on {obj} through our latest initiative: {desc}.\n\n✅ KEY PILLARS:\n• [Pillar 1]\n• [Pillar 2]\n\n🔗 READ MORE: [Link]" 
+    },
+    // CASUAL
+    { 
+      id: 'ig_cas_1', 
+      tone: 'casual',
+      label: 'Friendly BTS', 
+      structure: "Hey friends! 👋 Just wanted to share what we've been working on: {name}.\n\n{desc}\n\nOur big goal is to {obj}. 🚀\n\n✨ COOL STUFF:\n• [Fun Fact 1]\n• [Behind the scenes 2]\n\nDrop a comment below! 👇\n\n[Link]" 
+    },
+    { 
+      id: 'ig_cas_2', 
+      tone: 'casual',
+      label: 'Real Talk', 
+      structure: "Let's be real for a second... {obj} is tough. 🛋️\n\nThat's why we built {name}. {desc}\n\n🌈 WHY IT MATTERS:\n• [Reason 1]\n• [Reason 2]\n\nWhat do you think? ✨ [Link]" 
+    },
+    // INSPIRATIONAL
+    { 
+      id: 'ig_insp_1', 
+      tone: 'inspirational',
+      label: 'Brand Story', 
+      structure: "✨ BELIEVE IN {name}\n\nIt started with a simple idea: {desc}\n\nToday, we're on a mission to {obj}.\n\n💡 DAILY WISDOM:\n\"[Inspirational Quote]\"\n\n🔗 JOIN THE JOURNEY: [Link]" 
+    },
+    { 
+      id: 'ig_insp_2', 
+      tone: 'inspirational',
+      label: 'Big Dreams', 
+      structure: "🚀 DREAMING BIG: {obj}\n\nWe believe {name} is the key to {desc}.\n\n✨ VISION:\n• [Vision Point 1]\n• [Impact 2]\n\nStay inspired. ✨ [Link]" 
+    },
+    // EDUCATIONAL
+    { 
+      id: 'ig_edu_1', 
+      tone: 'educational',
+      label: 'Expert Tips', 
+      structure: "💡 DID YOU KNOW? \n\n{name}\n\n🚀 3 TIPS TO {obj}:\n1. [Expert Tip 1]\n2. [Advanced Strategy 2]\n3. [Quick Win 3]\n\n💬 Save this for later!" 
+    },
+    { 
+      id: 'ig_edu_2', 
+      tone: 'educational',
+      label: 'Step-by-Step', 
+      structure: "📖 HOW TO {obj} WITH {name}\n\nStep 1: [Action 1]\nStep 2: [Action 2]\nStep 3: [Action 3]\n\n{desc}\n\nFull guide: [Link] 🎓" 
+    },
+    // HUMOROUS
+    { 
+      id: 'ig_hum_1', 
+      tone: 'humorous',
+      label: 'Witty Observation', 
+      structure: "Me trying to {obj} without {name} 🤡\n\nSeriously though, {desc} is a game changer.\n\n😂 THE STRUGGLE IS REAL:\n• [Funny Point 1]\n• [Witty Observation 2]\n\n🔗 DON'T BE A CLOWN: [Link]" 
+    },
+    { 
+      id: 'ig_hum_2', 
+      tone: 'humorous',
+      label: 'Relatable Meme', 
+      structure: "Current Status: Trying to {obj}. 🕺\n\n{name} entered the chat: {desc}\n\n🤌 CHEF'S KISS:\n• [Funny Highlight 1]\n• [Relatable Moment 2]\n\n🔗 CHECK IT OUT: [Link]" 
+    },
+    // BOLD
+    { 
+      id: 'ig_bold_1', 
+      tone: 'bold',
+      label: 'Bold Launch', 
+      structure: "🔥 THE FUTURE IS HERE: {name}\n\nStop settling for less. We are here to {obj}.\n\n💥 WHY WE WIN:\n• [Disruptive Feature 1]\n• [Dominant Result 2]\n\n🔗 WITNESS THE POWER: [Link]" 
+    },
+    { 
+      id: 'ig_bold_2', 
+      tone: 'bold',
+      label: 'Manifesto', 
+      structure: "⚠️ UNPOPULAR OPINION: {obj} shouldn't be this hard.\n\nEnter {name}. {desc}\n\n🔥 THE NEW RULES:\n1. [Rule 1]\n2. [Rule 2]\n\nGET ON BOARD: [Link]" 
     }
   ],
   linkedin: [
+    // PROFESSIONAL
     { 
-      id: 'professional', 
-      label: 'Professional', 
-      structure: "💼 CAMPAIGN: {name}\n• Overview: {desc}\n• Strategy: {obj}\n\n📊 DISCUSSION POINTS:\n1. [Point 1]\n2. [Point 2]\n\n🚀 OUTCOMES:\n• [Outcome]\n\n🔗 CTA:\n[Link]" 
+      id: 'li_prof_1', 
+      tone: 'professional',
+      label: 'Standard Executive', 
+      structure: "💼 STRATEGIC INITIATIVE: {name}\n• Executive Summary: {desc}\n• Core Objective: {obj}\n\n📊 CORPORATE ANALYSIS:\n1. [Market Positioning 1]\n2. [Operational Impact 2]\n\n🚀 KEY DELIVERABLES:\n• [Outcome]\n\n🔗 FULL REPORT: [Link]" 
     },
     { 
-      id: 'thought_leadership', 
-      label: 'Thought Leadership', 
-      structure: "🚨 THE FUTURE OF {obj}\n\nI've been thinking about {name} lately. \n\n💡 KEY INSIGHTS:\n• {desc}\n\nWhat are your thoughts? 👇\n\n#ProfessionalInsights" 
+      id: 'li_prof_2', 
+      tone: 'professional',
+      label: 'Leadership Angle', 
+      structure: "🚨 THE FUTURE OF {obj}\n\nI've been analyzing {name} lately. \n\n💡 STRATEGIC INSIGHTS:\n• {desc}\n\nWhat are your thoughts on this industry shift? 👇\n\n#Leadership #Innovation" 
     },
     { 
-      id: 'case_study', 
+      id: 'li_prof_3', 
+      tone: 'professional',
+      label: 'Business Win', 
+      structure: "📈 BUSINESS UPDATE: Achieving {obj}\n\nThrilled to share how {name} is driving results.\n\n✅ KEY TAKEAWAYS:\n• [Point 1]\n• [Point 2]\n\n{desc}\n\n🔗 DETAILS: [Link]" 
+    },
+    // EDUCATIONAL
+    { 
+      id: 'li_edu_1', 
+      tone: 'educational',
+      label: 'Expert Guide', 
+      structure: "🎓 MASTERING {obj}\n\n{name} is the framework we've been using to solve {desc}.\n\n💡 LESSONS LEARNED:\n1. [Insight 1]\n2. [Strategy 2]\n3. [Tactic 3]\n\nFull case study: [Link]" 
+    },
+    { 
+      id: 'li_edu_2', 
+      tone: 'educational',
       label: 'Case Study', 
-      structure: "📈 HOW WE ACHIEVED {obj}\n\nProject: {name}\n\n❓ THE CHALLENGE:\n{desc}\n\n✅ THE SOLUTION:\n• [Action 1]\n• [Action 2]\n\n🏆 THE RESULT:\n• [Achievement]\n\nRead the full story: [Link]" 
+      structure: "📈 CASE STUDY: Optimizing {obj}\n\nProject: {name}\n\n❓ THE CHALLENGE:\n{desc}\n\n🏆 THE RESULTS:\n• [Achievement 1]\n• [Achievement 2]\n\nRead the breakdown: [Link]" 
+    },
+    // BOLD
+    { 
+      id: 'li_bold_1', 
+      tone: 'bold',
+      label: 'Industry Shakeup', 
+      structure: "⚠️ THE INDUSTRY IS CHANGED: {name}\n\nWe're officially disrupting {obj}.\n\n🔥 WHY THIS MATTERS:\n• [Point 1]\n• [Point 2]\n\n{desc}\n\nJoin the discussion: [Link]" 
     }
   ],
   twitter: [
+    // CASUAL
     { 
-      id: 'punchy', 
-      label: 'Punchy Update', 
-      structure: "🚀 Introducing {name}: {desc}\n\nKey Goal: {obj}\n\nCheck it out here: [Link]\n\n#TwitterX #Launch" 
+      id: 'tw_cas_1', 
+      tone: 'casual',
+      label: 'Punchy News', 
+      structure: "🚀 Introducing {name}: {desc}\n\nKey Goal: {obj}\n\nCheck it out here: [Link]\n\n#Launch #Tech #Innovation" 
     },
     { 
-      id: 'thread_hook', 
+      id: 'tw_cas_2', 
+      tone: 'casual',
+      label: 'Quick Thought', 
+      structure: "{name} is finally here! 🥳\n\nWe're helping people {obj} like never before.\n\n{desc}\n\n👇 [Link]" 
+    },
+    // PROFESSIONAL
+    { 
+      id: 'tw_prof_1', 
+      tone: 'professional',
+      label: 'Official Update', 
+      structure: "📢 STRATEGIC UPDATE: {name}\n\nWe're optimizing for {obj} through {desc}.\n\nKey pillars:\n• [Pillar 1]\n• [Pillar 2]\n\nDetails: [Link]" 
+    },
+    { 
+      id: 'tw_prof_2', 
+      tone: 'professional',
+      label: 'Data Point', 
+      structure: "📊 DATA INSIGHT: {obj}\n\nOur latest launch, {name}, is addressing {desc}.\n\nKey metric impact:\n• [Metric 1]: +[X]%\n• [Metric 2]: -[Y]%\n\nRead more: [Link]" 
+    },
+    // EDUCATIONAL
+    { 
+      id: 'tw_edu_1', 
+      tone: 'educational',
       label: 'Thread Hook', 
-      structure: "I just discovered the secret to {obj} 🧵\n\n{name} is changing everything we know about {desc}.\n\nHere are 3 reasons why:\n\n1/3..." 
+      structure: "I just discovered the secret to {obj} 🧵\n\n{name} is changing how we view {desc}.\n\nHere are 3 reasons why:\n\n1/ [Expert Point 1]\n2/ [Advanced Tip 2]\n3/ [Quick Win 3]\n\nClick to read more: [Link]" 
+    },
+    { 
+      id: 'tw_edu_2', 
+      tone: 'educational',
+      label: 'Quick Tips', 
+      structure: "💡 Quick Tips for {obj}:\n\n1️⃣ Use {name}\n2️⃣ Focus on {desc}\n3️⃣ [Tip 3]\n\nSimple but effective. ✅ [Link]" 
+    },
+    // BOLD
+    { 
+      id: 'tw_bold_1', 
+      tone: 'bold',
+      label: 'Bold Claims', 
+      structure: "STOP doing [Common Mistake]. 🛑\n\n{name} is here to {obj}. \n\n{desc}\n\nNo more excuses. [Link]" 
     }
   ],
   facebook: [
     { 
-      id: 'community', 
+      id: 'fb_prof_1', 
+      tone: 'professional',
+      label: 'Announcement', 
+      structure: "📢 ANNOUNCEMENT: {name}\n\nDetails: {desc}\nGoal: {obj}\n\nLearn more: [Link] 👋" 
+    },
+    { 
+      id: 'fb_cas_1', 
+      tone: 'casual',
       label: 'Community Engagement', 
-      structure: "Hey guys! We're excited to share {name} with you. 😊\n\n{desc}\n\nWe're aiming to {obj}. What do you think about [Point]? Let us know in the comments! 👇" 
-    },
-    { 
-      id: 'event', 
-      label: 'Event/Announcement', 
-      structure: "📢 ANNOUNCEMENT: {name}\n\nDetails: {desc}\nGoal: {obj}\n\nWhen: [Date/Time]\nWhere: [Location]\n\nSee you there! 👋" 
-    }
-  ],
-  youtube: [
-    { 
-      id: 'thumbnail', 
-      label: 'Thumbnail Strategy', 
-      structure: "TITLE: {name}\nHOOK: {desc}\nCALLOUT: {obj}\n\n(Note: This text is for visual layout on the thumbnail image)" 
-    },
-    { 
-      id: 'description', 
-      label: 'Video Description', 
-      structure: "In this video, we dive into {name}.\n\n{desc}\n\nOur mission: {obj}\n\nTIMESTAMPS:\n0:00 Intro\n[Add more timestamps...]\n\n🔗 LINKS: [Link]" 
+      structure: "Hey guys! We're excited to share {name} with you today. 😊\n\n{desc}\n\nWe're aiming to {obj}. What do you think about [Point]? 👇" 
     }
   ]
 };
@@ -3523,23 +3642,35 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
           let updated = false;
           const next = { ...curr };
           platforms.forEach(p => {
-            if (next[p] === undefined) {
-              next[p] = getTemplateForPlatform(p, campaignName, campaignDescription, objective);
-              updated = true;
+            // Re-apply if not edited or manually reset? Actually, if tone changes, we should update.
+            const currentToneTemplates = (PLATFORM_CONTENT_TEMPLATES[p] || []).filter(t => t.tone === contentTone);
+            const template = currentToneTemplates.find(t => t.id === selectedTemplateIds[p]) || currentToneTemplates[0] || (PLATFORM_CONTENT_TEMPLATES[p] || [])[0];
+            
+            if (next[p] === undefined || !manuallyEditedTemplates.current.has(p)) {
+              if (template) {
+                next[p] = applyTemplate(template.structure, campaignName, campaignDescription, objective);
+                updated = true;
+              }
             }
           });
           return updated ? next : curr;
         });
 
-        // Set default selected template IDs if they don't exist
+        // Set default selected template IDs if they don't exist OR if current one doesn't match tone
         setSelectedTemplateIds(curr => {
           let updated = false;
           const next = { ...curr };
           platforms.forEach(p => {
-            if (next[p] === undefined) {
-              const templates = PLATFORM_CONTENT_TEMPLATES[p];
-              if (templates && templates.length > 0) {
-                next[p] = templates[0].id;
+            const currentToneTemplates = (PLATFORM_CONTENT_TEMPLATES[p] || []).filter(t => t.tone === contentTone);
+            const currentId = next[p];
+            const isCurrentToneMatch = currentToneTemplates.some(t => t.id === currentId);
+
+            if (next[p] === undefined || !isCurrentToneMatch) {
+              if (currentToneTemplates.length > 0) {
+                next[p] = currentToneTemplates[0].id;
+                updated = true;
+              } else if (PLATFORM_CONTENT_TEMPLATES[p]?.length > 0) {
+                next[p] = PLATFORM_CONTENT_TEMPLATES[p][0].id;
                 updated = true;
               }
             }
@@ -4150,7 +4281,10 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                                             
                                             <div className="flex items-center justify-between mt-2">
                                               <div className="flex flex-wrap gap-1.5">
-                                                {templates.map(t => {
+                                                {((PLATFORM_CONTENT_TEMPLATES[p] || []).filter(t => t.tone === contentTone).length > 0 
+                                                  ? (PLATFORM_CONTENT_TEMPLATES[p] || []).filter(t => t.tone === contentTone)
+                                                  : (PLATFORM_CONTENT_TEMPLATES[p] || []).filter(t => t.tone === 'professional')
+                                                ).map(t => {
                                                   const isActive = selectedTemplateIds[p] === t.id;
                                                   return (
                                                     <button
