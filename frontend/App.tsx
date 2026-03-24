@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import ChatBot from './components/ChatBot';
@@ -93,43 +93,6 @@ const App: React.FC = () => {
     setTrialExpired({ expired: false, reason: 'time' });
   }, []);
 
-  // Auto-logout after 30 minutes of inactivity
-  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastResetRef = useRef(0);
-  const logoutRef = useRef(handleLogout);
-  logoutRef.current = handleLogout;
-
-  const IDLE_TIMEOUT = 30 * 60 * 1000; // 30 minutes
-  const THROTTLE_MS = 2000;
-
-  // Stable resetIdleTimer that never changes reference
-  const resetIdleTimer = useCallback(() => {
-    const now = Date.now();
-    if (now - lastResetRef.current < THROTTLE_MS) return;
-    lastResetRef.current = now;
-    if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
-    idleTimerRef.current = setTimeout(() => {
-      logoutRef.current();
-    }, IDLE_TIMEOUT);
-  }, []);
-
-  useEffect(() => {
-    if (!user) return;
-
-    const events = ['mousedown', 'mouseup', 'click', 'keydown', 'keyup', 'scroll', 'touchstart', 'touchmove', 'mousemove', 'focus', 'wheel', 'resize', 'input', 'change'];
-    events.forEach(e => window.addEventListener(e, resetIdleTimer, { passive: true }));
-
-    const handleVisibility = () => { if (!document.hidden) resetIdleTimer(); };
-    document.addEventListener('visibilitychange', handleVisibility);
-
-    resetIdleTimer(); // start timer on mount
-
-    return () => {
-      events.forEach(e => window.removeEventListener(e, resetIdleTimer));
-      document.removeEventListener('visibilitychange', handleVisibility);
-      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
-    };
-  }, [!!user, resetIdleTimer]);
 
   const handleOnboardingComplete = (updatedUser: User) => {
       setUser(updatedUser);
