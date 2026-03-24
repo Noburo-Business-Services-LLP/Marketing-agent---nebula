@@ -3431,6 +3431,40 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
     const [productLogo, setProductLogo] = useState<string | null>(null);
     const [productLogoName, setProductLogoName] = useState<string>('');
     const [showBrandLogoSelector, setShowBrandLogoSelector] = useState(false);
+    const [isPopulating, setIsPopulating] = useState<Record<string, boolean>>({});
+    const manuallyEditedTemplates = useRef<Set<string>>(new Set());
+
+    const smartPopulateTemplate = async (platform: string, templateText: string) => {
+      const apiBaseUrl = window.location.hostname !== 'localhost' ? '' : 'http://localhost:5000';
+      const token = localStorage.getItem('authToken');
+      
+      setIsPopulating(curr => ({ ...curr, [platform]: true }));
+      try {
+        const response = await fetch(`${apiBaseUrl}/api/campaigns/smart-populate-template`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            template: templateText,
+            campaignName,
+            campaignDescription,
+            objective
+          })
+        });
+        const data = await response.json();
+        if (data.success) {
+          setPlatformContents(curr => ({ ...curr, [platform]: data.filledContent }));
+          return data.filledContent;
+        }
+      } catch (err) {
+        console.error('Smart populate failed:', err);
+      } finally {
+        setIsPopulating(curr => ({ ...curr, [platform]: false }));
+      }
+      return null;
+    };
     
     // Step 4: Scheduling Preferences
     const [campaignDuration, setCampaignDuration] = useState<'1week' | '2weeks' | '1month' | '3months'>('2weeks');
@@ -3465,6 +3499,25 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
     };
 
     useEffect(() => {
+      const autoPopulate = async () => {
+        if (step === 2 && campaignName && campaignDescription) {
+          for (const p of platforms) {
+            // If the content is currently empty or just a default template (has brackets), auto-populate it
+            const currentContent = platformContents[p] || '';
+            const hasPlaceholders = /\[[^\]]*[A-Z0-9][^\]]*\]/.test(currentContent);
+            const isFilled = isPopulating[p] || manuallyEditedTemplates.current.has(p);
+
+            if ((!currentContent || hasPlaceholders) && !isFilled) {
+              const activeTemplate = PLATFORM_CONTENT_TEMPLATES[p]?.find(t => t.id === selectedTemplateIds[p]) || PLATFORM_CONTENT_TEMPLATES[p]?.[0];
+              if (activeTemplate) {
+                const base = applyTemplate(activeTemplate.structure, campaignName, campaignDescription, objective);
+                smartPopulateTemplate(p, base);
+              }
+            }
+          }
+        }
+      };
+
       if (step === 2) {
         setPlatformContents(curr => {
           let updated = false;
@@ -3493,6 +3546,8 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
           });
           return updated ? next : curr;
         });
+        
+        autoPopulate();
       }
     }, [step, platforms, campaignName, campaignDescription, objective]);
 
@@ -4093,41 +4148,53 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                                               </span>
                                             </div>
                                             
-                                            {/* Template Selection */}
-                                            <div className="flex flex-wrap gap-1.5 pb-1">
-                                              {templates.map(t => {
-                                                const isActive = selectedTemplateIds[p] === t.id;
-                                                return (
-                                                  <button
-                                                    key={t.id}
-                                                    onClick={() => {
-                                                      const content = applyTemplate(t.structure, campaignName, campaignDescription, objective);
-                                                      setPlatformContents(curr => ({ ...curr, [p]: content }));
-                                                      setSelectedTemplateIds(curr => ({ ...curr, [p]: t.id }));
-                                                    }}
-                                                    className={`px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-all border flex items-center gap-1.5 ${
-                                                      isActive 
-                                                        ? isDarkMode 
-                                                          ? 'bg-[#ffcc29]/20 border-[#ffcc29] text-[#ffcc29] scale-105 shadow-md shadow-[#ffcc29]/10' 
-                                                          : 'bg-[#ffcc29]/10 border-[#ffcc29] text-black scale-105 shadow-md shadow-[#ffcc29]/10'
-                                                        : isDarkMode 
-                                                          ? 'bg-slate-700 border-slate-600 text-slate-400 hover:border-[#ffcc29]/50 hover:text-slate-300' 
-                                                          : 'bg-white border-slate-200 text-slate-500 hover:border-[#ffcc29]/50 hover:text-slate-700'
-                                                    }`}
-                                                  >
-                                                    {isActive && <Check className="w-3 h-3" />}
-                                                    {t.label}
-                                                    {isActive && <span className="text-[8px] opacity-70 uppercase tracking-tighter"></span>}
-                                                  </button>
-                                                );
-                                              })}
+                                            <div className="flex items-center justify-between mt-2">
+                                              <div className="flex flex-wrap gap-1.5">
+                                                {templates.map(t => {
+                                                  const isActive = selectedTemplateIds[p] === t.id;
+                                                  return (
+                                                    <button
+                                                      key={t.id}
+                                                      onClick={() => {
+                                                        const content = applyTemplate(t.structure, campaignName, campaignDescription, objective);
+                                                        setPlatformContents(curr => ({ ...curr, [p]: content }));
+                                                        setSelectedTemplateIds(curr => ({ ...curr, [p]: t.id }));
+                                                        // After switching template, trigger auto-population for the new structure
+                                                        smartPopulateTemplate(p, content);
+                                                      }}
+                                                      className={`px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-all border flex items-center gap-1.5 ${
+                                                        isActive 
+                                                          ? isDarkMode 
+                                                            ? 'bg-[#ffcc29]/20 border-[#ffcc29] text-[#ffcc29] scale-105 shadow-md shadow-[#ffcc29]/10' 
+                                                            : 'bg-[#ffcc29]/10 border-[#ffcc29] text-black scale-105 shadow-md shadow-[#ffcc29]/10'
+                                                          : isDarkMode 
+                                                            ? 'bg-slate-700 border-slate-600 text-slate-400 hover:border-[#ffcc29]/50 hover:text-slate-300' 
+                                                            : 'bg-white border-slate-200 text-slate-500 hover:border-[#ffcc29]/50 hover:text-slate-700'
+                                                      }`}
+                                                    >
+                                                      {isActive && <Check className="w-3 h-3" />}
+                                                      {t.label}
+                                                    </button>
+                                                  );
+                                                })}
+                                              </div>
+                                              
+                                              {isPopulating[p] && (
+                                                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-bold bg-[#ffcc29]/10 text-[#ffcc29] border border-[#ffcc29]/20 animate-pulse">
+                                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                                  AI is tailor-fitting...
+                                                </div>
+                                              )}
                                             </div>
                                           </div>
                                           <textarea
                                             className={`w-full p-4 text-sm resize-none outline-none ${isDarkMode ? 'bg-[#0d1117] text-white' : 'bg-white text-slate-800'}`}
                                             rows={9}
                                             value={platformContents[p] || ''}
-                                            onChange={e => setPlatformContents(curr => ({ ...curr, [p]: e.target.value }))}
+                                            onChange={e => {
+                                              setPlatformContents(curr => ({ ...curr, [p]: e.target.value }));
+                                              manuallyEditedTemplates.current.add(p);
+                                            }}
                                             placeholder="Write out your template structure here..."
                                           />
                                         </div>

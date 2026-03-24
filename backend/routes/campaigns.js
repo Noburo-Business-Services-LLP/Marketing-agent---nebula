@@ -200,6 +200,46 @@ router.get('/icp-strategy', protect, async (req, res) => {
 });
 
 /**
+ * POST /api/campaigns/smart-populate-template
+ * AI-assisted template filling to avoid placeholders like [Key Point 1]
+ */
+router.post('/smart-populate-template', protect, async (req, res) => {
+  try {
+    const { template, campaignName, campaignDescription, objective } = req.body;
+    
+    if (!template) {
+      return res.status(400).json({ success: false, message: 'Template is required' });
+    }
+
+    const prompt = `You are a professional social media content editor. 
+Your task is to fill in the bracketed placeholders in a post template with high-quality, meaningful content.
+
+CAMPAIGN DETAILS:
+- Name: ${campaignName || 'General'}
+- Description: ${campaignDescription || 'N/A'}
+- Objective: ${objective || 'awareness'}
+
+TEMPLATE TO FILL:
+${template}
+
+RULES:
+1. Replace every bracketed placeholder (e.g., [Key Point 1], [Tip 1], [Point], [Outcome], [Date/Time], [Location]) with REAL meaningful content based on the campaign details.
+2. If details like Date/Location are not provided, invent realistic ones (e.g., "This Friday at 10 AM", "Our Online Event Hub").
+3. DO NOT change the structure, symbols (like 🎯, •, 📸), or headings.
+4. Keep the output EXACTLY the same format as the input template, just with placeholders filled.
+5. ONLY leave "[Link]" or "[Your CTA Link]" as is.
+6. Return ONLY the filled content. No introduction or extra text.`;
+
+    const filledContent = await callGemini(prompt, { temperature: 0.7, maxTokens: 1000, skipCache: true });
+    
+    res.json({ success: true, filledContent: filledContent.trim() });
+  } catch (error) {
+    console.error('Smart populate error:', error);
+    res.status(500).json({ success: false, message: 'Failed to populate template' });
+  }
+});
+
+/**
  * PUT /api/campaigns/icp-strategy
  * Save user-edited ICP data to DB
  */
@@ -301,13 +341,15 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
     // Step 1: Generate all captions via Gemini (ROCI format prompt)
     const captionPrompt = `ROLE: You are a senior social media strategist and copywriter at a leading digital marketing agency. You craft high-converting, scroll-stopping social media campaigns for premium brands.
 
-OBJECTIVE: You are a strict content generator. Your job is to ONLY fill the provided template structures.
-DO NOT:
-- Add any introduction or conversational filler.
-- Convert structured lists into paragraphs.
-- Add extra text before, between, or after the template sections.
-- Change the provided structure, headings, or symbols.
-ONLY fill inside the provided template using the campaign data while keeping it unique for each post. Also provide a detailed image description for each post.
+OBJECTIVE: You are a strict content generator. Your job is to STRICTLY follow and fill the provided template structures.
+
+STRICTOR RULES:
+- Do NOT change the format, do NOT remove sections, and do NOT convert content into paragraphs.
+- Automatically fill ALL bullet points, numbered points, highlights, tips, outcomes, and sections with meaningful content based on the campaign details.
+- Do NOT leave any placeholders like [Key Point 1], [Tip 1], [Point], or [Outcome].
+- ONLY keep the CTA link field as "[Link]" or "[Your CTA Link]".
+- Do NOT add any introduction, conversational filler, or extra commentary.
+- Keep all headings, symbols, and markers (like colons :) exactly as they appear in the template.
 
 CONTEXT:
 - Brand: ${bp.companyName || bp.name || 'Brand'} (${bp.industry || 'General'} industry)
@@ -320,12 +362,12 @@ ${keyMessages ? `- MANDATORY CONTENT STRUCTURES (STRICTLY FOLLOW THESE):\n${keyM
 
 INSTRUCTIONS:
 1. Create exactly ${totalPosts} posts. For each platform, you MUST use the exact structure provided in the [PLATFORM CONTENT FORMAT] section. 
-2. Do NOT convert structured content into paragraphs. Keep all headings, bullet points, special characters, and emojis from the provided structures exactly as they are.
-3. Within the structure, provide unique and engaging content for each post (e.g., different hooks, different industry-specific tips, different social proof details) so the campaign remains fresh while keeping the format consistent.
-4. Captions must be platform-native: ${platforms.includes('twitter') ? 'Twitter posts under 280 chars.' : ''} ${platforms.includes('instagram') ? 'Instagram captions with hook in first line.' : ''} ${platforms.includes('linkedin') ? 'LinkedIn posts that open with a bold statement or question.' : ''} Use natural language, not corporate jargon.
-5. Each caption should open with a strong hook (question, bold claim, statistic, or story opener) — the first line must make someone stop scrolling.
+2. Fill every single piece of structured data (bullet points, numbered lists) with high-value, specific content for the brand.
+3. Within the structure, provide unique and engaging content for each post (e.g., different hooks, different industry-specific tips, different social proof details) while keeping the format 100% consistent with the template.
+4. Captions must be platform-native: ${platforms.includes('twitter') ? 'Twitter posts under 280 chars.' : ''} ${platforms.includes('instagram') ? 'Instagram captions with hook in first line.' : ''} ${platforms.includes('linkedin') ? 'LinkedIn posts that open with a bold statement or question.' : ''}
+5. Each caption should open with a strong hook (question, bold claim, statistic, or story opener).
 6. Include 3-5 relevant hashtags per post. Mix broad and niche hashtags. Never use generic tags like #marketing or #business alone.
-7. The imageDescription for each post should describe a PROFESSIONAL AD CREATIVE — describe the visual style (photography, illustration, graphic design), subjects, colors, mood, lighting, and composition. Do NOT mention aspect ratios, post numbers, "Brand" labels, or any metadata. Describe it as if briefing a professional designer.
+7. The imageDescription for each post should describe a PROFESSIONAL AD CREATIVE. Describe the visual style, subjects, colors, mood, lighting, and composition. Do NOT mention metadata.
 
 Return ONLY valid JSON (no markdown, no backticks):
 {
@@ -361,11 +403,29 @@ Return ONLY valid JSON (no markdown, no backticks):
 
       const errs = [];
       posts.forEach((post, i) => {
-        const mkrs = pTemplates[post.platform?.toLowerCase()];
+        const platform = post.platform?.toLowerCase();
+        const mkrs = pTemplates[platform];
+        
         if (mkrs) {
           const miss = mkrs.filter(m => !post.caption.includes(m));
           if (miss.length > 0) {
             errs.push(`Post ${i + 1} (${post.platform}) is missing markers: ${miss.join(', ')}`);
+          }
+        }
+
+        // CRITICAL CHECK: Detect if any placeholders from the template were left unfilled
+        const placeholderRegex = /\[[^\]]*[A-Z0-9][^\]]*\]/g;
+        const foundPlaceholders = post.caption.match(placeholderRegex);
+        
+        if (foundPlaceholders && foundPlaceholders.length > 0) {
+          // Filter out valid [Link] or [Your CTA Link] placeholders
+          const realPlaceholders = foundPlaceholders.filter(p => 
+            !p.toLowerCase().includes('link') && 
+            !p.toLowerCase().includes('cta')
+          );
+          
+          if (realPlaceholders.length > 0) {
+            errs.push(`Post ${i + 1} (${post.platform}) still contains unfilled placeholders: ${realPlaceholders.join(', ')}`);
           }
         }
       });
@@ -397,7 +457,11 @@ Return ONLY valid JSON (no markdown, no backticks):
         } else {
           console.log(`⚠️ Attempt ${attempts} failed validation: ${validation.errorDetails}`);
           // Update prompt with feedback for next attempt
-          currentPrompt = `${captionPrompt}\n\nCRITICAL FIX: Your previous response failed to follow the template structure. The following errors were found: ${validation.errorDetails}. You MUST include all bullet points, headings, and colon-marked labels exactly as provided. Do NOT use paragraphs!`;
+          currentPrompt = `${captionPrompt}\n\nCRITICAL FIX REQUIRED: Your previous response failed validation with the following errors: ${validation.errorDetails}. 
+- You MUST replace every single bracketed placeholder (e.g. [Key Point], [Tip], [Outcome]) with actual meaningful content. 
+- Do NOT leave any square brackets except for [Link] or [Your CTA Link].
+- Follow the structure STRICTLY while filling in the details. 
+- DO NOT USE PARAGRAPHS.`;
         }
       } else if (attempts === maxAttempts) {
         sendEvent('error', { message: 'Failed to generate campaign content after multiple attempts' });

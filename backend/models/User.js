@@ -184,11 +184,22 @@ const userSchema = new mongoose.Schema({
   timestamps: true
 });
 
+// Fix credits if they are stored as a number (e.g. from manual DB edits or old bugs)
+userSchema.pre('init', function (doc) {
+  if (doc && typeof doc.credits === 'number') {
+    doc.credits = {
+      balance: doc.credits,
+      totalUsed: doc.totalUsed || 0,
+      history: []
+    };
+  }
+});
+
 // Hash password before saving
-userSchema.pre('save', async function(next) {
+userSchema.pre('save', async function (next) {
   // Only hash the password if it has been modified (or is new)
   if (!this.isModified('password')) return next();
-  
+
   // Hash password with cost of 12
   const salt = await bcrypt.genSalt(12);
   this.password = await bcrypt.hash(this.password, salt);
@@ -196,12 +207,12 @@ userSchema.pre('save', async function(next) {
 });
 
 // Method to check if password is correct
-userSchema.methods.comparePassword = async function(candidatePassword) {
+userSchema.methods.comparePassword = async function (candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
 // Method to get public profile (without sensitive data)
-userSchema.methods.toPublicJSON = function() {
+userSchema.methods.toPublicJSON = function () {
   return {
     _id: this._id,
     email: this.email,
