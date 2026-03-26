@@ -85,9 +85,7 @@ const app = express();
 // ============================================
 // Security: Trust Proxy (for Render / Cloudflare)
 // ============================================
-if (process.env.NODE_ENV === 'production') {
-  app.set('trust proxy', 1);
-}
+app.set('trust proxy', 1);
 
 // ============================================
 // Security: Helmet — Secure HTTP Headers
@@ -132,10 +130,10 @@ app.use(cors({
 // ============================================
 // Security: Rate Limiting
 // ============================================
-// General API rate limit — 200 requests per 15 minutes per IP
+// General API rate limit — 500 requests per 15 minutes per IP
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 200,
+  max: 5000,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later.' }
