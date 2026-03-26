@@ -115,39 +115,39 @@ const PLATFORM_CONTENT_TEMPLATES: Record<string, { id: string; label: string; st
       id: 'li_prof_1', 
       tone: 'professional',
       label: 'Standard Executive', 
-      structure: "💼 STRATEGIC INITIATIVE: {name}\n• Executive Summary: {desc}\n• Core Objective: {obj}\n\n📊 CORPORATE ANALYSIS:\n1. [Market Positioning 1]\n2. [Operational Impact 2]\n\n🚀 KEY DELIVERABLES:\n• [Outcome]\n\n🔗 FULL REPORT: [Link]" 
+      structure: "Innovation is the difference between a leader and a follower. Today, we're choosing to lead. 🚀\n\n💼 STRATEGIC INITIATIVE: {name}\n• Executive Summary: {desc}\n• Core Objective: {obj}\n\n📊 CORPORATE ANALYSIS:\n1. [Market Positioning 1]\n2. [Operational Impact 2]\n\n🚀 KEY DELIVERABLES:\n• [Outcome]\n\n🔗 FULL REPORT: [Link]" 
     },
     { 
       id: 'li_prof_2', 
       tone: 'professional',
       label: 'Leadership Angle', 
-      structure: "🚨 THE FUTURE OF {obj}\n\nI've been analyzing {name} lately. \n\n💡 STRATEGIC INSIGHTS:\n• {desc}\n\nWhat are your thoughts on this industry shift? 👇\n\n#Leadership #Innovation" 
+      structure: "The signal is often lost in the noise. It's time to talk about the future of {obj}. 📡\n\n🚨 THE FUTURE OF {obj}\n\nI've been analyzing {name} lately. \n\n💡 STRATEGIC INSIGHTS:\n• {desc}\n\nWhat are your thoughts on this industry shift? 👇\n\n#Leadership #Innovation" 
     },
     { 
       id: 'li_prof_3', 
       tone: 'professional',
       label: 'Business Win', 
-      structure: "📈 BUSINESS UPDATE: Achieving {obj}\n\nThrilled to share how {name} is driving results.\n\n✅ KEY TAKEAWAYS:\n• [Point 1]\n• [Point 2]\n\n{desc}\n\n🔗 DETAILS: [Link]" 
+      structure: "Operational excellence is table stakes. Real growth comes from a relentless focus on {obj}. 📈\n\n📈 BUSINESS UPDATE: Achieving {obj}\n\nThrilled to share how {name} is driving results.\n\n✅ KEY TAKEAWAYS:\n• [Point 1]\n• [Point 2]\n\n{desc}\n\n🔗 DETAILS: [Link]" 
     },
     // EDUCATIONAL
     { 
       id: 'li_edu_1', 
       tone: 'educational',
       label: 'Expert Guide', 
-      structure: "🎓 MASTERING {obj}\n\n{name} is the framework we've been using to solve {desc}.\n\n💡 LESSONS LEARNED:\n1. [Insight 1]\n2. [Strategy 2]\n3. [Tactic 3]\n\nFull case study: [Link]" 
+      structure: "Knowledge is only potential power. Execution is where the value lives. Here's your roadmap for {obj}. 🎓\n\n🎓 MASTERING {obj}\n\n{name} is the framework we've been using to solve {desc}.\n\n💡 LESSONS LEARNED:\n1. [Insight 1]\n2. [Strategy 2]\n3. [Tactic 3]\n\nFull case study: [Link]" 
     },
     { 
       id: 'li_edu_2', 
       tone: 'educational',
       label: 'Case Study', 
-      structure: "📈 CASE STUDY: Optimizing {obj}\n\nProject: {name}\n\n❓ THE CHALLENGE:\n{desc}\n\n🏆 THE RESULTS:\n• [Achievement 1]\n• [Achievement 2]\n\nRead the breakdown: [Link]" 
+      structure: "Data tells a story, but results build a legacy. Our journey with {obj} is proof. 📊\n\n📈 CASE STUDY: Optimizing {obj}\n\nProject: {name}\n\n❓ THE CHALLENGE:\n{desc}\n\n🏆 THE RESULTS:\n• [Achievement 1]\n• [Achievement 2]\n\nRead the breakdown: [Link]" 
     },
     // BOLD
     { 
       id: 'li_bold_1', 
       tone: 'bold',
       label: 'Industry Shakeup', 
-      structure: "⚠️ THE INDUSTRY IS CHANGED: {name}\n\nWe're officially disrupting {obj}.\n\n🔥 WHY THIS MATTERS:\n• [Point 1]\n• [Point 2]\n\n{desc}\n\nJoin the discussion: [Link]" 
+      structure: "Disruption isn't about doing things differently; it's about making the old ways obsolete. ⚡\n\n⚠️ THE INDUSTRY IS CHANGED: {name}\n\nWe're officially disrupting {obj}.\n\n🔥 WHY THIS MATTERS:\n• [Point 1]\n• [Point 2]\n\n{desc}\n\nJoin the discussion: [Link]" 
     }
   ],
   twitter: [
@@ -156,46 +156,46 @@ const PLATFORM_CONTENT_TEMPLATES: Record<string, { id: string; label: string; st
       id: 'tw_cas_1', 
       tone: 'casual',
       label: 'Punchy News', 
-      structure: "🚀 Introducing {name}: {desc}\n\nKey Goal: {obj}\n\nCheck it out here: [Link]\n\n#Launch #Tech #Innovation" 
+      structure: "Ship first. Refine later. {name} is live. 🔥\n\n🚀 Introducing {name}: {desc}\n\nKey Goal: {obj}\n\nCheck it out here: [Link]\n\n#Launch #Tech #Innovation" 
     },
     { 
       id: 'tw_cas_2', 
       tone: 'casual',
       label: 'Quick Thought', 
-      structure: "{name} is finally here! 🥳\n\nWe're helping people {obj} like never before.\n\n{desc}\n\n👇 [Link]" 
+      structure: "Most people overthink {obj}. We just solved it. 🚀\n\n{name} is finally here! 🥳\n\nWe're helping people {obj} like never before.\n\n{desc}\n\n👇 [Link]" 
     },
     // PROFESSIONAL
     { 
       id: 'tw_prof_1', 
       tone: 'professional',
       label: 'Official Update', 
-      structure: "📢 STRATEGIC UPDATE: {name}\n\nWe're optimizing for {obj} through {desc}.\n\nKey pillars:\n• [Pillar 1]\n• [Pillar 2]\n\nDetails: [Link]" 
+      structure: "Performance is the only metric that matters. {name} update. 📢\n\n📢 STRATEGIC UPDATE: {name}\n\nWe're optimizing for {obj} through {desc}.\n\nKey pillars:\n• [Pillar 1]\n• [Pillar 2]\n\nDetails: [Link]" 
     },
     { 
       id: 'tw_prof_2', 
       tone: 'professional',
       label: 'Data Point', 
-      structure: "📊 DATA INSIGHT: {obj}\n\nOur latest launch, {name}, is addressing {desc}.\n\nKey metric impact:\n• [Metric 1]: +[X]%\n• [Metric 2]: -[Y]%\n\nRead more: [Link]" 
+      structure: "Numbers > Opinions. Check the impact of {obj}. 📊\n\n📊 DATA INSIGHT: {obj}\n\nOur latest launch, {name}, is addressing {desc}.\n\nKey metric impact:\n• [Metric 1]: +[X]%\n• [Metric 2]: -[Y]%\n\nRead more: [Link]" 
     },
     // EDUCATIONAL
     { 
       id: 'tw_edu_1', 
       tone: 'educational',
       label: 'Thread Hook', 
-      structure: "I just discovered the secret to {obj} 🧵\n\n{name} is changing how we view {desc}.\n\nHere are 3 reasons why:\n\n1/ [Expert Point 1]\n2/ [Advanced Tip 2]\n3/ [Quick Win 3]\n\nClick to read more: [Link]" 
+      structure: "The ROI of {obj} is misunderstood. Here's the truth. 🧵\n\nI just discovered the secret to {obj} 🧵\n\n{name} is changing how we view {desc}.\n\nHere are 3 reasons why:\n\n1/ [Expert Point 1]\n2/ [Advanced Tip 2]\n3/ [Quick Win 3]\n\nClick to read more: [Link]" 
     },
     { 
       id: 'tw_edu_2', 
       tone: 'educational',
       label: 'Quick Tips', 
-      structure: "💡 Quick Tips for {obj}:\n\n1️⃣ Use {name}\n2️⃣ Focus on {desc}\n3️⃣ [Tip 3]\n\nSimple but effective. ✅ [Link]" 
+      structure: "Low effort. High leverage. 3 ways to win at {obj}. 💡\n\n💡 Quick Tips for {obj}:\n\n1️⃣ Use {name}\n2️⃣ Focus on {desc}\n3️⃣ [Tip 3]\n\nSimple but effective. ✅ [Link]" 
     },
     // BOLD
     { 
       id: 'tw_bold_1', 
       tone: 'bold',
       label: 'Bold Claims', 
-      structure: "STOP doing [Common Mistake]. 🛑\n\n{name} is here to {obj}. \n\n{desc}\n\nNo more excuses. [Link]" 
+      structure: "Average is the enemy. Stop settling for less in {obj}. 🛑\n\nSTOP doing [Common Mistake]. 🛑\n\n{name} is here to {obj}. \n\n{desc}\n\nNo more excuses. [Link]" 
     }
   ],
   facebook: [
