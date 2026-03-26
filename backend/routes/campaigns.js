@@ -112,10 +112,12 @@ router.get('/', protect, async (req, res) => {
       }
     }
     
-    // For scheduled campaigns past due WITHOUT a socialPostId, keep as scheduled
-    // (they were never actually sent to Ayrshare)
-    
-    // Get counts by status
+    // After verification, filter out campaigns whose status changed and no longer matches the query
+    const filteredCampaigns = (status && status !== 'all')
+      ? campaigns.filter(c => c.status === status)
+      : campaigns;
+
+    // Get counts by status (re-fetch after potential updates)
     const mongoose = require('mongoose');
     const statusCounts = await Campaign.aggregate([
       { $match: { userId: new mongoose.Types.ObjectId(userId) } },
@@ -138,7 +140,7 @@ router.get('/', protect, async (req, res) => {
     
     res.json({
       success: true,
-      campaigns,
+      campaigns: filteredCampaigns,
       counts
     });
   } catch (error) {
@@ -595,7 +597,7 @@ router.post('/', protect, async (req, res) => {
       ...req.body,
       userId
     };
-    
+
     const campaign = new Campaign(campaignData);
     await campaign.save();
     
@@ -1257,7 +1259,7 @@ Brand Voice: ${brandProfile.brandVoice || 'Professional'}`;
     // Use Gemini to analyze image and generate caption
     const { callGemini } = require('../services/geminiAI');
     
-    // Extract base64 data
+    // Extract base64 data — handle URLs, data URIs, and raw base64
     let imageData = image;
     let mimeType = 'image/png';
     if (image.startsWith('data:')) {
@@ -1265,6 +1267,18 @@ Brand Voice: ${brandProfile.brandVoice || 'Professional'}`;
       if (matches) {
         mimeType = matches[1];
         imageData = matches[2];
+      }
+    } else if (image.startsWith('http://') || image.startsWith('https://')) {
+      const fetchImg = (...args) => import('node-fetch').then(({default: f}) => f(...args));
+      try {
+        const imgResponse = await fetchImg(image);
+        const buffer = await imgResponse.buffer();
+        imageData = buffer.toString('base64');
+        const contentType = imgResponse.headers.get('content-type');
+        if (contentType) mimeType = contentType.split(';')[0];
+      } catch (fetchErr) {
+        console.error('Failed to fetch image URL:', fetchErr);
+        return res.status(400).json({ success: false, message: 'Failed to fetch image from URL' });
       }
     }
     
@@ -1275,7 +1289,7 @@ Requirements:
 1. Write a catchy, engaging caption that matches the image content
 2. Include relevant emojis
 3. Add a clear call-to-action
-4. Include 5-8 relevant hashtags at the end
+4. Include exactly 4 relevant hashtags at the end
 5. Keep it concise but impactful (2-4 sentences + hashtags)
 6. Match the tone appropriate for ${platform || 'Instagram'}
 
@@ -1342,7 +1356,7 @@ Return ONLY the caption text with hashtags. No JSON, no explanations.`;
     res.json({
       success: true,
       caption: caption.trim(),
-      hashtags: hashtags,
+      hashtags: hashtags.slice(0, 4),
       creditsRemaining: captionCreditResult.creditsRemaining
     });
     
@@ -1390,7 +1404,7 @@ router.post('/process-aspect-ratio', protect, async (req, res) => {
       });
     }
     
-    // Extract base64 data
+    // Extract base64 data — handle URLs, data URIs, and raw base64
     let imageData = image;
     let mimeType = 'image/png';
     if (image.startsWith('data:')) {
@@ -1398,6 +1412,18 @@ router.post('/process-aspect-ratio', protect, async (req, res) => {
       if (matches) {
         mimeType = matches[1];
         imageData = matches[2];
+      }
+    } else if (image.startsWith('http://') || image.startsWith('https://')) {
+      const fetchImg = (...args) => import('node-fetch').then(({default: f}) => f(...args));
+      try {
+        const imgResponse = await fetchImg(image);
+        const buffer = await imgResponse.buffer();
+        imageData = buffer.toString('base64');
+        const contentType = imgResponse.headers.get('content-type');
+        if (contentType) mimeType = contentType.split(';')[0];
+      } catch (fetchErr) {
+        console.error('Failed to fetch image URL:', fetchErr);
+        return res.status(400).json({ success: false, message: 'Failed to fetch image from URL' });
       }
     }
     

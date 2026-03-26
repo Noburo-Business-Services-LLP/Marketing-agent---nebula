@@ -9,7 +9,9 @@ function createTransporter() {
   }
 
   return nodemailer.createTransport({
-    service: 'gmail',
+    host: 'smtppro.zoho.in',
+    port: 465,
+    secure: true,
     auth: {
       user: smtpEmail,
       pass: smtpPassword,
@@ -23,7 +25,7 @@ async function sendSupportEmail({ name, email, message }) {
   const smtpEmail = process.env.SMTP_EMAIL;
 
   await transporter.sendMail({
-    from: `Nebulaa Dashboard <${smtpEmail}>`,
+    from: `Nebulaa Gravity <${smtpEmail}>`,
     to: 'support@nebulaa.ai',
     replyTo: email || undefined,
     subject: 'New Support Query from Nebulaa Dashboard',

@@ -18,7 +18,8 @@ import {
   Layers,
   PieChart,
   Sun,
-  Moon
+  Moon,
+  Mail
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 
@@ -26,6 +27,7 @@ const LandingPage: React.FC = () => {
   const navigate = useNavigate();
   const [scrollY, setScrollY] = useState(0);
   const [isVisible, setIsVisible] = useState<{[key: string]: boolean}>({});
+  const [showContact, setShowContact] = useState(false);
   const observerRefs = useRef<{[key: string]: HTMLDivElement | null}>({});
   const { theme, toggleTheme } = useTheme();
 
@@ -56,25 +58,9 @@ const LandingPage: React.FC = () => {
     return () => observer.disconnect();
   }, []);
 
-  const brands = [
-    "Google", "Microsoft", "Spotify", "Slack", "Notion", "Figma"
-  ];
 
   return (
     <div className={`min-h-screen overflow-x-hidden antialiased ${theme === 'dark' ? 'bg-[#070A12] text-[#ededed]' : 'bg-white text-gray-900'}`}>
-      {/* Theme Toggle Button */}
-      <button
-        onClick={toggleTheme}
-        className={`fixed top-24 right-6 p-3 rounded-full transition-all duration-300 z-50 ${
-          theme === 'dark' 
-            ? 'bg-[#1a1f2e] hover:bg-[#252b3d] text-yellow-400' 
-            : 'bg-white hover:bg-gray-100 text-gray-700 shadow-md'
-        }`}
-        title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
-      >
-        {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-      </button>
-
       {/* Navigation */}
       <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
         scrollY > 50 
@@ -124,11 +110,6 @@ const LandingPage: React.FC = () => {
         
         <div className="relative max-w-6xl mx-auto px-6">
           <div className="max-w-3xl mx-auto text-center">
-            {/* Badge */}
-            <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full mb-8 ${theme === 'dark' ? 'bg-[#ffcc29]/10 border border-[#ffcc29]/30' : 'bg-[#ffcc29]/10 border border-[#ffcc29]/30'}`}>
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-              <span className="text-sm font-medium text-[#ffcc29]">Now with GPT-4 Integration</span>
-            </div>
 
             {/* Headline */}
             <h1 className={`text-4xl md:text-6xl lg:text-7xl font-bold tracking-tight leading-[1.1] mb-6 ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>
@@ -150,7 +131,7 @@ const LandingPage: React.FC = () => {
 
             {/* Subheadline */}
             <p className={`text-lg md:text-xl leading-relaxed mb-10 max-w-2xl mx-auto ${theme === 'dark' ? 'text-[#ededed]/70' : 'text-gray-600'}`}>
-              Nebulaa Gravity uses advanced AI to automate your marketing campaigns, analyze competitors, and find the perfect influencers — all from one beautiful dashboard.
+              Nebulaa Gravity automates your marketing campaigns, analyzes competitors, and finds the perfect influencers — all from one beautiful dashboard.
             </p>
 
             {/* CTAs */}
@@ -164,34 +145,6 @@ const LandingPage: React.FC = () => {
               </button>
             </div>
 
-            {/* Social proof */}
-            <div className="flex flex-col items-center gap-4">
-              <div className="flex -space-x-3">
-                {[1, 2, 3, 4, 5].map((i) => (
-                  <div key={i} className={`w-10 h-10 rounded-full border-2 overflow-hidden ${theme === 'dark' ? 'border-[#070A12] bg-gradient-to-br from-[#1a1f2e] to-[#0d1117]' : 'border-white bg-gradient-to-br from-gray-100 to-gray-200'}`}>
-                    <img 
-                      src={`https://i.pravatar.cc/100?img=${i + 10}`} 
-                      alt="" 
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                ))}
-                <div className={`w-10 h-10 rounded-full border-2 bg-[#ffcc29] flex items-center justify-center text-[#070A12] text-xs font-medium ${theme === 'dark' ? 'border-[#070A12]' : 'border-white'}`}>
-                  +2k
-                </div>
-              </div>
-              <div className={`flex items-center gap-2 text-sm ${theme === 'dark' ? 'text-[#ededed]/70' : 'text-gray-600'}`}>
-                <div className="flex gap-0.5">
-                  {[...Array(5)].map((_, i) => (
-                    <svg key={i} className="w-4 h-4 text-[#ffcc29] fill-current" viewBox="0 0 20 20">
-                      <path d="M10 15l-5.878 3.09 1.123-6.545L.489 6.91l6.572-.955L10 0l2.939 5.955 6.572.955-4.756 4.635 1.123 6.545z"/>
-                    </svg>
-                  ))}
-                </div>
-                <span className={`font-medium ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>4.9/5</span>
-                <span>from 2,000+ reviews</span>
-              </div>
-            </div>
           </div>
 
           {/* Dashboard Preview */}
@@ -265,19 +218,6 @@ const LandingPage: React.FC = () => {
         </div>
       </section>
 
-      {/* Trusted By */}
-      <section className={`py-16 border-y ${theme === 'dark' ? 'border-slate-700/50 bg-[#0d1117]/50' : 'border-gray-200 bg-gray-50'}`}>
-        <div className="max-w-6xl mx-auto px-6">
-          <p className={`text-center text-sm font-medium mb-8 ${theme === 'dark' ? 'text-[#ededed]/50' : 'text-gray-500'}`}>TRUSTED BY LEADING COMPANIES WORLDWIDE</p>
-          <div className="flex flex-wrap items-center justify-center gap-x-12 gap-y-6">
-            {brands.map((brand, i) => (
-              <div key={i} className={`text-2xl font-semibold cursor-default transition-colors ${theme === 'dark' ? 'text-slate-300 hover:text-slate-400' : 'text-gray-400 hover:text-gray-500'}`}>
-                {brand}
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
 
       {/* Features Section */}
       <section id="features" className="py-24 md:py-32">
@@ -304,7 +244,7 @@ const LandingPage: React.FC = () => {
               {
                 icon: <Target className="w-6 h-6" />,
                 title: "Smart Campaigns",
-                description: "AI-powered campaign creation that adapts to your audience in real-time.",
+                description: "Automated campaign creation that adapts to your audience in real-time.",
                 bgColor: theme === 'dark' ? "bg-violet-500/10" : "bg-violet-50",
                 iconColor: "text-[#ffcc29]"
               },
@@ -313,13 +253,6 @@ const LandingPage: React.FC = () => {
                 title: "Advanced Analytics",
                 description: "Deep insights into performance with actionable recommendations.",
                 bgColor: theme === 'dark' ? "bg-[#ffcc29]/10" : "bg-[#ffcc29]/10",
-                iconColor: "text-[#ffcc29]"
-              },
-              {
-                icon: <Users className="w-6 h-6" />,
-                title: "Influencer Matching",
-                description: "Find creators who align perfectly with your brand values.",
-                bgColor: theme === 'dark' ? "bg-blue-500/10" : "bg-blue-50",
                 iconColor: "text-[#ffcc29]"
               },
               {
@@ -332,7 +265,7 @@ const LandingPage: React.FC = () => {
               {
                 icon: <Globe className="w-6 h-6" />,
                 title: "Multi-Platform",
-                description: "Manage all channels from Instagram to YouTube in one place.",
+                description: "Manage all channels from Instagram to LinkedIn in one place.",
                 bgColor: theme === 'dark' ? "bg-teal-500/10" : "bg-teal-50",
                 iconColor: "text-teal-600"
               },
@@ -389,7 +322,7 @@ const LandingPage: React.FC = () => {
               {
                 step: "02",
                 title: "Set your goals",
-                description: "Tell us what you want to achieve and our AI will create a personalized strategy."
+                description: "Tell us what you want to achieve and Gravity will create a personalized strategy."
               },
               {
                 step: "03",
@@ -412,73 +345,7 @@ const LandingPage: React.FC = () => {
         </div>
       </section>
 
-      {/* Stats Section */}
-      <section className="py-24 md:py-32 bg-[#070A12] text-white">
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="grid md:grid-cols-2 gap-16 items-center">
-            <div>
-              <h2 className="text-3xl md:text-5xl font-bold tracking-tight mb-6">
-                Results that speak for themselves
-              </h2>
-              <p className="text-lg text-slate-400 mb-8">
-                Our customers see measurable improvements within the first month of using Nebulaa Gravity.
-              </p>
-              <div className="space-y-4">
-                {[
-                  "Average 340% increase in engagement",
-                  "Save 20+ hours per week on marketing",
-                  "10x faster campaign deployment"
-                ].map((item, i) => (
-                  <div key={i} className="flex items-center gap-3">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-                    <span className="text-slate-300">{item}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-6">
-              {[
-                { value: "10K+", label: "Active Users", icon: <Users className="w-5 h-5" /> },
-                { value: "500M+", label: "Impressions", icon: <TrendingUp className="w-5 h-5" /> },
-                { value: "99.9%", label: "Uptime", icon: <Shield className="w-5 h-5" /> },
-                { value: "24/7", label: "Support", icon: <Clock className="w-5 h-5" /> }
-              ].map((stat, i) => (
-                <div key={i} className="bg-[#0a0f1a]/50 rounded-2xl p-6 border border-[#0f1526]/50">
-                  <div className="text-slate-400 mb-2">{stat.icon}</div>
-                  <div className="text-3xl md:text-4xl font-bold mb-1">{stat.value}</div>
-                  <div className="text-slate-400 text-sm">{stat.label}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
 
-      {/* Testimonial */}
-      <section className={`py-24 md:py-32 ${theme === 'dark' ? 'bg-[#070A12]' : 'bg-white'}`}>
-        <div className="max-w-4xl mx-auto px-6 text-center">
-          <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full mb-8 ${theme === 'dark' ? 'bg-amber-500/10 border border-amber-500/20' : 'bg-amber-50 border border-amber-100'}`}>
-            <Award className="w-4 h-4 text-amber-600" />
-            <span className={`text-sm font-medium ${theme === 'dark' ? 'text-amber-400' : 'text-amber-700'}`}>Customer Story</span>
-          </div>
-          <blockquote className={`text-2xl md:text-4xl font-medium leading-relaxed mb-8 ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>
-            "Nebulaa Gravity transformed how we approach marketing. We've seen a 
-            <span className="text-[#ffcc29]"> 340% increase in engagement</span> 
-            {" "}and saved countless hours on campaign management."
-          </blockquote>
-          <div className="flex items-center justify-center gap-4">
-            <img 
-              src="https://i.pravatar.cc/100?img=32" 
-              alt="Sarah Chen" 
-              className="w-14 h-14 rounded-full object-cover"
-            />
-            <div className="text-left">
-              <div className={`font-semibold ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>Sarah Chen</div>
-              <div className={`text-sm ${theme === 'dark' ? 'text-[#ededed]/60' : 'text-gray-500'}`}>CMO at TechFlow</div>
-            </div>
-          </div>
-        </div>
-      </section>
 
       {/* Pricing */}
       <section id="pricing" className={`py-24 md:py-32 ${theme === 'dark' ? 'bg-[#0d1117]' : 'bg-gray-50'}`}>
@@ -492,79 +359,29 @@ const LandingPage: React.FC = () => {
               Simple, transparent pricing
             </h2>
             <p className={`text-lg max-w-2xl mx-auto ${theme === 'dark' ? 'text-[#ededed]/70' : 'text-gray-600'}`}>
-              Start free and upgrade as you grow. No hidden fees, no surprises.
+              Everything you need to automate your marketing. No hidden fees, no surprises.
             </p>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
-            {/* Starter */}
-            <div className={`rounded-2xl p-8 border shadow-sm ${theme === 'dark' ? 'bg-[#070A12] border-slate-700/50' : 'bg-white border-gray-200'}`}>
-              <div className={`text-sm font-medium mb-2 ${theme === 'dark' ? 'text-[#ededed]/60' : 'text-gray-500'}`}>Starter</div>
-              <div className={`text-4xl font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>Free</div>
-              <div className={`text-sm mb-6 ${theme === 'dark' ? 'text-[#ededed]/60' : 'text-gray-500'}`}>Forever free</div>
-              <ul className="space-y-3 mb-8">
-                {['1 social account', '5 campaigns/month', 'Basic analytics', 'Email support'].map((item, i) => (
-                  <li key={i} className="flex items-center gap-3 text-sm">
-                    <CheckCircle2 className={`w-4 h-4 shrink-0 ${theme === 'dark' ? 'text-[#ededed]/40' : 'text-gray-400'}`} />
-                    <span className={theme === 'dark' ? 'text-[#ededed]/70' : 'text-gray-600'}>{item}</span>
-                  </li>
-                ))}
-              </ul>
-              <button 
-                onClick={() => navigate('/login')}
-                className={`w-full py-3 font-medium rounded-xl transition-colors ${
-                  theme === 'dark' 
-                    ? 'bg-[#1a1f2e] hover:bg-[#252b3d] text-[#ededed]'
-                    : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
-                }`}
-              >
-                Sign up free
-              </button>
-            </div>
-
-            {/* Pro */}
+          <div className="max-w-md mx-auto">
             <div className="bg-[#070A12] rounded-2xl p-8 text-white relative shadow-xl">
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-[#ffcc29] rounded-full text-xs font-medium text-[#070A12]">
-                Most popular
+              <div className="text-center mb-6">
+                <div className="text-4xl font-bold mb-1">₹7,500</div>
+                <div className="text-slate-400 text-sm">1,000 credits included</div>
               </div>
-              <div className="text-sm font-medium text-slate-400 mb-2">Pro</div>
-              <div className="text-4xl font-bold mb-1">$49<span className="text-lg text-slate-400 font-normal">/mo</span></div>
-              <div className="text-slate-400 text-sm mb-6">Billed annually</div>
               <ul className="space-y-3 mb-8">
-                {['10 social accounts', 'Unlimited campaigns', 'Advanced analytics', 'Influencer discovery', 'Priority support'].map((item, i) => (
+                {['Automated campaign generation', 'Multi-platform posting', 'Competitor analysis', 'Advanced analytics', 'Instant publishing', 'Priority support'].map((item, i) => (
                   <li key={i} className="flex items-center gap-3 text-sm">
                     <CheckCircle2 className="w-4 h-4 text-[#ffcc29] shrink-0" />
                     <span className="text-slate-300">{item}</span>
                   </li>
                 ))}
               </ul>
-              <button 
-                onClick={() => navigate('/login')}
-                className="w-full py-3 bg-white hover:bg-gray-100 text-[#070A12] font-medium rounded-xl transition-colors"
+              <button
+                onClick={() => navigate('/login?mode=signup')}
+                className="w-full py-3 bg-[#ffcc29] hover:bg-[#e6b800] text-[#070A12] font-medium rounded-xl transition-colors"
               >
                 Start free trial
-              </button>
-            </div>
-
-            {/* Enterprise */}
-            <div className={`rounded-2xl p-8 border shadow-sm ${theme === 'dark' ? 'bg-[#070A12] border-slate-700/50' : 'bg-white border-gray-200'}`}>
-              <div className={`text-sm font-medium mb-2 ${theme === 'dark' ? 'text-[#ededed]/60' : 'text-gray-500'}`}>Enterprise</div>
-              <div className={`text-4xl font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>Custom</div>
-              <div className={`text-sm mb-6 ${theme === 'dark' ? 'text-[#ededed]/60' : 'text-gray-500'}`}>For large teams</div>
-              <ul className="space-y-3 mb-8">
-                {['Unlimited everything', 'Custom integrations', 'Dedicated manager', 'SLA & compliance', 'White label'].map((item, i) => (
-                  <li key={i} className="flex items-center gap-3 text-sm">
-                    <CheckCircle2 className={`w-4 h-4 shrink-0 ${theme === 'dark' ? 'text-[#ededed]/40' : 'text-gray-400'}`} />
-                    <span className={theme === 'dark' ? 'text-[#ededed]/70' : 'text-gray-600'}>{item}</span>
-                  </li>
-                ))}
-              </ul>
-              <button className={`w-full py-3 font-medium rounded-xl transition-colors ${
-                theme === 'dark' 
-                  ? 'bg-[#1a1f2e] hover:bg-[#252b3d] text-[#ededed]'
-                  : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
-              }`}>
-                Contact sales
               </button>
             </div>
           </div>
@@ -608,7 +425,7 @@ const LandingPage: React.FC = () => {
             <div className={`flex items-center gap-8 text-sm ${theme === 'dark' ? 'text-[#ededed]/70' : 'text-gray-600'}`}>
               <a href="/#/privacy-policy" className={`transition-colors ${theme === 'dark' ? 'hover:text-[#ffcc29]' : 'hover:text-[#070A12]'}`}>Privacy</a>
               <a href="/#/terms" className={`transition-colors ${theme === 'dark' ? 'hover:text-[#ffcc29]' : 'hover:text-[#070A12]'}`}>Terms</a>
-              <a href="#" className={`transition-colors ${theme === 'dark' ? 'hover:text-[#ffcc29]' : 'hover:text-[#070A12]'}`}>Contact</a>
+              <button onClick={() => setShowContact(true)} className={`transition-colors ${theme === 'dark' ? 'hover:text-[#ffcc29]' : 'hover:text-[#070A12]'}`}>Contact</button>
             </div>
             <div className={`text-sm ${theme === 'dark' ? 'text-[#ededed]/50' : 'text-gray-500'}`}>
               © 2025 Nebulaa Gravity. All rights reserved.
@@ -616,6 +433,25 @@ const LandingPage: React.FC = () => {
           </div>
         </div>
       </footer>
+
+      {/* Contact Modal */}
+      {showContact && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowContact(false)}>
+          <div className="bg-white rounded-2xl p-8 shadow-2xl max-w-sm mx-4 text-center" onClick={e => e.stopPropagation()}>
+            <div className="w-12 h-12 bg-[#070A12] rounded-full flex items-center justify-center mx-auto mb-4">
+              <Mail className="w-6 h-6 text-[#ffcc29]" />
+            </div>
+            <h3 className="text-xl font-bold text-gray-900 mb-2">Contact Us</h3>
+            <p className="text-gray-500 text-sm mb-4">Reach out to us anytime</p>
+            <a href="mailto:support@nebulaa.ai" className="text-[#070A12] font-semibold text-lg hover:text-[#ffcc29] transition-colors">
+              support@nebulaa.ai
+            </a>
+            <button onClick={() => setShowContact(false)} className="mt-6 block w-full py-2.5 bg-[#070A12] text-white rounded-lg font-medium hover:bg-[#0f1526] transition-colors">
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

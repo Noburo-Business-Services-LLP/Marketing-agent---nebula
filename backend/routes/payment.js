@@ -36,7 +36,7 @@ router.post('/create-order', protect, async (req, res) => {
     if (!numAmount || numAmount < MIN_AMOUNT || numAmount > MAX_AMOUNT || numAmount % 1000 !== 0) {
       return res.status(400).json({ success: false, message: `Choose an amount between ₹${MIN_AMOUNT.toLocaleString()} and ₹${MAX_AMOUNT.toLocaleString()} (in multiples of ₹1,000).` });
     }
-    const credits = (numAmount / 1000) * 100;
+    const credits = 1000; // Fixed 1000 credits for ₹7,500 starter pack
 
     const userId = req.user?.userId || req.user?.id || req.user?._id;
     const user = await User.findById(userId);
@@ -122,7 +122,7 @@ router.post('/verify', protect, async (req, res) => {
 
     // Store payment in history array
     const paidAmount = (await razorpay.orders.fetch(razorpay_order_id))?.amount;
-    const paidCredits = paidAmount ? Math.round((paidAmount / 100 / 1000) * 100) : 100;
+    const paidCredits = 1000; // Fixed 1000 credits per payment
     user.payments.push({
       razorpayOrderId: razorpay_order_id,
       razorpayPaymentId: razorpay_payment_id,

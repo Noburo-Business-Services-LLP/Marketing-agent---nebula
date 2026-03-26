@@ -927,13 +927,33 @@ router.post('/:platform/disconnect', protect, async (req, res) => {
   try {
     const { platform } = req.params;
     const user = await User.findById(req.user._id);
-    
+
+    // Unlink from Ayrshare first
+    if (user.ayrshare?.profileKey) {
+      const ayrsharePlatform = AYRSHARE_PLATFORM_MAP[platform.toLowerCase()] || platform.toLowerCase();
+      try {
+        const response = await fetch('https://app.ayrshare.com/api/profiles/social', {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${process.env.AYRSHARE_API_KEY}`,
+            'Content-Type': 'application/json',
+            'Profile-Key': user.ayrshare.profileKey
+          },
+          body: JSON.stringify({ platform: ayrsharePlatform })
+        });
+        const result = await response.json();
+        console.log(`Ayrshare unlink ${ayrsharePlatform}:`, result.status || result);
+      } catch (ayrshareErr) {
+        console.error(`Ayrshare unlink failed for ${platform}:`, ayrshareErr.message);
+      }
+    }
+
     // Handle X/Twitter naming
     const platformsToRemove = platform.toLowerCase() === 'x' || platform.toLowerCase() === 'twitter'
       ? ['X', 'Twitter', 'x', 'twitter']
       : [platform, platform.toLowerCase(), platform.charAt(0).toUpperCase() + platform.slice(1).toLowerCase()];
-    
-    user.connectedSocials = user.connectedSocials.filter(s => 
+
+    user.connectedSocials = user.connectedSocials.filter(s =>
       !platformsToRemove.includes(s.platform)
     );
     await user.save();
@@ -1123,18 +1143,23 @@ router.get('/status', protect, async (req, res) => {
 router.post('/post', protect, async (req, res) => {
   try {
     const { platforms, content, mediaUrls, scheduledDate } = req.body;
-    
+
     if (!platforms || !content) {
       return res.status(400).json({
         success: false,
         message: 'Platforms and content are required'
       });
     }
-    
+
     const options = {};
     if (mediaUrls) options.mediaUrls = mediaUrls;
     if (scheduledDate) options.scheduleDate = new Date(scheduledDate).toISOString();
-    
+
+    // Pass user's Ayrshare profile key so it posts to their sub-profile
+    if (req.user?.ayrshare?.profileKey) {
+      options.profileKey = req.user.ayrshare.profileKey;
+    }
+
     const result = await postToSocialMedia(platforms, content, options);
     
     res.json({

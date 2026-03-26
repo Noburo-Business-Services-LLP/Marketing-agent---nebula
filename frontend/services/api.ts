@@ -74,22 +74,18 @@ async function apiCall<T>(
   // Add auth token if required
   if (requiresAuth) {
     const token = getToken();
-    console.log('[API] Auth required for', endpoint, 'Token:', token ? token.substring(0, 20) + '...' : 'NO TOKEN');
     if (token) {
       (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
     }
   }
 
   try {
-    console.log('[API] Calling:', `${API_BASE_URL}${endpoint}`);
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       ...options,
       headers,
     });
 
     const data = await response.json();
-    console.log('[API] Response from', endpoint, ':', response.status, data?.success);
-
     // Handle trial/credit expiry responses
     if (response.status === 403 && (data.trialExpired || data.creditsExhausted)) {
       // Dispatch custom event so App.tsx can catch it
@@ -333,7 +329,7 @@ export const apiService = {
         geography: response.context?.geography
       };
     } catch (error) {
-      console.log('Error fetching business context:', error);
+      // Error fetching business context
       return { success: false };
     }
   },
@@ -429,7 +425,7 @@ export const apiService = {
       
       throw new Error('Invalid response');
     } catch (error) {
-      console.log('Using fallback dashboard data:', error);
+      // Using fallback dashboard data
       // Fallback to mock data if API fails or user not logged in
       const activeCount = campaigns.filter(c => c.status === 'active' || c.status === 'posted').length;
       
@@ -470,7 +466,7 @@ export const apiService = {
       );
       return response.data;
     } catch (error) {
-      console.log('Competitor analysis error:', error);
+      // Competitor analysis error
       return { competitors: [], marketGaps: [], recommendations: [] };
     }
   },
@@ -496,10 +492,10 @@ export const apiService = {
     } catch (error: any) {
       // Propagate credit errors instead of swallowing them
       if (error?.message?.includes('Insufficient credits') || error?.message?.includes('credits') || error?.status === 403) {
-        console.log('Insufficient credits for campaign suggestions:', error);
+        // Insufficient credits for campaign suggestions
         return { campaigns: [], insufficientCredits: true, creditsRemaining: error?.creditsRemaining || 0, required: error?.required || 0 };
       }
-      console.log('Campaign suggestions error:', error);
+      // Campaign suggestions error
       return { campaigns: [] };
     }
   },
@@ -575,7 +571,7 @@ export const apiService = {
                   onError(data.message);
                 }
               } catch (e) {
-                console.log('SSE parse error:', e);
+                // SSE parse error
               }
             }
           }
@@ -606,7 +602,7 @@ export const apiService = {
       );
       return response;
     } catch (error) {
-      console.log('Clear cache error:', error);
+      // Clear cache error
       return { success: false };
     }
   },
@@ -620,7 +616,7 @@ export const apiService = {
       );
       return response.data;
     } catch (error) {
-      console.log('Dashboard refresh error:', error);
+      // Dashboard refresh error
       return null;
     }
   },
@@ -638,7 +634,7 @@ export const apiService = {
         trend: response.trend || 'stable'
       };
     } catch (error) {
-      console.log('Synopsis error:', error);
+      // Synopsis error
       return { 
         synopsis: 'Unable to generate synopsis at this time. Please try again.', 
         insights: [], 
@@ -707,7 +703,7 @@ export const apiService = {
       return { connections: response.connections };
     } catch (error) {
       // Fallback to mock data if not logged in or API fails
-      console.log('Using mock social connections');
+      // Using mock social connections
       return { connections: socialConnections };
     }
   },
@@ -838,7 +834,7 @@ export const apiService = {
       );
       return { posts: response.posts || [], competitors: response.competitors || [] };
     } catch (error) {
-      console.log('Using fallback competitor data');
+      // Using fallback competitor data
       // Return empty - will trigger seed on page
       return { posts: [], competitors: [] };
     }
@@ -926,7 +922,7 @@ export const apiService = {
       );
       return { influencers: response.influencers || [] };
     } catch (error) {
-      console.log('Using fallback influencer data');
+      // Using fallback influencer data
       return { influencers: [] };
     }
   },
@@ -1005,7 +1001,7 @@ export const apiService = {
       );
       return { campaigns: response.campaigns || [], counts: response.counts };
     } catch (error) {
-      console.log('Using fallback campaign data:', error);
+      // Using fallback campaign data
       return { campaigns };
     }
   },
@@ -1298,7 +1294,7 @@ export const apiService = {
       );
       return response.analytics;
     } catch (error) {
-      console.log('Analytics error:', error);
+      // Analytics error
       return {
         totals: { impressions: 0, clicks: 0, engagement: 0, reach: 0, spend: 0 },
         averages: { ctr: 0, engagementRate: 0 },
@@ -1329,7 +1325,7 @@ export const apiService = {
       );
       return { reminders: response.reminders || [] };
     } catch (error) {
-      console.log('Reminders error:', error);
+      // Reminders error
       return { reminders: [] };
     }
   },
@@ -1343,7 +1339,7 @@ export const apiService = {
       );
       return { reminders: response.reminders || [], count: response.count || 0 };
     } catch (error) {
-      console.log('Pending reminders error:', error);
+      // Pending reminders error
       return { reminders: [], count: 0 };
     }
   },
@@ -1357,7 +1353,7 @@ export const apiService = {
       );
       return { events: response.events || [] };
     } catch (error) {
-      console.log('Calendar events error:', error);
+      // Calendar events error
       return { events: [] };
     }
   },
@@ -1607,7 +1603,7 @@ export const apiService = {
       );
       return { notifications: response.notifications || [], unreadCount: response.unreadCount || 0 };
     } catch (error) {
-      console.log('Notifications error:', error);
+      // Notifications error
       return { notifications: [], unreadCount: 0 };
     }
   },
@@ -2246,7 +2242,6 @@ export const apiService = {
     const queryString = Object.keys(cleanParams).length > 0 
       ? '?' + new URLSearchParams(cleanParams).toString() 
       : '';
-    console.log('[getLeads] Query string:', queryString);
     const response = await apiCall<any>(
       `/reachouts/leads${queryString}`,
       { method: 'GET' },

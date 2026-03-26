@@ -215,7 +215,7 @@ const BrandAssets: React.FC = () => {
             Brand Assets
           </h1>
           <p className={`${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-            Upload your brand logos — AI will automatically place them in the best position on generated images
+            Upload your brand logos — Gravity will automatically place them in the best position on generated images
           </p>
         </div>
 

@@ -128,16 +128,16 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, daysUsed = 7, onLog
   const [migrating, setMigrating] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
-  const [sliderValue, setSliderValue] = useState(3000); // ₹3,000 default
 
-  const credits = (sliderValue / 1000) * 100;
+  const price = 7500;
+  const credits = 1000;
 
   const handleSubscribe = async () => {
     setLoading(true);
     setError('');
 
     try {
-      const orderData = await apiService.createPaymentOrder(sliderValue);
+      const orderData = await apiService.createPaymentOrder(price);
       if (!orderData.success) throw new Error(orderData.message || 'Failed to create order');
 
       const options = {
@@ -145,7 +145,7 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, daysUsed = 7, onLog
         amount: orderData.order.amount,
         currency: orderData.order.currency,
         name: 'Nebulaa',
-        description: `${credits} Credits — ₹${sliderValue.toLocaleString('en-IN')}`,
+        description: `${credits} Credits — ₹${price.toLocaleString('en-IN')}`,
         order_id: orderData.order.id,
         prefill: orderData.prefill,
         theme: { color: '#ffcc29', backdrop_color: 'rgba(7, 10, 18, 0.9)' },
@@ -275,10 +275,10 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, daysUsed = 7, onLog
 
   // ─── Feature lists ───
   const features = [
-    { icon: <Bot className="w-4 h-4" />, text: 'AI credits loaded instantly on production' },
+    { icon: <Bot className="w-4 h-4" />, text: '1,000 credits loaded instantly on production' },
     { icon: <Target className="w-4 h-4" />, text: '+10 daily login bonus credits' },
     { icon: <Globe className="w-4 h-4" />, text: 'All your demo data migrated' },
-    { icon: <Megaphone className="w-4 h-4" />, text: 'AI campaign & content generation' },
+    { icon: <Megaphone className="w-4 h-4" />, text: 'Campaign & content generation' },
     { icon: <Globe className="w-4 h-4" />, text: 'Multi-platform social posting' },
     { icon: <Users className="w-4 h-4" />, text: 'Competitor intelligence & tracking' },
     { icon: <BarChart3 className="w-4 h-4" />, text: 'Analytics & performance insights' },
@@ -317,132 +317,118 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, daysUsed = 7, onLog
           </div>
         )}
 
-        {/* ── Credit Slider Card ── */}
-        <GlassCard highlighted className="mb-10">
-          <div className="p-7 md:p-10">
-            {/* Card header */}
-            <div className="flex items-center gap-3.5 mb-8">
-              <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-[#ffcc29]/15 to-[#ffcc29]/5 flex items-center justify-center ring-1 ring-[#ffcc29]/10 overflow-hidden">
-                <img src="/assets/gravity-logo.png" alt="" className="w-7 h-7 object-contain" />
-              </div>
-              <div>
-                <h3 className="text-[17px] font-bold text-white">Buy Credits</h3>
-                <p className="text-[11px] text-[#ededed]/35 tracking-wide">Choose your amount</p>
-              </div>
-            </div>
+        {/* ── Skeuomorphic Credit Card ── */}
+        <div className="mb-10 relative group">
+          {/* Outer glow */}
+          <div className="absolute -inset-1 rounded-[28px] bg-gradient-to-b from-[#ffcc29]/20 via-[#ffcc29]/5 to-transparent blur-sm opacity-60 group-hover:opacity-80 transition-opacity duration-500" />
 
-            {/* Price + credits display */}
-            <div className="text-center mb-8">
-              <div className="text-[56px] font-extrabold text-white leading-none">
-                ₹{sliderValue.toLocaleString('en-IN')}
-              </div>
-              <div className="mt-3 inline-flex items-center gap-2 bg-[#ffcc29]/10 border border-[#ffcc29]/20 rounded-full px-5 py-2">
-                <span className="text-[#ffcc29] font-bold text-lg">{credits}</span>
-                <span className="text-[#ededed]/50 text-sm">credits</span>
-              </div>
-              <p className="text-[#ededed]/30 text-xs mt-2">100 credits per ₹1,000</p>
-            </div>
+          {/* Card body */}
+          <div className="relative rounded-3xl overflow-hidden"
+            style={{
+              background: 'linear-gradient(145deg, #1a1f2e 0%, #12161f 40%, #0c1018 100%)',
+              boxShadow: `
+                inset 0 1px 0 rgba(255,255,255,0.07),
+                inset 0 -1px 0 rgba(0,0,0,0.4),
+                0 20px 60px rgba(0,0,0,0.5),
+                0 8px 24px rgba(0,0,0,0.3),
+                0 0 0 1px rgba(255,255,255,0.04)
+              `,
+            }}
+          >
+            {/* Top highlight edge */}
+            <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-[#ffcc29]/25 to-transparent" />
 
-            {/* Slider */}
-            <div className="mb-8 px-2">
-              <style>{`
-                .credit-slider {
-                  -webkit-appearance: none;
-                  appearance: none;
-                  width: 100%;
-                  height: 8px;
-                  border-radius: 9999px;
-                  outline: none;
-                  cursor: pointer;
-                }
-                .credit-slider::-webkit-slider-runnable-track {
-                  height: 8px;
-                  border-radius: 9999px;
-                }
-                .credit-slider::-webkit-slider-thumb {
-                  -webkit-appearance: none;
-                  appearance: none;
-                  width: 28px;
-                  height: 28px;
-                  border-radius: 50%;
-                  background: #ffcc29;
-                  cursor: grab;
-                  margin-top: -10px;
-                  box-shadow: 0 0 12px rgba(255, 204, 41, 0.4), 0 2px 6px rgba(0,0,0,0.3);
-                  border: 3px solid #070A12;
-                  position: relative;
-                  z-index: 2;
-                }
-                .credit-slider::-webkit-slider-thumb:active {
-                  cursor: grabbing;
-                  transform: scale(1.15);
-                }
-                .credit-slider::-moz-range-track {
-                  height: 8px;
-                  border-radius: 9999px;
-                  border: none;
-                }
-                .credit-slider::-moz-range-thumb {
-                  width: 28px;
-                  height: 28px;
-                  border-radius: 50%;
-                  background: #ffcc29;
-                  cursor: grab;
-                  box-shadow: 0 0 12px rgba(255, 204, 41, 0.4), 0 2px 6px rgba(0,0,0,0.3);
-                  border: 3px solid #070A12;
-                }
-                .credit-slider::-moz-range-thumb:active {
-                  cursor: grabbing;
-                  transform: scale(1.15);
-                }
-              `}</style>
-              <input
-                type="range"
-                min={1000}
-                max={20000}
-                step={1000}
-                value={sliderValue}
-                onChange={(e) => setSliderValue(Number(e.target.value))}
-                className="credit-slider"
+            <div className="p-8 md:p-10">
+              {/* Card header with embossed feel */}
+              <div className="flex items-center gap-3.5 mb-10">
+                <div className="w-12 h-12 rounded-2xl flex items-center justify-center overflow-hidden"
+                  style={{
+                    background: 'linear-gradient(145deg, #1e2433 0%, #141821 100%)',
+                    boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.3), inset 0 -1px 2px rgba(255,255,255,0.05), 0 1px 3px rgba(0,0,0,0.2)',
+                  }}
+                >
+                  <img src="/assets/gravity-logo.png" alt="" className="w-7 h-7 object-contain" />
+                </div>
+                <div>
+                  <h3 className="text-[17px] font-bold text-white tracking-wide" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>Nebulaa Gravity</h3>
+                  <p className="text-[11px] text-[#ededed]/35 tracking-wider uppercase">Starter Pack</p>
+                </div>
+              </div>
+
+              {/* Price display — embossed */}
+              <div className="text-center mb-10">
+                <div className="text-[64px] font-extrabold leading-none tracking-tight"
+                  style={{
+                    background: 'linear-gradient(180deg, #ffffff 0%, #d4d4d4 50%, #a0a0a0 100%)',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                    filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.5))',
+                  }}
+                >
+                  ₹7,500
+                </div>
+
+                {/* Credits badge — raised pill */}
+                <div className="mt-4 inline-flex items-center gap-2 px-6 py-2.5 rounded-full"
+                  style={{
+                    background: 'linear-gradient(145deg, #1e2433 0%, #161a24 100%)',
+                    boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.3), inset 0 -1px 1px rgba(255,255,255,0.04), 0 2px 8px rgba(0,0,0,0.2), 0 0 0 1px rgba(255,204,41,0.1)',
+                  }}
+                >
+                  <span className="text-[#ffcc29] font-bold text-xl" style={{ textShadow: '0 0 12px rgba(255,204,41,0.3)' }}>1,000</span>
+                  <span className="text-[#ededed]/40 text-sm font-medium">credits</span>
+                </div>
+                <p className="text-[#ededed]/25 text-xs mt-3 tracking-wide">Free replenish for first 50 users</p>
+              </div>
+
+              {/* Engraved divider */}
+              <div className="relative mb-8">
+                <div className="h-[1px] bg-black/40" />
+                <div className="h-[1px] bg-white/[0.04] mt-[1px]" />
+              </div>
+
+              {/* Features — recessed panel */}
+              <div className="rounded-2xl p-5 mb-8"
                 style={{
-                  background: `linear-gradient(to right, #ffcc29 ${((sliderValue - 1000) / 19000) * 100}%, rgba(255,255,255,0.08) ${((sliderValue - 1000) / 19000) * 100}%)`,
+                  background: 'linear-gradient(180deg, #0a0d14 0%, #0e1219 100%)',
+                  boxShadow: 'inset 0 2px 6px rgba(0,0,0,0.4), inset 0 -1px 2px rgba(255,255,255,0.03), 0 1px 0 rgba(255,255,255,0.03)',
                 }}
-              />
-              <div className="flex justify-between text-[11px] text-[#ededed]/25 mt-2 px-0.5">
-                <span>₹1,000</span>
-                <span>₹5,000</span>
-                <span>₹10,000</span>
-                <span>₹15,000</span>
-                <span>₹20,000</span>
+              >
+                <p className="text-[10px] font-bold text-[#ededed]/25 uppercase tracking-[0.18em] mb-3">What you get</p>
+                <div className="grid grid-cols-2 gap-x-6">
+                  {features.map((f, i) => <FeatureRow key={i} {...f} />)}
+                </div>
               </div>
+
+              {/* CTA Button — raised, tactile */}
+              <button
+                onClick={handleSubscribe}
+                disabled={loading}
+                className="w-full py-4 rounded-2xl font-bold text-[15px] transition-all duration-300 flex items-center justify-center gap-2.5
+                  text-[#070A12] disabled:opacity-50 disabled:cursor-not-allowed active:translate-y-[1px]"
+                style={{
+                  background: 'linear-gradient(180deg, #ffd54f 0%, #ffcc29 40%, #e6b825 100%)',
+                  boxShadow: loading ? 'none' : `
+                    inset 0 1px 0 rgba(255,255,255,0.35),
+                    inset 0 -2px 0 rgba(0,0,0,0.15),
+                    0 4px 12px rgba(255,204,41,0.35),
+                    0 1px 3px rgba(0,0,0,0.3),
+                    0 0 40px rgba(255,204,41,0.08)
+                  `,
+                }}
+              >
+                {loading ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /> Processing...</>
+                ) : (
+                  <><CreditCard className="w-4 h-4" /> Pay ₹7,500 & Activate <ArrowRight className="w-4 h-4" /></>
+                )}
+              </button>
             </div>
 
-            {/* Divider */}
-            <div className="border-t border-white/[0.06] pt-6 mb-6">
-              <p className="text-[10px] font-bold text-[#ededed]/25 uppercase tracking-[0.15em] mb-3">What you get</p>
-              <div className="grid grid-cols-2 gap-x-6">
-                {features.map((f, i) => <FeatureRow key={i} {...f} />)}
-              </div>
-            </div>
-
-            {/* CTA */}
-            <button
-              onClick={handleSubscribe}
-              disabled={loading}
-              className="w-full py-4 rounded-2xl font-semibold text-sm transition-all duration-300 flex items-center justify-center gap-2
-                bg-gradient-to-b from-[#ffcc29] to-[#e6b825] hover:from-[#ffd54f] hover:to-[#ffcc29] text-[#070A12]
-                disabled:opacity-50 disabled:cursor-not-allowed
-                shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_2px_8px_rgba(255,204,41,0.3),0_0_30px_rgba(255,204,41,0.08)]
-                hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.3),0_4px_16px_rgba(255,204,41,0.4),0_0_50px_rgba(255,204,41,0.12)]"
-            >
-              {loading ? (
-                <><Loader2 className="w-4 h-4 animate-spin" /> Processing...</>
-              ) : (
-                <><CreditCard className="w-4 h-4" /> Pay ₹{sliderValue.toLocaleString('en-IN')} & Activate <ArrowRight className="w-4 h-4" /></>
-              )}
-            </button>
+            {/* Bottom edge shadow */}
+            <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-black/50" />
           </div>
-        </GlassCard>
+        </div>
 
         {/* ── Footer ── */}
         <div className="text-center space-y-3">

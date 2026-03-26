@@ -423,7 +423,7 @@ const Competitors: React.FC = () => {
           setLocation(contextRes.businessLocation);
         }
       } catch (error) {
-        console.log('Could not load business location');
+        // Could not load business location
       }
     };
     loadBusinessLocation();
@@ -536,7 +536,7 @@ const Competitors: React.FC = () => {
       <div className="flex justify-between items-start mb-6">
         <div>
           <h1 className={`text-2xl font-bold ${theme.text}`}>Competitor Analysis</h1>
-          <p className={theme.textSecondary}>Track market rivals with real-time AI search.</p>
+          <p className={theme.textSecondary}>Track market rivals with real-time search.</p>
         </div>
       </div>
 
@@ -971,7 +971,7 @@ const Competitors: React.FC = () => {
                   </div>
                   <p className={`text-lg font-semibold ${theme.text} mb-2`}>Crafting Your Viral Post</p>
                   <p className={`text-sm ${theme.textMuted} text-center max-w-sm`}>
-                    Our AI is analyzing the competitor's content and creating a unique, engaging post that will help you stand out...
+                    Gravity is analyzing the competitor's content and creating a unique, engaging post that will help you stand out...
                   </p>
                   <div className="flex items-center gap-2 mt-4">
                     <div className="w-2 h-2 rounded-full bg-[#ffcc29] animate-bounce" style={{ animationDelay: '0ms' }} />
@@ -1001,7 +1001,7 @@ const Competitors: React.FC = () => {
                             : `${isDarkMode ? 'bg-[#161b22] text-white hover:bg-[#21262d]' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`
                         }`}
                       >
-                        <Sparkles className="w-3 h-3" /> AI Image
+                        <Sparkles className="w-3 h-3" /> Generate Image
                       </button>
                       <button
                         onClick={() => setImageMode('upload')}

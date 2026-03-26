@@ -235,10 +235,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
         try {
             const result = await apiService.analyzeWebsite(formData.website);
             
-            console.log('Website analysis result:', result);
-            
             if (result.success && result.data) {
-                console.log('Extracted data:', result.data);
                 
                 // Auto-fill form with analyzed data including businessType and businessLocation
                 // Handle brandVoice - ensure it's always an array
@@ -267,7 +264,6 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                     marketingGoals: result.data.suggestedGoals?.length > 0 ? result.data.suggestedGoals : formData.marketingGoals
                 };
                 
-                console.log('New form data:', newFormData);
                 setFormData(newFormData);
                 
                 // Store the full analysis for use throughout the app
@@ -853,7 +849,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                         Your Competitors <span className={`text-xs font-normal ${theme === 'dark' ? 'text-[#ededed]/50' : 'text-gray-400'}`}>(optional)</span>
                                     </label>
                                     <p className={`text-xs mb-3 ${theme === 'dark' ? 'text-[#ededed]/50' : 'text-gray-500'}`}>
-                                        Add specific competitors you'd like to track, or skip this — our AI will automatically discover competitors based on your business and location.
+                                        Add specific competitors you'd like to track, or skip this — Gravity will automatically discover competitors based on your business and location.
                                     </p>
                                     <div className={`mb-3 p-3 rounded-lg flex items-start gap-2 ${theme === 'dark' ? 'bg-[#ffcc29]/10 border border-slate-700/50' : 'bg-yellow-50 border border-yellow-200'}`}>
                                         <span className="text-[#ffcc29] text-lg">✨</span>

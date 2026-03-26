@@ -49,7 +49,6 @@ const NotificationBell: React.FC = () => {
     setChecking(true);
     try {
       const res = await apiService.checkNotificationsNow();
-      console.log('Check result:', res);
       if (res.notifications && res.notifications.length > 0) {
         alert(`✅ Created ${res.notifications.length} notification(s)!`);
       } else if (res.campaigns && res.campaigns.length > 0) {
