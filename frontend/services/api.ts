@@ -2641,6 +2641,51 @@ export const brandAssetsAPI = {
   },
 };
 
+// ================================
+// Inventory API
+// ================================
+export const inventoryAPI = {
+  // Get all products
+  getProducts: async (filters?: { search?: string; category?: string; status?: string }): Promise<any> => {
+    let url = '/products';
+    if (filters) {
+      const params = new URLSearchParams();
+      if (filters.search) params.append('search', filters.search);
+      if (filters.category) params.append('category', filters.category);
+      if (filters.status) params.append('status', filters.status);
+      const queryString = params.toString();
+      if (queryString) url += `?${queryString}`;
+    }
+    return apiCall(url, { method: 'GET' }, true);
+  },
+
+  // Get a single product
+  getProduct: async (id: string): Promise<any> => {
+    return apiCall(`/products/${id}`, { method: 'GET' }, true);
+  },
+
+  // Create a new product
+  createProduct: async (data: any): Promise<any> => {
+    return apiCall('/products', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }, true);
+  },
+
+  // Update a product
+  updateProduct: async (id: string, data: any): Promise<any> => {
+    return apiCall(`/products/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    }, true);
+  },
+
+  // Delete a product
+  deleteProduct: async (id: string): Promise<any> => {
+    return apiCall(`/products/${id}`, { method: 'DELETE' }, true);
+  },
+};
+
 // ============================================
 // ICP & CHANNEL STRATEGY API
 // ============================================

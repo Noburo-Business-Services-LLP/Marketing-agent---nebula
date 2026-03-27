@@ -14,6 +14,7 @@ import {
   Moon,
   Palette,
   BarChart3,
+  Package,
   Clock,
   Zap,
   ChevronDown,
@@ -126,6 +127,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
     { path: '/competitors', label: 'Competitors', icon: Users },
     { path: '/connect-socials', label: 'Connect Socials', icon: Link2 },
     { path: '/brand-assets', label: 'Brand Assets', icon: Palette },
+    { path: '/inventory', label: 'Inventory', icon: Package },
     { path: '/analytics', label: 'Analytics & Ads', icon: BarChart3 },
   ];
 

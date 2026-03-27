@@ -4009,6 +4009,8 @@ OBJECTIVE: Generate a single, publication-ready social media ad image that looks
 CONTEXT:
 - Brand: ${brandName || 'The brand'}${industry ? ` (${industry} industry)` : ''}
 - Campaign theme: ${campaignTheme || 'Marketing campaign'}
+${options.linkedProduct ? `- Featured Product: ${options.linkedProduct.name}
+- Product description: ${options.linkedProduct.description || 'N/A'}` : ''}
 - Visual direction: ${imageDescription}
 - Tone & mood: ${tone || 'professional'}
 ${keyMessages ? `- Campaign messaging (for design inspiration, NOT to be written verbatim on the image): ${keyMessages}` : ''}
