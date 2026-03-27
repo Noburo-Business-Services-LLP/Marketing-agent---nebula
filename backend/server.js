@@ -75,6 +75,12 @@ const contentRoutes = require('./routes/content');
 // Google Calendar routes
 const googleCalendarRoutes = require('./routes/googleCalendar');
 
+// Admin routes
+const adminRoutes = require('./routes/admin');
+
+// Event tracking utility
+const trackEvent = require('./utils/trackEvent');
+
 // Notification scheduler service
 const notificationScheduler = require('./services/notificationScheduler');
 // Analytics snapshot scheduler
@@ -214,6 +220,43 @@ app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
   next();
 });
+
+// ============================================
+// Feature Event Tracking — fire-and-forget, non-breaking
+// ============================================
+const FEATURE_ROUTE_MAP = [
+  { method: 'GET',  pattern: /^\/api\/dashboard\/overview/,        feature: 'dashboard_viewed' },
+  { method: 'POST', pattern: /^\/api\/campaigns$/,                  feature: 'campaign_created' },
+  { method: 'POST', pattern: /^\/api\/campaigns\/.*\/posts/,        feature: 'post_generated' },
+  { method: 'POST', pattern: /^\/api\/social\/post/,                feature: 'post_published' },
+  { method: 'GET',  pattern: /^\/api\/competitors/,                 feature: 'competitor_viewed' },
+  { method: 'POST', pattern: /^\/api\/competitors/,                 feature: 'competitor_added' },
+  { method: 'GET',  pattern: /^\/api\/brand-assets/,                feature: 'brand_assets_viewed' },
+  { method: 'POST', pattern: /^\/api\/brand-assets/,                feature: 'brand_assets_extracted' },
+  { method: 'GET',  pattern: /^\/api\/analytics/,                   feature: 'analytics_viewed' },
+  { method: 'POST', pattern: /^\/api\/social\/connect/,             feature: 'social_connected' },
+  { method: 'POST', pattern: /^\/api\/chat/,                        feature: 'chat_used' },
+  { method: 'PUT',  pattern: /^\/api\/brand/,                       feature: 'brand_profile_updated' },
+];
+
+app.use((req, res, next) => {
+  const originalJson = res.json.bind(res);
+  res.json = function(data) {
+    try {
+      if (res.statusCode >= 200 && res.statusCode < 300 && req.user?._id) {
+        const match = FEATURE_ROUTE_MAP.find(
+          m => m.method === req.method && m.pattern.test(req.path)
+        );
+        if (match) trackEvent(req.user._id, match.feature);
+      }
+    } catch (_) {}
+    return originalJson(data);
+  };
+  next();
+});
+
+// Routes - Admin (no trial/credit guard)
+app.use('/api/admin', adminRoutes);
 
 // Routes - Core (with specific rate limiters on sensitive routes)
 app.use('/api/auth', authLimiter, authRoutes);

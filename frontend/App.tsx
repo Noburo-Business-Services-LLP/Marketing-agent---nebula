@@ -16,6 +16,8 @@ import Settings from './pages/Settings';
 import Analytics from './pages/Analytics';
 import TermsAndConditions from './pages/TermsAndConditions';
 import PrivacyPolicy from './pages/PrivacyPolicy';
+import AdminLogin from './pages/AdminLogin';
+import AdminDashboard from './pages/AdminDashboard';
 import { ThemeProvider } from './context/ThemeContext';
 import { apiService } from './services/api';
 import { User } from './types';
@@ -124,6 +126,10 @@ const App: React.FC = () => {
         {/* Public legal pages */}
         <Route path="/terms" element={<TermsAndConditions />} />
         <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+
+        {/* Admin routes — completely separate from user auth */}
+        <Route path="/admin/login" element={<AdminLogin />} />
+        <Route path="/admin" element={<AdminDashboard />} />
 
         {/* Onboarding Route - Protected but outside main Layout if needed, or redirect check */}
         <Route 
