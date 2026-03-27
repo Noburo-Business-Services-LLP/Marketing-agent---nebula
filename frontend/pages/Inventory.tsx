@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Plus, Search, Edit, Trash2, Box, Package, 
   Filter, Download, ChevronRight, Loader2, 
   Image as ImageIcon, MoreVertical, AlertCircle,
-  Tag, BarChart3, Clock, Check, X
+  Tag, BarChart3, Clock, Check, X, Upload,
+  FileSpreadsheet, CheckCircle2, XCircle, Info, Sparkles, ExternalLink, 
+  DownloadCloud, ImagePlus, Monitor, Smartphone, Linkedin, Instagram
 } from 'lucide-react';
 import { inventoryAPI } from '../services/api';
 import { Product } from '../types';
@@ -20,6 +22,29 @@ const Inventory: React.FC = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  // AI Ad Generation State
+  const [showAdModal, setShowAdModal] = useState(false);
+  const [isGeneratingAd, setIsGeneratingAd] = useState(false);
+  const [selectedAdProduct, setSelectedAdProduct] = useState<Product | null>(null);
+  const [generatedAdUrl, setGeneratedAdUrl] = useState<string | null>(null);
+  const [adOptions, setAdOptions] = useState({
+    platform: 'instagram',
+    tone: 'professional',
+    aspectRatio: '1:1'
+  });
+
+  // Bulk Import State
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [importResult, setImportResult] = useState<{
+    summary: { total: number; imported: number; failed: number; truncated: boolean; truncatedAt?: number };
+    successes: { row: number; productId: string; name: string }[];
+    failures: { row: number; reason: string; data: any }[];
+  } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -128,6 +153,104 @@ const Inventory: React.FC = () => {
     }
   };
 
+  const handleOpenAdGenerator = (product: Product) => {
+    setSelectedAdProduct(product);
+    setGeneratedAdUrl(null);
+    setShowAdModal(true);
+  };
+
+  const handleGenerateAd = async () => {
+    if (!selectedAdProduct) return;
+    
+    setIsGeneratingAd(true);
+    setGeneratedAdUrl(null);
+    
+    try {
+      const response = await inventoryAPI.generateProductAdImage(selectedAdProduct._id, adOptions);
+      if (response.success && response.imageUrl) {
+        setGeneratedAdUrl(response.imageUrl);
+      } else {
+        alert(response.message || 'Failed to generate ad image');
+      }
+    } catch (err) {
+      console.error('Ad generation error:', err);
+      alert('An error occurred while generating the ad image');
+    } finally {
+      setIsGeneratingAd(false);
+    }
+  };
+
+  const downloadImage = async (url: string, filename: string) => {
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      console.error('Download error:', err);
+      window.open(url, '_blank');
+    }
+  };
+
+  // ── Bulk Import Handlers ────────────────────────────────────────────────
+  const handleFileSelect = (file: File) => {
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    if (!['csv', 'xls', 'xlsx'].includes(ext || '')) {
+      alert('Please select a valid CSV or Excel file (.csv, .xls, .xlsx)');
+      return;
+    }
+    setImportFile(file);
+    setImportResult(null);
+  };
+
+  const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files[0];
+    if (file) handleFileSelect(file);
+  }, []);
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = () => setIsDragging(false);
+
+  const handleImport = async () => {
+    if (!importFile) return;
+    setIsImporting(true);
+    try {
+      const result = await inventoryAPI.bulkImportProducts(importFile);
+      setImportResult({
+        summary: result.summary,
+        successes: result.successes || [],
+        failures: result.failures || [],
+      });
+      if (result.summary.imported > 0) {
+        fetchProducts(); // refresh the product list immediately
+      }
+    } catch (err: any) {
+      alert(err.message || 'Import failed. Please try again.');
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const handleCloseImport = () => {
+    setShowImportModal(false);
+    setImportFile(null);
+    setImportResult(null);
+    setIsDragging(false);
+  };
+  // ─────────────────────────────────────────────────────────────────────────
+
   const filteredProducts = products.filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                           p.category?.toLowerCase().includes(searchQuery.toLowerCase());
@@ -164,15 +287,30 @@ const Inventory: React.FC = () => {
           </p>
         </div>
         
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <button 
             onClick={fetchProducts}
             className={`p-2.5 rounded-xl border transition-all hover:scale-105 active:scale-95 ${
               isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-white border-slate-200 text-slate-600'
             }`}
+            title="Refresh"
           >
             <Clock className="w-5 h-5" />
           </button>
+
+          {/* Import CSV/Excel button */}
+          <button
+            onClick={() => { setShowImportModal(true); setImportResult(null); setImportFile(null); }}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border font-bold text-sm transition-all hover:scale-[1.02] active:scale-[0.98] ${
+              isDarkMode
+                ? 'bg-slate-800 border-slate-700 text-slate-200 hover:border-[#ffcc29]/50 hover:text-[#ffcc29]'
+                : 'bg-white border-slate-200 text-slate-700 hover:border-[#ffcc29] hover:text-[#ffcc29]'
+            }`}
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            Import CSV / Excel
+          </button>
+
           <button 
             onClick={handleOpenAdd}
             className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-[#ffcc29] to-[#ffa500] text-black font-bold rounded-xl shadow-lg shadow-[#ffcc29]/20 hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all"
@@ -283,6 +421,13 @@ const Inventory: React.FC = () => {
 
                 {/* Quick Actions Overlay */}
                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                  <button 
+                    onClick={() => handleOpenAdGenerator(product)}
+                    className="p-3 bg-[#ffcc29] rounded-xl text-slate-900 hover:bg-white transition-colors shadow-lg group/btn"
+                    title="Generate AI Ad Image"
+                  >
+                    <Sparkles className="w-5 h-5 group-hover/btn:animate-pulse" />
+                  </button>
                   <button 
                     onClick={() => handleOpenEdit(product)}
                     className="p-3 bg-white rounded-xl text-slate-800 hover:bg-[#ffcc29] transition-colors shadow-lg"
@@ -481,6 +626,461 @@ const Inventory: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Bulk Import Modal ────────────────────────────────────────── */}
+      {showImportModal && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/70 backdrop-blur-md p-4 animate-in fade-in duration-300">
+          <div className={`relative w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] ${
+            isDarkMode ? 'bg-[#0d1117] border border-slate-800' : 'bg-white border border-slate-200'
+          } animate-in slide-in-from-bottom-4 duration-500`}>
+
+            {/* Modal Header */}
+            <div className={`px-8 py-5 border-b flex items-center justify-between flex-shrink-0 ${
+              isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200'
+            }`}>
+              <div className="flex items-center gap-4">
+                <div className="p-3 rounded-2xl bg-[#ffcc29]/10 border border-[#ffcc29]/20">
+                  <Upload className="w-5 h-5 text-[#ffcc29]" />
+                </div>
+                <div>
+                  <h3 className={`text-lg font-black ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                    Bulk Import Products
+                  </h3>
+                  <p className={`text-xs font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                    Upload a CSV or Excel file — up to 500 products at once
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={handleCloseImport}
+                className={`p-2 rounded-xl transition-all ${
+                  isDarkMode ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-slate-100 text-slate-500'
+                }`}
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Scrollable Body */}
+            <div className="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar">
+
+              {/* Required columns info */}
+              <div className={`flex gap-3 p-4 rounded-2xl border text-sm ${
+                isDarkMode ? 'bg-blue-900/10 border-blue-500/20 text-blue-300' : 'bg-blue-50 border-blue-200 text-blue-700'
+              }`}>
+                <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="font-bold mb-1">Required columns in your file:</p>
+                  <p className="font-mono text-xs leading-relaxed">
+                    <span className="font-bold">name</span>, <span className="font-bold">price</span>
+                    {' '}— Optional: description, currency, stockQuantity, category, tags, imageUrl
+                  </p>
+                  <a
+                    href="data:text/csv;charset=utf-8,name%2Cdescription%2Cprice%2Ccurrency%2CstockQuantity%2Ccategory%2Ctags%2CimageUrl%0AExample%20Product%2CA%20sample%20product%2C99.99%2CINR%2C50%2CElectronics%2Cnew%2Cfeatured%2Chttps%3A%2F%2Fexample.com%2Fimg.jpg"
+                    download="product_import_template.csv"
+                    className="inline-flex items-center gap-1 mt-2 text-xs font-bold underline underline-offset-2 hover:no-underline"
+                  >
+                    <Download className="w-3 h-3" />
+                    Download sample template
+                  </a>
+                </div>
+              </div>
+
+              {/* Drop zone */}
+              {!importResult && (
+                <div
+                  onDrop={handleDrop}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onClick={() => fileInputRef.current?.click()}
+                  className={`relative flex flex-col items-center justify-center gap-3 p-10 rounded-2xl border-2 border-dashed cursor-pointer transition-all duration-200 ${
+                    isDragging
+                      ? 'border-[#ffcc29] bg-[#ffcc29]/5 scale-[1.01]'
+                      : importFile
+                      ? isDarkMode ? 'border-green-500/40 bg-green-500/5' : 'border-green-400 bg-green-50'
+                      : isDarkMode ? 'border-slate-700 hover:border-[#ffcc29]/50 hover:bg-[#ffcc29]/5' : 'border-slate-200 hover:border-[#ffcc29] hover:bg-[#ffcc29]/5'
+                  }`}
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".csv,.xls,.xlsx"
+                    className="hidden"
+                    onChange={e => { if (e.target.files?.[0]) handleFileSelect(e.target.files[0]); }}
+                  />
+
+                  {importFile ? (
+                    <>
+                      <div className="p-4 rounded-2xl bg-green-500/10 border border-green-500/20">
+                        <FileSpreadsheet className="w-8 h-8 text-green-500" />
+                      </div>
+                      <div className="text-center">
+                        <p className={`font-bold text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                          {importFile.name}
+                        </p>
+                        <p className={`text-xs mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                          {(importFile.size / 1024).toFixed(1)} KB &mdash; click to change file
+                        </p>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className={`p-4 rounded-2xl border ${
+                        isDragging ? 'bg-[#ffcc29]/10 border-[#ffcc29]/30' : isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-200'
+                      }`}>
+                        <Upload className={`w-8 h-8 ${isDragging ? 'text-[#ffcc29]' : isDarkMode ? 'text-slate-500' : 'text-slate-400'}`} />
+                      </div>
+                      <div className="text-center">
+                        <p className={`font-bold text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>
+                          {isDragging ? 'Drop your file here' : 'Drag & drop or click to browse'}
+                        </p>
+                        <p className={`text-xs mt-1 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                          Accepts .csv, .xls, .xlsx — max 5 MB
+                        </p>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* ── Import Results ── */}
+              {importResult && (
+                <div className="space-y-4">
+                  {/* Summary cards */}
+                  <div className="grid grid-cols-3 gap-3">
+                    {[
+                      {
+                        label: 'Total Rows',
+                        value: importResult.summary.total,
+                        icon: FileSpreadsheet,
+                        color: 'text-blue-400',
+                        bg: isDarkMode ? 'bg-blue-900/15 border-blue-800/40' : 'bg-blue-50 border-blue-200'
+                      },
+                      {
+                        label: 'Imported',
+                        value: importResult.summary.imported,
+                        icon: CheckCircle2,
+                        color: 'text-green-400',
+                        bg: isDarkMode ? 'bg-green-900/15 border-green-800/40' : 'bg-green-50 border-green-200'
+                      },
+                      {
+                        label: 'Failed',
+                        value: importResult.summary.failed,
+                        icon: XCircle,
+                        color: 'text-red-400',
+                        bg: isDarkMode ? 'bg-red-900/15 border-red-800/40' : 'bg-red-50 border-red-200'
+                      },
+                    ].map(stat => (
+                      <div key={stat.label} className={`p-4 rounded-2xl border flex flex-col gap-1 ${stat.bg}`}>
+                        <stat.icon className={`w-5 h-5 ${stat.color}`} />
+                        <p className={`text-2xl font-black ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{stat.value}</p>
+                        <p className={`text-[10px] font-bold uppercase tracking-wider ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{stat.label}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {importResult.summary.truncated && (
+                    <div className={`flex items-center gap-2 px-4 py-3 rounded-xl text-xs font-medium ${
+                      isDarkMode ? 'bg-yellow-900/15 border border-yellow-700/30 text-yellow-300' : 'bg-yellow-50 border border-yellow-200 text-yellow-700'
+                    }`}>
+                      <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                      File exceeded 500 rows. Only the first 500 rows were processed.
+                    </div>
+                  )}
+
+                  {/* Success list (collapsed) */}
+                  {importResult.successes.length > 0 && (
+                    <details className={`rounded-2xl border overflow-hidden ${
+                      isDarkMode ? 'border-green-800/40' : 'border-green-200'
+                    }`}>
+                      <summary className={`flex items-center gap-2 px-5 py-3 cursor-pointer select-none font-bold text-sm ${
+                        isDarkMode ? 'bg-green-900/15 text-green-400' : 'bg-green-50 text-green-700'
+                      }`}>
+                        <CheckCircle2 className="w-4 h-4" />
+                        {importResult.successes.length} product{importResult.successes.length !== 1 ? 's' : ''} imported successfully
+                      </summary>
+                      <div className={`max-h-40 overflow-y-auto divide-y text-xs ${
+                        isDarkMode ? 'divide-slate-800 bg-green-950/10' : 'divide-green-100 bg-white'
+                      }`}>
+                        {importResult.successes.map(s => (
+                          <div key={s.productId} className={`flex items-center justify-between px-5 py-2 ${
+                            isDarkMode ? 'text-slate-300' : 'text-slate-600'
+                          }`}>
+                            <span className="font-medium">Row {s.row}: {s.name}</span>
+                            <span className={`font-mono text-[10px] ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>{s.productId}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  )}
+
+                  {/* Failure list */}
+                  {importResult.failures.length > 0 && (
+                    <details open className={`rounded-2xl border overflow-hidden ${
+                      isDarkMode ? 'border-red-800/40' : 'border-red-200'
+                    }`}>
+                      <summary className={`flex items-center gap-2 px-5 py-3 cursor-pointer select-none font-bold text-sm ${
+                        isDarkMode ? 'bg-red-900/15 text-red-400' : 'bg-red-50 text-red-600'
+                      }`}>
+                        <XCircle className="w-4 h-4" />
+                        {importResult.failures.length} row{importResult.failures.length !== 1 ? 's' : ''} failed — click to review
+                      </summary>
+                      <div className={`max-h-48 overflow-y-auto divide-y text-xs ${
+                        isDarkMode ? 'divide-slate-800 bg-red-950/10' : 'divide-red-100 bg-white'
+                      }`}>
+                        {importResult.failures.map((f, idx) => (
+                          <div key={idx} className={`px-5 py-2.5 ${
+                            isDarkMode ? 'text-slate-300' : 'text-slate-600'
+                          }`}>
+                            <span className={`font-bold ${isDarkMode ? 'text-red-400' : 'text-red-600'}`}>Row {f.row}:</span>{' '}
+                            {f.reason}
+                            {f.data?.name ? (
+                              <span className={`ml-1 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                                (name: "{f.data.name}")
+                              </span>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  )}
+
+                  {/* Import another file */}
+                  <button
+                    onClick={() => { setImportFile(null); setImportResult(null); }}
+                    className={`w-full py-2.5 rounded-xl border text-sm font-bold transition-all ${
+                      isDarkMode ? 'border-slate-700 text-slate-400 hover:border-[#ffcc29]/40 hover:text-[#ffcc29]' : 'border-slate-200 text-slate-500 hover:border-[#ffcc29] hover:text-[#ffcc29]'
+                    }`}
+                  >
+                    Import another file
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Footer actions */}
+            {!importResult && (
+              <div className={`px-8 py-5 border-t flex items-center justify-end gap-3 flex-shrink-0 ${
+                isDarkMode ? 'border-slate-800 bg-slate-900/40' : 'border-slate-200 bg-slate-50'
+              }`}>
+                <button
+                  type="button"
+                  onClick={handleCloseImport}
+                  className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all ${
+                    isDarkMode ? 'text-slate-400 hover:bg-slate-800' : 'text-slate-500 hover:bg-slate-100'
+                  }`}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleImport}
+                  disabled={!importFile || isImporting}
+                  className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-[#ffcc29] to-[#ffa500] text-black font-black text-sm rounded-xl shadow-lg shadow-[#ffcc29]/20 hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100"
+                >
+                  {isImporting ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Importing…</>
+                  ) : (
+                    <><Upload className="w-4 h-4" /> Import Products</>
+                  )}
+                </button>
+              </div>
+            )}
+
+            {importResult && (
+              <div className={`px-8 py-5 border-t flex items-center justify-end flex-shrink-0 ${
+                isDarkMode ? 'border-slate-800 bg-slate-900/40' : 'border-slate-200 bg-slate-50'
+              }`}>
+                <button
+                  type="button"
+                  onClick={handleCloseImport}
+                  className="px-6 py-2.5 bg-gradient-to-r from-[#ffcc29] to-[#ffa500] text-black font-black text-sm rounded-xl shadow-lg shadow-[#ffcc29]/20 hover:shadow-xl transition-all"
+                >
+                  Done
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* AI Ad Generator Modal */}
+      {showAdModal && selectedAdProduct && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 backdrop-blur-xl p-4 animate-in fade-in duration-300">
+          <div className={`relative w-full max-w-4xl rounded-[32px] shadow-2xl overflow-hidden flex flex-col md:flex-row h-auto max-h-[90vh] ${theme.bgCard} border border-white/10 animate-in zoom-in-95 duration-500`}>
+            
+            {/* Modal Left Side - Controls */}
+            <div className={`w-full md:w-[380px] p-8 flex flex-col gap-8 border-r ${isDarkMode ? 'bg-slate-900/50 border-white/5' : 'bg-slate-50 border-slate-200'}`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-2xl bg-[#ffcc29]/20 border border-[#ffcc29]/30">
+                    <Sparkles className="w-6 h-6 text-[#ffcc29]" />
+                  </div>
+                  <h3 className={`text-xl font-black ${theme.text}`}>AI Ad Studio</h3>
+                </div>
+                <button 
+                  onClick={() => setShowAdModal(false)}
+                  className={`md:hidden p-2 rounded-xl ${isDarkMode ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-slate-200 text-slate-500'}`}
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <div>
+                <p className={`text-[10px] font-black uppercase tracking-[0.2em] mb-4 ${theme.textMuted}`}>Platform</p>
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { id: 'instagram', icon: Instagram, label: 'Instagram' },
+                    { id: 'linkedin', icon: Linkedin, label: 'LinkedIn' },
+                    { id: 'facebook', icon: Box, label: 'Facebook' },
+                    { id: 'marketing', icon: Monitor, label: 'General' },
+                  ].map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => setAdOptions(prev => ({ ...prev, platform: p.id }))}
+                      className={`flex items-center gap-3 p-3 rounded-2xl border transition-all ${
+                        adOptions.platform === p.id 
+                          ? 'bg-[#ffcc29]/10 border-[#ffcc29] text-[#ffcc29]' 
+                          : `${isDarkMode ? 'bg-slate-800/50 border-white/5 text-slate-400' : 'bg-white border-slate-200 text-slate-600'} hover:border-slate-400`
+                      }`}
+                    >
+                      <p.icon className="w-4 h-4" />
+                      <span className="text-xs font-bold">{p.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <p className={`text-[10px] font-black uppercase tracking-[0.2em] mb-4 ${theme.textMuted}`}>Brand Tone</p>
+                <div className="grid grid-cols-2 gap-3">
+                  {['Professional', 'Luxurious', 'Playful', 'Minimalist'].map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => setAdOptions(prev => ({ ...prev, tone: t.toLowerCase() }))}
+                      className={`p-3 rounded-2xl border text-xs font-bold transition-all ${
+                        adOptions.tone === t.toLowerCase() 
+                          ? 'bg-[#ffcc29]/10 border-[#ffcc29] text-[#ffcc29]' 
+                          : `${isDarkMode ? 'bg-slate-800/50 border-white/5 text-slate-400' : 'bg-white border-slate-200 text-slate-600'} hover:border-slate-400`
+                      }`}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <p className={`text-[10px] font-black uppercase tracking-[0.2em] mb-4 ${theme.textMuted}`}>Aspect Ratio</p>
+                <div className="flex gap-4">
+                  {[
+                    { id: '1:1', icon: Smartphone, label: 'Square' },
+                    { id: '9:16', icon: Smartphone, label: 'Stories' },
+                    { id: '16:9', icon: Monitor, label: 'Landscape' },
+                  ].map((r) => (
+                    <button
+                      key={r.id}
+                      onClick={() => setAdOptions(prev => ({ ...prev, aspectRatio: r.id }))}
+                      className={`flex-1 flex flex-col items-center gap-2 p-4 rounded-2xl border transition-all ${
+                        adOptions.aspectRatio === r.id 
+                          ? 'bg-[#ffcc29]/10 border-[#ffcc29] text-[#ffcc29]' 
+                          : `${isDarkMode ? 'bg-slate-800/50 border-white/5 text-slate-400' : 'bg-white border-slate-200 text-slate-600'} hover:border-slate-400`
+                      }`}
+                    >
+                      <r.icon className={`w-5 h-5 ${r.id === '16:9' ? 'rotate-90' : ''}`} />
+                      <span className="text-[10px] font-black">{r.id}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-auto pt-8">
+                <button
+                  onClick={handleGenerateAd}
+                  disabled={isGeneratingAd}
+                  className="w-full h-14 bg-[#ffcc29] text-slate-900 rounded-2xl font-black text-sm shadow-xl shadow-[#ffcc29]/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 disabled:scale-100 flex items-center justify-center gap-2"
+                >
+                  {isGeneratingAd ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      GENERATING...
+                    </>
+                  ) : (
+                    <>
+                      <ImagePlus className="w-5 h-5" />
+                      GENERATE AD CREATIVE
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Right Side - Preview */}
+            <div className={`flex-1 p-8 md:p-12 flex flex-col items-center justify-center relative ${isDarkMode ? 'bg-slate-950/30' : 'bg-slate-100/50'}`}>
+              <button 
+                onClick={() => setShowAdModal(false)}
+                className={`hidden md:block absolute top-8 right-8 p-3 rounded-2xl transition-all ${isDarkMode ? 'hover:bg-white/10 text-slate-400' : 'hover:bg-black/5 text-slate-500'}`}
+              >
+                <X className="w-6 h-6" />
+              </button>
+
+              <div className="w-full h-full flex flex-col items-center justify-center max-w-xl mx-auto">
+                <div className={`relative w-full aspect-square rounded-[32px] overflow-hidden shadow-2xl border ${isDarkMode ? 'border-white/10 bg-black/40' : 'border-slate-300 bg-white'}`}>
+                  {isGeneratingAd ? (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-6">
+                      <div className="relative">
+                        <div className="w-20 h-20 border-4 border-[#ffcc29]/20 border-t-[#ffcc29] rounded-full animate-spin" />
+                        <Sparkles className="absolute inset-0 m-auto w-8 h-8 text-[#ffcc29] animate-pulse" />
+                      </div>
+                      <div className="text-center">
+                        <p className={`text-sm font-black mb-1 ${theme.text}`}>Nano Banana 2 is working</p>
+                        <p className={`text-xs font-medium ${theme.textSecondary}`}>Crafting your premium ad creative...</p>
+                      </div>
+                    </div>
+                  ) : generatedAdUrl ? (
+                    <img 
+                      src={generatedAdUrl} 
+                      alt="Generated AI Ad" 
+                      className="w-full h-full object-contain animate-in fade-in zoom-in duration-700" 
+                    />
+                  ) : (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-12">
+                      <div className={`w-24 h-24 rounded-full flex items-center justify-center mb-6 ${isDarkMode ? 'bg-slate-800' : 'bg-slate-100'}`}>
+                        <ImagePlus className={`w-10 h-10 ${theme.textMuted}`} />
+                      </div>
+                      <h4 className={`text-xl font-black mb-3 ${theme.text}`}>Ready to Launch?</h4>
+                      <p className={`text-xs leading-relaxed max-w-xs ${theme.textSecondary}`}>
+                        Click generate to create an agency-grade marketing image for <span className="font-bold text-[#ffcc29]">{selectedAdProduct.name}</span>.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {generatedAdUrl && !isGeneratingAd && (
+                  <div className="mt-8 flex gap-4 w-full">
+                    <button
+                      onClick={() => downloadImage(generatedAdUrl, `${selectedAdProduct.name.replace(/\s+/g, '_')}_ad.png`)}
+                      className="flex-1 h-16 bg-white text-slate-900 border border-slate-200 rounded-[20px] font-black text-sm hover:bg-slate-100 transition-all flex items-center justify-center gap-3 shadow-lg"
+                    >
+                      <DownloadCloud className="w-5 h-5" />
+                      DOWNLOAD AD
+                    </button>
+                    <button
+                      onClick={() => window.open(generatedAdUrl, '_blank')}
+                      className={`flex-1 h-16 rounded-[20px] font-black text-sm transition-all flex items-center justify-center gap-3 border shadow-lg ${
+                        isDarkMode ? 'bg-slate-800 border-white/5 hover:bg-slate-700 text-white' : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-800'
+                      }`}
+                    >
+                      <ExternalLink className="w-5 h-5" />
+                      VIEW FULLSIZE
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}
