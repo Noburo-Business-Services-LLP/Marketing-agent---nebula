@@ -1,18 +1,20 @@
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
+const mongoose = require('mongoose');
 const User = require('../models/User');
 const FeatureEvent = require('../models/FeatureEvent');
 const adminAuth = require('../middleware/adminAuth');
 
-// Feature display labels
 const FEATURE_LABELS = {
   dashboard_viewed: 'Dashboard',
+  campaigns_viewed: 'Campaigns Viewed',
   campaign_created: 'Campaign Created',
   post_generated: 'Post Generated',
   post_published: 'Post Published',
   competitor_viewed: 'Competitors Viewed',
   competitor_added: 'Competitor Added',
+  competitor_scraped: 'Competitor Scraped',
   brand_assets_viewed: 'Brand Assets Viewed',
   brand_assets_extracted: 'Brand Assets Extracted',
   analytics_viewed: 'Analytics Viewed',
@@ -48,50 +50,177 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// GET /api/admin/stats — overview numbers
-router.get('/stats', adminAuth, async (req, res) => {
+// GET /api/admin/overview — DAU/WAU/MAU + signups + trial funnel
+router.get('/overview', adminAuth, async (req, res) => {
   try {
     const now = new Date();
     const startOfToday = new Date(now); startOfToday.setHours(0, 0, 0, 0);
-    const startOfWeek = new Date(now); startOfWeek.setDate(now.getDate() - 7);
+    const start7d = new Date(now); start7d.setDate(now.getDate() - 7);
+    const start30d = new Date(now); start30d.setDate(now.getDate() - 30);
+    const in3days = new Date(now); in3days.setDate(now.getDate() + 3);
 
-    const [total, today, thisWeek] = await Promise.all([
+    const [
+      totalUsers,
+      newToday,
+      newThisWeek,
+      newThisMonth,
+      dau,
+      wau,
+      mau,
+      activeTrials,
+      expiringSoon,
+      expiredTrials,
+      totalCreditsUsed,
+    ] = await Promise.all([
       User.countDocuments(),
       User.countDocuments({ createdAt: { $gte: startOfToday } }),
-      User.countDocuments({ createdAt: { $gte: startOfWeek } }),
+      User.countDocuments({ createdAt: { $gte: start7d } }),
+      User.countDocuments({ createdAt: { $gte: start30d } }),
+      User.countDocuments({ lastLoginAt: { $gte: startOfToday } }),
+      User.countDocuments({ lastLoginAt: { $gte: start7d } }),
+      User.countDocuments({ lastLoginAt: { $gte: start30d } }),
+      User.countDocuments({ 'trial.isExpired': { $ne: true }, 'trial.migratedToProd': { $ne: true }, 'trial.expiresAt': { $gt: now } }),
+      User.countDocuments({ 'trial.expiresAt': { $gt: now, $lte: in3days }, 'trial.isExpired': { $ne: true } }),
+      User.countDocuments({ $or: [{ 'trial.isExpired': true }, { 'trial.expiresAt': { $lte: now } }] }),
+      User.aggregate([{ $group: { _id: null, total: { $sum: '$credits.totalUsed' } } }]),
     ]);
 
-    res.json({ success: true, data: { total, today, thisWeek } });
+    res.json({
+      success: true,
+      data: {
+        totalUsers,
+        newToday,
+        newThisWeek,
+        newThisMonth,
+        dau,
+        wau,
+        mau,
+        activeTrials,
+        expiringSoon,
+        expiredTrials,
+        totalCreditsUsed: totalCreditsUsed[0]?.total || 0,
+      }
+    });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch stats' });
+    res.status(500).json({ error: 'Failed to fetch overview' });
   }
 });
 
-// GET /api/admin/users — all users with basic info
+// GET /api/admin/trial-funnel — users by trial stage
+router.get('/trial-funnel', adminAuth, async (req, res) => {
+  try {
+    const now = new Date();
+    const in3days = new Date(now); in3days.setDate(now.getDate() + 3);
+
+    const users = await User.find(
+      {},
+      { email: 1, companyName: 1, 'trial.expiresAt': 1, 'trial.isExpired': 1, 'trial.migratedToProd': 1, 'credits.balance': 1, lastLoginAt: 1, createdAt: 1 }
+    ).lean();
+
+    const funnel = { active: [], expiringSoon: [], expired: [], migrated: [] };
+
+    for (const u of users) {
+      const exp = u.trial?.expiresAt ? new Date(u.trial.expiresAt) : null;
+      if (u.trial?.migratedToProd) {
+        funnel.migrated.push(u);
+      } else if (u.trial?.isExpired || (exp && exp <= now)) {
+        funnel.expired.push(u);
+      } else if (exp && exp <= in3days) {
+        funnel.expiringSoon.push(u);
+      } else {
+        funnel.active.push(u);
+      }
+    }
+
+    res.json({ success: true, data: funnel });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch trial funnel' });
+  }
+});
+
+// GET /api/admin/content-stats — generate→publish rate
+router.get('/content-stats', adminAuth, async (req, res) => {
+  try {
+    const [generated, published] = await Promise.all([
+      FeatureEvent.countDocuments({ feature: 'post_generated' }),
+      FeatureEvent.countDocuments({ feature: 'post_published' }),
+    ]);
+
+    const publishRate = generated > 0 ? Math.round((published / generated) * 100) : 0;
+
+    // Top 5 users by posts generated
+    const topGenerators = await FeatureEvent.aggregate([
+      { $match: { feature: 'post_generated' } },
+      { $group: { _id: '$userId', count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+      { $limit: 5 },
+      { $lookup: { from: 'users', localField: '_id', foreignField: '_id', as: 'user' } },
+      { $unwind: { path: '$user', preserveNullAndEmpty: true } },
+      { $project: { email: '$user.email', companyName: '$user.companyName', count: 1 } }
+    ]);
+
+    res.json({ success: true, data: { generated, published, publishRate, topGenerators } });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch content stats' });
+  }
+});
+
+// GET /api/admin/users — all users with enriched info
 router.get('/users', adminAuth, async (req, res) => {
   try {
     const users = await User.find(
       {},
-      { email: 1, companyName: 1, isActive: 1, createdAt: 1, 'credits.balance': 1, 'credits.totalUsed': 1 }
+      {
+        email: 1, firstName: 1, lastName: 1, companyName: 1, isActive: 1,
+        createdAt: 1, lastLoginAt: 1,
+        'credits.balance': 1, 'credits.totalUsed': 1,
+        'trial.expiresAt': 1, 'trial.isExpired': 1, 'trial.migratedToProd': 1,
+        connectedSocials: 1, onboardingCompleted: 1
+      }
     ).sort({ createdAt: -1 }).lean();
 
-    res.json({ success: true, data: users });
+    // Get event counts per user
+    const eventCounts = await FeatureEvent.aggregate([
+      { $group: { _id: '$userId', total: { $sum: 1 }, lastEvent: { $max: '$timestamp' } } }
+    ]);
+    const eventMap = {};
+    eventCounts.forEach(e => { eventMap[e._id.toString()] = { total: e.total, lastEvent: e.lastEvent }; });
+
+    const enriched = users.map(u => ({
+      ...u,
+      eventTotal: eventMap[u._id.toString()]?.total || 0,
+      lastActivity: eventMap[u._id.toString()]?.lastEvent || null,
+      socialCount: u.connectedSocials?.length || 0,
+    }));
+
+    res.json({ success: true, data: enriched });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch users' });
   }
 });
 
-// GET /api/admin/users/:id/usage — feature usage for a specific user
+// GET /api/admin/users/:id/usage — per-user feature breakdown
 router.get('/users/:id/usage', adminAuth, async (req, res) => {
   try {
     const { id } = req.params;
+    const oid = mongoose.Types.ObjectId.createFromHexString(id);
 
-    const [user, events] = await Promise.all([
-      User.findById(id, { email: 1, companyName: 1, isActive: 1, createdAt: 1, 'credits.balance': 1, 'credits.totalUsed': 1, lastLoginAt: 1 }).lean(),
+    const [user, events, creditsBurned] = await Promise.all([
+      User.findById(id, {
+        email: 1, firstName: 1, lastName: 1, companyName: 1, isActive: 1,
+        createdAt: 1, lastLoginAt: 1,
+        'credits.balance': 1, 'credits.totalUsed': 1,
+        'trial.expiresAt': 1, 'trial.isExpired': 1, 'trial.migratedToProd': 1,
+        connectedSocials: 1, onboardingCompleted: 1
+      }).lean(),
       FeatureEvent.aggregate([
-        { $match: { userId: require('mongoose').Types.ObjectId.createFromHexString(id) } },
-        { $group: { _id: '$feature', count: { $sum: 1 }, lastUsed: { $max: '$timestamp' } } },
+        { $match: { userId: oid } },
+        { $group: { _id: '$feature', count: { $sum: 1 }, lastUsed: { $max: '$timestamp' }, creditsTotal: { $sum: '$credits_consumed' } } },
         { $sort: { count: -1 } }
+      ]),
+      FeatureEvent.aggregate([
+        { $match: { userId: oid } },
+        { $group: { _id: null, total: { $sum: '$credits_consumed' } } }
       ])
     ]);
 
@@ -101,16 +230,40 @@ router.get('/users/:id/usage', adminAuth, async (req, res) => {
       feature: e._id,
       label: FEATURE_LABELS[e._id] || e._id,
       count: e.count,
-      lastUsed: e.lastUsed
+      lastUsed: e.lastUsed,
+      creditsUsed: e.creditsTotal || 0,
     }));
 
-    res.json({ success: true, data: { user, usage } });
+    // Generate → publish rate for this user
+    const generated = events.find(e => e._id === 'post_generated')?.count || 0;
+    const published = events.find(e => e._id === 'post_published')?.count || 0;
+    const publishRate = generated > 0 ? Math.round((published / generated) * 100) : 0;
+
+    const now = new Date();
+    const trialExp = user.trial?.expiresAt ? new Date(user.trial.expiresAt) : null;
+    const trialDaysLeft = trialExp ? Math.max(0, Math.ceil((trialExp - now) / (1000 * 60 * 60 * 24))) : null;
+
+    res.json({
+      success: true,
+      data: {
+        user: {
+          ...user,
+          trialDaysLeft,
+          socialCount: user.connectedSocials?.length || 0,
+        },
+        usage,
+        publishRate,
+        generated,
+        published,
+        totalCreditsBurned: creditsBurned[0]?.total || 0,
+      }
+    });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch usage' });
   }
 });
 
-// PUT /api/admin/users/:id/toggle — enable or disable a user account
+// PUT /api/admin/users/:id/toggle
 router.put('/users/:id/toggle', adminAuth, async (req, res) => {
   try {
     const { id } = req.params;

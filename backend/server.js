@@ -222,18 +222,19 @@ app.use((req, res, next) => {
 // Feature Event Tracking — fire-and-forget, non-breaking
 // ============================================
 const FEATURE_ROUTE_MAP = [
-  { method: 'GET',  pattern: /^\/api\/dashboard\/overview/,        feature: 'dashboard_viewed' },
-  { method: 'POST', pattern: /^\/api\/campaigns$/,                  feature: 'campaign_created' },
-  { method: 'POST', pattern: /^\/api\/campaigns\/.*\/posts/,        feature: 'post_generated' },
-  { method: 'POST', pattern: /^\/api\/social\/post/,                feature: 'post_published' },
-  { method: 'GET',  pattern: /^\/api\/competitors/,                 feature: 'competitor_viewed' },
-  { method: 'POST', pattern: /^\/api\/competitors/,                 feature: 'competitor_added' },
-  { method: 'GET',  pattern: /^\/api\/brand-assets/,                feature: 'brand_assets_viewed' },
-  { method: 'POST', pattern: /^\/api\/brand-assets/,                feature: 'brand_assets_extracted' },
-  { method: 'GET',  pattern: /^\/api\/analytics/,                   feature: 'analytics_viewed' },
-  { method: 'POST', pattern: /^\/api\/social\/connect/,             feature: 'social_connected' },
-  { method: 'POST', pattern: /^\/api\/chat/,                        feature: 'chat_used' },
-  { method: 'PUT',  pattern: /^\/api\/brand/,                       feature: 'brand_profile_updated' },
+  { method: 'GET',  pattern: /^\/api\/dashboard\/overview/,       feature: 'dashboard_viewed',        module: 'dashboard' },
+  { method: 'POST', pattern: /^\/api\/campaigns$/,                 feature: 'campaign_created',        module: 'campaigns' },
+  { method: 'POST', pattern: /^\/api\/campaigns\/.*\/posts/,       feature: 'post_generated',          module: 'campaigns' },
+  { method: 'POST', pattern: /^\/api\/social\/post/,               feature: 'post_published',          module: 'social' },
+  { method: 'GET',  pattern: /^\/api\/competitors/,                feature: 'competitor_viewed',       module: 'competitors' },
+  { method: 'POST', pattern: /^\/api\/competitors/,                feature: 'competitor_added',        module: 'competitors' },
+  { method: 'GET',  pattern: /^\/api\/brand-assets/,               feature: 'brand_assets_viewed',     module: 'brand' },
+  { method: 'POST', pattern: /^\/api\/brand-assets/,               feature: 'brand_assets_extracted',  module: 'brand' },
+  { method: 'GET',  pattern: /^\/api\/analytics/,                  feature: 'analytics_viewed',        module: 'analytics' },
+  { method: 'POST', pattern: /^\/api\/social\/connect/,            feature: 'social_connected',        module: 'social' },
+  { method: 'POST', pattern: /^\/api\/chat/,                       feature: 'chat_used',               module: 'chat' },
+  { method: 'PUT',  pattern: /^\/api\/brand/,                      feature: 'brand_profile_updated',   module: 'brand' },
+  { method: 'GET',  pattern: /^\/api\/campaigns/,                  feature: 'campaigns_viewed',        module: 'campaigns' },
 ];
 
 app.use((req, res, next) => {
@@ -244,7 +245,14 @@ app.use((req, res, next) => {
         const match = FEATURE_ROUTE_MAP.find(
           m => m.method === req.method && m.pattern.test(req.path)
         );
-        if (match) trackEvent(req.user._id, match.feature);
+        if (match) {
+          const credits = data?.creditsDeducted || data?.creditCost || 0;
+          trackEvent(req.user._id, match.feature, {
+            feature_module: match.module,
+            credits_consumed: credits,
+            status: 'success',
+          });
+        }
       }
     } catch (_) {}
     return originalJson(data);
