@@ -327,4 +327,4 @@ export interface Product {
   tags?: string[];
   createdAt: string;
   updatedAt: string;
-}
+}
