@@ -74,6 +74,7 @@ const contentRoutes = require('./routes/content');
 
 // Google Calendar routes
 const googleCalendarRoutes = require('./routes/googleCalendar');
+const productRoutes = require('./routes/products');
 
 // Notification scheduler service
 const notificationScheduler = require('./services/notificationScheduler');
@@ -248,6 +249,7 @@ app.use('/api/payment', paymentRoutes);
 // Routes - Content
 app.use('/api/content', contentRoutes);
 app.use('/api/google-calendar', googleCalendarRoutes);
+app.use('/api/products', productRoutes);
 
 // Health check endpoint (handled before rate limiter above)
 

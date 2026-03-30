@@ -12,6 +12,7 @@ import Campaigns from './pages/Campaigns';
 import Competitors from './pages/Competitors';
 import ConnectSocials from './pages/ConnectSocials';
 import BrandAssets from './pages/BrandAssets';
+import Inventory from './pages/Inventory';
 import Settings from './pages/Settings';
 import Analytics from './pages/Analytics';
 import TermsAndConditions from './pages/TermsAndConditions';
@@ -213,8 +214,9 @@ const App: React.FC = () => {
                     <Route path="/dashboard" element={<Dashboard />} />
                     <Route path="/campaigns" element={<Campaigns />} />
                     <Route path="/competitors" element={<Competitors />} />
-                    <Route path="/brand-assets" element={<BrandAssets />} />
                     <Route path="/connect-socials" element={<ConnectSocials />} />
+                    <Route path="/brand-assets" element={<BrandAssets />} />
+                    <Route path="/inventory" element={<Inventory />} />
                     <Route path="/analytics" element={<Analytics />} />
                     <Route path="/settings" element={<Settings user={user} onUserUpdate={setUser} />} />
                     <Route path="*" element={<Navigate to="/dashboard" replace />} />

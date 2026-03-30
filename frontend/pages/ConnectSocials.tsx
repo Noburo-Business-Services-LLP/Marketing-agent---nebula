@@ -30,8 +30,6 @@ const ConnectSocials: React.FC = () => {
   const [loadingPlatform, setLoadingPlatform] = useState<string | null>(null);
 
   useEffect(() => {
-    loadSocials();
-    
     // Check URL params for OAuth callback results
     const searchParams = new URLSearchParams(location.search);
     const error = searchParams.get('error');
@@ -39,10 +37,30 @@ const ConnectSocials: React.FC = () => {
     
     // Check for successful connections for each platform
     const platforms = ['instagram', 'facebook', 'x', 'linkedin'];
+    let foundConnection = false;
     for (const platform of platforms) {
       const status = searchParams.get(platform);
       if (status === 'connected') {
+        foundConnection = true;
         const displayName = platform.charAt(0).toUpperCase() + platform.slice(1);
+        
+        // ✅ KEY FIX: If we're inside the Ayrshare popup window (window.opener exists),
+        // auto-close this window so the user returns to the original tab automatically.
+        if (window.opener && !window.opener.closed) {
+          // Show a brief success page then close
+          document.title = `${displayName} Connected ✅`;
+          document.body.innerHTML = `
+            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;background:#0f172a;color:#fff;gap:16px;">
+              <div style="font-size:48px;">✅</div>
+              <h2 style="margin:0;font-size:22px;">${displayName} Connected Successfully!</h2>
+              <p style="margin:0;color:#94a3b8;">Closing this window...</p>
+            </div>
+          `;
+          setTimeout(() => window.close(), 1500);
+          return;
+        }
+        
+        // Not in a popup — normal flow for same-window redirects
         setNotification({
           type: 'success',
           message: `${displayName}${account ? ` (${decodeURIComponent(account)})` : ''} connected successfully!`
@@ -51,6 +69,10 @@ const ConnectSocials: React.FC = () => {
         setTimeout(() => loadSocials(), 500);
         break;
       }
+    }
+    
+    if (!foundConnection) {
+      loadSocials();
     }
     
     // Legacy YouTube callback
@@ -87,7 +109,7 @@ const ConnectSocials: React.FC = () => {
   // Auto-dismiss notifications
   useEffect(() => {
     if (notification) {
-      const timer = setTimeout(() => setNotification(null), 5000);
+      const timer = setTimeout(() => setNotification(null), 12000);
       return () => clearTimeout(timer);
     }
   }, [notification]);
@@ -108,31 +130,106 @@ const ConnectSocials: React.FC = () => {
     setConnectingPlatform(platform);
     
     try {
-      // Use universal OAuth endpoint for all platforms
       const response = await apiService.getPlatformAuthUrl(platform);
       
       if (response.success && response.authUrl) {
-        // For Ayrshare JWT flow, open in a new tab/window as recommended by Ayrshare docs
-        // This allows the Close button to work properly and return the user to our app
         if (response.method === 'ayrshare_jwt') {
-          // Open Ayrshare social linking page in a new tab
-          const newWindow = window.open(response.authUrl, '_blank', 'noopener,noreferrer');
-          if (newWindow) {
-            newWindow.focus();
-          }
-          // Reset loading state since user will return via redirect
+          // Open Ayrshare as a controlled popup window so we can detect when it closes
+          const popupWidth = 600;
+          const popupHeight = 700;
+          const left = window.screenX + (window.outerWidth - popupWidth) / 2;
+          const top = window.screenY + (window.outerHeight - popupHeight) / 2;
+          
+          const popup = window.open(
+            response.authUrl,
+            `ayrshare_connect_${platform}`,
+            `width=${popupWidth},height=${popupHeight},left=${left},top=${top},toolbar=no,menubar=no,scrollbars=yes,resizable=yes`
+          );
+
           setLoadingPlatform(null);
           setConnectingPlatform(null);
+
+          if (!popup) {
+            // Popup was blocked — fallback to new tab
+            window.open(response.authUrl, '_blank', 'noopener,noreferrer');
+            setNotification({
+              type: 'success',
+              message: `Connect your ${platform} in the new tab, then click "Refresh Status" when done.`
+            });
+            return;
+          }
+
+          popup.focus();
           setNotification({
             type: 'success',
-            message: `A new tab has opened. Connect your ${platform} account there and return here when done.`
+            message: `Connect your ${platform} in the popup. This page will auto-refresh when done.`
           });
+
+          // Poll every second to detect when the popup closes
+          const pollTimer = setInterval(async () => {
+            if (popup.closed) {
+              clearInterval(pollTimer);
+
+              // Ayrshare caches the /api/user response for ~60 seconds.
+              // So we retry the status check up to 8 times, every 8 seconds,
+              // until the new account appears or we exhaust retries.
+              const maxRetries = 8;
+              const retryDelay = 8000; // 8 seconds between retries
+              let attempt = 0;
+
+              const checkWithRetry = async () => {
+                attempt++;
+                const platformLower = platform.toLowerCase();
+
+                setNotification({
+                  type: 'success',
+                  message: `Checking ${platform} connection... (${attempt}/${maxRetries})`
+                });
+
+                // Call loadSocials and check if the platform is now connected
+                try {
+                  const res = await apiService.getSocials();
+                  const updatedSocials = res.connections || [];
+                  setSocials(updatedSocials);
+
+                  const isNowConnected = updatedSocials.find(
+                    (s: SocialConnection) =>
+                      s.platform.toLowerCase() === platformLower && s.connected
+                  );
+
+                  if (isNowConnected) {
+                    setNotification({
+                      type: 'success',
+                      message: `${platform} connected successfully! ✅`
+                    });
+                    return; // Done!
+                  }
+                } catch (e) {
+                  console.error('Status check error:', e);
+                }
+
+                if (attempt < maxRetries) {
+                  // Wait and retry
+                  setTimeout(checkWithRetry, retryDelay);
+                } else {
+                  // Exhausted retries
+                  setNotification({
+                    type: 'error',
+                    message: `Could not confirm ${platform} connection. Try clicking "Refresh Status" in 1 minute.`
+                  });
+                }
+              };
+
+              // Start first check after 3 seconds
+              setTimeout(checkWithRetry, 3000);
+            }
+          }, 1000);
+
         } else {
-          // For direct OAuth (like YouTube), redirect in the same window
+          // For direct OAuth (e.g. YouTube), redirect in same window
           window.location.href = response.authUrl;
         }
       } else {
-        // Some error occurred
         setNotification({ 
           type: 'error', 
           message: response.message || `Failed to initiate ${platform} connection.` 
@@ -244,10 +341,20 @@ const ConnectSocials: React.FC = () => {
             <h1 className={`text-2xl font-bold ${theme.text}`}>Connect Socials</h1>
             <p className={theme.textSecondary}>Securely connect your platforms to enable auto-posting and analytics.</p>
         </div>
-        <div className={`rounded-full px-4 py-1.5 flex items-center gap-2 text-xs font-bold ${
-          isDarkMode ? 'bg-blue-500/20 border border-blue-400/30 text-blue-400' : 'bg-blue-50 border border-blue-200 text-blue-700'
-        }`}>
-            <ShieldCheck className="w-4 h-4" /> Secure OAuth 2.0 Connection
+        <div className="flex items-center gap-3">
+          <button
+            onClick={async () => { setLoading(true); await loadSocials(); }}
+            className={`rounded-full px-4 py-1.5 flex items-center gap-2 text-xs font-bold transition-colors ${
+              isDarkMode ? 'bg-slate-700 hover:bg-slate-600 text-slate-300 border border-slate-600' : 'bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200'
+            }`}
+          >
+            <RefreshCw className="w-3.5 h-3.5" /> Refresh Status
+          </button>
+          <div className={`rounded-full px-4 py-1.5 flex items-center gap-2 text-xs font-bold ${
+            isDarkMode ? 'bg-blue-500/20 border border-blue-400/30 text-blue-400' : 'bg-blue-50 border border-blue-200 text-blue-700'
+          }`}>
+              <ShieldCheck className="w-4 h-4" /> Secure OAuth 2.0 Connection
+          </div>
         </div>
       </div>
 

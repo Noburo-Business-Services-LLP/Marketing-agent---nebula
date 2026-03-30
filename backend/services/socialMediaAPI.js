@@ -486,10 +486,11 @@ async function getAyrshareUserProfile(profileKey) {
     });
 
     if (response.status === 200) {
+      console.log(`[Ayrshare API] Raw /api/user response for Profile-Key ${profileKey.substring(0,8)}...:`, JSON.stringify(response.data, null, 2));
       return {
         success: true,
         data: response.data,
-        activeSocialAccounts: response.data?.activeSocialAccounts || []
+        activeSocialAccounts: response.data?.activeSocialAccounts || response.data?.grants || response.data?.profiles || []
       };
     } else {
       return {

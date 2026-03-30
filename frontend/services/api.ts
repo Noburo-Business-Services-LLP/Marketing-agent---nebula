@@ -2641,6 +2641,91 @@ export const brandAssetsAPI = {
   },
 };
 
+// ================================
+// Inventory API
+// ================================
+export const inventoryAPI = {
+  // Get all products
+  getProducts: async (filters?: { search?: string; category?: string; status?: string }): Promise<any> => {
+    let url = '/products';
+    if (filters) {
+      const params = new URLSearchParams();
+      if (filters.search) params.append('search', filters.search);
+      if (filters.category) params.append('category', filters.category);
+      if (filters.status) params.append('status', filters.status);
+      const queryString = params.toString();
+      if (queryString) url += `?${queryString}`;
+    }
+    return apiCall(url, { method: 'GET' }, true);
+  },
+
+  // Get a single product
+  getProduct: async (id: string): Promise<any> => {
+    return apiCall(`/products/${id}`, { method: 'GET' }, true);
+  },
+
+  // Create a new product
+  createProduct: async (data: any): Promise<any> => {
+    return apiCall('/products', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }, true);
+  },
+
+  // Update a product
+  updateProduct: async (id: string, data: any): Promise<any> => {
+    return apiCall(`/products/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    }, true);
+  },
+
+  // Delete a product
+  deleteProduct: async (id: string): Promise<any> => {
+    return apiCall(`/products/${id}`, { method: 'DELETE' }, true);
+  },
+
+  // Bulk import products from a CSV or Excel file
+  bulkImportProducts: async (file: File): Promise<{
+    success: boolean;
+    summary: { total: number; imported: number; failed: number; truncated: boolean; truncatedAt?: number };
+    successes: { row: number; productId: string; name: string }[];
+    failures: { row: number; reason: string; data: any }[];
+    message?: string;
+  }> => {
+    const token = getToken();
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch(`${API_BASE_URL}/products/bulk-import`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    });
+
+    const data = await response.json();
+    if (!response.ok && !data.success) {
+      throw new Error(data.message || 'Bulk import failed');
+    }
+    return data;
+  },
+
+  // Generate a premium social-media ad image for a product using AI
+  generateProductAdImage: async (
+    productId: string,
+    options: { platform?: string; tone?: string; aspectRatio?: string } = {}
+  ): Promise<{ success: boolean; imageUrl?: string; model?: string; message?: string }> => {
+    return apiCall(`/products/${productId}/generate-ad-image`, {
+      method: 'POST',
+      body: JSON.stringify({
+        platform:    options.platform    || 'instagram',
+        tone:        options.tone        || 'professional',
+        aspectRatio: options.aspectRatio || '1:1',
+      }),
+    }, true);
+  },
+};
+
 // ============================================
 // ICP & CHANNEL STRATEGY API
 // ============================================

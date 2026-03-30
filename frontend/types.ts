@@ -313,3 +313,18 @@ export interface DashboardData {
   generatedAt?: string;
   dataSource?: 'real' | 'mock';
 }
+
+export interface Product {
+  _id: string;
+  name: string;
+  price: number;
+  currency: string;
+  imageUrl?: string;
+  description?: string;
+  stockStatus: 'in-stock' | 'out-of-stock' | 'low-stock';
+  stockQuantity: number;
+  category: string;
+  tags?: string[];
+  createdAt: string;
+  updatedAt: string;
+}

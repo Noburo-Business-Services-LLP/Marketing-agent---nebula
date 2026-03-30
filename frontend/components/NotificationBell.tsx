@@ -69,13 +69,13 @@ const NotificationBell: React.FC = () => {
   // Fetch unread count periodically
   useEffect(() => {
     fetchNotifications();
-    
+
     // Poll for new notifications every 30 seconds
     const interval = setInterval(async () => {
       try {
         const count = await apiService.getUnreadNotificationCount();
         setUnreadCount(count);
-        
+
         // If there are new unread notifications, show browser notification
         if (count > unreadCount && count > 0) {
           showBrowserNotification();
@@ -126,7 +126,7 @@ const NotificationBell: React.FC = () => {
   const handleMarkRead = async (id: string) => {
     try {
       await apiService.markNotificationRead(id);
-      setNotifications(prev => 
+      setNotifications(prev =>
         prev.map(n => n._id === id ? { ...n, readAt: new Date().toISOString(), status: 'read' } : n)
       );
       setUnreadCount(prev => Math.max(0, prev - 1));
@@ -139,7 +139,7 @@ const NotificationBell: React.FC = () => {
   const handleMarkAllRead = async () => {
     try {
       await apiService.markAllNotificationsRead();
-      setNotifications(prev => 
+      setNotifications(prev =>
         prev.map(n => ({ ...n, readAt: new Date().toISOString(), status: 'read' }))
       );
       setUnreadCount(0);
@@ -192,10 +192,10 @@ const NotificationBell: React.FC = () => {
     if (!notification.readAt) {
       await handleMarkRead(notification._id);
     }
-    
+
     // Close the dropdown
     setIsOpen(false);
-    
+
     // Navigate to campaigns page with the campaign ID as a query param
     if (notification.campaignId) {
       navigate(`/campaigns?selected=${notification.campaignId}`);
@@ -213,11 +213,10 @@ const NotificationBell: React.FC = () => {
           setIsOpen(!isOpen);
           if (!isOpen) fetchNotifications();
         }}
-        className={`relative p-2 rounded-lg transition-colors ${
-          isDarkMode 
-            ? 'hover:bg-[#ededed]/10 text-[#ededed]' 
+        className={`relative p-2 rounded-lg transition-colors ${isDarkMode
+            ? 'hover:bg-[#ededed]/10 text-[#ededed]'
             : 'hover:bg-gray-100 text-gray-700'
-        }`}
+          }`}
       >
         <Bell className="w-5 h-5" />
         {unreadCount > 0 && (
@@ -229,15 +228,13 @@ const NotificationBell: React.FC = () => {
 
       {/* Dropdown */}
       {isOpen && (
-        <div className={`absolute right-0 mt-2 w-80 max-h-96 overflow-hidden rounded-xl shadow-xl border z-50 ${
-          isDarkMode 
-            ? 'bg-[#0d1117] border-slate-700/50' 
+        <div className={`absolute right-0 mt-2 w-80 max-h-96 overflow-hidden rounded-xl shadow-xl border z-50 ${isDarkMode
+            ? 'bg-[#0d1117] border-slate-700/50'
             : 'bg-white border-gray-200'
-        }`}>
-          {/* Header */}
-          <div className={`px-4 py-3 border-b flex items-center justify-between ${
-            isDarkMode ? 'border-slate-700/50' : 'border-gray-100'
           }`}>
+          {/* Header */}
+          <div className={`px-4 py-3 border-b flex items-center justify-between ${isDarkMode ? 'border-slate-700/50' : 'border-gray-100'
+            }`}>
             <h3 className={`font-bold ${theme.text}`}>Notifications</h3>
             <div className="flex items-center gap-2">
               <button
@@ -284,13 +281,11 @@ const NotificationBell: React.FC = () => {
               notifications.map(notification => (
                 <div
                   key={notification._id}
-                  className={`px-4 py-3 border-b transition-colors cursor-pointer ${
-                    isDarkMode ? 'border-[#ededed]/5' : 'border-gray-50'
-                  } ${
-                    !notification.readAt
+                  className={`px-4 py-3 border-b transition-colors cursor-pointer ${isDarkMode ? 'border-[#ededed]/5' : 'border-gray-50'
+                    } ${!notification.readAt
                       ? isDarkMode ? 'bg-[#ffcc29]/5' : 'bg-yellow-50/50'
                       : ''
-                  } hover:${isDarkMode ? 'bg-[#ededed]/5' : 'bg-gray-50'}`}
+                    } hover:${isDarkMode ? 'bg-[#ededed]/5' : 'bg-gray-50'}`}
                   onClick={() => handleNotificationClick(notification)}
                 >
                   <div className="flex gap-3">
@@ -312,11 +307,10 @@ const NotificationBell: React.FC = () => {
                       {notification.metadata?.platforms?.length > 0 && (
                         <div className="flex gap-1 mt-1">
                           {notification.metadata.platforms.map(p => (
-                            <span 
-                              key={p} 
-                              className={`text-[10px] px-1.5 py-0.5 rounded ${
-                                isDarkMode ? 'bg-[#ededed]/10 text-[#ededed]/60' : 'bg-gray-100 text-gray-500'
-                              }`}
+                            <span
+                              key={p}
+                              className={`text-[10px] px-1.5 py-0.5 rounded ${isDarkMode ? 'bg-[#ededed]/10 text-[#ededed]/60' : 'bg-gray-100 text-gray-500'
+                                }`}
                             >
                               {p}
                             </span>

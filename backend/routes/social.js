@@ -279,7 +279,7 @@ router.get('/:platform/auth', protect, async (req, res) => {
     
     const jwtResult = await generateAyrshareJWT(profileKey, {
       redirect: redirectUrl,
-      logout: false, // Don't force logout for faster UX
+      logout: true, // Force clear any existing Ayrshare browser session — prevents connecting to the wrong profile
       // Only show the specific platform the user clicked on
       allowedSocial: [ayrshareplatform]
     });
@@ -979,19 +979,21 @@ router.get('/status', protect, async (req, res) => {
     // Build status for all platforms (removed TikTok and Snapchat, renamed Twitter to X)
     const platforms = ['Instagram', 'Facebook', 'X', 'LinkedIn'];
     
-    // Get user's Ayrshare connected accounts using their profile key
     let ayrshareAccounts = [];
     let ayrshareDisplayNames = [];
     let socialAnalytics = {};
+    let needsNewProfile = false;
     
     if (user.ayrshare?.profileKey) {
       try {
+        console.log(`[Social Status] Checking Ayrshare status using profile key: ${user.ayrshare.profileKey.substring(0, 8)}...`);
         // Use user's specific profile key to get their connected accounts
         const userProfile = await getAyrshareUserProfile(user.ayrshare.profileKey);
+        
         if (userProfile.success) {
           ayrshareAccounts = userProfile.data?.activeSocialAccounts || [];
           ayrshareDisplayNames = userProfile.data?.displayNames || [];
-          console.log(`User ${user.email} Ayrshare accounts:`, ayrshareAccounts);
+          console.log(`[Social Status] Success. Ayrshare accounts for ${user.email}:`, ayrshareAccounts);
           
           // Fetch social analytics for connected platforms
           if (ayrshareAccounts.length > 0) {
@@ -999,26 +1001,65 @@ router.get('/status', protect, async (req, res) => {
               const analyticsResult = await getUserSocialAnalytics(user.ayrshare.profileKey, ayrshareAccounts);
               if (analyticsResult.success && analyticsResult.data) {
                 socialAnalytics = analyticsResult.data;
-                console.log('Social analytics fetched:', Object.keys(socialAnalytics));
               }
             } catch (analyticsError) {
-              console.log('Could not fetch social analytics:', analyticsError.message);
+              console.log('[Social Status] Could not fetch social analytics:', analyticsError.message);
             }
           }
+        } else {
+          console.log('[Social Status] Ayrshare user profile check failed (missing/invalid profileKey):', userProfile.error);
+          needsNewProfile = true;
         }
       } catch (e) {
-        console.log('Ayrshare user profile check failed:', e.message);
+        console.log('[Social Status] Ayrshare user profile check exception:', e.message);
+        needsNewProfile = true;
       }
     } else {
-      // Fallback to primary profile check for backwards compatibility
-      try {
-        const ayrshareProfile = await getAyrshareProfile();
-        if (ayrshareProfile.success) {
-          ayrshareAccounts = ayrshareProfile.data?.activeSocialAccounts || [];
-          ayrshareDisplayNames = ayrshareProfile.data?.displayNames || [];
+      console.log(`[Social Status] No Ayrshare profile key found for user ${user.email}.`);
+      needsNewProfile = true;
+    }
+    
+    // Auto-create missing or broken profile
+    if (needsNewProfile) {
+      console.log(`[Social Status] Creating new Ayrshare profile for user: ${user.email}`);
+      const profileTitle = `Nebula-${user._id.toString().slice(-8)}-${user.email.split('@')[0]}`;
+      const disableSocial = ['gmb', 'snapchat', 'telegram', 'threads'];
+      
+      const createResult = await createAyrshareProfile(profileTitle, {
+         hideTopHeader: false,
+         disableSocial
+      });
+
+      if (createResult.success) {
+        user.ayrshare = {
+          profileKey: createResult.profileKey,
+          refId: createResult.refId,
+          title: createResult.title || profileTitle,
+          createdAt: new Date()
+        };
+        await user.save();
+        console.log(`[Social Status] New Ayrshare profile key generated and saved: ${createResult.profileKey.substring(0, 8)}...`);
+      } else if (createResult.code === 146) {
+        const uniqueTitle = `Nebula-${Date.now()}-${user._id.toString().slice(-6)}`;
+        const retryResult = await createAyrshareProfile(uniqueTitle, {
+          hideTopHeader: false,
+          disableSocial
+        });
+        
+        if (retryResult.success) {
+          user.ayrshare = {
+            profileKey: retryResult.profileKey,
+            refId: retryResult.refId,
+            title: uniqueTitle,
+            createdAt: new Date()
+          };
+          await user.save();
+          console.log(`[Social Status] New Ayrshare profile key (retry) generated and saved: ${retryResult.profileKey.substring(0, 8)}...`);
+        } else {
+          console.log('[Social Status] Failed to create fallback profile.');
         }
-      } catch (e) {
-        console.log('Ayrshare profile check failed:', e.message);
+      } else {
+        console.log('[Social Status] Failed to create new profile error:', createResult.error);
       }
     }
     
@@ -1245,12 +1286,16 @@ router.get('/api-status', protect, async (req, res) => {
  */
 router.get('/ayrshare/profiles', protect, async (req, res) => {
   try {
-    const result = await getAyrshareProfile();
+    const user = await User.findById(req.user._id);
+    if (!user || !user.ayrshare?.profileKey) {
+      return res.json({ success: false, message: 'No Ayrshare profile key found', profiles: [] });
+    }
+    const result = await getAyrshareUserProfile(user.ayrshare.profileKey);
     
     if (result.success) {
-      // Map Ayrshare profiles to our format
-      const profiles = result.profiles || [];
-      const connections = profiles.map(profile => ({
+      // Map Ayrshare displayNames to our format
+      const displayNames = result.data?.displayNames || [];
+      const connections = displayNames.map(profile => ({
         platform: profile.platform === 'twitter' ? 'X' : 
                   profile.platform.charAt(0).toUpperCase() + profile.platform.slice(1),
         connected: true,
@@ -1405,11 +1450,15 @@ router.delete('/disconnect/:platform', protect, async (req, res) => {
  */
 router.get('/ayrshare/profile', protect, async (req, res) => {
   try {
-    const result = await getAyrshareProfile();
+    const user = await User.findById(req.user._id);
+    if (!user || !user.ayrshare?.profileKey) {
+      return res.json({ success: false, message: 'No Ayrshare profile key found', profiles: [] });
+    }
+    const result = await getAyrshareUserProfile(user.ayrshare.profileKey);
     
     if (result.success) {
-      const profiles = result.profiles || [];
-      const connections = profiles.map(profile => ({
+      const displayNames = result.data?.displayNames || [];
+      const connections = displayNames.map(profile => ({
         platform: profile.platform === 'twitter' ? 'X' : 
                   profile.platform.charAt(0).toUpperCase() + profile.platform.slice(1),
         connected: true,

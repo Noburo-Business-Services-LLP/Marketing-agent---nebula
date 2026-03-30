@@ -301,7 +301,8 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
       platforms: platformsInput, tone, aspectRatio,
       keyMessages, duration, startDate: startDateParam,
       preferredDays: daysInput, targetAge, targetGender,
-      targetLocation, targetInterests, productLogo
+      targetLocation, targetInterests, productLogo,
+      linkedProduct
     } = req.body;
 
     const platforms = Array.isArray(platformsInput) ? platformsInput : (platformsInput ? platformsInput.split(',') : ['instagram']);
@@ -371,6 +372,7 @@ CONTEXT:
 - Target audience: ${targetAge || '18-35'} age, ${targetGender || 'all'} gender${targetLocation ? ', located in ' + targetLocation : ''}${targetInterests ? ', interested in ' + targetInterests : ''}
 - Platforms: ${platforms.join(', ')}
 - Tone: ${tone || 'professional'}
+${linkedProduct ? `- Featured Product: ${linkedProduct.name} - ${linkedProduct.currency || '$'}${linkedProduct.price}\n- Product Description: ${linkedProduct.description || 'N/A'}` : ''}
 ${keyMessages ? `- MANDATORY CONTENT STRUCTURES (STRICTLY FOLLOW THESE):\n${keyMessages}` : ''}
 
 INSTRUCTIONS:
@@ -522,7 +524,8 @@ Return ONLY valid JSON (no markdown, no backticks):
           postIndex: slotIndex, // Use slot index for image context
           totalPosts: numSlots,
           campaignTheme: campaignName,
-          keyMessages: keyMessages || ''
+          keyMessages: keyMessages || '',
+          linkedProduct
         });
         
         slotImageCache.set(slotIndex, imageResult);
