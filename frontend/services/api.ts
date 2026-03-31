@@ -285,6 +285,14 @@ export const apiService = {
     return apiCall('/payment/verify', { method: 'POST', body: JSON.stringify(data) }, true);
   },
 
+  createSubscription: async (): Promise<any> => {
+    return apiCall('/payment/create-subscription', { method: 'POST', body: JSON.stringify({}) }, true);
+  },
+
+  verifySubscription: async (data: { razorpay_payment_id: string; razorpay_subscription_id: string; razorpay_signature: string }): Promise<any> => {
+    return apiCall('/payment/verify-subscription', { method: 'POST', body: JSON.stringify(data) }, true);
+  },
+
   getPaymentStatus: async (): Promise<any> => {
     return apiCall('/payment/status', { method: 'GET' }, true);
   },

@@ -91,8 +91,12 @@ const userSchema = new mongoose.Schema({
   }],
   subscription: {
     plan: { type: String, enum: ['free', 'pro', 'enterprise'], default: 'free' },
-    status: { type: String, enum: ['active', 'cancelled', 'expired'], default: 'active' },
-    expiresAt: { type: Date }
+    status: { type: String, enum: ['active', 'cancelled', 'expired', 'halted'], default: 'active' },
+    expiresAt: { type: Date },
+    razorpaySubscriptionId: { type: String, default: '' },
+    razorpayPlanId: { type: String, default: '' },
+    currentPeriodEnd: { type: Date },
+    nextBillingAt: { type: Date }
   },
   // Google Calendar integration
   googleCalendar: {

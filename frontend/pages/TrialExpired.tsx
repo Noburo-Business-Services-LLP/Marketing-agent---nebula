@@ -137,25 +137,23 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, daysUsed = 7, onLog
     setError('');
 
     try {
-      const orderData = await apiService.createPaymentOrder(price);
-      if (!orderData.success) throw new Error(orderData.message || 'Failed to create order');
+      const subData = await apiService.createSubscription();
+      if (!subData.success) throw new Error(subData.message || 'Failed to create subscription');
 
       const options = {
-        key: orderData.key,
-        amount: orderData.order.amount,
-        currency: orderData.order.currency,
+        key: subData.key,
+        subscription_id: subData.subscription_id,
         name: 'Nebulaa',
-        description: `${credits} Credits — ₹${price.toLocaleString('en-IN')}`,
-        order_id: orderData.order.id,
-        prefill: orderData.prefill,
+        description: `₹${price.toLocaleString('en-IN')}/month — ${credits} credits`,
+        prefill: subData.prefill,
         theme: { color: '#ffcc29', backdrop_color: 'rgba(7, 10, 18, 0.9)' },
         handler: async (response: any) => {
           setLoading(false);
           setMigrating(true);
           try {
-            const verifyResult = await apiService.verifyPayment({
-              razorpay_order_id: response.razorpay_order_id,
+            const verifyResult = await apiService.verifySubscription({
               razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_subscription_id: response.razorpay_subscription_id,
               razorpay_signature: response.razorpay_signature
             });
             if (verifyResult.success) { setSuccess(true); setMigrating(false); }
@@ -378,7 +376,7 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, daysUsed = 7, onLog
                   <span className="text-[#ffcc29] font-bold text-xl" style={{ textShadow: '0 0 12px rgba(255,204,41,0.3)' }}>1,000</span>
                   <span className="text-[#ededed]/40 text-sm font-medium">credits</span>
                 </div>
-                <p className="text-[#ededed]/25 text-xs mt-3 tracking-wide">Free replenish for first 50 users</p>
+                <p className="text-[#ededed]/25 text-xs mt-3 tracking-wide">Auto-renews monthly · Cancel anytime</p>
               </div>
 
               {/* Engraved divider */}
@@ -420,7 +418,7 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, daysUsed = 7, onLog
                 {loading ? (
                   <><Loader2 className="w-4 h-4 animate-spin" /> Processing...</>
                 ) : (
-                  <><CreditCard className="w-4 h-4" /> Pay ₹7,500 & Activate <ArrowRight className="w-4 h-4" /></>
+                  <><CreditCard className="w-4 h-4" /> Subscribe ₹7,500/month <ArrowRight className="w-4 h-4" /></>
                 )}
               </button>
             </div>
