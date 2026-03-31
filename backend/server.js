@@ -66,8 +66,8 @@ const creditsRoutes = require('./routes/credits');
 // Payment / Razorpay routes
 const paymentRoutes = require('./routes/payment');
 
-// Trial guard middleware
-const { checkTrial } = require('./middleware/trialGuard');
+// Trial guard middleware (credits only — no trial expiry check in prod)
+const { requireCredits } = require('./middleware/trialGuard');
 
 // Content routes
 const contentRoutes = require('./routes/content');

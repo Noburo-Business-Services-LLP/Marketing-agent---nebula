@@ -352,6 +352,63 @@ router.post('/webhook', async (req, res) => {
 });
 
 /**
+ * POST /api/payment/replenish
+ * Free credit replenish for eligible prod users (max 3/month, unlocks below 100 credits)
+ */
+router.post('/replenish', protect, async (req, res) => {
+  try {
+    const userId = req.user?.userId || req.user?.id || req.user?._id;
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    // Must be an active subscriber
+    if (user.subscription?.plan !== 'pro' || user.subscription?.status !== 'active') {
+      return res.status(403).json({ success: false, message: 'Active subscription required' });
+    }
+
+    // Must be below 100 credits
+    if ((user.credits?.balance ?? 0) >= 100) {
+      return res.status(400).json({ success: false, message: 'Replenish unlocks when credits drop below 100' });
+    }
+
+    // Reset monthly counter if new billing month
+    const now = new Date();
+    const resetAt = user.replenish?.resetAt ? new Date(user.replenish.resetAt) : null;
+    const isNewMonth = !resetAt || now.getMonth() !== resetAt.getMonth() || now.getFullYear() !== resetAt.getFullYear();
+
+    if (isNewMonth) {
+      user.replenish = { usedThisMonth: 0, maxPerMonth: 3, resetAt: now };
+    }
+
+    const used = user.replenish?.usedThisMonth ?? 0;
+    const max = user.replenish?.maxPerMonth ?? 3;
+
+    if (used >= max) {
+      return res.status(400).json({ success: false, message: `You've used all ${max} free replenishes this month` });
+    }
+
+    // Add 1,000 credits
+    user.credits.balance = (user.credits.balance ?? 0) + MONTHLY_CREDITS;
+    user.replenish.usedThisMonth = used + 1;
+
+    await user.save();
+
+    console.log(`✅ Replenish #${used + 1} for user: ${userId} — ${MONTHLY_CREDITS} credits added`);
+
+    res.json({
+      success: true,
+      creditsAdded: MONTHLY_CREDITS,
+      creditsBalance: user.credits.balance,
+      replenishesLeft: max - (used + 1),
+      replenishesUsed: used + 1
+    });
+  } catch (error) {
+    console.error('Replenish error:', error);
+    res.status(500).json({ success: false, message: 'Replenish failed' });
+  }
+});
+
+/**
  * POST /api/payment/create-order
  * Creates a Razorpay order for chosen credit amount
  */
@@ -587,12 +644,25 @@ router.get('/billing', protect, async (req, res) => {
 
     if (needsSave) await user.save();
 
+    // Replenish eligibility
+    const now2 = new Date();
+    const resetAt = user.replenish?.resetAt ? new Date(user.replenish.resetAt) : null;
+    const isNewMonth = !resetAt || now2.getMonth() !== resetAt.getMonth() || now2.getFullYear() !== resetAt.getFullYear();
+    const replenishUsed = isNewMonth ? 0 : (user.replenish?.usedThisMonth ?? 0);
+    const replenishMax = user.replenish?.maxPerMonth ?? 3;
+
     res.json({
       success: true,
       subscription: user.subscription || { plan: 'free', status: 'active' },
       credits: {
         balance: user.credits?.balance ?? 0,
         totalUsed: user.credits?.totalUsed ?? 0
+      },
+      replenish: {
+        eligible: (user.credits?.balance ?? 0) < 100 && replenishUsed < replenishMax && user.subscription?.status === 'active',
+        usedThisMonth: replenishUsed,
+        maxPerMonth: replenishMax,
+        replenishesLeft: Math.max(0, replenishMax - replenishUsed)
       },
       payments: payments.map(p => ({
         orderId: p.razorpayOrderId,

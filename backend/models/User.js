@@ -158,6 +158,12 @@ const userSchema = new mongoose.Schema({
     invoiceUrl: { type: String, default: '' },
     paidAt: { type: Date, default: Date.now }
   }],
+  // Monthly replenish tracking (prod only)
+  replenish: {
+    usedThisMonth: { type: Number, default: 0 },
+    maxPerMonth:   { type: Number, default: 3 },
+    resetAt:       { type: Date }   // start of current billing month
+  },
   // Trial tracking
   trial: {
     startDate: { type: Date },

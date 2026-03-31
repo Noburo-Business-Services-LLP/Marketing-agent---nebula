@@ -8,7 +8,7 @@ const CachedCampaign = require('../models/CachedCampaign');
 const Influencer = require('../models/Influencer');
 const BrandAsset = require('../models/BrandAsset');
 const { generateChatResponse, generateChatSuggestions } = require('../services/geminiAI');
-const { checkTrial, deductCredits } = require('../middleware/trialGuard');
+const { deductCredits } = require('../middleware/trialGuard');
 
 // Chat completion endpoint - uses Gemini AI with user context
 router.post('/message', optionalAuth, async (req, res) => {

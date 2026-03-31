@@ -293,6 +293,10 @@ export const apiService = {
     return apiCall('/payment/validate-coupon', { method: 'POST', body: JSON.stringify({ code }) }, true);
   },
 
+  replenishCredits: async (): Promise<any> => {
+    return apiCall('/payment/replenish', { method: 'POST', body: JSON.stringify({}) }, true);
+  },
+
   verifySubscription: async (data: { razorpay_payment_id: string; razorpay_subscription_id: string; razorpay_signature: string }): Promise<any> => {
     return apiCall('/payment/verify-subscription', { method: 'POST', body: JSON.stringify(data) }, true);
   },

@@ -64,6 +64,7 @@ export interface BillingData {
   success: boolean;
   subscription: { plan: string; status: string; expiresAt?: string };
   credits: { balance: number; totalUsed: number };
+  replenish: { eligible: boolean; usedThisMonth: number; maxPerMonth: number; replenishesLeft: number };
   payments: Payment[];
 }
 

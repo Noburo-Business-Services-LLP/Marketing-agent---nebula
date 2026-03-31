@@ -49,6 +49,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
   // Billing State
   const [billingData, setBillingData] = useState<BillingData | null>(null);
   const [loadingBilling, setLoadingBilling] = useState(false);
+  const [replenishing, setReplenishing] = useState(false);
 
   // Fetch billing data when Billing tab is active
   useEffect(() => {
@@ -502,7 +503,41 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                               <div className={`p-5 rounded-lg border ${
                                 isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-slate-50 border-slate-200'
                               }`}>
-                                <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3">Credits</p>
+                                <div className="flex items-center justify-between mb-3">
+                                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wide">Credits</p>
+                                  {billingData.replenish && (
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs text-slate-400">{billingData.replenish.replenishesLeft}/{billingData.replenish.maxPerMonth} replenishes left</span>
+                                      {billingData.replenish.eligible ? (
+                                        <button
+                                          onClick={async () => {
+                                            setReplenishing(true);
+                                            try {
+                                              const res = await apiService.replenishCredits();
+                                              if (res.success) {
+                                                setBillingData(prev => prev ? {
+                                                  ...prev,
+                                                  credits: { ...prev.credits, balance: res.creditsBalance },
+                                                  replenish: { ...prev.replenish, eligible: false, usedThisMonth: res.replenishesUsed, replenishesLeft: res.replenishesLeft }
+                                                } : prev);
+                                              }
+                                            } catch {}
+                                            setReplenishing(false);
+                                          }}
+                                          disabled={replenishing}
+                                          className="flex items-center gap-1.5 px-3 py-1.5 bg-[#ffcc29] hover:bg-[#e6b825] text-black text-xs font-bold rounded-lg transition-all disabled:opacity-50"
+                                        >
+                                          <Zap className="w-3 h-3" />
+                                          {replenishing ? 'Adding...' : 'Replenish'}
+                                        </button>
+                                      ) : (
+                                        <span className="text-xs text-slate-500 px-3 py-1.5 rounded-lg border border-slate-700/50">
+                                          {billingData.replenish.replenishesLeft === 0 ? 'Max reached' : 'Need &lt;100 credits'}
+                                        </span>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
                                 <div className="grid grid-cols-2 gap-4">
                                   <div>
                                     <p className={`text-2xl font-bold ${theme.text}`}>{billingData.credits.balance}</p>
