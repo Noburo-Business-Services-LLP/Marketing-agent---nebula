@@ -409,6 +409,44 @@ router.post('/replenish', protect, async (req, res) => {
 });
 
 /**
+ * POST /api/payment/cancel-subscription
+ * Cancels the Razorpay subscription at end of current billing period
+ */
+router.post('/cancel-subscription', protect, async (req, res) => {
+  try {
+    const userId = req.user?.userId || req.user?.id || req.user?._id;
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    const subId = user.subscription?.razorpaySubscriptionId;
+    if (!subId) {
+      return res.status(400).json({ success: false, message: 'No active subscription found' });
+    }
+    if (user.subscription?.status === 'cancelled') {
+      return res.status(400).json({ success: false, message: 'Subscription is already cancelled' });
+    }
+
+    // Cancel at end of current billing period (cancel_at_cycle_end = 1)
+    await razorpay.subscriptions.cancel(subId, { cancel_at_cycle_end: 1 });
+
+    // Update user subscription status
+    user.subscription.status = 'cancelled';
+    await user.save();
+
+    console.log(`❌ Subscription cancelled at cycle end for user: ${userId}`);
+
+    res.json({
+      success: true,
+      message: 'Subscription cancelled. You have access until the end of your billing period.',
+      accessUntil: user.subscription.currentPeriodEnd
+    });
+  } catch (error) {
+    console.error('Cancel subscription error:', error);
+    res.status(500).json({ success: false, message: 'Failed to cancel subscription' });
+  }
+});
+
+/**
  * POST /api/payment/create-order
  * Creates a Razorpay order for chosen credit amount
  */

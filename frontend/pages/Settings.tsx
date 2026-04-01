@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Save, AlertCircle, Check, Loader2, Eye, EyeOff, Zap, RefreshCw, CreditCard, Download, ExternalLink } from 'lucide-react';
+import { Save, AlertCircle, Check, Loader2, Eye, EyeOff, Zap, RefreshCw, CreditCard, Download, ExternalLink, XCircle } from 'lucide-react';
 import { User, BillingData } from '../types';
 import { apiService } from '../services/api';
 import { useTheme, getThemeClasses } from '../context/ThemeContext';
@@ -50,6 +50,9 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
   const [billingData, setBillingData] = useState<BillingData | null>(null);
   const [loadingBilling, setLoadingBilling] = useState(false);
   const [replenishing, setReplenishing] = useState(false);
+  const [showUnsubscribeModal, setShowUnsubscribeModal] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState('');
 
   // Fetch billing data when Billing tab is active
   useEffect(() => {
@@ -168,6 +171,22 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
           setPasswordStatus('error');
           setPasswordStatusMessage(error.message || 'Failed to change password');
       }
+  };
+
+  const handleCancelSubscription = async () => {
+    setCancelling(true);
+    setCancelError('');
+    try {
+      await apiService.cancelSubscription();
+      setBillingData(prev => prev ? {
+        ...prev,
+        subscription: { ...prev.subscription, status: 'cancelled' }
+      } : prev);
+      setShowUnsubscribeModal(false);
+    } catch (err: any) {
+      setCancelError(err.message || 'Failed to cancel subscription');
+    }
+    setCancelling(false);
   };
 
   return (
@@ -495,7 +514,22 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                       </p>
                                     )}
                                   </div>
-                                  <CreditCard className={`w-8 h-8 ${isDarkMode ? 'text-slate-600' : 'text-slate-300'}`} />
+                                  <div className="flex flex-col items-end gap-2">
+                                    <CreditCard className={`w-8 h-8 ${isDarkMode ? 'text-slate-600' : 'text-slate-300'}`} />
+                                    {billingData.subscription.status === 'active' && (
+                                      <button
+                                        onClick={() => { setCancelError(''); setShowUnsubscribeModal(true); }}
+                                        className="text-xs text-red-400 hover:text-red-300 underline underline-offset-2 transition-colors"
+                                      >
+                                        Unsubscribe
+                                      </button>
+                                    )}
+                                    {billingData.subscription.status === 'cancelled' && billingData.subscription.currentPeriodEnd && (
+                                      <p className="text-xs text-amber-400">
+                                        Access until {new Date(billingData.subscription.currentPeriodEnd).toLocaleDateString()}
+                                      </p>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
 
@@ -633,7 +667,64 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
               </div>
           </div>
       </div>
-    </div>
+
+      {/* Unsubscribe Confirmation Modal */}
+      {showUnsubscribeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className={`relative w-full max-w-md mx-4 rounded-2xl shadow-2xl p-8 ${isDarkMode ? 'bg-[#0d1117] border border-slate-700/50' : 'bg-white border border-slate-200'}`}>
+            <button
+              onClick={() => setShowUnsubscribeModal(false)}
+              className={`absolute top-4 right-4 ${theme.textSecondary} hover:text-red-400 transition-colors`}
+            >
+              <XCircle className="w-5 h-5" />
+            </button>
+
+            <div className="flex flex-col items-center text-center">
+              <div className="w-14 h-14 rounded-full bg-red-500/10 flex items-center justify-center mb-4">
+                <XCircle className="w-7 h-7 text-red-400" />
+              </div>
+              <h3 className={`text-lg font-bold mb-2 ${theme.text}`}>Cancel Subscription?</h3>
+              <p className={`text-sm mb-1 ${theme.textSecondary}`}>
+                Your UPI autopay will be stopped. You'll keep full access until:
+              </p>
+              {billingData?.subscription.currentPeriodEnd && (
+                <p className="text-base font-bold text-[#ffcc29] mb-4">
+                  {new Date(billingData.subscription.currentPeriodEnd).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}
+                </p>
+              )}
+              <p className={`text-xs mb-6 ${theme.textSecondary}`}>
+                After that, your account will revert to the free plan.
+              </p>
+
+              {cancelError && (
+                <div className="w-full mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-600 text-xs">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  {cancelError}
+                </div>
+              )}
+
+              <div className="flex gap-3 w-full">
+                <button
+                  onClick={() => setShowUnsubscribeModal(false)}
+                  className={`flex-1 py-2.5 rounded-lg font-bold text-sm transition-all ${
+                    isDarkMode ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  Keep Plan
+                </button>
+                <button
+                  onClick={handleCancelSubscription}
+                  disabled={cancelling}
+                  className="flex-1 py-2.5 rounded-lg font-bold text-sm bg-red-500 hover:bg-red-600 text-white transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {cancelling ? <><Loader2 className="w-4 h-4 animate-spin" /> Cancelling...</> : 'Yes, Cancel'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+  </div>
   );
 };
 
