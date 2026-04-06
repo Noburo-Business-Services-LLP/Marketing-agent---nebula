@@ -97,6 +97,8 @@ if (process.env.NODE_ENV === 'production') {
 app.use(helmet({
   contentSecurityPolicy: false, // Disabled — frontend is served separately
   crossOriginEmbedderPolicy: false, // Allow loading external images/resources
+  // Default `same-origin` blocks dev (e.g. localhost:3000 loading 127.0.0.1:5000 `/audio/*.mp3`) and some CDN setups.
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
 }));
 
 // ============================================
@@ -294,12 +296,13 @@ app.get('/api/demo/dashboard', (req, res) => {
   });
 });
 
+// Reel tone MP3s MUST be registered before `public` static, or a stray `public/audio/*`
+// from a frontend build could shadow these and break previews (wrong/empty file → silent UI).
+// Files live at backend/tone-audio/*.mp3 → /audio/<file>.mp3
+app.use('/audio', express.static(path.join(__dirname, 'tone-audio')));
+
 // Serve static files from React frontend build
 app.use(express.static(path.join(__dirname, 'public')));
-
-// Serve predefined audio files for Instagram Reel composition (not under public/ — Vite build empties public/)
-// Files live at backend/tone-audio/*.mp3 and are accessible via /audio/<file>.mp3
-app.use('/audio', express.static(path.join(__dirname, 'tone-audio')));
 
 // Catch-all handler for React Router - serve index.html for any non-API routes
 app.get('*', (req, res, next) => {
