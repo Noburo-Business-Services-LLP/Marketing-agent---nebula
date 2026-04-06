@@ -10,6 +10,7 @@ import { useTheme, getThemeClasses } from '../context/ThemeContext';
 import BoostPostModal from '../components/BoostPostModal';
 import LogoSelector from '../components/LogoSelector';
 import PlatformPreview from '../components/PlatformPreview';
+import { ReelToneAudioPreview } from '../components/ReelToneAudioPreview';
 import { buildScheduledForISOString, formatLocalDateYYYYMMDD, formatLocalTimeHHMM } from '../utils/datetime';
 
 // ============================================
@@ -22,6 +23,22 @@ const PLATFORM_LIMITS: Record<string, { charLimit: number; label: string; imageM
   linkedin:  { charLimit: 3000,   label: 'LinkedIn',   imageMaxMB: 5,  videoMaxMB: 200, bestRatio: '1.91:1 or 1:1' },
   youtube:   { charLimit: 5000,   label: 'YouTube',    imageMaxMB: 2,  videoMaxMB: 12800, bestRatio: '16:9' },
 };
+
+/** Instagram Reel tone → backend `tone-audio/*.mp3` (see backend/utils/toneAudio.js) */
+const REEL_TONE_AUDIO_FILES: Record<string, string> = {
+  fun: 'fun.mp3',
+  luxury: 'luxury.mp3',
+  normal: 'normal.mp3',
+  professional: 'professional.mp3',
+  simple: 'simple.mp3',
+};
+
+function getReelTonePreviewAudioSrc(tone: string): string | null {
+  const file = REEL_TONE_AUDIO_FILES[String(tone || '').trim().toLowerCase()];
+  if (!file) return null;
+  // Same-origin `/audio/*` — Vite dev server proxies to the backend (see vite.config.ts)
+  return `/audio/${encodeURIComponent(file)}`;
+}
 
 const PLATFORM_CONTENT_TEMPLATES: Record<string, { id: string; label: string; structure: string; tone: string }[]> = {
   instagram: [
@@ -5036,8 +5053,22 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                                         <option value="simple">Simple</option>
                                       </select>
 
+                                      {reelTone && getReelTonePreviewAudioSrc(reelTone) && (
+                                        <div className="mt-3 space-y-2">
+                                          <p className={`text-xs font-medium ${theme.textSecondary}`}>
+                                            Preview this track before generating your Reel
+                                          </p>
+                                          <ReelToneAudioPreview
+                                            key={reelTone}
+                                            src={getReelTonePreviewAudioSrc(reelTone)!}
+                                            toneLabel={reelTone}
+                                            isDarkMode={isDarkMode}
+                                          />
+                                        </div>
+                                      )}
+
                                       <p className={`text-xs mt-2 ${theme.textMuted}`}>
-                                        Debug: tone → backend maps to `/audio/&lt;tone&gt;.mp3`. Instagram + tone becomes a Reel; other platforms remain image.
+                                        Tone maps to `/audio/&lt;tone&gt;.mp3` on the server. Instagram + tone becomes a Reel; other platforms remain image.
                                       </p>
                                     </div>
                                   </div>

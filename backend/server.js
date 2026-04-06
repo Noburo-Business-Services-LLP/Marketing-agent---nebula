@@ -297,9 +297,9 @@ app.get('/api/demo/dashboard', (req, res) => {
 // Serve static files from React frontend build
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Serve predefined audio files for Instagram Reel composition
-// Files live at backend/public/audio/*.mp3 and are accessible via /audio/<file>.mp3
-app.use('/audio', express.static(path.join(__dirname, 'public', 'audio')));
+// Serve predefined audio files for Instagram Reel composition (not under public/ — Vite build empties public/)
+// Files live at backend/tone-audio/*.mp3 and are accessible via /audio/<file>.mp3
+app.use('/audio', express.static(path.join(__dirname, 'tone-audio')));
 
 // Catch-all handler for React Router - serve index.html for any non-API routes
 app.get('*', (req, res, next) => {

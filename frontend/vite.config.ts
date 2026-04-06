@@ -8,6 +8,13 @@ export default defineConfig(({ mode }) => {
       server: {
         port: 3000,
         host: '0.0.0.0',
+        proxy: {
+          // Tone preview loads `/audio/*.mp3` from the Express app (backend/tone-audio)
+          '/audio': {
+            target: 'http://localhost:5000',
+            changeOrigin: true,
+          },
+        },
       },
       build: {
         outDir: '../backend/public',

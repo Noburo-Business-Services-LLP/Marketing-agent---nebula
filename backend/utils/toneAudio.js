@@ -46,7 +46,7 @@ function resolveToneAudioUrl(tone, { baseUrl } = {}) {
 function audioFilePathForTone(tone) {
   const normalized = normalizeTone(tone);
   if (!normalized) return null;
-  return path.join(__dirname, '..', 'public', 'audio', TONE_AUDIO_FILES[normalized]);
+  return path.join(__dirname, '..', 'tone-audio', TONE_AUDIO_FILES[normalized]);
 }
 
 module.exports = {
