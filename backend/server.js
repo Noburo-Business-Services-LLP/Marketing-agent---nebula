@@ -116,7 +116,9 @@ const allowedOrigins = [
   'https://demo.nebulaa.ai',
   'https://www.demo.nebulaa.ai',
   'https://gravity.nebulaa.ai',
-  'https://www.gravity.nebulaa.ai'
+  'https://www.gravity.nebulaa.ai',
+  'https://promotion.nebulaa.ai',
+  'https://www.promotion.nebulaa.ai'
 ];
 
 app.use(cors({
