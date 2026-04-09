@@ -234,7 +234,7 @@ router.put('/icp-strategy', protect, async (req, res) => {
  * POST /api/campaigns/generate-campaign-stream
  * SSE endpoint — generates campaign posts with AI images one by one, streaming each to the frontend
  */
-router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) => {
+router.post('/generate-campaign-stream', protect, async (req, res) => {
   // Set SSE headers
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
@@ -750,7 +750,7 @@ router.post('/:id/publish', protect, async (req, res) => {
  * POST /api/campaigns/generate-campaign-posts
  * Generate AI-powered posts for a campaign based on detailed inputs
  */
-router.post('/generate-campaign-posts', protect, checkTrial, async (req, res) => {
+router.post('/generate-campaign-posts', protect, async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
     const user = await User.findById(userId);
@@ -980,7 +980,7 @@ Return ONLY valid JSON (no markdown, no code blocks):
  * POST /api/campaigns/regenerate-post-image
  * Regenerate a single post image with optional custom prompt
  */
-router.post('/regenerate-post-image', protect, checkTrial, requireCredits('image_edit'), async (req, res) => {
+router.post('/regenerate-post-image', protect, requireCredits('image_edit'), async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id || req.user._id;
     const { 
@@ -1068,7 +1068,7 @@ const { generatePosterFromTemplate, editPosterFromTemplate } = require('../servi
  * POST /api/campaigns/generate-caption
  * Generate a caption from an uploaded image using AI vision
  */
-router.post('/generate-caption', protect, checkTrial, requireCredits('campaign_text'), async (req, res) => {
+router.post('/generate-caption', protect, requireCredits('campaign_text'), async (req, res) => {
   try {
     const { image, platform } = req.body;
     
@@ -1363,7 +1363,7 @@ router.post('/process-aspect-ratio', protect, async (req, res) => {
  * Uses Canvas for reliable text overlay, AI as fallback
  * Supports logo overlay from Brand Assets
  */
-router.post('/template-poster', protect, checkTrial, requireCredits('image_generated'), async (req, res) => {
+router.post('/template-poster', protect, requireCredits('image_generated'), async (req, res) => {
   try {
     const { templateImage, content, platform, style, useAI, logoOverlay, aspectRatio } = req.body;
     
@@ -1497,7 +1497,7 @@ router.post('/template-poster', protect, checkTrial, requireCredits('image_gener
  * Edit/refine a generated poster based on user feedback
  * Supports iterative refinement through conversational prompts
  */
-router.post('/template-poster/edit', protect, checkTrial, requireCredits('image_edit'), async (req, res) => {
+router.post('/template-poster/edit', protect, requireCredits('image_edit'), async (req, res) => {
   try {
     const { currentImage, originalContent, editInstructions, templateImage } = req.body;
     
@@ -1573,7 +1573,7 @@ router.post('/template-poster/edit', protect, checkTrial, requireCredits('image_
  * Generate a NEW poster using a REFERENCE image for style inspiration
  * The AI creates a poster that LOOKS LIKE the reference but uses user's content
  */
-router.post('/template-poster/from-reference', protect, checkTrial, requireCredits('image_generated'), async (req, res) => {
+router.post('/template-poster/from-reference', protect, requireCredits('image_generated'), async (req, res) => {
   try {
     const { referenceImage, content, platform, logoUrl, aspectRatio } = req.body;
 
@@ -1675,7 +1675,7 @@ router.post('/template-poster/from-reference', protect, checkTrial, requireCredi
  * POST /api/campaigns/template-poster/batch
  * Generate multiple posters from multiple templates in batch
  */
-router.post('/template-poster/batch', protect, checkTrial, requireCredits('image_generated', (req) => (req.body.posters?.length || 1)), async (req, res) => {
+router.post('/template-poster/batch', protect, requireCredits('image_generated', (req) => (req.body.posters?.length || 1)), async (req, res) => {
   try {
     const { posters, platform, useAI } = req.body;
     

@@ -499,42 +499,26 @@ router.post('/signup', [
       });
     }
 
-    // Create new user (unverified)
+    // Create new user (auto-verified — no OTP required on promotion build)
     const user = await User.create({
       email: email.toLowerCase(),
       password,
       firstName,
       lastName: lastName || '',
       companyName: companyName || '',
-      isVerified: false
+      isVerified: true
     });
 
-    // Generate and send OTP
-    try {
-      const otp = otpService.generateOTP();
-      const hashedOtp = await otpService.hashOTP(otp);
-      
-      user.otp = {
-        code: hashedOtp,
-        expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
-        attempts: 0,
-        lastSentAt: new Date()
-      };
-      await user.save({ validateBeforeSave: false });
-      
-      await otpService.sendOTP(email, otp, firstName);
-      console.log(`📧 OTP sent to ${email} during signup`);
-    } catch (otpError) {
-      console.error('OTP send error during signup:', otpError.message);
-      // Don't fail signup if OTP fails — user can request resend
-    }
+    // Issue token immediately
+    const token = generateToken(user._id);
 
-    // SECURITY: Do NOT issue token until OTP is verified
+    console.log(`✅ New signup (no OTP): ${email}`);
+
     res.status(201).json({
       success: true,
-      message: 'Account created! Please verify your email.',
-      user: user.toPublicJSON(),
-      requiresVerification: true
+      message: 'Account created! Welcome to Nebulaa.',
+      token,
+      user: user.toPublicJSON()
     });
   } catch (error) {
     console.error('Signup error:', error);
