@@ -321,14 +321,6 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
                       </span>
                       <span className={`text-xs ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}>credits</span>
                     </div>
-                    <div className={`text-[11px] flex items-center gap-1 ${
-                      trialInfo.daysLeft <= 2
-                        ? 'text-red-400'
-                        : isDarkMode ? 'text-slate-500' : 'text-gray-400'
-                    }`}>
-                      <Clock className="w-3 h-3" />
-                      <span>{trialInfo.daysLeft}d remaining</span>
-                    </div>
                   </div>
 
                   <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${showCreditPanel ? 'rotate-180' : ''} ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`} />
@@ -343,13 +335,6 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
                     <div className={`px-5 pt-5 pb-4 ${isDarkMode ? 'bg-[#0f1419]' : 'bg-gray-50'}`}>
                       <div className="flex items-center justify-between mb-3">
                         <h3 className={`text-sm font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Usage Overview</h3>
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                          trialInfo.daysLeft <= 2
-                            ? 'bg-red-500/10 text-red-400'
-                            : 'bg-[#ffcc29]/10 text-[#d4a800]'
-                        }`}>
-                          Free Trial
-                        </span>
                       </div>
 
                       {/* Credit Bar */}
@@ -405,23 +390,6 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
                     </div>
 
 
-                    {/* Trial Timer */}
-                    <div className={`px-5 py-3 border-t ${isDarkMode ? 'border-slate-800 bg-[#0f1419]' : 'border-gray-100 bg-gray-50'}`}>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Clock className={`w-3.5 h-3.5 ${trialInfo.daysLeft <= 2 ? 'text-red-400' : isDarkMode ? 'text-slate-500' : 'text-gray-400'}`} />
-                          <span className={`text-xs ${trialInfo.daysLeft <= 2 ? 'text-red-400 font-medium' : isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
-                            {trialInfo.daysLeft} day{trialInfo.daysLeft !== 1 ? 's' : ''} left in trial
-                          </span>
-                        </div>
-                        <button 
-                          onClick={() => navigate('/trial-expired')}
-                          className="text-xs font-medium text-[#ffcc29] hover:text-[#e6b800] transition-colors"
-                        >
-                          Upgrade
-                        </button>
-                      </div>
-                    </div>
                   </div>
                 )}
               </div>
