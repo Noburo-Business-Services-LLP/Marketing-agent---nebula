@@ -37,19 +37,9 @@ const App: React.FC = () => {
           const res = await apiService.getCurrentUser();
           setUser(res.user || null);
           
-          // Check trial status
-          if (res.user) {
-            if (res.user.trial?.migratedToProd) {
-              setTrialExpired({ expired: true, reason: 'migrated' as any });
-            } else {
-              const trialEnd = res.user.trial?.expiresAt ? new Date(res.user.trial.expiresAt) : null;
-              const now = new Date();
-              if (res.user.trial?.isExpired || (trialEnd && now > trialEnd)) {
-                setTrialExpired({ expired: true, reason: 'time' });
-              } else if ((res.user.credits?.balance ?? 100) <= 0) {
-                setTrialExpired({ expired: true, reason: 'credits' });
-              }
-            }
+          // Credits check only (no time-based expiry)
+          if (res.user && (res.user.credits?.balance ?? 100) <= 0) {
+            setTrialExpired({ expired: true, reason: 'credits' });
           }
         } catch (error) {
           console.error("Auth check failed", error);
@@ -73,19 +63,11 @@ const App: React.FC = () => {
 
   const handleLoginSuccess = (userData: User) => {
     setUser(userData);
-    // Check trial on login
-    if (userData.trial?.migratedToProd) {
-      setTrialExpired({ expired: true, reason: 'migrated' as any });
+    // Credits check only (no time-based expiry)
+    if ((userData.credits?.balance ?? 100) <= 0) {
+      setTrialExpired({ expired: true, reason: 'credits' });
     } else {
-      const trialEnd = userData.trial?.expiresAt ? new Date(userData.trial.expiresAt) : null;
-      const now = new Date();
-      if (userData.trial?.isExpired || (trialEnd && now > trialEnd)) {
-        setTrialExpired({ expired: true, reason: 'time' });
-      } else if ((userData.credits?.balance ?? 100) <= 0) {
-        setTrialExpired({ expired: true, reason: 'credits' });
-      } else {
-        setTrialExpired({ expired: false, reason: 'time' });
-      }
+      setTrialExpired({ expired: false, reason: 'time' });
     }
   };
 

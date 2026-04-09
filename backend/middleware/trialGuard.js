@@ -28,41 +28,18 @@ const checkTrial = async (req, res, next) => {
     const user = await User.findById(userId);
     if (!user) return next();
 
-    const now = new Date();
-    const trialEnd = user.trial?.expiresAt ? new Date(user.trial.expiresAt) : null;
-
-    // Check if trial period has expired
-    if (trialEnd && now > trialEnd) {
-      // Mark as expired in DB if not already
-      if (!user.trial.isExpired) {
-        user.trial.isExpired = true;
-        await user.save();
-      }
-      return res.status(403).json({
-        success: false,
-        trialExpired: true,
-        message: 'Your 7-day free trial has ended. Subscribe to continue using Nebulaa Gravity.',
-        trialExpiresAt: trialEnd.toISOString(),
-        creditsRemaining: user.credits?.balance ?? 0
-      });
-    }
-
-    // Check if credits are exhausted
+    // Check if credits are exhausted (no time-based expiry)
     if ((user.credits?.balance ?? 100) <= 0) {
       return res.status(403).json({
         success: false,
         creditsExhausted: true,
-        message: 'You\'ve used all your trial credits. Subscribe to continue using Nebulaa Gravity.',
-        trialExpiresAt: trialEnd?.toISOString(),
+        message: 'You\'ve used all your credits. Subscribe to continue using Nebulaa Gravity.',
         creditsRemaining: 0
       });
     }
 
-    // Attach trial info to request for downstream use
     req.trialInfo = {
-      expiresAt: trialEnd,
-      creditsRemaining: user.credits?.balance ?? 100,
-      daysLeft: trialEnd ? Math.max(0, Math.ceil((trialEnd - now) / (1000 * 60 * 60 * 24))) : 7
+      creditsRemaining: user.credits?.balance ?? 100
     };
 
     next();

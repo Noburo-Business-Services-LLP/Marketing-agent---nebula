@@ -31,16 +31,9 @@ router.post('/message', optionalAuth, async (req, res) => {
         businessProfile = user.businessProfile;
       }
 
-      // Check trial status for authenticated users
-      if (user) {
-        const now = new Date();
-        const trialEnd = user.trial?.expiresAt ? new Date(user.trial.expiresAt) : null;
-        if (trialEnd && now > trialEnd) {
-          return res.status(403).json({ success: false, trialExpired: true, message: 'Trial expired' });
-        }
-        if ((user.credits?.balance ?? 100) < 0.5) {
-          return res.status(403).json({ success: false, creditsExhausted: true, message: 'Insufficient credits for chat' });
-        }
+      // Credits check only (no time-based expiry)
+      if (user && (user.credits?.balance ?? 100) < 0.5) {
+        return res.status(403).json({ success: false, creditsExhausted: true, message: 'Insufficient credits for chat' });
       }
     }
 
