@@ -113,6 +113,242 @@ function sanitizeHashtags(rawHashtags = []) {
   return Array.from(new Set(sanitized)).slice(0, 25);
 }
 
+function isValidFacebookPostId(value) {
+  const raw = String(value || '').trim();
+  return /^\d{5,}_\d{5,}$/.test(raw);
+}
+
+function normalizeFacebookPostId(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  return isValidFacebookPostId(raw) ? raw : '';
+}
+
+function extractFacebookPageId(value) {
+  const normalized = normalizeFacebookPostId(value);
+  if (!normalized) return '';
+  return normalized.split('_')[0] || '';
+}
+
+function normalizeNumericId(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  return /^\d+$/.test(raw) ? raw : '';
+}
+
+function parseFacebookPostUrl(rawUrl) {
+  const urlValue = String(rawUrl || '').trim();
+  if (!urlValue) return { pageId: '', postId: '' };
+
+  try {
+    const parsed = new URL(urlValue);
+    const host = String(parsed.hostname || '').toLowerCase();
+    if (!host.includes('facebook.com') && !host.includes('fb.com')) {
+      return { pageId: '', postId: '' };
+    }
+
+    const pathname = String(parsed.pathname || '');
+    const query = parsed.searchParams;
+
+    const queryPostId =
+      normalizeNumericId(query.get('fbid')) ||
+      normalizeNumericId(query.get('story_fbid')) ||
+      '';
+    const queryPageId = normalizeNumericId(query.get('id')) || '';
+    if (queryPostId && queryPageId) {
+      return { pageId: queryPageId, postId: queryPostId };
+    }
+
+    const postsMatch = pathname.match(/\/posts\/(\d{5,})/i);
+    if (postsMatch?.[1]) {
+      const pathPageId =
+        pathname.match(/^\/(\d{5,})(?:\/|$)/)?.[1] ||
+        pathname.match(/\/pages\/[^/]+\/(\d{5,})\//i)?.[1] ||
+        '';
+      return { pageId: normalizeNumericId(pathPageId), postId: normalizeNumericId(postsMatch[1]) };
+    }
+
+    const videosMatch = pathname.match(/\/videos\/(\d{5,})/i);
+    if (videosMatch?.[1]) {
+      const pathPageId =
+        pathname.match(/^\/(\d{5,})(?:\/|$)/)?.[1] ||
+        pathname.match(/\/pages\/[^/]+\/(\d{5,})\//i)?.[1] ||
+        '';
+      return { pageId: normalizeNumericId(pathPageId), postId: normalizeNumericId(videosMatch[1]) };
+    }
+
+    if (queryPostId) {
+      const setParam = String(query.get('set') || '').trim();
+      const setPageIdMatch = setParam.match(/(?:^|\.)(?:pcb|pb)\.(\d{5,})(?:\.|$)/i);
+      const guessedSetPageId = normalizeNumericId(setPageIdMatch?.[1] || '');
+      return { pageId: queryPageId || guessedSetPageId, postId: queryPostId };
+    }
+
+    const reelMatch = pathname.match(/\/reel\/(\d{5,})/i);
+    if (reelMatch?.[1]) {
+      return { pageId: queryPageId, postId: normalizeNumericId(reelMatch[1]) };
+    }
+  } catch (error) {
+    return { pageId: '', postId: '' };
+  }
+
+  return { pageId: '', postId: '' };
+}
+
+function buildFacebookPostId({ pageId = '', postId = '' } = {}) {
+  const normalizedPageId = normalizeNumericId(pageId);
+  const normalizedPostId = normalizeNumericId(postId);
+  if (!normalizedPageId || !normalizedPostId) return '';
+  return `${normalizedPageId}_${normalizedPostId}`;
+}
+
+function extractFacebookPostIdFromUrl(rawUrl, { fallbackPageId = '' } = {}) {
+  const parsed = parseFacebookPostUrl(rawUrl);
+  return normalizeFacebookPostId(
+    buildFacebookPostId({
+      pageId: parsed.pageId || fallbackPageId,
+      postId: parsed.postId
+    })
+  );
+}
+
+function extractRawFacebookPostIdCandidate(payload = {}) {
+  const posts = Array.isArray(payload?.posts) ? payload.posts : [];
+  if (posts.length > 0) {
+    const firstRaw = String(posts[0]?.fbId || posts[0]?.facebookPostId || '').trim();
+    if (firstRaw) return firstRaw;
+  }
+
+  for (const post of posts) {
+    const raw = String(post?.fbId || post?.facebookPostId || '').trim();
+    if (raw) return raw;
+  }
+
+  return String(payload?.fbId || payload?.facebookPostId || '').trim();
+}
+
+function isValidInstagramPostId(value) {
+  const raw = String(value || '').trim();
+  return /^\d+$/.test(raw);
+}
+
+function normalizeInstagramPostId(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  return isValidInstagramPostId(raw) ? raw : '';
+}
+
+function extractFacebookPostIdFromAyrsharePayload(payload = {}, options = {}) {
+  const posts = Array.isArray(payload?.posts) ? payload.posts : [];
+  const fallbackPageId =
+    normalizeNumericId(options?.fallbackPageId || '') ||
+    extractFacebookPageId(options?.existingFacebookPostId || '');
+
+  if (posts.length > 0) {
+    const firstPostFbId = normalizeFacebookPostId(posts[0]?.fbId || posts[0]?.facebookPostId || '');
+    if (firstPostFbId) return firstPostFbId;
+  }
+
+  for (const post of posts) {
+    const fbId = normalizeFacebookPostId(post?.fbId || post?.facebookPostId || '');
+    if (fbId) return fbId;
+  }
+
+  const topLevelFbId = normalizeFacebookPostId(payload?.fbId || payload?.facebookPostId || '');
+  if (topLevelFbId) return topLevelFbId;
+
+  const topLevelPageId =
+    normalizeNumericId(payload?.facebookPageId || payload?.fbPageId || payload?.pageId || payload?.page_id || '') ||
+    fallbackPageId;
+  const topLevelUrl = String(payload?.postUrl || payload?.url || payload?.link || '').trim();
+  const fromTopLevelUrl = extractFacebookPostIdFromUrl(topLevelUrl, { fallbackPageId: topLevelPageId });
+  if (fromTopLevelUrl) return fromTopLevelUrl;
+
+  for (const post of posts) {
+    const postPageId =
+      normalizeNumericId(
+        post?.facebookPageId ||
+          post?.fbPageId ||
+          post?.pageId ||
+          post?.page_id ||
+          post?.accountId ||
+          ''
+      ) ||
+      topLevelPageId;
+    const postUrl = String(post?.postUrl || post?.url || post?.link || '').trim();
+    const fromPostUrl = extractFacebookPostIdFromUrl(postUrl, { fallbackPageId: postPageId });
+    if (fromPostUrl) return fromPostUrl;
+  }
+
+  return '';
+}
+
+function getAyrsharePostLifecycleStatus(payload = {}) {
+  return String(payload?.status || payload?.posts?.[0]?.status || '').trim().toLowerCase();
+}
+
+function isAyrsharePostLifecycleReady(status = '') {
+  return ['success', 'posted', 'published'].includes(String(status || '').toLowerCase());
+}
+
+function isAyrsharePostLifecyclePending(status = '') {
+  return ['processing', 'scheduled', 'pending', 'queued', 'in_progress'].includes(
+    String(status || '').toLowerCase()
+  );
+}
+
+const FACEBOOK_POST_ID_POLL_ATTEMPTS = 4;
+const FACEBOOK_POST_ID_POLL_DELAY_MS = (() => {
+  const raw = Number.parseInt(String(process.env.FACEBOOK_POST_ID_POLL_DELAY_MS || '15000'), 10);
+  if (!Number.isFinite(raw)) return 15000;
+  return Math.min(Math.max(raw, 5000), 30000);
+})();
+
+async function waitForFacebookPostIdFromAyrshare({
+  profileKey = '',
+  ayrsharePostId = '',
+  initialPayload = null,
+  fallbackPageId = '',
+  existingFacebookPostId = ''
+} = {}) {
+  const immediate = extractFacebookPostIdFromAyrsharePayload(initialPayload || {}, {
+    fallbackPageId,
+    existingFacebookPostId
+  });
+  if (immediate) return immediate;
+
+  const postId = String(ayrsharePostId || '').trim();
+  if (!postId) return '';
+
+  for (let attempt = 1; attempt <= FACEBOOK_POST_ID_POLL_ATTEMPTS; attempt += 1) {
+    const statusResult = await getPostStatus(postId, { profileKey });
+    if (!statusResult?.success || !statusResult?.data) {
+      if (attempt < FACEBOOK_POST_ID_POLL_ATTEMPTS) {
+        await new Promise((resolve) => setTimeout(resolve, FACEBOOK_POST_ID_POLL_DELAY_MS));
+      }
+      continue;
+    }
+
+    const payload = statusResult.data || {};
+    const fbId = extractFacebookPostIdFromAyrsharePayload(payload, {
+      fallbackPageId,
+      existingFacebookPostId
+    });
+    if (fbId) return fbId;
+
+    const lifecycleStatus = getAyrsharePostLifecycleStatus(payload);
+    if (!isAyrsharePostLifecyclePending(lifecycleStatus)) {
+      break;
+    }
+
+    if (attempt < FACEBOOK_POST_ID_POLL_ATTEMPTS) {
+      await new Promise((resolve) => setTimeout(resolve, FACEBOOK_POST_ID_POLL_DELAY_MS));
+    }
+  }
+
+  return '';
+}
+
 async function deleteScheduledAyrsharePostBeforeReschedule(postId, { profileKey, logger = console } = {}) {
   if (!postId || typeof postId !== 'string') {
     logger.warn('[Ayrshare Reschedule] Missing or invalid post ID. Skipping delete.');
@@ -543,6 +779,9 @@ router.get('/', protect, async (req, res) => {
           
           if (statusResult.success && statusResult.data) {
             const postData = statusResult.data;
+            const resolvedFbIdFromStatus = extractFacebookPostIdFromAyrsharePayload(postData, {
+              existingFacebookPostId: campaign?.facebookPostId || ''
+            });
             // Check if Ayrshare confirms the post was actually published
             // Ayrshare returns status 'success' for posted, 'scheduled' for pending, 'error' for failed
             const ayrshareStatus = postData.status || 
@@ -551,6 +790,26 @@ router.get('/', protect, async (req, res) => {
             
             console.log(`📊 Campaign ${campaign._id} Ayrshare status: ${ayrshareStatus}`);
             
+            if (resolvedFbIdFromStatus && campaign.facebookPostId !== resolvedFbIdFromStatus) {
+              const existingSocialPostIds = campaign?.socialPostIds && typeof campaign.socialPostIds === 'object'
+                ? campaign.socialPostIds
+                : {};
+              const nextSocialPostIds = {
+                ...existingSocialPostIds,
+                facebook: resolvedFbIdFromStatus
+              };
+
+              await Campaign.findByIdAndUpdate(campaign._id, {
+                $set: {
+                  facebookPostId: resolvedFbIdFromStatus,
+                  socialPostIds: nextSocialPostIds
+                }
+              });
+
+              campaign.facebookPostId = resolvedFbIdFromStatus;
+              campaign.socialPostIds = nextSocialPostIds;
+            }
+
             if (ayrshareStatus === 'success' || ayrshareStatus === 'posted') {
               // Ayrshare confirmed it was actually posted!
               await Campaign.findByIdAndUpdate(campaign._id, { 
@@ -1342,16 +1601,177 @@ router.post('/', protect, async (req, res) => {
 });
 
 /**
+ * PATCH /api/campaigns/:id/post-ids
+ * Manually set platform post IDs for ad creation/tracking fallback.
+ */
+router.patch('/:id/post-ids', protect, async (req, res) => {
+  try {
+    const userId = req.user.userId || req.user.id;
+    const campaign = await Campaign.findOne({ _id: req.params.id, userId });
+
+    if (!campaign) {
+      return res.status(404).json({ success: false, message: 'Campaign not found' });
+    }
+
+    const hasFacebookField = Object.prototype.hasOwnProperty.call(req.body || {}, 'facebookPostId');
+    const hasInstagramField = Object.prototype.hasOwnProperty.call(req.body || {}, 'instagramPostId');
+    if (!hasFacebookField && !hasInstagramField) {
+      return res.status(400).json({
+        success: false,
+        message: 'Provide facebookPostId and/or instagramPostId.'
+      });
+    }
+
+    let nextFacebookPostId = campaign.facebookPostId;
+    let nextInstagramPostId = campaign.instagramPostId;
+
+    if (hasFacebookField) {
+      const rawFacebookPostId = req.body?.facebookPostId;
+      const trimmedFacebookPostId = String(rawFacebookPostId ?? '').trim();
+      if (trimmedFacebookPostId) {
+        const normalizedFacebookPostId = normalizeFacebookPostId(trimmedFacebookPostId);
+        if (!normalizedFacebookPostId) {
+          return res.status(400).json({
+            success: false,
+            message: 'facebookPostId must follow format "pageId_postId".'
+          });
+        }
+        nextFacebookPostId = normalizedFacebookPostId;
+      } else {
+        nextFacebookPostId = null;
+      }
+    }
+
+    if (hasInstagramField) {
+      const rawInstagramPostId = req.body?.instagramPostId;
+      const trimmedInstagramPostId = String(rawInstagramPostId ?? '').trim();
+      if (trimmedInstagramPostId) {
+        const normalizedInstagramPostId = normalizeInstagramPostId(trimmedInstagramPostId);
+        if (!normalizedInstagramPostId) {
+          return res.status(400).json({
+            success: false,
+            message: 'instagramPostId must be a numeric string.'
+          });
+        }
+        nextInstagramPostId = normalizedInstagramPostId;
+      } else {
+        nextInstagramPostId = null;
+      }
+    }
+
+    const nextSocialPostIds =
+      campaign?.socialPostIds && typeof campaign.socialPostIds === 'object'
+        ? { ...campaign.socialPostIds }
+        : {};
+
+    if (hasFacebookField) {
+      if (nextFacebookPostId) {
+        nextSocialPostIds.facebook = nextFacebookPostId;
+      } else {
+        delete nextSocialPostIds.facebook;
+      }
+    }
+
+    if (hasInstagramField) {
+      if (nextInstagramPostId) {
+        nextSocialPostIds.instagram = nextInstagramPostId;
+      } else {
+        delete nextSocialPostIds.instagram;
+      }
+    }
+
+    campaign.facebookPostId = nextFacebookPostId;
+    campaign.instagramPostId = nextInstagramPostId;
+    campaign.socialPostIds = Object.keys(nextSocialPostIds).length > 0 ? nextSocialPostIds : null;
+    await campaign.save();
+
+    res.json({
+      success: true,
+      message: 'Campaign post IDs updated successfully.',
+      campaign
+    });
+  } catch (error) {
+    console.error('Manual campaign post ID update error:', error);
+    res.status(500).json({ success: false, message: 'Failed to update campaign post IDs', error: error.message });
+  }
+});
+
+/**
  * PUT /api/campaigns/:id
  * Update an existing campaign
  */
 router.put('/:id', protect, async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
-    
+
+    const updatePayload = { ...(req.body || {}) };
+    const hasFacebookField = Object.prototype.hasOwnProperty.call(updatePayload, 'facebookPostId');
+    const hasInstagramField = Object.prototype.hasOwnProperty.call(updatePayload, 'instagramPostId');
+
+    if (hasFacebookField) {
+      const trimmedFacebookPostId = String(updatePayload.facebookPostId ?? '').trim();
+      if (trimmedFacebookPostId) {
+        const normalizedFacebookPostId = normalizeFacebookPostId(trimmedFacebookPostId);
+        if (!normalizedFacebookPostId) {
+          return res.status(400).json({
+            success: false,
+            message: 'facebookPostId must follow format "pageId_postId".'
+          });
+        }
+        updatePayload.facebookPostId = normalizedFacebookPostId;
+      } else {
+        updatePayload.facebookPostId = null;
+      }
+    }
+
+    if (hasInstagramField) {
+      const trimmedInstagramPostId = String(updatePayload.instagramPostId ?? '').trim();
+      if (trimmedInstagramPostId) {
+        const normalizedInstagramPostId = normalizeInstagramPostId(trimmedInstagramPostId);
+        if (!normalizedInstagramPostId) {
+          return res.status(400).json({
+            success: false,
+            message: 'instagramPostId must be a numeric string.'
+          });
+        }
+        updatePayload.instagramPostId = normalizedInstagramPostId;
+      } else {
+        updatePayload.instagramPostId = null;
+      }
+    }
+
+    if (hasFacebookField || hasInstagramField) {
+      const existingCampaign = await Campaign.findOne({ _id: req.params.id, userId }).select('socialPostIds');
+      if (!existingCampaign) {
+        return res.status(404).json({ success: false, message: 'Campaign not found' });
+      }
+
+      const nextSocialPostIds =
+        existingCampaign?.socialPostIds && typeof existingCampaign.socialPostIds === 'object'
+          ? { ...existingCampaign.socialPostIds }
+          : {};
+
+      if (hasFacebookField) {
+        if (updatePayload.facebookPostId) {
+          nextSocialPostIds.facebook = updatePayload.facebookPostId;
+        } else {
+          delete nextSocialPostIds.facebook;
+        }
+      }
+      if (hasInstagramField) {
+        if (updatePayload.instagramPostId) {
+          nextSocialPostIds.instagram = updatePayload.instagramPostId;
+        } else {
+          delete nextSocialPostIds.instagram;
+        }
+      }
+
+      updatePayload.socialPostIds = Object.keys(nextSocialPostIds).length > 0 ? nextSocialPostIds : null;
+    }
+
     const campaign = await Campaign.findOneAndUpdate(
       { _id: req.params.id, userId },
-      { $set: req.body },
+      { $set: updatePayload },
       { new: true, runValidators: true }
     );
     
@@ -1924,6 +2344,13 @@ router.post('/:id/publish', protect, async (req, res) => {
         errorMessage = r.data?.message || 'Post failed';
       }
 
+      const extractedFacebookPostId = extractFacebookPostIdFromAyrsharePayload(r.data || {}, {
+        existingFacebookPostId: campaign?.facebookPostId || ''
+      });
+      if (extractedFacebookPostId) {
+        platformPostIds.facebook = extractedFacebookPostId;
+      }
+
       // Some Ayrshare responses include top-level errors even when status is not explicitly "error"
       if (!hasAyrshareError && Array.isArray(r.data?.errors) && r.data.errors.length > 0) {
         hasAyrshareError = true;
@@ -1933,10 +2360,32 @@ router.post('/:id/publish', protect, async (req, res) => {
 
       // Check individual platform posts for errors and capture IDs
       if (r.data?.posts && Array.isArray(r.data.posts)) {
+        const firstPost = r.data.posts[0] || {};
+        const firstFbId = normalizeFacebookPostId(firstPost?.fbId || firstPost?.facebookPostId || '');
+        if (firstFbId) {
+          platformPostIds.facebook = firstFbId;
+        }
+
         for (const post of r.data.posts) {
           const pid = post.id || post.postId;
           const plat = post.platform ? String(post.platform).toLowerCase() : null;
           if (pid && plat) platformPostIds[plat] = pid;
+
+          const fbId = normalizeFacebookPostId(post?.fbId || post?.facebookPostId || '');
+          if (fbId) {
+            platformPostIds.facebook = fbId;
+          }
+
+          if (Array.isArray(post?.postIds)) {
+            for (const postIdEntry of post.postIds) {
+              if (!postIdEntry || typeof postIdEntry !== 'object') continue;
+              const postIdPlatform = String(postIdEntry.platform || '').toLowerCase().trim();
+              const postIdValue = String(postIdEntry.id || postIdEntry.postId || '').trim();
+              if (postIdPlatform && postIdValue && !platformPostIds[postIdPlatform]) {
+                platformPostIds[postIdPlatform] = postIdValue;
+              }
+            }
+          }
 
           const numericCode = (typeof post.code === 'number' && Number.isFinite(post.code))
             ? post.code
@@ -1961,13 +2410,24 @@ router.post('/:id/publish', protect, async (req, res) => {
         }
       }
 
-      const extractedPostId = r.data?.posts?.[0]?.id || r.data?.id || r.id || r.data?.postIds?.[0] || null;
+      const firstTopLevelPostId = Array.isArray(r.data?.postIds) ? r.data.postIds[0] : null;
+      const extractedPostId = r.data?.posts?.[0]?.id ||
+        r.data?.id ||
+        r.id ||
+        firstTopLevelPostId?.id ||
+        firstTopLevelPostId?.postId ||
+        (typeof firstTopLevelPostId === 'string' ? firstTopLevelPostId : null) ||
+        null;
       const retryAvailable = !!r.data?.retryAvailable;
       const hasSuccessId = !!extractedPostId;
 
       // If Ayrshare didn't return per-platform IDs but only one platform was requested, map it for convenience.
       if (Object.keys(platformPostIds).length === 0 && extractedPostId && Array.isArray(calledPlatforms) && calledPlatforms.length === 1) {
-        platformPostIds[String(calledPlatforms[0]).toLowerCase()] = extractedPostId;
+        const fallbackPlatform = String(calledPlatforms[0]).toLowerCase();
+        // Never infer Facebook post ID from generic Ayrshare internal IDs.
+        if (fallbackPlatform !== 'facebook') {
+          platformPostIds[fallbackPlatform] = extractedPostId;
+        }
       }
 
       const success = (r.success || hasSuccessId) && !hasAyrshareError;
@@ -2194,12 +2654,69 @@ router.post('/:id/publish', protect, async (req, res) => {
 
       // Prefer Instagram ID when present, otherwise fall back to the top-level ID.
       const extractedPostId = socialPostIds.instagram || analyzed[0]?.extractedPostId || null;
+      const normalizedSelectedPlatforms = Array.isArray(platforms)
+        ? platforms.map((platform) => String(platform || '').toLowerCase())
+        : [];
+      const facebookSelected = normalizedSelectedPlatforms.includes('facebook');
+      const facebookPublishEntry = analyzed.find((entry) =>
+        Array.isArray(entry?.platforms) &&
+        entry.platforms.some((platform) => String(platform || '').toLowerCase() === 'facebook')
+      );
+      const facebookAyrsharePostId = String(
+        facebookPublishEntry?.extractedPostId ||
+          (facebookSelected ? extractedPostId : '') ||
+          ''
+      ).trim();
+      const initialFacebookPayload =
+        (shouldAttachInstagramAudio ? otherPlatformsResult?.data : allResults?.data) ||
+        instagramResult?.data ||
+        null;
+
+      let facebookPostId = normalizeFacebookPostId(
+        socialPostIds.facebook ||
+          extractFacebookPostIdFromAyrsharePayload(initialFacebookPayload || {}, {
+            existingFacebookPostId: campaign?.facebookPostId || ''
+          }) ||
+          campaign.facebookPostId ||
+          ''
+      ) || null;
+
+      if (!facebookPostId && facebookSelected) {
+        facebookPostId = normalizeFacebookPostId(
+          await waitForFacebookPostIdFromAyrshare({
+            profileKey,
+            ayrsharePostId: facebookAyrsharePostId,
+            initialPayload: initialFacebookPayload,
+            fallbackPageId: extractFacebookPageId(campaign?.facebookPostId || ''),
+            existingFacebookPostId: campaign?.facebookPostId || ''
+          })
+        ) || null;
+      }
+
+      if (!facebookPostId && facebookSelected) {
+        const rawFacebookIdCandidate = extractRawFacebookPostIdCandidate(initialFacebookPayload || {});
+        if (rawFacebookIdCandidate) {
+          const invalidIdErrorMessage = 'Invalid Facebook Post ID format';
+          await persistPublishFailure(invalidIdErrorMessage, {
+            rawFacebookIdCandidate,
+            initialFacebookPayload
+          });
+          return res.status(400).json({ success: false, message: invalidIdErrorMessage });
+        }
+      }
+      if (facebookPostId) {
+        socialPostIds.facebook = facebookPostId;
+      }
+
+      const instagramPostId = String(socialPostIds.instagram || campaign.instagramPostId || '').trim() || null;
 
       // Update campaign with post result
       const updateData = {
         status: isScheduled ? 'scheduled' : 'posted',
         'socialPostId': extractedPostId,
         'socialPostIds': Object.keys(socialPostIds).length > 0 ? socialPostIds : null,
+        'facebookPostId': facebookPostId,
+        'instagramPostId': instagramPostId,
         'publishResult': allResults,
         'lastPublishError': null,
         'ayrshareStatus': isScheduled ? 'scheduled' : 'success',

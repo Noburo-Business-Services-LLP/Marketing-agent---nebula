@@ -66,6 +66,26 @@ const adCampaignSchema = new mongoose.Schema(
       meta: { type: platformResultSchema, default: () => ({ status: 'skipped', message: 'Not selected' }) },
       google: { type: platformResultSchema, default: () => ({ status: 'skipped', message: 'Not selected' }) }
     },
+    sourcePostIds: {
+      facebook: { type: String, default: '' },
+      instagram: { type: String, default: '' }
+    },
+    cta: {
+      type: {
+        type: String,
+        default: 'LEARN_MORE'
+      },
+      link: { type: String, default: '' },
+      sourcePlatform: {
+        type: String,
+        enum: ['', 'facebook', 'instagram'],
+        default: ''
+      }
+    },
+    sourceProfileUrls: {
+      facebook: { type: String, default: '' },
+      instagram: { type: String, default: '' }
+    },
     performance: {
       clicks: { type: Number, default: 0 },
       impressions: { type: Number, default: 0 },

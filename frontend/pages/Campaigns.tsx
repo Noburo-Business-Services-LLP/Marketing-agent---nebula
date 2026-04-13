@@ -3937,196 +3937,257 @@ const CampaignCard: React.FC<{
   onView?: (campaign: Campaign) => void;
   isSelected?: boolean;
   onToggleSelect?: (campaignId: string) => void;
-}> = ({ campaign, isDarkMode, theme, onPost, onDelete, onBoost, onUseForAd, onView, isSelected = false, onToggleSelect }) => (
-    <div className={`rounded-xl shadow-sm border overflow-hidden hover:shadow-md transition-shadow flex flex-col h-full ${theme.bgCard} ${
-      isDarkMode ? 'border-slate-700/50' : 'border-slate-200'
-    } ${isSelected ? 'ring-2 ring-[#ffcc29]' : ''}`}>
-        <div className={`p-5 border-b ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'}`}>
-            <div className="flex justify-between items-start mb-2">
-                <div className="flex items-center gap-2">
-                    {/* Selection Checkbox */}
-                    <button
-                      onClick={(e) => { e.stopPropagation(); onToggleSelect?.(campaign._id); }}
-                      className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
-                        isSelected 
-                          ? 'bg-[#ffcc29] border-[#ffcc29]' 
-                          : isDarkMode ? 'border-slate-500 hover:border-[#ffcc29]' : 'border-slate-300 hover:border-[#ffcc29]'
-                      }`}
-                    >
-                      {isSelected && <Check className="w-3 h-3 text-black" />}
-                    </button>
-                    <h3 className={`font-bold text-sm ${theme.text}`}>{campaign.name}</h3>
-                </div>
-                <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase ${
-                    campaign.status === 'active' ? 'bg-green-500/20 text-green-500' :
-                    campaign.status === 'posted' ? 'bg-blue-500/20 text-blue-500' :
-                    campaign.status === 'draft' ? 'bg-amber-500/20 text-amber-500' :
-                    isDarkMode ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-600'
-                }`}>
-                    {campaign.status}
-                </span>
-            </div>
-            <div className={`flex flex-col gap-1 text-xs ${theme.textSecondary} ml-7`}>
-                <p>{campaign.platforms.length > 1 ? 'Platforms' : 'Platform'}: <span className={`font-medium capitalize ${theme.text}`}>{campaign.platforms.join(', ')}</span></p>
-                <div className="flex items-center gap-1">
-                    <Calendar className="w-3 h-3" />
-	                    <span>
-	                      {campaign.status === 'posted' && campaign.publishedAt
-	                        ? new Date(campaign.publishedAt).toLocaleString()
-	                        : (() => {
-	                            // Prefer canonical scheduled datetime when available (e.g., after rescheduling)
-	                            if (campaign.status === 'scheduled' && campaign.scheduledFor) {
-	                              const scheduled = new Date(campaign.scheduledFor);
-	                              if (!isNaN(scheduled.getTime())) {
-	                                const today = new Date(); today.setHours(0,0,0,0);
-	                                const cmp = new Date(scheduled); cmp.setHours(0,0,0,0);
-	                                const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
-	                                const label = cmp.getTime() === today.getTime()
-	                                  ? 'Today'
-	                                  : cmp.getTime() === tomorrow.getTime()
-	                                    ? 'Tomorrow'
-	                                    : scheduled.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-	                                const hh = String(scheduled.getHours()).padStart(2, '0');
-	                                const mm = String(scheduled.getMinutes()).padStart(2, '0');
-	                                return `${label} at ${hh}:${mm}`;
-	                              }
-	                            }
+}> = ({ campaign, isDarkMode, theme, onPost, onDelete, onBoost, onUseForAd, onView, isSelected = false, onToggleSelect }) => {
+  const status = String(campaign.status || '').toLowerCase();
+  const statusLabel =
+    status === 'posted'
+      ? 'POSTED'
+      : status === 'active'
+        ? 'ACTIVE'
+        : status === 'failed'
+          ? 'FAILED'
+          : status === 'partial'
+            ? 'PARTIAL'
+            : status
+              ? status.toUpperCase()
+              : 'UNKNOWN';
 
-	                            const raw = campaign.scheduling.startDate;
-	                            const d = new Date(raw);
-	                            const fallbackTime = campaign.scheduling.postTime || '10:00';
-	                            if (isNaN(d.getTime())) return `${raw} at ${fallbackTime}`;
-	                            const today = new Date(); today.setHours(0,0,0,0);
-	                            const cmp = new Date(d); cmp.setHours(0,0,0,0);
-	                            const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
-	                            const label = cmp.getTime() === today.getTime() ? 'Today' : cmp.getTime() === tomorrow.getTime() ? 'Tomorrow' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-	                            return `${label} at ${fallbackTime}`;
-	                          })()
-	                      }
-	                    </span>
-                </div>
-                {campaign.lastPublishError && campaign.status !== 'posted' && (
-                  <div className={`flex items-start gap-1 ${isDarkMode ? 'text-red-400' : 'text-red-600'}`}>
-                    <AlertCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
-                    <span className="line-clamp-2">{campaign.lastPublishError}</span>
-                  </div>
-                )}
-            </div>
+  const badgeClass =
+    status === 'posted'
+      ? 'bg-blue-500/15 text-blue-400 border-blue-500/35'
+      : status === 'active'
+        ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/35'
+        : status === 'failed'
+          ? 'bg-red-500/15 text-red-400 border-red-500/35'
+          : status === 'partial'
+            ? 'bg-amber-500/15 text-amber-400 border-amber-500/35'
+            : isDarkMode
+              ? 'bg-slate-700/60 text-slate-300 border-slate-600'
+              : 'bg-slate-100 text-slate-600 border-slate-200';
+
+  const previewImage = String(
+    campaign.creative?.imageUrls?.[0] ||
+      campaign.creative?.videoUrl ||
+      ''
+  ).trim();
+
+  const previewCaption = String(
+    campaign.creative?.captions ||
+      campaign.creative?.textContent ||
+      ''
+  ).trim();
+
+  const impressions = Number(campaign.performance?.impressions || 0);
+  const engagement = Number(campaign.performance?.engagement || 0);
+
+  const canBoost =
+    status === 'posted' &&
+    Boolean(campaign.socialPostId) &&
+    Array.isArray(campaign.platforms) &&
+    campaign.platforms.some((p) => ['facebook', 'instagram'].includes(String(p || '').toLowerCase()));
+
+  const platformText = Array.isArray(campaign.platforms) && campaign.platforms.length
+    ? campaign.platforms.join(', ')
+    : '--';
+
+  const hasPublishError = Boolean(campaign.lastPublishError) && status !== 'posted';
+  const compactErrorReason = String(campaign.lastPublishError || 'Unable to fetch post').trim();
+  const failedPlatform = Array.isArray(campaign.platforms) && campaign.platforms[0]
+    ? String(campaign.platforms[0]).toUpperCase()
+    : 'PLATFORM';
+
+  const dateText = campaign.status === 'posted' && campaign.publishedAt
+    ? new Date(campaign.publishedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    : (() => {
+        if (campaign.status === 'scheduled' && campaign.scheduledFor) {
+          const scheduled = new Date(campaign.scheduledFor);
+          if (!isNaN(scheduled.getTime())) {
+            const hh = String(scheduled.getHours()).padStart(2, '0');
+            const mm = String(scheduled.getMinutes()).padStart(2, '0');
+            return `${scheduled.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} ${hh}:${mm}`;
+          }
+        }
+
+        const raw = campaign.scheduling?.startDate || '';
+        const d = new Date(raw);
+        if (isNaN(d.getTime())) return String(raw || '');
+        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      })();
+
+  return (
+    <div
+      className={`group rounded-2xl border overflow-hidden transition-all duration-200 hover:-translate-y-1 hover:scale-[1.01] ${
+        isDarkMode
+          ? 'shadow-sm shadow-black/20 hover:shadow-lg hover:shadow-black/30 border-slate-700/50'
+          : 'shadow-sm shadow-slate-200/70 hover:shadow-lg hover:shadow-slate-300/70 border-slate-200'
+      } ${theme.bgCard} ${isSelected ? 'ring-2 ring-[#ffcc29]' : ''}`}
+    >
+      {/* Header */}
+      <div className={`p-4 border-b ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'}`}>
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-2 min-w-0">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleSelect?.(campaign._id);
+              }}
+              className={`mt-0.5 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                isSelected
+                  ? 'bg-[#ffcc29] border-[#ffcc29]'
+                  : isDarkMode
+                    ? 'border-slate-500 hover:border-[#ffcc29]'
+                    : 'border-slate-300 hover:border-[#ffcc29]'
+              }`}
+            >
+              {isSelected && <Check className="w-3 h-3 text-black" />}
+            </button>
+            <h3 className={`font-bold text-sm truncate ${theme.text}`}>{campaign.name || 'Untitled Campaign'}</h3>
+          </div>
+
+          <span className={`px-2.5 py-0.5 rounded-full border text-[10px] font-bold uppercase whitespace-nowrap ${badgeClass}`}>
+            {statusLabel}
+          </span>
+        </div>
+      </div>
+
+      {/* Body */}
+      <div className="p-4">
+        <div className="text-xs mb-3">
+          <p className={theme.textSecondary}>
+            <span className={`font-medium capitalize ${theme.text}`}>{platformText}</span>
+            <span className="mx-2">|</span>
+            <span>{dateText || '--'}</span>
+          </p>
         </div>
 
-        {/* Content Preview */}
-        <div className="p-5 flex-1">
-            <div className={`rounded-lg p-3 mb-4 border h-24 overflow-hidden relative group ${
-              isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-slate-50 border-slate-200'
-            }`}>
-                 {campaign.creative.imageUrls?.[0] ? (
-                    <div className="flex gap-4 h-full">
-                        <img 
-                            src={campaign.creative.imageUrls[0]} 
-                            alt="Campaign Creative" 
-                            className="w-16 h-16 object-cover rounded-md flex-shrink-0"
-                        />
-                        <p className={`text-xs line-clamp-3 italic ${theme.textSecondary}`}>"{campaign.creative.textContent}"</p>
-                    </div>
-                ) : (
-                    <p className={`text-xs italic ${theme.textSecondary}`}>"{campaign.creative.textContent}"</p>
-                )}
-            </div>
+        <div className={`rounded-lg border p-3 ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-slate-50 border-slate-200'}`}>
+          <div className="flex items-start gap-3">
+            {previewImage ? (
+              <img
+                src={previewImage}
+                alt="Campaign preview"
+                className="w-[72px] h-[72px] object-cover rounded-md flex-shrink-0"
+              />
+            ) : (
+              <div className={`w-[72px] h-[72px] rounded-md border flex items-center justify-center flex-shrink-0 ${
+                isDarkMode ? 'border-slate-700 text-slate-500' : 'border-slate-200 text-slate-400'
+              }`}>
+                <ImageIcon className="w-4 h-4" />
+              </div>
+            )}
 
-            {/* Metrics */}
-            {campaign.performance && (
-                <div className="grid grid-cols-2 gap-4 pt-2">
-                    <div>
-                        <p className="text-[10px] text-slate-400 uppercase font-bold mb-1">IMPRESSIONS</p>
-                        <p className={`text-sm font-bold ${theme.text}`}>{campaign.performance.impressions.toLocaleString()}</p>
-                    </div>
-                    <div className="text-right">
-                        <p className="text-[10px] text-slate-400 uppercase font-bold mb-1">ENGAGEMENT</p>
-                        <p className={`text-sm font-bold ${theme.text}`}>{campaign.performance.engagement.toLocaleString()}</p>
-                    </div>
-                </div>
-            )}
-            {!campaign.performance && (
-                <div className={`text-center py-2 text-xs text-slate-400 rounded border border-dashed ${
-                  isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-slate-50 border-slate-200'
-                }`}>
-                    No analytics yet
-                </div>
-            )}
+            <div className="min-w-0 flex-1">
+              <p className={`text-xs leading-relaxed line-clamp-2 ${theme.textSecondary}`}>
+                {previewCaption || 'No caption available'}
+              </p>
+            </div>
+          </div>
         </div>
 
-        {/* Action Footer */}
-        <div className={`p-3 border-t flex justify-between items-center ${
-          isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-slate-50 border-slate-200'
-        }`}>
-            {/* Delete Button - always visible */}
-            <button 
+        {hasPublishError && (
+          <div className={`mt-3 rounded-md px-2.5 py-2 text-xs flex items-center gap-2 ${
+            isDarkMode ? 'bg-red-500/10 text-red-300 border border-red-500/25' : 'bg-red-50 text-red-700 border border-red-200'
+          }`}>
+            <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+            <div className="min-w-0">
+              <p className="font-semibold">{failedPlatform} Failed</p>
+              <p className="line-clamp-1 opacity-90">{compactErrorReason}</p>
+            </div>
+            <span
+              className="ml-auto text-[10px] px-1.5 py-0.5 rounded border border-current/30 opacity-90"
+              title="Check post publish status and ad account readiness."
+            >
+              Fix
+            </span>
+          </div>
+        )}
+
+        {/* Metrics */}
+        <div className={`mt-3 rounded-lg border ${isDarkMode ? 'border-slate-700/50 bg-[#0d1117]' : 'border-slate-200 bg-white'}`}>
+          <div className={`grid grid-cols-2 ${isDarkMode ? 'divide-slate-700/50' : 'divide-slate-200'} divide-x`}>
+            <div className="p-2.5">
+              <p className="text-[10px] text-slate-400 uppercase font-bold">Impressions</p>
+              <p className={`text-sm font-bold mt-0.5 ${theme.text}`}>{impressions.toLocaleString()}</p>
+            </div>
+            <div className="p-2.5">
+              <p className="text-[10px] text-slate-400 uppercase font-bold">Engagement</p>
+              <p className={`text-sm font-bold mt-0.5 ${theme.text}`}>{engagement.toLocaleString()}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Action Bar */}
+      <div className={`p-3 border-t ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-slate-50 border-slate-200'}`}>
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <div className="order-2 md:order-1 flex items-center gap-3">
+            <button
+              onClick={() => onView?.(campaign)}
+              className={`text-xs font-semibold px-3 py-1.5 rounded-md border transition-colors ${
+                isDarkMode
+                  ? 'border-slate-600 text-slate-200 hover:bg-slate-700/70 group-hover:border-slate-500'
+                  : 'border-slate-300 text-slate-700 hover:bg-slate-100 group-hover:border-slate-400'
+              }`}
+              title="View campaign"
+            >
+              <Eye className="w-3 h-3 inline mr-1" />
+              View
+            </button>
+            <button
+              onClick={() => onPost?.(campaign)}
+              className={`text-xs font-semibold px-3 py-1.5 rounded-md border transition-colors ${
+                isDarkMode
+                  ? 'border-slate-600 text-slate-200 hover:bg-slate-700/70 group-hover:border-slate-500'
+                  : 'border-slate-300 text-slate-700 hover:bg-slate-100 group-hover:border-slate-400'
+              }`}
+              title="Edit campaign"
+            >
+              <Edit3 className="w-3 h-3 inline mr-1" />
+              Edit
+            </button>
+          </div>
+
+          <div className="order-1 md:order-2 flex items-center justify-start md:justify-center">
+            <button
+              onClick={() => onUseForAd?.(campaign)}
+              className="w-full md:w-auto text-xs font-bold text-black bg-[#ffcc29] px-4 py-2 rounded-md hover:bg-[#ffcc29]/85 transition-colors shadow-sm"
+              title="Use this campaign for ad creation"
+            >
+              <DollarSign className="w-3 h-3 inline mr-1" />
+              Use for Ad
+            </button>
+          </div>
+
+          <div className="order-3 flex items-center gap-3 justify-start md:justify-end">
+            {canBoost && (
+              <button
+                onClick={() => onBoost?.(campaign)}
+                className={`text-xs font-semibold px-3 py-1.5 rounded-md border transition-colors ${
+                  isDarkMode
+                    ? 'border-[#ffcc29]/40 text-[#ffcc29] hover:bg-[#ffcc29]/10'
+                    : 'border-[#ffcc29]/60 text-amber-700 hover:bg-amber-50'
+                }`}
+              >
+                <Zap className="w-3 h-3 inline mr-1" />
+                Boost
+              </button>
+            )}
+
+            <button
               onClick={() => onDelete?.(campaign._id)}
-              className={`text-xs font-bold px-2 py-1.5 rounded flex items-center gap-1 transition-colors ${
+              className={`p-2 rounded-md transition-colors ${
                 isDarkMode ? 'text-red-400 hover:bg-red-500/20' : 'text-red-500 hover:bg-red-50'
               }`}
               title="Delete campaign"
             >
-                <Trash2 className="w-3.5 h-3.5" />
+              <Trash2 className="w-4 h-4" />
             </button>
-            
-            <div className="flex gap-2">
-              <button
-                onClick={() => onView?.(campaign)}
-                className={`text-xs font-bold px-3 py-1.5 rounded flex items-center gap-1 ${
-                  isDarkMode ? 'text-slate-300 hover:bg-slate-700' : 'text-slate-700 hover:bg-slate-200'
-                }`}
-                title="View campaign"
-              >
-                <Eye className="w-3 h-3" /> View
-              </button>
-
-              <button
-                onClick={() => onPost?.(campaign)}
-                className={`text-xs font-bold px-3 py-1.5 rounded flex items-center gap-1 ${
-                  isDarkMode ? 'text-slate-300 hover:bg-slate-700' : 'text-slate-700 hover:bg-slate-200'
-                }`}
-                title="Edit campaign"
-              >
-                <Edit3 className="w-3 h-3" /> Edit
-              </button>
-
-              <button
-                onClick={() => onUseForAd?.(campaign)}
-                className="text-xs font-bold text-black bg-[#ffcc29] px-3 py-1.5 rounded hover:bg-[#ffcc29]/80 flex items-center gap-1"
-                title="Use this campaign for ad creation"
-              >
-                <DollarSign className="w-3 h-3" /> Use for Ad
-              </button>
-
-               {(campaign.status === 'draft' || campaign.status === 'scheduled') && (
-                  <button 
-                    onClick={() => onPost?.(campaign)}
-                    className="text-xs font-bold text-black bg-[#ffcc29] px-3 py-1.5 rounded hover:bg-[#ffcc29]/80 flex items-center gap-1"
-                  >
-                      <Send className="w-3 h-3" /> {campaign.status === 'scheduled' ? 'Edit' : 'Post'}
-                  </button>
-              )}
-              {campaign.status === 'posted' && campaign.socialPostId && campaign.platforms?.some(p => ['facebook', 'instagram'].includes(p)) && (
-                  <button 
-                    onClick={() => onBoost?.(campaign)}
-                    className="text-xs font-bold text-black bg-[#ffcc29] px-3 py-1.5 rounded hover:bg-[#ffcc29]/80 flex items-center gap-1"
-                  >
-                      <Zap className="w-3 h-3" /> Boost
-                  </button>
-              )}
-              {campaign.status === 'posted' && (
-                  <button className={`text-xs font-bold px-3 py-1.5 rounded flex items-center gap-1 ${
-                    isDarkMode ? 'text-slate-400 hover:bg-slate-700' : 'text-slate-500 hover:bg-slate-200'
-                  }`}>
-                      <Archive className="w-3 h-3" /> Archive
-                  </button>
-              )}
-            </div>
+          </div>
         </div>
+      </div>
     </div>
-);
-
+  );
+};
 // --- COMPREHENSIVE CAMPAIGN CREATION MODAL ---
 interface GeneratedPost {
   id: string;

@@ -94,6 +94,7 @@ export interface Campaign {
     type: 'text' | 'image' | 'video' | 'carousel' | 'story' | 'reel';
     textContent: string;
     imageUrls: string[];
+    videoUrl?: string;
     captions?: string;
     instagramAudio?: {
       url: string;
@@ -133,6 +134,8 @@ export interface Campaign {
   scheduledFor?: string;
   socialPostId?: string;
   socialPostIds?: Record<string, string> | null;
+  facebookPostId?: string | null;
+  instagramPostId?: string | null;
   ayrshareStatus?: string;
   lastPublishError?: string | null;
   createdAt: string;
@@ -172,6 +175,19 @@ export interface AdCampaign {
   platformStatus: {
     meta: AdCampaignPlatformStatus;
     google: AdCampaignPlatformStatus;
+  };
+  sourcePostIds?: {
+    facebook?: string;
+    instagram?: string;
+  };
+  cta?: {
+    type?: string;
+    link?: string;
+    sourcePlatform?: 'facebook' | 'instagram' | '';
+  };
+  sourceProfileUrls?: {
+    facebook?: string;
+    instagram?: string;
   };
   performance?: {
     clicks: number;

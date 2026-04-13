@@ -1,0 +1,64 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1080" viewBox="0 0 1080 1080" role="img" aria-label="Premium Instagram campaign poster for New org">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#8965EC"/>
+      <stop offset="100%" stop-color="#7150D7"/>
+    </linearGradient>
+    <radialGradient id="halo" cx="50%" cy="45%" r="48%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.24"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="shoeBody" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#E7E7ED"/>
+    </linearGradient>
+    <filter id="softShadow" x="-25%" y="-25%" width="150%" height="150%">
+      <feDropShadow dx="0" dy="14" stdDeviation="13" flood-color="#000000" flood-opacity="0.18"/>
+    </filter>
+  </defs>
+
+  <rect x="0" y="0" width="1080" height="1080" fill="url(#bg)"/>
+  <circle cx="540" cy="525" r="400" fill="url(#halo)"/>
+
+  <g opacity="0.2" fill="none" stroke="#FFFFFF">
+    <circle cx="540" cy="540" r="350" stroke-width="1.2"/>
+    <circle cx="540" cy="540" r="305" stroke-width="0.9"/>
+  </g>
+
+  <g filter="url(#softShadow)">
+    <rect x="454" y="58" width="172" height="172" rx="34" fill="#FFFFFF" fill-opacity="0.14"/>
+    <image href="new-org-logo.png" x="474" y="78" width="132" height="132" preserveAspectRatio="xMidYMid meet"/>
+  </g>
+
+  <g transform="translate(155 330)" filter="url(#softShadow)">
+    <ellipse cx="385" cy="372" rx="282" ry="45" fill="#FFFFFF" opacity="0.16"/>
+
+    <path d="M114 286 C150 232, 239 198, 351 195 C458 192, 549 219, 649 266 C685 282, 729 289, 771 291 C788 292, 802 305, 803 321 C804 338, 792 351, 774 352 L640 358 C598 360, 568 349, 534 332 C470 301, 404 292, 323 300 L231 309 C176 314, 130 314, 93 303 C74 297, 71 277, 114 286 Z"
+      fill="url(#shoeBody)"/>
+
+    <path d="M140 278 C174 240, 248 214, 347 210 C451 206, 545 229, 655 274 C688 288, 730 294, 768 295"
+      fill="none" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round" opacity="0.95"/>
+
+    <path d="M250 309 C334 293, 413 296, 490 327" fill="none" stroke="#D8D8E2" stroke-width="5" opacity="0.7"/>
+    <path d="M530 335 C564 349, 604 351, 651 345" fill="none" stroke="#D8D8E2" stroke-width="4" opacity="0.7"/>
+
+    <path d="M233 321 L265 321 M292 317 L324 318 M351 315 L383 316 M411 317 L443 319"
+      stroke="#FFFFFF" stroke-width="3.8" stroke-linecap="round" opacity="0.77"/>
+
+    <path d="M658 290 C700 293, 736 308, 766 334" fill="none" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round" opacity="0.9"/>
+  </g>
+
+  <text x="540" y="838" text-anchor="middle" fill="#FFFFFF" font-family="'Playfair Display', Georgia, serif" font-size="86" letter-spacing="1.4" font-weight="600">
+    REFINED MOTION
+  </text>
+
+  <text x="540" y="895" text-anchor="middle" fill="#FFFFFF" font-family="'Playfair Display', Georgia, serif" font-size="29" letter-spacing="7" opacity="0.92">
+    PREMIUM SOCIAL CAMPAIGN
+  </text>
+
+  <rect x="372" y="935" width="336" height="1.5" fill="#FFFFFF" opacity="0.72"/>
+
+  <text x="540" y="973" text-anchor="middle" fill="#FFFFFF" font-family="'Playfair Display', Georgia, serif" font-size="22" letter-spacing="3" opacity="0.9">
+    INSTAGRAM 1080 x 1080
+  </text>
+</svg>
