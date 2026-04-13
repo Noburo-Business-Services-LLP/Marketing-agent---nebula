@@ -1178,12 +1178,14 @@ router.post('/check-duplicate', protect, async (req, res) => {
 // @access  Private
 router.put('/complete-onboarding', protect, async (req, res) => {
   try {
-    const { businessProfile, connectedSocials } = req.body;
+    const { businessProfile, connectedSocials, mobileNumber } = req.body;
 
     const updateData = {
       onboardingCompleted: true,
       businessProfile: businessProfile || {}
     };
+
+    if (mobileNumber) updateData.mobileNumber = mobileNumber;
 
     // If connected socials are provided during onboarding, save them
     if (connectedSocials && Array.isArray(connectedSocials) && connectedSocials.length > 0) {

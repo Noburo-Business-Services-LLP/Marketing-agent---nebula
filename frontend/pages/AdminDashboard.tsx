@@ -23,6 +23,7 @@ interface UserRow {
   onboardingCompleted: boolean;
   credits?: { balance: number; totalUsed: number };
   trial?: { expiresAt?: string; isExpired?: boolean; migratedToProd?: boolean };
+  mobileNumber?: string;
 }
 
 interface FeatureUsage {
@@ -108,6 +109,10 @@ const AdminDashboard: React.FC = () => {
   const [coupons, setCoupons] = useState<any[]>([]);
   const [couponForm, setCouponForm] = useState({ code: '', discountedAmount: '5000', maxUses: '1', note: '' });
   const [couponCreating, setCouponCreating] = useState(false);
+  const [resettingTrial, setResettingTrial] = useState(false);
+  const [addingCredits, setAddingCredits] = useState(false);
+  const [creditsToAdd, setCreditsToAdd] = useState('100');
+  const [adminActionMsg, setAdminActionMsg] = useState('');
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -123,6 +128,34 @@ const AdminDashboard: React.FC = () => {
     } catch {}
     setLoading(false);
   }, []);
+
+  const handleResetTrial = async (userId: string) => {
+    setResettingTrial(true);
+    setAdminActionMsg('');
+    try {
+      const res = await adminFetch(`/users/${userId}/reset-trial`, { method: 'POST' });
+      if (res.success) {
+        setAdminActionMsg('Trial re-enabled for 30 days');
+        if (selected) setSelected(prev => prev ? { ...prev, user: { ...prev.user, trial: { ...prev.user.trial, isExpired: false } } } : prev);
+      }
+    } catch { setAdminActionMsg('Failed to reset trial'); }
+    setResettingTrial(false);
+  };
+
+  const handleAddCredits = async (userId: string) => {
+    const amount = Number(creditsToAdd);
+    if (!amount || amount <= 0) return;
+    setAddingCredits(true);
+    setAdminActionMsg('');
+    try {
+      const res = await adminFetch(`/users/${userId}/add-credits`, { method: 'POST', body: JSON.stringify({ amount }) });
+      if (res.success) {
+        setAdminActionMsg(`Added ${amount} credits. New balance: ${res.newBalance}`);
+        if (selected) setSelected(prev => prev ? { ...prev, user: { ...prev.user, credits: { ...prev.user.credits, balance: res.newBalance } } } : prev);
+      }
+    } catch { setAdminActionMsg('Failed to add credits'); }
+    setAddingCredits(false);
+  };
 
   const createCoupon = async () => {
     if (!couponForm.code.trim()) return;
@@ -570,6 +603,46 @@ const AdminDashboard: React.FC = () => {
                             </div>
                           </div>
                         )}
+                      </div>
+
+                      {/* Mobile Number */}
+                      {selected.user.mobileNumber && (
+                        <div className="px-5 py-3 border-b border-white/[0.04]">
+                          <p className="text-white/30 text-xs uppercase tracking-wider mb-1">Mobile</p>
+                          <p className="text-white text-sm font-medium">{selected.user.mobileNumber}</p>
+                        </div>
+                      )}
+
+                      {/* Admin Actions */}
+                      <div className="px-5 py-4 border-b border-white/[0.04] space-y-3">
+                        <p className="text-white/30 text-xs uppercase tracking-wider">Admin Actions</p>
+                        {adminActionMsg && (
+                          <p className="text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2">{adminActionMsg}</p>
+                        )}
+                        <button
+                          onClick={() => { setAdminActionMsg(''); handleResetTrial(selected.user._id); }}
+                          disabled={resettingTrial}
+                          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 border border-blue-500/20 transition-all disabled:opacity-50"
+                        >
+                          {resettingTrial ? 'Resetting...' : '↺ Re-enable Trial (30 days)'}
+                        </button>
+                        <div className="flex gap-2">
+                          <input
+                            type="number"
+                            value={creditsToAdd}
+                            onChange={e => setCreditsToAdd(e.target.value)}
+                            className="flex-1 bg-white/[0.05] border border-white/10 rounded-xl px-3 py-2 text-white text-sm outline-none focus:border-[#ffcc29]/50"
+                            placeholder="Credits"
+                            min="1"
+                          />
+                          <button
+                            onClick={() => { setAdminActionMsg(''); handleAddCredits(selected.user._id); }}
+                            disabled={addingCredits}
+                            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold bg-[#ffcc29]/10 text-[#ffcc29] hover:bg-[#ffcc29]/20 border border-[#ffcc29]/20 transition-all disabled:opacity-50"
+                          >
+                            {addingCredits ? 'Adding...' : '+ Add Credits'}
+                          </button>
+                        </div>
                       </div>
 
                       {/* Toggle */}

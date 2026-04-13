@@ -375,10 +375,10 @@ export const apiService = {
     return apiCall('/auth/check-duplicate', { method: 'POST', body: JSON.stringify({ businessName, website, gstNumber }) }, true);
   },
 
-  completeOnboarding: async (data: BusinessProfile, connectedSocials?: {platform: string; username?: string}[]): Promise<{ success: boolean; user: User }> => {
+  completeOnboarding: async (data: BusinessProfile, connectedSocials?: {platform: string; username?: string}[], mobileNumber?: string): Promise<{ success: boolean; user: User }> => {
     const response = await apiCall<{ success: boolean; user: User }>(
       '/auth/complete-onboarding',
-      { method: 'PUT', body: JSON.stringify({ businessProfile: data, connectedSocials }) },
+      { method: 'PUT', body: JSON.stringify({ businessProfile: data, connectedSocials, mobileNumber }) },
       true
     );
     return response;
