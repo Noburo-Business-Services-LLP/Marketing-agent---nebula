@@ -344,8 +344,7 @@ router.post('/users/:id/reset-trial', adminAuth, async (req, res) => {
 
     user.trial = {
       ...user.trial,
-      isExpired: false,
-      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days from now
+      isExpired: false
     };
     await user.save({ validateBeforeSave: false });
 

@@ -112,6 +112,7 @@ const AdminDashboard: React.FC = () => {
   const [resettingTrial, setResettingTrial] = useState(false);
   const [addingCredits, setAddingCredits] = useState(false);
   const [creditsToAdd, setCreditsToAdd] = useState('100');
+  const [trialDaysToAdd, setTrialDaysToAdd] = useState('7');
   const [adminActionMsg, setAdminActionMsg] = useState('');
 
   const loadData = useCallback(async () => {
@@ -624,7 +625,7 @@ const AdminDashboard: React.FC = () => {
                           disabled={resettingTrial}
                           className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 border border-blue-500/20 transition-all disabled:opacity-50"
                         >
-                          {resettingTrial ? 'Resetting...' : '↺ Re-enable Trial (30 days)'}
+                          {resettingTrial ? 'Resetting...' : '↺ Re-enable Trial'}
                         </button>
                         <div className="flex gap-2">
                           <input
