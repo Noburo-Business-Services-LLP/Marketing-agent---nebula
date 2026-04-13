@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
-import { apiService, brandAssetsAPI } from '../services/api';
+import { useNavigate } from 'react-router-dom';
+import { adCampaignsAPI, apiService, brandAssetsAPI } from '../services/api';
 import { DashboardData, Campaign, CompetitorPost } from '../types';
 import { TrendingUp, ArrowUpRight, ChevronRight, ChevronLeft, Calendar as CalendarIcon, Calendar, CalendarSync, Info, Activity, Clock, MoreHorizontal, Plus, X, ExternalLink, Edit3, Share2, MessageSquare, FileText, Loader2, Bell, BellRing, Check, AlertCircle, Trash2, Eye, Users, BarChart3, Swords, Sparkles, Download, Copy, Send, Save, Lightbulb, Flame, Target, Zap, Music, Image as ImageIcon, RefreshCw, PenTool, Wand2, Upload, Filter, Unlink } from 'lucide-react';
 import { useTheme, getThemeClasses } from '../context/ThemeContext';
@@ -254,7 +255,17 @@ const SectionButtons: React.FC<{
 const Dashboard: React.FC = () => {
   const { isDarkMode } = useTheme();
   const theme = getThemeClasses(isDarkMode);
+  const navigate = useNavigate();
   const [data, setData] = useState<DashboardData | null>(null);
+  const [adSummary, setAdSummary] = useState<{
+    totalAdCampaigns: number;
+    activeAdCampaigns: number;
+    metrics: { clicks: number; impressions: number; ctr: number; spend: number };
+  }>({
+    totalAdCampaigns: 0,
+    activeAdCampaigns: 0,
+    metrics: { clicks: 0, impressions: 0, ctr: 0, spend: 0 }
+  });
   const [loading, setLoading] = useState(true);
   const [showBrandScoreInfo, setShowBrandScoreInfo] = useState(false);
   const [competitorIndex, setCompetitorIndex] = useState(0);
@@ -416,8 +427,14 @@ const Dashboard: React.FC = () => {
     }
 
     try {
-      const dashboardData = await apiService.getDashboardOverview(refresh);
+      const [dashboardData, adSummaryRes] = await Promise.all([
+        apiService.getDashboardOverview(refresh),
+        adCampaignsAPI.getSummary().catch(() => null)
+      ]);
       setData(dashboardData);
+      if (adSummaryRes?.success && adSummaryRes?.summary) {
+        setAdSummary(adSummaryRes.summary);
+      }
       hasFetchedDashboard.current = true;
       // Dashboard loaded/refreshed
     } catch (error) {
@@ -1276,6 +1293,16 @@ const Dashboard: React.FC = () => {
   const currentCompetitor = data?.competitorActivity?.[competitorIndex];
   const prevCompetitor = data?.competitorActivity?.[(competitorIndex === 0 ? (data.competitorActivity.length - 1) : competitorIndex - 1)];
   const nextCompetitor = data?.competitorActivity?.[(competitorIndex === (data?.competitorActivity?.length || 1) - 1 ? 0 : competitorIndex + 1)];
+  const campaignClicks = (data?.recentCampaigns || []).reduce(
+    (sum, campaign) => sum + Number(campaign?.performance?.clicks || 0),
+    0
+  );
+  const campaignImpressions = (data?.recentCampaigns || []).reduce(
+    (sum, campaign) => sum + Number(campaign?.performance?.impressions || 0),
+    0
+  );
+  const totalClicks = campaignClicks + Number(adSummary.metrics.clicks || 0);
+  const totalImpressions = campaignImpressions + Number(adSummary.metrics.impressions || 0);
 
   return (
     <div className="max-w-7xl mx-auto space-y-8 p-1">
@@ -1303,6 +1330,38 @@ const Dashboard: React.FC = () => {
         >
           <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
           {refreshing ? 'Refreshing...' : 'Refresh'}
+        </button>
+      </div>
+
+      {/* Executive Summary + Quick Actions */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        {[
+          { label: 'Total Campaigns', value: Number(data?.overview?.totalCampaigns || 0).toLocaleString() },
+          { label: 'Active Ad Campaigns', value: Number(adSummary.activeAdCampaigns || 0).toLocaleString() },
+          { label: 'Clicks', value: totalClicks.toLocaleString() },
+          { label: 'Impressions', value: totalImpressions.toLocaleString() }
+        ].map((item) => (
+          <div key={item.label} className={`${theme.bgCard} rounded-xl border p-4 ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'}`}>
+            <p className={`text-xs uppercase tracking-wide ${theme.textMuted}`}>{item.label}</p>
+            <p className={`text-2xl font-bold mt-1 ${theme.text}`}>{item.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap gap-3">
+        <button
+          onClick={() => navigate('/campaigns')}
+          className="px-4 py-2 rounded-lg bg-[#ffcc29] text-[#070A12] font-semibold hover:bg-[#ffcc29]/90"
+        >
+          Create Campaign
+        </button>
+        <button
+          onClick={() => navigate('/ad-campaigns')}
+          className={`px-4 py-2 rounded-lg border font-semibold ${
+            isDarkMode ? 'border-slate-600 text-slate-200 hover:border-[#ffcc29] hover:text-[#ffcc29]' : 'border-slate-300 text-slate-700 hover:border-[#ffcc29]'
+          }`}
+        >
+          Create Ad Campaign
         </button>
       </div>
 

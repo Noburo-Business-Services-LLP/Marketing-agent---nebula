@@ -9,6 +9,7 @@ import Onboarding from './pages/Onboarding';
 import TrialExpired from './pages/TrialExpired';
 import Dashboard from './pages/Dashboard';
 import Campaigns from './pages/Campaigns';
+import AdCampaigns from './pages/AdCampaigns';
 import Competitors from './pages/Competitors';
 import ConnectSocials from './pages/ConnectSocials';
 import BrandAssets from './pages/BrandAssets';
@@ -213,6 +214,7 @@ const App: React.FC = () => {
                     <Routes>
                     <Route path="/dashboard" element={<Dashboard />} />
                     <Route path="/campaigns" element={<Campaigns />} />
+                    <Route path="/ad-campaigns" element={<AdCampaigns />} />
                     <Route path="/competitors" element={<Competitors />} />
                     <Route path="/connect-socials" element={<ConnectSocials />} />
                     <Route path="/brand-assets" element={<BrandAssets />} />

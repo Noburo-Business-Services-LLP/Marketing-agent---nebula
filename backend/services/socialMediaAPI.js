@@ -57,6 +57,116 @@ function detectInstagramVideoRequest(platforms = [], options = {}) {
   };
 }
 
+function normalizeAyrshareErrorEntry(entry, fallbackPlatform = '') {
+  if (!entry) return null;
+
+  if (typeof entry === 'string') {
+    const message = String(entry || '').trim();
+    if (!message) return null;
+    return {
+      code: '',
+      platform: String(fallbackPlatform || '').trim().toLowerCase(),
+      message,
+      details: ''
+    };
+  }
+
+  const code = String(entry.code ?? entry.errorCode ?? '').trim();
+  const platform = String(entry.platform || fallbackPlatform || '').trim().toLowerCase();
+  const message = String(entry.message || entry.error || entry.title || '').trim();
+  const details = String(entry.details || entry.detail || '').trim();
+
+  if (!code && !message && !details) return null;
+
+  return {
+    code,
+    platform,
+    message: message || details || 'Ayrshare error',
+    details
+  };
+}
+
+function dedupeAyrshareErrors(errors = []) {
+  const seen = new Set();
+  const deduped = [];
+
+  for (const error of errors) {
+    if (!error) continue;
+    const key = `${error.code}|${error.platform}|${error.message}|${error.details}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(error);
+  }
+
+  return deduped;
+}
+
+function extractAyrshareErrors(payload = {}, fallbackPlatforms = []) {
+  const errors = [];
+  const fallbackPlatform = Array.isArray(fallbackPlatforms) && fallbackPlatforms.length > 0
+    ? String(fallbackPlatforms[0] || '').trim().toLowerCase()
+    : '';
+
+  if (Array.isArray(payload?.errors)) {
+    for (const entry of payload.errors) {
+      const normalized = normalizeAyrshareErrorEntry(entry, fallbackPlatform);
+      if (normalized) errors.push(normalized);
+    }
+  }
+
+  const posts = Array.isArray(payload?.posts) ? payload.posts : [];
+  for (const post of posts) {
+    const postPlatform = String(post?.platform || fallbackPlatform || '').trim().toLowerCase();
+    if (Array.isArray(post?.errors)) {
+      for (const entry of post.errors) {
+        const normalized = normalizeAyrshareErrorEntry(entry, postPlatform);
+        if (normalized) errors.push(normalized);
+      }
+    }
+
+    if (String(post?.status || '').toLowerCase() === 'error') {
+      const fallbackError = normalizeAyrshareErrorEntry(
+        {
+          code: post?.code || '',
+          platform: postPlatform,
+          message: post?.message || post?.error || '',
+          details: post?.details || post?.detail || ''
+        },
+        postPlatform
+      );
+      if (fallbackError) errors.push(fallbackError);
+    }
+  }
+
+  if (errors.length === 0 && String(payload?.status || '').toLowerCase() === 'error') {
+    const fallbackError = normalizeAyrshareErrorEntry(
+      {
+        code: payload?.code || '',
+        platform: fallbackPlatform,
+        message: payload?.message || payload?.error || '',
+        details: payload?.details || payload?.detail || ''
+      },
+      fallbackPlatform
+    );
+    if (fallbackError) errors.push(fallbackError);
+  }
+
+  return dedupeAyrshareErrors(errors);
+}
+
+function summarizeAyrshareErrors(errors = []) {
+  if (!Array.isArray(errors) || errors.length === 0) return '';
+
+  return errors
+    .map((error) => {
+      const codePart = error.code ? `[${error.code}] ` : '';
+      const platformPart = error.platform ? `${error.platform}: ` : '';
+      const detailsPart = error.details ? ` (${error.details})` : '';
+      return `${platformPart}${codePart}${error.message}${detailsPart}`.trim();
+    })
+    .join(' | ');
+}
+
 /**
  * Generic HTTP request helper
  */
@@ -168,7 +278,7 @@ async function postToSocialMedia(platforms, content, options = {}) {
 
   const payload = {
     post: content,
-    platforms: platforms,
+    platforms,
     mediaUrls: options.mediaUrls || [],
     shortenLinks: options.shortenLinks || true,
     ...(options.scheduleDate ? { scheduleDate: options.scheduleDate } : {}),
@@ -189,11 +299,11 @@ async function postToSocialMedia(platforms, content, options = {}) {
       console.log('Using Profile-Key for posting:', options.profileKey.substring(0, 20) + '...');
     }
 
-    console.log('📤 [Ayrshare] postToSocialMedia payload:', JSON.stringify(payload, null, 2));
+    console.log('[Ayrshare] postToSocialMedia payload:', JSON.stringify(payload, null, 2));
 
     // Add detailed Instagram debugging
     if (payload.platforms && payload.platforms.includes('instagram')) {
-      console.log('📸 [INSTAGRAM DEBUG] Instagram post details:');
+      console.log('[INSTAGRAM DEBUG] Instagram post details:');
       console.log('   - Post content length:', payload.post ? payload.post.length : 0);
       console.log('   - Media URLs:', payload.mediaUrls);
       console.log('   - Schedule date:', payload.scheduleDate);
@@ -205,44 +315,39 @@ async function postToSocialMedia(platforms, content, options = {}) {
 
     const response = await makeRequest('https://api.ayrshare.com/api/post', {
       method: 'POST',
-      headers: headers,
+      headers,
       timeout: 120000,
       body: payload
     });
 
-    console.log('📥 [Ayrshare] status:', response.status);
-    console.log('📥 [Ayrshare] response data:', JSON.stringify(response.data, null, 2));
+    console.log('[Ayrshare] status:', response.status);
+    console.log('[Ayrshare] response data:', JSON.stringify(response.data, null, 2));
 
-    let effectiveError = null;
-    if (response.data?.errors && Array.isArray(response.data.errors) && response.data.errors.length) {
-      const errMessages = response.data.errors.map((e) => `${e.code || 'unknown'}: ${e.message || e}`);
-      effectiveError = errMessages.join(' | ');
+    const errorDetails = extractAyrshareErrors(response.data, platforms);
+    const effectiveError = summarizeAyrshareErrors(errorDetails);
 
-      // Special detection for known Ayrshare error codes
-      if (response.data.errors.some((e) => e.code === 138 || e.code === '138')) {
-        effectiveError = `Ayrshare error 138 (Instagram processing) - ${effectiveError}`;
-
-        // Add detailed Instagram error debugging
-        console.log('❌ [INSTAGRAM ERROR 138] Detailed error analysis:');
-        console.log('   - Full error response:', JSON.stringify(response.data, null, 2));
-        console.log('   - Error codes:', response.data.errors.map(e => e.code));
-        console.log('   - Error messages:', response.data.errors.map(e => e.message));
-        console.log('   - Post ID (if available):', response.data.id || 'none');
-        console.log('   - Retry available:', response.data.errors.some(e => e.retryAvailable));
-
-      } else if (response.data.errors.some((e) => e.code === 161 || e.code === '161')) {
-        effectiveError = `Ayrshare error 161 (Instagram authentication/account connection) - ${effectiveError}`;
-      }
+    const hasInstagram138 = errorDetails.some((entry) => String(entry?.code || '') === '138');
+    const hasInstagram161 = errorDetails.some((entry) => String(entry?.code || '') === '161');
+    if (hasInstagram138) {
+      console.log('[INSTAGRAM ERROR 138] Detailed error analysis:');
+      console.log('   - Full error response:', JSON.stringify(response.data, null, 2));
+      console.log('   - Parsed errors:', JSON.stringify(errorDetails, null, 2));
+    } else if (hasInstagram161) {
+      console.log('[INSTAGRAM ERROR 161] Parsed error details:', JSON.stringify(errorDetails, null, 2));
     }
 
-    if (response.status !== 200 || (response.data && response.data.status === 'error') || effectiveError) {
-      const returnedError = effectiveError || response.data?.message || response.data?.error || 'Unknown Ayrshare error';
-      console.error('❌ Ayrshare publish error:', returnedError);
+    if (response.status !== 200 || (response.data && response.data.status === 'error') || errorDetails.length > 0) {
+      const returnedError =
+        effectiveError ||
+        String(response.data?.message || response.data?.error || '').trim() ||
+        'Ayrshare publish request failed';
+      console.error('[Ayrshare] publish error:', returnedError);
       return {
         success: false,
         error: returnedError,
         status: response.status,
-        data: response.data
+        data: response.data,
+        errorDetails
       };
     }
 
@@ -2054,8 +2159,18 @@ async function boostPost(profileKey, params = {}) {
       budget: params.dailyBudget || params.budget || 1,
       bidAmount: params.bidAmount || 1,
       status: params.status || 'active',
-      locations: params.locations || { countries: ['US'] },
     };
+
+    if (Array.isArray(params.postIds) && params.postIds.length > 0) {
+      body.postIds = params.postIds;
+    }
+    if (Array.isArray(params.placements) && params.placements.length > 0) {
+      body.placements = params.placements;
+    }
+
+    if (params.locations && typeof params.locations === 'object') {
+      body.locations = params.locations;
+    }
 
     // Dates (omit endDate for ongoing ads)
     if (params.startDate) body.startDate = params.startDate;
@@ -2090,6 +2205,21 @@ async function boostPost(profileKey, params = {}) {
     // DSA compliance (EU)
     if (params.dsaBeneficiary) body.dsaBeneficiary = params.dsaBeneficiary;
     if (params.dsaPayor) body.dsaPayor = params.dsaPayor;
+
+    // CTA payload (Meta Ads): include Learn More destination URL.
+    if (params.callToActionType && params.callToActionLink) {
+      const ctaType = String(params.callToActionType || '').trim();
+      const ctaLink = String(params.callToActionLink || '').trim();
+      if (ctaType && ctaLink) {
+        body.call_to_action = {
+          type: ctaType,
+          value: { link: ctaLink }
+        };
+        body.callToAction = body.call_to_action;
+        body.destinationUrl = ctaLink;
+        body.websiteUrl = ctaLink;
+      }
+    }
 
     // Legacy support: handle old nested targeting format
     if (params.targeting) {
@@ -2331,3 +2461,4 @@ module.exports = {
   getCompetitorAnalysis,
   getAPIStatus
 };
+

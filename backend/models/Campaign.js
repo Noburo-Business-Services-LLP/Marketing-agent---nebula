@@ -121,6 +121,14 @@ const campaignSchema = new mongoose.Schema({
     estimatedReach: String
   },
   // Ayrshare integration fields
+  facebookPostId: {
+    type: String,
+    default: null
+  },
+  instagramPostId: {
+    type: String,
+    default: null
+  },
   socialPostId: {
     type: String,
     default: null
