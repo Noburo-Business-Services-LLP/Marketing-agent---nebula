@@ -72,6 +72,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
         description: '',
         competitors: []
     });
+    const [mobileNumber, setMobileNumber] = useState(savedState?.mobileNumber || '');
 
     // Competitor input state
     const [competitorInput, setCompetitorInput] = useState('');
@@ -428,7 +429,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
 
     const finishOnboarding = async (connectedSocials?: {platform: string; username?: string}[]) => {
         try {
-            const response = await apiService.completeOnboarding(formData, connectedSocials);
+            const response = await apiService.completeOnboarding(formData, connectedSocials, mobileNumber);
             if (response.success && response.user) {
                 sessionStorage.removeItem(ONBOARDING_STATE_KEY);
                 onComplete(response.user);
@@ -581,6 +582,20 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                         placeholder="e.g. Gravity Corp"
                                         value={formData.name}
                                         onChange={e => handleChange('name', e.target.value)}
+                                    />
+                                </div>
+                                <div>
+                                    <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Mobile Number <span className="text-red-500">*</span></label>
+                                    <input
+                                        type="tel"
+                                        className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#ffcc29] ${
+                                            theme === 'dark'
+                                                ? 'bg-[#070A12] border-[#ffcc29]/30 text-[#ededed] placeholder-[#ededed]/40'
+                                                : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
+                                        }`}
+                                        placeholder="e.g. +91 98765 43210"
+                                        value={mobileNumber}
+                                        onChange={e => setMobileNumber(e.target.value)}
                                     />
                                 </div>
                                 <div>

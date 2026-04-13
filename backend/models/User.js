@@ -38,6 +38,10 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  mobileNumber: {
+    type: String,
+    default: ''
+  },
   onboardingCompleted: {
     type: Boolean,
     default: false
@@ -221,6 +225,7 @@ userSchema.methods.toPublicJSON = function() {
     lastName: this.lastName,
     companyName: this.companyName,
     avatar: this.avatar,
+    mobileNumber: this.mobileNumber,
     isVerified: this.isVerified,
     onboardingCompleted: this.onboardingCompleted,
     businessProfile: this.businessProfile,

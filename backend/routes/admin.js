@@ -336,4 +336,49 @@ router.delete('/coupons/:code', adminAuth, async (req, res) => {
   }
 });
 
+// POST /api/admin/users/:id/reset-trial
+router.post('/users/:id/reset-trial', adminAuth, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    user.trial = {
+      ...user.trial,
+      isExpired: false,
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days from now
+    };
+    await user.save({ validateBeforeSave: false });
+
+    res.json({ success: true, message: 'Trial re-enabled for 30 days' });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to reset trial' });
+  }
+});
+
+// POST /api/admin/users/:id/add-credits
+router.post('/users/:id/add-credits', adminAuth, async (req, res) => {
+  try {
+    const { amount } = req.body;
+    if (!amount || isNaN(amount) || amount <= 0) return res.status(400).json({ error: 'Invalid amount' });
+
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    if (!user.credits) user.credits = { balance: 0, totalUsed: 0, history: [] };
+    user.credits.balance = (user.credits.balance || 0) + Number(amount);
+    user.credits.history = user.credits.history || [];
+    user.credits.history.push({
+      action: 'admin_grant',
+      amount: Number(amount),
+      description: `Admin added ${amount} credits`,
+      createdAt: new Date()
+    });
+    await user.save({ validateBeforeSave: false });
+
+    res.json({ success: true, newBalance: user.credits.balance });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to add credits' });
+  }
+});
+
 module.exports = router;
