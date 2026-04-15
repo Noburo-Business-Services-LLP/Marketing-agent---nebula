@@ -628,21 +628,6 @@ const AdminDashboard: React.FC = () => {
                           ))}
                         </div>
 
-                        {selected.user.trialDaysLeft !== null && selected.user.trialDaysLeft !== undefined && (
-                          <div className="mt-3 bg-white/[0.03] rounded-xl p-3">
-                            <div className="flex justify-between text-xs mb-1.5">
-                              <span className="text-white/40">Trial remaining</span>
-                              <span className={selected.user.trialDaysLeft <= 3 ? 'text-orange-400 font-semibold' : 'text-emerald-400 font-semibold'}>
-                                {selected.user.trialDaysLeft}d
-                              </span>
-                            </div>
-                            <div className="w-full bg-white/10 rounded-full h-1.5">
-                              <div
-                                className={`h-1.5 rounded-full transition-all ${selected.user.trialDaysLeft <= 3 ? 'bg-orange-400' : 'bg-emerald-400'}`}
-                                style={{ width: `${Math.min(100, (selected.user.trialDaysLeft / 7) * 100)}%` }}
-                              />
-                            </div>
-                          </div>
                         )}
                       </div>
 
