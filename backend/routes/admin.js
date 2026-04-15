@@ -73,10 +73,10 @@ router.get('/overview', adminAuth, async (req, res) => {
       expiredTrials,
       totalCreditsUsed,
     ] = await Promise.all([
-      User.countDocuments(),
-      User.countDocuments({ createdAt: { $gte: startOfToday } }),
-      User.countDocuments({ createdAt: { $gte: start7d } }),
-      User.countDocuments({ createdAt: { $gte: start30d } }),
+      User.countDocuments({ isHidden: { $ne: true } }),
+      User.countDocuments({ createdAt: { $gte: startOfToday }, isHidden: { $ne: true } }),
+      User.countDocuments({ createdAt: { $gte: start7d }, isHidden: { $ne: true } }),
+      User.countDocuments({ createdAt: { $gte: start30d }, isHidden: { $ne: true } }),
       User.countDocuments({ lastLoginAt: { $gte: startOfToday } }),
       User.countDocuments({ lastLoginAt: { $gte: start7d } }),
       User.countDocuments({ lastLoginAt: { $gte: start30d } }),
@@ -353,14 +353,30 @@ router.post('/users/:id/reset-trial', adminAuth, async (req, res) => {
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ error: 'User not found' });
 
+    const wasExpired = user.trial?.isExpired || (user.credits?.balance ?? 100) <= 0;
+
     user.trial = {
       ...user.trial,
       isExpired: false,
       reenabled: true
     };
+
+    // Auto-add 100 credits only if account was expired
+    if (wasExpired) {
+      if (!user.credits) user.credits = { balance: 0, totalUsed: 0, history: [] };
+      user.credits.balance = (user.credits.balance || 0) + 100;
+      user.credits.history = user.credits.history || [];
+      user.credits.history.push({
+        action: 'admin_grant',
+        amount: 100,
+        description: 'Trial re-enabled — 100 credits added by admin',
+        createdAt: new Date()
+      });
+    }
+
     await user.save({ validateBeforeSave: false });
 
-    res.json({ success: true, message: 'Trial re-enabled' });
+    res.json({ success: true, message: wasExpired ? 'Trial re-enabled and 100 credits added' : 'Trial re-enabled' });
   } catch (err) {
     res.status(500).json({ error: 'Failed to reset trial' });
   }
