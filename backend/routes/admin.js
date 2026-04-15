@@ -80,9 +80,9 @@ router.get('/overview', adminAuth, async (req, res) => {
       User.countDocuments({ lastLoginAt: { $gte: startOfToday } }),
       User.countDocuments({ lastLoginAt: { $gte: start7d } }),
       User.countDocuments({ lastLoginAt: { $gte: start30d } }),
-      User.countDocuments({ 'trial.isExpired': { $ne: true }, 'trial.migratedToProd': { $ne: true } }),
+      User.countDocuments({ 'trial.isExpired': { $ne: true }, 'trial.migratedToProd': { $ne: true }, isHidden: { $ne: true } }),
       Promise.resolve(0), // expiringSoon — removed, credits-only mode
-      User.countDocuments({ 'trial.isExpired': true }),
+      User.countDocuments({ 'trial.isExpired': true, isHidden: { $ne: true } }),
       User.aggregate([{ $group: { _id: null, total: { $sum: '$credits.totalUsed' } } }]),
     ]);
 
@@ -114,7 +114,7 @@ router.get('/trial-funnel', adminAuth, async (req, res) => {
     const in3days = new Date(now); in3days.setDate(now.getDate() + 3);
 
     const users = await User.find(
-      {},
+      { isHidden: { $ne: true } },
       { email: 1, companyName: 1, 'trial.expiresAt': 1, 'trial.isExpired': 1, 'trial.migratedToProd': 1, 'credits.balance': 1, lastLoginAt: 1, createdAt: 1 }
     ).lean();
 
