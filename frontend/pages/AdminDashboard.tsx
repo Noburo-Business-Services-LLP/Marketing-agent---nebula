@@ -319,8 +319,8 @@ const AdminDashboard: React.FC = () => {
                     <p className="text-orange-400/70 text-xs uppercase tracking-wider">Expiring</p>
                     <AlertTriangle className="w-3.5 h-3.5 text-orange-400" />
                   </div>
-                  <p className="text-2xl font-bold text-orange-300">{overview.expiringSoon}</p>
-                  <p className="text-orange-400/50 text-xs mt-1">≤3 days left</p>
+                  <p className="text-2xl font-bold text-orange-300">0</p>
+                  <p className="text-orange-400/50 text-xs mt-1">Credits-only mode</p>
                 </div>
 
                 <div className="bg-red-500/5 border border-red-500/20 rounded-2xl p-4">
