@@ -126,8 +126,6 @@ router.get('/trial-funnel', adminAuth, async (req, res) => {
         funnel.migrated.push(u);
       } else if (u.trial?.isExpired) {
         funnel.expired.push(u);
-      } else if (exp && exp <= in3days) {
-        funnel.expiringSoon.push(u);
       } else {
         funnel.active.push(u);
       }
