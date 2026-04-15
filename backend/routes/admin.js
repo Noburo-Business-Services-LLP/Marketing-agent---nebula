@@ -175,7 +175,7 @@ router.get('/users', adminAuth, async (req, res) => {
         email: 1, firstName: 1, lastName: 1, companyName: 1, isActive: 1,
         createdAt: 1, lastLoginAt: 1, mobileNumber: 1, isHidden: 1,
         'credits.balance': 1, 'credits.totalUsed': 1,
-        'trial.expiresAt': 1, 'trial.isExpired': 1, 'trial.migratedToProd': 1,
+        'trial.expiresAt': 1, 'trial.isExpired': 1, 'trial.migratedToProd': 1, 'trial.reenabled': 1,
         connectedSocials: 1, onboardingCompleted: 1
       }
     ).sort({ createdAt: -1 }).lean();
@@ -211,7 +211,7 @@ router.get('/users/:id/usage', adminAuth, async (req, res) => {
         email: 1, firstName: 1, lastName: 1, companyName: 1, isActive: 1,
         createdAt: 1, lastLoginAt: 1,
         'credits.balance': 1, 'credits.totalUsed': 1,
-        'trial.expiresAt': 1, 'trial.isExpired': 1, 'trial.migratedToProd': 1,
+        'trial.expiresAt': 1, 'trial.isExpired': 1, 'trial.migratedToProd': 1, 'trial.reenabled': 1,
         connectedSocials: 1, onboardingCompleted: 1
       }).lean(),
       FeatureEvent.aggregate([
@@ -357,7 +357,8 @@ router.post('/users/:id/reset-trial', adminAuth, async (req, res) => {
 
     user.trial = {
       ...user.trial,
-      isExpired: false
+      isExpired: false,
+      reenabled: true
     };
     await user.save({ validateBeforeSave: false });
 
