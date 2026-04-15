@@ -78,13 +78,6 @@ const adminFetch = async (path: string, options: RequestInit = {}) => {
 const getTrialInfo = (user: UserRow) => {
   if (user.trial?.migratedToProd) return { label: 'Converted', cls: 'text-blue-400 bg-blue-500/10 border border-blue-500/20' };
   if (user.trial?.isExpired) return { label: 'Expired', cls: 'text-red-400 bg-red-500/10 border border-red-500/20' };
-  const exp = user.trial?.expiresAt ? new Date(user.trial.expiresAt) : null;
-  if (exp) {
-    const d = Math.ceil((exp.getTime() - Date.now()) / 86400000);
-    if (d <= 0) return { label: 'Expired', cls: 'text-red-400 bg-red-500/10 border border-red-500/20' };
-    if (d <= 3) return { label: `${d}d left`, cls: 'text-orange-400 bg-orange-500/10 border border-orange-500/20' };
-    return { label: `${d}d left`, cls: 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/20' };
-  }
   return { label: 'Active', cls: 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/20' };
 };
 
