@@ -81,7 +81,7 @@ router.get('/overview', adminAuth, async (req, res) => {
       User.countDocuments({ lastLoginAt: { $gte: start7d } }),
       User.countDocuments({ lastLoginAt: { $gte: start30d } }),
       User.countDocuments({ 'trial.isExpired': { $ne: true }, 'trial.migratedToProd': { $ne: true } }),
-      User.countDocuments({}), // expiringSoon — unused, always 0
+      Promise.resolve(0), // expiringSoon — removed, credits-only mode
       User.countDocuments({ 'trial.isExpired': true }),
       User.aggregate([{ $group: { _id: null, total: { $sum: '$credits.totalUsed' } } }]),
     ]);
