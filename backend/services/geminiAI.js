@@ -5,6 +5,8 @@
 
 const { GoogleAuth } = require('google-auth-library');
 const { uploadBase64Image } = require('./imageUploader');
+const fs = require('fs/promises');
+const path = require('path');
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 // Using Gemini 2.5 Pro for all text generation (150 RPM, 1K RPD)
@@ -28,7 +30,7 @@ async function getVertexAccessToken() {
   if (vertexAccessToken && tokenExpiry > now + 300000) {
     return vertexAccessToken;
   }
-  
+
   try {
     if (!vertexAuth) {
       // Use credentials from environment variables
@@ -38,13 +40,13 @@ async function getVertexAccessToken() {
         client_email: process.env.VERTEX_CLIENT_EMAIL,
         private_key: process.env.VERTEX_PRIVATE_KEY?.replace(/\\n/g, '\n'),
       };
-      
+
       vertexAuth = new GoogleAuth({
         credentials,
         scopes: ['https://www.googleapis.com/auth/cloud-platform']
       });
     }
-    
+
     const client = await vertexAuth.getClient();
     const tokenResponse = await client.getAccessToken();
     vertexAccessToken = tokenResponse.token;
@@ -102,7 +104,7 @@ function sleep(ms) {
 async function fetchWithTimeout(url, options, timeout = API_TIMEOUT) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeout);
-  
+
   try {
     const response = await fetch(url, {
       ...options,
@@ -127,7 +129,7 @@ async function fetchWithTimeout(url, options, timeout = API_TIMEOUT) {
  */
 async function callGemini(prompt, options = {}) {
   const startTime = Date.now();
-  
+
   // Check cache first (unless explicitly disabled)
   if (!options.skipCache) {
     const cacheKey = getCacheKey(prompt);
@@ -140,10 +142,10 @@ async function callGemini(prompt, options = {}) {
 
   const timeout = options.timeout || API_TIMEOUT;
   const maxRetries = 3; // Retry up to 3 times for rate limiting
-  
+
   for (const model of GEMINI_MODELS) {
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
-    
+
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
         // Rate limiting: ensure minimum delay between calls
@@ -152,7 +154,7 @@ async function callGemini(prompt, options = {}) {
           await sleep(MIN_DELAY_BETWEEN_CALLS - timeSinceLastCall);
         }
         lastApiCall = Date.now();
-        
+
         const response = await fetchWithTimeout(`${apiUrl}?key=${GEMINI_API_KEY}`, {
           method: 'POST',
           headers: {
@@ -214,7 +216,7 @@ async function callGemini(prompt, options = {}) {
       }
     }
   }
-  
+
   // All APIs failed
   throw new Error('All Gemini API endpoints failed - quota may be exhausted');
 }
@@ -234,19 +236,19 @@ function parseGeminiJSON(text) {
     cleaned = cleaned.slice(0, -3);
   }
   cleaned = cleaned.trim();
-  
+
   try {
     return JSON.parse(cleaned);
   } catch (err) {
     console.error('Failed to parse Gemini JSON:', err.message);
-    
+
     // Try to repair truncated JSON
     let repaired = cleaned;
-    
+
     // Check if JSON is truncated (common with token limits)
     if (err.message.includes('Unterminated string') || err.message.includes('Unexpected end')) {
       console.log('Attempting to repair truncated JSON...');
-      
+
       // Strategy 1: Try to close the current truncated string and complete the JSON
       // Find the last complete key-value pair by looking for last '", "' or '", \n"' pattern
       const lastCompleteFieldMatch = repaired.match(/^([\s\S]*",)\s*"[^"]*"?\s*:?\s*"?[^"{}[\]]*$/);
@@ -256,16 +258,16 @@ function parseGeminiJSON(text) {
         let truncated = repaired.substring(0, cutPoint).trimEnd();
         // Remove trailing comma
         if (truncated.endsWith(',')) truncated = truncated.slice(0, -1);
-        
+
         // Count and close brackets
         const openBraces = (truncated.match(/{/g) || []).length;
         const closeBraces = (truncated.match(/}/g) || []).length;
         const openBrackets = (truncated.match(/\[/g) || []).length;
         const closeBrackets = (truncated.match(/]/g) || []).length;
-        
+
         for (let i = 0; i < openBrackets - closeBrackets; i++) truncated += ']';
         for (let i = 0; i < openBraces - closeBraces; i++) truncated += '}';
-        
+
         try {
           const parsed = JSON.parse(truncated);
           console.log('✅ Successfully repaired truncated JSON (strategy 1: last complete field)');
@@ -274,20 +276,20 @@ function parseGeminiJSON(text) {
           // Continue to strategy 2
         }
       }
-      
+
       // Strategy 2: Find the last complete object boundary (for arrays)
       const lastCompleteIndex = repaired.lastIndexOf('},');
       if (lastCompleteIndex > 0) {
         repaired = repaired.substring(0, lastCompleteIndex + 1);
-        
+
         const openBraces = (repaired.match(/{/g) || []).length;
         const closeBraces = (repaired.match(/}/g) || []).length;
         const openBrackets = (repaired.match(/\[/g) || []).length;
         const closeBrackets = (repaired.match(/]/g) || []).length;
-        
+
         for (let i = 0; i < openBrackets - closeBrackets; i++) repaired += ']';
         for (let i = 0; i < openBraces - closeBraces; i++) repaired += '}';
-        
+
         try {
           const parsed = JSON.parse(repaired);
           console.log('✅ Successfully repaired truncated JSON (strategy 2: last complete object)');
@@ -296,7 +298,7 @@ function parseGeminiJSON(text) {
           console.error('Repair strategy 2 failed:', repairErr.message);
         }
       }
-      
+
       // Strategy 3: Brute-force — find the last valid quote, close the string, then close brackets
       const lastQuote = cleaned.lastIndexOf('"');
       if (lastQuote > 10) {
@@ -313,14 +315,14 @@ function parseGeminiJSON(text) {
         // Remove trailing comma
         brute = brute.trimEnd();
         if (brute.endsWith(',')) brute = brute.slice(0, -1);
-        
+
         const ob = (brute.match(/{/g) || []).length;
         const cb = (brute.match(/}/g) || []).length;
         const osb = (brute.match(/\[/g) || []).length;
         const csb = (brute.match(/]/g) || []).length;
         for (let i = 0; i < osb - csb; i++) brute += ']';
         for (let i = 0; i < ob - cb; i++) brute += '}';
-        
+
         try {
           const parsed = JSON.parse(brute);
           console.log('✅ Successfully repaired truncated JSON (strategy 3: brute-force)');
@@ -330,7 +332,7 @@ function parseGeminiJSON(text) {
         }
       }
     }
-    
+
     console.error('Raw response (first 500 chars):', cleaned.substring(0, 500));
     // Return a fallback object to avoid crashing the backend
     return { error: 'Invalid Gemini JSON', campaigns: [], raw: cleaned.substring(0, 200) };
@@ -363,27 +365,27 @@ async function generateCampaignSuggestions(businessProfile, count = 6, allowedPl
   const brandVoice = businessProfile.brandVoice || 'Professional';
   const description = businessProfile.description || '';
   const marketingGoals = (businessProfile.marketingGoals || []).join(', ') || 'Brand awareness';
-  
+
   // Filter platforms — exclude YouTube always, use allowed list if provided
   const defaultPlatforms = ['instagram', 'facebook', 'linkedin', 'twitter'];
-  const platformsList = allowedPlatforms 
+  const platformsList = allowedPlatforms
     ? allowedPlatforms.map(p => p.toLowerCase()).filter(p => p !== 'youtube')
     : defaultPlatforms;
-  
+
   // Get products/services context if available
   const products = businessProfile.products?.map(p => p.name || p).join(', ') || '';
   const services = businessProfile.services?.map(s => s.name || s).join(', ') || '';
   const keyProducts = businessProfile.keyProducts?.join(', ') || products || services || '';
-  
+
   // Get unique selling points
   const usps = businessProfile.uniqueSellingPoints?.join(', ') || businessProfile.valuePropositions?.join(', ') || '';
-  
+
   // Get brand assets if available
   const brandAssets = businessProfile.brandAssets || {};
   const logoUrl = brandAssets.logoUrl || brandAssets.ogImage || '';
   const brandColors = (brandAssets.brandColors || []).slice(0, 5).join(', ');
   const brandImages = brandAssets.images || [];
-  
+
   // Find product/service images from brand assets
   const productImages = brandImages
     .filter(img => !img.isLogo && img.alt && img.alt.length > 2)
@@ -474,7 +476,7 @@ Do NOT deviate from this angle. Make it the central theme of the campaign.
     // ALWAYS skip cache for campaign generation — cached prompts cause duplicate content
     const response = await callGemini(prompt, { temperature: 0.8, maxTokens: 16384, timeout: EXTENDED_TIMEOUT, skipCache: true });
     const parsed = parseGeminiJSON(response);
-    
+
     // Deduplicate campaigns — remove any with duplicate titles or very similar captions
     if (parsed.campaigns && parsed.campaigns.length > 1) {
       const seen = new Set();
@@ -488,7 +490,7 @@ Do NOT deviate from this angle. Make it the central theme of the campaign.
         return true;
       });
     }
-    
+
     // Build rich brand context for image generation
     const brandContext = {
       companyName,
@@ -506,13 +508,13 @@ Do NOT deviate from this angle. Make it the central theme of the campaign.
       productImages, // Actual product images from website
       ogImage: brandAssets.ogImage || ''
     };
-    
+
     // Enhance campaigns with AI-generated images based on campaign content AND brand context
     if (parsed.campaigns && parsed.campaigns.length > 0) {
       parsed.campaigns = await Promise.all(parsed.campaigns.map(async (campaign, index) => {
         // Generate contextually relevant AI image based on campaign details AND brand
         const imageQuery = campaign.imageSearchQuery || campaign.description || campaign.caption || `${niche} ${campaign.objective} marketing`;
-        
+
         // Try to use product images from the website first
         let imageUrl;
         if (productImages.length > 0 && index < productImages.length) {
@@ -526,15 +528,15 @@ Do NOT deviate from this angle. Make it the central theme of the campaign.
         } else {
           // Generate relevant image with brand context
           imageUrl = await getRelevantImage(
-            imageQuery, 
-            industry, 
+            imageQuery,
+            industry,
             campaign.objective,
             campaign.title || campaign.name,
             campaign.platform || 'instagram',
             brandContext // Pass full brand context for personalized images
           );
         }
-        
+
         return {
           ...campaign,
           imageUrl,
@@ -545,7 +547,7 @@ Do NOT deviate from this angle. Make it the central theme of the campaign.
         };
       }));
     }
-    
+
     return parsed;
   } catch (error) {
     console.error('Campaign generation error:', error);
@@ -565,22 +567,22 @@ async function generateSingleCampaign(businessProfile, index, total, allowedPlat
   const targetAudience = businessProfile.targetAudience || 'General consumers';
   const brandVoice = businessProfile.brandVoice || 'Professional';
   const marketingGoals = (businessProfile.marketingGoals || []).join(', ') || 'Brand awareness';
-  
+
   // Vary objectives for diversity with randomness
   const objectives = ['awareness', 'engagement', 'sales', 'traffic', 'trust', 'conversion'];
   // Filter platforms — exclude YouTube always, use allowed list if provided
-  const platforms = allowedPlatforms 
+  const platforms = allowedPlatforms
     ? allowedPlatforms.map(p => p.toLowerCase()).filter(p => p !== 'youtube')
     : ['instagram', 'facebook', 'linkedin', 'twitter'];
-  
+
   // Add randomness to selection to ensure variety on regeneration
   const randomSeed = Date.now() + index;
   const shuffledObjectives = [...objectives].sort(() => Math.sin(randomSeed) - 0.5);
   const shuffledPlatforms = [...platforms].sort(() => Math.cos(randomSeed) - 0.5);
-  
+
   const objective = shuffledObjectives[index % shuffledObjectives.length];
   const platform = shuffledPlatforms[index % shuffledPlatforms.length];
-  
+
   // Assign a specific CONTENT SLOT to each campaign index — guarantees diversity
   const contentSlots = [
     'product showcase or feature highlight',
@@ -595,19 +597,19 @@ async function generateSingleCampaign(businessProfile, index, total, allowedPlat
     'seasonal or event-based campaign'
   ];
   const contentSlot = contentSlots[index % contentSlots.length];
-  
+
   // Get additional business context
   const products = businessProfile.products?.map(p => p.name || p).join(', ') || '';
   const services = businessProfile.services?.map(s => s.name || s).join(', ') || '';
   const keyProducts = businessProfile.keyProducts?.join(', ') || products || services || '';
   const usps = businessProfile.uniqueSellingPoints?.join(', ') || '';
   const description = businessProfile.description || '';
-  
+
   const prompt = `Generate a ${objective}-focused social media campaign for "${companyName}" (${industry}/${niche}).
 
 === MANDATORY CONTENT SLOT ===
 This campaign MUST be a "${contentSlot}" type post. Build the ENTIRE campaign around this angle.
-Do NOT deviate from this content type. ID: ${Date.now()}-${Math.random().toString(36).slice(2,6)}
+Do NOT deviate from this content type. ID: ${Date.now()}-${Math.random().toString(36).slice(2, 6)}
 
 BUSINESS DETAILS:
 - Company: ${companyName}
@@ -644,11 +646,11 @@ Return ONLY valid JSON (no markdown):
   try {
     const response = await callGemini(prompt, { temperature: 0.95, maxTokens: 1024, skipCache: true });
     const campaign = parseGeminiJSON(response);
-    
+
     // Post-process: force the platform to match what was requested (Gemini sometimes ignores it)
     campaign.platforms = [platform];
     campaign.platform = platform;
-    
+
     // Build rich brand context for image generation
     const brandContext = {
       companyName,
@@ -661,7 +663,7 @@ Return ONLY valid JSON (no markdown):
       brandVoice,
       description
     };
-    
+
     // Generate AI image for this campaign with brand context
     const imageUrl = await getRelevantImage(
       campaign.imageDescription || campaign.caption || campaign.name || `${niche} ${objective} marketing`,
@@ -671,7 +673,7 @@ Return ONLY valid JSON (no markdown):
       platform,
       brandContext // Pass full brand context
     );
-    
+
     return {
       ...campaign,
       imageUrl,
@@ -679,7 +681,7 @@ Return ONLY valid JSON (no markdown):
     };
   } catch (error) {
     console.error(`Error generating single campaign ${index}:`, error);
-    
+
     // Return a fallback campaign on error
     return {
       id: `campaign_${index + 1}`,
@@ -702,37 +704,37 @@ Return ONLY valid JSON (no markdown):
 async function generateAIImage(campaignTitle, campaignDescription, objective, platform, industry, brandContext = {}) {
   // Create a detailed, campaign-specific prompt for relevant images with brand context
   const campaignContext = campaignDescription || campaignTitle || '';
-  
+
   // Build rich brand-aware prompt with specific details
   const brandDetails = [];
   if (brandContext.companyName) brandDetails.push(`Brand: ${brandContext.companyName}`);
   if (brandContext.products) brandDetails.push(`Products/Services: ${brandContext.products}`);
   if (brandContext.niche) brandDetails.push(`Business type: ${brandContext.niche}`);
   if (brandContext.description) brandDetails.push(`About: ${brandContext.description.substring(0, 100)}`);
-  
+
   // Add brand colors if available
   const brandColors = brandContext.brandColors || [];
   if (brandColors.length > 0) {
     brandDetails.push(`Brand colors: ${brandColors.slice(0, 3).join(', ')} (incorporate these colors)`);
   }
-  
+
   // Add logo instruction if logo is provided
   const hasLogo = brandContext.hasLogo || brandContext.productLogo;
-  const logoInstruction = hasLogo 
+  const logoInstruction = hasLogo
     ? `IMPORTANT: Leave space in the corner (bottom-right preferred) for the brand logo to be overlaid. Do not include any text or watermarks in that area.`
     : '';
-  
+
   const brandInfo = brandDetails.length > 0 ? brandDetails.join('. ') + '.' : '';
-  
+
   // Color guidance for image generation
-  const colorGuidance = brandColors.length > 0 
-    ? `Use these brand colors prominently: ${brandColors.slice(0, 3).join(', ')}.` 
+  const colorGuidance = brandColors.length > 0
+    ? `Use these brand colors prominently: ${brandColors.slice(0, 3).join(', ')}.`
     : '';
-  
+
   // Create a very specific image prompt based on the niche
   let nicheSpecificStyle = '';
   const niche = (brandContext.niche || industry || '').toLowerCase();
-  
+
   if (niche.includes('startup') || niche.includes('accelerator') || niche.includes('incubator')) {
     nicheSpecificStyle = 'Show entrepreneurs working in a modern coworking space, startup pitch meeting, or innovation hub atmosphere. Young professionals collaborating, whiteboards with ideas, laptops and tech setup.';
   } else if (niche.includes('education') || niche.includes('training') || niche.includes('bootcamp')) {
@@ -746,15 +748,15 @@ async function generateAIImage(campaignTitle, campaignDescription, objective, pl
   } else if (niche.includes('baby') || niche.includes('infant') || niche.includes('kids') || niche.includes('children') || niche.includes('parenting')) {
     nicheSpecificStyle = 'Show ONLY the products (toys, accessories, grooming tools, clothing) arranged beautifully on a soft pastel background. Product-focused flat lay photography. DO NOT show any people, babies, children, or faces. Focus purely on the product aesthetics with soft lighting and gentle colors.';
   }
-  
+
   // Safety: Check if campaign relates to babies/children and adjust prompt
   const campaignLower = (campaignTitle + ' ' + campaignContext).toLowerCase();
   const isBabyRelated = campaignLower.includes('baby') || campaignLower.includes('infant') || campaignLower.includes('newborn') || campaignLower.includes('toddler') || campaignLower.includes('kid') || campaignLower.includes('child') || campaignLower.includes('mom') || campaignLower.includes('parent');
-  
-  const safetyNote = isBabyRelated 
+
+  const safetyNote = isBabyRelated
     ? 'IMPORTANT: Do NOT generate images of babies, children, infants, or minors. Show ONLY products, adult hands holding products, or artistic product arrangements. Focus on the product itself, not people.'
     : '';
-  
+
   // Extract key themes from the campaign
   const prompt = `Create a professional, high-quality social media marketing image.
 
@@ -785,16 +787,16 @@ REQUIREMENTS:
 Make the image specific to ${brandContext.companyName || 'the brand'}'s actual business and products.`;
 
   console.log('Generating brand-specific image for:', campaignTitle);
-  
+
   try {
     // Use Vertex AI Imagen 4 Ultra (no daily rate limits!)
     console.log('🎨 Generating with Vertex AI Imagen 4 Ultra...');
     const accessToken = await getVertexAccessToken();
     const vertexUrl = `https://${VERTEX_LOCATION}-aiplatform.googleapis.com/v1/projects/${VERTEX_PROJECT_ID}/locations/${VERTEX_LOCATION}/publishers/google/models/imagen-4.0-ultra-generate-001:predict`;
-    
+
     const response = await fetch(vertexUrl, {
       method: 'POST',
-      headers: { 
+      headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${accessToken}`
       },
@@ -810,11 +812,11 @@ Make the image specific to ${brandContext.companyName || 'the brand'}'s actual b
     });
 
     const data = await response.json();
-    
+
     if (data.predictions && data.predictions[0]?.bytesBase64Encoded) {
       console.log('✅ Vertex AI Imagen 4 Ultra generated image successfully');
       const base64Image = `data:image/png;base64,${data.predictions[0].bytesBase64Encoded}`;
-      
+
       // Upload to Cloudinary for permanent URL (allows caching in localStorage)
       try {
         const uploadResult = await uploadBase64Image(base64Image, 'nebula-campaign-suggestions');
@@ -825,24 +827,24 @@ Make the image specific to ${brandContext.companyName || 'the brand'}'s actual b
       } catch (uploadError) {
         console.warn('⚠️ Cloudinary upload failed, returning base64:', uploadError.message);
       }
-      
+
       return base64Image;
     }
-    
+
     // Log the error for debugging
     if (data.error) {
       console.error('Vertex AI Imagen 4 Ultra error:', data.error.message || JSON.stringify(data.error));
     } else {
       console.log('Vertex AI Imagen 4 Ultra response (no predictions):', JSON.stringify(data).substring(0, 300));
     }
-    
+
     // Try Vertex AI Imagen 3 as fallback
     console.log('🎨 Trying Vertex AI Imagen 3 Fast...');
     const imagen3Url = `https://${VERTEX_LOCATION}-aiplatform.googleapis.com/v1/projects/${VERTEX_PROJECT_ID}/locations/${VERTEX_LOCATION}/publishers/google/models/imagen-3.0-fast-generate-001:predict`;
-    
+
     const imagen3Response = await fetch(imagen3Url, {
       method: 'POST',
-      headers: { 
+      headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${accessToken}`
       },
@@ -858,11 +860,11 @@ Make the image specific to ${brandContext.companyName || 'the brand'}'s actual b
     });
 
     const imagen3Data = await imagen3Response.json();
-    
+
     if (imagen3Data.predictions?.[0]?.bytesBase64Encoded) {
       console.log('✅ Vertex AI Imagen 3 generated image successfully');
       const base64Image = `data:image/png;base64,${imagen3Data.predictions[0].bytesBase64Encoded}`;
-      
+
       // Upload to Cloudinary for permanent URL
       try {
         const uploadResult = await uploadBase64Image(base64Image, 'nebula-campaign-suggestions');
@@ -873,15 +875,15 @@ Make the image specific to ${brandContext.companyName || 'the brand'}'s actual b
       } catch (uploadError) {
         console.warn('⚠️ Cloudinary upload failed, returning base64:', uploadError.message);
       }
-      
+
       return base64Image;
     }
-    
+
     console.log('Vertex AI Imagen 3 response:', JSON.stringify(imagen3Data).substring(0, 200));
-    
+
     // Fallback to stock image
     return getRelevantStockImage(campaignTitle, industry, objective, platform);
-    
+
   } catch (error) {
     console.error('Vertex AI Imagen error:', error.message);
     return await generateImageWithVertexAIFallback(campaignTitle, campaignDescription, industry, objective, platform, brandContext);
@@ -895,17 +897,17 @@ async function generateImageWithVertexAIFallback(campaignTitle, campaignDescript
   // Build brand-aware prompt
   const brandInfo = brandContext.companyName ? `for ${brandContext.companyName} (${brandContext.products || brandContext.services || industry})` : `for a ${industry} brand`;
   const targetInfo = brandContext.targetAudience ? `, appealing to ${brandContext.targetAudience}` : '';
-  
+
   const prompt = `Generate a stunning, professional social media image ${brandInfo} campaign called "${campaignTitle}". The image should be perfect for ${platform}, with modern design, vibrant and eye-catching visuals that represent the brand's products/services${targetInfo}. No text in the image. High-quality commercial photography style.`;
-  
+
   try {
     console.log('🎨 Generating with Vertex AI Imagen 3 (fallback)...');
     const accessToken = await getVertexAccessToken();
     const vertexUrl = `https://${VERTEX_LOCATION}-aiplatform.googleapis.com/v1/projects/${VERTEX_PROJECT_ID}/locations/${VERTEX_LOCATION}/publishers/google/models/imagen-3.0-generate-001:predict`;
-    
+
     const response = await fetch(vertexUrl, {
       method: 'POST',
-      headers: { 
+      headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${accessToken}`
       },
@@ -921,11 +923,11 @@ async function generateImageWithVertexAIFallback(campaignTitle, campaignDescript
     });
 
     const data = await response.json();
-    
+
     if (data.predictions?.[0]?.bytesBase64Encoded) {
       console.log('✅ Vertex AI Imagen 3 generated image successfully (fallback)');
       const base64Image = `data:image/png;base64,${data.predictions[0].bytesBase64Encoded}`;
-      
+
       // Upload to Cloudinary for permanent URL
       try {
         const uploadResult = await uploadBase64Image(base64Image, 'nebula-campaign-suggestions');
@@ -936,15 +938,15 @@ async function generateImageWithVertexAIFallback(campaignTitle, campaignDescript
       } catch (uploadError) {
         console.warn('⚠️ Cloudinary upload failed, returning base64:', uploadError.message);
       }
-      
+
       return base64Image;
     }
-    
+
     console.log('Vertex AI Imagen 3 response:', JSON.stringify(data).substring(0, 200));
   } catch (error) {
     console.log('Vertex AI Imagen fallback failed:', error.message);
   }
-  
+
   // Fallback to stock image
   console.log('⚠️ Image generation failed, using stock image');
   return getRelevantStockImage(campaignTitle, industry, objective, platform);
@@ -957,7 +959,7 @@ async function generateImageWithVertexAIFallback(campaignTitle, campaignDescript
 function getRelevantStockImage(campaignTitle, industry, objective, platform) {
   const title = (campaignTitle || '').toLowerCase();
   const ind = (industry || '').toLowerCase();
-  
+
   // Keyword-based image mapping for relevance
   const keywordImages = {
     // Startup & Entrepreneurship
@@ -971,14 +973,14 @@ function getRelevantStockImage(campaignTitle, industry, objective, platform) {
     'mentor': 'https://images.unsplash.com/photo-1531482615713-2afd69097998?w=800&h=600&fit=crop',
     'cohort': 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=800&h=600&fit=crop',
     'innovation': 'https://images.unsplash.com/photo-1531545514256-b1400bc00f31?w=800&h=600&fit=crop',
-    
+
     // Education & Learning
     'workshop': 'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?w=800&h=600&fit=crop',
     'training': 'https://images.unsplash.com/photo-1524178232363-1fb2b075b655?w=800&h=600&fit=crop',
     'learning': 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=800&h=600&fit=crop',
     'course': 'https://images.unsplash.com/photo-1524178232363-1fb2b075b655?w=800&h=600&fit=crop',
     'student': 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=800&h=600&fit=crop',
-    
+
     // Sports & Athletics
     'champion': 'https://images.pexels.com/photos/3621104/pexels-photo-3621104.jpeg?w=800&h=600&fit=crop',
     'athlete': 'https://images.pexels.com/photos/2294361/pexels-photo-2294361.jpeg?w=800&h=600&fit=crop',
@@ -987,13 +989,13 @@ function getRelevantStockImage(campaignTitle, industry, objective, platform) {
     'fitness': 'https://images.pexels.com/photos/841130/pexels-photo-841130.jpeg?w=800&h=600&fit=crop',
     'workout': 'https://images.pexels.com/photos/1552242/pexels-photo-1552242.jpeg?w=800&h=600&fit=crop',
     'gym': 'https://images.pexels.com/photos/1954524/pexels-photo-1954524.jpeg?w=800&h=600&fit=crop',
-    
+
     // Fashion & Style
     'style': 'https://images.pexels.com/photos/1536619/pexels-photo-1536619.jpeg?w=800&h=600&fit=crop',
     'fashion': 'https://images.pexels.com/photos/1536619/pexels-photo-1536619.jpeg?w=800&h=600&fit=crop',
     'school': 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=800&h=600&fit=crop',
     'back-to-school': 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=800&h=600&fit=crop',
-    
+
     // Community & People
     'community': 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=800&h=600&fit=crop',
     'spotlight': 'https://images.unsplash.com/photo-1559136555-9303baea8ebd?w=800&h=600&fit=crop',
@@ -1001,14 +1003,14 @@ function getRelevantStockImage(campaignTitle, industry, objective, platform) {
     'success': 'https://images.unsplash.com/photo-1559136555-9303baea8ebd?w=800&h=600&fit=crop',
     'brand': 'https://images.unsplash.com/photo-1552664730-d307ca884978?w=800&h=600&fit=crop',
     'story': 'https://images.unsplash.com/photo-1552664730-d307ca884978?w=800&h=600&fit=crop',
-    
+
     // Business & Marketing
     'lead': 'https://images.unsplash.com/photo-1557804506-669a67965ba0?w=800&h=600&fit=crop',
     'business': 'https://images.unsplash.com/photo-1557804506-669a67965ba0?w=800&h=600&fit=crop',
     'partner': 'https://images.unsplash.com/photo-1557804506-669a67965ba0?w=800&h=600&fit=crop',
     'organization': 'https://images.unsplash.com/photo-1557804506-669a67965ba0?w=800&h=600&fit=crop'
   };
-  
+
   // Industry-specific defaults
   const industryDefaults = {
     'startup': 'https://images.unsplash.com/photo-1559136555-9303baea8ebd?w=800&h=600&fit=crop',
@@ -1024,7 +1026,7 @@ function getRelevantStockImage(campaignTitle, industry, objective, platform) {
     'ecommerce': 'https://images.pexels.com/photos/5632402/pexels-photo-5632402.jpeg?w=800&h=600&fit=crop',
     'default': 'https://images.unsplash.com/photo-1552664730-d307ca884978?w=800&h=600&fit=crop'
   };
-  
+
   // Find matching keyword in campaign title
   for (const [keyword, imageUrl] of Object.entries(keywordImages)) {
     if (title.includes(keyword)) {
@@ -1032,7 +1034,7 @@ function getRelevantStockImage(campaignTitle, industry, objective, platform) {
       return imageUrl;
     }
   }
-  
+
   // Fall back to industry default
   for (const [key, imageUrl] of Object.entries(industryDefaults)) {
     if (ind.includes(key)) {
@@ -1040,7 +1042,7 @@ function getRelevantStockImage(campaignTitle, industry, objective, platform) {
       return imageUrl;
     }
   }
-  
+
   console.log('Using general default image');
   return industryDefaults.default;
 }
@@ -1051,15 +1053,15 @@ function getRelevantStockImage(campaignTitle, industry, objective, platform) {
  */
 async function generateImageFromCustomPrompt(customPrompt, platform = 'instagram') {
   console.log(`🎨 Generating image from custom prompt: "${customPrompt.substring(0, 100)}..."`);
-  
+
   // Check if prompt relates to babies/children and add safety guidance
   const promptLower = customPrompt.toLowerCase();
   const isBabyRelated = promptLower.includes('baby') || promptLower.includes('infant') || promptLower.includes('newborn') || promptLower.includes('toddler') || promptLower.includes('kid') || promptLower.includes('child');
-  
-  const safetyGuidance = isBabyRelated 
+
+  const safetyGuidance = isBabyRelated
     ? ' IMPORTANT: Do NOT include babies, children, or minors in the image. Show only products, adult hands, or artistic arrangements. Focus on product aesthetics.'
     : '';
-  
+
   // Enhance the prompt for better image generation while keeping user's intent
   const enhancedPrompt = `Create a high-quality, professional image based on this description: ${customPrompt}.${safetyGuidance}
 Style requirements: High resolution, suitable for ${platform} social media, professional photography or digital art quality, visually appealing, no text or watermarks in the image.`;
@@ -1069,10 +1071,10 @@ Style requirements: High resolution, suitable for ${platform} social media, prof
     console.log('🎨 Generating with Vertex AI Imagen 4 Ultra...');
     const accessToken = await getVertexAccessToken();
     const vertexUrl = `https://${VERTEX_LOCATION}-aiplatform.googleapis.com/v1/projects/${VERTEX_PROJECT_ID}/locations/${VERTEX_LOCATION}/publishers/google/models/imagen-4.0-ultra-generate-001:predict`;
-    
+
     const imagenResponse = await fetch(vertexUrl, {
       method: 'POST',
-      headers: { 
+      headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${accessToken}`
       },
@@ -1088,21 +1090,21 @@ Style requirements: High resolution, suitable for ${platform} social media, prof
     });
 
     const imagenData = await imagenResponse.json();
-    
+
     if (imagenData.predictions && imagenData.predictions[0]?.bytesBase64Encoded) {
       console.log('✅ Vertex AI Imagen 4 Ultra generated image from custom prompt successfully');
       return `data:image/png;base64,${imagenData.predictions[0].bytesBase64Encoded}`;
     }
-    
+
     console.log('Vertex AI Imagen 4 Ultra did not return image:', JSON.stringify(imagenData).substring(0, 200));
-    
+
     // Try Imagen 3 as fallback
     console.log('🎨 Trying Vertex AI Imagen 3...');
     const imagen3Url = `https://${VERTEX_LOCATION}-aiplatform.googleapis.com/v1/projects/${VERTEX_PROJECT_ID}/locations/${VERTEX_LOCATION}/publishers/google/models/imagen-3.0-generate-001:predict`;
-    
+
     const imagen3Response = await fetch(imagen3Url, {
       method: 'POST',
-      headers: { 
+      headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${accessToken}`
       },
@@ -1118,12 +1120,12 @@ Style requirements: High resolution, suitable for ${platform} social media, prof
     });
 
     const imagen3Data = await imagen3Response.json();
-    
+
     if (imagen3Data.predictions?.[0]?.bytesBase64Encoded) {
       console.log('✅ Vertex AI Imagen 3 generated image from custom prompt successfully');
       return `data:image/png;base64,${imagen3Data.predictions[0].bytesBase64Encoded}`;
     }
-    
+
   } catch (error) {
     console.error('Vertex AI Imagen error:', error.message);
   }
@@ -1144,13 +1146,13 @@ async function searchUnsplashImage(query) {
     .filter(word => word.length > 3)
     .slice(0, 3)
     .join(',');
-  
+
   const searchTerm = keywords || 'professional,business,modern';
-  
+
   // Use Unsplash Source for direct image URLs
   const unsplashUrl = `https://source.unsplash.com/800x600/?${encodeURIComponent(searchTerm)}`;
   console.log(`📷 Using Unsplash search for: ${searchTerm}`);
-  
+
   return unsplashUrl;
 }
 
@@ -1286,7 +1288,7 @@ function getFallbackImage(industry, objective) {
       'conversion': 'https://images.unsplash.com/photo-1554995207-c18c203602cb?w=800&h=600&fit=crop'
     }
   };
-  
+
   // Default images for any industry
   const defaultImages = {
     'awareness': 'https://images.unsplash.com/photo-1557804506-669a67965ba0?w=800&h=600&fit=crop',
@@ -1295,16 +1297,16 @@ function getFallbackImage(industry, objective) {
     'sales': 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=800&h=600&fit=crop',
     'conversion': 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&h=600&fit=crop'
   };
-  
+
   // Normalize industry name
   const normalizedIndustry = industry.toLowerCase().replace(/[^a-z]/g, '');
   const normalizedObjective = objective.toLowerCase();
-  
+
   // Try to find industry-specific image
   if (industryImages[normalizedIndustry] && industryImages[normalizedIndustry][normalizedObjective]) {
     return industryImages[normalizedIndustry][normalizedObjective];
   }
-  
+
   // Fall back to default objective-based image
   return defaultImages[normalizedObjective] || defaultImages.awareness;
 }
@@ -1315,7 +1317,7 @@ function getFallbackImage(industry, objective) {
 async function generateDashboardInsights(businessProfile, metrics = {}) {
   const goals = (businessProfile.marketingGoals || []).join(', ') || 'increase brand awareness';
   const hasNoCampaigns = (metrics.totalCampaigns || 0) === 0;
-  
+
   const prompt = `You are an expert marketing strategist AI. Generate highly personalized, actionable marketing recommendations for this business:
 
 BUSINESS PROFILE:
@@ -1512,7 +1514,7 @@ Maintain a ${businessProfile.brandVoice || 'Professional'} tone but be approacha
     }
   }
 
-  const historyText = conversationHistory.slice(-5).map(m => 
+  const historyText = conversationHistory.slice(-5).map(m =>
     `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`
   ).join('\n');
 
@@ -1530,7 +1532,7 @@ Provide a helpful, concise response (under 250 words). Be specific and data-driv
     console.error('Chat response error:', error);
     // Provide smart fallback responses based on message content
     const lowerMessage = message.toLowerCase();
-    
+
     if (lowerMessage.includes('hello') || lowerMessage.includes('hi ') || lowerMessage.includes('hey') || lowerMessage === 'hi') {
       return "Hey there! 👋 I'm Daddy, your marketing assistant. I'm here to help you with marketing strategies, content ideas, social media tips, and more. What would you like to work on today?";
     }
@@ -1555,7 +1557,7 @@ Provide a helpful, concise response (under 250 words). Be specific and data-driv
     if (lowerMessage.includes('thank')) {
       return "You're welcome! 😊 I'm always here if you need more marketing help. Let's crush those goals together! 🚀";
     }
-    
+
     return "Great question! 🎯 I'd love to help you with that. While I gather more context, here are some quick marketing tips:\n\n1. Know your audience inside out\n2. Be consistent with your posting schedule\n3. Engage authentically with your community\n4. Test different content formats\n5. Track your metrics weekly\n\nCan you tell me more about what specific area you'd like to focus on?";
   }
 }
@@ -1567,7 +1569,7 @@ async function generateSectionSynopsis(section, data, businessProfile) {
   // Build section-specific context
   let sectionContext = '';
   let dataContext = '';
-  
+
   switch (section) {
     case 'activeCampaigns':
       sectionContext = 'Active Marketing Campaigns - The number of campaigns currently running';
@@ -1635,7 +1637,7 @@ Be specific to their ${businessProfile?.industry || 'business'} industry and ${b
 function getFallbackSynopsis(section, data, businessProfile) {
   const companyName = businessProfile?.name || 'Your business';
   const industry = businessProfile?.industry || 'your industry';
-  
+
   switch (section) {
     case 'activeCampaigns':
       const count = data?.count || 0;
@@ -1651,50 +1653,50 @@ function getFallbackSynopsis(section, data, businessProfile) {
         insights: ['Review campaign performance weekly', 'A/B test different ad creatives', 'Adjust targeting based on engagement data'],
         trend: data?.change > 0 ? 'up' : data?.change < 0 ? 'down' : 'stable'
       };
-      
+
     case 'budgetSpent':
       const spent = data?.total || 0;
       return {
-        synopsis: spent > 0 
+        synopsis: spent > 0
           ? `${companyName} has invested $${spent} in marketing. Ensure your spend aligns with your ${industry} campaign objectives and ROI targets.`
           : `No marketing budget spent yet for ${companyName}. Consider allocating budget to reach your ${industry} target audience effectively.`,
-        insights: spent > 0 
+        insights: spent > 0
           ? ['Track cost per acquisition (CPA)', 'Allocate more budget to high-performing campaigns', 'Review ROI regularly']
           : ['Start with a small test budget', 'Focus on high-intent audiences first', 'Use organic content to supplement paid efforts'],
         trend: spent > 0 ? 'stable' : 'stable'
       };
-      
+
     case 'brandScore':
       const score = data?.score || 0;
       return {
         synopsis: `${companyName}'s brand score is ${score}/100. ${score >= 70 ? 'Strong performance!' : score >= 50 ? 'Room for improvement.' : 'Focus on consistency and engagement.'} This score reflects your overall marketing health in the ${industry} space.`,
-        insights: score >= 70 
+        insights: score >= 70
           ? ['Maintain posting consistency', 'Expand to new platforms', 'Leverage your strong engagement']
           : ['Increase posting frequency', 'Engage more with your audience', 'Create more valuable content'],
         trend: data?.change > 0 ? 'up' : data?.change < 0 ? 'down' : 'stable'
       };
-      
+
     case 'competitorRadar':
       return {
         synopsis: `Monitor competitor activity in the ${industry} market to identify opportunities and stay ahead of trends.`,
         insights: ['Track competitor posting frequency', 'Analyze their most engaging content', 'Identify gaps in their strategy you can exploit'],
         trend: 'stable'
       };
-      
+
     case 'recommendedActions':
       return {
         synopsis: `AI has identified key actions to improve ${companyName}'s marketing performance in the ${industry} industry.`,
         insights: ['Prioritize high-impact actions first', 'Complete actions to improve brand score', 'Regular action review improves performance by 40%'],
         trend: 'stable'
       };
-      
+
     case 'calendar':
       return {
         synopsis: `Plan and schedule your ${industry} marketing content for consistent audience engagement.`,
         insights: ['Maintain regular posting schedule', 'Plan content around industry events', 'Use scheduling to post at optimal times'],
         trend: 'stable'
       };
-      
+
     default:
       return {
         synopsis: `Analysis for ${companyName} in the ${industry} industry.`,
@@ -1822,23 +1824,23 @@ Return ONLY valid JSON in this EXACT format:
   try {
     const response = await callGemini(prompt, { maxTokens: 2000 });
     const parsed = parseGeminiJSON(response);
-    
+
     if (parsed && parsed.posts && Array.isArray(parsed.posts)) {
       // STRICT 3-MONTH THRESHOLD - enforce even if AI doesn't follow prompt
       const threeMonthsAgo = Date.now() - (90 * 24 * 60 * 60 * 1000);
       const maxHoursAgo = 2160; // 90 days in hours
-      
+
       // Add generated timestamps and IDs - sort by most recent first
       const postsWithTimestamps = parsed.posts.map((post, index) => {
         // Get hours ago from AI response (use hoursAgo, fallback to postedDaysAgo * 24, or random)
         let hoursAgo = post.hoursAgo ?? (post.postedDaysAgo ? post.postedDaysAgo * 24 : (index + 1) * 8 + Math.floor(Math.random() * 12));
-        
+
         // ENFORCE 3-month limit: Cap hoursAgo at 2160 (90 days)
         if (hoursAgo > maxHoursAgo) {
           console.log(`⚠️ Post hoursAgo ${hoursAgo} exceeds 3-month limit, capping to ${maxHoursAgo}`);
           hoursAgo = Math.floor(Math.random() * 168) + 1; // Reset to within 1 week
         }
-        
+
         const timeInfo = getRelativeTimeFromHours(hoursAgo);
         return {
           id: `comp_post_${Date.now()}_${index}`,
@@ -1856,15 +1858,15 @@ Return ONLY valid JSON in this EXACT format:
           isAIGenerated: false // We present this as "real" tracked data
         };
       });
-      
+
       // FINAL SAFETY CHECK: Filter out any posts older than 3 months
       const recentPosts = postsWithTimestamps.filter(post => post.postedAtTimestamp > threeMonthsAgo);
-      
+
       // Sort by timestamp (most recent first)
       recentPosts.sort((a, b) => b.postedAtTimestamp - a.postedAtTimestamp);
       return recentPosts;
     }
-    
+
     return generateFallbackCompetitorPosts(competitorNames, businessProfile);
   } catch (error) {
     console.error('Competitor activity generation error:', error);
@@ -1953,7 +1955,7 @@ function getRelativeTimeFromDays(daysAgo) {
   const now = Date.now();
   let timestamp;
   let displayString;
-  
+
   if (daysAgo === 0) {
     // Random hours between 1-12 for "today"
     const hours = Math.floor(Math.random() * 12) + 1;
@@ -1972,7 +1974,7 @@ function getRelativeTimeFromDays(daysAgo) {
     timestamp = now - (daysAgo * 24 * 60 * 60 * 1000);
     displayString = `${weeks}w ago`;
   }
-  
+
   return { displayString, timestamp };
 }
 
@@ -1984,7 +1986,7 @@ function getRelativeTimeFromHours(hoursAgo) {
   const now = Date.now();
   const timestamp = now - (hoursAgo * 60 * 60 * 1000);
   let displayString;
-  
+
   if (hoursAgo < 1) {
     const minutes = Math.max(1, Math.floor(hoursAgo * 60));
     displayString = `${minutes}m ago`;
@@ -1999,7 +2001,7 @@ function getRelativeTimeFromHours(hoursAgo) {
     const weeks = Math.floor(hoursAgo / 168);
     displayString = `${weeks}w ago`;
   }
-  
+
   return { displayString, timestamp };
 }
 
@@ -2009,7 +2011,7 @@ function getRelativeTimeFromHours(hoursAgo) {
 function generatePostUrl(platform, competitorName) {
   const cleanName = (competitorName || 'competitor').toLowerCase().replace(/[^a-z0-9]/g, '');
   const postId = Math.random().toString(36).substring(2, 12);
-  
+
   switch (platform?.toLowerCase()) {
     case 'instagram':
       return `https://www.instagram.com/p/${postId}/`;
@@ -2032,7 +2034,7 @@ function generatePostUrl(platform, competitorName) {
 async function generateRivalPost(competitorData, brandProfile) {
   const { competitorName, competitorContent, platform, sentiment, likes, comments, brandLogo, aspectRatio } = competitorData;
   const bp = brandProfile || {};
-  
+
   // Extract comprehensive brand context
   const brandContext = {
     companyName: bp.companyName || bp.name || 'Our Brand',
@@ -2046,10 +2048,10 @@ async function generateRivalPost(competitorData, brandProfile) {
     brandVoice: bp.brandVoice || 'professional yet bold',
     competitors: bp.competitors?.join(', ') || competitorName
   };
-  
+
   // Extract key themes from competitor content for relevance
   const contentLower = (competitorContent || '').toLowerCase();
-  
+
   // Expanded theme detection
   let contentThemes = [];
   const themePatterns = {
@@ -2067,20 +2069,20 @@ async function generateRivalPost(competitorData, brandProfile) {
     'comfort': ['comfort', 'cozy', 'soft', 'cushion', 'support', 'feel'],
     'performance': ['performance', 'speed', 'power', 'energy', 'boost', 'max']
   };
-  
+
   for (const [theme, keywords] of Object.entries(themePatterns)) {
     if (keywords.some(kw => contentLower.includes(kw))) {
       contentThemes.push(theme);
     }
   }
-  
+
   // Add industry-specific themes
   if (brandContext.industry) {
     contentThemes.push(brandContext.industry.toLowerCase());
   }
-  
+
   if (contentThemes.length === 0) contentThemes = ['quality', 'excellence', 'innovation'];
-  
+
   // Extract competitor claims to mock
   const competitorClaims = [];
   if (contentLower.includes('best')) competitorClaims.push('claims to be the best');
@@ -2088,7 +2090,7 @@ async function generateRivalPost(competitorData, brandProfile) {
   if (contentLower.includes('only')) competitorClaims.push('claims exclusivity');
   if (contentLower.includes('#1') || contentLower.includes('number one')) competitorClaims.push('claims #1 position');
   if (contentLower.includes('revolutionary')) competitorClaims.push('claims revolutionary product');
-  
+
   // Build a powerful mocking prompt
   const prompt = `You are an ELITE social media strategist creating a SAVAGE yet professional counter-post that DESTROYS the competition while showcasing YOUR brand's superiority.
 
@@ -2156,13 +2158,13 @@ Return ONLY valid JSON (no markdown, no explanations):
     console.log(`🎯 Generating SAVAGE rival post against ${competitorName} for ${brandContext.companyName}`);
     const response = await callGemini(prompt, { skipCache: true, temperature: 0.9, maxTokens: 4096, timeout: 45000 });
     const parsed = parseGeminiJSON(response);
-    
+
     if (!parsed || !parsed.caption) {
       throw new Error('Invalid response format');
     }
-    
+
     console.log(`✅ Generated mocking caption for ${brandContext.companyName}`);
-    
+
     // Generate AI image with Nano Banana 2
     const imagePrompt = `${parsed.imageDescription}. Brand: ${brandContext.companyName}. Industry: ${brandContext.industry}. Products: ${brandContext.products || 'premium products'}. Style: modern, premium, commercial photography, high-end advertising quality.`;
 
@@ -2175,15 +2177,15 @@ Return ONLY valid JSON (no markdown, no explanations):
       campaignTheme: `Rival post countering ${competitorName}`
     });
     const imageUrl = imageResult?.imageUrl || imageResult;
-    
+
     // Clean and format hashtags
-    const cleanHashtags = Array.isArray(parsed.hashtags) 
+    const cleanHashtags = Array.isArray(parsed.hashtags)
       ? parsed.hashtags.map(h => {
-          const clean = h.replace(/^#+/, '').trim();
-          return clean ? `#${clean}` : null;
-        }).filter(Boolean)
+        const clean = h.replace(/^#+/, '').trim();
+        return clean ? `#${clean}` : null;
+      }).filter(Boolean)
       : [`#${contentThemes[0] || 'trending'}`, '#viral', '#quality'];
-    
+
     return {
       caption: parsed.caption,
       hashtags: cleanHashtags.slice(0, 4),
@@ -2192,17 +2194,17 @@ Return ONLY valid JSON (no markdown, no explanations):
     };
   } catch (error) {
     console.error('Error generating rival post:', error);
-    
+
     // Enhanced fallback response with brand context and mocking tone
     const brandName = brandContext.companyName || 'Our Brand';
     const themeBasedCaption = contentThemes.includes('footwear') || contentThemes.includes('sneakers')
       ? `👟 Oh, ${competitorName} just dropped something? That's cute.\n\nAt ${brandName}, we've been perfecting ${contentThemes[0]} since before it was "trendy." 💅\n\n🔥 Real ones know the difference. Our ${brandContext.products || 'collection'} isn't just footwear – it's a statement.\n\n💬 Tag someone who needs an upgrade from the basics!\n\n#${brandName.replace(/\s+/g, '')} #LevelsAbove`
       : contentThemes.includes('fitness') || contentThemes.includes('wellness')
-      ? `🏆 While ${competitorName} is just getting started, ${brandName} has been transforming ${contentThemes[0]} for years.\n\n💪 Our community doesn't just talk about results – we LIVE them.\n\n✨ ${brandContext.usps || 'Premium quality meets unmatched performance.'}\n\n🔥 Ready to join the winning side?\n\n👇 Drop a 💪 if you're serious about your ${contentThemes[0]} journey!`
-      : contentThemes.includes('technology') || contentThemes.includes('innovation')
-      ? `🚀 Innovation? ${competitorName}, welcome to 2020. We've been there.\n\n${brandName} has been pioneering ${contentThemes[0]} while others played catch-up. 🏅\n\n⚡ ${brandContext.usps || 'Cutting-edge technology meets exceptional design.'}\n\n💡 The future isn't coming – we're already living it.\n\n📱 Tag a friend who's ready to upgrade!`
-      : `💫 Spotted: ${competitorName} trying their best. Adorable.\n\nMeanwhile, at ${brandName}? We've been setting the standard in ${brandContext.industry || contentThemes[0]} that others dream of reaching. 👑\n\n🎯 ${brandContext.usps || 'Excellence isn\'t a goal – it\'s our baseline.'}\n\n🔥 There's a reason the best choose ${brandName}.\n\n💬 Ready to experience the difference? Drop a 🙋‍♂️ below!`;
-    
+        ? `🏆 While ${competitorName} is just getting started, ${brandName} has been transforming ${contentThemes[0]} for years.\n\n💪 Our community doesn't just talk about results – we LIVE them.\n\n✨ ${brandContext.usps || 'Premium quality meets unmatched performance.'}\n\n🔥 Ready to join the winning side?\n\n👇 Drop a 💪 if you're serious about your ${contentThemes[0]} journey!`
+        : contentThemes.includes('technology') || contentThemes.includes('innovation')
+          ? `🚀 Innovation? ${competitorName}, welcome to 2020. We've been there.\n\n${brandName} has been pioneering ${contentThemes[0]} while others played catch-up. 🏅\n\n⚡ ${brandContext.usps || 'Cutting-edge technology meets exceptional design.'}\n\n💡 The future isn't coming – we're already living it.\n\n📱 Tag a friend who's ready to upgrade!`
+          : `💫 Spotted: ${competitorName} trying their best. Adorable.\n\nMeanwhile, at ${brandName}? We've been setting the standard in ${brandContext.industry || contentThemes[0]} that others dream of reaching. 👑\n\n🎯 ${brandContext.usps || 'Excellence isn\'t a goal – it\'s our baseline.'}\n\n🔥 There's a reason the best choose ${brandName}.\n\n💬 Ready to experience the difference? Drop a 🙋‍♂️ below!`;
+
     // Brand-relevant hashtags
     const fallbackHashtags = [
       `#${brandName.replace(/\s+/g, '')}`,
@@ -2212,7 +2214,7 @@ Return ONLY valid JSON (no markdown, no explanations):
       '#LevelsAbove',
       '#TheOriginal'
     ].slice(0, 6);
-    
+
     return {
       caption: themeBasedCaption,
       hashtags: fallbackHashtags,
@@ -2236,7 +2238,7 @@ async function generateABTestVariations(baseContent, businessProfile, count = 3,
   const industry = businessProfile.industry || 'General';
   const brandVoice = businessProfile.brandVoice || 'Professional';
   const targetAudience = businessProfile.targetAudience || 'General audience';
-  
+
   const prompt = `You are an expert A/B testing strategist for social media marketing. Generate ${count} unique variations of the following content for "${companyName}".
 
 === BASE CONTENT ===
@@ -2301,7 +2303,7 @@ Return ONLY valid JSON in this exact format:
   try {
     const response = await callGemini(prompt, { skipCache: true, timeout: EXTENDED_TIMEOUT, temperature: 0.8 });
     const parsed = parseGeminiJSON(response);
-    
+
     if (parsed.variations && Array.isArray(parsed.variations)) {
       return parsed.variations.map((v, i) => ({
         id: v.id || `var_${i + 1}`,
@@ -2326,11 +2328,11 @@ Return ONLY valid JSON in this exact format:
         }
       }));
     }
-    
+
     throw new Error('Invalid response format');
   } catch (error) {
     console.error('Error generating A/B variations:', error);
-    
+
     // Generate basic fallback variations
     return Array.from({ length: count }, (_, i) => ({
       id: `var_${i + 1}`,
@@ -2363,7 +2365,7 @@ Return ONLY valid JSON in this exact format:
 async function analyzeABTestVariations(variations, businessProfile, evaluationCriteria = 'balanced') {
   const companyName = businessProfile.name || 'Your Company';
   const targetAudience = businessProfile.targetAudience || 'General audience';
-  
+
   const variationsContext = variations.map((v, i) => `
 Variation ${i + 1} (${v.name || 'Unnamed'}):
 - Caption: ${v.caption?.substring(0, 200)}...
@@ -2425,7 +2427,7 @@ Return ONLY valid JSON:
     return parseGeminiJSON(response);
   } catch (error) {
     console.error('Error analyzing A/B variations:', error);
-    
+
     return {
       variations: variations.map((v, i) => ({
         id: v.id,
@@ -2458,7 +2460,7 @@ Return ONLY valid JSON:
  */
 async function selectABTestWinner(variations, businessProfile, evaluationCriteria = 'balanced') {
   const companyName = businessProfile.name || 'Your Company';
-  
+
   const variationsContext = variations.map((v, i) => `
 Variation ${i + 1} - ${v.name}:
 - Caption Preview: ${v.caption?.substring(0, 150)}...
@@ -2487,7 +2489,7 @@ Return ONLY valid JSON:
   try {
     const response = await callGemini(prompt, { skipCache: true, timeout: API_TIMEOUT });
     const parsed = parseGeminiJSON(response);
-    
+
     return {
       winnerId: parsed.winnerId || variations[0]?.id,
       reason: parsed.reason || 'Selected as best performer based on overall metrics',
@@ -2496,14 +2498,14 @@ Return ONLY valid JSON:
     };
   } catch (error) {
     console.error('Error selecting winner:', error);
-    
+
     // Select variation with highest overall score
     const winner = variations.reduce((best, current) => {
       const bestScore = best.predictedMetrics?.overallScore || 0;
       const currentScore = current.predictedMetrics?.overallScore || 0;
       return currentScore > bestScore ? current : best;
     }, variations[0]);
-    
+
     return {
       winnerId: winner?.id || 'var_1',
       reason: 'Selected based on highest predicted overall score',
@@ -2512,21 +2514,540 @@ Return ONLY valid JSON:
   }
 }
 
+function normalizeLocalizationHashtags(rawHashtags = [], fallbackText = '', region = '', platform = '') {
+  const fromArray = Array.isArray(rawHashtags) ? rawHashtags : [];
+  const fromCaption = typeof fallbackText === 'string' ? (fallbackText.match(/#[^\s#]+/g) || []) : [];
+
+  const merged = [...fromArray, ...fromCaption]
+    .map((tag) => String(tag || '').trim().replace(/\s+/g, ''))
+    .filter(Boolean)
+    .map((tag) => (tag.startsWith('#') ? tag : `#${tag}`));
+
+  const deduped = Array.from(new Set(merged.map((tag) => tag.toLowerCase())))
+    .map((lower) => merged.find((tag) => tag.toLowerCase() === lower))
+    .filter(Boolean);
+
+  const addIfMissing = (value) => {
+    const token = String(value || '')
+      .trim()
+      .replace(/[^A-Za-z0-9]/g, '');
+    if (!token) return;
+    const hashtag = `#${token}`;
+    if (!deduped.some((item) => String(item).toLowerCase() === hashtag.toLowerCase())) {
+      deduped.push(hashtag);
+    }
+  };
+
+  if (deduped.length < 2) {
+    addIfMissing(region);
+  }
+  if (deduped.length < 2) {
+    addIfMissing(platform);
+  }
+
+  const guaranteedFallbackTags = [region, platform, 'brand', 'campaign', 'premium', 'marketing', 'local'];
+  for (const tag of guaranteedFallbackTags) {
+    if (deduped.length >= 5) break;
+    addIfMissing(tag);
+  }
+
+  return deduped.slice(0, 5);
+}
+
+function normalizeLocalizationLanguage(value = '') {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+
+  const lower = raw.toLowerCase();
+  if (lower === 'ta' || lower === 'tamil' || lower === 'tam') return 'ta';
+  if (lower === 'hi' || lower === 'hindi' || lower === 'hin') return 'hi';
+  if (lower === 'en' || lower === 'english' || lower === 'eng') return 'en';
+
+  return lower;
+}
+
+function normalizeLocalizationLanguageOutput(value = '') {
+  const code = normalizeLocalizationLanguage(value);
+  if (code === 'ta') return 'Tamil';
+  if (code === 'hi') return 'Hindi';
+  if (code === 'en') return 'English';
+  return String(value || '').trim() || code || 'English';
+}
+
+function inferLanguageFromRegion(region = '') {
+  const raw = String(region || '').trim();
+  if (!raw) return 'en';
+
+  const upper = raw.toUpperCase();
+  const regionToken = upper
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .pop() || upper;
+
+  const isIndia =
+    regionToken === 'IN' ||
+    regionToken === 'INDIA' ||
+    upper.startsWith('INDIA') ||
+    upper.includes(', INDIA') ||
+    upper.includes(' IN ');
+
+  if (isIndia) {
+    const tamilSignals = [
+      'TAMIL NADU',
+      'CHENNAI',
+      'COIMBATORE',
+      'MADURAI',
+      'TIRUCHIRAPPALLI',
+      'TRICHY',
+      'SALEM'
+    ];
+    if (tamilSignals.some((signal) => upper.includes(signal))) {
+      return 'ta';
+    }
+    // Default India choice
+    return 'en';
+  }
+
+  const isUS =
+    regionToken === 'US' ||
+    regionToken === 'USA' ||
+    regionToken === 'UNITED STATES' ||
+    regionToken === 'UNITED STATES OF AMERICA' ||
+    upper.startsWith('UNITED STATES') ||
+    upper.includes(', US') ||
+    upper.includes(', USA');
+
+  if (isUS) return 'en';
+
+  return 'en';
+}
+
+function buildLocalizationFallback({ baseCaption = '', language = '', region = '' } = {}) {
+  return {
+    caption: String(baseCaption || '').trim(),
+    hashtags: normalizeLocalizationHashtags([], String(baseCaption || ''), region, ''),
+    cta: '',
+    language: normalizeLocalizationLanguageOutput(language),
+    region: String(region || '').trim(),
+    fallback: true
+  };
+}
+
+function stripMarkdownCodeBlock(text = '') {
+  const raw = String(text || '').trim();
+  if (raw.startsWith('```')) {
+    return raw
+      .replace(/^```[a-zA-Z0-9_-]*\s*/i, '')
+      .replace(/```$/, '')
+      .trim();
+  }
+  return raw;
+}
+
+function tryParseLocalizationJSON(text = '') {
+  const cleaned = stripMarkdownCodeBlock(text);
+  if (!cleaned.startsWith('{') && !cleaned.startsWith('[')) return null;
+  try {
+    return JSON.parse(cleaned);
+  } catch (_err) {
+    return null;
+  }
+}
+
+function parseLocalizationStructuredText(text = '') {
+  const normalized = stripMarkdownCodeBlock(text).replace(/\r\n/g, '\n').trim();
+  if (!normalized) return null;
+
+  const captionMatch = normalized.match(
+    /Caption\s*\(in[^\)]*\)\s*:\s*([\s\S]*?)(?:\n\s*CTA\s*\(in[^\)]*\)\s*:|\n\s*Hashtags\s*:|$)/i
+  );
+  const ctaMatch = normalized.match(
+    /CTA\s*\(in[^\)]*\)\s*:\s*([\s\S]*?)(?:\n\s*Hashtags\s*:|$)/i
+  );
+  const hashtagsMatch = normalized.match(/Hashtags\s*:\s*([\s\S]*)$/i);
+
+  const caption = String(captionMatch?.[1] || '').trim();
+  const cta = String(ctaMatch?.[1] || '').trim();
+  const hashtagsLine = String(hashtagsMatch?.[1] || '').trim();
+  const hashtagMatches = hashtagsLine.match(/#[^\s#,]+/g) || [];
+  const normalizedHashtags = hashtagMatches.length > 0
+    ? hashtagMatches
+    : hashtagsLine
+      .split(/[\s,\n]+/)
+      .map((token) => String(token || '').trim())
+      .filter(Boolean)
+      .map((token) => token.startsWith('#') ? token : `#${token}`);
+
+  if (!caption) return null;
+
+  return {
+    caption,
+    cta,
+    hashtags: normalizedHashtags
+  };
+}
+
+function isLocalizationLanguageLikelyValid(text = '', languageLabel = '') {
+  const langCode = normalizeLocalizationLanguage(languageLabel);
+  const sample = String(text || '').trim();
+  if (!sample) return false;
+
+  if (langCode === 'ta') {
+    const tamilChars = (sample.match(/[\u0B80-\u0BFF]/g) || []).length;
+    return tamilChars >= Math.max(4, Math.floor(sample.length * 0.08));
+  }
+  if (langCode === 'hi') {
+    const devanagariChars = (sample.match(/[\u0900-\u097F]/g) || []).length;
+    return devanagariChars >= Math.max(4, Math.floor(sample.length * 0.08));
+  }
+  if (langCode === 'en') {
+    const latinChars = (sample.match(/[A-Za-z]/g) || []).length;
+    return latinChars >= Math.max(8, Math.floor(sample.length * 0.2));
+  }
+  return true;
+}
+
+function normalizeLocalizationPairsInput(localizationsInput = [], fallbackRegion = '', fallbackLanguage = '') {
+  const fromArray = Array.isArray(localizationsInput)
+    ? localizationsInput
+      .map((item) => {
+        if (!item || typeof item !== 'object') return null;
+        const itemRegionRaw = String(item.region || '').trim();
+        const itemLanguageRaw = String(item.language || '').trim();
+        if (!itemRegionRaw && !itemLanguageRaw) return null;
+        const itemRegion = itemRegionRaw || 'Global';
+        const languageCode = normalizeLocalizationLanguage(itemLanguageRaw) || inferLanguageFromRegion(itemRegion);
+        const language = normalizeLocalizationLanguageOutput(itemLanguageRaw || languageCode) || 'English';
+        return { region: itemRegion, language, languageCode };
+      })
+      .filter(Boolean)
+    : [];
+
+  if (fromArray.length > 0) return fromArray;
+
+  const safeRegion = String(fallbackRegion || '').trim() || 'Global';
+  const safeLanguageRaw = String(fallbackLanguage || '').trim();
+  const safeLanguageCode = normalizeLocalizationLanguage(safeLanguageRaw) || inferLanguageFromRegion(safeRegion);
+  const safeLanguage = normalizeLocalizationLanguageOutput(safeLanguageRaw || safeLanguageCode) || 'English';
+
+  return [{ region: safeRegion, language: safeLanguage, languageCode: safeLanguageCode }];
+}
+
+function parseLocalizationBatchJSONResponse(rawResponse = '') {
+  const parsedJson = tryParseLocalizationJSON(rawResponse);
+  if (Array.isArray(parsedJson)) {
+    const rows = parsedJson
+      .filter((item) => item && typeof item === 'object')
+      .map((item) => ({
+        caption: String(item.caption || '').trim(),
+        hashtags: Array.isArray(item.hashtags) ? item.hashtags : [],
+        cta: String(item.cta || '').trim(),
+        language: String(item.language || '').trim(),
+        region: String(item.region || '').trim(),
+        fallback: item.fallback === true
+      }));
+    return rows.length > 0 ? rows : null;
+  }
+
+  if (parsedJson && typeof parsedJson === 'object') {
+    return [{
+      caption: String(parsedJson.caption || '').trim(),
+      hashtags: Array.isArray(parsedJson.hashtags) ? parsedJson.hashtags : [],
+      cta: String(parsedJson.cta || '').trim(),
+      language: String(parsedJson.language || '').trim(),
+      region: String(parsedJson.region || '').trim(),
+      fallback: parsedJson.fallback === true
+    }];
+  }
+
+  const parsedText = parseLocalizationStructuredText(rawResponse);
+  if (parsedText && typeof parsedText === 'object') {
+    return [{
+      caption: String(parsedText.caption || '').trim(),
+      hashtags: Array.isArray(parsedText.hashtags) ? parsedText.hashtags : [],
+      cta: String(parsedText.cta || '').trim(),
+      language: '',
+      region: '',
+      fallback: false
+    }];
+  }
+
+  return null;
+}
+
+function buildLocalizationPrompt({
+  localizations = [],
+  brandName = '',
+  industry = '',
+  brandDescription = '',
+  targetAudience = '',
+  keyMessage = '',
+  brandTone = '',
+  writingStyle = '',
+  ctaStyle = '',
+  visualStyle = '',
+  platform = ''
+} = {}) {
+  const localizationJson = JSON.stringify(
+    localizations.map((item) => ({
+      region: String(item.region || '').trim() || 'Global',
+      language: String(item.language || '').trim() || 'English'
+    })),
+    null,
+    2
+  );
+
+  return `You are a premium brand marketing AI. Your task is to generate HIGH-CONVERTING social media ad content based on the provided brand details and localization settings.
+
+---
+
+🚨 LANGUAGE + REGION RULES (CRITICAL):
+- You MUST generate SEPARATE content for EACH region provided in the LOCALIZATION INPUT.
+- Each region's content (caption, CTA) MUST be strictly in its specified language.
+- Do NOT mix languages between regions.
+- Do NOT default to English unless it is the specified language.
+
+---
+
+🌍 LOCALIZATION INPUT:
+${localizationJson}
+
+Example:
+[
+  { "region": "Tamil Nadu", "language": "Tamil" },
+  { "region": "India", "language": "Hindi" }
+]
+
+---
+
+🎯 BRAND CONTEXT:
+- Brand Name: ${brandName || 'Brand'}
+- Industry: ${industry || 'general'}
+- Description: ${brandDescription || 'Not provided'}
+- Target Audience: ${targetAudience || 'general audience'}
+- Core Message: ${keyMessage || 'Not provided'}
+
+---
+
+🎨 BRAND IDENTITY (STRICT):
+- Tone: ${brandTone || 'professional'}
+- Writing Style: ${writingStyle || 'concise and premium'}
+- CTA Style: ${ctaStyle || 'action-driven'}
+- Visual Style: ${visualStyle || 'modern premium'}
+
+⚠️ Follow brand tone strictly. Do NOT deviate.
+
+---
+
+🧠 CONTENT RULES:
+- Emotionally engaging
+- Platform-ready (${platform || 'Instagram'} / Facebook style)
+- Short, premium, non-generic
+- Adapt cultural tone per region
+
+---
+
+🔥 OUTPUT FORMAT (STRICT JSON ONLY):
+
+[
+  {
+    "region": "<region>",
+    "language": "<language>",
+    "caption": "<MUST be in the specified language>",
+    "cta": "<MUST be in the specified language>",
+    "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5"]
+  }
+]
+
+---
+
+🚫 IMPORTANT:
+- Return ONLY valid JSON.
+- Do NOT add explanations or any text outside the JSON.
+- Do NOT change the JSON structure.
+- Ensure each region from the input has its own localized output object in the array.`;
+}
+
+/**
+ * Localize campaign caption for one or many language + region markets.
+ * Returns:
+ * - single mode: { caption, hashtags[], cta, language, region, fallback? }
+ * - batch mode: [{ caption, hashtags[], cta, language, region, fallback? }]
+ */
+async function localizeCampaignContent(payload = {}) {
+  const brandName = String(payload.brandName || payload.brand_name || '').trim();
+  const brandTone = String(payload.brandTone || payload.brand_tone || payload.tone || '').trim() || 'professional';
+  const writingStyle = String(payload.writingStyle || payload.writing_style || payload.style || '').trim() || 'concise and premium';
+  const ctaStyle = String(payload.ctaStyle || payload.cta_style || '').trim() || 'action-driven';
+  const visualStyle = String(payload.visualStyle || payload.visual_style || '').trim() || 'modern premium';
+  const targetAudience = String(payload.targetAudience || payload.target_audience || payload.audience || '').trim() || 'general audience';
+  const brandDescription = String(payload.brandDescription || payload.brand_description || '').trim() || '';
+  const industry = String(payload.industry || '').trim() || 'general';
+  const keyMessage = String(payload.keyMessage || payload.key_message || payload.baseCaption || payload.base_caption || '').trim();
+  const platform = String(payload.platform || '').trim() || 'Instagram';
+  const region = String(payload.region || '').trim();
+  const requestedLanguageRaw = String(payload.language || '').trim();
+  const requestedLanguage = normalizeLocalizationLanguage(requestedLanguageRaw);
+  const inferredLanguage = requestedLanguage || inferLanguageFromRegion(region);
+  const baseCaption = String(payload.baseCaption || payload.base_caption || keyMessage || '').trim();
+
+  const isBatchMode = Array.isArray(payload.localizations) && payload.localizations.length > 0;
+  const requestedPairs = normalizeLocalizationPairsInput(
+    payload.localizations,
+    region,
+    requestedLanguageRaw || inferredLanguage
+  );
+
+  const buildFallbackResults = () => {
+    const rows = requestedPairs.map((pair) =>
+      buildLocalizationFallback({
+        baseCaption,
+        language: pair.languageCode || pair.language,
+        region: pair.region
+      })
+    );
+    return isBatchMode ? rows : (rows[0] || buildLocalizationFallback({ baseCaption, language: inferredLanguage, region }));
+  };
+
+  if (!baseCaption) {
+    return buildFallbackResults();
+  }
+
+  const prompt = buildLocalizationPrompt({
+    localizations: requestedPairs,
+    brandName,
+    industry,
+    brandDescription,
+    targetAudience,
+    keyMessage: keyMessage || baseCaption,
+    brandTone,
+    writingStyle,
+    ctaStyle,
+    visualStyle,
+    platform
+  });
+
+  const finalizeHashtags = (rawHashtags = [], caption = '', regionValue = '') =>
+    normalizeLocalizationHashtags(rawHashtags, caption, regionValue, platform).slice(0, 5);
+
+  const callAndParse = async (sourcePrompt) => {
+    const raw = await callGemini(sourcePrompt, {
+      skipCache: true,
+      temperature: 0.7,
+      maxTokens: 3072,
+      timeout: API_TIMEOUT
+    });
+    return parseLocalizationBatchJSONResponse(raw);
+  };
+
+  const pickCandidateForPair = (rows = [], pair = {}, index = 0, usedIndexes = new Set()) => {
+    const targetRegion = String(pair.region || '').trim().toLowerCase();
+    const targetLanguage = String(pair.language || '').trim().toLowerCase();
+
+    let selectedIndex = rows.findIndex((item, itemIndex) => {
+      if (usedIndexes.has(itemIndex)) return false;
+      return (
+        String(item?.region || '').trim().toLowerCase() === targetRegion &&
+        String(item?.language || '').trim().toLowerCase() === targetLanguage
+      );
+    });
+
+    if (selectedIndex < 0) {
+      selectedIndex = rows.findIndex((item, itemIndex) => {
+        if (usedIndexes.has(itemIndex)) return false;
+        return String(item?.region || '').trim().toLowerCase() === targetRegion;
+      });
+    }
+
+    if (selectedIndex < 0 && index < rows.length && !usedIndexes.has(index)) {
+      selectedIndex = index;
+    }
+
+    if (selectedIndex < 0) {
+      selectedIndex = rows.findIndex((_item, itemIndex) => !usedIndexes.has(itemIndex));
+    }
+
+    if (selectedIndex < 0) return null;
+    usedIndexes.add(selectedIndex);
+    return rows[selectedIndex];
+  };
+
+  const normalizeBatch = (rows = []) => {
+    if (!Array.isArray(rows) || rows.length === 0) return null;
+
+    const usedIndexes = new Set();
+    const normalized = requestedPairs.map((pair, index) => {
+      const parsed = pickCandidateForPair(rows, pair, index, usedIndexes);
+      if (!parsed || parsed.fallback === true) return null;
+
+      const caption = String(parsed.caption || '').trim();
+      if (!caption) return null;
+
+      const cta = String(parsed.cta || '').trim();
+      const resolvedLanguageRaw = String(parsed.language || pair.language || pair.languageCode || '').trim();
+      const validationText = `${caption}\n${cta}`.trim();
+      if (!isLocalizationLanguageLikelyValid(validationText, resolvedLanguageRaw)) {
+        return null;
+      }
+
+      return {
+        caption,
+        hashtags: finalizeHashtags(parsed.hashtags, caption, pair.region),
+        cta,
+        language: normalizeLocalizationLanguageOutput(resolvedLanguageRaw) || pair.language || 'English',
+        region: String(parsed.region || pair.region || '').trim(),
+        fallback: false
+      };
+    });
+
+    if (normalized.some((item) => !item)) return null;
+    return normalized;
+  };
+
+  try {
+    let parsedRows = await callAndParse(prompt);
+    let normalizedRows = normalizeBatch(parsedRows);
+
+    if (!normalizedRows) {
+      const retryPrompt = `${prompt}
+
+RETRY FIX:
+- Your previous output did not follow the language rule or JSON schema.
+- Caption and CTA must strictly use each row's specified language.
+- Do not switch or mix languages between rows.
+- Return ONLY valid JSON as an array with exactly ${requestedPairs.length} objects.
+- Keep the same order as LOCALIZATION INPUT.`;
+      parsedRows = await callAndParse(retryPrompt);
+      normalizedRows = normalizeBatch(parsedRows);
+    }
+
+    if (!normalizedRows) {
+      throw new Error('Localization output failed validation');
+    }
+
+    return isBatchMode ? normalizedRows : normalizedRows[0];
+  } catch (error) {
+    console.error('Localization generation failed:', error.message);
+    return buildFallbackResults();
+  }
+}
+
 /**
  * Analyze goal progress and provide AI insights
  */
 async function analyzeGoalProgress(goal, businessProfile, recentCampaigns = []) {
   const companyName = businessProfile.name || 'Your Company';
-  
-  const progressPercentage = goal.target > goal.startValue 
-    ? ((goal.currentValue - goal.startValue) / (goal.target - goal.startValue)) * 100 
+
+  const progressPercentage = goal.target > goal.startValue
+    ? ((goal.currentValue - goal.startValue) / (goal.target - goal.startValue)) * 100
     : 0;
-  
+
   const daysTotal = Math.ceil((new Date(goal.endDate) - new Date(goal.startDate)) / (1000 * 60 * 60 * 24));
   const daysPassed = Math.ceil((new Date() - new Date(goal.startDate)) / (1000 * 60 * 60 * 24));
   const daysRemaining = Math.max(0, daysTotal - daysPassed);
-  
-  const campaignContext = recentCampaigns.slice(0, 5).map(c => 
+
+  const campaignContext = recentCampaigns.slice(0, 5).map(c =>
     `- ${c.name}: ${c.status}, engagement: ${c.performance?.engagement || 0}`
   ).join('\n');
 
@@ -2546,9 +3067,9 @@ Days Remaining: ${daysRemaining}
 ${campaignContext || 'No recent campaigns'}
 
 === PROGRESS HISTORY ===
-${(goal.progressHistory || []).slice(-5).map(p => 
-  `- ${new Date(p.date).toLocaleDateString()}: ${p.value} ${goal.unit}`
-).join('\n') || 'No history'}
+${(goal.progressHistory || []).slice(-5).map(p =>
+    `- ${new Date(p.date).toLocaleDateString()}: ${p.value} ${goal.unit}`
+  ).join('\n') || 'No history'}
 
 Analyze if this goal is on track and provide actionable insights.
 
@@ -2568,7 +3089,7 @@ Return ONLY valid JSON:
   try {
     const response = await callGemini(prompt, { skipCache: true, timeout: API_TIMEOUT });
     const parsed = parseGeminiJSON(response);
-    
+
     return {
       onTrack: parsed.onTrack ?? progressPercentage >= (daysPassed / daysTotal) * 100 * 0.8,
       projectedCompletion: parsed.projectedCompletion ? new Date(parsed.projectedCompletion) : goal.endDate,
@@ -2582,15 +3103,15 @@ Return ONLY valid JSON:
     };
   } catch (error) {
     console.error('Error analyzing goal:', error);
-    
+
     const onTrack = progressPercentage >= (daysPassed / daysTotal) * 100 * 0.8;
-    
+
     return {
       onTrack,
       projectedCompletion: goal.endDate,
       confidence: 50,
-      recommendation: onTrack 
-        ? 'Goal is on track. Maintain current efforts.' 
+      recommendation: onTrack
+        ? 'Goal is on track. Maintain current efforts.'
         : 'Goal is behind schedule. Consider increasing campaign frequency.',
       riskLevel: onTrack ? 'low' : 'medium'
     };
@@ -2603,10 +3124,10 @@ Return ONLY valid JSON:
 async function generateGoalRecommendations(goals, businessProfile) {
   const companyName = businessProfile.name || 'Your Company';
   const industry = businessProfile.industry || 'General';
-  
+
   const goalsContext = goals.map(g => {
-    const progress = g.target > g.startValue 
-      ? ((g.currentValue - g.startValue) / (g.target - g.startValue)) * 100 
+    const progress = g.target > g.startValue
+      ? ((g.currentValue - g.startValue) / (g.target - g.startValue)) * 100
       : 0;
     return `- ${g.name} (${g.type}): ${progress.toFixed(0)}% complete, ${g.daysRemaining || 0} days left`;
   }).join('\n');
@@ -2637,7 +3158,7 @@ Return ONLY valid JSON:
   try {
     const response = await callGemini(prompt, { skipCache: true, timeout: API_TIMEOUT });
     const parsed = parseGeminiJSON(response);
-    
+
     return parsed.recommendations || [];
   } catch (error) {
     console.error('Error generating recommendations:', error);
@@ -2669,21 +3190,21 @@ async function generateStrategicContentSuggestions(businessProfile, competitorPo
   const targetAudience = businessProfile.targetAudience || 'General consumers';
   const brandVoice = businessProfile.brandVoice || 'Professional';
   const location = businessProfile.location || 'India';
-  
+
   // Format current date
-  const dateStr = currentDate.toLocaleDateString('en-IN', { 
-    weekday: 'long', 
-    year: 'numeric', 
-    month: 'long', 
-    day: 'numeric' 
+  const dateStr = currentDate.toLocaleDateString('en-IN', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
   });
-  
+
   // Get month for seasonal context
   const month = currentDate.getMonth();
   const seasonalContext = getSeasonalContext(month);
-  
+
   // Format competitor posts for context
-  const competitorContext = competitorPosts.slice(0, 5).map(p => 
+  const competitorContext = competitorPosts.slice(0, 5).map(p =>
     `- ${p.competitorName || 'Competitor'}: "${(p.content || p.caption || '').substring(0, 100)}..." (${p.engagement || 'high'} engagement)`
   ).join('\n') || 'No recent competitor posts available';
 
@@ -2749,14 +3270,14 @@ Return ONLY valid JSON (no markdown):
 Make suggestions SPECIFIC, ACTIONABLE, and TIMELY. Include actual trending hashtags and real events.`;
 
   try {
-    const response = await callGemini(prompt, { 
-      skipCache: true, 
-      temperature: 0.85, 
+    const response = await callGemini(prompt, {
+      skipCache: true,
+      temperature: 0.85,
       maxTokens: 4096,
-      timeout: EXTENDED_TIMEOUT 
+      timeout: EXTENDED_TIMEOUT
     });
     const parsed = parseGeminiJSON(response);
-    
+
     if (parsed && parsed.suggestions) {
       // Add unique IDs if missing
       parsed.suggestions = parsed.suggestions.map((sug, idx) => ({
@@ -2764,7 +3285,7 @@ Make suggestions SPECIFIC, ACTIONABLE, and TIMELY. Include actual trending hasht
         id: sug.id || `sug_${Date.now()}_${idx}`
       }));
     }
-    
+
     return parsed || { suggestions: [], trendingNow: [], upcomingEvents: [] };
   } catch (error) {
     console.error('Strategic content generation error:', error);
@@ -2780,7 +3301,7 @@ async function generatePostFromSuggestion(suggestion, businessProfile, logoUrl =
   const companyName = businessProfile.name || 'Your Company';
   const industry = businessProfile.industry || 'General';
   const brandVoice = businessProfile.brandVoice || 'Professional';
-  
+
   const prompt = `You are a social media content creator for ${companyName} (${industry}).
 Create a COMPLETE, ready-to-post piece of content based on this suggestion:
 
@@ -2828,14 +3349,14 @@ Return ONLY valid JSON:
 }`;
 
   try {
-    const response = await callGemini(prompt, { 
-      skipCache: true, 
-      temperature: 0.8, 
+    const response = await callGemini(prompt, {
+      skipCache: true,
+      temperature: 0.8,
       maxTokens: 4096,
-      timeout: EXTENDED_TIMEOUT 
+      timeout: EXTENDED_TIMEOUT
     });
     const parsed = parseGeminiJSON(response);
-    
+
     // Generate AI image based on the image prompt using Nano Banana 2
     if (parsed && parsed.imagePrompt) {
       try {
@@ -2866,7 +3387,7 @@ Return ONLY valid JSON:
         );
       }
     }
-    
+
     if (Array.isArray(parsed.hashtags)) {
       parsed.hashtags = parsed.hashtags.slice(0, 4);
     }
@@ -2961,7 +3482,7 @@ Keep the overall composition and subject matter the same. Only apply the request
           if (inlineData?.data) {
             const resultMime = inlineData.mimeType || inlineData.mime_type || 'image/png';
             const base64Url = `data:${resultMime};base64,${inlineData.data}`;
-            
+
             // Upload to Cloudinary for permanent URL
             const uploadResult = await uploadBase64Image(base64Url, 'nebula-refined');
             const finalUrl = uploadResult.success ? uploadResult.url : base64Url;
@@ -3008,13 +3529,13 @@ async function generateEventPost(event, businessProfile, logoUrl = null, aspectR
   const brandVoice = businessProfile.brandVoice || 'Professional';
   const description = businessProfile.description || '';
   const targetAudience = businessProfile.targetAudience || '';
-  
+
   const eventName = event.name || 'Special Day';
   const eventType = event.type || 'holiday';
   const eventDescription = event.description || '';
   const eventDate = event.date || new Date().toISOString().split('T')[0];
   const marketingTip = event.marketingTip || '';
-  
+
   const prompt = `You are a creative social media marketer for ${companyName} (${industry}).
 Create a VIRAL, ready-to-post piece of content that celebrates this special occasion while subtly promoting the business.
 
@@ -3073,14 +3594,14 @@ Return ONLY valid JSON:
 }`;
 
   try {
-    const response = await callGemini(prompt, { 
-      skipCache: true, 
-      temperature: 0.85, 
+    const response = await callGemini(prompt, {
+      skipCache: true,
+      temperature: 0.85,
       maxTokens: 4096,
-      timeout: EXTENDED_TIMEOUT 
+      timeout: EXTENDED_TIMEOUT
     });
     const parsed = parseGeminiJSON(response);
-    
+
     // Generate AI image based on the image prompt using Nano Banana 2
     if (parsed && parsed.imagePrompt) {
       try {
@@ -3111,7 +3632,7 @@ Return ONLY valid JSON:
         );
       }
     }
-    
+
     if (Array.isArray(parsed.hashtags)) {
       parsed.hashtags = parsed.hashtags.slice(0, 4);
     }
@@ -3142,7 +3663,7 @@ Return ONLY valid JSON:
  */
 async function generateTemplatePoster(templateImageBase64, content, options = {}) {
   const startTime = Date.now();
-  
+
   // Extract just the base64 data if it includes the data URL prefix
   let imageData = templateImageBase64;
   let mimeType = 'image/png';
@@ -3153,7 +3674,7 @@ async function generateTemplatePoster(templateImageBase64, content, options = {}
       imageData = matches[2];
     }
   }
-  
+
   const aspectRatio = options.aspectRatio || null;
   const style = String(options.style || '').trim();
   const tone = String(options.tone || '').trim();
@@ -3186,7 +3707,7 @@ ${aspectRatio && aspectRatio !== 'original' ? `10. Generate the output image in 
     console.log('🎨 Generating template poster with Nano Banana Pro...');
 
     const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/nano-banana-pro-preview:generateContent';
-    
+
     const requestBody = {
       contents: [{
         parts: [
@@ -3204,7 +3725,7 @@ ${aspectRatio && aspectRatio !== 'original' ? `10. Generate the output image in 
         responseModalities: ["TEXT", "IMAGE"]
       }
     };
-    
+
     const response = await fetchWithTimeout(`${apiUrl}?key=${GEMINI_API_KEY}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -3242,20 +3763,20 @@ ${aspectRatio && aspectRatio !== 'original' ? `10. Generate the output image in 
         }
       }
     }
-    
+
     throw new Error('Nano Banana Pro returned no image');
-      
+
   } catch (error) {
     const isTimeout = error.message && (error.message.includes('timed out') || error.message.includes('timeout'));
     const isHighDemand = error.message && (error.message.includes('high demand') || error.message.includes('overloaded') || error.message.includes('503') || error.message.includes('429'));
     console.error('Nano Banana Pro poster generation failed:', error.message, (isTimeout || isHighDemand) ? '(trying fallback)' : '');
-    
+
     // Fallback to gemini-2.5-flash-image on timeout or high demand
     if (isTimeout || isHighDemand) {
       try {
         console.log('🔄 Falling back to gemini-2.5-flash-image for template poster...');
         const fallbackUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent';
-        
+
         const fallbackBody = {
           contents: [{
             parts: [
@@ -3268,18 +3789,18 @@ ${aspectRatio && aspectRatio !== 'original' ? `10. Generate the output image in 
             responseModalities: ["TEXT", "IMAGE"]
           }
         };
-        
+
         const fallbackResponse = await fetchWithTimeout(`${fallbackUrl}?key=${GEMINI_API_KEY}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(fallbackBody)
         }, 180000);
-        
+
         const fallbackData = await fallbackResponse.json();
         if (!fallbackResponse.ok) {
           throw new Error(fallbackData.error?.message || 'Fallback model failed');
         }
-        
+
         const fbCandidates = fallbackData.candidates || [];
         for (const candidate of fbCandidates) {
           const parts = candidate.content?.parts || [];
@@ -3313,7 +3834,7 @@ ${aspectRatio && aspectRatio !== 'original' ? `10. Generate the output image in 
         };
       }
     }
-    
+
     return {
       success: false,
       error: error.message || 'Failed to generate poster. Please try again.'
@@ -3331,7 +3852,7 @@ ${aspectRatio && aspectRatio !== 'original' ? `10. Generate the output image in 
  */
 async function editTemplatePoster(currentImageBase64, originalContent, editInstructions, templateImageBase64 = null) {
   const startTime = Date.now();
-  
+
   // Extract base64 data from current image (supports URL, data URI, or raw base64)
   let imageData = currentImageBase64;
   let mimeType = 'image/png';
@@ -3355,10 +3876,10 @@ async function editTemplatePoster(currentImageBase64, originalContent, editInstr
       imageData = matches[2];
     }
   }
-  
+
   // NOTE: We no longer send template image to reduce payload size and avoid timeouts
   // The current image already contains all the design elements needed
-  
+
   // Simple, direct prompt for editing
   const prompt = `Act as a professional graphic designer. I'm showing you a poster that needs a specific modification.
 
@@ -3384,13 +3905,13 @@ Instructions:
   // Retry logic for when model is overloaded
   const maxRetries = 3;
   let lastError = null;
-  
+
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       console.log(`🎨 Editing poster with Nano Banana 2 (attempt ${attempt}/${maxRetries})...`);
 
       const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image-preview:generateContent';
-      
+
       const response = await fetchWithTimeout(`${apiUrl}?key=${GEMINI_API_KEY}`, {
         method: 'POST',
         headers: {
@@ -3412,13 +3933,13 @@ Instructions:
       if (!response.ok) {
         const errorMsg = data.error?.message || 'Image edit failed';
         console.error(`Gemini edit error (attempt ${attempt}):`, errorMsg);
-        
+
         // If model is overloaded/high demand, retry after a delay
         if (errorMsg.includes('overloaded') || errorMsg.includes('503') || errorMsg.includes('RESOURCE_EXHAUSTED') || errorMsg.includes('high demand') || errorMsg.includes('429')) {
           lastError = new Error(errorMsg);
           if (attempt < maxRetries) {
             const delay = attempt * 3000; // 3s, 6s, 9s
-            console.log(`⏳ Model busy, waiting ${delay/1000}s before retry...`);
+            console.log(`⏳ Model busy, waiting ${delay / 1000}s before retry...`);
             await new Promise(resolve => setTimeout(resolve, delay));
             continue;
           }
@@ -3444,45 +3965,45 @@ Instructions:
           }
         }
       }
-      
+
       // If we got here, no image was returned
       lastError = new Error('No image returned from model');
       if (attempt < maxRetries) {
         console.log(`⚠️ No image in response, retrying...`);
         continue;
       }
-    
+
     } catch (error) {
       console.error(`Nano Banana Pro poster edit failed (attempt ${attempt}):`, error.message);
       lastError = error;
-      
+
       // Retry on timeout or network errors
       if (error.message.includes('timeout') || error.message.includes('ETIMEDOUT') || error.message.includes('overloaded')) {
         if (attempt < maxRetries) {
           const delay = attempt * 3000;
-          console.log(`⏳ Request failed, waiting ${delay/1000}s before retry...`);
+          console.log(`⏳ Request failed, waiting ${delay / 1000}s before retry...`);
           await new Promise(resolve => setTimeout(resolve, delay));
           continue;
         }
       }
     }
   }
-  
+
   // All retries exhausted - try fallback with gemini-2.5-flash-image
   const shouldFallback = lastError?.message && (
-    lastError.message.includes('high demand') || 
-    lastError.message.includes('overloaded') || 
-    lastError.message.includes('timeout') || 
+    lastError.message.includes('high demand') ||
+    lastError.message.includes('overloaded') ||
+    lastError.message.includes('timeout') ||
     lastError.message.includes('timed out') ||
-    lastError.message.includes('503') || 
+    lastError.message.includes('503') ||
     lastError.message.includes('429')
   );
-  
+
   if (shouldFallback) {
     try {
       console.log('🔄 Falling back to gemini-2.5-flash-image for poster edit...');
       const fallbackUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent';
-      
+
       const fallbackResponse = await fetchWithTimeout(`${fallbackUrl}?key=${GEMINI_API_KEY}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -3494,12 +4015,12 @@ Instructions:
           }
         })
       }, 180000);
-      
+
       const fallbackData = await fallbackResponse.json();
       if (!fallbackResponse.ok) {
         throw new Error(fallbackData.error?.message || 'Fallback model failed');
       }
-      
+
       const fbCandidates = fallbackData.candidates || [];
       for (const candidate of fbCandidates) {
         const candidateParts = candidate.content?.parts || [];
@@ -3533,7 +4054,7 @@ Instructions:
       };
     }
   }
-  
+
   return {
     success: false,
     error: lastError?.message || 'Failed to edit poster. The AI model is busy - please try again in a moment.'
@@ -3571,7 +4092,7 @@ function getSeasonalContext(month) {
  */
 async function generatePosterFromReference(referenceImageBase64, content, options = {}) {
   const startTime = Date.now();
-  
+
   // Extract just the base64 data if it includes the data URL prefix
   let imageData = referenceImageBase64;
   let mimeType = 'image/png';
@@ -3582,7 +4103,7 @@ async function generatePosterFromReference(referenceImageBase64, content, option
       imageData = matches[2];
     }
   }
-  
+
   const aspectRatio = options.aspectRatio || null;
   const style = String(options.style || '').trim();
   const tone = String(options.tone || '').trim();
@@ -3628,7 +4149,7 @@ Create a poster that someone would think "this looks like it was designed by the
     console.log('🎨 Generating poster from reference with Nano Banana Pro...');
 
     const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/nano-banana-pro-preview:generateContent';
-    
+
     const requestBody = {
       contents: [{
         parts: [
@@ -3646,7 +4167,7 @@ Create a poster that someone would think "this looks like it was designed by the
         responseModalities: ["TEXT", "IMAGE"]
       }
     };
-    
+
     const response = await fetchWithTimeout(`${apiUrl}?key=${GEMINI_API_KEY}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -3684,20 +4205,20 @@ Create a poster that someone would think "this looks like it was designed by the
         }
       }
     }
-    
+
     throw new Error('Nano Banana Pro returned no image');
-      
+
   } catch (error) {
     const isTimeout = error.message && (error.message.includes('timed out') || error.message.includes('timeout'));
     const isHighDemand = error.message && (error.message.includes('high demand') || error.message.includes('overloaded') || error.message.includes('503') || error.message.includes('429'));
     console.error('Poster from reference generation failed:', error.message, (isTimeout || isHighDemand) ? '(trying fallback)' : '');
-    
+
     // Fallback to gemini-2.5-flash-image on timeout or high demand
     if (isTimeout || isHighDemand) {
       try {
         console.log('🔄 Falling back to gemini-2.5-flash-image...');
         const fallbackUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent';
-        
+
         const fallbackBody = {
           contents: [{
             parts: [
@@ -3710,18 +4231,18 @@ Create a poster that someone would think "this looks like it was designed by the
             responseModalities: ["TEXT", "IMAGE"]
           }
         };
-        
+
         const fallbackResponse = await fetchWithTimeout(`${fallbackUrl}?key=${GEMINI_API_KEY}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(fallbackBody)
         }, 180000);
-        
+
         const fallbackData = await fallbackResponse.json();
         if (!fallbackResponse.ok) {
           throw new Error(fallbackData.error?.message || 'Fallback model failed');
         }
-        
+
         const fbCandidates = fallbackData.candidates || [];
         for (const candidate of fbCandidates) {
           const parts = candidate.content?.parts || [];
@@ -3755,7 +4276,7 @@ Create a poster that someone would think "this looks like it was designed by the
         };
       }
     }
-    
+
     return {
       success: false,
       error: error.message || 'Failed to generate poster from reference. Please try again.'
@@ -3771,11 +4292,11 @@ Create a poster that someone would think "this looks like it was designed by the
 async function detectLogoInImage(imageBase64) {
   try {
     console.log('🔍 Detecting logo in image using Gemini Vision...');
-    
+
     // Extract base64 data
     let imageData = imageBase64;
     let mimeType = 'image/png';
-    
+
     if (imageBase64.startsWith('data:')) {
       const match = imageBase64.match(/^data:([^;]+);base64,(.+)$/);
       if (match) {
@@ -3783,7 +4304,7 @@ async function detectLogoInImage(imageBase64) {
         imageData = match[2];
       }
     }
-    
+
     const prompt = `Analyze this image and detect if there is a logo or brand emblem present.
 
 If a logo is detected, provide the bounding box coordinates as percentages of the image dimensions.
@@ -3808,7 +4329,7 @@ If no logo is detected, return:
 }`;
 
     const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
-    
+
     const requestBody = {
       contents: [{
         parts: [
@@ -3826,7 +4347,7 @@ If no logo is detected, return:
         maxOutputTokens: 500
       }
     };
-    
+
     const response = await fetchWithTimeout(`${apiUrl}?key=${GEMINI_API_KEY}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -3841,16 +4362,16 @@ If no logo is detected, return:
 
     // Extract text response
     const textContent = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    
+
     // Parse JSON from response
     const jsonMatch = textContent.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       console.log('⚠️ No JSON found in logo detection response');
       return { success: true, detected: false };
     }
-    
+
     const result = JSON.parse(jsonMatch[0]);
-    
+
     if (result.detected && result.bbox) {
       console.log(`✅ Logo detected with ${(result.confidence * 100).toFixed(0)}% confidence at (${result.bbox.x}%, ${result.bbox.y}%)`);
       return {
@@ -3861,10 +4382,10 @@ If no logo is detected, return:
         description: result.description
       };
     }
-    
+
     console.log('ℹ️ No logo detected in image');
     return { success: true, detected: false };
-    
+
   } catch (error) {
     console.error('Logo detection failed:', error.message);
     return {
@@ -3881,7 +4402,7 @@ If no logo is detected, return:
  */
 async function generateICPAndStrategy(businessProfile) {
   const bp = businessProfile || {};
-  
+
   const prompt = `You are a world-class marketing strategist. Based on the following business profile, generate:
 1. A detailed Ideal Customer Profile (ICP)
 2. A Channel Strategy Mix with percentage allocation
@@ -3955,13 +4476,13 @@ IMPORTANT RULES:
 - Return ONLY valid JSON, no other text`;
 
   try {
-    const raw = await callGemini(prompt, { 
-      temperature: 0.7, 
+    const raw = await callGemini(prompt, {
+      temperature: 0.7,
       maxTokens: 4096,
       skipCache: true  // Always skip cache — ICP is persisted in MongoDB per user
     });
     const parsed = parseGeminiJSON(raw);
-    
+
     // Post-process: normalize channel strategy percentages to exactly 100%
     if (parsed.channelStrategy && parsed.channelStrategy.length > 0) {
       const total = parsed.channelStrategy.reduce((sum, ch) => sum + (ch.percentage || 0), 0);
@@ -3980,7 +4501,7 @@ IMPORTANT RULES:
         console.log(`📊 Normalized channel percentages from ${total}% to 100%`);
       }
     }
-    
+
     return parsed;
   } catch (error) {
     console.error('❌ ICP/Strategy generation failed:', error.message);
@@ -4232,6 +4753,245 @@ ${totalPosts > 1 ? `15. SERIES CONSISTENCY: This is part of a ${totalPosts}-post
     return { success: false, error: error.message };
   }
 }
+
+/**
+ * Parse structured text ad copy from Gemini response
+ */
+function parseStructuredAdText(text) {
+  if (!text || typeof text !== 'string') {
+    return { caption: '', cta: '', hashtags: [] };
+  }
+
+  const parsed = parseLocalizationStructuredText(text);
+  if (!parsed) {
+    return { caption: '', cta: '', hashtags: [] };
+  }
+
+  const sanitizeField = (value = '') =>
+    String(value || '')
+      .trim()
+      .replace(/^<\s*|\s*>$/g, '')
+      .trim();
+
+  const caption = sanitizeField(parsed.caption);
+  const cta = sanitizeField(parsed.cta);
+  const hashtags = Array.isArray(parsed.hashtags)
+    ? parsed.hashtags
+      .map((tag) => String(tag || '').trim().replace(/\s+/g, ''))
+      .filter(Boolean)
+      .map((tag) => (tag.startsWith('#') ? tag : `#${tag}`))
+      .filter((value, index, arr) => arr.findIndex((item) => item.toLowerCase() === value.toLowerCase()) === index)
+    : [];
+
+  return { caption, cta, hashtags };
+}
+
+/**
+ * Generate localized ad text using a structured text prompt.
+ * @param {object} brandProfile - The business profile.
+ * @param {string} region - The target region.
+ * @param {string} language - The target language.
+ * @returns {Promise<object>} - The generated ad content.
+ */
+async function generateLocalizedAdText(brandProfile, region, language) {
+  const safeBrandProfile = brandProfile && typeof brandProfile === 'object' ? brandProfile : {};
+  const safeRegion = String(region || '').trim() || 'Global';
+  const requestedLanguageRaw = String(language || '').trim();
+  const languageCode = normalizeLocalizationLanguage(requestedLanguageRaw) || inferLanguageFromRegion(safeRegion);
+  const resolvedLanguage = normalizeLocalizationLanguageOutput(requestedLanguageRaw || languageCode) || 'English';
+  const sourceCaption = String(
+    safeBrandProfile.caption ||
+    safeBrandProfile.baseCaption ||
+    safeBrandProfile.keyMessage ||
+    ''
+  ).trim();
+  const sourceCta = String(
+    safeBrandProfile.cta ||
+    safeBrandProfile.callToAction ||
+    ''
+  ).trim();
+  const sourceHashtags = Array.isArray(safeBrandProfile.hashtags)
+    ? safeBrandProfile.hashtags.join(' ')
+    : String(safeBrandProfile.hashtags || '').trim();
+  const sourcePlatform = String(safeBrandProfile.platform || 'Instagram').trim() || 'Instagram';
+
+  const englishStopwords = new Set([
+    'the', 'and', 'with', 'for', 'your', 'you', 'from', 'this', 'that',
+    'shop', 'now', 'discover', 'new', 'our', 'in', 'to', 'of', 'is', 'on'
+  ]);
+
+  const finalizeHashtags = (rawHashtags = [], caption = '') => {
+    const fromArray = Array.isArray(rawHashtags) ? rawHashtags : [];
+    const fromCaption = String(caption || '').match(/#[^\s#]+/g) || [];
+    const hashtags = [];
+    const seen = new Set();
+
+    const addTag = (value = '') => {
+      const raw = String(value || '').trim();
+      if (!raw) return;
+      const normalized = raw.startsWith('#')
+        ? raw.replace(/\s+/g, '')
+        : `#${raw.replace(/[^A-Za-z0-9]/g, '')}`;
+      if (!normalized || normalized === '#') return;
+      const key = normalized.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      hashtags.push(normalized);
+    };
+
+    for (const tag of [...fromArray, ...fromCaption]) {
+      addTag(tag);
+      if (hashtags.length >= 8) break;
+    }
+
+    const fallbackTags = [
+      safeBrandProfile.name,
+      safeBrandProfile.industry,
+      safeRegion,
+      'premium',
+      'campaign',
+      'brand',
+      'social',
+      'marketing'
+    ];
+
+    for (const tag of fallbackTags) {
+      if (hashtags.length >= 5) break;
+      addTag(tag);
+    }
+
+    return hashtags.slice(0, 8);
+  };
+
+  const containsEnglishLeak = (text = '') => {
+    if (languageCode === 'en') return false;
+    const tokens = String(text || '').toLowerCase().match(/[a-z']+/g) || [];
+    if (tokens.length < 6) return false;
+    const stopwordHits = tokens.reduce(
+      (count, token) => count + (englishStopwords.has(token) ? 1 : 0),
+      0
+    );
+    return stopwordHits >= Math.max(4, Math.floor(tokens.length * 0.35));
+  };
+
+  const parseAndValidateResponse = (responseText = '') => {
+    const parsedContent = parseStructuredAdText(responseText);
+    if (!parsedContent.caption) return null;
+
+    const caption = String(parsedContent.caption || '').trim();
+    const cta = String(parsedContent.cta || '').trim();
+    const validationText = `${caption}\n${cta}`.trim();
+
+    if (!isLocalizationLanguageLikelyValid(validationText, requestedLanguageRaw || resolvedLanguage)) {
+      return null;
+    }
+    if (containsEnglishLeak(validationText)) {
+      return null;
+    }
+
+    return {
+      caption,
+      cta,
+      hashtags: finalizeHashtags(parsedContent.hashtags, caption)
+    };
+  };
+
+  const buildStrictRetryPrompt = (basePrompt = '') => `${basePrompt}
+
+RETRY FIX:
+- Your previous output violated language or format rules.
+- Caption and CTA MUST be strictly in ${resolvedLanguage}. Do not use English words unless the language is English.
+- Use this exact structure only:
+Caption (in ${resolvedLanguage}):
+<Write caption strictly in ${resolvedLanguage}>
+
+CTA (in ${resolvedLanguage}):
+<Write CTA strictly in ${resolvedLanguage}>
+
+Hashtags:
+<5-8 relevant hashtags>
+- Do NOT return JSON.
+- Do NOT add explanations.
+- Do NOT change this format.`;
+
+  const buildLanguageFallbackCopy = () => {
+    const brandName = String(safeBrandProfile.name || 'Brand').trim() || 'Brand';
+    if (languageCode === 'ta') {
+      return {
+        caption: `${brandName} உடன் உங்கள் அடுத்த தேர்வை கண்டறியுங்கள்.`,
+        cta: 'இப்போது தொடங்குங்கள்'
+      };
+    }
+    if (languageCode === 'hi') {
+      return {
+        caption: `${brandName} के साथ अपनी अगली पसंद खोजें।`,
+        cta: 'अभी शुरू करें'
+      };
+    }
+    if (languageCode === 'en') {
+      return {
+        caption: `Explore the new collection from ${brandName}.`,
+        cta: 'Shop Now'
+      };
+    }
+    return {
+      caption: brandName,
+      cta: ''
+    };
+  };
+
+  try {
+    const promptTemplate = await fs.readFile(
+      path.join(__dirname, '../data/localized-ad-copy-prompt.txt'),
+      'utf-8'
+    );
+
+    const prompt = promptTemplate
+      .replace(/\${region}/g, safeRegion)
+      .replace(/\${target_language}/g, resolvedLanguage)
+      .replace(/\${language}/g, resolvedLanguage)
+      .replace(/\${caption}/g, sourceCaption)
+      .replace(/\${cta}/g, sourceCta)
+      .replace(/\${hashtags}/g, sourceHashtags)
+      .replace(/\${platform}/g, sourcePlatform)
+      .replace('${brand_name}', safeBrandProfile.name || safeBrandProfile.brandName || 'the brand')
+      .replace('${industry}', safeBrandProfile.industry || 'general')
+      .replace('${brand_description}', safeBrandProfile.description || 'a premium product/service')
+      .replace('${target_audience}', safeBrandProfile.targetAudience || 'a discerning audience')
+      .replace('${brand_tone}', safeBrandProfile.brandVoice || 'professional')
+      .replace('${writing_style}', safeBrandProfile.writingStyle || 'clear and concise')
+      .replace('${cta_style}', safeBrandProfile.ctaStyle || 'direct')
+      .replace('${visual_style}', safeBrandProfile.visualStyle || 'modern');
+
+    let validated = null;
+    let attemptPrompt = prompt;
+
+    for (let attempt = 0; attempt < 2 && !validated; attempt++) {
+      const responseText = await callGemini(attemptPrompt, { skipCache: true, temperature: 0.8 });
+      validated = parseAndValidateResponse(responseText);
+      if (!validated) {
+        attemptPrompt = buildStrictRetryPrompt(prompt);
+      }
+    }
+
+    if (!validated) {
+      throw new Error('Failed to generate valid localized ad text after retry.');
+    }
+
+    return { ...validated, region: safeRegion, language: resolvedLanguage };
+  } catch (error) {
+    console.error('Error in generateLocalizedAdText:', error.message);
+    const fallbackCopy = buildLanguageFallbackCopy();
+    return {
+      caption: fallbackCopy.caption,
+      cta: fallbackCopy.cta,
+      hashtags: finalizeHashtags([], fallbackCopy.caption),
+      region: safeRegion,
+      language: resolvedLanguage,
+      error: 'Failed to generate localized content.'
+    };
+  }
+}
 module.exports = {
   callGemini,
   parseGeminiJSON,
@@ -4250,6 +5010,8 @@ module.exports = {
   generateABTestVariations,
   analyzeABTestVariations,
   selectABTestWinner,
+  generateLocalizedAdText,
+  localizeCampaignContent,
   // New goal tracking functions
   analyzeGoalProgress,
   generateGoalRecommendations,
@@ -4270,4 +5032,3 @@ module.exports = {
   // Nano Banana 2 campaign image generation
   generateCampaignImageNanoBanana
 };
-

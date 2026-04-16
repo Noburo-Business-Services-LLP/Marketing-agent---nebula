@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
-const { generateImageFromCustomPrompt, refineImageWithPrompt } = require('../services/geminiAI');
+const { generateImageFromCustomPrompt, refineImageWithPrompt, localizeCampaignContent } = require('../services/geminiAI');
 const { uploadBase64Image } = require('../services/imageUploader');
 const { deductCredits } = require('../middleware/trialGuard');
 const { ensureCreditCycle } = require('../middleware/creditGuard');
@@ -104,6 +104,136 @@ router.post('/modify', protect, async (req, res) => {
   } catch (error) {
     console.error('Content modify error:', error.message);
     res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route   POST /api/content/localize-campaign
+ * @desc    Localize campaign caption for single or multiple regions/languages
+ * @access  Private
+ */
+router.post('/localize-campaign', protect, async (req, res) => {
+  try {
+    const brandName = String(req.body?.brandName || req.body?.brand_name || '').trim();
+    const tone = String(req.body?.tone || req.body?.brandTone || req.body?.brand_tone || '').trim();
+    const audience = String(req.body?.audience || req.body?.targetAudience || req.body?.target_audience || '').trim();
+    const brandDescription = String(req.body?.brandDescription || req.body?.brand_description || '').trim();
+    const industry = String(req.body?.industry || '').trim();
+    const keyMessage = String(req.body?.keyMessage || req.body?.key_message || '').trim();
+    const writingStyle = String(req.body?.writingStyle || req.body?.writing_style || '').trim();
+    const ctaStyle = String(req.body?.ctaStyle || req.body?.cta_style || '').trim();
+    const visualStyle = String(req.body?.visualStyle || req.body?.visual_style || '').trim();
+    const platform = String(req.body?.platform || '').trim();
+    const region = String(req.body?.region || '').trim();
+    const language = String(req.body?.language || '').trim();
+    const regionsInput = Array.isArray(req.body?.regions) ? req.body.regions : [];
+    const languagesInput = Array.isArray(req.body?.languages) ? req.body.languages : null;
+    let localizationsInput = [];
+    if (Array.isArray(req.body?.localizations)) {
+      localizationsInput = req.body.localizations;
+    } else if (typeof req.body?.localizations === 'string') {
+      try {
+        const parsed = JSON.parse(req.body.localizations);
+        localizationsInput = Array.isArray(parsed) ? parsed : [];
+      } catch (_err) {
+        localizationsInput = [];
+      }
+    }
+
+    const baseCaption = String(req.body?.baseCaption || req.body?.base_caption || keyMessage || '').trim();
+
+    if (!baseCaption) {
+      return res.status(400).json({ success: false, error: 'baseCaption/base_caption or keyMessage/key_message is required' });
+    }
+
+    const formatLocalizedResult = (localized, regionValue = '', languageValue = '') => ({
+      region: String(localized?.region || regionValue || '').trim(),
+      language: String(localized?.language || languageValue || '').trim(),
+      caption: String(localized?.caption || baseCaption).trim(),
+      cta: String(localized?.cta || '').trim(),
+      hashtags: Array.isArray(localized?.hashtags) ? localized.hashtags : []
+    });
+
+    const normalizedLocalizations = Array.isArray(localizationsInput)
+      ? localizationsInput
+          .map((item) => {
+            if (!item || typeof item !== 'object') return null;
+            const itemRegion = String(item.region || '').trim();
+            const itemLanguage = String(item.language || '').trim();
+            if (!itemRegion && !itemLanguage) return null;
+            return { region: itemRegion, language: itemLanguage };
+          })
+          .filter(Boolean)
+      : [];
+
+    // Batch mode: localize one output per localization
+    if (normalizedLocalizations.length > 0 || regionsInput.length > 0) {
+      const pairs = normalizedLocalizations.length > 0
+        ? normalizedLocalizations
+        : regionsInput
+            .map((item, index) => ({
+              region: String(item || '').trim(),
+              language: String((Array.isArray(languagesInput) ? languagesInput[index] : '') || '').trim()
+            }))
+            .filter((item) => item.region);
+
+      if (pairs.length === 0) {
+        return res.status(400).json({ success: false, error: 'At least one valid localization is required' });
+      }
+
+      let localizedBatch = [];
+      try {
+        const localized = await localizeCampaignContent({
+          brandName,
+          tone,
+          audience,
+          brandDescription,
+          industry,
+          writingStyle,
+          ctaStyle,
+          visualStyle,
+          keyMessage: keyMessage || baseCaption,
+          platform,
+          localizations: pairs,
+          baseCaption
+        });
+        localizedBatch = Array.isArray(localized) ? localized : [];
+      } catch (_batchError) {
+        localizedBatch = [];
+      }
+
+      const results = pairs.map(({ region: regionItem, language: languageItem }, index) =>
+        formatLocalizedResult(localizedBatch[index], regionItem, languageItem)
+      );
+
+      return res.json({ success: true, results });
+    }
+
+    // Single mode (backward compatible)
+    if (!region && !language) {
+      return res.status(400).json({ success: false, error: 'Either region/language or regions[] is required' });
+    }
+
+    const localized = await localizeCampaignContent({
+      brandName,
+      tone,
+      audience,
+      brandDescription,
+      industry,
+      writingStyle,
+      ctaStyle,
+      visualStyle,
+      keyMessage: keyMessage || baseCaption,
+      platform,
+      region,
+      language,
+      baseCaption
+    });
+
+    return res.json({ success: true, ...formatLocalizedResult(localized, region, language) });
+  } catch (error) {
+    console.error('Localize campaign error:', error.message);
+    return res.status(500).json({ success: false, error: error.message || 'Failed to localize campaign content' });
   }
 });
 

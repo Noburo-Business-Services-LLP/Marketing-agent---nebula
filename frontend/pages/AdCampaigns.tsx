@@ -37,8 +37,8 @@ const normalizeCampaignCaption = (campaign?: Campaign | null) =>
 const normalizeCampaignImage = (campaign?: Campaign | null) =>
   String(
     (Array.isArray(campaign?.creative?.imageUrls) && campaign?.creative?.imageUrls[0]) ||
-      campaign?.creative?.videoUrl ||
-      ''
+    campaign?.creative?.videoUrl ||
+    ''
   ).trim();
 
 const normalizeFacebookPostIdInput = (value?: string | null) => String(value || '').trim();
@@ -545,9 +545,8 @@ const AdCampaigns: React.FC = () => {
         onClick={(e) => e.target === e.currentTarget && closeCreateModal()}
       >
         <div
-          className={`w-full max-w-3xl rounded-2xl shadow-2xl max-h-[90vh] flex flex-col overflow-hidden ${
-            isDarkMode ? 'bg-[#161b22]' : 'bg-white'
-          }`}
+          className={`w-full max-w-3xl rounded-2xl shadow-2xl max-h-[90vh] flex flex-col overflow-hidden ${isDarkMode ? 'bg-[#161b22]' : 'bg-white'
+            }`}
           onClick={(e) => e.stopPropagation()}
         >
           <div className={`p-4 border-b flex items-center justify-between ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'}`}>
@@ -567,9 +566,8 @@ const AdCampaigns: React.FC = () => {
               <select
                 value={selectedCampaignId}
                 onChange={(e) => setSelectedCampaignId(e.target.value)}
-                className={`w-full px-3 py-2 rounded-lg border text-sm ${
-                  isDarkMode ? 'bg-[#0d1117] border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-800'
-                }`}
+                className={`w-full px-3 py-2 rounded-lg border text-sm ${isDarkMode ? 'bg-[#0d1117] border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-800'
+                  }`}
               >
                 <option value="">Select campaign</option>
                 {campaigns.map((campaign) => (
@@ -684,23 +682,21 @@ const AdCampaigns: React.FC = () => {
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex items-center gap-2 min-w-0">
                           <span
-                            className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-[11px] font-bold ${
-                              postOption.id === 'facebook'
-                                ? 'bg-[#1877F2]/20 text-[#1877F2]'
-                                : 'bg-pink-500/20 text-pink-400'
-                            }`}
+                            className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-[11px] font-bold ${postOption.id === 'facebook'
+                              ? 'bg-[#1877F2]/20 text-[#1877F2]'
+                              : 'bg-pink-500/20 text-pink-400'
+                              }`}
                           >
                             {postOption.shortLabel}
                           </span>
                           <p className={`text-sm font-semibold ${theme.text}`}>{postOption.label}</p>
                         </div>
-                        <span className={`text-[11px] px-2 py-0.5 rounded-full border ${
-                          postOption.isAvailable
-                            ? 'border-emerald-500/40 text-emerald-400'
-                            : isDarkMode
-                              ? 'border-slate-700 text-slate-400'
-                              : 'border-slate-300 text-slate-500'
-                        }`}>
+                        <span className={`text-[11px] px-2 py-0.5 rounded-full border ${postOption.isAvailable
+                          ? 'border-emerald-500/40 text-emerald-400'
+                          : isDarkMode
+                            ? 'border-slate-700 text-slate-400'
+                            : 'border-slate-300 text-slate-500'
+                          }`}>
                           {postOption.isAvailable ? 'Ready' : 'Not Available'}
                         </span>
                       </div>
@@ -726,9 +722,8 @@ const AdCampaigns: React.FC = () => {
                     step="0.01"
                     value={budget}
                     onChange={(e) => setBudget(e.target.value)}
-                    className={`mt-2 w-full px-3 py-2 rounded-lg border text-sm ${
-                      isDarkMode ? 'bg-[#0d1117] border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-800'
-                    }`}
+                    className={`mt-2 w-full px-3 py-2 rounded-lg border text-sm ${isDarkMode ? 'bg-[#0d1117] border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-800'
+                      }`}
                     placeholder="500"
                   />
                 </div>
@@ -737,9 +732,8 @@ const AdCampaigns: React.FC = () => {
                   <select
                     value={currency}
                     onChange={(e) => setCurrency(e.target.value.toUpperCase())}
-                    className={`mt-2 w-full px-3 py-2 rounded-lg border text-sm ${
-                      isDarkMode ? 'bg-[#0d1117] border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-800'
-                    }`}
+                    className={`mt-2 w-full px-3 py-2 rounded-lg border text-sm ${isDarkMode ? 'bg-[#0d1117] border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-800'
+                      }`}
                   >
                     {['INR', 'USD'].map((code) => (
                       <option key={code} value={code}>
@@ -757,9 +751,8 @@ const AdCampaigns: React.FC = () => {
                     type="date"
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
-                    className={`mt-2 w-full px-3 py-2 rounded-lg border text-sm ${
-                      isDarkMode ? 'bg-[#0d1117] border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-800'
-                    }`}
+                    className={`mt-2 w-full px-3 py-2 rounded-lg border text-sm ${isDarkMode ? 'bg-[#0d1117] border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-800'
+                      }`}
                   />
                 </div>
                 <div>
@@ -768,9 +761,8 @@ const AdCampaigns: React.FC = () => {
                     type="date"
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}
-                    className={`mt-2 w-full px-3 py-2 rounded-lg border text-sm ${
-                      isDarkMode ? 'bg-[#0d1117] border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-800'
-                    }`}
+                    className={`mt-2 w-full px-3 py-2 rounded-lg border text-sm ${isDarkMode ? 'bg-[#0d1117] border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-800'
+                      }`}
                   />
                 </div>
               </div>
@@ -786,8 +778,7 @@ const AdCampaigns: React.FC = () => {
                   <>
                     <p className={`mt-2 text-xs ${theme.text}`}>
                       {ctaPreviewText ||
-                        `Learn More -> opens your ${
-                          ctaPreviewSourcePlatform === 'instagram' ? 'Instagram profile' : 'Facebook page'
+                        `Learn More -> opens your ${ctaPreviewSourcePlatform === 'instagram' ? 'Instagram profile' : 'Facebook page'
                         }`}
                     </p>
                     <p className={`mt-1 text-xs break-all ${theme.textSecondary}`}>{ctaPreviewLink}</p>
@@ -812,9 +803,8 @@ const AdCampaigns: React.FC = () => {
             <button
               type="button"
               onClick={closeCreateModal}
-              className={`px-4 py-2 rounded-lg text-sm font-medium border ${
-                isDarkMode ? 'border-slate-700 text-slate-300 hover:border-slate-500' : 'border-slate-300 text-slate-700 hover:border-slate-400'
-              }`}
+              className={`px-4 py-2 rounded-lg text-sm font-medium border ${isDarkMode ? 'border-slate-700 text-slate-300 hover:border-slate-500' : 'border-slate-300 text-slate-700 hover:border-slate-400'
+                }`}
             >
               Cancel
             </button>
@@ -841,9 +831,8 @@ const AdCampaigns: React.FC = () => {
         onClick={(e) => e.target === e.currentTarget && closeDeleteModal()}
       >
         <div
-          className={`w-full max-w-md rounded-2xl shadow-2xl overflow-hidden ${
-            isDarkMode ? 'bg-[#161b22]' : 'bg-white'
-          }`}
+          className={`w-full max-w-md rounded-2xl shadow-2xl overflow-hidden ${isDarkMode ? 'bg-[#161b22]' : 'bg-white'
+            }`}
           onClick={(e) => e.stopPropagation()}
         >
           <div className={`p-4 border-b ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'}`}>
@@ -858,11 +847,10 @@ const AdCampaigns: React.FC = () => {
             <button
               type="button"
               onClick={closeDeleteModal}
-              className={`px-4 py-2 rounded-lg text-sm font-medium border ${
-                isDarkMode
-                  ? 'border-slate-700 text-slate-300 hover:border-slate-500'
-                  : 'border-slate-300 text-slate-700 hover:border-slate-400'
-              }`}
+              className={`px-4 py-2 rounded-lg text-sm font-medium border ${isDarkMode
+                ? 'border-slate-700 text-slate-300 hover:border-slate-500'
+                : 'border-slate-300 text-slate-700 hover:border-slate-400'
+                }`}
               disabled={!!deletingId}
             >
               Cancel
@@ -1011,9 +999,8 @@ const AdCampaigns: React.FC = () => {
               )}
               <button
                 onClick={() => navigate('/campaigns', { state: { campaignId: summaryCampaignId } })}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border inline-flex items-center gap-1 ${
-                  isDarkMode ? 'border-slate-700 text-slate-300 hover:border-slate-500' : 'border-slate-300 text-slate-700 hover:border-slate-400'
-                }`}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border inline-flex items-center gap-1 ${isDarkMode ? 'border-slate-700 text-slate-300 hover:border-slate-500' : 'border-slate-300 text-slate-700 hover:border-slate-400'
+                  }`}
               >
                 <Pencil className="w-3.5 h-3.5" />
                 Edit Campaign
@@ -1021,9 +1008,8 @@ const AdCampaigns: React.FC = () => {
               <button
                 onClick={() => setDeleteModalItem(createdSummary)}
                 disabled={deletingId === createdSummary._id}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border inline-flex items-center gap-1 ${
-                  isDarkMode ? 'border-red-500/40 text-red-300 hover:bg-red-500/10' : 'border-red-300 text-red-700 hover:bg-red-50'
-                } disabled:opacity-60`}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border inline-flex items-center gap-1 ${isDarkMode ? 'border-red-500/40 text-red-300 hover:bg-red-500/10' : 'border-red-300 text-red-700 hover:bg-red-50'
+                  } disabled:opacity-60`}
               >
                 {deletingId === createdSummary._id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
                 Delete
@@ -1068,11 +1054,10 @@ const AdCampaigns: React.FC = () => {
             return (
               <article
                 key={item._id}
-                className={`group rounded-2xl border overflow-hidden transition-transform duration-200 hover:scale-[1.02] ${
-                  isDarkMode
-                    ? 'border-slate-700 bg-[#0d1117] shadow-sm shadow-black/20 hover:shadow-lg hover:shadow-black/35'
-                    : 'border-slate-200 bg-white shadow-sm shadow-slate-200/80 hover:shadow-lg hover:shadow-slate-300/60'
-                }`}
+                className={`group rounded-2xl border overflow-hidden transition-transform duration-200 hover:scale-[1.02] ${isDarkMode
+                  ? 'border-slate-700 bg-[#0d1117] shadow-sm shadow-black/20 hover:shadow-lg hover:shadow-black/35'
+                  : 'border-slate-200 bg-white shadow-sm shadow-slate-200/80 hover:shadow-lg hover:shadow-slate-300/60'
+                  }`}
               >
                 <div className="relative h-48">
                   {item.adCreativeUrl ? (
@@ -1108,9 +1093,8 @@ const AdCampaigns: React.FC = () => {
                         <p className="truncate">"{primaryFailure.message || 'Unable to launch ad'}"</p>
                       </div>
                       <span
-                        className={`ml-auto text-[10px] px-1.5 py-0.5 rounded border ${
-                          isDarkMode ? 'border-red-400/40 text-red-200' : 'border-red-300 text-red-700'
-                        }`}
+                        className={`ml-auto text-[10px] px-1.5 py-0.5 rounded border ${isDarkMode ? 'border-red-400/40 text-red-200' : 'border-red-300 text-red-700'
+                          }`}
                         title="Fix: ensure campaign is published and ad account setup is complete."
                       >
                         Fix
@@ -1132,9 +1116,8 @@ const AdCampaigns: React.FC = () => {
 
                     <button
                       onClick={() => navigate('/campaigns', { state: { campaignId: linkedCampaignId } })}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold border inline-flex items-center gap-1 ${
-                        isDarkMode ? 'border-slate-700 text-slate-300 hover:border-slate-500' : 'border-slate-300 text-slate-700 hover:border-slate-400'
-                      }`}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold border inline-flex items-center gap-1 ${isDarkMode ? 'border-slate-700 text-slate-300 hover:border-slate-500' : 'border-slate-300 text-slate-700 hover:border-slate-400'
+                        }`}
                     >
                       <Pencil className="w-3.5 h-3.5" />
                       Edit
@@ -1143,11 +1126,10 @@ const AdCampaigns: React.FC = () => {
                     <button
                       onClick={() => setDeleteModalItem(item)}
                       disabled={deletingId === item._id}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold border inline-flex items-center gap-1 ${
-                        isDarkMode
-                          ? 'border-red-500/40 text-red-300 hover:bg-red-500/10'
-                          : 'border-red-300 text-red-700 hover:bg-red-50'
-                      } disabled:opacity-60`}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold border inline-flex items-center gap-1 ${isDarkMode
+                        ? 'border-red-500/40 text-red-300 hover:bg-red-500/10'
+                        : 'border-red-300 text-red-700 hover:bg-red-50'
+                        } disabled:opacity-60`}
                     >
                       {deletingId === item._id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
                       Delete

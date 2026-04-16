@@ -1165,8 +1165,29 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
       keyMessages, duration, startDate: startDateParam,
       preferredDays: daysInput, targetAge, targetGender,
       targetLocation, targetInterests, productLogo,
-      linkedProduct
+      linkedProduct,
+      language: languageInput
     } = req.body;
+
+    const normalizeCampaignLanguage = (value = '') => {
+      const normalized = String(value || '').trim().toLowerCase();
+      const languageMap = {
+        english: 'English',
+        en: 'English',
+        hindi: 'Hindi',
+        hi: 'Hindi',
+        tamil: 'Tamil',
+        ta: 'Tamil',
+        telugu: 'Telugu',
+        te: 'Telugu',
+        malayalam: 'Malayalam',
+        ml: 'Malayalam',
+        kannada: 'Kannada',
+        kn: 'Kannada'
+      };
+      return languageMap[normalized] || 'English';
+    };
+    const selectedLanguage = normalizeCampaignLanguage(languageInput);
 
     generationLockSignature = buildGenerationSignature({
       route: 'generate-campaign-stream',
@@ -1184,6 +1205,7 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
       targetGender,
       targetLocation,
       targetInterests,
+      selectedLanguage,
       linkedProduct: linkedProduct
         ? {
             id: linkedProduct.id || null,
@@ -1288,6 +1310,7 @@ CONTEXT:
 - Target audience: ${targetAge || '18-35'} age, ${targetGender || 'all'} gender${targetLocation ? ', located in ' + targetLocation : ''}${targetInterests ? ', interested in ' + targetInterests : ''}
 - Platforms: ${platforms.join(', ')}
 - Tone: ${enforcedTone || 'professional'}
+- Language: ${selectedLanguage}
 ${linkedProduct ? `- Featured Product: ${linkedProduct.name} - ${linkedProduct.currency || '$'}${linkedProduct.price}\n- Product Description: ${linkedProduct.description || 'N/A'}` : ''}
 ${visualHints ? `- Brand Visual Tokens: ${visualHints}` : ''}
 ${strictBrandText ? `- ${strictBrandText}` : ''}
@@ -1314,6 +1337,8 @@ INSTRUCTIONS:
 14. ${strictBrandMode && primaryLockedColor && secondaryLockedColor
       ? `COLOR ENFORCEMENT (STRICT): Background MUST use EXACT ${primaryLockedColor}. Gradient is allowed only within shades of ${primaryLockedColor}. Text MUST use EXACT ${secondaryLockedColor}. Ensure strong contrast and readability. Do NOT introduce unrelated colors. Do NOT use gray or desaturated tones.`
       : 'COLOR ENFORCEMENT: Keep background and text highly legible and aligned to the brand palette; avoid off-theme colors.'}
+15. LANGUAGE ENFORCEMENT: Write caption and CTA strictly in ${selectedLanguage}. Do not mix languages.
+16. ${selectedLanguage === 'English' ? 'English is allowed.' : 'Do NOT use English words unless they are brand names, product names, or hashtags.'}
 
 Return ONLY valid JSON (no markdown, no backticks):
 {
@@ -3494,7 +3519,27 @@ const { generatePosterFromTemplate, editPosterFromTemplate } = require('../servi
  */
 router.post('/generate-caption', protect, checkTrial, requireCredits('campaign_text'), async (req, res) => {
   try {
-    const { image, platform } = req.body;
+    const { image, platform, language: languageInput } = req.body;
+
+    const normalizeCaptionLanguage = (value = '') => {
+      const normalized = String(value || '').trim().toLowerCase();
+      const languageMap = {
+        english: 'English',
+        en: 'English',
+        hindi: 'Hindi',
+        hi: 'Hindi',
+        tamil: 'Tamil',
+        ta: 'Tamil',
+        telugu: 'Telugu',
+        te: 'Telugu',
+        malayalam: 'Malayalam',
+        ml: 'Malayalam',
+        kannada: 'Kannada',
+        kn: 'Kannada'
+      };
+      return languageMap[normalized] || 'English';
+    };
+    const selectedLanguage = normalizeCaptionLanguage(languageInput);
     
     if (!image) {
       return res.status(400).json({ 
@@ -3559,6 +3604,8 @@ Requirements:
 6. Match the tone appropriate for ${platform || 'Instagram'}
 7. ${strictBrandMode ? `STRICT BRAND LOCK: The caption MUST follow "${enforcedTone}" tone exactly and must not drift.` : 'Keep tone aligned to the brand context above.'}
 8. ${strictBrandMode ? 'If there is conflict between platform defaults and brand profile, prioritize brand profile.' : 'Balance platform-native style with brand voice.'}
+9. Caption and CTA must be strictly in ${selectedLanguage}. Do not mix languages.
+10. ${selectedLanguage === 'English' ? 'English is allowed.' : 'Do NOT use English words unless they are brand names or hashtags.'}
 
 Return ONLY the caption text with hashtags. No JSON, no explanations.`;
 
