@@ -102,7 +102,12 @@ async function apiCall<T>(
     }
 
     if (!response.ok) {
-      throw new Error(data.error || data.message || 'Something went wrong');
+      const apiError: any = new Error(data.error || data.message || 'Something went wrong');
+      apiError.status = response.status;
+      apiError.reason = data?.reason || '';
+      apiError.errorCode = data?.errorCode || '';
+      apiError.data = data;
+      throw apiError;
     }
 
     // Dispatch credit update if response contains credit balance info
@@ -1134,6 +1139,22 @@ export const apiService = {
       true
     );
     return { campaign: response.campaign };
+  },
+
+  updateCampaignPostIds: async (
+    id: string,
+    data: { facebookPostId?: string; instagramPostId?: string }
+  ): Promise<{ success: boolean; message?: string; campaign: Campaign }> => {
+    const response = await apiCall<{ success: boolean; message?: string; campaign: Campaign }>(
+      `/campaigns/${id}/post-ids`,
+      { method: 'PATCH', body: JSON.stringify(data) },
+      true
+    );
+    return {
+      success: Boolean(response?.success),
+      message: response?.message,
+      campaign: response.campaign
+    };
   },
 
   // Upload audio for Instagram campaign posts (stored on Cloudinary)
@@ -2858,6 +2879,68 @@ export const brandAssetsAPI = {
       true
     );
   },
+};
+
+export const adCampaignsAPI = {
+  getAll: async (): Promise<any> => {
+    return await apiCall<any>('/ad-campaigns', { method: 'GET' }, true);
+  },
+
+  getSummary: async (): Promise<any> => {
+    return await apiCall<any>('/ad-campaigns/summary', { method: 'GET' }, true);
+  },
+
+  getCtaPreview: async (): Promise<any> => {
+    return await apiCall<any>('/ad-campaigns/cta-preview', { method: 'GET' }, true);
+  },
+
+  getMetaReadiness: async (campaignId?: string): Promise<any> => {
+    const query = campaignId ? `?campaignId=${encodeURIComponent(campaignId)}` : '';
+    return await apiCall<any>(`/ad-campaigns/meta-readiness${query}`, { method: 'GET' }, true);
+  },
+
+  create: async (data: {
+    campaignId: string;
+    platformSelection: 'meta' | 'google' | 'both';
+    selectedPosts?: {
+      facebook?: boolean;
+      instagram?: boolean;
+    };
+    budget: number;
+    currency: string;
+    startDate: string;
+    endDate: string;
+  }): Promise<any> => {
+    return await apiCall<any>(
+      '/ad-campaigns',
+      { method: 'POST', body: JSON.stringify(data) },
+      true
+    );
+  },
+
+  updateStatus: async (id: string, status: 'active' | 'paused'): Promise<any> => {
+    return await apiCall<any>(
+      `/ad-campaigns/${id}/status`,
+      { method: 'PUT', body: JSON.stringify({ status }) },
+      true
+    );
+  },
+
+  retry: async (id: string): Promise<any> => {
+    return await apiCall<any>(
+      `/ad-campaigns/${id}/retry`,
+      { method: 'POST' },
+      true
+    );
+  },
+
+  remove: async (id: string): Promise<any> => {
+    return await apiCall<any>(
+      `/ad-campaigns/${id}`,
+      { method: 'DELETE' },
+      true
+    );
+  }
 };
 
 // ================================

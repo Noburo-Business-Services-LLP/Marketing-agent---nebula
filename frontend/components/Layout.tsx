@@ -122,14 +122,57 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
 
 
   const navItems = [
-    { path: '/', label: 'Dashboard', icon: LayoutDashboard },
+    { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/campaigns', label: 'Campaigns', icon: Megaphone },
+    { path: '/ad-campaigns', label: 'Ad Campaigns', icon: Layers },
     { path: '/competitors', label: 'Competitors', icon: Users },
     { path: '/connect-socials', label: 'Connect Socials', icon: Link2 },
     { path: '/brand-assets', label: 'Brand Assets', icon: Palette },
     { path: '/inventory', label: 'Inventory', icon: Package },
     { path: '/analytics', label: 'Analytics & Ads', icon: BarChart3 },
   ];
+
+  const resolveTopBarMeta = (pathname: string) => {
+    if (pathname.startsWith('/campaigns')) {
+      return {
+        title: 'Campaigns',
+        subtitle: 'Create and manage campaign posts with on-brand content.',
+        actions: [{ label: 'Create Ad Campaign', path: '/ad-campaigns' }]
+      };
+    }
+    if (pathname.startsWith('/ad-campaigns')) {
+      return {
+        title: 'Ad Campaigns',
+        subtitle: 'Launch paid ads from existing campaigns with platform-wise status.',
+        actions: [{ label: 'Go to Campaigns', path: '/campaigns' }]
+      };
+    }
+    if (pathname.startsWith('/competitors')) {
+      return { title: 'Competitors', subtitle: 'Track competitor campaigns and strategic insights.', actions: [] };
+    }
+    if (pathname.startsWith('/connect-socials')) {
+      return { title: 'Connect Socials', subtitle: 'Manage your social media account connections.', actions: [] };
+    }
+    if (pathname.startsWith('/brand-assets')) {
+      return { title: 'Brand Assets', subtitle: 'Manage logo, colors, fonts, and brand tone.', actions: [] };
+    }
+    if (pathname.startsWith('/inventory')) {
+      return { title: 'Inventory', subtitle: 'Manage products and creative-ready catalog assets.', actions: [] };
+    }
+    if (pathname.startsWith('/analytics')) {
+      return { title: 'Analytics & Ads', subtitle: 'Review ad performance and control active ads.', actions: [] };
+    }
+    return {
+      title: 'Dashboard',
+      subtitle: 'Track campaigns, ad activity, and performance from one place.',
+      actions: [
+        { label: 'Create Campaign', path: '/campaigns' },
+        { label: 'Create Ad Campaign', path: '/ad-campaigns' }
+      ]
+    };
+  };
+
+  const topBarMeta = resolveTopBarMeta(location.pathname);
 
   const handleLogout = () => {
     onLogout();
@@ -248,7 +291,9 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
           >
             <Menu className="w-6 h-6" />
           </button>
-          <span className={`font-bold ${isDarkMode ? 'text-[#ffcc29]' : 'text-[#070A12]'}`}>GRAVITY</span>
+          <span className={`font-semibold text-sm ${isDarkMode ? 'text-[#ffcc29]' : 'text-[#070A12]'}`}>
+            {topBarMeta.title}
+          </span>
           <div className="flex items-center gap-2">
             {/* Mobile credit indicator */}
             {trialInfo && (
@@ -267,6 +312,28 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
 
         {/* Desktop Header with Credits Widget */}
         <header className={`hidden md:flex ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-gray-200'} border-b px-8 py-3 items-center justify-between gap-4`}>
+          <div className="min-w-0">
+            <h1 className={`text-base font-semibold truncate ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+              {topBarMeta.title}
+            </h1>
+            <p className={`text-xs truncate ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+              {topBarMeta.subtitle}
+            </p>
+          </div>
+          <div className="flex items-center gap-3 ml-auto">
+            {topBarMeta.actions?.map((action) => (
+              <Link
+                key={`${action.path}-${action.label}`}
+                to={action.path}
+                className={`px-3 py-2 rounded-lg text-xs font-semibold border transition-colors ${
+                  isDarkMode
+                    ? 'border-slate-600 text-slate-200 hover:border-[#ffcc29] hover:text-[#ffcc29]'
+                    : 'border-slate-300 text-slate-700 hover:border-[#ffcc29] hover:text-[#070A12]'
+                }`}
+              >
+                {action.label}
+              </Link>
+            ))}
           {/* Enterprise Credits Widget */}
           {trialInfo && (() => {
             const pct = Math.max(0, Math.min(100, (trialInfo.creditsBalance / trialInfo.startingCredits) * 100));
@@ -421,6 +488,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
             );
           })()}
           <NotificationBell />
+          </div>
         </header>
 
         <main className="flex-1 overflow-y-auto p-4 md:p-8">
