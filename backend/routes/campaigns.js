@@ -1362,6 +1362,8 @@ INSTRUCTIONS:
       : 'COLOR ENFORCEMENT: Keep background and text highly legible and aligned to the brand palette; avoid off-theme colors.'}
 15. LANGUAGE ENFORCEMENT: Write caption and CTA strictly in ${selectedLanguage}. Do not mix languages.
 16. ${selectedLanguage === 'English' ? 'English is allowed.' : 'Do NOT use English words unless they are brand names, product names, or hashtags.'}
+17. IMAGE TEXT ENFORCEMENT: Also provide "imageText" for each post (2-5 words max). imageText MUST be strictly in ${selectedLanguage}. Do NOT use English for imageText unless selectedLanguage is English.
+18. imageText must be short, punchy, and suitable for text overlay on the image.
 
 Return ONLY valid JSON (no markdown, no backticks):
 {
@@ -1371,7 +1373,8 @@ Return ONLY valid JSON (no markdown, no backticks):
       "caption": "The full caption text with emojis and line breaks",
       "hashtags": ["#tag1", "#tag2", "#tag3"],
       "contentTheme": "educational|promotional|engagement|storytelling|social_proof|problem_solution",
-      "imageDescription": "Detailed visual description for AI image generation"
+      "imageDescription": "Detailed visual description for AI image generation",
+      "imageText": "Short overlay text (2-5 words) strictly in selected language"
     }
   ]
 }`;
@@ -1490,6 +1493,18 @@ Return ONLY valid JSON (no markdown, no backticks):
     // Step 2: Generate images one by one and stream each
     const postsToProcess = parsed.posts.slice(0, totalPosts);
     const slotImageCache = new Map();
+    const fallbackImageTextByLanguage = {
+      tamil: 'இப்போதே தொடங்குங்கள்',
+      telugu: 'ఇప్పుడే ప్రారంభించండి',
+      malayalam: 'ഇപ്പോള്‍ തുടങ്ങൂ',
+      kannada: 'ಈಗಲೇ ಪ್ರಾರಂಭಿಸಿ',
+      hindi: 'अभी शुरू करें',
+      english: 'Start Now'
+    };
+    const selectedLanguageKey = String(selectedLanguage || '').trim().toLowerCase();
+    const defaultImageText =
+      fallbackImageTextByLanguage[selectedLanguageKey] ||
+      fallbackImageTextByLanguage.english;
 
     for (let i = 0; i < postsToProcess.length; i++) {
       if (aborted) break;
@@ -1506,6 +1521,7 @@ Return ONLY valid JSON (no markdown, no backticks):
         imageResult = slotImageCache.get(slotIndex);
       } else {
         sendEvent('generating', { index: i, total: postsToProcess.length, message: `Generating image for slot ${slotIndex + 1}...` });
+        const resolvedImageText = String(post?.imageText || '').trim() || defaultImageText;
         
         imageResult = await generateCampaignImageNanoBanana(post.imageDescription, {
           aspectRatio: aspectRatio || '1:1',
@@ -1520,7 +1536,9 @@ Return ONLY valid JSON (no markdown, no backticks):
           totalPosts: numSlots,
           campaignTheme: campaignName,
           keyMessages: [keyMessages || '', visualHints || '', strictBrandText || '', brandGuidelinesText || ''].filter(Boolean).join('\n'),
-          linkedProduct
+          linkedProduct,
+          targetLanguage: selectedLanguage,
+          imageText: resolvedImageText
         });
         
         slotImageCache.set(slotIndex, imageResult);
@@ -1537,6 +1555,7 @@ Return ONLY valid JSON (no markdown, no backticks):
           : ['#marketing'],
         imageUrl: imageResult.success ? imageResult.imageUrl : '',
         imageDescription: post.imageDescription || '',
+        imageText: String(post.imageText || '').trim() || defaultImageText,
         suggestedDate: schedule.date,
         suggestedTime: schedule.time,
         contentTheme: post.contentTheme || 'promotional',

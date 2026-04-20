@@ -4641,6 +4641,8 @@ async function generateCampaignImageNanoBanana(imageDescription, options = {}) {
     brandPalette = [],
     fontType = '',
     strictBrandLock = false,
+    targetLanguage = 'English',
+    imageText = '',
   } = options;
 
   const linkedProduct = options.linkedProduct && typeof options.linkedProduct === 'object' ? options.linkedProduct : null;
@@ -4648,6 +4650,15 @@ async function generateCampaignImageNanoBanana(imageDescription, options = {}) {
   const normalizedPalette = Array.isArray(brandPalette) ? brandPalette.filter(Boolean) : [];
   const primaryColor = String(normalizedPalette[0] || '').trim();
   const secondaryColor = String(normalizedPalette[1] || '').trim();
+  const resolvedTargetLanguage = String(targetLanguage || 'English').trim() || 'English';
+  const rawPreferredImageText = String(imageText || '').trim();
+  const hasLatinChars = /[A-Za-z]/.test(rawPreferredImageText);
+  const hasNonLatinChars = /[^\u0000-\u007F]/.test(rawPreferredImageText);
+  const isEnglishLikeImageText = hasLatinChars && !hasNonLatinChars;
+  const preferredImageText =
+    resolvedTargetLanguage.toLowerCase() !== 'english' && isEnglishLikeImageText
+      ? ''
+      : rawPreferredImageText;
 
   const prompt = `ROLE: You are an elite creative director at a top-tier advertising agency. You create award-winning social media ad creatives that drive engagement and conversions for global brands.
 
@@ -4672,6 +4683,9 @@ INSTRUCTIONS:
 2. ASPECT RATIO: The image MUST be in exactly ${aspectRatio} aspect ratio. This is critical.
 3. RESOLUTION: Output at 1024px on the longest edge maximum. Do not exceed 1K resolution.
 4. TEXT ON IMAGE: If the design calls for text overlays, keep them SHORT (3-7 words max). Use professional typography and no more than 2 font styles. The text should be a punchy headline or tagline, NOT a paragraph. Never put placeholder text like [Date], [Name], [CTA], etc.
+4A. LANGUAGE LOCK FOR IMAGE TEXT: Any visible text rendered on the image MUST be strictly in ${resolvedTargetLanguage}. ${resolvedTargetLanguage === 'English' ? 'English is allowed.' : 'Do NOT render English text on the image (except unavoidable brand names/logos).'}
+4B. TEXT SAFETY RULE: If you are not confident rendering ${resolvedTargetLanguage} script correctly, do NOT render any extra text overlay instead of falling back to English.
+${preferredImageText ? `4C. REQUIRED OVERLAY TEXT: Render this exact text on the image as the main headline: "${preferredImageText}". Do not translate it and do not replace it with English.` : ''}
 5. BRAND IDENTITY: ${brandName ? `Subtly incorporate "${brandName}" as real brand craft.` : 'Make the design look professionally branded.'}
 6. NO METADATA: Do NOT include post numbers, aspect ratio labels, generic "Brand" labels, campaign names, watermark text, frame borders, or UI-like editor elements.
 7. VISUAL STORYTELLING: Let imagery communicate the message with strong focal points and emotional resonance.
