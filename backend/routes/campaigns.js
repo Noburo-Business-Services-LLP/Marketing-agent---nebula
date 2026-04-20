@@ -1056,7 +1056,7 @@ router.get('/icp-strategy', protect, async (req, res) => {
 router.post('/smart-populate-template', protect, async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id || req.user._id;
-    const { template, campaignName, campaignDescription, objective } = req.body;
+    const { template, campaignName, campaignDescription, objective, language: languageInput } = req.body;
     
     if (!template) {
       return res.status(400).json({ success: false, message: 'Template is required' });
@@ -1070,6 +1070,25 @@ router.post('/smart-populate-template', protect, async (req, res) => {
       ? brandCtx.effectiveTone
       : String(brandCtx?.effectiveTone || bp?.brandVoice || 'professional').toLowerCase();
     const strictBrandText = strictBrandMode ? buildStrictBrandLockText(brandCtx) : '';
+    const normalizeCampaignLanguage = (value = '') => {
+      const normalized = String(value || '').trim().toLowerCase();
+      const languageMap = {
+        english: 'English',
+        en: 'English',
+        hindi: 'Hindi',
+        hi: 'Hindi',
+        tamil: 'Tamil',
+        ta: 'Tamil',
+        telugu: 'Telugu',
+        te: 'Telugu',
+        malayalam: 'Malayalam',
+        ml: 'Malayalam',
+        kannada: 'Kannada',
+        kn: 'Kannada'
+      };
+      return languageMap[normalized] || 'English';
+    };
+    const selectedLanguage = normalizeCampaignLanguage(languageInput);
 
     const prompt = `You are a professional social media content editor. 
 Your task is to fill in the bracketed placeholders in a post template with high-quality, meaningful content.
@@ -1079,6 +1098,7 @@ CAMPAIGN DETAILS:
 - Description: ${campaignDescription || 'N/A'}
 - Objective: ${objective || 'awareness'}
 - Tone to follow: ${enforcedTone || 'professional'}
+- Output language: ${selectedLanguage}
 ${strictBrandMode ? `- ${strictBrandText}` : ''}
 ${brandCtx?.guidelineBundle?.instructions || ''}
 
@@ -1091,7 +1111,10 @@ RULES:
 3. DO NOT change the structure, symbols (like 🎯, •, 📸), or headings.
 4. Keep the output EXACTLY the same format as the input template, just with placeholders filled.
 5. ONLY leave "[Link]" or "[Your CTA Link]" as is.
-6. Return ONLY the filled content. No introduction or extra text.`;
+6. Translate/adapt all generated and existing template text to ${selectedLanguage} while preserving structure and marketing intent.
+7. If the template is already filled (few/no placeholders), still rewrite it fully into ${selectedLanguage}.
+8. ${selectedLanguage === 'English' ? 'English is allowed.' : 'Do NOT output English words unless they are brand names, product names, or hashtags.'}
+9. Return ONLY the filled content. No introduction or extra text.`;
 
     const filledContent = await callGemini(prompt, { temperature: 0.7, maxTokens: 1000, skipCache: true });
     

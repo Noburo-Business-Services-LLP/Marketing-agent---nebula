@@ -1,50 +1,38 @@
-Create a premium advertisement for "{{brand_name}}".
+Generate a premium advertisement image for "{{brand_name}}".
 
-STRICT BRAND COLOR ENFORCEMENT (CRITICAL):
-- Use ONLY this primary color: {{primary_color}}
-- Background MUST be SOLID or GRADIENT of ONLY {{primary_color}}
-- Allowed gradient range: darker {{primary_color}} -> lighter {{primary_color}} ONLY
-- DO NOT introduce blue, pink, violet, or any other shade
-- DO NOT auto-enhance or adjust colors
-- DO NOT use cinematic color grading
+STRICT LANGUAGE RULE:
+- ALL text in the image MUST be in: {{target_language}}
+- Do NOT use English text (unless {{target_language}} is English)
+- Do NOT mix languages
+- Text must match the selected language exactly
 
-COLOR RESTRICTIONS:
-- No additional colors except {{primary_color}} and {{secondary_color}}
-- Product UI (watch screen, elements) MUST also follow brand color
-- Remove any blue light, neon colors, or multi-color UI
+---
 
-EXACT COLOR MATCH:
-- The primary color must visually match HEX {{primary_color}} exactly
-- No deviation, no approximation
+CONTENT:
 
-BACKGROUND:
-- Clean, minimal, smooth gradient using ONLY {{primary_color}}
-- No texture, no noise, no mixed tones
+Primary Message:
+"{{image_text}}"
 
-TEXT:
-- Color: {{secondary_color}} ONLY
-- Font style: "{{font_type}}" (Playfair Display style serif)
-- Elegant, premium look
+---
 
-LOGO:
-- Use EXACT uploaded logo: {{logo_image_url}}
-- DO NOT recreate, redraw, or modify
-- Maintain original colors and proportions
+DESIGN RULES:
 
-PRODUCT:
-- Smartwatch or fitness product, premium and minimal
-- Remove any non-brand colors from product UI
-- UI elements must use {{primary_color}} shades only
+- Use brand color: {{primary_color}}
+- Keep background clean and premium
+- Place text clearly readable
+- Use modern, bold typography
+- Keep text short (2-5 words)
 
-STYLE:
-- Minimal, luxury, clean
-- High contrast, no clutter
+---
 
-HARD RULE:
-- If any color outside {{primary_color}} or {{secondary_color}} is used, the output is INVALID.
+IMPORTANT:
 
-HEADLINE:
-- Use this premium headline: "{{headline}}"
+- If language = Tamil -> text must be Tamil
+- If language = Telugu -> text must be Telugu
+- If language = Malayalam -> text must be Malayalam
+- If language = Kannada -> text must be Kannada
+- If language = Hindi -> text must be Hindi
+- NEVER default to English
 
 OUTPUT:
-- Final creative must be publication-ready, strictly on-brand, and pass all rules above.
+- Final creative must be publication-ready, premium, and strictly follow all language rules.

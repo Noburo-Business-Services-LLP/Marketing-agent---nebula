@@ -41,14 +41,12 @@ function getStrictAdPromptTemplate() {
   } catch (error) {
     console.warn(`Could not load strict ad prompt template from ${STRICT_AD_PROMPT_PATH}:`, error.message);
     strictAdPromptTemplateCache = [
-      'Create a premium advertisement for "{{brand_name}}".',
-      'Use ONLY {{primary_color}} and {{secondary_color}}.',
-      'Background must be solid/gradient of {{primary_color}} only.',
-      'Text must be {{secondary_color}} only.',
-      'Use exact logo {{logo_image_url}} without modification.',
-      'Use "{{font_type}}" style typography.',
-      'Use premium headline "{{headline}}".',
-      'If any extra color appears, output is invalid.'
+      'Generate a premium advertisement image for "{{brand_name}}".',
+      'ALL text must be in {{target_language}} only.',
+      'Primary message: "{{image_text}}".',
+      'Use brand color {{primary_color}} with clean premium background.',
+      'Use modern bold typography and keep text short (2-5 words).',
+      'Never default to English unless target language is English.'
     ].join('\n');
   }
   return strictAdPromptTemplateCache;
@@ -393,7 +391,14 @@ router.post('/:id/generate-ad-image', protect, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Product not found' });
     }
 
-    const { platform = 'instagram', tone = 'professional', aspectRatio = '1:1' } = req.body || {};
+    const requestBody = req.body || {};
+    const { platform = 'instagram', tone = 'professional', aspectRatio = '1:1' } = requestBody;
+    const targetLanguage = String(
+      requestBody.language || requestBody.targetLanguage || requestBody.target_language || 'English'
+    ).trim() || 'English';
+    const requestedImageText = String(
+      requestBody.imageText || requestBody.image_text || ''
+    ).trim();
 
     // Lazy-import to avoid circular deps
     const { generateCampaignImageNanoBanana } = require('../services/geminiAI');
@@ -411,7 +416,7 @@ router.post('/:id/generate-ad-image', protect, async (req, res) => {
     const primaryColor = normalizeHexColor(profile?.assets?.primaryColor, '#8965EC');
     const secondaryColor = normalizeHexColor(profile?.assets?.secondaryColor, '#FFFFFF');
     const fontType = String(profile?.assets?.fontType || 'Playfair Display').trim() || 'Playfair Display';
-    const headline = `${product.name} Premium Edition`;
+    const headline = requestedImageText || `${product.name} Premium Edition`;
 
     const strictPromptTemplate = getStrictAdPromptTemplate();
     const imageDescription = replaceTemplateTokens(strictPromptTemplate, {
@@ -421,7 +426,9 @@ router.post('/:id/generate-ad-image', protect, async (req, res) => {
       font_type: fontType,
       logo_image_url: primaryLogoUrl || 'MISSING_PRIMARY_LOGO',
       product_category: product.category || 'Smartwatch / Fitness',
-      headline
+      headline,
+      target_language: targetLanguage,
+      image_text: headline
     });
 
     const hasProductReference = Boolean(

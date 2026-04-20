@@ -3052,7 +3052,7 @@ export const inventoryAPI = {
   // Generate a premium social-media ad image for a product using AI
   generateProductAdImage: async (
     productId: string,
-    options: { platform?: string; tone?: string; aspectRatio?: string } = {}
+    options: { platform?: string; tone?: string; aspectRatio?: string; language?: string; imageText?: string } = {}
   ): Promise<{ success: boolean; imageUrl?: string; model?: string; message?: string }> => {
     return apiCall(`/products/${productId}/generate-ad-image`, {
       method: 'POST',
@@ -3060,6 +3060,8 @@ export const inventoryAPI = {
         platform: options.platform || 'instagram',
         tone: options.tone || 'professional',
         aspectRatio: options.aspectRatio || '1:1',
+        language: options.language || 'English',
+        imageText: options.imageText || '',
       }),
     }, true);
   },

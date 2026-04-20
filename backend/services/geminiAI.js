@@ -2660,16 +2660,22 @@ function parseLocalizationStructuredText(text = '') {
   if (!normalized) return null;
 
   const captionMatch = normalized.match(
-    /Caption\s*\(in[^\)]*\)\s*:\s*([\s\S]*?)(?:\n\s*CTA\s*\(in[^\)]*\)\s*:|\n\s*Hashtags\s*:|$)/i
+    /Caption(?:\s*\(in[^\)]*\))?\s*:\s*([\s\S]*?)(?:\n\s*CTA(?:\s*\(in[^\)]*\))?\s*:|\n\s*Hashtags\s*:|\n\s*Image(?:\s*Text)?\s*:|$)/i
   );
   const ctaMatch = normalized.match(
-    /CTA\s*\(in[^\)]*\)\s*:\s*([\s\S]*?)(?:\n\s*Hashtags\s*:|$)/i
+    /CTA(?:\s*\(in[^\)]*\))?\s*:\s*([\s\S]*?)(?:\n\s*Hashtags\s*:|\n\s*Image(?:\s*Text)?\s*:|$)/i
   );
-  const hashtagsMatch = normalized.match(/Hashtags\s*:\s*([\s\S]*)$/i);
+  const hashtagsMatch = normalized.match(
+    /Hashtags\s*:\s*([\s\S]*?)(?:\n\s*Image(?:\s*Text)?\s*:|$)/i
+  );
+  const imageTextMatch = normalized.match(
+    /Image(?:\s*Text)?\s*:\s*([\s\S]*?)$/i
+  );
 
   const caption = String(captionMatch?.[1] || '').trim();
   const cta = String(ctaMatch?.[1] || '').trim();
   const hashtagsLine = String(hashtagsMatch?.[1] || '').trim();
+  const imageText = String(imageTextMatch?.[1] || '').trim();
   const hashtagMatches = hashtagsLine.match(/#[^\s#,]+/g) || [];
   const normalizedHashtags = hashtagMatches.length > 0
     ? hashtagMatches
@@ -2684,7 +2690,8 @@ function parseLocalizationStructuredText(text = '') {
   return {
     caption,
     cta,
-    hashtags: normalizedHashtags
+    hashtags: normalizedHashtags,
+    imageText
   };
 }
 
@@ -2782,6 +2789,9 @@ function buildLocalizationPrompt({
   industry = '',
   brandDescription = '',
   targetAudience = '',
+  baseCaption = '',
+  sourceCaptionLength = 0,
+  sourceSentenceCount = 1,
   keyMessage = '',
   brandTone = '',
   writingStyle = '',
@@ -2789,6 +2799,17 @@ function buildLocalizationPrompt({
   visualStyle = '',
   platform = ''
 } = {}) {
+  const normalizedSourceLength = Number.isFinite(sourceCaptionLength) && sourceCaptionLength > 0
+    ? Math.round(sourceCaptionLength)
+    : Array.from(String(baseCaption || keyMessage || '')).length;
+  const minTargetLength = normalizedSourceLength > 0
+    ? Math.max(40, Math.round(normalizedSourceLength * 0.8))
+    : 60;
+  const maxTargetLength = normalizedSourceLength > 0
+    ? Math.max(minTargetLength + 20, Math.round(normalizedSourceLength * 1.35))
+    : 280;
+  const minTargetSentences = Math.max(1, Math.round(sourceSentenceCount || 1));
+
   const localizationJson = JSON.stringify(
     localizations.map((item) => ({
       region: String(item.region || '').trim() || 'Global',
@@ -2827,6 +2848,9 @@ Example:
 - Description: ${brandDescription || 'Not provided'}
 - Target Audience: ${targetAudience || 'general audience'}
 - Core Message: ${keyMessage || 'Not provided'}
+- Source Caption: ${baseCaption || keyMessage || 'Not provided'}
+- Source Caption Length: ${normalizedSourceLength} characters
+- Source Sentence Count: ${Math.max(1, Math.round(sourceSentenceCount || 1))}
 
 ---
 
@@ -2843,7 +2867,13 @@ Example:
 🧠 CONTENT RULES:
 - Emotionally engaging
 - Platform-ready (${platform || 'Instagram'} / Facebook style)
-- Short, premium, non-generic
+- Premium and non-generic
+- Preserve source detail level and message depth
+- Keep a similar amount of information as source caption
+- Do NOT summarize into fewer points than the source
+- Keep a similar sentence structure and detail density as source
+- Target localized caption length: ${minTargetLength}-${maxTargetLength} characters
+- Target localized sentence count: ${minTargetSentences}+ sentences when source has multiple sentences
 - Adapt cultural tone per region
 
 ---
@@ -2891,6 +2921,23 @@ async function localizeCampaignContent(payload = {}) {
   const requestedLanguage = normalizeLocalizationLanguage(requestedLanguageRaw);
   const inferredLanguage = requestedLanguage || inferLanguageFromRegion(region);
   const baseCaption = String(payload.baseCaption || payload.base_caption || keyMessage || '').trim();
+  const sourceCaptionLength = Array.from(baseCaption).length;
+  const sourceSentenceCount = Math.max(
+    1,
+    String(baseCaption || '')
+      .split(/[.!?।]+/)
+      .map((segment) => String(segment || '').trim())
+      .filter(Boolean).length
+  );
+  const minLocalizedCaptionLength = sourceCaptionLength > 0
+    ? Math.max(40, Math.round(sourceCaptionLength * 0.88))
+    : 40;
+  const maxLocalizedCaptionLength = sourceCaptionLength > 0
+    ? Math.max(minLocalizedCaptionLength + 20, Math.round(sourceCaptionLength * 1.5))
+    : 300;
+  const minLocalizedSentenceCount = sourceSentenceCount >= 2
+    ? Math.max(2, sourceSentenceCount - 1)
+    : 1;
 
   const isBatchMode = Array.isArray(payload.localizations) && payload.localizations.length > 0;
   const requestedPairs = normalizeLocalizationPairsInput(
@@ -2920,6 +2967,9 @@ async function localizeCampaignContent(payload = {}) {
     industry,
     brandDescription,
     targetAudience,
+    baseCaption,
+    sourceCaptionLength,
+    sourceSentenceCount,
     keyMessage: keyMessage || baseCaption,
     brandTone,
     writingStyle,
@@ -2930,6 +2980,33 @@ async function localizeCampaignContent(payload = {}) {
 
   const finalizeHashtags = (rawHashtags = [], caption = '', regionValue = '') =>
     normalizeLocalizationHashtags(rawHashtags, caption, regionValue, platform).slice(0, 5);
+
+  const extractSentenceCount = (value = '') =>
+    Math.max(
+      1,
+      String(value || '')
+        .split(/[.!?।]+/)
+        .map((segment) => String(segment || '').trim())
+        .filter(Boolean).length
+    );
+
+  const isCaptionDetailSufficient = (caption = '') => {
+    const normalizedCaption = String(caption || '').trim();
+    if (!normalizedCaption) return false;
+
+    const captionLength = Array.from(normalizedCaption).length;
+    const captionSentenceCount = extractSentenceCount(normalizedCaption);
+    const sourceIsDetailed = sourceCaptionLength >= 70 || sourceSentenceCount >= 2;
+
+    if (!sourceIsDetailed) {
+      return captionLength >= Math.max(30, Math.round(sourceCaptionLength * 0.75));
+    }
+
+    if (captionLength < minLocalizedCaptionLength) return false;
+    if (captionLength > maxLocalizedCaptionLength) return false;
+    if (captionSentenceCount < minLocalizedSentenceCount) return false;
+    return true;
+  };
 
   const callAndParse = async (sourcePrompt) => {
     const raw = await callGemini(sourcePrompt, {
@@ -2983,6 +3060,7 @@ async function localizeCampaignContent(payload = {}) {
 
       const caption = String(parsed.caption || '').trim();
       if (!caption) return null;
+      if (!isCaptionDetailSufficient(caption)) return null;
 
       const cta = String(parsed.cta || '').trim();
       const resolvedLanguageRaw = String(parsed.language || pair.language || pair.languageCode || '').trim();
@@ -3016,9 +3094,27 @@ RETRY FIX:
 - Your previous output did not follow the language rule or JSON schema.
 - Caption and CTA must strictly use each row's specified language.
 - Do not switch or mix languages between rows.
+- Do NOT shorten or summarize the caption.
+- Each caption must keep source detail depth and be at least ${minLocalizedCaptionLength} characters when source is detailed.
+- Each caption should keep around ${minLocalizedSentenceCount}+ sentences when source has multiple sentences.
 - Return ONLY valid JSON as an array with exactly ${requestedPairs.length} objects.
 - Keep the same order as LOCALIZATION INPUT.`;
       parsedRows = await callAndParse(retryPrompt);
+      normalizedRows = normalizeBatch(parsedRows);
+    }
+
+    if (!normalizedRows) {
+      const expansionRetryPrompt = `${prompt}
+
+FINAL RETRY - EXPAND CONTENT:
+- Previous output captions were too short.
+- Rewrite each caption in its target language with FULL detail parity to source.
+- Keep product features, benefits, and intent from source caption.
+- Minimum caption length per row: ${minLocalizedCaptionLength} characters (when source is detailed).
+- Preferred caption length range: ${minLocalizedCaptionLength}-${maxLocalizedCaptionLength} characters.
+- Keep natural readability; do not pad with filler.
+- Return ONLY valid JSON array with ${requestedPairs.length} rows in exact input order.`;
+      parsedRows = await callAndParse(expansionRetryPrompt);
       normalizedRows = normalizeBatch(parsedRows);
     }
 
@@ -4759,12 +4855,12 @@ ${totalPosts > 1 ? `15. SERIES CONSISTENCY: This is part of a ${totalPosts}-post
  */
 function parseStructuredAdText(text) {
   if (!text || typeof text !== 'string') {
-    return { caption: '', cta: '', hashtags: [] };
+    return { caption: '', cta: '', hashtags: [], imageText: '' };
   }
 
   const parsed = parseLocalizationStructuredText(text);
   if (!parsed) {
-    return { caption: '', cta: '', hashtags: [] };
+    return { caption: '', cta: '', hashtags: [], imageText: '' };
   }
 
   const sanitizeField = (value = '') =>
@@ -4775,6 +4871,7 @@ function parseStructuredAdText(text) {
 
   const caption = sanitizeField(parsed.caption);
   const cta = sanitizeField(parsed.cta);
+  const imageText = sanitizeField(parsed.imageText);
   const hashtags = Array.isArray(parsed.hashtags)
     ? parsed.hashtags
       .map((tag) => String(tag || '').trim().replace(/\s+/g, ''))
@@ -4783,7 +4880,7 @@ function parseStructuredAdText(text) {
       .filter((value, index, arr) => arr.findIndex((item) => item.toLowerCase() === value.toLowerCase()) === index)
     : [];
 
-  return { caption, cta, hashtags };
+  return { caption, cta, hashtags, imageText };
 }
 
 /**
@@ -4814,6 +4911,45 @@ async function generateLocalizedAdText(brandProfile, region, language) {
     ? safeBrandProfile.hashtags.join(' ')
     : String(safeBrandProfile.hashtags || '').trim();
   const sourcePlatform = String(safeBrandProfile.platform || 'Instagram').trim() || 'Instagram';
+  const sourceTrendHashtagsRaw =
+    safeBrandProfile.trendHashtags ||
+    safeBrandProfile.trendingHashtags ||
+    safeBrandProfile.trend_hashtags ||
+    '';
+  const sourceTrendTone = String(
+    safeBrandProfile.trendTone ||
+    safeBrandProfile.trendingTone ||
+    safeBrandProfile.trend_tone ||
+    ''
+  ).trim();
+
+  const parseHashtagList = (value = '') => {
+    if (Array.isArray(value)) {
+      return value
+        .map((tag) => String(tag || '').trim())
+        .filter(Boolean)
+        .map((tag) => (tag.startsWith('#') ? tag : `#${tag.replace(/[^A-Za-z0-9_]/g, '')}`))
+        .filter((tag) => tag !== '#');
+    }
+
+    const raw = String(value || '').trim();
+    if (!raw) return [];
+
+    const hashtagMatches = raw.match(/#[^\s#,]+/g) || [];
+    if (hashtagMatches.length > 0) {
+      return hashtagMatches.map((tag) => String(tag || '').trim()).filter(Boolean);
+    }
+
+    return raw
+      .split(/[\s,\n]+/)
+      .map((tag) => String(tag || '').trim())
+      .filter(Boolean)
+      .map((tag) => (tag.startsWith('#') ? tag : `#${tag.replace(/[^A-Za-z0-9_]/g, '')}`))
+      .filter((tag) => tag !== '#');
+  };
+
+  const trendHashtagPool = parseHashtagList(sourceTrendHashtagsRaw).slice(0, 3);
+  const sourceTrendHashtags = trendHashtagPool.join(' ');
 
   const englishStopwords = new Set([
     'the', 'and', 'with', 'for', 'your', 'you', 'from', 'this', 'that',
@@ -4842,6 +4978,22 @@ async function generateLocalizedAdText(brandProfile, region, language) {
     for (const tag of [...fromArray, ...fromCaption]) {
       addTag(tag);
       if (hashtags.length >= 8) break;
+    }
+
+    if (trendHashtagPool.length > 0 && hashtags.length < 8) {
+      const minimumTrending = Math.min(2, trendHashtagPool.length);
+      const countTrending = () =>
+        hashtags.reduce(
+          (count, tag) =>
+            count + (trendHashtagPool.some((trendTag) => trendTag.toLowerCase() === String(tag || '').toLowerCase()) ? 1 : 0),
+          0
+        );
+
+      for (const trendTag of trendHashtagPool) {
+        if (hashtags.length >= 8) break;
+        if (countTrending() >= minimumTrending) break;
+        addTag(trendTag);
+      }
     }
 
     const fallbackTags = [
@@ -4880,7 +5032,9 @@ async function generateLocalizedAdText(brandProfile, region, language) {
 
     const caption = String(parsedContent.caption || '').trim();
     const cta = String(parsedContent.cta || '').trim();
-    const validationText = `${caption}\n${cta}`.trim();
+    const imageText = String(parsedContent.imageText || '').trim();
+    if (!imageText) return null;
+    const validationText = `${caption}\n${cta}\n${imageText}`.trim();
 
     if (!isLocalizationLanguageLikelyValid(validationText, requestedLanguageRaw || resolvedLanguage)) {
       return null;
@@ -4892,7 +5046,8 @@ async function generateLocalizedAdText(brandProfile, region, language) {
     return {
       caption,
       cta,
-      hashtags: finalizeHashtags(parsedContent.hashtags, caption)
+      hashtags: finalizeHashtags(parsedContent.hashtags, caption),
+      imageText
     };
   };
 
@@ -4902,14 +5057,17 @@ RETRY FIX:
 - Your previous output violated language or format rules.
 - Caption and CTA MUST be strictly in ${resolvedLanguage}. Do not use English words unless the language is English.
 - Use this exact structure only:
-Caption (in ${resolvedLanguage}):
+Caption:
 <Write caption strictly in ${resolvedLanguage}>
 
-CTA (in ${resolvedLanguage}):
+CTA:
 <Write CTA strictly in ${resolvedLanguage}>
 
 Hashtags:
-<5-8 relevant hashtags>
+<Include 5-8 hashtags and use 2-3 trending hashtags when provided>
+
+Image Text:
+<Write short image text strictly in ${resolvedLanguage} (2-5 words)>
 - Do NOT return JSON.
 - Do NOT add explanations.
 - Do NOT change this format.`;
@@ -4953,6 +5111,8 @@ Hashtags:
       .replace(/\${caption}/g, sourceCaption)
       .replace(/\${cta}/g, sourceCta)
       .replace(/\${hashtags}/g, sourceHashtags)
+      .replace(/\${trend_hashtags}/g, sourceTrendHashtags)
+      .replace(/\${trend_tone}/g, sourceTrendTone || safeBrandProfile.brandVoice || 'conversational')
       .replace(/\${platform}/g, sourcePlatform)
       .replace('${brand_name}', safeBrandProfile.name || safeBrandProfile.brandName || 'the brand')
       .replace('${industry}', safeBrandProfile.industry || 'general')
@@ -4982,10 +5142,14 @@ Hashtags:
   } catch (error) {
     console.error('Error in generateLocalizedAdText:', error.message);
     const fallbackCopy = buildLanguageFallbackCopy();
+    const fallbackImageText = String(
+      fallbackCopy.imageText || fallbackCopy.cta || fallbackCopy.caption || ''
+    ).trim();
     return {
       caption: fallbackCopy.caption,
       cta: fallbackCopy.cta,
       hashtags: finalizeHashtags([], fallbackCopy.caption),
+      imageText: fallbackImageText,
       region: safeRegion,
       language: resolvedLanguage,
       error: 'Failed to generate localized content.'
