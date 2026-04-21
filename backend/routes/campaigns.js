@@ -18,6 +18,10 @@ const {
   publishSocialPostWithSafetyWrapper
 } = require('../services/instagram-fix');
 const { URL } = require('url');
+const {
+  getReelGenerationOptions,
+  generateReelFromImage
+} = require('../services/reelGenerationService');
 
 function isMongoTimeoutOrSelectionError(err) {
   const name = String(err?.name || '');
@@ -1584,6 +1588,166 @@ Return ONLY valid JSON (no markdown, no backticks):
     if (hasGenerationLock && userId && generationLockSignature) {
       releaseGenerationLock(userId, generationLockSignature);
     }
+  }
+});
+
+/**
+ * GET /api/campaigns/reel/options
+ * Returns predefined prompt types, supported languages, and duration options
+ * for AI image-to-reel generation flow.
+ */
+router.get('/reel/options', protect, async (_req, res) => {
+  try {
+    return res.json({
+      success: true,
+      ...getReelGenerationOptions()
+    });
+  } catch (error) {
+    console.error('Reel options error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to load reel generation options',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/campaigns/reel/generate
+ * Generate AI reel from image + prompt type + language + duration.
+ * Creates a draft campaign so existing publish/schedule flow can be reused.
+ */
+router.post('/reel/generate', protect, checkTrial, requireCredits('campaign_full'), async (req, res) => {
+  try {
+    const userId = req.user.userId || req.user.id;
+    const {
+      imageData,
+      imageUrl,
+      promptType,
+      language,
+      durationSeconds,
+      customPrompt
+    } = req.body || {};
+
+    if (!imageData && !imageUrl) {
+      return res.status(400).json({
+        success: false,
+        message: 'imageData or imageUrl is required'
+      });
+    }
+
+    const user = await User.findById(userId).select('businessProfile');
+
+    const reel = await generateReelFromImage({
+      imageData,
+      imageUrl,
+      promptType,
+      language,
+      durationSeconds,
+      customPrompt,
+      businessProfile: user?.businessProfile || {},
+      req
+    });
+
+    const hashtagList = Array.from(
+      new Set(
+        (Array.isArray(reel?.script?.hashtags) ? reel.script.hashtags : [])
+          .map((tag) => String(tag || '').trim())
+          .map((tag) => (tag.startsWith('#') ? tag : `#${tag}`))
+          .filter((tag) => tag.length > 1)
+      )
+    ).slice(0, 20);
+
+    const caption = String(reel?.script?.caption || '').trim();
+    const cta = String(reel?.script?.cta || '').trim();
+    const voiceoverScript = String(reel?.script?.voiceoverScript || '').trim();
+    const captionWithHashtags = hashtagList.length > 0
+      ? `${caption}\n\n${hashtagList.join(' ')}`
+      : caption;
+
+    const nowIsoDate = new Date().toISOString().split('T')[0];
+    const languageLabel = String(reel?.language?.label || 'Language');
+    const campaignName = `${reel.prompt.label} Reel (${languageLabel}) - ${nowIsoDate}`;
+
+    const campaign = new Campaign({
+      userId,
+      name: campaignName,
+      objective: reel.objective,
+      platforms: ['instagram'],
+      status: 'draft',
+      tone: reel.tone,
+      notes: `AI reel config | promptType=${reel.promptType} | language=${languageLabel} | duration=${reel.durationSeconds}s | audioMode=${reel.audioMode}`,
+      creative: {
+        type: 'reel',
+        textContent: voiceoverScript
+          ? `${captionWithHashtags}\n\nVoiceover Script:\n${voiceoverScript}`
+          : captionWithHashtags,
+        imageUrls: [reel.sourceImageUrl],
+        videoUrl: reel.video.url,
+        captions: caption,
+        hashtags: hashtagList,
+        callToAction: reel.callToActionKey,
+        instagramAudio: {
+          url: reel.audioUrl,
+          durationSeconds: reel.durationSeconds
+        }
+      },
+      aiGenerated: true,
+      aiSuggestions: {
+        caption,
+        hashtags: hashtagList,
+        bestTime: '10:00',
+        estimatedReach: '8K - 20K'
+      },
+      scheduling: {
+        startDate: new Date(),
+        postTime: '10:00',
+        timezone: 'UTC',
+        frequency: 'once'
+      }
+    });
+
+    await campaign.save();
+
+    const creditResult = await deductCredits(
+      userId,
+      'campaign_full',
+      1,
+      `AI reel generation (${reel.prompt.label}, ${languageLabel}, ${reel.durationSeconds}s)`
+    );
+
+    return res.status(201).json({
+      success: true,
+      message: 'AI reel generated successfully',
+      campaign,
+      reel: {
+        promptType: reel.promptType,
+        promptLabel: reel.prompt.label,
+        promptTemplate: reel.prompt.promptTemplate,
+        language: reel.language,
+        durationSeconds: reel.durationSeconds,
+        sourceImageUrl: reel.sourceImageUrl,
+        videoUrl: reel.video.url,
+        audioUrl: reel.audioUrl,
+        audioMode: reel.audioMode,
+        caption,
+        cta,
+        hashtags: hashtagList,
+        voiceoverScript,
+        scenePlan: reel.script.scenePlan,
+        videoMetadata: reel.video.metadata,
+        videoValidation: reel.video.validation
+      },
+      creditsRemaining: creditResult?.creditsRemaining
+    });
+  } catch (error) {
+    console.error('Reel generation error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to generate AI reel',
+      error: error.message,
+      details: error?.details || null
+    });
   }
 });
 

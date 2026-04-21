@@ -855,7 +855,13 @@ async function prepareInstagramVideoForPublishing({
   }
 }
 
-async function composeImageToVideoWithAudio({ imageUrl, audioUrl, requestedDurationSeconds = null, cloudinaryFolder = 'nebula-instagram-audio-posts' }) {
+async function composeImageToVideoWithAudio({
+  imageUrl,
+  audioUrl,
+  requestedDurationSeconds = null,
+  cloudinaryFolder = 'nebula-instagram-audio-posts',
+  motionEffect = 'none'
+}) {
   if (!imageUrl || !audioUrl) {
     return { success: false, error: 'imageUrl and audioUrl are required' };
   }
@@ -956,6 +962,10 @@ async function composeImageToVideoWithAudio({ imageUrl, audioUrl, requestedDurat
     console.log(`   ✓ Audio exists: ${audioPath} (${(audioExistsCheck.size / 1024).toFixed(2)} KB)`);
     console.log(`   ✓ Output path: ${outPath}`);
 
+    const filterChain = motionEffect === 'ken_burns'
+      ? "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,zoompan=z='min(zoom+0.0008,1.08)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s=1080x1920:fps=30,format=yuv420p"
+      : 'scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,format=yuv420p';
+
     const args = [
       '-y',
       '-loop', '1',
@@ -976,7 +986,7 @@ async function composeImageToVideoWithAudio({ imageUrl, audioUrl, requestedDurat
       '-b:v', `${INSTAGRAM_VIDEO_TARGET.videoBitrateKbps}k`,
       '-maxrate', `${INSTAGRAM_VIDEO_TARGET.videoBitrateKbps}k`,
       '-bufsize', `${INSTAGRAM_VIDEO_TARGET.videoBitrateKbps * 2}k`,
-      '-vf', 'scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,format=yuv420p',
+      '-vf', filterChain,
       '-movflags', '+faststart',
       '-c:a', 'aac',
       '-b:a', `${INSTAGRAM_VIDEO_TARGET.audioBitrateKbps}k`,

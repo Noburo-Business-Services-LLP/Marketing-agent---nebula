@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+﻿import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Campaign, Product } from '../types';
 import { apiService, icpStrategyService, inventoryAPI, brandAssetsAPI } from '../services/api';
 import { Plus, Sparkles, Filter, Loader2, Calendar, BarChart3, Image as ImageIcon, Video, X, ChevronRight, Check, Eye, MousePointer, Archive, Send, Edit3, DollarSign, RefreshCw, Wand2, Instagram, Facebook, Twitter, Linkedin, Youtube, Clock, Heart, MessageCircle, Share2, Zap, Download, FileText, ImageDown, ChevronDown, ChevronUp, Trash2, Save, AlertCircle, Target, Users, PieChart, Pencil, PenLine, Music } from 'lucide-react';
@@ -24,7 +24,7 @@ const PLATFORM_LIMITS: Record<string, { charLimit: number; label: string; imageM
   youtube:   { charLimit: 5000,   label: 'YouTube',    imageMaxMB: 2,  videoMaxMB: 12800, bestRatio: '16:9' },
 };
 
-/** Instagram Reel tone → backend `tone-audio/*.mp3` (see backend/utils/toneAudio.js) */
+/** Instagram Reel tone ? backend `tone-audio/*.mp3` (see backend/utils/toneAudio.js) */
 const REEL_TONE_AUDIO_FILES: Record<string, string> = {
   fun: 'fun.mp3',
   luxury: 'luxury.mp3',
@@ -36,7 +36,7 @@ const REEL_TONE_AUDIO_FILES: Record<string, string> = {
 function getReelTonePreviewAudioSrc(tone: string): string | null {
   const file = REEL_TONE_AUDIO_FILES[String(tone || '').trim().toLowerCase()];
   if (!file) return null;
-  // Same-origin `/audio/*` — Vite dev server proxies to the backend (see vite.config.ts)
+  // Same-origin `/audio/*` ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ Vite dev server proxies to the backend (see vite.config.ts)
   return `/audio/${encodeURIComponent(file)}`;
 }
 
@@ -47,84 +47,84 @@ const PLATFORM_CONTENT_TEMPLATES: Record<string, { id: string; label: string; st
       id: 'ig_prof_1', 
       tone: 'professional',
       label: 'Strategic Standard', 
-      structure: "🎯 STRATEGIC OVERVIEW: {name}\n• Core Mission: {desc}\n• Key Objective: {obj}\n\n📸 KEY HIGHLIGHTS:\n• [Strategic Point 1]\n• [Business Value 2]\n\n🔗 LEARN MORE: [Link]" 
+      structure: "?? STRATEGIC OVERVIEW: {name}\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ Core Mission: {desc}\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ Key Objective: {obj}\n\n?? KEY HIGHLIGHTS:\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Strategic Point 1]\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Business Value 2]\n\n?? LEARN MORE: [Link]" 
     },
     { 
       id: 'ig_prof_2', 
       tone: 'professional',
       label: 'Executive Summary', 
-      structure: "📊 EXECUTIVE ANALYSIS: {name}\n\nSummary:\n{desc}\n\n🚀 PROJECTED OUTCOMES:\n• [Impact 1]\n• [Impact 2]\n\nGoal: {obj}\n\n🔗 VIEW DETAILS: [Your CTA Link]" 
+      structure: "?? EXECUTIVE ANALYSIS: {name}\n\nSummary:\n{desc}\n\n?? PROJECTED OUTCOMES:\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Impact 1]\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Impact 2]\n\nGoal: {obj}\n\n?? VIEW DETAILS: [Your CTA Link]" 
     },
     { 
       id: 'ig_prof_3', 
       tone: 'professional',
       label: 'Corporate Update', 
-      structure: "💼 OFFICIAL ANNOUNCEMENT: {name}\n\nWe are focusing on {obj} through our latest initiative: {desc}.\n\n✅ KEY PILLARS:\n• [Pillar 1]\n• [Pillar 2]\n\n🔗 READ MORE: [Link]" 
+      structure: "?? OFFICIAL ANNOUNCEMENT: {name}\n\nWe are focusing on {obj} through our latest initiative: {desc}.\n\n? KEY PILLARS:\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Pillar 1]\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Pillar 2]\n\n?? READ MORE: [Link]" 
     },
     // CASUAL
     { 
       id: 'ig_cas_1', 
       tone: 'casual',
       label: 'Friendly BTS', 
-      structure: "Hey friends! 👋 Just wanted to share what we've been working on: {name}.\n\n{desc}\n\nOur big goal is to {obj}. 🚀\n\n✨ COOL STUFF:\n• [Fun Fact 1]\n• [Behind the scenes 2]\n\nDrop a comment below! 👇\n\n[Link]" 
+      structure: "Hey friends! ?? Just wanted to share what we've been working on: {name}.\n\n{desc}\n\nOur big goal is to {obj}. ??\n\n? COOL STUFF:\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Fun Fact 1]\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Behind the scenes 2]\n\nDrop a comment below! ??\n\n[Link]" 
     },
     { 
       id: 'ig_cas_2', 
       tone: 'casual',
       label: 'Real Talk', 
-      structure: "Let's be real for a second... {obj} is tough. 🛋️\n\nThat's why we built {name}. {desc}\n\n🌈 WHY IT MATTERS:\n• [Reason 1]\n• [Reason 2]\n\nWhat do you think? ✨ [Link]" 
+      structure: "Let's be real for a second... {obj} is tough. ???\n\nThat's why we built {name}. {desc}\n\n?? WHY IT MATTERS:\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Reason 1]\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Reason 2]\n\nWhat do you think? ? [Link]" 
     },
     // INSPIRATIONAL
     { 
       id: 'ig_insp_1', 
       tone: 'inspirational',
       label: 'Brand Story', 
-      structure: "✨ BELIEVE IN {name}\n\nIt started with a simple idea: {desc}\n\nToday, we're on a mission to {obj}.\n\n💡 DAILY WISDOM:\n\"[Inspirational Quote]\"\n\n🔗 JOIN THE JOURNEY: [Link]" 
+      structure: "? BELIEVE IN {name}\n\nIt started with a simple idea: {desc}\n\nToday, we're on a mission to {obj}.\n\n?? DAILY WISDOM:\n\"[Inspirational Quote]\"\n\n?? JOIN THE JOURNEY: [Link]" 
     },
     { 
       id: 'ig_insp_2', 
       tone: 'inspirational',
       label: 'Big Dreams', 
-      structure: "🚀 DREAMING BIG: {obj}\n\nWe believe {name} is the key to {desc}.\n\n✨ VISION:\n• [Vision Point 1]\n• [Impact 2]\n\nStay inspired. ✨ [Link]" 
+      structure: "?? DREAMING BIG: {obj}\n\nWe believe {name} is the key to {desc}.\n\n? VISION:\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Vision Point 1]\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Impact 2]\n\nStay inspired. ? [Link]" 
     },
     // EDUCATIONAL
     { 
       id: 'ig_edu_1', 
       tone: 'educational',
       label: 'Expert Tips', 
-      structure: "💡 DID YOU KNOW? \n\n{name}\n\n🚀 3 TIPS TO {obj}:\n1. [Expert Tip 1]\n2. [Advanced Strategy 2]\n3. [Quick Win 3]\n\n💬 Save this for later!" 
+      structure: "?? DID YOU KNOW? \n\n{name}\n\n?? 3 TIPS TO {obj}:\n1. [Expert Tip 1]\n2. [Advanced Strategy 2]\n3. [Quick Win 3]\n\n?? Save this for later!" 
     },
     { 
       id: 'ig_edu_2', 
       tone: 'educational',
       label: 'Step-by-Step', 
-      structure: "📖 HOW TO {obj} WITH {name}\n\nStep 1: [Action 1]\nStep 2: [Action 2]\nStep 3: [Action 3]\n\n{desc}\n\nFull guide: [Link] 🎓" 
+      structure: "?? HOW TO {obj} WITH {name}\n\nStep 1: [Action 1]\nStep 2: [Action 2]\nStep 3: [Action 3]\n\n{desc}\n\nFull guide: [Link] ??" 
     },
     // HUMOROUS
     { 
       id: 'ig_hum_1', 
       tone: 'humorous',
       label: 'Witty Observation', 
-      structure: "Me trying to {obj} without {name} 🤡\n\nSeriously though, {desc} is a game changer.\n\n😂 THE STRUGGLE IS REAL:\n• [Funny Point 1]\n• [Witty Observation 2]\n\n🔗 DON'T BE A CLOWN: [Link]" 
+      structure: "Me trying to {obj} without {name} ??\n\nSeriously though, {desc} is a game changer.\n\n?? THE STRUGGLE IS REAL:\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Funny Point 1]\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Witty Observation 2]\n\n?? DON'T BE A CLOWN: [Link]" 
     },
     { 
       id: 'ig_hum_2', 
       tone: 'humorous',
       label: 'Relatable Meme', 
-      structure: "Current Status: Trying to {obj}. 🕺\n\n{name} entered the chat: {desc}\n\n🤌 CHEF'S KISS:\n• [Funny Highlight 1]\n• [Relatable Moment 2]\n\n🔗 CHECK IT OUT: [Link]" 
+      structure: "Current Status: Trying to {obj}. ??\n\n{name} entered the chat: {desc}\n\n?? CHEF'S KISS:\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Funny Highlight 1]\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Relatable Moment 2]\n\n?? CHECK IT OUT: [Link]" 
     },
     // BOLD
     { 
       id: 'ig_bold_1', 
       tone: 'bold',
       label: 'Bold Launch', 
-      structure: "🔥 THE FUTURE IS HERE: {name}\n\nStop settling for less. We are here to {obj}.\n\n💥 WHY WE WIN:\n• [Disruptive Feature 1]\n• [Dominant Result 2]\n\n🔗 WITNESS THE POWER: [Link]" 
+      structure: "?? THE FUTURE IS HERE: {name}\n\nStop settling for less. We are here to {obj}.\n\n?? WHY WE WIN:\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Disruptive Feature 1]\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Dominant Result 2]\n\n?? WITNESS THE POWER: [Link]" 
     },
     { 
       id: 'ig_bold_2', 
       tone: 'bold',
       label: 'Manifesto', 
-      structure: "⚠️ UNPOPULAR OPINION: {obj} shouldn't be this hard.\n\nEnter {name}. {desc}\n\n🔥 THE NEW RULES:\n1. [Rule 1]\n2. [Rule 2]\n\nGET ON BOARD: [Link]" 
+      structure: "?? UNPOPULAR OPINION: {obj} shouldn't be this hard.\n\nEnter {name}. {desc}\n\n?? THE NEW RULES:\n1. [Rule 1]\n2. [Rule 2]\n\nGET ON BOARD: [Link]" 
     }
   ],
   linkedin: [
@@ -133,39 +133,39 @@ const PLATFORM_CONTENT_TEMPLATES: Record<string, { id: string; label: string; st
       id: 'li_prof_1', 
       tone: 'professional',
       label: 'Standard Executive', 
-      structure: "Innovation is the difference between a leader and a follower. Today, we're choosing to lead. 🚀\n\n💼 STRATEGIC INITIATIVE: {name}\n• Executive Summary: {desc}\n• Core Objective: {obj}\n\n📊 CORPORATE ANALYSIS:\n1. [Market Positioning 1]\n2. [Operational Impact 2]\n\n🚀 KEY DELIVERABLES:\n• [Outcome]\n\n🔗 FULL REPORT: [Link]" 
+      structure: "Innovation is the difference between a leader and a follower. Today, we're choosing to lead. ??\n\n?? STRATEGIC INITIATIVE: {name}\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ Executive Summary: {desc}\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ Core Objective: {obj}\n\n?? CORPORATE ANALYSIS:\n1. [Market Positioning 1]\n2. [Operational Impact 2]\n\n?? KEY DELIVERABLES:\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Outcome]\n\n?? FULL REPORT: [Link]" 
     },
     { 
       id: 'li_prof_2', 
       tone: 'professional',
       label: 'Leadership Angle', 
-      structure: "The signal is often lost in the noise. It's time to talk about the future of {obj}. 📡\n\n🚨 THE FUTURE OF {obj}\n\nI've been analyzing {name} lately. \n\n💡 STRATEGIC INSIGHTS:\n• {desc}\n\nWhat are your thoughts on this industry shift? 👇\n\n#Leadership #Innovation" 
+      structure: "The signal is often lost in the noise. It's time to talk about the future of {obj}. ??\n\n?? THE FUTURE OF {obj}\n\nI've been analyzing {name} lately. \n\n?? STRATEGIC INSIGHTS:\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ {desc}\n\nWhat are your thoughts on this industry shift? ??\n\n#Leadership #Innovation" 
     },
     { 
       id: 'li_prof_3', 
       tone: 'professional',
       label: 'Business Win', 
-      structure: "Operational excellence is table stakes. Real growth comes from a relentless focus on {obj}. 📈\n\n📈 BUSINESS UPDATE: Achieving {obj}\n\nThrilled to share how {name} is driving results.\n\n✅ KEY TAKEAWAYS:\n• [Point 1]\n• [Point 2]\n\n{desc}\n\n🔗 DETAILS: [Link]" 
+      structure: "Operational excellence is table stakes. Real growth comes from a relentless focus on {obj}. ??\n\n?? BUSINESS UPDATE: Achieving {obj}\n\nThrilled to share how {name} is driving results.\n\n? KEY TAKEAWAYS:\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Point 1]\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Point 2]\n\n{desc}\n\n?? DETAILS: [Link]" 
     },
     // EDUCATIONAL
     { 
       id: 'li_edu_1', 
       tone: 'educational',
       label: 'Expert Guide', 
-      structure: "Knowledge is only potential power. Execution is where the value lives. Here's your roadmap for {obj}. 🎓\n\n🎓 MASTERING {obj}\n\n{name} is the framework we've been using to solve {desc}.\n\n💡 LESSONS LEARNED:\n1. [Insight 1]\n2. [Strategy 2]\n3. [Tactic 3]\n\nFull case study: [Link]" 
+      structure: "Knowledge is only potential power. Execution is where the value lives. Here's your roadmap for {obj}. ??\n\n?? MASTERING {obj}\n\n{name} is the framework we've been using to solve {desc}.\n\n?? LESSONS LEARNED:\n1. [Insight 1]\n2. [Strategy 2]\n3. [Tactic 3]\n\nFull case study: [Link]" 
     },
     { 
       id: 'li_edu_2', 
       tone: 'educational',
       label: 'Case Study', 
-      structure: "Data tells a story, but results build a legacy. Our journey with {obj} is proof. 📊\n\n📈 CASE STUDY: Optimizing {obj}\n\nProject: {name}\n\n❓ THE CHALLENGE:\n{desc}\n\n🏆 THE RESULTS:\n• [Achievement 1]\n• [Achievement 2]\n\nRead the breakdown: [Link]" 
+      structure: "Data tells a story, but results build a legacy. Our journey with {obj} is proof. ??\n\n?? CASE STUDY: Optimizing {obj}\n\nProject: {name}\n\n? THE CHALLENGE:\n{desc}\n\n?? THE RESULTS:\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Achievement 1]\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Achievement 2]\n\nRead the breakdown: [Link]" 
     },
     // BOLD
     { 
       id: 'li_bold_1', 
       tone: 'bold',
       label: 'Industry Shakeup', 
-      structure: "Disruption isn't about doing things differently; it's about making the old ways obsolete. ⚡\n\n⚠️ THE INDUSTRY IS CHANGED: {name}\n\nWe're officially disrupting {obj}.\n\n🔥 WHY THIS MATTERS:\n• [Point 1]\n• [Point 2]\n\n{desc}\n\nJoin the discussion: [Link]" 
+      structure: "Disruption isn't about doing things differently; it's about making the old ways obsolete. ?\n\n?? THE INDUSTRY IS CHANGED: {name}\n\nWe're officially disrupting {obj}.\n\n?? WHY THIS MATTERS:\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Point 1]\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Point 2]\n\n{desc}\n\nJoin the discussion: [Link]" 
     }
   ],
   twitter: [
@@ -174,46 +174,46 @@ const PLATFORM_CONTENT_TEMPLATES: Record<string, { id: string; label: string; st
       id: 'tw_cas_1', 
       tone: 'casual',
       label: 'Punchy News', 
-      structure: "Ship first. Refine later. {name} is live. 🔥\n\n🚀 Introducing {name}: {desc}\n\nKey Goal: {obj}\n\nCheck it out here: [Link]\n\n#Launch #Tech #Innovation" 
+      structure: "Ship first. Refine later. {name} is live. ??\n\n?? Introducing {name}: {desc}\n\nKey Goal: {obj}\n\nCheck it out here: [Link]\n\n#Launch #Tech #Innovation" 
     },
     { 
       id: 'tw_cas_2', 
       tone: 'casual',
       label: 'Quick Thought', 
-      structure: "Most people overthink {obj}. We just solved it. 🚀\n\n{name} is finally here! 🥳\n\nWe're helping people {obj} like never before.\n\n{desc}\n\n👇 [Link]" 
+      structure: "Most people overthink {obj}. We just solved it. ??\n\n{name} is finally here! ??\n\nWe're helping people {obj} like never before.\n\n{desc}\n\n?? [Link]" 
     },
     // PROFESSIONAL
     { 
       id: 'tw_prof_1', 
       tone: 'professional',
       label: 'Official Update', 
-      structure: "Performance is the only metric that matters. {name} update. 📢\n\n📢 STRATEGIC UPDATE: {name}\n\nWe're optimizing for {obj} through {desc}.\n\nKey pillars:\n• [Pillar 1]\n• [Pillar 2]\n\nDetails: [Link]" 
+      structure: "Performance is the only metric that matters. {name} update. ??\n\n?? STRATEGIC UPDATE: {name}\n\nWe're optimizing for {obj} through {desc}.\n\nKey pillars:\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Pillar 1]\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Pillar 2]\n\nDetails: [Link]" 
     },
     { 
       id: 'tw_prof_2', 
       tone: 'professional',
       label: 'Data Point', 
-      structure: "Numbers > Opinions. Check the impact of {obj}. 📊\n\n📊 DATA INSIGHT: {obj}\n\nOur latest launch, {name}, is addressing {desc}.\n\nKey metric impact:\n• [Metric 1]: +[X]%\n• [Metric 2]: -[Y]%\n\nRead more: [Link]" 
+      structure: "Numbers > Opinions. Check the impact of {obj}. ??\n\n?? DATA INSIGHT: {obj}\n\nOur latest launch, {name}, is addressing {desc}.\n\nKey metric impact:\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Metric 1]: +[X]%\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Metric 2]: -[Y]%\n\nRead more: [Link]" 
     },
     // EDUCATIONAL
     { 
       id: 'tw_edu_1', 
       tone: 'educational',
       label: 'Thread Hook', 
-      structure: "The ROI of {obj} is misunderstood. Here's the truth. 🧵\n\nI just discovered the secret to {obj} 🧵\n\n{name} is changing how we view {desc}.\n\nHere are 3 reasons why:\n\n1/ [Expert Point 1]\n2/ [Advanced Tip 2]\n3/ [Quick Win 3]\n\nClick to read more: [Link]" 
+      structure: "The ROI of {obj} is misunderstood. Here's the truth. ??\n\nI just discovered the secret to {obj} ??\n\n{name} is changing how we view {desc}.\n\nHere are 3 reasons why:\n\n1/ [Expert Point 1]\n2/ [Advanced Tip 2]\n3/ [Quick Win 3]\n\nClick to read more: [Link]" 
     },
     { 
       id: 'tw_edu_2', 
       tone: 'educational',
       label: 'Quick Tips', 
-      structure: "Low effort. High leverage. 3 ways to win at {obj}. 💡\n\n💡 Quick Tips for {obj}:\n\n1️⃣ Use {name}\n2️⃣ Focus on {desc}\n3️⃣ [Tip 3]\n\nSimple but effective. ✅ [Link]" 
+      structure: "Low effort. High leverage. 3 ways to win at {obj}. ??\n\n?? Quick Tips for {obj}:\n\n1?? Use {name}\n2?? Focus on {desc}\n3?? [Tip 3]\n\nSimple but effective. ? [Link]" 
     },
     // BOLD
     { 
       id: 'tw_bold_1', 
       tone: 'bold',
       label: 'Bold Claims', 
-      structure: "Average is the enemy. Stop settling for less in {obj}. 🛑\n\nSTOP doing [Common Mistake]. 🛑\n\n{name} is here to {obj}. \n\n{desc}\n\nNo more excuses. [Link]" 
+      structure: "Average is the enemy. Stop settling for less in {obj}. ??\n\nSTOP doing [Common Mistake]. ??\n\n{name} is here to {obj}. \n\n{desc}\n\nNo more excuses. [Link]" 
     }
   ],
   facebook: [
@@ -221,13 +221,13 @@ const PLATFORM_CONTENT_TEMPLATES: Record<string, { id: string; label: string; st
       id: 'fb_prof_1', 
       tone: 'professional',
       label: 'Announcement', 
-      structure: "📢 ANNOUNCEMENT: {name}\n\nDetails: {desc}\nGoal: {obj}\n\nLearn more: [Link] 👋" 
+      structure: "?? ANNOUNCEMENT: {name}\n\nDetails: {desc}\nGoal: {obj}\n\nLearn more: [Link] ??" 
     },
     { 
       id: 'fb_cas_1', 
       tone: 'casual',
       label: 'Community Engagement', 
-      structure: "Hey guys! We're excited to share {name} with you today. 😊\n\n{desc}\n\nWe're aiming to {obj}. What do you think about [Point]? 👇" 
+      structure: "Hey guys! We're excited to share {name} with you today. ??\n\n{desc}\n\nWe're aiming to {obj}. What do you think about [Point]? ??" 
     }
   ]
 };
@@ -240,11 +240,11 @@ const applyTemplate = (structure: string, name: string, desc: string, obj: strin
 };
 
 const PLATFORM_DISPLAY_DATA: Record<string, { icon: string; color: string; borderColor: string; bgColor: string; darkBgColor: string }> = {
-  instagram: { icon: '📸', color: 'from-pink-500 to-purple-600', borderColor: 'border-pink-500/40', bgColor: 'bg-pink-50', darkBgColor: 'bg-pink-500/10' },
-  linkedin:  { icon: '💼', color: 'from-blue-600 to-blue-800', borderColor: 'border-blue-500/40', bgColor: 'bg-blue-50', darkBgColor: 'bg-blue-500/10' },
-  twitter:   { icon: '🐦', color: 'from-sky-400 to-sky-600', borderColor: 'border-sky-500/40', bgColor: 'bg-sky-50', darkBgColor: 'bg-sky-500/10' },
-  facebook:  { icon: '👍', color: 'from-blue-500 to-indigo-600', borderColor: 'border-blue-400/40', bgColor: 'bg-blue-50', darkBgColor: 'bg-blue-400/10' },
-  youtube:   { icon: '▶️', color: 'from-red-500 to-red-700', borderColor: 'border-red-500/40', bgColor: 'bg-red-50', darkBgColor: 'bg-red-500/10' },
+  instagram: { icon: '??', color: 'from-pink-500 to-purple-600', borderColor: 'border-pink-500/40', bgColor: 'bg-pink-50', darkBgColor: 'bg-pink-500/10' },
+  linkedin:  { icon: '??', color: 'from-blue-600 to-blue-800', borderColor: 'border-blue-500/40', bgColor: 'bg-blue-50', darkBgColor: 'bg-blue-500/10' },
+  twitter:   { icon: '??', color: 'from-sky-400 to-sky-600', borderColor: 'border-sky-500/40', bgColor: 'bg-sky-50', darkBgColor: 'bg-sky-500/10' },
+  facebook:  { icon: '??', color: 'from-blue-500 to-indigo-600', borderColor: 'border-blue-400/40', bgColor: 'bg-blue-50', darkBgColor: 'bg-blue-400/10' },
+  youtube:   { icon: '??', color: 'from-red-500 to-red-700', borderColor: 'border-red-500/40', bgColor: 'bg-red-50', darkBgColor: 'bg-red-500/10' },
 };
 
 /** Reusable character counter bar for caption textareas */
@@ -391,7 +391,7 @@ const ComboBox: React.FC<ComboBoxProps> = ({ value, onChange, options, placehold
             <div className={`px-3 py-2 text-xs border-t ${
               isDarkMode ? 'text-slate-500 border-slate-700' : 'text-slate-400 border-slate-200'
             }`}>
-              ✨ Using custom value: "{inputValue}"
+              ? Using custom value: "{inputValue}"
             </div>
           )}
         </div>
@@ -415,7 +415,7 @@ interface SuggestedCampaign {
 }
 
 // ============================================
-// CONTENT ANGLE POOL — Each regeneration picks a unique angle
+// CONTENT ANGLE POOL ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ Each regeneration picks a unique angle
 // ============================================
 const CONTENT_ANGLES = [
   'customer success story',
@@ -492,7 +492,7 @@ const SuggestionCard: React.FC<{
       const creditData = await apiService.getCredits();
       const balance = creditData?.credits?.balance ?? 0;
       if (balance < 7) {
-        alert(`⚠️ Insufficient credits. You have ${balance} credits but need 7.`);
+        alert(`?? Insufficient credits. You have ${balance} credits but need 7.`);
         return;
       }
     } catch (err) {
@@ -582,7 +582,7 @@ const SuggestionCard: React.FC<{
           : (isDarkMode ? 'border-slate-700/50 hover:border-slate-600' : 'border-slate-200 hover:border-[#ffcc29]/30')
       } ${isUsed ? '' : 'group hover:shadow-lg'}`}
     >
-      {/* Image — click to open platform preview */}
+      {/* Image ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ click to open platform preview */}
       <div className="relative h-48 overflow-hidden cursor-pointer" onClick={() => !isUsed && setShowPreview(true)}>
         <img
           src={suggestion.imageUrl}
@@ -749,7 +749,9 @@ const Campaigns: React.FC = () => {
   const { isDarkMode } = useTheme();
   const theme = getThemeClasses(isDarkMode);
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
+  const isReelsMode = location.pathname.startsWith('/reels') || searchParams.get('mode') === 'reels';
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabView>('suggestions');
@@ -757,6 +759,7 @@ const Campaigns: React.FC = () => {
   const [suggestedCampaigns, setSuggestedCampaigns] = useState<SuggestedCampaign[]>([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState(true);
   const [editingCampaign, setEditingCampaign] = useState<SuggestedCampaign | null>(null);
+  const [createModalInitialType, setCreateModalInitialType] = useState<CampaignContentType>('image');
   const [regenerationCount, setRegenerationCount] = useState(0);
   const [streamingProgress, setStreamingProgress] = useState<{ current: number; total: number } | null>(null);
   const [isCached, setIsCached] = useState(false);
@@ -891,6 +894,33 @@ const Campaigns: React.FC = () => {
     },
     [setSearchParams]
   );
+
+  const parseCreateTypeFromSearch = useCallback((rawType: string | null): CampaignContentType => {
+    const normalized = String(rawType || '').trim().toLowerCase();
+    const allowedTypes: CampaignContentType[] = ['image', 'video', 'carousel', 'story', 'reel'];
+    if (allowedTypes.includes(normalized as CampaignContentType)) {
+      return normalized as CampaignContentType;
+    }
+    return 'image';
+  }, []);
+
+  useEffect(() => {
+    const action = searchParams.get('action');
+    if (action !== 'create') return;
+
+    const requestedType = parseCreateTypeFromSearch(searchParams.get('type') || (isReelsMode ? 'reel' : null));
+    if (activeTab !== 'suggestions') {
+      setActiveTab('suggestions');
+    }
+    setCreateModalInitialType(requestedType);
+    setIsModalOpen(true);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('action');
+      next.delete('type');
+      return next;
+    }, { replace: true });
+  }, [activeTab, isReelsMode, parseCreateTypeFromSearch, searchParams, setSearchParams]);
 
   // Toggle campaign selection
   const toggleCampaignSelection = (campaignId: string) => {
@@ -1209,7 +1239,7 @@ const Campaigns: React.FC = () => {
       // ============================================
       // PRE-PUBLISH VALIDATION LOGGING
       // ============================================
-      console.log('🎬 [PUBLISH FLOW] Starting campaign publish...');
+      console.log('?? [PUBLISH FLOW] Starting campaign publish...');
       console.log(`   - Campaign ID: ${postingCampaign._id}`);
       console.log(`   - Campaign name: ${postingCampaign.name}`);
       console.log(`   - Selected platforms: [${selectedPlatforms.join(', ')}]`);
@@ -1220,7 +1250,7 @@ const Campaigns: React.FC = () => {
       
       // Check for Instagram audio
       const hasInstagramAudio = selectedPlatforms.includes('instagram') && !!postInstagramAudio?.url;
-      console.log(`\n🎵 [AUDIO CHECK]`);
+      console.log(`\n?? [AUDIO CHECK]`);
       console.log(`   - Instagram in platforms: ${selectedPlatforms.includes('instagram') ? 'YES' : 'NO'}`);
       console.log(`   - Audio object exists: ${!!postInstagramAudio ? 'YES' : 'NO'}`);
       console.log(`   - Audio URL: ${postInstagramAudio?.url ? postInstagramAudio.url.substring(0, 80) + '...' : 'NONE'}`);
@@ -1228,7 +1258,7 @@ const Campaigns: React.FC = () => {
       
       const result = await apiService.publishCampaign(postingCampaign._id, selectedPlatforms, scheduledFor);
       
-      console.log('\n📊 [PUBLISH RESPONSE]');
+      console.log('\n?? [PUBLISH RESPONSE]');
       console.log(`   - Success: ${result.success ? 'YES' : 'NO'}`);
       console.log(`   - Message: ${result.message}`);
       if (hasInstagramAudio) {
@@ -1254,9 +1284,9 @@ const Campaigns: React.FC = () => {
 	          ? `Scheduled for ${scheduledLabel} on ${selectedPlatforms.join(', ')}!`
 	          : `Posted successfully to ${selectedPlatforms.join(', ')}!`;
 	        
-          console.log('\n✅ [PUBLISH SUCCESS]');
+          console.log('\n? [PUBLISH SUCCESS]');
           if (selectedPlatforms.includes('instagram') && postInstagramAudio?.url) {
-            console.log('   🎵 Instagram audio flow completed successfully!');
+            console.log('   ?? Instagram audio flow completed successfully!');
             console.log(`   - Video was generated and posted to Instagram`);
             console.log(`   - Original image may have been posted to other platforms`);
           }
@@ -1278,24 +1308,24 @@ const Campaigns: React.FC = () => {
 	          closePostModal();
 	        }, 2000);
 	      } else {
-          console.log('\n❌ [PUBLISH FAILED]');
+          console.log('\n? [PUBLISH FAILED]');
           
           // Check for video validation failure
           if (result.videoValidationFailed || result.validationDetails) {
-            console.log('   🎵 [VIDEO VALIDATION FAILED]');
+            console.log('   ?? [VIDEO VALIDATION FAILED]');
             if (result.validationDetails) {
               const validation = result.validationDetails;
               console.log(`   - Severity: ${validation.severity}`);
               if (validation.issues && validation.issues.length > 0) {
                 console.log('   - Critical Issues:');
                 validation.issues.forEach((issue: string) => {
-                  console.log(`     • ${issue}`);
+                  console.log(`     ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ ${issue}`);
                 });
               }
               if (validation.warnings && validation.warnings.length > 0) {
                 console.log('   - Warnings:');
                 validation.warnings.forEach((warning: string) => {
-                  console.log(`     • ${warning}`);
+                  console.log(`     ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ ${warning}`);
                 });
               }
             }
@@ -1315,7 +1345,7 @@ const Campaigns: React.FC = () => {
               }
             }
           } else if (selectedPlatforms.includes('instagram') && postInstagramAudio?.url) {
-            console.log('   🎵 [AUDIO FAILURE DIAGNOSIS]');
+            console.log('   ?? [AUDIO FAILURE DIAGNOSIS]');
             if (result.audioFlowInfo) {
               console.log(`   - Audio was present: ${result.audioFlowInfo.audioUrlPresent}`);
               console.log(`   - Image was present: ${result.audioFlowInfo.imageUrlPresent}`);
@@ -1335,7 +1365,7 @@ const Campaigns: React.FC = () => {
 	        setPublishResult({ success: false, message: displayMessage });
 	      }
     } catch (error: any) {
-      console.log('\n❌ [PUBLISH ERROR - EXCEPTION]');
+      console.log('\n? [PUBLISH ERROR - EXCEPTION]');
       console.log(`   - Error: ${error.message || error}`);
       setPublishResult({ success: false, message: error.message || 'Failed to post. Please try again.' });
     } finally {
@@ -1391,15 +1421,15 @@ const Campaigns: React.FC = () => {
   };
 
   // Always load campaigns from backend (MongoDB cache + Cloudinary URLs = single source of truth)
-  // No localStorage campaign cache — all browsers/devices stay in sync
+  // No localStorage campaign cache ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ all browsers/devices stay in sync
   useEffect(() => {
     if (activeTab === 'suggestions') {
-      // Create tab — no API calls needed, just shows action boxes
+      // Create tab ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ no API calls needed, just shows action boxes
       setLoadingSuggestions(false);
     } else {
       loadCampaigns();
     }
-  }, [activeTab]);
+  }, [activeTab, isReelsMode]);
 
 
   // Generate personalized fallback suggestions based on business profile
@@ -1472,11 +1502,11 @@ const Campaigns: React.FC = () => {
       : (industryImages[industry] || industryImages['default']);
     
     const voiceTones: Record<string, { emoji: string; style: string }> = {
-      'Professional': { emoji: '📈', style: 'formal and trustworthy' },
-      'Witty': { emoji: '😎', style: 'fun and clever' },
-      'Empathetic': { emoji: '💫', style: 'warm and caring' },
-      'Bold': { emoji: '🔥', style: 'confident and direct' },
-      'Educational': { emoji: '💡', style: 'informative and helpful' }
+      'Professional': { emoji: '??', style: 'formal and trustworthy' },
+      'Witty': { emoji: '??', style: 'fun and clever' },
+      'Empathetic': { emoji: '??', style: 'warm and caring' },
+      'Bold': { emoji: '??', style: 'confident and direct' },
+      'Educational': { emoji: '??', style: 'informative and helpful' }
     };
     
     const voice = voiceTones[brandVoice] || voiceTones['Professional'];
@@ -1487,7 +1517,7 @@ const Campaigns: React.FC = () => {
       {
         id: 'fb-1',
         title: `${name} Brand Story`,
-        caption: `${voice.emoji} What makes ${name} different?\n\nWe're not just another ${industry.toLowerCase()} company. We're here to ${niche ? `help with ${niche}` : 'make a real difference for ' + targetAudience}.\n\n💬 Tell us what brought you here!`,
+        caption: `${voice.emoji} What makes ${name} different?\n\nWe're not just another ${industry.toLowerCase()} company. We're here to ${niche ? `help with ${niche}` : 'make a real difference for ' + targetAudience}.\n\n?? Tell us what brought you here!`,
         imageUrl: images[0],
         platform: 'Instagram',
         objective: 'Awareness',
@@ -1499,8 +1529,8 @@ const Campaigns: React.FC = () => {
         id: 'fb-2',
         title: `Value for ${targetAudience}`,
         caption: isB2B 
-          ? `🎯 3 ways ${name} helps businesses grow:\n\n1️⃣ Streamlined operations\n2️⃣ Data-driven insights\n3️⃣ Expert support\n\n📊 See real results – link in bio!`
-          : `✨ Why ${targetAudience || 'our customers'} love ${name}:\n\n💜 Quality you can trust\n💜 Service that cares\n💜 Results that show\n\n👇 Share your experience!`,
+          ? `?? 3 ways ${name} helps businesses grow:\n\n1?? Streamlined operations\n2?? Data-driven insights\n3?? Expert support\n\n?? See real results ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ link in bio!`
+          : `? Why ${targetAudience || 'our customers'} love ${name}:\n\n?? Quality you can trust\n?? Service that cares\n?? Results that show\n\n?? Share your experience!`,
         imageUrl: images[1],
         platform: isB2B ? 'LinkedIn' : 'Instagram',
         objective: marketingGoals.includes('Sales') ? 'Sales' : 'Engagement',
@@ -1511,7 +1541,7 @@ const Campaigns: React.FC = () => {
       {
         id: 'fb-3',
         title: `Behind the Scenes at ${name}`,
-        caption: `🎬 Ever wonder what happens behind the scenes?\n\nHere's a sneak peek into how we ${niche || 'create value for you'}!\n\n${voice.emoji} Our team works hard to bring you the best in ${industry.toLowerCase()}.\n\n💬 Drop a comment if you want to see more!`,
+        caption: `?? Ever wonder what happens behind the scenes?\n\nHere's a sneak peek into how we ${niche || 'create value for you'}!\n\n${voice.emoji} Our team works hard to bring you the best in ${industry.toLowerCase()}.\n\n?? Drop a comment if you want to see more!`,
         imageUrl: images[2] || images[0],
         platform: 'YouTube',
         objective: 'Engagement',
@@ -1522,7 +1552,7 @@ const Campaigns: React.FC = () => {
       {
         id: 'fb-4',
         title: `${industry} Tips & Insights`,
-        caption: `💡 PRO TIP: 3 things every ${targetAudience || 'person'} should know about ${industry.toLowerCase()}:\n\n1️⃣ Quality matters more than price\n2️⃣ Research before you commit\n3️⃣ Trust proven expertise (like ${name}!)\n\n📌 Save this for later!`,
+        caption: `?? PRO TIP: 3 things every ${targetAudience || 'person'} should know about ${industry.toLowerCase()}:\n\n1?? Quality matters more than price\n2?? Research before you commit\n3?? Trust proven expertise (like ${name}!)\n\n?? Save this for later!`,
         imageUrl: industryImages['default'][2],
         platform: isB2B ? 'LinkedIn' : 'Twitter',
         objective: 'Authority',
@@ -1533,7 +1563,7 @@ const Campaigns: React.FC = () => {
       {
         id: 'fb-5',
         title: `Limited Time Offer`,
-        caption: `🔥 SPECIAL OFFER for our amazing ${targetAudience || 'followers'}!\n\n${voice.emoji} For a limited time, get exclusive access to our best ${industry.toLowerCase()} solutions.\n\n⏰ Don't wait – this won't last long!\n\n👆 Link in bio`,
+        caption: `?? SPECIAL OFFER for our amazing ${targetAudience || 'followers'}!\n\n${voice.emoji} For a limited time, get exclusive access to our best ${industry.toLowerCase()} solutions.\n\n? Don't wait ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ this won't last long!\n\n?? Link in bio`,
         imageUrl: 'https://images.unsplash.com/photo-1607082350899-7e105aa886ae?w=800&h=600&fit=crop',
         platform: 'Instagram',
         objective: 'Sales',
@@ -1544,7 +1574,7 @@ const Campaigns: React.FC = () => {
       {
         id: 'fb-6',
         title: `Community Question`,
-        caption: `🤔 We want to hear from YOU!\n\nWhat's your biggest challenge when it comes to ${niche || industry.toLowerCase()}?\n\nA) Finding the right solution\nB) Budget constraints\nC) Time management\nD) Something else (tell us!)\n\n👇 Vote below!`,
+        caption: `?? We want to hear from YOU!\n\nWhat's your biggest challenge when it comes to ${niche || industry.toLowerCase()}?\n\nA) Finding the right solution\nB) Budget constraints\nC) Time management\nD) Something else (tell us!)\n\n?? Vote below!`,
         imageUrl: 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=800&h=600&fit=crop',
         platform: 'Twitter',
         objective: 'Engagement',
@@ -1555,7 +1585,7 @@ const Campaigns: React.FC = () => {
       {
         id: 'fb-7',
         title: `Meet the Team`,
-        caption: `👋 Meet the faces behind ${name}!\n\nOur passionate team is dedicated to delivering the best ${industry.toLowerCase()} experience for ${targetAudience}.\n\n🌟 Every success starts with great people.\n\n💬 Who would you like to know more about?`,
+        caption: `?? Meet the faces behind ${name}!\n\nOur passionate team is dedicated to delivering the best ${industry.toLowerCase()} experience for ${targetAudience}.\n\n?? Every success starts with great people.\n\n?? Who would you like to know more about?`,
         imageUrl: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=800&h=600&fit=crop',
         platform: 'LinkedIn',
         objective: 'Trust',
@@ -1566,7 +1596,7 @@ const Campaigns: React.FC = () => {
       {
         id: 'fb-8',
         title: `${name} Milestone`,
-        caption: `🎉 Big news! ${name} has just hit an amazing milestone!\n\n${voice.emoji} Thank you to everyone who made this possible – our incredible ${targetAudience} and our dedicated team.\n\nHere's to even bigger things ahead! 🚀\n\n#Grateful`,
+        caption: `?? Big news! ${name} has just hit an amazing milestone!\n\n${voice.emoji} Thank you to everyone who made this possible ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ our incredible ${targetAudience} and our dedicated team.\n\nHere's to even bigger things ahead! ??\n\n#Grateful`,
         imageUrl: 'https://images.unsplash.com/photo-1533750349088-cd871a92f312?w=800&h=600&fit=crop',
         platform: 'Instagram',
         objective: 'Engagement',
@@ -1577,7 +1607,7 @@ const Campaigns: React.FC = () => {
       {
         id: 'fb-9',
         title: `How It Works`,
-        caption: `🔍 Ever wondered how ${name} works?\n\nStep 1️⃣: ${isB2B ? 'Contact us' : 'Browse our offerings'}\nStep 2️⃣: ${isB2B ? 'Get a custom solution' : 'Choose what fits you'}\nStep 3️⃣: ${isB2B ? 'See measurable results' : 'Enjoy the experience!'}\n\n👆 Ready to start? Link in bio!`,
+        caption: `?? Ever wondered how ${name} works?\n\nStep 1??: ${isB2B ? 'Contact us' : 'Browse our offerings'}\nStep 2??: ${isB2B ? 'Get a custom solution' : 'Choose what fits you'}\nStep 3??: ${isB2B ? 'See measurable results' : 'Enjoy the experience!'}\n\n?? Ready to start? Link in bio!`,
         imageUrl: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&h=600&fit=crop',
         platform: isB2B ? 'LinkedIn' : 'Instagram',
         objective: 'Traffic',
@@ -1588,7 +1618,7 @@ const Campaigns: React.FC = () => {
       {
         id: 'fb-10',
         title: `Weekend Special`,
-        caption: `☀️ Weekend vibes + Special deals = Perfect combo!\n\nTreat yourself this weekend with exclusive offers from ${name}.\n\n🏷️ Use code WEEKEND${new Date().getDate()} for a special surprise!\n\n⏰ Valid through Sunday!`,
+        caption: `?? Weekend vibes + Special deals = Perfect combo!\n\nTreat yourself this weekend with exclusive offers from ${name}.\n\n??? Use code WEEKEND${new Date().getDate()} for a special surprise!\n\n? Valid through Sunday!`,
         imageUrl: 'https://images.unsplash.com/photo-1557821552-17105176677c?w=800&h=600&fit=crop',
         platform: 'Instagram',
         objective: 'Sales',
@@ -1599,7 +1629,7 @@ const Campaigns: React.FC = () => {
       {
         id: 'fb-11',
         title: `Customer Spotlight`,
-        caption: `🌟 CUSTOMER SPOTLIGHT 🌟\n\n"${name} has completely transformed how I approach ${niche || industry.toLowerCase()}!" - Happy Customer\n\n📸 Want to be featured? Share your story with us!\n\n#CustomerSuccess`,
+        caption: `?? CUSTOMER SPOTLIGHT ??\n\n"${name} has completely transformed how I approach ${niche || industry.toLowerCase()}!" - Happy Customer\n\n?? Want to be featured? Share your story with us!\n\n#CustomerSuccess`,
         imageUrl: 'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=800&h=600&fit=crop',
         platform: 'Facebook',
         objective: 'Trust',
@@ -1610,7 +1640,7 @@ const Campaigns: React.FC = () => {
       {
         id: 'fb-12',
         title: `Did You Know?`,
-        caption: `🧠 Did you know?\n\n${industry === 'Technology' ? 'The average person checks their phone 96 times a day!' : industry === 'Ecommerce' ? '70% of shopping carts are abandoned before checkout!' : `Most ${targetAudience} make decisions in under 7 seconds!`}\n\nThat's why ${name} focuses on ${niche || 'making things simple for you'}.\n\n💬 Drop a 🤯 if this surprised you!`,
+        caption: `?? Did you know?\n\n${industry === 'Technology' ? 'The average person checks their phone 96 times a day!' : industry === 'Ecommerce' ? '70% of shopping carts are abandoned before checkout!' : `Most ${targetAudience} make decisions in under 7 seconds!`}\n\nThat's why ${name} focuses on ${niche || 'making things simple for you'}.\n\n?? Drop a ?? if this surprised you!`,
         imageUrl: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=800&h=600&fit=crop',
         platform: 'Twitter',
         objective: 'Engagement',
@@ -1642,7 +1672,7 @@ const Campaigns: React.FC = () => {
         const balance = creditData?.credits?.balance ?? 0;
         const required = 42;
         if (balance < required) {
-          alert(`⚠️ Insufficient credits. You have ${balance} credits but need ${required} to generate new campaigns.`);
+          alert(`?? Insufficient credits. You have ${balance} credits but need ${required} to generate new campaigns.`);
           return;
         }
       } catch (err) {
@@ -1712,7 +1742,7 @@ const Campaigns: React.FC = () => {
           if (error && (error.includes('Insufficient credits') || error.includes('credits'))) {
             setLoadingSuggestions(false);
             setStreamingProgress(null);
-            alert('⚠️ Insufficient credits to generate new campaigns. Please wait for your monthly credit reset or upgrade your plan.');
+            alert('?? Insufficient credits to generate new campaigns. Please wait for your monthly credit reset or upgrade your plan.');
             return;
           }
           // Streaming failed, falling back to regular API
@@ -1749,7 +1779,7 @@ const Campaigns: React.FC = () => {
       // Check for insufficient credits error from the API
       if (response.insufficientCredits) {
         setLoadingSuggestions(false);
-        alert(`⚠️ Insufficient credits. You have ${response.creditsRemaining} credits but need ${response.required}. Please wait for your monthly credit reset or upgrade your plan.`);
+        alert(`?? Insufficient credits. You have ${response.creditsRemaining} credits but need ${response.required}. Please wait for your monthly credit reset or upgrade your plan.`);
         return;
       }
       
@@ -1787,7 +1817,7 @@ const Campaigns: React.FC = () => {
       // Check if the error is a credit issue
       if (error?.message?.includes('Insufficient credits') || error?.message?.includes('credits')) {
         setLoadingSuggestions(false);
-        alert('⚠️ Insufficient credits to generate new campaigns. Please wait for your monthly credit reset or upgrade your plan.');
+        alert('?? Insufficient credits to generate new campaigns. Please wait for your monthly credit reset or upgrade your plan.');
         return;
       }
       // AI suggestions not available, using personalized fallback
@@ -1832,7 +1862,7 @@ const Campaigns: React.FC = () => {
   }, []);
 
   // ====== SERIALIZED REGENERATION QUEUE ======
-  // Only one regeneration runs at a time — prevents duplicate content
+  // Only one regeneration runs at a time ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ prevents duplicate content
   const regenQueueRef = useRef<Promise<void>>(Promise.resolve());
 
   const enqueueRegeneration = useCallback((fn: () => Promise<void>) => {
@@ -1914,17 +1944,17 @@ Objective: ${suggestion.objective}
 Best Time to Post: ${suggestion.bestTime}
 Estimated Reach: ${suggestion.estimatedReach}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+??????????????????????????????????
 
 CAPTION:
 ${suggestion.caption}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+??????????????????????????????????
 
 HASHTAGS:
 ${suggestion.hashtags.join(' ')}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+??????????????????????????????????
 
 Generated by Nebulaa Gravity Marketing Agent
 `;
@@ -1957,12 +1987,19 @@ Generated by Nebulaa Gravity Marketing Agent
     return str.charAt(0).toUpperCase() + str.slice(1);
   };
 
+  const isReelCampaignItem = useCallback((campaign: Campaign) => {
+    const creativeType = String(campaign?.creative?.type || '').toLowerCase();
+    const hasVideo = Boolean(String(campaign?.creative?.videoUrl || '').trim());
+    return creativeType === 'reel' || hasVideo;
+  }, []);
+
   const loadCampaigns = async () => {
     try {
       setLoading(true);
       const queryStatus = activeTab === 'all' ? undefined : activeTab;
       const response = await apiService.getCampaigns(queryStatus);
-      setCampaigns(response.campaigns || []);
+      const nextCampaigns = response.campaigns || [];
+      setCampaigns(isReelsMode ? nextCampaigns.filter(isReelCampaignItem) : nextCampaigns);
     } catch (error) {
       console.error("Failed to fetch campaigns", error);
     } finally {
@@ -2014,7 +2051,7 @@ Generated by Nebulaa Gravity Marketing Agent
         bestDateTime.setHours(hours, minutes, 0, 0);
         
         if (bestDateTime <= now) {
-          // Best time already passed today — schedule for tomorrow
+          // Best time already passed today ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ schedule for tomorrow
           const tomorrow = new Date(now);
           tomorrow.setDate(tomorrow.getDate() + 1);
           startDate = tomorrow.toISOString().split('T')[0];
@@ -2039,7 +2076,7 @@ Generated by Nebulaa Gravity Marketing Agent
       });
       setCampaigns([campaign, ...campaigns]);
       // Mark as saved successfully
-      setUsedSuggestions(prev => new Map(prev).set(suggestion.id, 'Saved to Drafts ✓'));
+      setUsedSuggestions(prev => new Map(prev).set(suggestion.id, 'Saved to Drafts ?'));
     } catch (e) {
       console.error(e);
       // Remove the saving status on error
@@ -2075,12 +2112,51 @@ Generated by Nebulaa Gravity Marketing Agent
 
   const renderContent = () => {
     if (activeTab === 'suggestions') {
+      if (isReelsMode) {
+        return (
+          <div className="animate-in fade-in duration-500">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <button
+                onClick={() => {
+                  setCreateModalInitialType('reel');
+                  setIsModalOpen(true);
+                }}
+                className={`group relative rounded-2xl border p-8 text-left transition-all duration-300 hover:scale-[1.01] hover:shadow-xl flex flex-col justify-between min-h-[220px] ${
+                  isDarkMode
+                    ? 'bg-[#161b22] border-slate-700/50 hover:border-[#ffcc29]/50'
+                    : 'bg-white border-slate-200 hover:border-[#ffcc29]/60'
+                }`}
+              >
+                <div>
+                  <div className="p-3.5 bg-gradient-to-br from-[#ffcc29] to-[#ffa500] rounded-xl w-fit mb-5 shadow-lg shadow-[#ffcc29]/20">
+                    <Video className="w-7 h-7 text-black" />
+                  </div>
+                  <h3 className={`text-xl font-bold mb-2 ${theme.text}`}>Create Reel</h3>
+                  <p className={`text-sm leading-relaxed ${theme.textSecondary}`}>
+                    Upload source image/video, generate AI reel, then post or schedule.
+                  </p>
+                </div>
+                <div className={`mt-5 flex items-center gap-1.5 text-xs font-medium ${
+                  isDarkMode ? 'text-[#ffcc29]' : 'text-amber-600'
+                }`}>
+                  <Sparkles className="w-3.5 h-3.5" />
+                  Reels by Gravity
+                </div>
+              </button>
+            </div>
+          </div>
+        );
+      }
+
       return (
         <div className="animate-in fade-in duration-500">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             {/* Create Campaign */}
             <button
-              onClick={() => setIsModalOpen(true)}
+              onClick={() => {
+                setCreateModalInitialType('image');
+                setIsModalOpen(true);
+              }}
               className={`group relative rounded-2xl border p-8 text-left transition-all duration-300 hover:scale-[1.01] hover:shadow-xl flex flex-col justify-between min-h-[220px] ${
                 isDarkMode
                   ? 'bg-[#161b22] border-slate-700/50 hover:border-purple-500/50'
@@ -2204,10 +2280,10 @@ Generated by Nebulaa Gravity Marketing Agent
           }`}>
             <Filter className="w-8 h-8 text-slate-400" />
           </div>
-          <h3 className={`text-lg font-bold ${theme.text}`}>No campaigns found</h3>
-          <p className={`${theme.textSecondary} mb-6`}>There are no campaigns in this view.</p>
+          <h3 className={`text-lg font-bold ${theme.text}`}>{isReelsMode ? 'No reels found' : 'No campaigns found'}</h3>
+          <p className={`${theme.textSecondary} mb-6`}>{isReelsMode ? 'There are no reels in this view.' : 'There are no campaigns in this view.'}</p>
           <button onClick={() => setActiveTab('suggestions')} className="text-[#ffcc29] font-bold hover:underline">
-            View Suggestions
+            View Create
           </button>
         </div>
       );
@@ -2302,8 +2378,8 @@ Generated by Nebulaa Gravity Marketing Agent
     <div className="max-w-7xl mx-auto min-h-screen">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div>
-          <h1 className={`text-2xl font-bold ${theme.text}`}>Campaign Manager</h1>
-          <p className={theme.textSecondary}>Plan, execute, and analyze your marketing efforts.</p>
+          <h1 className={`text-2xl font-bold ${theme.text}`}>{isReelsMode ? 'Reels Manager' : 'Campaign Manager'}</h1>
+          <p className={theme.textSecondary}>{isReelsMode ? 'Create, schedule, and track your AI reels in one place.' : 'Plan, execute, and analyze your marketing efforts.'}</p>
         </div>
         
         {/* Campaign Type Selector - hidden, actions are in Create tab */}
@@ -2320,6 +2396,7 @@ Generated by Nebulaa Gravity Marketing Agent
               <button
                 onClick={() => {
                   setShowCampaignTypeSelector(false);
+                  setCreateModalInitialType('image');
                   setIsModalOpen(true);
                 }}
                 className={`w-full p-4 text-left transition-colors flex items-start gap-3 ${
@@ -2395,6 +2472,8 @@ Generated by Nebulaa Gravity Marketing Agent
         />
       )}
 
+      {!isReelsMode && (
+      <>
       {/* ICP & Channel Strategy Section */}
       <div className={`mb-6 rounded-2xl border overflow-hidden transition-all duration-300 ${isDarkMode ? 'bg-[#0B0F1A] border-slate-700/50' : 'bg-white border-slate-200'}`}>
         {/* Collapsed header bar */}
@@ -2533,10 +2612,10 @@ Generated by Nebulaa Gravity Marketing Agent
                   {/* ICP Details Grid */}
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                     {[
-                      { label: 'Demographics', key: 'demographics', icon: '👤' },
-                      { label: 'Psychographics', key: 'psychographics', icon: '🧠' },
-                      { label: 'Buying Behavior', key: 'buyingBehavior', icon: '🛒' },
-                      { label: 'Online Presence', key: 'onlinePresence', icon: '🌐' },
+                      { label: 'Demographics', key: 'demographics', icon: '??' },
+                      { label: 'Psychographics', key: 'psychographics', icon: '??' },
+                      { label: 'Buying Behavior', key: 'buyingBehavior', icon: '??' },
+                      { label: 'Online Presence', key: 'onlinePresence', icon: '??' },
                     ].map((field) => (
                       <div key={field.key} className={`p-3.5 rounded-xl ${isDarkMode ? 'bg-[#161b22] border border-slate-700/50' : 'bg-slate-50 border border-slate-200'}`}>
                         <div className="flex items-center gap-2 mb-2">
@@ -2561,7 +2640,7 @@ Generated by Nebulaa Gravity Marketing Agent
                     {/* Pain Points */}
                     <div className={`p-3.5 rounded-xl ${isDarkMode ? 'bg-[#161b22] border border-slate-700/50' : 'bg-slate-50 border border-slate-200'}`}>
                       <div className="flex items-center gap-2 mb-2">
-                        <span className="text-sm">🎯</span>
+                        <span className="text-sm">??</span>
                         <h4 className={`text-xs font-bold uppercase tracking-wider ${theme.textSecondary}`}>Pain Points</h4>
                       </div>
                       {icpEditing ? (
@@ -2577,7 +2656,7 @@ Generated by Nebulaa Gravity Marketing Agent
                         <ul className="space-y-1.5">
                           {(icpData.icp?.painPoints || []).map((point, i) => (
                             <li key={i} className={`text-xs flex items-start gap-2 ${theme.textSecondary}`}>
-                              <span className="text-[#ffcc29] mt-0.5">•</span>
+                              <span className="text-[#ffcc29] mt-0.5">ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½</span>
                               {point}
                             </li>
                           ))}
@@ -2683,7 +2762,7 @@ Generated by Nebulaa Gravity Marketing Agent
 
                   {/* Selection hint */}
                   <p className={`text-[10px] mt-2 ${theme.textSecondary}`}>
-                    Click platforms to select/deselect — campaign suggestions will only use selected platforms
+                    Click platforms to select/deselect ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ campaign suggestions will only use selected platforms
                   </p>
                 </div>
 
@@ -2733,13 +2812,15 @@ Generated by Nebulaa Gravity Marketing Agent
           </div>
         )}
       </div>
+      </>
+      )}
 
       {/* Tabs */}
       <div className={`border-b mb-8 overflow-x-auto ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'}`}>
         <div className="flex space-x-6 min-w-max">
           {[
-            { id: 'suggestions', label: 'Create', icon: Plus },
-            { id: 'all', label: 'All Campaigns', icon: null },
+            { id: 'suggestions', label: isReelsMode ? 'Create Reel' : 'Create', icon: Plus },
+            { id: 'all', label: isReelsMode ? 'All Reels' : 'All Campaigns', icon: null },
             { id: 'draft', label: 'Drafts', icon: null },
             { id: 'scheduled', label: 'Scheduled', icon: null },
             { id: 'posted', label: 'Posted', icon: null },
@@ -2770,6 +2851,8 @@ Generated by Nebulaa Gravity Marketing Agent
           isDarkMode={isDarkMode}
           theme={theme}
           connectedPlatforms={connectedPlatforms}
+          initialContentType={createModalInitialType}
+          reelsOnly={isReelsMode}
         />
       )}
 
@@ -3005,7 +3088,7 @@ Generated by Nebulaa Gravity Marketing Agent
                       )}
 
                       <p className={`text-xs ${theme.textMuted}`}>
-                        Applied only to Instagram. We publish Instagram as a video with your audio embedded (this plays as normal video sound, not as Instagram Music). Instagram web doesn’t support adding music to image posts. Other platforms publish without audio.
+                        Applied only to Instagram. We publish Instagram as a video with your audio embedded (this plays as normal video sound, not as Instagram Music). Instagram web doesnÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½t support adding music to image posts. Other platforms publish without audio.
                       </p>
                     </div>
                   </div>
@@ -3401,7 +3484,7 @@ Generated by Nebulaa Gravity Marketing Agent
                         />
                         <div className="flex items-center justify-between mt-2">
                           <span className={`text-xs ${theme.textMuted}`}>
-                            {createPostLogo ? '✓ Logo selected' : 'No logo'} • {createPostAspectRatio}
+                            {createPostLogo ? '? Logo selected' : 'No logo'} ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ {createPostAspectRatio}
                           </span>
                           <button
                             onClick={async () => {
@@ -3965,17 +4048,26 @@ const CampaignCard: React.FC<{
               ? 'bg-slate-700/60 text-slate-300 border-slate-600'
               : 'bg-slate-100 text-slate-600 border-slate-200';
 
-  const previewImage = String(
-    campaign.creative?.imageUrls?.[0] ||
-      campaign.creative?.videoUrl ||
-      ''
-  ).trim();
+    const previewImage = String(campaign.creative?.imageUrls?.[0] || '').trim();
+  const previewVideo = String(campaign.creative?.videoUrl || '').trim();
+  const previewMedia = String(previewImage || previewVideo || '').trim();
+  const hasVideoPreview =
+    Boolean(previewVideo) ||
+    /\.(mp4|mov|m4v|webm)(\?|#|$)/i.test(previewMedia);
 
   const previewCaption = String(
     campaign.creative?.captions ||
       campaign.creative?.textContent ||
       ''
   ).trim();
+
+  const previewHashtagText = Array.isArray(campaign.creative?.hashtags)
+    ? campaign.creative.hashtags
+        .map((tag) => String(tag || '').trim())
+        .filter(Boolean)
+        .slice(0, 4)
+        .join(' ')
+    : '';
 
   const impressions = Number(campaign.performance?.impressions || 0);
   const engagement = Number(campaign.performance?.engagement || 0);
@@ -4062,12 +4154,27 @@ const CampaignCard: React.FC<{
 
         <div className={`rounded-lg border p-3 ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-slate-50 border-slate-200'}`}>
           <div className="flex items-start gap-3">
-            {previewImage ? (
-              <img
-                src={previewImage}
-                alt="Campaign preview"
-                className="w-[72px] h-[72px] object-cover rounded-md flex-shrink-0"
-              />
+                        {previewMedia ? (
+              hasVideoPreview ? (
+                <div className="relative w-[72px] h-[72px] rounded-md overflow-hidden flex-shrink-0 bg-black">
+                  <video
+                    src={previewVideo || previewMedia}
+                    className="w-full h-full object-cover"
+                    muted
+                    playsInline
+                    preload="metadata"
+                  />
+                  <span className="absolute bottom-1 right-1 text-[9px] px-1 py-0.5 rounded bg-black/70 text-white uppercase">
+                    Reel
+                  </span>
+                </div>
+              ) : (
+                <img
+                  src={previewMedia}
+                  alt="Campaign preview"
+                  className="w-[72px] h-[72px] object-cover rounded-md flex-shrink-0"
+                />
+              )
             ) : (
               <div className={`w-[72px] h-[72px] rounded-md border flex items-center justify-center flex-shrink-0 ${
                 isDarkMode ? 'border-slate-700 text-slate-500' : 'border-slate-200 text-slate-400'
@@ -4076,10 +4183,14 @@ const CampaignCard: React.FC<{
               </div>
             )}
 
-            <div className="min-w-0 flex-1">
-              <p className={`text-xs leading-relaxed line-clamp-2 ${theme.textSecondary}`}>
+                        <div className="min-w-0 flex-1">
+              <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">Campaign preview</p>
+              <p className={`text-xs leading-relaxed line-clamp-2 mt-0.5 ${theme.textSecondary}`}>
                 {previewCaption || 'No caption available'}
               </p>
+              {previewHashtagText && (
+                <p className="text-[11px] text-[#ffcc29] mt-1 line-clamp-1">{previewHashtagText}</p>
+              )}
             </div>
           </div>
         </div>
@@ -4203,7 +4314,38 @@ interface GeneratedPost {
   week?: number;
 }
 
-const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campaign) => void; isDarkMode: boolean; theme: ReturnType<typeof getThemeClasses>; connectedPlatforms: string[] }> = ({ onClose, onSuccess, isDarkMode, theme, connectedPlatforms }) => {
+type CampaignContentType = 'image' | 'video' | 'carousel' | 'story' | 'reel';
+
+type ReelPromptTypeOption = {
+  key: string;
+  label: string;
+  description: string;
+};
+
+type GeneratedReelState = {
+  campaignId: string;
+  campaignName: string;
+  promptLabel: string;
+  promptType: string;
+  languageLabel: string;
+  durationSeconds: number;
+  sourceImageUrl: string;
+  videoUrl: string;
+  audioUrl: string;
+  caption: string;
+  cta: string;
+  hashtags: string[];
+  voiceoverScript: string;
+  scenePlan: Array<{
+    sceneTitle: string;
+    startSec: number;
+    endSec: number;
+    visualDirection: string;
+    caption: string;
+  }>;
+};
+
+const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campaign) => void; isDarkMode: boolean; theme: ReturnType<typeof getThemeClasses>; connectedPlatforms: string[]; initialContentType?: CampaignContentType; reelsOnly?: boolean }> = ({ onClose, onSuccess, isDarkMode, theme, connectedPlatforms, initialContentType = 'image', reelsOnly = false }) => {
     const [step, setStep] = useState(1);
     const [isGenerating, setIsGenerating] = useState(false);
     const generationRequestInFlightRef = useRef(false);
@@ -4230,7 +4372,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
     const [platforms, setPlatforms] = useState<string[]>(connectedPlatforms.length > 0 ? [connectedPlatforms[0]] : []);
     const [contentTone, setContentTone] = useState<'professional' | 'casual' | 'humorous' | 'inspirational' | 'educational'>('professional');
     const [contentLanguage, setContentLanguage] = useState<string>('English');
-    const [contentType, setContentType] = useState<'image' | 'video' | 'carousel' | 'story'>('image');
+    const [contentType, setContentType] = useState<CampaignContentType>(initialContentType);
     const [selectedAspectRatio, setSelectedAspectRatio] = useState<string>('1:1');
     const [platformContents, setPlatformContents] = useState<Record<string, string>>({});
     const [selectedTemplateIds, setSelectedTemplateIds] = useState<Record<string, string>>({});
@@ -4243,6 +4385,29 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
     const [showBrandLogoSelector, setShowBrandLogoSelector] = useState(false);
     const [isPopulating, setIsPopulating] = useState<Record<string, boolean>>({});
     const manuallyEditedTemplates = useRef<Set<string>>(new Set());
+
+    const isReelFlow = contentType === 'reel';
+    const isReelOnlyFlow = reelsOnly && isReelFlow;
+    const reelGenerationStep = isReelOnlyFlow ? 1 : 3;
+    const reelPreviewStep = isReelOnlyFlow ? 2 : 4;
+    const reelSchedulingStep = isReelOnlyFlow ? 3 : 5;
+    const reelMaxStep = isReelOnlyFlow ? 3 : 5;
+    const reelOnlyPlatforms = ['instagram', 'facebook', 'youtube'];
+    const [reelPromptTypes, setReelPromptTypes] = useState<ReelPromptTypeOption[]>([]);
+    const [reelDurationOptions, setReelDurationOptions] = useState<number[]>([10, 20, 30]);
+    const [loadingReelOptions, setLoadingReelOptions] = useState(false);
+    const [reelImageFile, setReelImageFile] = useState<File | null>(null);
+    const [reelImagePreview, setReelImagePreview] = useState<string>('');
+    const [reelPromptType, setReelPromptType] = useState<string>('');
+    const [reelDurationSeconds, setReelDurationSeconds] = useState<number>(20);
+    const [reelCustomHint, setReelCustomHint] = useState<string>('');
+    const [isGeneratingReel, setIsGeneratingReel] = useState(false);
+    const [generatedReel, setGeneratedReel] = useState<GeneratedReelState | null>(null);
+    const [generatedReelCampaign, setGeneratedReelCampaign] = useState<Campaign | null>(null);
+    const [reelScheduleDate, setReelScheduleDate] = useState<string>(formatLocalDateYYYYMMDD(new Date()));
+    const [reelScheduleTime, setReelScheduleTime] = useState<string>('10:00');
+    const [isPublishingReel, setIsPublishingReel] = useState(false);
+    const [reelResultMessage, setReelResultMessage] = useState<{ success: boolean; message: string } | null>(null);
 
     const smartPopulateTemplate = async (platform: string, templateText: string, targetLanguage: string = contentLanguage) => {
       const apiBaseUrl = window.location.hostname !== 'localhost' ? '' : 'http://localhost:5000';
@@ -4311,6 +4476,326 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
       }
       setShowProductPicker(false);
     };
+
+    const readReelFileAsDataURL = (file: File): Promise<string> => {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(new Error('Failed to read reel image file'));
+        reader.readAsDataURL(file);
+      });
+    };
+
+    const resetReelImageSource = useCallback(() => {
+      if (reelImagePreview && reelImagePreview.startsWith('blob:')) {
+        URL.revokeObjectURL(reelImagePreview);
+      }
+      setReelImageFile(null);
+      setReelImagePreview('');
+    }, [reelImagePreview]);
+
+    const setReelImageFromUrl = useCallback((url: string) => {
+      const nextUrl = String(url || '').trim();
+      if (!nextUrl) return;
+
+      if (reelImagePreview && reelImagePreview.startsWith('blob:')) {
+        URL.revokeObjectURL(reelImagePreview);
+      }
+
+      setReelImageFile(null);
+      setReelImagePreview(nextUrl);
+    }, [reelImagePreview]);
+
+    const handleUseLinkedProductImageForReel = () => {
+      const linkedImage = String(selectedProduct?.imageUrl || '').trim();
+      if (!linkedImage) {
+        alert('Please select a product with an image from inventory.');
+        return;
+      }
+      setReelImageFromUrl(linkedImage);
+    };
+    const mapContentLanguageToReelCode = (language: string): string => {
+      const normalized = String(language || '').trim().toLowerCase();
+      const map: Record<string, string> = {
+        english: 'en',
+        en: 'en',
+        hindi: 'hi',
+        hi: 'hi',
+        tamil: 'ta',
+        ta: 'ta',
+        telugu: 'te',
+        te: 'te',
+        malayalam: 'ml',
+        ml: 'ml',
+        kannada: 'kn',
+        kn: 'kn'
+      };
+      return map[normalized] || 'en';
+    };
+
+    const onReelImageSelected = (file: File | null) => {
+      if (!file) return;
+      if (!file.type.startsWith('image/')) {
+        alert('Please select an image file for reel generation.');
+        return;
+      }
+
+      if (reelImagePreview && reelImagePreview.startsWith('blob:')) {
+        URL.revokeObjectURL(reelImagePreview);
+      }
+
+      setReelImageFile(file);
+      setReelImagePreview(URL.createObjectURL(file));
+    };
+
+    useEffect(() => {
+      if (!isReelFlow) return;
+      if (reelImageFile || reelImagePreview) return;
+
+      const linkedImage = String(selectedProduct?.imageUrl || '').trim();
+      if (!linkedImage) return;
+
+      setReelImageFromUrl(linkedImage);
+    }, [isReelFlow, reelImageFile, reelImagePreview, selectedProduct?.imageUrl, setReelImageFromUrl]);
+    useEffect(() => {
+      return () => {
+        if (reelImagePreview && reelImagePreview.startsWith('blob:')) {
+          URL.revokeObjectURL(reelImagePreview);
+        }
+      };
+    }, [reelImagePreview]);
+
+    useEffect(() => {
+      if (!isReelFlow) return;
+
+      const connectedReelPlatforms = connectedPlatforms
+        .map((p) => String(p || '').toLowerCase().trim())
+        .filter((p) => reelOnlyPlatforms.includes(p));
+
+      setSelectedAspectRatio('9:16');
+      setPlatforms((prev) => {
+        const filtered = prev
+          .map((p) => String(p || '').toLowerCase().trim())
+          .filter((p) => reelOnlyPlatforms.includes(p));
+
+        if (filtered.length > 0) return Array.from(new Set(filtered));
+        if (connectedReelPlatforms.length > 0) return [connectedReelPlatforms[0]];
+        return ['instagram'];
+      });
+    }, [isReelFlow, connectedPlatforms]);
+
+    useEffect(() => {
+      if (!isReelFlow) return;
+
+      let cancelled = false;
+      const loadReelOptions = async () => {
+        setLoadingReelOptions(true);
+        try {
+          const response = await apiService.getReelGenerationOptions();
+          if (cancelled) return;
+
+          const nextPromptTypes = Array.isArray(response?.promptTypes) ? response.promptTypes : [];
+          const nextDurations = Array.isArray(response?.durations) ? response.durations : [10, 20, 30];
+
+          setReelPromptTypes(nextPromptTypes);
+          setReelDurationOptions(nextDurations);
+
+          if (nextPromptTypes.length > 0) {
+            setReelPromptType((prev) => prev || nextPromptTypes[0].key);
+          }
+          if (nextDurations.length > 0) {
+            setReelDurationSeconds((prev) => (nextDurations.includes(prev) ? prev : nextDurations[0]));
+          }
+        } catch (error: any) {
+          if (!cancelled) {
+            setReelResultMessage({
+              success: false,
+              message: error?.message || 'Failed to load reel options.'
+            });
+          }
+        } finally {
+          if (!cancelled) setLoadingReelOptions(false);
+        }
+      };
+
+      loadReelOptions();
+      return () => {
+        cancelled = true;
+      };
+    }, [isReelFlow]);
+
+    const handleGenerateReelInCampaignFlow = async () => {
+      const selectedReelSource = String(reelImagePreview || '').trim();
+      if (!reelImageFile && !selectedReelSource) {
+        alert('Please upload an image or select one from inventory for reel generation.');
+        return;
+      }
+      if (!reelPromptType) {
+        alert('Please select a reel type.');
+        return;
+      }
+
+      const selectedProductId = selectedProduct?._id ? String(selectedProduct._id) : null;
+      const campaignState = {
+        name: campaignName,
+        description: campaignDescription,
+        product_id: selectedProductId,
+        platform: platforms,
+        language: contentLanguage,
+        reel: {
+          image: selectedReelSource,
+          prompt_type: reelPromptType,
+          duration: reelDurationSeconds
+        }
+      };
+
+      setIsGeneratingReel(true);
+      setReelResultMessage(null);
+      setGeneratedReel(null);
+      setGeneratedReelCampaign(null);
+
+      try {
+        const reelPayload: {
+          imageData?: string;
+          imageUrl?: string;
+          promptType: string;
+          language: string;
+          durationSeconds: number;
+          customPrompt?: string;
+        } = {
+          promptType: campaignState.reel.prompt_type,
+          language: mapContentLanguageToReelCode(campaignState.language),
+          durationSeconds: campaignState.reel.duration,
+          customPrompt: reelPromptType === 'custom_normal' ? reelCustomHint.trim() : ''
+        };
+
+        if (reelImageFile) {
+          reelPayload.imageData = await readReelFileAsDataURL(reelImageFile);
+        } else {
+          if (!selectedReelSource || selectedReelSource.startsWith('blob:')) {
+            throw new Error('Image source is invalid. Please upload again or pick from inventory.');
+          }
+          reelPayload.imageUrl = selectedReelSource;
+        }
+
+        const response = await apiService.generateImageReel(reelPayload);
+
+        if (!response?.success || !response?.campaign?._id) {
+          throw new Error(response?.message || response?.error || 'Failed to generate reel');
+        }
+
+        const resolvedVideoUrl = String(response?.reel?.videoUrl || response?.campaign?.creative?.videoUrl || '').trim();
+
+        setGeneratedReel({
+          campaignId: String(response.campaign._id),
+          campaignName: String(response.campaign.name || campaignState.name || 'Generated Reel Campaign'),
+          promptLabel: String(response.reel?.promptLabel || reelPromptType),
+          promptType: String(response.reel?.promptType || reelPromptType),
+          languageLabel: String(response.reel?.language?.label || campaignState.language),
+          durationSeconds: Number(response.reel?.durationSeconds || reelDurationSeconds),
+          sourceImageUrl: String(response.reel?.sourceImageUrl || ''),
+          videoUrl: resolvedVideoUrl,
+          audioUrl: String(response.reel?.audioUrl || ''),
+          caption: String(response.reel?.caption || ''),
+          cta: String(response.reel?.cta || ''),
+          hashtags: Array.isArray(response.reel?.hashtags) ? response.reel.hashtags : [],
+          voiceoverScript: String(response.reel?.voiceoverScript || ''),
+          scenePlan: Array.isArray(response.reel?.scenePlan) ? response.reel.scenePlan : []
+        });
+
+        setGeneratedReelCampaign(response.campaign as Campaign);
+
+        if (!resolvedVideoUrl) {
+          setReelResultMessage({
+            success: false,
+            message: 'Video URL missing in backend response. If video is not showing, backend is not returning reel.videoUrl.'
+          });
+        } else {
+          setReelResultMessage({
+            success: true,
+            message: 'Reel generated successfully. Review and continue to scheduling.'
+          });
+        }
+
+        setStep(4);
+      } catch (error: any) {
+        setReelResultMessage({
+          success: false,
+          message: error?.message || 'Failed to generate reel.'
+        });
+      } finally {
+        setIsGeneratingReel(false);
+      }
+    };
+
+    const handlePostReelNow = async () => {
+      if (!generatedReel?.campaignId) return;
+      if (platforms.length === 0) {
+        setReelResultMessage({ success: false, message: 'Select at least one reel platform.' });
+        return;
+      }
+
+      setIsPublishingReel(true);
+      setReelResultMessage(null);
+      try {
+        const response = await apiService.publishCampaign(generatedReel.campaignId, platforms);
+        const success = Boolean(response?.success);
+        setReelResultMessage({
+          success,
+          message: response?.message || (success ? 'Reel posted successfully.' : 'Failed to post reel.')
+        });
+
+        if (success && generatedReelCampaign) {
+          onSuccess(generatedReelCampaign);
+        }
+      } catch (error: any) {
+        setReelResultMessage({ success: false, message: error?.message || 'Failed to post reel.' });
+      } finally {
+        setIsPublishingReel(false);
+      }
+    };
+
+    const handleScheduleReelPublish = async () => {
+      if (!generatedReel?.campaignId) return;
+      if (platforms.length === 0) {
+        setReelResultMessage({ success: false, message: 'Select at least one reel platform.' });
+        return;
+      }
+
+      const normalized = buildScheduledForISOString(reelScheduleDate, reelScheduleTime, {
+        minLeadMinutes: 5,
+        safetySeconds: 30
+      });
+
+      if (!normalized) {
+        setReelResultMessage({ success: false, message: 'Invalid schedule date/time.' });
+        return;
+      }
+
+      if (normalized.adjusted) {
+        setReelScheduleDate(formatLocalDateYYYYMMDD(normalized.date));
+        setReelScheduleTime(formatLocalTimeHHMM(normalized.date));
+      }
+
+      setIsPublishingReel(true);
+      setReelResultMessage(null);
+      try {
+        const response = await apiService.publishCampaign(generatedReel.campaignId, platforms, normalized.iso);
+        const success = Boolean(response?.success);
+        setReelResultMessage({
+          success,
+          message: response?.message || (success ? 'Reel scheduled successfully.' : 'Failed to schedule reel.')
+        });
+
+        if (success && generatedReelCampaign) {
+          onSuccess(generatedReelCampaign);
+        }
+      } catch (error: any) {
+        setReelResultMessage({ success: false, message: error?.message || 'Failed to schedule reel.' });
+      } finally {
+        setIsPublishingReel(false);
+      }
+    };
     // Step 4: Scheduling Preferences
     const [campaignDuration, setCampaignDuration] = useState<'1week' | '2weeks' | '1month' | '3months'>('2weeks');
     const [postsPerWeek, setPostsPerWeek] = useState(3);
@@ -4345,7 +4830,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
 
     useEffect(() => {
       const autoPopulate = async () => {
-        if (step === 2 && campaignName && campaignDescription) {
+        if (step === 2 && !isReelFlow && campaignName && campaignDescription) {
           for (const p of platforms) {
             // If the content is currently empty or just a default template (has brackets), auto-populate it
             const currentContent = platformContents[p] || '';
@@ -4363,7 +4848,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
         }
       };
 
-      if (step === 2) {
+      if (step === 2 && !isReelFlow) {
         setPlatformContents(curr => {
           let updated = false;
           const next = { ...curr };
@@ -4406,7 +4891,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
         
         autoPopulate();
       }
-    }, [step, platforms, campaignName, campaignDescription, objective]);
+    }, [step, platforms, campaignName, campaignDescription, objective, isReelFlow]);
 
     const togglePlatform = (platform: string) => {
       setPlatforms(prev => prev.includes(platform) ? prev.filter(p => p !== platform) : [...prev, platform]);
@@ -4449,6 +4934,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
       setContentLanguage(nextLanguage);
 
       if (!changed) return;
+      if (isReelFlow) return;
       if (step !== 2) return;
       if (!campaignName || !campaignDescription) return;
       if (platforms.length === 0) return;
@@ -4593,7 +5079,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
         const creditData = await apiService.getCredits();
         const balance = creditData?.credits?.balance ?? 0;
         if (balance < creditCost) {
-          alert(`⚠️ Insufficient credits. You have ${balance} credits but need ${creditCost} (7 per post × ${totalPosts} posts).`);
+          alert(`?? Insufficient credits. You have ${balance} credits but need ${creditCost} (7 per post ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ ${totalPosts} posts).`);
           generationRequestInFlightRef.current = false;
           return;
         }
@@ -4826,7 +5312,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
               continue;
             }
 
-            // Create the campaign as DRAFT first — only set to 'scheduled' after Ayrshare confirms
+            // Create the campaign as DRAFT first ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ only set to 'scheduled' after Ayrshare confirms
             const createResult = await apiService.createCampaign({
               name: `${campaignName} - ${platformForPost} ${post.suggestedDate}`,
               objective: objective as any,
@@ -4871,7 +5357,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
 
             if (!normalized) {
               errorMessages.push(`${post.platform} (${post.suggestedDate}): Invalid schedule date/time`);
-              console.error(`❌ Invalid schedule for post ${i + 1}:`, post.suggestedDate, post.suggestedTime);
+              console.error(`? Invalid schedule for post ${i + 1}:`, post.suggestedDate, post.suggestedTime);
               try { await apiService.updateCampaign(campaign._id, { status: 'draft' }); } catch(e) {}
               continue;
             }
@@ -4887,7 +5373,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
               : normalized.iso;
 
             if (normalized.adjusted) {
-              console.warn(`⚠️ Post ${i + 1} schedule time was too soon/past, adjusted to ${new Date(scheduledFor).toLocaleString()}`);
+              console.warn(`?? Post ${i + 1} schedule time was too soon/past, adjusted to ${new Date(scheduledFor).toLocaleString()}`);
             }
             try {
               console.log('Publishing:', {
@@ -4906,27 +5392,27 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
               } else {
                 const msg = publishResult.message || publishResult.error || 'Ayrshare rejected the post';
                 errorMessages.push(`${post.platform} (${post.suggestedDate}): ${msg}`);
-                console.error(`❌ Ayrshare rejected ${post.platform} post:`, msg);
+                console.error(`? Ayrshare rejected ${post.platform} post:`, msg);
                 // Update campaign status to indicate failure
                 try { await apiService.updateCampaign(campaign._id, { status: 'draft' }); } catch(e) {}
               }
             } catch (publishError: any) {
               const msg = publishError?.message || publishError?.error || 'Publish request failed - check connected accounts';
               errorMessages.push(`${post.platform} (${post.suggestedDate}): ${msg}`);
-              console.error(`❌ Error publishing ${post.platform} to Ayrshare:`, publishError);
+              console.error(`? Error publishing ${post.platform} to Ayrshare:`, publishError);
               // Revert campaign to draft since publish failed
               try { await apiService.updateCampaign(campaign._id, { status: 'draft' }); } catch(e) {}
             }
           } catch (postError: any) {
             const msg = postError?.message || 'Failed to create/schedule';
             errorMessages.push(`Post ${i + 1} (${post.platform}): ${msg}`);
-            console.error(`❌ Error with post ${i + 1}:`, postError);
+            console.error(`? Error with post ${i + 1}:`, postError);
           }
         }
         
         if (scheduledCampaigns.length > 0) {
           if (errorMessages.length > 0) {
-            alert(`✅ ${scheduledCampaigns.length}/${postsToSave.length} posts scheduled!\n\n❌ Failed:\n${errorMessages.join('\n')}`);
+            alert(`? ${scheduledCampaigns.length}/${postsToSave.length} posts scheduled!\n\n? Failed:\n${errorMessages.join('\n')}`);
           }
 
           onSuccess(scheduledCampaigns[0]);
@@ -4949,13 +5435,33 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
       return productLogo || null;
     };
 
-    const stepTitles = [
-      'Campaign Details',
-      'Content Preferences',
-      'Scheduling',
-      'Goals',
-      'Review Generated Posts'
-    ];
+    const reelScheduleDayText = (() => {
+      const parsed = new Date(reelScheduleDate);
+      if (isNaN(parsed.getTime())) return '--';
+      return parsed.toLocaleDateString('en-US', { weekday: 'long' });
+    })();
+    const stepTitles = isReelFlow
+      ? (isReelOnlyFlow
+          ? [
+              'Reels Generation',
+              'Preview & Edit',
+              'Scheduling'
+            ]
+          : [
+              'Campaign Details',
+              'Content Preferences',
+              'Reels Generation',
+              'Preview & Edit',
+              'Scheduling'
+            ])
+      : [
+          'Campaign Details',
+          'Content Preferences',
+          'Scheduling',
+          'Goals',
+          'Review Generated Posts'
+        ];
+    const sidebarStepCount = isReelFlow ? (isReelOnlyFlow ? 3 : 5) : 4;
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
@@ -4974,13 +5480,13 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                           <Sparkles className="w-5 h-5 text-black" />
                         </div>
                         <div>
-                          <h2 className={`text-lg font-bold ${theme.text}`}>Create Campaign</h2>
+                          <h2 className={`text-lg font-bold ${theme.text}`}>{isReelOnlyFlow ? 'Create Reel' : 'Create Campaign'}</h2>
                           <p className={`text-xs ${theme.textMuted}`}>Powered by Gravity</p>
                         </div>
                     </div>
                     
                     <div className="space-y-3 flex-1">
-                      {stepTitles.slice(0, 4).map((title, idx) => (
+                      {stepTitles.slice(0, sidebarStepCount).map((title, idx) => (
                         <div 
                           key={idx}
                           className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-all ${
@@ -5008,15 +5514,16 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                       ))}
                     </div>
                     
-                    {step === 5 && (
+                    
+                    {step === 5 && !isReelFlow && (
                       <div className="mt-4 p-4 rounded-xl bg-gradient-to-br from-[#ffcc29]/20 to-[#ffa500]/10 border border-[#ffcc29]/30">
-                        <p className={`text-sm font-medium ${theme.text}`}>📊 Generated Posts</p>
+                        <p className={`text-sm font-medium ${theme.text}`}>?? Generated Posts</p>
                         <p className={`text-xs ${theme.textMuted} mt-1`}>
                           {generatedPosts.filter(p => p.status === 'accepted').length}/{generatedPosts.length} posts accepted
                         </p>
                         {!generatedPosts.every(p => p.status === 'accepted') && (
                           <p className="text-xs text-[#ffcc29] mt-1">
-                            ✓ Accept all posts to schedule
+                            ? Accept all posts to schedule
                           </p>
                         )}
                       </div>
@@ -5028,7 +5535,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                     <div className="flex-1 flex overflow-hidden">
                         <div className="flex-1 overflow-y-auto p-8">
                         {/* Step 1: Campaign Details */}
-                        {step === 1 && (
+                        {step === 1 && !isReelOnlyFlow && (
                             <div className="space-y-6 animate-in fade-in duration-300">
                                 <div>
                                   <h3 className={`text-xl font-bold ${theme.text}`}>Campaign Details</h3>
@@ -5100,7 +5607,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                                         <h4 className={`text-sm font-bold ${theme.text}`}>{selectedProduct.name}</h4>
                                         <p className="text-xs text-[#ffcc29] font-medium">{selectedProduct.currency} {selectedProduct.price}</p>
                                         {selectedProduct.stockStatus === 'low-stock' && (
-                                          <span className="text-[10px] text-yellow-500 ml-2">⚠️ Low stock</span>
+                                          <span className="text-[10px] text-yellow-500 ml-2">?? Low stock</span>
                                         )}
                                       </div>
                                     </div>
@@ -5111,11 +5618,11 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                                   <label className={labelClasses}>Campaign Objective *</label>
                                   <div className="grid grid-cols-5 gap-2">
                                     {[
-                                      { id: 'awareness', label: 'Awareness', icon: '👁️', desc: 'Increase brand visibility' },
-                                      { id: 'engagement', label: 'Engagement', icon: '💬', desc: 'Boost interactions' },
-                                      { id: 'traffic', label: 'Traffic', icon: '🔗', desc: 'Drive website visits' },
-                                      { id: 'sales', label: 'Sales', icon: '💰', desc: 'Generate purchases' },
-                                      { id: 'leads', label: 'Leads', icon: '📧', desc: 'Collect contacts' }
+                                      { id: 'awareness', label: 'Awareness', icon: '???', desc: 'Increase brand visibility' },
+                                      { id: 'engagement', label: 'Engagement', icon: '??', desc: 'Boost interactions' },
+                                      { id: 'traffic', label: 'Traffic', icon: '??', desc: 'Drive website visits' },
+                                      { id: 'sales', label: 'Sales', icon: '??', desc: 'Generate purchases' },
+                                      { id: 'leads', label: 'Leads', icon: '??', desc: 'Collect contacts' }
                                     ].map(obj => (
                                       <button 
                                         key={obj.id}
@@ -5138,7 +5645,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                         )}
 
                         {/* Step 2: Content Preferences */}
-                        {step === 2 && (
+                        {step === 2 && !isReelOnlyFlow && (
                             <div className="space-y-6 animate-in fade-in duration-300">
                                 <div>
                                   <h3 className={`text-xl font-bold ${theme.text}`}>Content Preferences</h3>
@@ -5146,15 +5653,55 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                                 </div>
                                 
                                 <div>
+                                  <label className={labelClasses}>Content Type</label>
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => setContentType('image')}
+                                      className={`p-3 rounded-lg border text-left transition ${
+                                        !isReelFlow
+                                          ? 'border-[#ffcc29] bg-[#ffcc29]/15 text-[#ffcc29]'
+                                          : isDarkMode
+                                            ? 'border-slate-700 text-slate-300 hover:border-[#ffcc29]/40'
+                                            : 'border-slate-200 text-slate-700 hover:border-[#ffcc29]/40'
+                                      }`}
+                                    >
+                                      <p className="text-sm font-semibold">Post Campaign</p>
+                                      <p className="text-xs opacity-80">Image/video/carousel campaign flow</p>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setContentType('reel')}
+                                      className={`p-3 rounded-lg border text-left transition ${
+                                        isReelFlow
+                                          ? 'border-[#ffcc29] bg-[#ffcc29]/15 text-[#ffcc29]'
+                                          : isDarkMode
+                                            ? 'border-slate-700 text-slate-300 hover:border-[#ffcc29]/40'
+                                            : 'border-slate-200 text-slate-700 hover:border-[#ffcc29]/40'
+                                      }`}
+                                    >
+                                      <p className="text-sm font-semibold">Reels</p>
+                                      <p className="text-xs opacity-80">Video-first reels creation flow</p>
+                                    </button>
+                                  </div>
+                                </div>
+
+                                <div>
                                   <label className={labelClasses}>Platforms *</label>
                                   <div className="flex flex-wrap gap-2">
-                                    {[
-                                      { id: 'instagram', label: 'Instagram', icon: <Instagram className="w-4 h-4" /> },
-                                      { id: 'facebook', label: 'Facebook', icon: <Facebook className="w-4 h-4" /> },
-                                      { id: 'twitter', label: 'Twitter/X', icon: <Twitter className="w-4 h-4" /> },
-                                      { id: 'linkedin', label: 'LinkedIn', icon: <Linkedin className="w-4 h-4" /> },
-                                      { id: 'youtube', label: 'YouTube', icon: <Youtube className="w-4 h-4" /> }
-                                    ].map(p => (
+                                    {(isReelFlow
+                                      ? [
+                                          { id: 'instagram', label: 'Instagram Reels', icon: <Instagram className="w-4 h-4" /> },
+                                          { id: 'facebook', label: 'Facebook Reels', icon: <Facebook className="w-4 h-4" /> },
+                                          { id: 'youtube', label: 'YouTube Shorts', icon: <Youtube className="w-4 h-4" /> }
+                                        ]
+                                      : [
+                                          { id: 'instagram', label: 'Instagram', icon: <Instagram className="w-4 h-4" /> },
+                                          { id: 'facebook', label: 'Facebook', icon: <Facebook className="w-4 h-4" /> },
+                                          { id: 'twitter', label: 'Twitter/X', icon: <Twitter className="w-4 h-4" /> },
+                                          { id: 'linkedin', label: 'LinkedIn', icon: <Linkedin className="w-4 h-4" /> },
+                                          { id: 'youtube', label: 'YouTube', icon: <Youtube className="w-4 h-4" /> }
+                                        ]).map(p => (
                                       <button
                                         key={p.id}
                                         onClick={() => togglePlatform(p.id)}
@@ -5174,8 +5721,9 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                                   </div>
                                 </div>
                                 
-                                <div>
-                                  <label className={labelClasses}>Content Tone</label>
+                                {!isReelFlow && (
+                                  <div>
+                                    <label className={labelClasses}>Content Tone</label>
                                   <ComboBox
                                     value={contentTone}
                                     onChange={(v) => setContentTone(v as any)}
@@ -5193,7 +5741,8 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                                       { value: 'luxurious', label: 'Premium & Luxurious' }
                                     ]}
                                   />
-                                </div>
+                                  </div>
+                                )}
 
                                 <div>
                                   <label className={labelClasses}>Post Language</label>
@@ -5217,6 +5766,9 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                                 </div>
                                 <div>
                                   <label className={labelClasses}>Aspect Ratio</label>
+                                  {isReelFlow && (
+                                    <p className={`text-xs mb-2 ${theme.textSecondary}`}>Locked to 9:16 for reels.</p>
+                                  )}
                                   <div className="grid grid-cols-6 gap-3 mt-2">
                                     {[
                                       { value: '1:1', label: 'Square', w: 44, h: 44 },
@@ -5229,8 +5781,8 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                                       <button
                                         key={ratio.value}
                                         type="button"
-                                        onClick={() => setSelectedAspectRatio(ratio.value)}
-                                        className={`flex flex-col items-center justify-end gap-2 p-3 rounded-xl border-2 transition-all duration-200 ${
+                                        onClick={() => { if (!isReelFlow) setSelectedAspectRatio(ratio.value); }}
+                                        className={`flex flex-col items-center justify-end gap-2 p-3 rounded-xl border-2 transition-all duration-200 ${isReelFlow ? 'opacity-70 cursor-not-allowed' : ''} ${
                                           selectedAspectRatio === ratio.value
                                             ? 'border-[#ffcc29] bg-[#ffcc29]/10 shadow-md shadow-[#ffcc29]/20'
                                             : isDarkMode
@@ -5263,8 +5815,61 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                                   </div>
                                 </div>
 
-                                <div>
-                                  <label className={labelClasses}>Platform Content Strategy</label>
+                                {isReelFlow && (
+                                  <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-[#161b22] border-slate-700/50' : 'bg-slate-50 border-slate-200'}`}>
+                                    <label className={labelClasses}>Linked Product (Inventory)</label>
+                                    <p className={`text-xs mb-3 ${theme.textSecondary}`}>
+                                      Use inventory products in reels just like post campaigns.
+                                    </p>
+                                    {selectedProduct ? (
+                                      <div className="flex items-center justify-between gap-3">
+                                        <div className="flex items-center gap-3 min-w-0">
+                                          {selectedProduct.imageUrl ? (
+                                            <img src={selectedProduct.imageUrl} className="w-11 h-11 rounded object-cover" alt={selectedProduct.name} />
+                                          ) : (
+                                            <div className={`w-11 h-11 rounded flex items-center justify-center ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`}>
+                                              <ImageIcon className={`w-5 h-5 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`} />
+                                            </div>
+                                          )}
+                                          <div className="min-w-0">
+                                            <p className={`text-sm font-semibold truncate ${theme.text}`}>{selectedProduct.name}</p>
+                                            <p className={`text-xs ${theme.textSecondary}`}>{selectedProduct.currency} {selectedProduct.price}</p>
+                                          </div>
+                                        </div>
+                                        <div className="flex items-center gap-2 shrink-0">
+                                          <button
+                                            type="button"
+                                            onClick={handleUseLinkedProductImageForReel}
+                                            disabled={!selectedProduct.imageUrl}
+                                            className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-[#ffcc29]/40 text-[#ffcc29] hover:bg-[#ffcc29]/10 disabled:opacity-50"
+                                          >
+                                            Use Image
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => setShowProductPicker(true)}
+                                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${isDarkMode ? 'border-slate-600 text-slate-300 hover:bg-slate-700/50' : 'border-slate-300 text-slate-700 hover:bg-slate-100'}`}
+                                          >
+                                            Change
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() => setShowProductPicker(true)}
+                                        className={`w-full py-2.5 rounded-lg border-2 border-dashed text-sm font-medium transition-colors ${
+                                          isDarkMode ? 'border-slate-700 hover:bg-slate-800 text-slate-400' : 'border-slate-300 hover:bg-white text-slate-600'
+                                        }`}
+                                      >
+                                        Select Product from Inventory
+                                      </button>
+                                    )}
+                                  </div>
+                                )}
+                                {!isReelFlow && (
+                                  <div>
+                                    <label className={labelClasses}>Platform Content Strategy</label>
                                   <p className={`text-xs mb-3 ${theme.textSecondary}`}>
                                     Customize the content structure for each platform. AI will use this to generate the final posts.
                                   </p>
@@ -5288,7 +5893,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                                               </div>
                                               <span className={`text-[10px] font-mono whitespace-nowrap px-2 py-0.5 rounded-full ${isOver ? 'bg-red-500/10 text-red-500 font-bold' : isDarkMode ? 'bg-slate-700 text-slate-300' : 'bg-slate-200 text-slate-600'}`}>
                                                 {count.toLocaleString()} / {charLimit.toLocaleString()} chars
-                                                {isOver && ' ⚠️'}
+                                                {isOver && ' ??'}
                                               </span>
                                             </div>
                                             
@@ -5348,10 +5953,11 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                                       );
                                     })}
                                   </div>
-                                </div>
+                                  </div>
+                                )}
 
                                 {/* Instagram Reel Tone (Optional) */}
-                                {platforms.includes('instagram') && (
+                                {!isReelFlow && platforms.includes('instagram') && (
                                   <div>
                                     <label className={labelClasses}>Instagram Reel Tone (Optional)</label>
                                     <p className={`text-xs mb-2 ${theme.textSecondary}`}>
@@ -5468,14 +6074,184 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                             </div>
                         )}
 
+                        {step === reelGenerationStep && isReelFlow && (
+                            <div className="space-y-6 animate-in fade-in duration-300">
+                                <div>
+                                  <h3 className={`text-xl font-bold ${theme.text}`}>Reels Generation</h3>
+                                  <p className={`text-sm ${theme.textSecondary} mt-1`}>Upload image, choose reel type, set duration, and generate your reel.</p>
+                                </div>
+
+                                {isReelOnlyFlow && (
+                                  <div>
+                                    <label className={labelClasses}>Platforms *</label>
+                                    <div className="flex flex-wrap gap-2 mt-2">
+                                      {[
+                                        { id: 'instagram', label: 'Instagram Reels', icon: <Instagram className="w-4 h-4" /> },
+                                        { id: 'facebook', label: 'Facebook Reels', icon: <Facebook className="w-4 h-4" /> },
+                                        { id: 'youtube', label: 'YouTube Shorts', icon: <Youtube className="w-4 h-4" /> }
+                                      ].map((p) => (
+                                        <button
+                                          key={p.id}
+                                          onClick={() => togglePlatform(p.id)}
+                                          className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border transition-all ${
+                                            platforms.includes(p.id)
+                                              ? 'bg-[#ffcc29]/20 border-[#ffcc29] text-[#ffcc29]'
+                                              : isDarkMode
+                                                ? 'border-slate-700 text-slate-400 hover:border-[#ffcc29]/50'
+                                                : 'border-slate-200 text-slate-600 hover:border-[#ffcc29]/50'
+                                          }`}
+                                        >
+                                          {p.icon}
+                                          <span className="text-sm font-medium">{p.label}</span>
+                                          {platforms.includes(p.id) && <Check className="w-4 h-4" />}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {reelResultMessage && (
+                                  <div className={`rounded-lg border px-4 py-3 text-sm ${
+                                    reelResultMessage.success
+                                      ? 'border-green-500/30 bg-green-500/10 text-green-400'
+                                      : 'border-red-500/30 bg-red-500/10 text-red-400'
+                                  }`}>
+                                    {reelResultMessage.message}
+                                  </div>
+                                )}
+
+                                <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-[#161b22] border-slate-700/50' : 'bg-slate-50 border-slate-200'}`}>
+                                  <label className={labelClasses}>Image Input *</label>
+                                  <p className={`text-xs mb-3 ${theme.textSecondary}`}>
+                                    Upload a source image or use your linked inventory product image.
+                                  </p>
+
+                                  <div className="flex flex-wrap gap-2">
+                                    <label className="cursor-pointer">
+                                      <input
+                                        type="file"
+                                        accept="image/*"
+                                        className="hidden"
+                                        onChange={(e) => onReelImageSelected(e.target.files?.[0] || null)}
+                                      />
+                                      <span className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold bg-[#ffcc29] text-black hover:bg-[#e6b825] transition-colors">
+                                        <ImageIcon className="w-4 h-4" />
+                                        Upload Image
+                                      </span>
+                                    </label>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => setShowProductPicker(true)}
+                                      className={`px-3 py-2 rounded-lg text-sm font-semibold border ${isDarkMode ? 'border-slate-600 text-slate-300 hover:bg-slate-700/50' : 'border-slate-300 text-slate-700 hover:bg-slate-100'}`}
+                                    >
+                                      Choose from Inventory
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={handleUseLinkedProductImageForReel}
+                                      disabled={!selectedProduct?.imageUrl}
+                                      className="px-3 py-2 rounded-lg text-sm font-semibold border border-[#ffcc29]/40 text-[#ffcc29] hover:bg-[#ffcc29]/10 disabled:opacity-50"
+                                    >
+                                      Use Linked Product Image
+                                    </button>
+
+                                    {(reelImageFile || reelImagePreview) && (
+                                      <button
+                                        type="button"
+                                        onClick={resetReelImageSource}
+                                        className={`px-3 py-2 rounded-lg text-sm font-semibold border ${isDarkMode ? 'border-red-500/40 text-red-400 hover:bg-red-500/10' : 'border-red-300 text-red-600 hover:bg-red-50'}`}
+                                      >
+                                        Clear
+                                      </button>
+                                    )}
+                                  </div>
+
+                                  <p className={`text-xs mt-3 ${theme.textSecondary}`}>
+                                    {reelImageFile
+                                      ? `Selected file: ${reelImageFile.name}`
+                                      : reelImagePreview
+                                        ? 'Image source selected and ready for generation.'
+                                        : 'No image selected yet.'}
+                                  </p>
+
+                                  {reelImagePreview && (
+                                    <img src={reelImagePreview} alt="Reel source preview" className="mt-3 w-full max-h-64 object-contain rounded-lg border border-[#ffcc29]/30" />
+                                  )}
+                                </div>
+                                <div>
+                                  <label className={labelClasses}>Reel Type (Prompt Mapping) *</label>
+                                  {loadingReelOptions ? (
+                                    <div className="mt-2 flex items-center gap-2 text-sm text-slate-400">
+                                      <Loader2 className="w-4 h-4 animate-spin" /> Loading reel options...
+                                    </div>
+                                  ) : (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                      {reelPromptTypes.map((type) => (
+                                        <button
+                                          key={type.key}
+                                          type="button"
+                                          onClick={() => setReelPromptType(type.key)}
+                                          className={`text-left p-3 rounded-lg border transition ${
+                                            reelPromptType === type.key ? 'border-[#ffcc29] bg-[#ffcc29]/15' : `${theme.border} ${theme.bgSecondary}`
+                                          }`}>
+                                          <p className={`text-sm font-semibold ${theme.text}`}>{type.label}</p>
+                                          <p className={`text-xs mt-1 ${theme.textSecondary}`}>{type.description}</p>
+                                        </button>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div>
+                                  <label className={labelClasses}>Duration</label>
+                                  <div className="flex flex-wrap gap-2">
+                                    {reelDurationOptions.map((seconds) => (
+                                      <button
+                                        key={seconds}
+                                        type="button"
+                                        onClick={() => setReelDurationSeconds(seconds)}
+                                        className={`px-4 py-2 rounded-lg border text-sm font-medium transition ${
+                                          reelDurationSeconds === seconds ? 'border-[#ffcc29] bg-[#ffcc29] text-[#070A12]' : `${theme.border} ${theme.text}`
+                                        }`}>
+                                        {seconds}s
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+
+                                <div>
+                                  <label className={labelClasses}>Custom Hint (Optional)</label>
+                                  <textarea
+                                    value={reelCustomHint}
+                                    onChange={(e) => setReelCustomHint(e.target.value)}
+                                    rows={3}
+                                    placeholder="Add optional guidance for the generated reel..."
+                                    className={inputClasses}
+                                  />
+                                </div>
+
+                                {isGeneratingReel && (
+                                  <div className="rounded-lg border border-[#ffcc29]/30 bg-[#ffcc29]/10 p-4 flex items-center gap-3 text-[#ffcc29]">
+                                    <Loader2 className="w-5 h-5 animate-spin" />
+                                    <div>
+                                      <p className="font-semibold">Processing Reel...</p>
+                                      <p className="text-xs opacity-90">Generating scenes, captions, and FFmpeg video render.</p>
+                                    </div>
+                                  </div>
+                                )}
+                            </div>
+                        )}
+
                         {/* Step 3: Scheduling */}
-                        {step === 3 && (
+                        {step === 3 && !isReelFlow && (
                             <div className="space-y-6 animate-in fade-in duration-300">
                                 <div>
                                   <h3 className={`text-xl font-bold ${theme.text}`}>Scheduling Preferences</h3>
                                   <p className={`text-sm ${theme.textSecondary} mt-1`}>When should your posts go live?</p>
                                 </div>
-                                
+
                                 <div className="grid grid-cols-2 gap-4">
                                   <div>
                                     <label className={labelClasses}>Campaign Duration</label>
@@ -5491,18 +6267,12 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                                       ]}
                                     />
                                   </div>
-                                  
                                   <div>
                                     <label className={labelClasses}>Start Date</label>
-                                    <input 
-                                      type="date" 
-                                      className={inputClasses} 
-                                      value={startDate} 
-                                      onChange={e => setStartDate(e.target.value)} 
-                                    />
+                                    <input type="date" className={inputClasses} value={startDate} onChange={e => setStartDate(e.target.value)} />
                                   </div>
                                 </div>
-                                
+
                                 <div>
                                   <label className={labelClasses}>Preferred Days</label>
                                   <div className="flex flex-wrap gap-2">
@@ -5516,8 +6286,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                                             : isDarkMode
                                               ? 'border-slate-700 text-slate-400 hover:border-[#ffcc29]/50'
                                               : 'border-slate-200 text-slate-600 hover:border-[#ffcc29]/50'
-                                        }`}
-                                      >
+                                        }`}>
                                         {day.slice(0, 3)}
                                       </button>
                                     ))}
@@ -5526,8 +6295,95 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                             </div>
                         )}
 
-                        {/* Step 4: Goals */}
-                        {step === 4 && (
+                        {step === reelPreviewStep && isReelFlow && (
+                            <div className="space-y-6 animate-in fade-in duration-300">
+                                <div>
+                                  <h3 className={`text-xl font-bold ${theme.text}`}>Preview & Edit</h3>
+                                  <p className={`text-sm ${theme.textSecondary} mt-1`}>Review generated reel output before publishing.</p>
+                                </div>
+
+                                {isReelOnlyFlow && (
+                                  <div>
+                                    <label className={labelClasses}>Platforms *</label>
+                                    <div className="flex flex-wrap gap-2 mt-2">
+                                      {[
+                                        { id: 'instagram', label: 'Instagram Reels', icon: <Instagram className="w-4 h-4" /> },
+                                        { id: 'facebook', label: 'Facebook Reels', icon: <Facebook className="w-4 h-4" /> },
+                                        { id: 'youtube', label: 'YouTube Shorts', icon: <Youtube className="w-4 h-4" /> }
+                                      ].map((p) => (
+                                        <button
+                                          key={p.id}
+                                          onClick={() => togglePlatform(p.id)}
+                                          className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border transition-all ${
+                                            platforms.includes(p.id)
+                                              ? 'bg-[#ffcc29]/20 border-[#ffcc29] text-[#ffcc29]'
+                                              : isDarkMode
+                                                ? 'border-slate-700 text-slate-400 hover:border-[#ffcc29]/50'
+                                                : 'border-slate-200 text-slate-600 hover:border-[#ffcc29]/50'
+                                          }`}
+                                        >
+                                          {p.icon}
+                                          <span className="text-sm font-medium">{p.label}</span>
+                                          {platforms.includes(p.id) && <Check className="w-4 h-4" />}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {reelResultMessage && (
+                                  <div className={`rounded-lg border px-4 py-3 text-sm ${
+                                    reelResultMessage.success
+                                      ? 'border-green-500/30 bg-green-500/10 text-green-400'
+                                      : 'border-red-500/30 bg-red-500/10 text-red-400'
+                                  }`}>
+                                    {reelResultMessage.message}
+                                  </div>
+                                )}
+
+                                {!generatedReel ? (
+                                  <div className={`rounded-lg border p-4 ${theme.border} ${theme.bgSecondary}`}>
+                                    <p className={`text-sm ${theme.textSecondary}`}>No reel generated yet. Go back to Reels Generation and click Generate Reel.</p>
+                                  </div>
+                                ) : (
+                                  <div className="space-y-4">
+                                    {generatedReel.videoUrl ? (
+                                      <video controls playsInline src={generatedReel.videoUrl} className="w-full max-h-[560px] rounded-xl border border-[#ffcc29]/30 bg-black" />
+                                    ) : (
+                                      <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-red-400 text-sm">
+                                        Video URL missing in backend response. If video is not showing, backend is not returning video URL.
+                                      </div>
+                                    )}
+
+                                    <div className={`rounded-lg p-4 ${theme.bgSecondary} ${theme.border} border space-y-3`}>
+                                      <p className={`font-semibold ${theme.text}`}>Caption</p>
+                                      <p className={`text-sm ${theme.textSecondary} whitespace-pre-line`}>{generatedReel.caption || '-'}</p>
+                                      <p className={`text-sm ${theme.textSecondary}`}><span className={`font-semibold ${theme.text}`}>CTA:</span> {generatedReel.cta || '-'}</p>
+                                      <p className={`text-sm ${theme.textSecondary}`}><span className={`font-semibold ${theme.text}`}>Hashtags:</span> {generatedReel.hashtags.length > 0 ? generatedReel.hashtags.join(' ') : '-'}</p>
+                                    </div>
+
+                                    <div className={`rounded-lg p-4 ${theme.bgSecondary} ${theme.border} border`}>
+                                      <p className={`font-semibold ${theme.text}`}>Scene Breakdown</p>
+                                      {generatedReel.scenePlan.length > 0 ? (
+                                        <div className="mt-2 space-y-2">
+                                          {generatedReel.scenePlan.map((scene, idx) => (
+                                            <div key={`${scene.sceneTitle}-${idx}`} className={`p-2 rounded ${isDarkMode ? 'bg-slate-800/70' : 'bg-gray-100'}`}>
+                                              <p className={`text-sm font-semibold ${theme.text}`}>{scene.sceneTitle} ({scene.startSec}s - {scene.endSec}s)</p>
+                                              <p className={`text-xs mt-1 ${theme.textSecondary}`}><span className={`font-semibold ${theme.text}`}>Caption:</span> {scene.caption}</p>
+                                              <p className={`text-xs mt-1 ${theme.textSecondary}`}><span className={`font-semibold ${theme.text}`}>Direction:</span> {scene.visualDirection}</p>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      ) : (
+                                        <p className={`text-sm mt-2 ${theme.textSecondary}`}>No scene breakdown returned.</p>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+                            </div>
+                        )}
+
+                        {step === 4 && !isReelFlow && (
                             <div className="space-y-6 animate-in fade-in duration-300">
                                 <div>
                                   <h3 className={`text-xl font-bold ${theme.text}`}>Goals</h3>
@@ -5536,11 +6392,11 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                                 
                                 {/* Summary Card */}
                                 <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-[#161b22] border-slate-700/50' : 'bg-slate-50 border-slate-200'}`}>
-                                  <h4 className={`font-bold ${theme.text} mb-3`}>📋 Campaign Summary</h4>
+                                  <h4 className={`font-bold ${theme.text} mb-3`}>?? Campaign Summary</h4>
                                   <div className="grid grid-cols-2 gap-3 text-sm">
-                                    <div><span className={theme.textMuted}>Name:</span> <span className={theme.text}>{campaignName || '�'}</span></div>
+                                    <div><span className={theme.textMuted}>Name:</span> <span className={theme.text}>{campaignName || '?'}</span></div>
                                     <div><span className={theme.textMuted}>Objective:</span> <span className={theme.text}>{objective}</span></div>
-                                    <div><span className={theme.textMuted}>Platforms:</span> <span className={theme.text}>{platforms.join(', ') || '�'}</span></div>
+                                    <div><span className={theme.textMuted}>Platforms:</span> <span className={theme.text}>{platforms.join(', ') || '?'}</span></div>
                                     <div><span className={theme.textMuted}>Duration:</span> <span className={theme.text}>{campaignDuration === '2weeks' ? '2 Weeks' : '1 Week'}</span></div>
                                     <div><span className={theme.textMuted}>Total Posts:</span> <span className={theme.text}>{preferredDays.length * (campaignDuration === '2weeks' ? 2 : 1)}</span></div>
                                     <div><span className={theme.textMuted}>Target:</span> <span className={theme.text}>{targetAge}, {targetGender}</span></div>
@@ -5549,8 +6405,81 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                             </div>
                         )}
 
+                        {step === reelSchedulingStep && isReelFlow && (
+                            <div className="space-y-6 animate-in fade-in duration-300">
+                                <div>
+                                  <h3 className={`text-xl font-bold ${theme.text}`}>Scheduling</h3>
+                                  <p className={`text-sm ${theme.textSecondary} mt-1`}>Choose when to publish this reel.</p>
+                                </div>
+
+                                {isReelOnlyFlow && (
+                                  <div>
+                                    <label className={labelClasses}>Platforms *</label>
+                                    <div className="flex flex-wrap gap-2 mt-2">
+                                      {[
+                                        { id: 'instagram', label: 'Instagram Reels', icon: <Instagram className="w-4 h-4" /> },
+                                        { id: 'facebook', label: 'Facebook Reels', icon: <Facebook className="w-4 h-4" /> },
+                                        { id: 'youtube', label: 'YouTube Shorts', icon: <Youtube className="w-4 h-4" /> }
+                                      ].map((p) => (
+                                        <button
+                                          key={p.id}
+                                          onClick={() => togglePlatform(p.id)}
+                                          className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border transition-all ${
+                                            platforms.includes(p.id)
+                                              ? 'bg-[#ffcc29]/20 border-[#ffcc29] text-[#ffcc29]'
+                                              : isDarkMode
+                                                ? 'border-slate-700 text-slate-400 hover:border-[#ffcc29]/50'
+                                                : 'border-slate-200 text-slate-600 hover:border-[#ffcc29]/50'
+                                          }`}
+                                        >
+                                          {p.icon}
+                                          <span className="text-sm font-medium">{p.label}</span>
+                                          {platforms.includes(p.id) && <Check className="w-4 h-4" />}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {reelResultMessage && (
+                                  <div className={`rounded-lg border px-4 py-3 text-sm ${
+                                    reelResultMessage.success
+                                      ? 'border-green-500/30 bg-green-500/10 text-green-400'
+                                      : 'border-red-500/30 bg-red-500/10 text-red-400'
+                                  }`}>
+                                    {reelResultMessage.message}
+                                  </div>
+                                )}
+
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                  <div>
+                                    <label className={labelClasses}>Posting Date</label>
+                                    <input
+                                      type="date"
+                                      value={reelScheduleDate}
+                                      onChange={(e) => setReelScheduleDate(e.target.value)}
+                                      className={inputClasses}
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className={labelClasses}>Day</label>
+                                    <div className={`${inputClasses} flex items-center`}>{reelScheduleDayText}</div>
+                                  </div>
+                                  <div>
+                                    <label className={labelClasses}>Time</label>
+                                    <input
+                                      type="time"
+                                      value={reelScheduleTime}
+                                      onChange={(e) => setReelScheduleTime(e.target.value)}
+                                      className={inputClasses}
+                                    />
+                                  </div>
+                                </div>
+                            </div>
+                        )}
+
                         {/* Step 5: Review Generated Posts */}
-                        {step === 5 && (
+                        {step === 5 && !isReelFlow && (
                             <div className="space-y-4 animate-in fade-in duration-300">
                                 {/* Header */}
                                 <div className="flex items-center justify-between">
@@ -5839,7 +6768,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                             {step === 1 ? 'Cancel' : 'Back'}
                           </button>
                           
-                          {step >= 2 && step <= 4 && platforms.length > 0 && (
+                          {!isReelFlow && step >= 2 && step <= 4 && platforms.length > 0 && (
                             <button
                               onClick={() => setPreviewPost({
                                 platform: platforms[0],
@@ -5853,10 +6782,15 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                             </button>
                           )}
                           
-                          {step < 4 && (
+                          {((!isReelFlow && step < 4) || (isReelFlow && (isReelOnlyFlow ? [1, 2].includes(step) : [1, 2, 4].includes(step)))) && (
                             <button 
-                              onClick={() => setStep(s => s + 1)} 
-                              disabled={step === 1 && !campaignName}
+                              onClick={() => setStep(s => Math.min(isReelFlow ? reelMaxStep : 5, s + 1))} 
+                              disabled={
+                                (!isReelFlow && step === 1 && !campaignName) ||
+                                (!isReelFlow && step === 2 && platforms.length === 0) ||
+                                (isReelFlow && isReelOnlyFlow && step === 1 && !generatedReel) ||
+                                (isReelFlow && !isReelOnlyFlow && step === 4 && !generatedReel)
+                              }
                               className="px-6 py-2.5 bg-[#ffcc29] text-black rounded-lg font-semibold hover:bg-[#e6b825] transition-colors disabled:opacity-50 flex items-center gap-2"
                             >
                               Next
@@ -5864,7 +6798,27 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                             </button>
                           )}
                         
-                        {step === 4 && (
+                        {step === reelGenerationStep && isReelFlow && (
+                          <button 
+                            onClick={handleGenerateReelInCampaignFlow}
+                            disabled={isGeneratingReel || (!reelImageFile && !reelImagePreview) || !reelPromptType || platforms.length === 0}
+                            className="px-6 py-2.5 bg-gradient-to-r from-[#ffcc29] to-[#ffa500] text-black rounded-lg font-semibold hover:shadow-lg transition-all disabled:opacity-50 flex items-center gap-2"
+                          >
+                            {isGeneratingReel ? (
+                              <>
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                Processing Reel...
+                              </>
+                            ) : (
+                              <>
+                                <Video className="w-4 h-4" />
+                                Generate Reel
+                              </>
+                            )}
+                          </button>
+                        )}
+                        
+                        {step === 4 && !isReelFlow && (
                           <button 
                             onClick={handleGeneratePosts}
                             disabled={isGenerating || !campaignName}
@@ -5885,7 +6839,36 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                           </button>
                         )}
                         
-                        {step === 5 && (
+                        {step === reelSchedulingStep && isReelFlow && (
+                          <div className="flex items-center gap-3">
+                            <button
+                              onClick={handlePostReelNow}
+                              disabled={isPublishingReel || !generatedReel?.campaignId || platforms.length === 0}
+                              className="px-5 py-2.5 rounded-lg font-semibold border border-slate-500/40 hover:bg-slate-500/10 disabled:opacity-50"
+                            >
+                              {isPublishingReel ? 'Posting...' : 'Post Now'}
+                            </button>
+                            <button
+                              onClick={handleScheduleReelPublish}
+                              disabled={isPublishingReel || !generatedReel?.campaignId || platforms.length === 0}
+                              className="px-6 py-2.5 bg-gradient-to-r from-[#ffcc29] to-[#ffa500] text-black rounded-lg font-semibold hover:shadow-lg transition-all disabled:opacity-50 flex items-center gap-2"
+                            >
+                              {isPublishingReel ? (
+                                <>
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                  Scheduling...
+                                </>
+                              ) : (
+                                <>
+                                  <Calendar className="w-4 h-4" />
+                                  Schedule
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        )}
+                        
+                        {step === 5 && !isReelFlow && (
                           <div className="flex items-center gap-4">
                             {/* Status indicator */}
                             <span className={`text-sm ${
@@ -6116,7 +7099,7 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
     const [isProcessingImage, setIsProcessingImage] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
 
-    // Instagram-only audio (optional) — only used when Instagram is selected
+    // Instagram-only audio (optional) ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ only used when Instagram is selected
     const [instagramAudio, setInstagramAudio] = useState<{ url: string; publicId?: string | null; originalName?: string | null; durationSeconds?: number | null } | null>(null);
     const [instagramAudioUrlInput, setInstagramAudioUrlInput] = useState('');
     const [isUploadingInstagramAudio, setIsUploadingInstagramAudio] = useState(false);
@@ -6191,11 +7174,11 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
       const fileArray = Array.from(files).filter(f => f.type.startsWith('image/') || f.type.startsWith('video/'));
       const rejected = Array.from(files).filter(f => !f.type.startsWith('image/') && !f.type.startsWith('video/'));
       if (rejected.length > 0) {
-        alert(`${rejected.map(f => f.name).join(', ')} skipped — only image and video files are accepted.`);
+        alert(`${rejected.map(f => f.name).join(', ')} skipped ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ only image and video files are accepted.`);
       }
       const oversized = fileArray.filter(f => f.size > MAX_FILE_SIZE);
       if (oversized.length > 0) {
-        alert(`${oversized.length} file${oversized.length > 1 ? 's' : ''} exceeded the 10MB limit and ${oversized.length > 1 ? 'were' : 'was'} skipped:\n${oversized.map(f => `• ${f.name} (${(f.size / 1024 / 1024).toFixed(1)}MB)`).join('\n')}`);
+        alert(`${oversized.length} file${oversized.length > 1 ? 's' : ''} exceeded the 10MB limit and ${oversized.length > 1 ? 'were' : 'was'} skipped:\n${oversized.map(f => `ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ ${f.name} (${(f.size / 1024 / 1024).toFixed(1)}MB)`).join('\n')}`);
       }
       const validFiles = fileArray.filter(f => f.size <= MAX_FILE_SIZE);
       if (validFiles.length === 0) return;
@@ -6291,7 +7274,7 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
       if (overLimitPosters.length > 0) {
         const details = overLimitPosters.map(p => {
           const charInfo = getCharLimitForPoster(p)!;
-          return `• ${charInfo.label}: ${p.content.length}/${charInfo.limit} chars`;
+          return `ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ ${charInfo.label}: ${p.content.length}/${charInfo.limit} chars`;
         }).join('\n');
         alert(`Some posters exceed the platform character limit:\n\n${details}\n\nPlease shorten the content before generating.`);
         return;
@@ -6760,7 +7743,7 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
         const message = isScheduleMode
           ? `Scheduled ${generatedPosters.length} poster(s) for ${new Date(`${scheduleDate}T${scheduleTime}`).toLocaleString()}`
           : anyBackendScheduled
-            ? `Queued ${generatedPosters.length} poster(s) for publishing ${lastBackendScheduledFor ? `(${new Date(lastBackendScheduledFor).toLocaleString()})` : '(pending)'} — check again in a few minutes`
+            ? `Queued ${generatedPosters.length} poster(s) for publishing ${lastBackendScheduledFor ? `(${new Date(lastBackendScheduledFor).toLocaleString()})` : '(pending)'} ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ check again in a few minutes`
             : `Posted ${generatedPosters.length} poster(s) to ${selectedPlatforms.join(', ')}`;
         
         setPublishResult({ success: true, message });
@@ -6874,7 +7857,7 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center justify-between mb-2">
                                 <span className={`text-xs font-medium ${poster.useAsReference ? 'text-purple-500' : theme.textSecondary}`}>
-                                  {poster.useAsReference ? '✨ Reference' : `Template ${index + 1}`}
+                                  {poster.useAsReference ? '? Reference' : `Template ${index + 1}`}
                                 </span>
                                 <div className="flex items-center gap-1">
                                   <button
@@ -6983,7 +7966,7 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
                                       isOver ? 'text-red-500 font-semibold' : isNear ? 'text-amber-500' : theme.textMuted
                                     }`}>
                                       {isOver
-                                        ? `⚠ ${count - charInfo.limit} characters over the ${charInfo.label} limit`
+                                        ? `? ${count - charInfo.limit} characters over the ${charInfo.label} limit`
                                         : charInfo.tip
                                       }
                                     </span>
@@ -7005,7 +7988,7 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
               </div>
             )}
 
-            {/* STEP 2: Preview & Edit (merged with schedule — strategic advisor layout) */}
+            {/* STEP 2: Preview & Edit (merged with schedule ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ strategic advisor layout) */}
             {step === 'preview' && (
               <div className="space-y-4">
                 {/* Poster Thumbnails Strip (if multiple) */}
@@ -7047,7 +8030,7 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
                 )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Left Column — Image */}
+                  {/* Left Column ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ Image */}
                   <div>
                     <label className={`block text-xs font-semibold uppercase tracking-wide mb-2 ${theme.textSecondary}`}>Image</label>
                     {currentPoster && currentPoster.status === 'generating' || currentPoster?.status === 'editing' ? (
@@ -7160,7 +8143,7 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
                     )}
                   </div>
 
-                  {/* Right Column — Platform, Caption, Schedule */}
+                  {/* Right Column ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ Platform, Caption, Schedule */}
                   <div className="space-y-4">
                     {/* Platform Selection */}
                     <div>
@@ -7249,7 +8232,7 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
                           )}
 
                           <p className={`text-xs ${theme.textMuted}`}>
-                            Applied only to Instagram. We publish Instagram as a video with your audio embedded (this plays as normal video sound, not as Instagram Music). Instagram web doesn’t support adding music to image posts. Other platforms publish without audio.
+                            Applied only to Instagram. We publish Instagram as a video with your audio embedded (this plays as normal video sound, not as Instagram Music). Instagram web doesnÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½t support adding music to image posts. Other platforms publish without audio.
                           </p>
                         </div>
                       </div>
@@ -7424,7 +8407,7 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
           </div>
         )}
 
-        {/* Aspect Ratio Modal — rendered outside overflow-hidden container */}
+        {/* Aspect Ratio Modal ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ rendered outside overflow-hidden container */}
         {showAspectRatioModal && (
           <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setShowAspectRatioModal(false)}>
             <div className={`${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white'} border rounded-2xl shadow-2xl w-full max-w-md p-6`} onClick={e => e.stopPropagation()}>
@@ -7834,7 +8817,7 @@ const UploadPublishModal: React.FC<UploadPublishModalProps> = ({ onClose, onSucc
     const [publishSummary, setPublishSummary] = useState<{ total: number; success: number; failed: number } | null>(null);
     const [showUploadPreview, setShowUploadPreview] = useState(false);
 
-    // Instagram-only audio (optional) — only used when Instagram is selected
+    // Instagram-only audio (optional) ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ only used when Instagram is selected
     const [instagramAudio, setInstagramAudio] = useState<{ url: string; publicId?: string | null; originalName?: string | null; durationSeconds?: number | null } | null>(null);
     const [instagramAudioUrlInput, setInstagramAudioUrlInput] = useState('');
     const [isUploadingInstagramAudio, setIsUploadingInstagramAudio] = useState(false);
@@ -7858,11 +8841,11 @@ const UploadPublishModal: React.FC<UploadPublishModalProps> = ({ onClose, onSucc
         const fileArray = Array.from(files).filter(f => f.type.startsWith('image/') || f.type.startsWith('video/'));
         const rejected = Array.from(files).filter(f => !f.type.startsWith('image/') && !f.type.startsWith('video/'));
         if (rejected.length > 0) {
-          alert(`${rejected.map(f => f.name).join(', ')} skipped — only image and video files are accepted.`);
+          alert(`${rejected.map(f => f.name).join(', ')} skipped ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ only image and video files are accepted.`);
         }
         const oversized = fileArray.filter(f => f.size > MAX_FILE_SIZE);
         if (oversized.length > 0) {
-            alert(`${oversized.length} file${oversized.length > 1 ? 's' : ''} exceeded the 10MB limit and ${oversized.length > 1 ? 'were' : 'was'} skipped:\n${oversized.map(f => `• ${f.name} (${(f.size / 1024 / 1024).toFixed(1)}MB)`).join('\n')}`);
+            alert(`${oversized.length} file${oversized.length > 1 ? 's' : ''} exceeded the 10MB limit and ${oversized.length > 1 ? 'were' : 'was'} skipped:\n${oversized.map(f => `ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ ${f.name} (${(f.size / 1024 / 1024).toFixed(1)}MB)`).join('\n')}`);
         }
         const validFiles = fileArray.filter(f => f.size <= MAX_FILE_SIZE);
         if (validFiles.length === 0) return;
@@ -8187,7 +9170,7 @@ const UploadPublishModal: React.FC<UploadPublishModalProps> = ({ onClose, onSucc
                             <p className={`text-xs ${theme.textSecondary}`}>
                                 {posts.length === 0 
                                     ? 'Drop or browse multiple images to create posts' 
-                                    : `${posts.length} image${posts.length > 1 ? 's' : ''} uploaded · ${readyCount} ready to publish`
+                                    : `${posts.length} image${posts.length > 1 ? 's' : ''} uploaded ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ ${readyCount} ready to publish`
                                 }
                             </p>
                         </div>
@@ -8230,7 +9213,7 @@ const UploadPublishModal: React.FC<UploadPublishModalProps> = ({ onClose, onSucc
                                         </div>
                                         <div>
                                             <p className={`font-medium ${theme.text}`}>{isDragging ? 'Drop images here!' : 'Drop your images here'}</p>
-                                            <p className={`text-sm ${theme.textSecondary}`}>or click to browse — multiple images supported (PNG, JPG)</p>
+                                            <p className={`text-sm ${theme.textSecondary}`}>or click to browse ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ multiple images supported (PNG, JPG)</p>
                                         </div>
                                     </>
                                 ) : (
@@ -8287,7 +9270,7 @@ const UploadPublishModal: React.FC<UploadPublishModalProps> = ({ onClose, onSucc
                                         if (!pl) return null;
                                         return (
                                             <span key={p} className={`text-[10px] px-2 py-0.5 rounded-full ${isDarkMode ? 'bg-slate-700/50 text-slate-400' : 'bg-slate-100 text-slate-500'}`}>
-                                                {pl.label}: {pl.charLimit.toLocaleString()} chars · {pl.imageMaxMB}MB max · {pl.bestRatio}
+                                                {pl.label}: {pl.charLimit.toLocaleString()} chars ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ {pl.imageMaxMB}MB max ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ {pl.bestRatio}
                                             </span>
                                         );
                                     })}
@@ -8355,7 +9338,7 @@ const UploadPublishModal: React.FC<UploadPublishModalProps> = ({ onClose, onSucc
                                 )}
 
                                 <p className={`text-xs ${theme.textMuted}`}>
-                                    Applied only to Instagram. We publish Instagram as a video with your audio embedded (this plays as normal video sound, not as Instagram Music). Instagram web doesn’t support adding music to image posts. Other platforms publish without audio.
+                                    Applied only to Instagram. We publish Instagram as a video with your audio embedded (this plays as normal video sound, not as Instagram Music). Instagram web doesnÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½t support adding music to image posts. Other platforms publish without audio.
                                 </p>
                             </div>
                         </div>
@@ -8420,9 +9403,9 @@ const UploadPublishModal: React.FC<UploadPublishModalProps> = ({ onClose, onSucc
                                                 : post.status === 'publishing' ? 'text-[#ffcc29]'
                                                 : theme.textSecondary
                                             }`}>
-                                                {post.status === 'success' ? '✓ Published' 
-                                                : post.status === 'error' ? '✗ Failed'
-                                                : post.status === 'publishing' ? '⏳ Publishing...'
+                                                {post.status === 'success' ? '? Published' 
+                                                : post.status === 'error' ? '? Failed'
+                                                : post.status === 'publishing' ? '? Publishing...'
                                                 : `Post ${index + 1}`}
                                             </span>
                                             <div className="flex items-center gap-1">
@@ -8543,7 +9526,7 @@ const UploadPublishModal: React.FC<UploadPublishModalProps> = ({ onClose, onSucc
                                 {publishSummary.failed === 0 ? <Check className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
                                 <span className="font-medium">
                                     {publishSummary.success}/{publishSummary.total} posts published successfully
-                                    {publishSummary.failed > 0 && ` · ${publishSummary.failed} failed`}
+                                    {publishSummary.failed > 0 && ` ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ ${publishSummary.failed} failed`}
                                 </span>
                             </div>
                         </div>

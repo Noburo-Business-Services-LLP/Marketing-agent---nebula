@@ -22,7 +22,8 @@ import {
   ImageIcon,
   MessageSquare,
   PenTool,
-  Layers
+  Layers,
+  PlayCircle
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { User } from '../types';
@@ -124,6 +125,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
   const navItems = [
     { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/campaigns', label: 'Campaigns', icon: Megaphone },
+    { path: '/reels', label: 'AI Reels', icon: PlayCircle },
     { path: '/ad-campaigns', label: 'Ad Campaigns', icon: Layers },
     { path: '/competitors', label: 'Competitors', icon: Users },
     { path: '/connect-socials', label: 'Connect Socials', icon: Link2 },
@@ -137,7 +139,17 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
       return {
         title: 'Campaigns',
         subtitle: 'Create and manage campaign posts with on-brand content.',
-        actions: [{ label: 'Create Ad Campaign', path: '/ad-campaigns' }]
+        actions: [
+          { label: 'Generate Reel', path: '/reels' },
+          { label: 'Create Ad Campaign', path: '/ad-campaigns' }
+        ]
+      };
+    }
+    if (pathname.startsWith('/reels')) {
+      return {
+        title: 'AI Reels',
+        subtitle: 'Generate image-to-reel videos with prompt templates and scheduling.',
+        actions: [{ label: 'Go to Campaigns', path: '/campaigns' }]
       };
     }
     if (pathname.startsWith('/ad-campaigns')) {
@@ -167,6 +179,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
       subtitle: 'Track campaigns, ad activity, and performance from one place.',
       actions: [
         { label: 'Create Campaign', path: '/campaigns' },
+        { label: 'Generate Reel', path: '/reels' },
         { label: 'Create Ad Campaign', path: '/ad-campaigns' }
       ]
     };

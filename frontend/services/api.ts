@@ -1213,6 +1213,66 @@ export const apiService = {
     return { campaign: response.campaign };
   },
 
+  getReelGenerationOptions: async (): Promise<{
+    success: boolean;
+    promptTypes: Array<{ key: string; label: string; description: string }>;
+    languages: Array<{ code: string; label: string; nativeLabel?: string }>;
+    durations: number[];
+  }> => {
+    const response = await apiCall<any>(
+      '/campaigns/reel/options',
+      { method: 'GET' },
+      true
+    );
+    return response;
+  },
+
+  generateImageReel: async (payload: {
+    imageData?: string;
+    imageUrl?: string;
+    promptType: string;
+    language: string;
+    durationSeconds: number;
+    customPrompt?: string;
+  }): Promise<{
+    success: boolean;
+    message?: string;
+    campaign?: Campaign;
+    reel?: {
+      promptType: string;
+      promptLabel: string;
+      promptTemplate: string;
+      language: { code: string; label: string; nativeLabel?: string };
+      durationSeconds: number;
+      sourceImageUrl: string;
+      videoUrl: string;
+      audioUrl: string;
+      audioMode?: string;
+      caption: string;
+      cta: string;
+      hashtags: string[];
+      voiceoverScript: string;
+      scenePlan: Array<{
+        sceneTitle: string;
+        startSec: number;
+        endSec: number;
+        visualDirection: string;
+        caption: string;
+      }>;
+      videoMetadata?: any;
+      videoValidation?: any;
+    };
+    creditsRemaining?: number;
+    error?: string;
+  }> => {
+    const response = await apiCall<any>(
+      '/campaigns/reel/generate',
+      { method: 'POST', body: JSON.stringify(payload) },
+      true
+    );
+    return response;
+  },
+
   // ============================================
   // TEMPLATE POSTER GENERATION (Nano Banana Pro)
   // ============================================
