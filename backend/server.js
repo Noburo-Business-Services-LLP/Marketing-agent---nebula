@@ -77,6 +77,7 @@ const contentRoutes = require('./routes/content');
 // Google Calendar routes
 const googleCalendarRoutes = require('./routes/googleCalendar');
 const productRoutes = require('./routes/products');
+const videoGenerationRoutes = require('./routes/videoGeneration');
 
 // Notification scheduler service
 const notificationScheduler = require('./services/notificationScheduler');
@@ -258,6 +259,7 @@ app.use('/api/payment', paymentRoutes);
 app.use('/api/content', contentRoutes);
 app.use('/api/google-calendar', googleCalendarRoutes);
 app.use('/api/products', productRoutes);
+app.use('/api/video-generation', aiLimiter, videoGenerationRoutes);
 
 // Health check endpoint (handled before rate limiter above)
 
@@ -304,6 +306,7 @@ app.get('/api/demo/dashboard', (req, res) => {
 // from a frontend build could shadow these and break previews (wrong/empty file → silent UI).
 // Files live at backend/tone-audio/*.mp3 → /audio/<file>.mp3
 app.use('/audio', express.static(path.join(__dirname, 'tone-audio')));
+app.use('/generated-media', express.static(path.join(__dirname, 'storage', 'ai-videos')));
 
 // Serve static files from React frontend build
 app.use(express.static(path.join(__dirname, 'public')));

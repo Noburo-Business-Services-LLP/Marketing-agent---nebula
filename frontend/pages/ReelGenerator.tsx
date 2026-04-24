@@ -1,8 +1,909 @@
-﻿import React from 'react';
-import Campaigns from './Campaigns';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Loader2,
+  Film,
+  Image as ImageIcon,
+  Package,
+  Captions,
+  Music2,
+  Sparkles,
+  RefreshCcw,
+  Mic
+} from 'lucide-react';
+import { getThemeClasses, useTheme } from '../context/ThemeContext';
+import { inventoryAPI, videoGenerationAPI } from '../services/api';
+import { Product } from '../types';
+
+type AudioMode = 'off' | 'auto' | 'upload';
+
+const WIZARD_STEPS = [
+  'Input',
+  'Prompt + Scenes',
+  'Scene Images',
+  'Video Clips',
+  'Audio Config',
+  'Audio Mix',
+  'Video Merge',
+  'Thumbnail + Content',
+  'Platform Select',
+  'Scheduling',
+  'Final Output'
+];
+
+function fileToDataUrl(file: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(new Error('Failed to read file'));
+    reader.readAsDataURL(file);
+  });
+}
 
 const ReelGenerator: React.FC = () => {
-  return <Campaigns />;
+  const { isDarkMode } = useTheme();
+  const theme = getThemeClasses(isDarkMode);
+  const panelClass = `${theme.bgCard} border ${isDarkMode ? 'border-slate-800' : 'border-slate-200'} rounded-2xl`;
+  const inputClass = `w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition ${
+    isDarkMode
+      ? 'bg-slate-900 border-slate-700 text-white focus:border-[#ffcc29]'
+      : 'bg-white border-slate-300 text-slate-900 focus:border-[#ffcc29]'
+  }`;
+
+  const [step, setStep] = useState(1);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [jobId, setJobId] = useState('');
+  const [draft, setDraft] = useState<any>(null);
+
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loadingProducts, setLoadingProducts] = useState(false);
+  const [description, setDescription] = useState('');
+  const [durationSeconds, setDurationSeconds] = useState(60);
+  const [sceneCount, setSceneCount] = useState<number | ''>('');
+  const [selectedProductId, setSelectedProductId] = useState('');
+  const [inputImageData, setInputImageData] = useState('');
+  const [inputImageName, setInputImageName] = useState('');
+
+  const [promptText, setPromptText] = useState('');
+  const [scenes, setScenes] = useState<any[]>([]);
+
+  const [audioEnabled, setAudioEnabled] = useState(true);
+  const [audioMode, setAudioMode] = useState<AudioMode>('auto');
+  const [audioTone, setAudioTone] = useState('professional');
+  const [audioLanguageCode, setAudioLanguageCode] = useState('en');
+  const [voiceGender, setVoiceGender] = useState<'male' | 'female'>('female');
+  const [voiceVolume, setVoiceVolume] = useState(1);
+  const [musicVolume, setMusicVolume] = useState(0.24);
+  const [manualVoiceData, setManualVoiceData] = useState('');
+  const [manualVoiceName, setManualVoiceName] = useState('');
+  const [generatedTracks, setGeneratedTracks] = useState<any>(null);
+  const [finalAudioUrl, setFinalAudioUrl] = useState('');
+
+  const [finalVideoUrl, setFinalVideoUrl] = useState('');
+  const [finalOutputUrl, setFinalOutputUrl] = useState('');
+
+  const [thumbnailUrl, setThumbnailUrl] = useState('');
+  const [caption, setCaption] = useState('');
+  const [hashtagsText, setHashtagsText] = useState('');
+
+  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([]);
+  const [scheduleDate, setScheduleDate] = useState('');
+  const [scheduleTime, setScheduleTime] = useState('');
+
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const recordingChunksRef = useRef<Blob[]>([]);
+  const [isRecording, setIsRecording] = useState(false);
+
+  const selectedProduct = useMemo(
+    () => products.find((p) => p._id === selectedProductId) || null,
+    [products, selectedProductId]
+  );
+
+  const hasSceneImages = scenes.some((scene) => scene.imageUrl);
+  const hasSceneClips = scenes.some((scene) => scene.clipUrl);
+
+  useEffect(() => {
+    const loadProducts = async () => {
+      setLoadingProducts(true);
+      try {
+        const response = await inventoryAPI.getProducts();
+        if (response?.success && Array.isArray(response?.data)) {
+          setProducts(response.data);
+        }
+      } catch (_) {
+        // Non-blocking
+      } finally {
+        setLoadingProducts(false);
+      }
+    };
+    loadProducts();
+  }, []);
+
+  const refreshDraft = async (id = jobId) => {
+    if (!id) return;
+    const response = await videoGenerationAPI.getDraft(id);
+    if (!response?.success) return;
+    const nextDraft = response.draft;
+    setDraft(nextDraft);
+    setPromptText(nextDraft?.prompt?.promptText || '');
+    if (Array.isArray(nextDraft?.images?.sceneData) && nextDraft.images.sceneData.length) {
+      setScenes(nextDraft.images.sceneData);
+    } else if (Array.isArray(nextDraft?.clips?.sceneData) && nextDraft.clips.sceneData.length) {
+      setScenes(nextDraft.clips.sceneData);
+    } else if (Array.isArray(nextDraft?.scenes?.sceneData) && nextDraft.scenes.sceneData.length) {
+      setScenes(nextDraft.scenes.sceneData);
+    }
+    if (nextDraft?.audio?.tracks) setGeneratedTracks(nextDraft.audio.tracks);
+    if (nextDraft?.mix?.finalAudioUrl) setFinalAudioUrl(nextDraft.mix.finalAudioUrl);
+    if (nextDraft?.merge?.finalVideoUrl) setFinalVideoUrl(nextDraft.merge.finalVideoUrl);
+    if (nextDraft?.merge?.finalOutputUrl) setFinalOutputUrl(nextDraft.merge.finalOutputUrl);
+    if (nextDraft?.content?.thumbnailUrl) setThumbnailUrl(nextDraft.content.thumbnailUrl);
+    if (nextDraft?.content?.caption) setCaption(nextDraft.content.caption);
+    if (Array.isArray(nextDraft?.content?.hashtags)) setHashtagsText(nextDraft.content.hashtags.join(' '));
+    if (Array.isArray(nextDraft?.platform?.selectedPlatforms)) setSelectedPlatforms(nextDraft.platform.selectedPlatforms);
+    if (nextDraft?.schedule?.scheduledAt) {
+      const dateObj = new Date(nextDraft.schedule.scheduledAt);
+      if (!Number.isNaN(dateObj.getTime())) {
+        setScheduleDate(dateObj.toISOString().slice(0, 10));
+        setScheduleTime(dateObj.toISOString().slice(11, 16));
+      }
+    }
+  };
+
+  const withBusy = async (fn: () => Promise<void>) => {
+    setBusy(true);
+    setError('');
+    try {
+      await fn();
+    } catch (e: any) {
+      setError(e?.message || 'Something went wrong');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onInputImage = async (file?: File | null) => {
+    if (!file) return;
+    const data = await fileToDataUrl(file);
+    setInputImageData(data);
+    setInputImageName(file.name);
+    setSelectedProductId('');
+  };
+
+  const onSceneImageReplace = async (sceneId: string, file?: File | null) => {
+    if (!jobId || !file) return;
+    const data = await fileToDataUrl(file);
+    await withBusy(async () => {
+      const response = await videoGenerationAPI.generateImages({
+        jobId,
+        action: 'replace',
+        sceneId,
+        imageData: data
+      });
+      if (response?.success) {
+        setScenes(response.sceneData || []);
+        setDraft(response.draft || draft);
+      }
+    });
+  };
+
+  const onManualVoiceUpload = async (file?: File | null) => {
+    if (!file) return;
+    const data = await fileToDataUrl(file);
+    setManualVoiceData(data);
+    setManualVoiceName((file as File).name || 'voice-file');
+  };
+
+  const startVoiceRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      recordingChunksRef.current = [];
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          recordingChunksRef.current.push(event.data);
+        }
+      };
+      recorder.onstop = async () => {
+        const blob = new Blob(recordingChunksRef.current, { type: 'audio/webm' });
+        if (blob.size > 0) {
+          const data = await fileToDataUrl(blob);
+          setManualVoiceData(data);
+          setManualVoiceName('recorded-voice.webm');
+        }
+        stream.getTracks().forEach((track) => track.stop());
+      };
+      recorder.start();
+      recorderRef.current = recorder;
+      setIsRecording(true);
+    } catch {
+      setError('Microphone access denied or unavailable.');
+    }
+  };
+
+  const stopVoiceRecording = () => {
+    recorderRef.current?.stop();
+    setIsRecording(false);
+  };
+
+  const step1Next = async () => withBusy(async () => {
+    if (!description.trim()) {
+      throw new Error('Description is required');
+    }
+    const response = await videoGenerationAPI.createDraft({
+      description: description.trim(),
+      durationSeconds,
+      sceneCount: sceneCount || undefined,
+      imageData: inputImageData || undefined,
+      productId: selectedProduct?._id || undefined,
+      product: selectedProduct || undefined
+    });
+    if (!response?.success || !response?.jobId) {
+      throw new Error(response?.message || 'Failed to create draft');
+    }
+    setJobId(response.jobId);
+    setDraft(response.draft || null);
+    setStep(2);
+  });
+
+  const generatePromptAndScenes = async () => withBusy(async () => {
+    if (!jobId) throw new Error('Draft missing. Complete step 1 first.');
+    const promptResponse = await videoGenerationAPI.generatePrompt({
+      jobId,
+      promptText: promptText || undefined
+    });
+    const effectivePrompt = promptResponse?.prompt?.promptText || promptText;
+    setPromptText(effectivePrompt);
+
+    const sceneResponse = await videoGenerationAPI.generateScenes({
+      jobId,
+      promptText: effectivePrompt
+    });
+    if (!sceneResponse?.success) {
+      throw new Error(sceneResponse?.message || 'Scene generation failed');
+    }
+    setScenes(sceneResponse.sceneData || []);
+    setDraft(sceneResponse.draft || draft);
+  });
+
+  const saveStep2EditsAndNext = async () => withBusy(async () => {
+    if (!jobId) throw new Error('Draft missing');
+    await videoGenerationAPI.generatePrompt({
+      jobId,
+      promptText,
+      saveOnly: true
+    });
+    const sceneResponse = await videoGenerationAPI.generateScenes({
+      jobId,
+      sceneData: scenes,
+      saveOnly: true
+    });
+    setScenes(sceneResponse?.sceneData || scenes);
+    setDraft(sceneResponse?.draft || draft);
+    setStep(3);
+  });
+
+  const generateSceneImages = async () => withBusy(async () => {
+    if (!jobId) throw new Error('Draft missing');
+    const response = await videoGenerationAPI.generateImages({
+      jobId,
+      action: 'generateAll',
+      sceneData: scenes
+    });
+    if (!response?.success) throw new Error(response?.message || 'Image generation failed');
+    setScenes(response.sceneData || []);
+    setDraft(response.draft || draft);
+  });
+
+  const regenerateSceneImage = async (scene: any) => withBusy(async () => {
+    if (!jobId) throw new Error('Draft missing');
+    const response = await videoGenerationAPI.generateImages({
+      jobId,
+      action: 'regenerate',
+      sceneId: scene.sceneId,
+      imagePrompt: scene.imagePrompt
+    });
+    if (!response?.success) throw new Error(response?.message || 'Image regeneration failed');
+    setScenes(response.sceneData || []);
+    setDraft(response.draft || draft);
+  });
+
+  const generateClips = async () => withBusy(async () => {
+    if (!jobId) throw new Error('Draft missing');
+    const response = await videoGenerationAPI.generateClips({
+      jobId,
+      sceneData: scenes
+    });
+    if (!response?.success) throw new Error(response?.message || 'Clip generation failed');
+    setScenes(response.sceneData || []);
+    setDraft(response.draft || draft);
+  });
+
+  const generateAudioTracks = async () => withBusy(async () => {
+    if (!jobId) throw new Error('Draft missing');
+    const response = await videoGenerationAPI.generateAudio({
+      jobId,
+      audio: {
+        enabled: audioEnabled,
+        mode: audioEnabled ? audioMode : 'off',
+        languageCode: audioLanguageCode,
+        tone: audioTone,
+        voiceGender,
+        voiceVolume,
+        musicVolume,
+        manualAudioData: audioMode === 'upload' ? manualVoiceData : undefined
+      }
+    });
+    if (!response?.success) throw new Error(response?.message || 'Audio generation failed');
+    setGeneratedTracks(response?.audio?.tracks || null);
+    setDraft(response?.draft || draft);
+    setStep(6);
+  });
+
+  const mixAudio = async () => withBusy(async () => {
+    if (!jobId) throw new Error('Draft missing');
+    const response = await videoGenerationAPI.mixAudio({
+      jobId,
+      tracks: generatedTracks || draft?.audio?.tracks || {},
+      durationSeconds
+    });
+    if (!response?.success) throw new Error(response?.message || 'Audio mix failed');
+    setFinalAudioUrl(response.finalAudioUrl || '');
+    setDraft(response.draft || draft);
+  });
+
+  const mergeVideo = async () => withBusy(async () => {
+    if (!jobId) throw new Error('Draft missing');
+    const response = await videoGenerationAPI.mergeVideo({
+      jobId,
+      finalAudioUrl: finalAudioUrl || undefined
+    });
+    if (!response?.success) throw new Error(response?.message || 'Video merge failed');
+    setFinalVideoUrl(response?.merge?.finalVideoUrl || '');
+    setFinalOutputUrl(response?.merge?.finalOutputUrl || '');
+    setDraft(response?.draft || draft);
+  });
+
+  const generateContent = async () => withBusy(async () => {
+    if (!jobId) throw new Error('Draft missing');
+    const response = await videoGenerationAPI.generateContent({
+      jobId,
+      selectedPlatforms
+    });
+    if (!response?.success) throw new Error(response?.message || 'Content generation failed');
+    const content = response?.content || {};
+    setThumbnailUrl(content.thumbnailUrl || '');
+    setCaption(content.caption || '');
+    setHashtagsText(Array.isArray(content.hashtags) ? content.hashtags.join(' ') : '');
+    setDraft(response?.draft || draft);
+  });
+
+  const schedulePost = async (publishNow = false) => withBusy(async () => {
+    if (!jobId) throw new Error('Draft missing');
+    if (!selectedPlatforms.length) throw new Error('Select at least one platform');
+
+    let scheduledAt: string | undefined = undefined;
+    if (!publishNow) {
+      if (!scheduleDate || !scheduleTime) throw new Error('Select date and time');
+      scheduledAt = new Date(`${scheduleDate}T${scheduleTime}:00`).toISOString();
+    }
+
+    const response = await videoGenerationAPI.schedulePost({
+      jobId,
+      selectedPlatforms,
+      scheduledAt,
+      publishNow
+    });
+    if (!response?.success) throw new Error(response?.message || 'Scheduling failed');
+    setDraft(response?.draft || draft);
+    await refreshDraft(jobId);
+    setStep(11);
+  });
+
+  const togglePlatform = (platform: string) => {
+    setSelectedPlatforms((prev) => (
+      prev.includes(platform)
+        ? prev.filter((item) => item !== platform)
+        : [...prev, platform]
+    ));
+  };
+
+  return (
+    <div className={`p-6 min-h-screen ${isDarkMode ? 'bg-[#070A12]' : 'bg-slate-50'}`}>
+      <div className="max-w-6xl mx-auto space-y-6">
+        <div className="flex items-center gap-3">
+          <Film className="w-8 h-8 text-[#ffcc29]" />
+          <div>
+            <h1 className={`text-3xl font-black tracking-tight ${theme.text}`}>AI Video Wizard</h1>
+            <p className={`text-sm ${theme.textSecondary}`}>
+              Step-by-step video generation with edit + preview control at each stage.
+            </p>
+          </div>
+        </div>
+
+        <div className={`${panelClass} p-4`}>
+          <div className="grid grid-cols-2 md:grid-cols-6 lg:grid-cols-11 gap-2">
+            {WIZARD_STEPS.map((label, idx) => {
+              const stepNo = idx + 1;
+              const active = stepNo === step;
+              const done = stepNo < step;
+              return (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => done && setStep(stepNo)}
+                  disabled={!done && !active}
+                  className={`text-xs px-2 py-2 rounded-lg border transition ${
+                    active
+                      ? 'bg-[#ffcc29] text-black border-[#ffcc29] font-bold'
+                      : done
+                        ? (isDarkMode
+                          ? 'bg-slate-800 border-slate-700 text-slate-100'
+                          : 'bg-slate-100 border-slate-300 text-slate-800')
+                        : (isDarkMode
+                          ? 'bg-slate-900 border-slate-800 text-slate-500'
+                          : 'bg-slate-50 border-slate-200 text-slate-400')
+                  }`}
+                >
+                  {stepNo}. {label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {error && (
+          <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+            {error}
+          </div>
+        )}
+
+        {step === 1 && (
+          <div className={`${panelClass} p-6 space-y-4`}>
+            <h2 className={`font-bold text-lg ${theme.text}`}>Step 1: Input</h2>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className={`${inputClass} min-h-[120px]`}
+              placeholder="Describe the video you want to create..."
+            />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Duration</label>
+                <select value={durationSeconds} onChange={(e) => setDurationSeconds(Number(e.target.value))} className={`${inputClass} mt-2`}>
+                  {[15, 30, 45, 60, 90, 120].map((item) => <option key={item} value={item}>{item} sec</option>)}
+                </select>
+              </div>
+              <div>
+                <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Scene Count (Optional)</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={sceneCount}
+                  onChange={(e) => setSceneCount(e.target.value ? Number(e.target.value) : '')}
+                  className={`${inputClass} mt-2`}
+                />
+              </div>
+              <div>
+                <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Upload Image (Optional)</label>
+                <input type="file" accept="image/*" className="mt-2 text-sm" onChange={(e) => onInputImage(e.target.files?.[0])} />
+                {inputImageName && <p className={`text-xs mt-1 ${theme.textSecondary}`}>{inputImageName}</p>}
+              </div>
+            </div>
+            <div>
+              <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>OR Select Product</label>
+              <select
+                value={selectedProductId}
+                onChange={(e) => {
+                  setSelectedProductId(e.target.value);
+                  if (e.target.value) {
+                    setInputImageData('');
+                    setInputImageName('');
+                  }
+                }}
+                className={`${inputClass} mt-2`}
+              >
+                <option value="">{loadingProducts ? 'Loading products...' : 'No product selected'}</option>
+                {products.map((product) => <option key={product._id} value={product._id}>{product.name}</option>)}
+              </select>
+            </div>
+
+            <button onClick={step1Next} disabled={busy} className="px-6 py-3 rounded-xl bg-[#ffcc29] text-black font-bold">
+              {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Next'}
+            </button>
+          </div>
+        )}
+
+        {step === 2 && (
+          <div className={`${panelClass} p-6 space-y-4`}>
+            <h2 className={`font-bold text-lg ${theme.text}`}>Step 2: Prompt + Scene Generation</h2>
+            <div className="flex gap-3">
+              <button onClick={generatePromptAndScenes} disabled={busy} className="px-4 py-2 rounded-xl border border-[#ffcc29] text-[#ffcc29] font-semibold">
+                {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Generate Prompt + Scenes'}
+              </button>
+              <button onClick={refreshDraft} className="px-4 py-2 rounded-xl border border-slate-500 text-slate-300">
+                <RefreshCcw className="w-4 h-4 inline mr-1" /> Refresh
+              </button>
+            </div>
+
+            <div>
+              <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Generated Prompt (Editable)</label>
+              <textarea value={promptText} onChange={(e) => setPromptText(e.target.value)} className={`${inputClass} mt-2 min-h-[100px]`} />
+            </div>
+
+            <div className="space-y-3">
+              <p className={`text-sm font-semibold ${theme.text}`}>Scene Breakdown (Editable)</p>
+              {(scenes || []).map((scene, idx) => (
+                <div key={scene.sceneId || idx} className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3 space-y-2`}>
+                  <input value={scene.title || ''} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, title: e.target.value } : item))} className={inputClass} />
+                  <div className="grid grid-cols-2 gap-2">
+                    <input type="number" min={1} value={scene.durationSeconds || 1} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, durationSeconds: Number(e.target.value) || 1 } : item))} className={inputClass} />
+                    <input value={scene.sceneId || `scene_${idx + 1}`} disabled className={inputClass} />
+                  </div>
+                  <textarea value={scene.imagePrompt || ''} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, imagePrompt: e.target.value } : item))} className={`${inputClass} min-h-[70px]`} placeholder="Image prompt" />
+                  <textarea value={scene.videoPrompt || ''} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, videoPrompt: e.target.value } : item))} className={`${inputClass} min-h-[70px]`} placeholder="Video prompt" />
+                </div>
+              ))}
+            </div>
+
+            <button onClick={saveStep2EditsAndNext} disabled={busy || !scenes.length} className="px-6 py-3 rounded-xl bg-[#ffcc29] text-black font-bold">
+              {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Next'}
+            </button>
+          </div>
+        )}
+
+        {step === 3 && (
+          <div className={`${panelClass} p-6 space-y-4`}>
+            <h2 className={`font-bold text-lg ${theme.text}`}>Step 3: Image Generation (Scene Preview)</h2>
+            <button onClick={generateSceneImages} disabled={busy} className="px-4 py-2 rounded-xl border border-[#ffcc29] text-[#ffcc29] font-semibold">
+              {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Generate / Refresh All Scene Images'}
+            </button>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              {scenes.map((scene, idx) => (
+                <div key={scene.sceneId || idx} className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3`}>
+                  <p className={`font-semibold ${theme.text}`}>{scene.title || `Scene ${idx + 1}`}</p>
+                  <textarea value={scene.imagePrompt || ''} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, imagePrompt: e.target.value } : item))} className={`${inputClass} mt-2 min-h-[70px]`} />
+                  {scene.imageUrl ? (
+                    <img src={scene.imageUrl} alt={scene.title} className="w-full h-52 object-cover rounded-lg mt-3 border border-slate-700" />
+                  ) : (
+                    <div className="h-52 rounded-lg mt-3 border border-dashed border-slate-600 flex items-center justify-center">
+                      <ImageIcon className="w-7 h-7 text-slate-500" />
+                    </div>
+                  )}
+                  <div className="flex gap-2 mt-3">
+                    <button onClick={() => regenerateSceneImage(scene)} className="px-3 py-2 text-xs rounded-lg border border-[#ffcc29] text-[#ffcc29]">Regenerate</button>
+                    <label className="px-3 py-2 text-xs rounded-lg border border-slate-500 text-slate-300 cursor-pointer">
+                      Replace
+                      <input type="file" accept="image/*" className="hidden" onChange={(e) => onSceneImageReplace(scene.sceneId, e.target.files?.[0])} />
+                    </label>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button onClick={() => setStep(4)} disabled={busy || !hasSceneImages} className="px-6 py-3 rounded-xl bg-[#ffcc29] text-black font-bold">Next</button>
+          </div>
+        )}
+
+        {step === 4 && (
+          <div className={`${panelClass} p-6 space-y-4`}>
+            <h2 className={`font-bold text-lg ${theme.text}`}>Step 4: Video Clip Generation</h2>
+            <button onClick={generateClips} disabled={busy} className="px-4 py-2 rounded-xl border border-[#ffcc29] text-[#ffcc29] font-semibold">
+              {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Generate / Regenerate Clips'}
+            </button>
+            <div className="space-y-3">
+              {scenes.map((scene, idx) => (
+                <div key={scene.sceneId || idx} className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3`}>
+                  <div className="flex justify-between items-center gap-3">
+                    <p className={`font-semibold ${theme.text}`}>{scene.title || `Scene ${idx + 1}`}</p>
+                    <input
+                      type="number"
+                      min={1}
+                      value={scene.durationSeconds || 1}
+                      onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, durationSeconds: Number(e.target.value) || 1 } : item))}
+                      className={`${inputClass} w-28`}
+                    />
+                  </div>
+                  {scene.clipUrl ? (
+                    <video controls src={scene.clipUrl} className="w-full rounded-lg mt-3 max-h-[300px]" />
+                  ) : (
+                    <p className={`text-xs mt-2 ${theme.textSecondary}`}>Clip not generated yet.</p>
+                  )}
+                </div>
+              ))}
+            </div>
+            <button onClick={() => setStep(5)} disabled={busy || !hasSceneClips} className="px-6 py-3 rounded-xl bg-[#ffcc29] text-black font-bold">Next</button>
+          </div>
+        )}
+
+        {step === 5 && (
+          <div className={`${panelClass} p-6 space-y-4`}>
+            <h2 className={`font-bold text-lg ${theme.text}`}>Step 5: Audio Configuration</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Audio</label>
+                <button type="button" onClick={() => setAudioEnabled((v) => !v)} className={`${inputClass} mt-2 text-left`}>
+                  {audioEnabled ? 'ON' : 'OFF'}
+                </button>
+              </div>
+              <div>
+                <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Voice Mode</label>
+                <select value={audioMode} onChange={(e) => setAudioMode(e.target.value as AudioMode)} className={`${inputClass} mt-2`} disabled={!audioEnabled}>
+                  <option value="auto">TTS</option>
+                  <option value="upload">Upload Voice</option>
+                  <option value="off">No Voice</option>
+                </select>
+              </div>
+              <div>
+                <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Music</label>
+                <select value={audioTone} onChange={(e) => setAudioTone(e.target.value)} className={`${inputClass} mt-2`} disabled={!audioEnabled}>
+                  <option value="professional">Professional</option>
+                  <option value="normal">Normal</option>
+                  <option value="fun">Fun</option>
+                  <option value="luxury">Luxury</option>
+                  <option value="simple">Simple</option>
+                </select>
+              </div>
+            </div>
+
+            {audioEnabled && (
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                  <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Language</label>
+                  <select value={audioLanguageCode} onChange={(e) => setAudioLanguageCode(e.target.value)} className={`${inputClass} mt-2`}>
+                    <option value="en">English</option>
+                    <option value="hi">Hindi</option>
+                    <option value="ta">Tamil</option>
+                    <option value="te">Telugu</option>
+                    <option value="kn">Kannada</option>
+                    <option value="ml">Malayalam</option>
+                  </select>
+                </div>
+                <div>
+                  <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Voice</label>
+                  <select value={voiceGender} onChange={(e) => setVoiceGender(e.target.value as 'male' | 'female')} className={`${inputClass} mt-2`}>
+                    <option value="female">Female</option>
+                    <option value="male">Male</option>
+                  </select>
+                </div>
+                <div>
+                  <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Voice Volume</label>
+                  <input type="range" min={0} max={2} step={0.1} value={voiceVolume} onChange={(e) => setVoiceVolume(Number(e.target.value))} className="mt-3 w-full" />
+                </div>
+                <div>
+                  <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Music Volume</label>
+                  <input type="range" min={0} max={2} step={0.1} value={musicVolume} onChange={(e) => setMusicVolume(Number(e.target.value))} className="mt-3 w-full" />
+                </div>
+              </div>
+            )}
+
+            {audioEnabled && audioMode === 'upload' && (
+              <div className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3 space-y-3`}>
+                <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Upload Voice / Record Voice</label>
+                <input type="file" accept="audio/*" onChange={(e) => onManualVoiceUpload(e.target.files?.[0])} className="text-sm" />
+                <div className="flex gap-2">
+                  {!isRecording ? (
+                    <button onClick={startVoiceRecording} className="px-3 py-2 rounded-lg border border-slate-500 text-slate-200 text-sm">
+                      <Mic className="w-4 h-4 inline mr-1" /> Start Recording
+                    </button>
+                  ) : (
+                    <button onClick={stopVoiceRecording} className="px-3 py-2 rounded-lg border border-red-500 text-red-300 text-sm">
+                      Stop Recording
+                    </button>
+                  )}
+                </div>
+                {manualVoiceName && <p className={`text-xs ${theme.textSecondary}`}>{manualVoiceName}</p>}
+              </div>
+            )}
+
+            <button onClick={generateAudioTracks} disabled={busy} className="px-6 py-3 rounded-xl bg-[#ffcc29] text-black font-bold">
+              {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Next'}
+            </button>
+          </div>
+        )}
+
+        {step === 6 && (
+          <div className={`${panelClass} p-6 space-y-4`}>
+            <h2 className={`font-bold text-lg ${theme.text}`}>Step 6: Audio Mixing Preview</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {generatedTracks?.voiceUrl && (
+                <div className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3`}>
+                  <p className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Voice Preview</p>
+                  <audio controls src={generatedTracks.voiceUrl} className="w-full mt-2" />
+                </div>
+              )}
+              {generatedTracks?.backgroundUrl && (
+                <div className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3`}>
+                  <p className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Music Preview</p>
+                  <audio controls src={generatedTracks.backgroundUrl} className="w-full mt-2" />
+                </div>
+              )}
+              {generatedTracks?.manualUrl && (
+                <div className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3`}>
+                  <p className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Manual Voice Preview</p>
+                  <audio controls src={generatedTracks.manualUrl} className="w-full mt-2" />
+                </div>
+              )}
+            </div>
+
+            <button onClick={mixAudio} disabled={busy} className="px-4 py-2 rounded-xl border border-[#ffcc29] text-[#ffcc29] font-semibold">
+              {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Mix Audio'}
+            </button>
+            {finalAudioUrl && (
+              <div className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3`}>
+                <p className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>final_audio.mp3</p>
+                <audio controls src={finalAudioUrl} className="w-full mt-2" />
+              </div>
+            )}
+            <button onClick={() => setStep(7)} disabled={busy || (!finalAudioUrl && audioEnabled)} className="px-6 py-3 rounded-xl bg-[#ffcc29] text-black font-bold">Next</button>
+          </div>
+        )}
+
+        {step === 7 && (
+          <div className={`${panelClass} p-6 space-y-4`}>
+            <h2 className={`font-bold text-lg ${theme.text}`}>Step 7: Video + Audio Merge</h2>
+            <button onClick={mergeVideo} disabled={busy} className="px-4 py-2 rounded-xl border border-[#ffcc29] text-[#ffcc29] font-semibold">
+              {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Merge Video + Audio'}
+            </button>
+            {(finalOutputUrl || finalVideoUrl) && (
+              <div>
+                <video controls src={finalOutputUrl || finalVideoUrl} className="w-full rounded-lg max-h-[520px]" />
+                <p className={`text-xs mt-2 ${theme.textSecondary}`}>{finalOutputUrl ? 'final_output.mp4' : 'final_video.mp4'}</p>
+              </div>
+            )}
+            <button onClick={() => setStep(8)} disabled={busy || (!finalOutputUrl && !finalVideoUrl)} className="px-6 py-3 rounded-xl bg-[#ffcc29] text-black font-bold">Next</button>
+          </div>
+        )}
+
+        {step === 8 && (
+          <div className={`${panelClass} p-6 space-y-4`}>
+            <h2 className={`font-bold text-lg ${theme.text}`}>Step 8: Thumbnail + Content Generation</h2>
+            <button onClick={generateContent} disabled={busy} className="px-4 py-2 rounded-xl border border-[#ffcc29] text-[#ffcc29] font-semibold">
+              {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Generate Thumbnail + Caption + Hashtags'}
+            </button>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3`}>
+                <p className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Thumbnail</p>
+                {thumbnailUrl ? (
+                  <img src={thumbnailUrl} alt="thumbnail" className="w-full rounded-lg mt-3 max-h-[320px] object-cover" />
+                ) : (
+                  <div className="h-[220px] rounded-lg mt-3 border border-dashed border-slate-600 flex items-center justify-center">
+                    <ImageIcon className="w-7 h-7 text-slate-500" />
+                  </div>
+                )}
+              </div>
+              <div className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3 space-y-3`}>
+                <div>
+                  <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Caption</label>
+                  <textarea value={caption} onChange={(e) => setCaption(e.target.value)} className={`${inputClass} mt-2 min-h-[110px]`} />
+                </div>
+                <div>
+                  <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Hashtags</label>
+                  <textarea value={hashtagsText} onChange={(e) => setHashtagsText(e.target.value)} className={`${inputClass} mt-2 min-h-[90px]`} />
+                </div>
+              </div>
+            </div>
+            <button onClick={() => setStep(9)} disabled={busy || !caption} className="px-6 py-3 rounded-xl bg-[#ffcc29] text-black font-bold">Next</button>
+          </div>
+        )}
+
+        {step === 9 && (
+          <div className={`${panelClass} p-6 space-y-4`}>
+            <h2 className={`font-bold text-lg ${theme.text}`}>Step 9: Platform Selection</h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {['instagram', 'facebook', 'linkedin', 'youtube'].map((platform) => {
+                const active = selectedPlatforms.includes(platform);
+                return (
+                  <button
+                    key={platform}
+                    onClick={() => togglePlatform(platform)}
+                    className={`px-4 py-3 rounded-xl border text-sm font-semibold ${
+                      active
+                        ? 'bg-[#ffcc29] text-black border-[#ffcc29]'
+                        : isDarkMode
+                          ? 'bg-slate-900 border-slate-700 text-slate-200'
+                          : 'bg-white border-slate-300 text-slate-700'
+                    }`}
+                  >
+                    {platform.charAt(0).toUpperCase() + platform.slice(1)}
+                  </button>
+                );
+              })}
+            </div>
+            <button onClick={() => setStep(10)} disabled={busy || !selectedPlatforms.length} className="px-6 py-3 rounded-xl bg-[#ffcc29] text-black font-bold">Next</button>
+          </div>
+        )}
+
+        {step === 10 && (
+          <div className={`${panelClass} p-6 space-y-4`}>
+            <h2 className={`font-bold text-lg ${theme.text}`}>Step 10: Scheduling</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Date</label>
+                <input type="date" value={scheduleDate} onChange={(e) => setScheduleDate(e.target.value)} className={`${inputClass} mt-2`} />
+              </div>
+              <div>
+                <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Time</label>
+                <input type="time" value={scheduleTime} onChange={(e) => setScheduleTime(e.target.value)} className={`${inputClass} mt-2`} />
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => schedulePost(false)} disabled={busy} className="px-6 py-3 rounded-xl bg-[#ffcc29] text-black font-bold">
+                {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Post / Schedule'}
+              </button>
+              <button onClick={() => schedulePost(true)} disabled={busy} className="px-6 py-3 rounded-xl border border-slate-500 text-slate-200 font-semibold">
+                Publish Now
+              </button>
+            </div>
+          </div>
+        )}
+
+        {step === 11 && (
+          <div className={`${panelClass} p-6 space-y-4`}>
+            <h2 className={`font-bold text-lg ${theme.text}`}>Final Step: Output</h2>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3`}>
+                <p className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Final Video</p>
+                {(finalOutputUrl || finalVideoUrl) ? (
+                  <video controls src={finalOutputUrl || finalVideoUrl} className="w-full rounded-lg mt-3 max-h-[520px]" />
+                ) : (
+                  <p className={`text-sm mt-3 ${theme.textSecondary}`}>No final video available.</p>
+                )}
+              </div>
+              <div className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3 space-y-3`}>
+                <div>
+                  <p className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Thumbnail</p>
+                  {thumbnailUrl ? <img src={thumbnailUrl} alt="thumbnail" className="w-full rounded-lg mt-2 max-h-[240px] object-cover" /> : <p className={`text-sm mt-2 ${theme.textSecondary}`}>No thumbnail</p>}
+                </div>
+                <div>
+                  <p className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Caption</p>
+                  <p className={`text-sm mt-1 ${theme.text}`}>{caption || 'No caption'}</p>
+                </div>
+                <div>
+                  <p className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Hashtags</p>
+                  <p className={`text-sm mt-1 ${theme.text}`}>{hashtagsText || 'No hashtags'}</p>
+                </div>
+                <div>
+                  <p className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Platforms</p>
+                  <p className={`text-sm mt-1 ${theme.text}`}>{selectedPlatforms.join(', ') || 'None'}</p>
+                </div>
+                <div>
+                  <p className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Scheduled</p>
+                  <p className={`text-sm mt-1 ${theme.text}`}>
+                    {draft?.schedule?.scheduledAt ? new Date(draft.schedule.scheduledAt).toLocaleString() : 'Not scheduled'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button onClick={() => schedulePost(true)} disabled={busy} className="px-6 py-3 rounded-xl bg-[#ffcc29] text-black font-bold">
+                Publish
+              </button>
+              <button
+                onClick={() => {
+                  setStep(1);
+                  setJobId('');
+                  setDraft(null);
+                }}
+                className="px-6 py-3 rounded-xl border border-slate-500 text-slate-200 font-semibold"
+              >
+                Start New Wizard
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className={`${panelClass} p-3`}>
+          <p className={`text-xs ${theme.textMuted} flex items-center gap-2`}>
+            <Music2 className="w-4 h-4" />
+            APIs: createDraft, generatePrompt, generateScenes, generateImages, generateClips, generateAudio, mixAudio, mergeVideo, generateContent, schedulePost.
+          </p>
+          {jobId && <p className={`text-xs mt-1 ${theme.textSecondary}`}>Current jobId: {jobId}</p>}
+        </div>
+      </div>
+    </div>
+  );
 };
 
 export default ReelGenerator;

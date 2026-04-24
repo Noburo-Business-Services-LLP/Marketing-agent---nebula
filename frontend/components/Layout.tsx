@@ -148,7 +148,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
     if (pathname.startsWith('/reels')) {
       return {
         title: 'AI Reels',
-        subtitle: 'Generate image-to-reel videos with prompt templates and scheduling.',
+        subtitle: 'Generate full AI videos from description, uploaded images, or inventory products.',
         actions: [{ label: 'Go to Campaigns', path: '/campaigns' }]
       };
     }

@@ -1,0 +1,93 @@
+{
+  "jobId": "9787bc7c-9f05-4c19-af50-d410a9ccbddf",
+  "userId": "69c127ebf3d71c4d2070da39",
+  "createdAt": "2026-04-24T11:01:30.531Z",
+  "updatedAt": "2026-04-24T11:02:34.285Z",
+  "currentStep": 2,
+  "input": {
+    "description": "Best laptop int his segment and it has the graphic card rtx 4050 with 32gb ddr5 ram and have high processore ryzen 9 series. then the display it have 4k oled and best gaming and editing",
+    "durationSeconds": 60,
+    "sceneCount": 10,
+    "sourceImage": null,
+    "product": {
+      "_id": "69d49ae1059ce27bb254ef3f",
+      "user": "69c127ebf3d71c4d2070da39",
+      "name": "ASUS ROG Strix G15",
+      "price": 95000,
+      "currency": "INR",
+      "imageUrl": "https://images.unsplash.com/photo-1517336714731-489689fd1ca8",
+      "description": "Gaming laptop with high refresh rate display",
+      "stockStatus": "in-stock",
+      "stockQuantity": 18,
+      "category": "Computers",
+      "tags": [
+        "laptop",
+        "asus",
+        "gaming"
+      ],
+      "createdAt": "2026-04-07T05:49:21.968Z",
+      "updatedAt": "2026-04-07T05:49:21.969Z",
+      "__v": 0
+    },
+    "productId": "69d49ae1059ce27bb254ef3f"
+  },
+  "prompt": {
+    "promptText": "Best laptop int his segment and it has the graphic card rtx 4050 with 32gb ddr5 ram and have high processore ryzen 9 series. then the display it have 4k oled and best gaming and editing\nProduct: ASUS ROG Strix G15\nDetails: Gaming laptop with high refresh rate display",
+    "structuredPrompt": "Best laptop int his segment and it has the graphic card rtx 4050 with 32gb ddr5 ram and have high processore ryzen 9 series. then the display it have 4k oled and best gaming and editing\nProduct: ASUS ROG Strix G15\nDetails: Gaming laptop with high refresh rate display",
+    "creativeDirection": {
+      "targetAudience": "general audience",
+      "tone": "professional",
+      "visualStyle": "clean cinematic vertical ad style",
+      "cta": "Learn more"
+    },
+    "generatedAt": "2026-04-24T11:02:11.784Z",
+    "edited": false
+  },
+  "scenes": {
+    "sceneData": [
+      {
+        "index": 1,
+        "sceneId": "scene_1",
+        "title": "Introduction",
+        "durationSeconds": 30,
+        "startSec": 0,
+        "endSec": 30,
+        "imagePrompt": "A sleek ASUS ROG Strix G15 laptop sits closed in a dark, futuristic studio. Cinematic smoke swirls around it as neon RGB lights reflect off its metallic surface. Vertical 9:16 aspect ratio.",
+        "videoPrompt": "The ASUS ROG Strix G15 laptop lid slowly opens, revealing the glowing keyboard and screen in a dark, futuristic studio with cinematic smoke and neon reflections. Vertical 9:16 aspect ratio.",
+        "voiceLine": "In the world of portable performance, a new champion emerges. Meet the ASUS ROG Strix G15.",
+        "onScreenText": "ASUS ROG Strix G15"
+      },
+      {
+        "index": 2,
+        "sceneId": "scene_2",
+        "title": "Processor Power",
+        "durationSeconds": 30,
+        "startSec": 30,
+        "endSec": 60,
+        "imagePrompt": "A stylized, glowing Ryzen 9 processor chip seen through a translucent layer of the laptop's chassis. Digital energy pulses from the chip. Vertical 9:16 aspect ratio.",
+        "videoPrompt": "A dramatic zoom-in through the laptop's chassis to reveal a stylized, glowing Ryzen 9 processor. Digital energy pulses from the chip in slow motion. Vertical 9:16 aspect ratio.",
+        "voiceLine": "At its core, the raw power of the Ryzen 9 series processor, engineered for elite-tier performance.",
+        "onScreenText": "Ryzen 9 Series"
+      }
+    ],
+    "voiceScript": "In the world of portable performance, a new champion emerges. Meet the ASUS ROG Strix G15. At its core, the raw power of the Ryzen 9 series processor, engineered for elite-tier performance. Paired with a massive 32 gigabytes of DDR5 RAM, multitasking becomes effortless and loading times vanish. The graphical heart of this machine is the NVIDIA RTX 4050, delivering next-generation visuals and AI-powered performance. Experience gaming as it's meant to be, with fluid frame rates and breathtaking detail. The high-refresh-rate display ensures you never miss a single frame of the action. But it's not just for gaming. The stunning 4K OLED display brings content to life with true-to-life colors and infinite contrast. For creators, this means seamless 4K editing and rendering, turning your vision into reality without compromise. All this power is encased in a signature ROG design that's both stylish and functional. The ASUS ROG Strix G15. Unbeatable performance. Uncompromised power.",
+    "thumbnailPrompt": "Dramatic hero shot of the ASUS ROG Strix G15 laptop, slightly open, with the RGB keyboard glowing intensely in a dark, moody environment. Cinematic lighting, sharp focus, vertical 9:16 aspect ratio.",
+    "globalVisualStyle": "Sleek, futuristic, cinematic product showcase in a dark studio environment with vibrant RGB neon lighting. Hyper-realistic rendering, 8K resolution, professional and clean aesthetic."
+  },
+  "images": null,
+  "clips": null,
+  "audio": null,
+  "mix": null,
+  "merge": null,
+  "content": null,
+  "platform": null,
+  "schedule": null,
+  "outputs": {
+    "directories": {
+      "images": "C:\\Users\\abine\\Desktop\\Office\\Nebulaa\\Marketing-agent---nebula\\backend\\storage\\ai-videos\\9787bc7c-9f05-4c19-af50-d410a9ccbddf\\images",
+      "clips": "C:\\Users\\abine\\Desktop\\Office\\Nebulaa\\Marketing-agent---nebula\\backend\\storage\\ai-videos\\9787bc7c-9f05-4c19-af50-d410a9ccbddf\\clips",
+      "audio": "C:\\Users\\abine\\Desktop\\Office\\Nebulaa\\Marketing-agent---nebula\\backend\\storage\\ai-videos\\9787bc7c-9f05-4c19-af50-d410a9ccbddf\\audio",
+      "final": "C:\\Users\\abine\\Desktop\\Office\\Nebulaa\\Marketing-agent---nebula\\backend\\storage\\ai-videos\\9787bc7c-9f05-4c19-af50-d410a9ccbddf\\final"
+    }
+  }
+}

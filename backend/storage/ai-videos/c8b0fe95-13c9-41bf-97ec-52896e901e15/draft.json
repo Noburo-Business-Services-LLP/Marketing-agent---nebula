@@ -1,0 +1,224 @@
+{
+  "jobId": "c8b0fe95-13c9-41bf-97ec-52896e901e15",
+  "userId": "69c127ebf3d71c4d2070da39",
+  "createdAt": "2026-04-24T06:50:48.364Z",
+  "updatedAt": "2026-04-24T06:55:44.706Z",
+  "currentStep": 3,
+  "input": {
+    "description": "best laptop on this segement and i have high performance with rtx 4060 graphic card , best for gaming and also high end ram ddr5 32gb with 2tb ssd and it have oled dispaly. And have best processore ryzen 9 series",
+    "durationSeconds": 30,
+    "sceneCount": 6,
+    "sourceImage": null,
+    "product": {
+      "_id": "69d49ae1059ce27bb254ef3f",
+      "user": "69c127ebf3d71c4d2070da39",
+      "name": "ASUS ROG Strix G15",
+      "price": 95000,
+      "currency": "INR",
+      "imageUrl": "https://images.unsplash.com/photo-1517336714731-489689fd1ca8",
+      "description": "Gaming laptop with high refresh rate display",
+      "stockStatus": "in-stock",
+      "stockQuantity": 18,
+      "category": "Computers",
+      "tags": [
+        "laptop",
+        "asus",
+        "gaming"
+      ],
+      "createdAt": "2026-04-07T05:49:21.968Z",
+      "updatedAt": "2026-04-07T05:49:21.969Z",
+      "__v": 0
+    },
+    "productId": "69d49ae1059ce27bb254ef3f"
+  },
+  "prompt": {
+    "promptText": "best laptop on this segement and i have high performance with rtx 4060 graphic card , best for gaming and also high end ram ddr5 32gb with 2tb ssd and it have oled dispaly. And have best processore ryzen 9 series\nProduct: ASUS ROG Strix G15\nDetails: Gaming laptop with high refresh rate display",
+    "structuredPrompt": "best laptop on this segement and i have high performance with rtx 4060 graphic card , best for gaming and also high end ram ddr5 32gb with 2tb ssd and it have oled dispaly. And have best processore ryzen 9 series\nProduct: ASUS ROG Strix G15\nDetails: Gaming laptop with high refresh rate display",
+    "creativeDirection": {
+      "targetAudience": "general audience",
+      "tone": "professional",
+      "visualStyle": "clean cinematic vertical ad style",
+      "cta": "Learn more"
+    },
+    "generatedAt": "2026-04-24T06:51:35.819Z",
+    "edited": true,
+    "editedAt": "2026-04-24T06:53:29.883Z"
+  },
+  "scenes": {
+    "sceneData": [
+      {
+        "index": 1,
+        "sceneId": "scene_1",
+        "title": "Introduction",
+        "durationSeconds": 5,
+        "startSec": 0,
+        "endSec": 5,
+        "imagePrompt": "A sleek, closed ASUS ROG Strix G15 laptop centered vertically, with a glowing ROG logo, against a dark, moody background with subtle neon highlights.",
+        "videoPrompt": "A slow cinematic reveal of the ASUS ROG Strix G15 laptop, panning up its textured lid to focus on the glowing ROG logo. Dark, futuristic environment with ambient neon light reflections.",
+        "voiceLine": "Introducing the ASUS ROG Strix G15, the pinnacle of gaming performance.",
+        "onScreenText": "ASUS ROG Strix G15"
+      },
+      {
+        "index": 2,
+        "sceneId": "scene_2",
+        "title": "Processor Power",
+        "durationSeconds": 5,
+        "startSec": 5,
+        "endSec": 10,
+        "imagePrompt": "A vertical shot of the ASUS ROG Strix G15 laptop opening, with a dramatic glow emanating from the keyboard and screen. An abstract Ryzen 9 logo is subtly visible in the background.",
+        "videoPrompt": "The laptop lid smoothly opens, revealing the RGB keyboard which illuminates in a wave of color. A stylized, holographic AMD Ryzen 9 logo briefly appears and dissolves above the keyboard.",
+        "voiceLine": "Powered by the formidable AMD Ryzen 9 series processor, it handles the most demanding tasks with ease.",
+        "onScreenText": "Ryzen 9 Processor"
+      },
+      {
+        "index": 3,
+        "sceneId": "scene_3",
+        "title": "Graphics Card",
+        "durationSeconds": 5,
+        "startSec": 10,
+        "endSec": 15,
+        "imagePrompt": "A vertical, dynamic in-game screenshot from a futuristic racing game, displayed on the laptop's screen, showcasing intense motion blur and ray-traced reflections.",
+        "videoPrompt": "A fast-paced montage of visually stunning gameplay, focusing on explosions and realistic lighting effects, seamlessly transitioning to a close-up of the RTX 4060 branding on the laptop chassis.",
+        "voiceLine": "Experience next-generation visuals with the NVIDIA GeForce RTX 4060 graphics card, delivering unparalleled realism.",
+        "onScreenText": "RTX 4060 Graphics"
+      },
+      {
+        "index": 4,
+        "sceneId": "scene_4",
+        "title": "RAM and SSD",
+        "durationSeconds": 5,
+        "startSec": 15,
+        "endSec": 20,
+        "imagePrompt": "An abstract, high-tech visualization of data streams flowing at high speed, with neon blue and magenta lines representing the DDR5 RAM and 2TB SSD working in harmony.",
+        "videoPrompt": "A stylized, abstract animation showing glowing data particles rapidly moving through futuristic circuits, symbolizing the immense speed of the 32GB DDR5 RAM and 2TB SSD.",
+        "voiceLine": "Multitask seamlessly and load games in an instant with 32 gigabytes of DDR5 RAM and a massive 2-terabyte SSD.",
+        "onScreenText": "32GB DDR5 | 2TB SSD"
+      },
+      {
+        "index": 5,
+        "sceneId": "scene_5",
+        "title": "OLED Display",
+        "durationSeconds": 5,
+        "startSec": 20,
+        "endSec": 25,
+        "imagePrompt": "A stunning close-up of the ASUS ROG Strix G15's OLED screen, displaying a vibrant, colorful nebula with deep, perfect blacks at the edges. The focus is on the incredible color accuracy and contrast.",
+        "videoPrompt": "A slow pan across the laptop's OLED display, showing a hyper-detailed, colorful fantasy world with incredible vibrancy. The camera focuses on the crisp details and deep blacks of the scene.",
+        "voiceLine": "Immerse yourself in breathtaking color and clarity on the stunning high-refresh-rate OLED display.",
+        "onScreenText": "Vibrant OLED Display"
+      },
+      {
+        "index": 6,
+        "sceneId": "scene_6",
+        "title": "Conclusion",
+        "durationSeconds": 5,
+        "startSec": 25,
+        "endSec": 30,
+        "imagePrompt": "A powerful, final hero shot of the fully open ASUS ROG Strix G15, viewed from a low angle, with the screen and keyboard glowing brightly in a dark, atmospheric setting.",
+        "videoPrompt": "A dramatic 360-degree orbit around the ASUS ROG Strix G15, showcasing its design from all angles before settling on a powerful frontal shot. The brand name appears on screen.",
+        "voiceLine": "The ASUS ROG Strix G15: Engineered for victory.",
+        "onScreenText": "Engineered for Victory"
+      }
+    ],
+    "voiceScript": "Introducing the ASUS ROG Strix G15, the pinnacle of gaming performance. Powered by the formidable AMD Ryzen 9 series processor, it handles the most demanding tasks with ease. Experience next-generation visuals with the NVIDIA GeForce RTX 4060 graphics card, delivering unparalleled realism. Multitask seamlessly and load games in an instant with 32 gigabytes of DDR5 RAM and a massive 2-terabyte SSD. Immerse yourself in breathtaking color and clarity on the stunning high-refresh-rate OLED display. The ASUS ROG Strix G15: Engineered for victory.",
+    "thumbnailPrompt": "A dramatic hero shot of the ASUS ROG Strix G15 gaming laptop, angled view, lid slightly open to reveal a glowing keyboard, set against a dark, abstract background with neon light streaks, professional product photography, hyper-realistic, 8k.",
+    "globalVisualStyle": "Cinematic, professional product videography, dark futuristic aesthetic with neon blue and magenta accents, sharp focus, high contrast, 8K resolution, vertical 9:16 aspect ratio."
+  },
+  "images": {
+    "sceneData": [
+      {
+        "index": 1,
+        "sceneId": "scene_1",
+        "title": "Introduction",
+        "durationSeconds": 5,
+        "startSec": 0,
+        "endSec": 5,
+        "imagePrompt": "A sleek, closed ASUS ROG Strix G15 laptop centered vertically, with a glowing ROG logo, against a dark, moody background with subtle neon highlights.",
+        "videoPrompt": "A slow cinematic reveal of the ASUS ROG Strix G15 laptop, panning up its textured lid to focus on the glowing ROG logo. Dark, futuristic environment with ambient neon light reflections.",
+        "voiceLine": "Introducing the ASUS ROG Strix G15, the pinnacle of gaming performance.",
+        "onScreenText": "ASUS ROG Strix G15",
+        "imageUrl": "http://localhost:5000/generated-media/c8b0fe95-13c9-41bf-97ec-52896e901e15/images/scene_1.jpg"
+      },
+      {
+        "index": 2,
+        "sceneId": "scene_2",
+        "title": "Processor Power",
+        "durationSeconds": 5,
+        "startSec": 5,
+        "endSec": 10,
+        "imagePrompt": "A vertical shot of the ASUS ROG Strix G15 laptop opening, with a dramatic glow emanating from the keyboard and screen. An abstract Ryzen 9 logo is subtly visible in the background.",
+        "videoPrompt": "The laptop lid smoothly opens, revealing the RGB keyboard which illuminates in a wave of color. A stylized, holographic AMD Ryzen 9 logo briefly appears and dissolves above the keyboard.",
+        "voiceLine": "Powered by the formidable AMD Ryzen 9 series processor, it handles the most demanding tasks with ease.",
+        "onScreenText": "Ryzen 9 Processor",
+        "imageUrl": "http://localhost:5000/generated-media/c8b0fe95-13c9-41bf-97ec-52896e901e15/images/scene_2.jpg"
+      },
+      {
+        "index": 3,
+        "sceneId": "scene_3",
+        "title": "Graphics Card",
+        "durationSeconds": 5,
+        "startSec": 10,
+        "endSec": 15,
+        "imagePrompt": "A vertical, dynamic in-game screenshot from a futuristic racing game, displayed on the laptop's screen, showcasing intense motion blur and ray-traced reflections.",
+        "videoPrompt": "A fast-paced montage of visually stunning gameplay, focusing on explosions and realistic lighting effects, seamlessly transitioning to a close-up of the RTX 4060 branding on the laptop chassis.",
+        "voiceLine": "Experience next-generation visuals with the NVIDIA GeForce RTX 4060 graphics card, delivering unparalleled realism.",
+        "onScreenText": "RTX 4060 Graphics",
+        "imageUrl": "http://localhost:5000/generated-media/c8b0fe95-13c9-41bf-97ec-52896e901e15/images/scene_3.jpg"
+      },
+      {
+        "index": 4,
+        "sceneId": "scene_4",
+        "title": "RAM and SSD",
+        "durationSeconds": 5,
+        "startSec": 15,
+        "endSec": 20,
+        "imagePrompt": "An abstract, high-tech visualization of data streams flowing at high speed, with neon blue and magenta lines representing the DDR5 RAM and 2TB SSD working in harmony.",
+        "videoPrompt": "A stylized, abstract animation showing glowing data particles rapidly moving through futuristic circuits, symbolizing the immense speed of the 32GB DDR5 RAM and 2TB SSD.",
+        "voiceLine": "Multitask seamlessly and load games in an instant with 32 gigabytes of DDR5 RAM and a massive 2-terabyte SSD.",
+        "onScreenText": "32GB DDR5 | 2TB SSD",
+        "imageUrl": "http://localhost:5000/generated-media/c8b0fe95-13c9-41bf-97ec-52896e901e15/images/scene_4.jpg"
+      },
+      {
+        "index": 5,
+        "sceneId": "scene_5",
+        "title": "OLED Display",
+        "durationSeconds": 5,
+        "startSec": 20,
+        "endSec": 25,
+        "imagePrompt": "A stunning close-up of the ASUS ROG Strix G15's OLED screen, displaying a vibrant, colorful nebula with deep, perfect blacks at the edges. The focus is on the incredible color accuracy and contrast.",
+        "videoPrompt": "A slow pan across the laptop's OLED display, showing a hyper-detailed, colorful fantasy world with incredible vibrancy. The camera focuses on the crisp details and deep blacks of the scene.",
+        "voiceLine": "Immerse yourself in breathtaking color and clarity on the stunning high-refresh-rate OLED display.",
+        "onScreenText": "Vibrant OLED Display",
+        "imageUrl": "http://localhost:5000/generated-media/c8b0fe95-13c9-41bf-97ec-52896e901e15/images/scene_5.jpg"
+      },
+      {
+        "index": 6,
+        "sceneId": "scene_6",
+        "title": "Conclusion",
+        "durationSeconds": 5,
+        "startSec": 25,
+        "endSec": 30,
+        "imagePrompt": "A powerful, final hero shot of the fully open ASUS ROG Strix G15, viewed from a low angle, with the screen and keyboard glowing brightly in a dark, atmospheric setting.",
+        "videoPrompt": "A dramatic 360-degree orbit around the ASUS ROG Strix G15, showcasing its design from all angles before settling on a powerful frontal shot. The brand name appears on screen.",
+        "voiceLine": "The ASUS ROG Strix G15: Engineered for victory.",
+        "onScreenText": "Engineered for Victory",
+        "imageUrl": "http://localhost:5000/generated-media/c8b0fe95-13c9-41bf-97ec-52896e901e15/images/scene_6.jpg"
+      }
+    ],
+    "generatedAt": "2026-04-24T06:55:44.704Z"
+  },
+  "clips": null,
+  "audio": null,
+  "mix": null,
+  "merge": null,
+  "content": null,
+  "platform": null,
+  "schedule": null,
+  "outputs": {
+    "directories": {
+      "images": "C:\\Users\\abine\\Desktop\\Office\\Nebulaa\\Marketing-agent---nebula\\backend\\storage\\ai-videos\\c8b0fe95-13c9-41bf-97ec-52896e901e15\\images",
+      "clips": "C:\\Users\\abine\\Desktop\\Office\\Nebulaa\\Marketing-agent---nebula\\backend\\storage\\ai-videos\\c8b0fe95-13c9-41bf-97ec-52896e901e15\\clips",
+      "audio": "C:\\Users\\abine\\Desktop\\Office\\Nebulaa\\Marketing-agent---nebula\\backend\\storage\\ai-videos\\c8b0fe95-13c9-41bf-97ec-52896e901e15\\audio",
+      "final": "C:\\Users\\abine\\Desktop\\Office\\Nebulaa\\Marketing-agent---nebula\\backend\\storage\\ai-videos\\c8b0fe95-13c9-41bf-97ec-52896e901e15\\final"
+    }
+  }
+}
