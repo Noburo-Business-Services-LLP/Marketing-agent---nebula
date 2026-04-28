@@ -57,7 +57,7 @@ const ACTION_LABELS: Record<string, { label: string; icon: string }> = {
 };
 
 const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
-  const { isDarkMode } = useTheme();
+  const { isDarkMode, toggleTheme } = useTheme();
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [trialInfo, setTrialInfo] = useState<TrialData | null>(null);
   const [showCreditPanel, setShowCreditPanel] = useState(false);
@@ -259,9 +259,9 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
                 </nav>
             </div>
 
-            <div className={`mt-auto p-6 border-t ${isDarkMode ? 'border-slate-700/50' : 'border-[#070A12]/20'}`}>
+            <div className="mt-auto p-6">
                 
-                <nav className="space-y-1 mb-4">
+                <nav className="space-y-1">
                     <Link
                         to="/settings"
                         className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors font-medium ${
@@ -278,6 +278,36 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
                         <Settings className={`w-5 h-5 ${location.pathname === '/settings' ? (isDarkMode ? 'text-[#ffcc29]' : 'text-white') : (isDarkMode ? 'text-[#ededed]/50' : 'text-[#070A12]/60')}`} />
                         <span>Settings</span>
                     </Link>
+                    <button
+                        type="button"
+                        onClick={toggleTheme}
+                        className={`flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg transition-colors font-medium w-full ${
+                          isDarkMode
+                            ? 'text-[#ededed]/70 hover:bg-[#ffcc29]/10 hover:text-[#ffcc29]'
+                            : 'text-[#070A12]/80 hover:bg-[#070A12]/10 hover:text-[#070A12]'
+                        }`}
+                    >
+                        <span className="flex items-center gap-3">
+                          {isDarkMode ? (
+                            <Moon className="w-5 h-5 text-[#ededed]/50" />
+                          ) : (
+                            <Sun className="w-5 h-5 text-[#070A12]/60" />
+                          )}
+                          <span>Theme</span>
+                        </span>
+                        <span
+                          className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${
+                            isDarkMode ? 'bg-[#ffcc29]' : 'bg-[#070A12]/25'
+                          }`}
+                          aria-hidden="true"
+                        >
+                          <span
+                            className={`inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                              isDarkMode ? 'translate-x-5' : 'translate-x-1'
+                            }`}
+                          />
+                        </span>
+                    </button>
                     <button 
                         onClick={handleLogout}
                         className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors font-medium w-full ${
@@ -409,7 +439,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
 
                 {/* Dropdown Panel */}
                 {showCreditPanel && (
-                  <div className={`absolute top-full left-0 mt-2 w-80 rounded-2xl shadow-2xl border z-50 overflow-hidden ${
+                  <div className={`absolute top-full right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-2xl shadow-2xl border z-50 overflow-hidden ${
                     isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-gray-200'
                   }`} style={{ animation: 'fadeSlideDown 0.2s ease-out' }}>
                     {/* Header */}

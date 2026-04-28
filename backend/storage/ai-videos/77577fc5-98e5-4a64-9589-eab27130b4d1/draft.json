@@ -1,0 +1,270 @@
+{
+  "jobId": "77577fc5-98e5-4a64-9589-eab27130b4d1",
+  "userId": "69c127ebf3d71c4d2070da39",
+  "createdAt": "2026-04-27T10:37:25.228Z",
+  "updatedAt": "2026-04-27T10:41:52.267Z",
+  "currentStep": 3,
+  "input": {
+    "description": "best apple moble in this segment with 60fps refesh rate 128gb rom with 8gb ram latest ios softwore best camera",
+    "durationSeconds": 60,
+    "sceneCount": 8,
+    "sourceImage": null,
+    "product": {
+      "_id": "69d08ca62f4b26a1889af79a",
+      "user": "69c127ebf3d71c4d2070da39",
+      "name": "Apple iPhone 14",
+      "price": 69999,
+      "currency": "INR",
+      "imageUrl": "https://store.storeimages.cdn-apple.com/4668/as-images.apple.com/is/iphone-14-blue-select-202209",
+      "description": "",
+      "stockStatus": "in-stock",
+      "stockQuantity": 50,
+      "category": "General",
+      "tags": [],
+      "createdAt": "2026-04-04T03:59:34.313Z",
+      "updatedAt": "2026-04-04T03:59:34.317Z",
+      "__v": 0
+    },
+    "productId": "69d08ca62f4b26a1889af79a"
+  },
+  "prompt": {
+    "promptText": "best apple moble in this segment with 60fps refesh rate 128gb rom with 8gb ram latest ios softwore best camera\nProduct: Apple iPhone 14",
+    "structuredPrompt": "best apple moble in this segment with 60fps refesh rate 128gb rom with 8gb ram latest ios softwore best camera\nProduct: Apple iPhone 14",
+    "creativeDirection": {
+      "targetAudience": "general audience",
+      "tone": "professional",
+      "visualStyle": "clean cinematic vertical ad style",
+      "cta": "Learn more"
+    },
+    "generatedAt": "2026-04-27T10:38:07.401Z",
+    "edited": true,
+    "editedAt": "2026-04-27T10:38:39.499Z"
+  },
+  "scenes": {
+    "sceneData": [
+      {
+        "index": 1,
+        "sceneId": "scene_1",
+        "title": "Introduction",
+        "durationSeconds": 8,
+        "startSec": 0,
+        "endSec": 8,
+        "imagePrompt": "A sleek Apple iPhone 14 shown from a dynamic angle against a clean, minimalist background. The screen is off, highlighting the premium materials. Professional studio lighting, hyper-realistic, 8K.",
+        "videoPrompt": "A slow, elegant reveal of the Apple iPhone 14, rotating gently to catch the light on its edges. The background is a clean, neutral studio setting.",
+        "voiceLine": "Experience the next evolution in mobile technology. Introducing the Apple iPhone 14 from New org.",
+        "onScreenText": "iPhone 14"
+      },
+      {
+        "index": 2,
+        "sceneId": "scene_2",
+        "title": "Fluid Display",
+        "durationSeconds": 8,
+        "startSec": 8,
+        "endSec": 16,
+        "imagePrompt": "A close-up, macro shot of the corner of the iPhone 14 screen, showing a vibrant, colorful user interface with crystal clear icons. The display is bright and sharp.",
+        "videoPrompt": "A vertical video showing a user smoothly scrolling through a vibrant social media feed on the iPhone 14. The motion is incredibly fluid and seamless, demonstrating the 60Hz refresh rate.",
+        "voiceLine": "Immerse yourself in a flawlessly smooth visual experience with the stunning 60Hz refresh rate display.",
+        "onScreenText": "60Hz Display"
+      },
+      {
+        "index": 3,
+        "sceneId": "scene_3",
+        "title": "Seamless Performance",
+        "durationSeconds": 8,
+        "startSec": 16,
+        "endSec": 24,
+        "imagePrompt": "A stylized graphic overlay on the iPhone 14 screen showing multiple app icons arranged neatly, representing effortless multitasking capability.",
+        "videoPrompt": "An animation showing multiple apps opening and switching instantly on the iPhone 14 screen. The transitions are quick and without any lag, highlighting the power of the RAM.",
+        "voiceLine": "Powered by an impressive 8 gigabytes of RAM, multitasking is more seamless and responsive than ever before.",
+        "onScreenText": "8GB RAM"
+      },
+      {
+        "index": 4,
+        "sceneId": "scene_4",
+        "title": "Ample Storage",
+        "durationSeconds": 8,
+        "startSec": 24,
+        "endSec": 32,
+        "imagePrompt": "A visual representation on the iPhone 14 screen of a storage bar, almost empty, indicating vast available space. Icons for photos, videos, and apps are shown.",
+        "videoPrompt": "A fast-paced montage of photos and video clips being saved to the iPhone's gallery, followed by an animation of a storage meter barely filling up, signifying 128GB of space.",
+        "voiceLine": "With 128 gigabytes of internal storage, you have all the space you need for your photos, apps, and memories.",
+        "onScreenText": "128GB Storage"
+      },
+      {
+        "index": 5,
+        "sceneId": "scene_5",
+        "title": "Intelligent Software",
+        "durationSeconds": 7,
+        "startSec": 32,
+        "endSec": 39,
+        "imagePrompt": "A clean shot of the iPhone 14's home screen showcasing the latest iOS with customizable widgets and a modern, intuitive layout.",
+        "videoPrompt": "A screen recording-style animation demonstrating a key feature of the latest iOS, like interacting with a dynamic widget or using a new system-level function. The interaction is smooth and clean.",
+        "voiceLine": "Running on the latest, most secure iOS, the iPhone 14 delivers an intelligent and intuitive user experience.",
+        "onScreenText": "Latest iOS"
+      },
+      {
+        "index": 6,
+        "sceneId": "scene_6",
+        "title": "Scene 6",
+        "durationSeconds": 7,
+        "startSec": 39,
+        "endSec": 46,
+        "imagePrompt": "Product: Apple iPhone 14. Feature Apple iPhone 14 naturally in the frame. Keep composition vertical 9:16 and premium.",
+        "videoPrompt": "Product: Apple iPhone 14. Add subtle camera motion (slow push-in, pan, reveal).",
+        "voiceLine": "Product: Apple iPhone 14",
+        "onScreenText": "Product: Apple iPhone 14"
+      },
+      {
+        "index": 7,
+        "sceneId": "scene_7",
+        "title": "Scene 7",
+        "durationSeconds": 7,
+        "startSec": 46,
+        "endSec": 53,
+        "imagePrompt": "Product: Apple iPhone 14. Feature Apple iPhone 14 naturally in the frame. Keep composition vertical 9:16 and premium.",
+        "videoPrompt": "Product: Apple iPhone 14. Add subtle camera motion (slow push-in, pan, reveal).",
+        "voiceLine": "Product: Apple iPhone 14",
+        "onScreenText": "Product: Apple iPhone 14"
+      },
+      {
+        "index": 8,
+        "sceneId": "scene_8",
+        "title": "Scene 8",
+        "durationSeconds": 7,
+        "startSec": 53,
+        "endSec": 60,
+        "imagePrompt": "Product: Apple iPhone 14. Feature Apple iPhone 14 naturally in the frame. Keep composition vertical 9:16 and premium.",
+        "videoPrompt": "Product: Apple iPhone 14. Add subtle camera motion (slow push-in, pan, reveal).",
+        "voiceLine": "Product: Apple iPhone 14",
+        "onScreenText": "Product: Apple iPhone 14"
+      }
+    ],
+    "voiceScript": "Experience the next evolution in mobile technology. Introducing the Apple iPhone 14 from New org. Immerse yourself in a flawlessly smooth visual experience with the stunning 60Hz refresh rate display. Powered by an impressive 8 gigabytes of RAM, multitasking is more seamless and responsive than ever before. With 128 gigabytes of internal storage, you have all the space you need for your photos, apps, and memories. Running on the latest, most secure iOS, the iPhone 14 delivers an intelligent and intuitive user experience. Capture your world in breathtaking detail. The advanced camera system turns every moment into a masterpiece. From brilliant low-light photos to cinematic 4K video, your creativity knows no bounds. Power, elegance, and innovation in the palm of your hand. The Apple iPhone 14, available now at New org.",
+    "thumbnailPrompt": "A stunning hero shot of the Apple iPhone 14, angled to showcase its sleek design and advanced camera lenses. The phone is set against a clean, minimalist background with professional studio lighting, hyper-realistic, 8K.",
+    "globalVisualStyle": "Cinematic, clean, minimalist, high-tech, studio lighting, product focus, hyper-realistic, 8K resolution, vertical 9:16 aspect ratio."
+  },
+  "images": {
+    "sceneData": [
+      {
+        "index": 1,
+        "sceneId": "scene_1",
+        "title": "Introduction",
+        "durationSeconds": 8,
+        "startSec": 0,
+        "endSec": 8,
+        "imagePrompt": "A sleek Apple iPhone 14 shown from a dynamic angle against a clean, minimalist background. The screen is off, highlighting the premium materials. Professional studio lighting, hyper-realistic, 8K.",
+        "videoPrompt": "A slow, elegant reveal of the Apple iPhone 14, rotating gently to catch the light on its edges. The background is a clean, neutral studio setting.",
+        "voiceLine": "Experience the next evolution in mobile technology. Introducing the Apple iPhone 14 from New org.",
+        "onScreenText": "iPhone 14",
+        "imageUrl": "http://localhost:5000/generated-media/77577fc5-98e5-4a64-9589-eab27130b4d1/images/scene_1.jpg"
+      },
+      {
+        "index": 2,
+        "sceneId": "scene_2",
+        "title": "Fluid Display",
+        "durationSeconds": 8,
+        "startSec": 8,
+        "endSec": 16,
+        "imagePrompt": "A close-up, macro shot of the corner of the iPhone 14 screen, showing a vibrant, colorful user interface with crystal clear icons. The display is bright and sharp.",
+        "videoPrompt": "A vertical video showing a user smoothly scrolling through a vibrant social media feed on the iPhone 14. The motion is incredibly fluid and seamless, demonstrating the 60Hz refresh rate.",
+        "voiceLine": "Immerse yourself in a flawlessly smooth visual experience with the stunning 60Hz refresh rate display.",
+        "onScreenText": "60Hz Display",
+        "imageUrl": "http://localhost:5000/generated-media/77577fc5-98e5-4a64-9589-eab27130b4d1/images/scene_2.jpg"
+      },
+      {
+        "index": 3,
+        "sceneId": "scene_3",
+        "title": "Seamless Performance",
+        "durationSeconds": 8,
+        "startSec": 16,
+        "endSec": 24,
+        "imagePrompt": "A stylized graphic overlay on the iPhone 14 screen showing multiple app icons arranged neatly, representing effortless multitasking capability.",
+        "videoPrompt": "An animation showing multiple apps opening and switching instantly on the iPhone 14 screen. The transitions are quick and without any lag, highlighting the power of the RAM.",
+        "voiceLine": "Powered by an impressive 8 gigabytes of RAM, multitasking is more seamless and responsive than ever before.",
+        "onScreenText": "8GB RAM",
+        "imageUrl": "http://localhost:5000/generated-media/77577fc5-98e5-4a64-9589-eab27130b4d1/images/scene_3.jpg"
+      },
+      {
+        "index": 4,
+        "sceneId": "scene_4",
+        "title": "Ample Storage",
+        "durationSeconds": 8,
+        "startSec": 24,
+        "endSec": 32,
+        "imagePrompt": "A visual representation on the iPhone 14 screen of a storage bar, almost empty, indicating vast available space. Icons for photos, videos, and apps are shown.",
+        "videoPrompt": "A fast-paced montage of photos and video clips being saved to the iPhone's gallery, followed by an animation of a storage meter barely filling up, signifying 128GB of space.",
+        "voiceLine": "With 128 gigabytes of internal storage, you have all the space you need for your photos, apps, and memories.",
+        "onScreenText": "128GB Storage",
+        "imageUrl": "http://localhost:5000/generated-media/77577fc5-98e5-4a64-9589-eab27130b4d1/images/scene_4.jpg"
+      },
+      {
+        "index": 5,
+        "sceneId": "scene_5",
+        "title": "Intelligent Software",
+        "durationSeconds": 7,
+        "startSec": 32,
+        "endSec": 39,
+        "imagePrompt": "A clean shot of the iPhone 14's home screen showcasing the latest iOS with customizable widgets and a modern, intuitive layout.",
+        "videoPrompt": "A screen recording-style animation demonstrating a key feature of the latest iOS, like interacting with a dynamic widget or using a new system-level function. The interaction is smooth and clean.",
+        "voiceLine": "Running on the latest, most secure iOS, the iPhone 14 delivers an intelligent and intuitive user experience.",
+        "onScreenText": "Latest iOS",
+        "imageUrl": "http://localhost:5000/generated-media/77577fc5-98e5-4a64-9589-eab27130b4d1/images/scene_5.jpg"
+      },
+      {
+        "index": 6,
+        "sceneId": "scene_6",
+        "title": "Scene 6",
+        "durationSeconds": 7,
+        "startSec": 39,
+        "endSec": 46,
+        "imagePrompt": "Product: Apple iPhone 14. Feature Apple iPhone 14 naturally in the frame. Keep composition vertical 9:16 and premium.",
+        "videoPrompt": "Product: Apple iPhone 14. Add subtle camera motion (slow push-in, pan, reveal).",
+        "voiceLine": "Product: Apple iPhone 14",
+        "onScreenText": "Product: Apple iPhone 14",
+        "imageUrl": "http://localhost:5000/generated-media/77577fc5-98e5-4a64-9589-eab27130b4d1/images/scene_6.jpg"
+      },
+      {
+        "index": 7,
+        "sceneId": "scene_7",
+        "title": "Scene 7",
+        "durationSeconds": 7,
+        "startSec": 46,
+        "endSec": 53,
+        "imagePrompt": "Product: Apple iPhone 14. Feature Apple iPhone 14 naturally in the frame. Keep composition vertical 9:16 and premium.",
+        "videoPrompt": "Product: Apple iPhone 14. Add subtle camera motion (slow push-in, pan, reveal).",
+        "voiceLine": "Product: Apple iPhone 14",
+        "onScreenText": "Product: Apple iPhone 14",
+        "imageUrl": "http://localhost:5000/generated-media/77577fc5-98e5-4a64-9589-eab27130b4d1/images/scene_7.jpg"
+      },
+      {
+        "index": 8,
+        "sceneId": "scene_8",
+        "title": "Scene 8",
+        "durationSeconds": 7,
+        "startSec": 53,
+        "endSec": 60,
+        "imagePrompt": "Product: Apple iPhone 14. Feature Apple iPhone 14 naturally in the frame. Keep composition vertical 9:16 and premium.",
+        "videoPrompt": "Product: Apple iPhone 14. Add subtle camera motion (slow push-in, pan, reveal).",
+        "voiceLine": "Product: Apple iPhone 14",
+        "onScreenText": "Product: Apple iPhone 14",
+        "imageUrl": "http://localhost:5000/generated-media/77577fc5-98e5-4a64-9589-eab27130b4d1/images/scene_8.jpg"
+      }
+    ],
+    "generatedAt": "2026-04-27T10:41:52.266Z"
+  },
+  "clips": null,
+  "audio": null,
+  "mix": null,
+  "merge": null,
+  "content": null,
+  "platform": null,
+  "schedule": null,
+  "outputs": {
+    "directories": {
+      "images": "C:\\Users\\abine\\Desktop\\Office\\Nebulaa\\Marketing-agent---nebula\\backend\\storage\\ai-videos\\77577fc5-98e5-4a64-9589-eab27130b4d1\\images",
+      "clips": "C:\\Users\\abine\\Desktop\\Office\\Nebulaa\\Marketing-agent---nebula\\backend\\storage\\ai-videos\\77577fc5-98e5-4a64-9589-eab27130b4d1\\clips",
+      "audio": "C:\\Users\\abine\\Desktop\\Office\\Nebulaa\\Marketing-agent---nebula\\backend\\storage\\ai-videos\\77577fc5-98e5-4a64-9589-eab27130b4d1\\audio",
+      "final": "C:\\Users\\abine\\Desktop\\Office\\Nebulaa\\Marketing-agent---nebula\\backend\\storage\\ai-videos\\77577fc5-98e5-4a64-9589-eab27130b4d1\\final"
+    }
+  }
+}

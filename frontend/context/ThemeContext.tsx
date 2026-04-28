@@ -21,6 +21,10 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [isDarkMode, setIsDarkMode] = useState(() => {
+    const savedTheme = localStorage.getItem('nebulaa-theme');
+    if (savedTheme === 'dark') return true;
+    if (savedTheme === 'light') return false;
+
     // Check if class 'dark' exists on html or system preference
     return document.documentElement.classList.contains('dark') || 
            window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -31,8 +35,10 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   useEffect(() => {
     if (isDarkMode) {
       document.documentElement.classList.add('dark');
+      localStorage.setItem('nebulaa-theme', 'dark');
     } else {
       document.documentElement.classList.remove('dark');
+      localStorage.setItem('nebulaa-theme', 'light');
     }
   }, [isDarkMode]);
 
