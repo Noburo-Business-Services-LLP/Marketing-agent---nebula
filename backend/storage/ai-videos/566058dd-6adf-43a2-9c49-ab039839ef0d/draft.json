@@ -1,0 +1,435 @@
+{
+  "jobId": "566058dd-6adf-43a2-9c49-ab039839ef0d",
+  "userId": "69c127ebf3d71c4d2070da39",
+  "createdAt": "2026-04-28T09:35:15.925Z",
+  "updatedAt": "2026-04-28T09:45:02.953Z",
+  "currentStep": 10,
+  "input": {
+    "description": "best laptop with high end performance chip set and it have 24 hrs battery with 8gb ram and 512gb storage . it is best for editinga and coding based work",
+    "durationSeconds": 30,
+    "sceneCount": 6,
+    "sourceImage": null,
+    "product": {
+      "_id": "69d08ca62f4b26a1889af7a0",
+      "user": "69c127ebf3d71c4d2070da39",
+      "name": "Apple MacBook Air M2",
+      "price": 99999,
+      "currency": "INR",
+      "imageUrl": "https://store.storeimages.cdn-apple.com/4668/as-images.apple.com/is/macbook-air-m2-midnight-select-20220606",
+      "description": "",
+      "stockStatus": "in-stock",
+      "stockQuantity": 20,
+      "category": "General",
+      "tags": [],
+      "createdAt": "2026-04-04T03:59:34.466Z",
+      "updatedAt": "2026-04-04T03:59:34.467Z",
+      "__v": 0
+    },
+    "productId": "69d08ca62f4b26a1889af7a0"
+  },
+  "prompt": {
+    "promptText": "best laptop with high end performance chip set and it have 24 hrs battery with 8gb ram and 512gb storage . it is best for editinga and coding based work\nProduct: Apple MacBook Air M2",
+    "structuredPrompt": "best laptop with high end performance chip set and it have 24 hrs battery with 8gb ram and 512gb storage . it is best for editinga and coding based work\nProduct: Apple MacBook Air M2",
+    "creativeDirection": {
+      "targetAudience": "general audience",
+      "tone": "professional",
+      "visualStyle": "clean cinematic vertical ad style",
+      "cta": "Learn more"
+    },
+    "generatedAt": "2026-04-28T09:35:53.749Z",
+    "edited": true,
+    "editedAt": "2026-04-28T09:36:21.482Z"
+  },
+  "scenes": {
+    "sceneData": [
+      {
+        "index": 1,
+        "sceneId": "scene_1",
+        "title": "Introduction",
+        "durationSeconds": 5,
+        "startSec": 0,
+        "endSec": 5,
+        "imagePrompt": "A sleek, silver Apple MacBook Air M2 floating against a minimalist grey background, angled to showcase its incredibly thin profile. Professional studio lighting, cinematic quality, 9:16 aspect ratio.",
+        "videoPrompt": "best laptop with high end performance. Add subtle camera motion (slow push-in, pan, reveal).",
+        "voiceLine": "Introducing the tool that redefines productivity: the Apple MacBook Air M2 from New org.",
+        "onScreenText": "Power. Redefined."
+      },
+      {
+        "index": 2,
+        "sceneId": "scene_2",
+        "title": "M2 Chip Performance",
+        "durationSeconds": 5,
+        "startSec": 5,
+        "endSec": 10,
+        "imagePrompt": "chip set and it have 24. Feature Apple MacBook Air M2 naturally in the frame. Keep composition vertical 9:16 and premium.",
+        "videoPrompt": "A slow zoom into the keyboard of the MacBook Air M2, with a futuristic, glowing blue digital overlay representing the powerful M2 chipset inside. Abstract data streams flow across the keys. 9:16 aspect ratio.",
+        "voiceLine": "Engineered with a high-end performance chipset, it delivers speed and efficiency like never before.",
+        "onScreenText": "Next-Gen M2 Chip"
+      },
+      {
+        "index": 3,
+        "sceneId": "scene_3",
+        "title": "All-Day Battery",
+        "durationSeconds": 5,
+        "startSec": 10,
+        "endSec": 15,
+        "imagePrompt": "hrs battery with 8gb ram and. Feature Apple MacBook Air M2 naturally in the frame. Keep composition vertical 9:16 and premium.",
+        "videoPrompt": "A time-lapse shot of a professional working on the MacBook Air M2 in a modern office, as the background light changes from day to night. No charger is visible. A subtle battery icon in the corner stays full. 9:16 aspect ratio.",
+        "voiceLine": "Work, create, and innovate for up to 24 hours on a single charge. Power that lasts all day, and then some.",
+        "onScreenText": "24-Hour Battery Life"
+      },
+      {
+        "index": 4,
+        "sceneId": "scene_4",
+        "title": "RAM and Storage",
+        "durationSeconds": 5,
+        "startSec": 15,
+        "endSec": 20,
+        "imagePrompt": "512gb storage . it is best. Feature Apple MacBook Air M2 naturally in the frame. Keep composition vertical 9:16 and premium.",
+        "videoPrompt": "A clean, animated graphic on a grey background. The text '8GB RAM' and '512GB Storage' materializes with a smooth, professional animation. Minimalist icons representing speed and capacity appear next to the text. 9:16 aspect ratio.",
+        "voiceLine": "With 8 gigabytes of unified memory and 512 gigabytes of super-fast storage, your workflow is seamless.",
+        "onScreenText": "8GB RAM | 512GB SSD"
+      },
+      {
+        "index": 5,
+        "sceneId": "scene_5",
+        "title": "Editing and Coding",
+        "durationSeconds": 5,
+        "startSec": 20,
+        "endSec": 25,
+        "imagePrompt": "for editinga and coding based work. Feature Apple MacBook Air M2 naturally in the frame. Keep composition vertical 9:16 and premium.",
+        "videoPrompt": "A dynamic vertical split-screen. The top half shows a close-up of a complex video timeline being edited flawlessly. The bottom half shows lines of code being written rapidly in a dark-mode IDE. 9:16 aspect ratio.",
+        "voiceLine": "It’s the ultimate machine for demanding tasks, from high-resolution video editing to complex coding.",
+        "onScreenText": "For Creators &amp; Coders"
+      },
+      {
+        "index": 6,
+        "sceneId": "scene_6",
+        "title": "Closing Shot",
+        "durationSeconds": 5,
+        "startSec": 25,
+        "endSec": 30,
+        "imagePrompt": "Product: Apple MacBook Air M2. Feature Apple MacBook Air M2 naturally in the frame. Keep composition vertical 9:16 and premium.",
+        "videoPrompt": "The MacBook Air M2 closes smoothly in a final, elegant hero shot on a clean studio background. The New org logo fades in below it. Soft, professional lighting. 9:16 aspect ratio.",
+        "voiceLine": "Elevate your work. The Apple MacBook Air M2. Available now at New org.",
+        "onScreenText": "New org"
+      }
+    ],
+    "voiceScript": "Introducing the tool that redefines productivity: the Apple MacBook Air M2 from New org. Engineered with a high-end performance chipset, it delivers speed and efficiency like never before. Work, create, and innovate for up to 24 hours on a single charge. Power that lasts all day, and then some. With 8 gigabytes of unified memory and 512 gigabytes of super-fast storage, your workflow is seamless. It’s the ultimate machine for demanding tasks, from high-resolution video editing to complex coding. Elevate your work. The Apple MacBook Air M2. Available now at New org.",
+    "thumbnailPrompt": "An ultra-realistic, cinematic shot of the Apple MacBook Air M2, slightly open on a clean, white desk. The screen glows faintly, reflecting a minimalist workspace. Studio lighting, 9:16 aspect ratio.",
+    "globalVisualStyle": "Cinematic, minimalist, professional tech product showcase, clean studio lighting, shallow depth of field, high-resolution 8K, silver and grey color palette."
+  },
+  "images": {
+    "sceneData": [
+      {
+        "index": 1,
+        "sceneId": "scene_1",
+        "title": "Introduction",
+        "durationSeconds": 5,
+        "startSec": 0,
+        "endSec": 5,
+        "imagePrompt": "A sleek, silver Apple MacBook Air M2 floating against a minimalist grey background, angled to showcase its incredibly thin profile. Professional studio lighting, cinematic quality, 9:16 aspect ratio.",
+        "videoPrompt": "best laptop with high end performance. Add subtle camera motion (slow push-in, pan, reveal).",
+        "voiceLine": "Introducing the tool that redefines productivity: the Apple MacBook Air M2 from New org.",
+        "onScreenText": "Power. Redefined.",
+        "imageUrl": "http://localhost:5000/generated-media/566058dd-6adf-43a2-9c49-ab039839ef0d/images/scene_1.jpg"
+      },
+      {
+        "index": 2,
+        "sceneId": "scene_2",
+        "title": "M2 Chip Performance",
+        "durationSeconds": 5,
+        "startSec": 5,
+        "endSec": 10,
+        "imagePrompt": "chip set and it have 24. Feature Apple MacBook Air M2 naturally in the frame. Keep composition vertical 9:16 and premium.",
+        "videoPrompt": "A slow zoom into the keyboard of the MacBook Air M2, with a futuristic, glowing blue digital overlay representing the powerful M2 chipset inside. Abstract data streams flow across the keys. 9:16 aspect ratio.",
+        "voiceLine": "Engineered with a high-end performance chipset, it delivers speed and efficiency like never before.",
+        "onScreenText": "Next-Gen M2 Chip",
+        "imageUrl": "http://localhost:5000/generated-media/566058dd-6adf-43a2-9c49-ab039839ef0d/images/scene_2.jpg"
+      },
+      {
+        "index": 3,
+        "sceneId": "scene_3",
+        "title": "All-Day Battery",
+        "durationSeconds": 5,
+        "startSec": 10,
+        "endSec": 15,
+        "imagePrompt": "hrs battery with 8gb ram and. Feature Apple MacBook Air M2 naturally in the frame. Keep composition vertical 9:16 and premium.",
+        "videoPrompt": "A time-lapse shot of a professional working on the MacBook Air M2 in a modern office, as the background light changes from day to night. No charger is visible. A subtle battery icon in the corner stays full. 9:16 aspect ratio.",
+        "voiceLine": "Work, create, and innovate for up to 24 hours on a single charge. Power that lasts all day, and then some.",
+        "onScreenText": "24-Hour Battery Life",
+        "imageUrl": "http://localhost:5000/generated-media/566058dd-6adf-43a2-9c49-ab039839ef0d/images/scene_3.jpg"
+      },
+      {
+        "index": 4,
+        "sceneId": "scene_4",
+        "title": "RAM and Storage",
+        "durationSeconds": 5,
+        "startSec": 15,
+        "endSec": 20,
+        "imagePrompt": "512gb storage . it is best. Feature Apple MacBook Air M2 naturally in the frame. Keep composition vertical 9:16 and premium.",
+        "videoPrompt": "A clean, animated graphic on a grey background. The text '8GB RAM' and '512GB Storage' materializes with a smooth, professional animation. Minimalist icons representing speed and capacity appear next to the text. 9:16 aspect ratio.",
+        "voiceLine": "With 8 gigabytes of unified memory and 512 gigabytes of super-fast storage, your workflow is seamless.",
+        "onScreenText": "8GB RAM | 512GB SSD",
+        "imageUrl": "http://localhost:5000/generated-media/566058dd-6adf-43a2-9c49-ab039839ef0d/images/scene_4.jpg"
+      },
+      {
+        "index": 5,
+        "sceneId": "scene_5",
+        "title": "Editing and Coding",
+        "durationSeconds": 5,
+        "startSec": 20,
+        "endSec": 25,
+        "imagePrompt": "for editinga and coding based work. Feature Apple MacBook Air M2 naturally in the frame. Keep composition vertical 9:16 and premium.",
+        "videoPrompt": "A dynamic vertical split-screen. The top half shows a close-up of a complex video timeline being edited flawlessly. The bottom half shows lines of code being written rapidly in a dark-mode IDE. 9:16 aspect ratio.",
+        "voiceLine": "It’s the ultimate machine for demanding tasks, from high-resolution video editing to complex coding.",
+        "onScreenText": "For Creators &amp; Coders",
+        "imageUrl": "http://localhost:5000/generated-media/566058dd-6adf-43a2-9c49-ab039839ef0d/images/scene_5.jpg"
+      },
+      {
+        "index": 6,
+        "sceneId": "scene_6",
+        "title": "Closing Shot",
+        "durationSeconds": 5,
+        "startSec": 25,
+        "endSec": 30,
+        "imagePrompt": "Product: Apple MacBook Air M2. Feature Apple MacBook Air M2 naturally in the frame. Keep composition vertical 9:16 and premium.",
+        "videoPrompt": "The MacBook Air M2 closes smoothly in a final, elegant hero shot on a clean studio background. The New org logo fades in below it. Soft, professional lighting. 9:16 aspect ratio.",
+        "voiceLine": "Elevate your work. The Apple MacBook Air M2. Available now at New org.",
+        "onScreenText": "New org",
+        "imageUrl": "http://localhost:5000/generated-media/566058dd-6adf-43a2-9c49-ab039839ef0d/images/scene_6.jpg"
+      }
+    ],
+    "generatedAt": "2026-04-28T09:39:15.334Z"
+  },
+  "clips": {
+    "sceneData": [
+      {
+        "index": 1,
+        "sceneId": "scene_1",
+        "title": "Introduction",
+        "durationSeconds": 5,
+        "startSec": 0,
+        "endSec": 5,
+        "imageUrl": "http://localhost:5000/generated-media/566058dd-6adf-43a2-9c49-ab039839ef0d/images/scene_1.jpg",
+        "image_url": "http://localhost:5000/generated-media/566058dd-6adf-43a2-9c49-ab039839ef0d/images/scene_1.jpg",
+        "video_url": "https://v3b.fal.media/files/b/0a980cd6/N3DhMt_VP9M073_CbuV_d_bzSQeIWq.mp4",
+        "videoUrl": "https://v3b.fal.media/files/b/0a980cd6/N3DhMt_VP9M073_CbuV_d_bzSQeIWq.mp4",
+        "voiceLine": "Introducing the tool that redefines productivity: the Apple MacBook Air M2 from New org.",
+        "onScreenText": "Power. Redefined.",
+        "imagePrompt": "A sleek, silver Apple MacBook Air M2 floating against a minimalist grey background, angled to showcase its incredibly thin profile. Professional studio lighting, cinematic quality, 9:16 aspect ratio.",
+        "videoPrompt": "best laptop with high end performance. Add subtle camera motion (slow push-in, pan, reveal).",
+        "clipUrl": "http://localhost:5000/generated-media/566058dd-6adf-43a2-9c49-ab039839ef0d/clips/scene_1.mp4",
+        "fal": {
+          "model": "fal-ai/ltx-2.3-22b/image-to-video",
+          "seed": 149063119,
+          "num_frames": 33,
+          "width": 256,
+          "height": 256
+        },
+        "falVideoUrl": "https://v3b.fal.media/files/b/0a980cd6/N3DhMt_VP9M073_CbuV_d_bzSQeIWq.mp4"
+      },
+      {
+        "index": 2,
+        "sceneId": "scene_2",
+        "title": "M2 Chip Performance",
+        "durationSeconds": 5,
+        "startSec": 5,
+        "endSec": 10,
+        "imageUrl": "http://localhost:5000/generated-media/566058dd-6adf-43a2-9c49-ab039839ef0d/images/scene_2.jpg",
+        "image_url": "http://localhost:5000/generated-media/566058dd-6adf-43a2-9c49-ab039839ef0d/images/scene_2.jpg",
+        "video_url": "https://v3b.fal.media/files/b/0a980cd5/QgG89u4L2InAjQkIZ6Put_HtkE2IWf.mp4",
+        "videoUrl": "https://v3b.fal.media/files/b/0a980cd5/QgG89u4L2InAjQkIZ6Put_HtkE2IWf.mp4",
+        "voiceLine": "Engineered with a high-end performance chipset, it delivers speed and efficiency like never before.",
+        "onScreenText": "Next-Gen M2 Chip",
+        "imagePrompt": "chip set and it have 24. Feature Apple MacBook Air M2 naturally in the frame. Keep composition vertical 9:16 and premium.",
+        "videoPrompt": "A slow zoom into the keyboard of the MacBook Air M2, with a futuristic, glowing blue digital overlay representing the powerful M2 chipset inside. Abstract data streams flow across the keys. 9:16 aspect ratio.",
+        "clipUrl": "http://localhost:5000/generated-media/566058dd-6adf-43a2-9c49-ab039839ef0d/clips/scene_2.mp4",
+        "fal": {
+          "model": "fal-ai/ltx-2.3-22b/image-to-video",
+          "seed": 149063119,
+          "num_frames": 33,
+          "width": 256,
+          "height": 256
+        },
+        "falVideoUrl": "https://v3b.fal.media/files/b/0a980cd5/QgG89u4L2InAjQkIZ6Put_HtkE2IWf.mp4"
+      },
+      {
+        "index": 3,
+        "sceneId": "scene_3",
+        "title": "All-Day Battery",
+        "durationSeconds": 5,
+        "startSec": 10,
+        "endSec": 15,
+        "imageUrl": "http://localhost:5000/generated-media/566058dd-6adf-43a2-9c49-ab039839ef0d/images/scene_3.jpg",
+        "image_url": "http://localhost:5000/generated-media/566058dd-6adf-43a2-9c49-ab039839ef0d/images/scene_3.jpg",
+        "video_url": "https://v3b.fal.media/files/b/0a980cd9/1RiB-1gxKUni74Ya6LY73_GGFHITRW.mp4",
+        "videoUrl": "https://v3b.fal.media/files/b/0a980cd9/1RiB-1gxKUni74Ya6LY73_GGFHITRW.mp4",
+        "voiceLine": "Work, create, and innovate for up to 24 hours on a single charge. Power that lasts all day, and then some.",
+        "onScreenText": "24-Hour Battery Life",
+        "imagePrompt": "hrs battery with 8gb ram and. Feature Apple MacBook Air M2 naturally in the frame. Keep composition vertical 9:16 and premium.",
+        "videoPrompt": "A time-lapse shot of a professional working on the MacBook Air M2 in a modern office, as the background light changes from day to night. No charger is visible. A subtle battery icon in the corner stays full. 9:16 aspect ratio.",
+        "clipUrl": "http://localhost:5000/generated-media/566058dd-6adf-43a2-9c49-ab039839ef0d/clips/scene_3.mp4",
+        "fal": {
+          "model": "fal-ai/ltx-2.3-22b/image-to-video",
+          "seed": 149063119,
+          "num_frames": 33,
+          "width": 256,
+          "height": 256
+        },
+        "falVideoUrl": "https://v3b.fal.media/files/b/0a980cd9/1RiB-1gxKUni74Ya6LY73_GGFHITRW.mp4"
+      },
+      {
+        "index": 4,
+        "sceneId": "scene_4",
+        "title": "RAM and Storage",
+        "durationSeconds": 5,
+        "startSec": 15,
+        "endSec": 20,
+        "imageUrl": "http://localhost:5000/generated-media/566058dd-6adf-43a2-9c49-ab039839ef0d/images/scene_4.jpg",
+        "image_url": "http://localhost:5000/generated-media/566058dd-6adf-43a2-9c49-ab039839ef0d/images/scene_4.jpg",
+        "video_url": "https://v3b.fal.media/files/b/0a980cdb/awhW_JX6sHbyM8wUE_Bn-_w7u8qmjZ.mp4",
+        "videoUrl": "https://v3b.fal.media/files/b/0a980cdb/awhW_JX6sHbyM8wUE_Bn-_w7u8qmjZ.mp4",
+        "voiceLine": "With 8 gigabytes of unified memory and 512 gigabytes of super-fast storage, your workflow is seamless.",
+        "onScreenText": "8GB RAM | 512GB SSD",
+        "imagePrompt": "512gb storage . it is best. Feature Apple MacBook Air M2 naturally in the frame. Keep composition vertical 9:16 and premium.",
+        "videoPrompt": "A clean, animated graphic on a grey background. The text '8GB RAM' and '512GB Storage' materializes with a smooth, professional animation. Minimalist icons representing speed and capacity appear next to the text. 9:16 aspect ratio.",
+        "clipUrl": "http://localhost:5000/generated-media/566058dd-6adf-43a2-9c49-ab039839ef0d/clips/scene_4.mp4",
+        "fal": {
+          "model": "fal-ai/ltx-2.3-22b/image-to-video",
+          "seed": 149063119,
+          "num_frames": 33,
+          "width": 256,
+          "height": 256
+        },
+        "falVideoUrl": "https://v3b.fal.media/files/b/0a980cdb/awhW_JX6sHbyM8wUE_Bn-_w7u8qmjZ.mp4"
+      },
+      {
+        "index": 5,
+        "sceneId": "scene_5",
+        "title": "Editing and Coding",
+        "durationSeconds": 5,
+        "startSec": 20,
+        "endSec": 25,
+        "imageUrl": "http://localhost:5000/generated-media/566058dd-6adf-43a2-9c49-ab039839ef0d/images/scene_5.jpg",
+        "image_url": "http://localhost:5000/generated-media/566058dd-6adf-43a2-9c49-ab039839ef0d/images/scene_5.jpg",
+        "video_url": "https://v3b.fal.media/files/b/0a980cd7/KpPR90J-TDRMeshNxAePl_RHPXBr7E.mp4",
+        "videoUrl": "https://v3b.fal.media/files/b/0a980cd7/KpPR90J-TDRMeshNxAePl_RHPXBr7E.mp4",
+        "voiceLine": "It’s the ultimate machine for demanding tasks, from high-resolution video editing to complex coding.",
+        "onScreenText": "For Creators &amp; Coders",
+        "imagePrompt": "for editinga and coding based work. Feature Apple MacBook Air M2 naturally in the frame. Keep composition vertical 9:16 and premium.",
+        "videoPrompt": "A dynamic vertical split-screen. The top half shows a close-up of a complex video timeline being edited flawlessly. The bottom half shows lines of code being written rapidly in a dark-mode IDE. 9:16 aspect ratio.",
+        "clipUrl": "http://localhost:5000/generated-media/566058dd-6adf-43a2-9c49-ab039839ef0d/clips/scene_5.mp4",
+        "fal": {
+          "model": "fal-ai/ltx-2.3-22b/image-to-video",
+          "seed": 149063119,
+          "num_frames": 33,
+          "width": 256,
+          "height": 256
+        },
+        "falVideoUrl": "https://v3b.fal.media/files/b/0a980cd7/KpPR90J-TDRMeshNxAePl_RHPXBr7E.mp4"
+      },
+      {
+        "index": 6,
+        "sceneId": "scene_6",
+        "title": "Closing Shot",
+        "durationSeconds": 5,
+        "startSec": 25,
+        "endSec": 30,
+        "imageUrl": "http://localhost:5000/generated-media/566058dd-6adf-43a2-9c49-ab039839ef0d/images/scene_6.jpg",
+        "image_url": "http://localhost:5000/generated-media/566058dd-6adf-43a2-9c49-ab039839ef0d/images/scene_6.jpg",
+        "video_url": "https://v3b.fal.media/files/b/0a980cda/MbqhdGC97FWlfpXEE__kn_dH8hWDny.mp4",
+        "videoUrl": "https://v3b.fal.media/files/b/0a980cda/MbqhdGC97FWlfpXEE__kn_dH8hWDny.mp4",
+        "voiceLine": "Elevate your work. The Apple MacBook Air M2. Available now at New org.",
+        "onScreenText": "New org",
+        "imagePrompt": "Product: Apple MacBook Air M2. Feature Apple MacBook Air M2 naturally in the frame. Keep composition vertical 9:16 and premium.",
+        "videoPrompt": "The MacBook Air M2 closes smoothly in a final, elegant hero shot on a clean studio background. The New org logo fades in below it. Soft, professional lighting. 9:16 aspect ratio.",
+        "clipUrl": "http://localhost:5000/generated-media/566058dd-6adf-43a2-9c49-ab039839ef0d/clips/scene_6.mp4",
+        "fal": {
+          "model": "fal-ai/ltx-2.3-22b/image-to-video",
+          "seed": 149063119,
+          "num_frames": 33,
+          "width": 256,
+          "height": 256
+        },
+        "falVideoUrl": "https://v3b.fal.media/files/b/0a980cda/MbqhdGC97FWlfpXEE__kn_dH8hWDny.mp4"
+      }
+    ],
+    "clipUrls": [
+      "http://localhost:5000/generated-media/566058dd-6adf-43a2-9c49-ab039839ef0d/clips/scene_1.mp4",
+      "http://localhost:5000/generated-media/566058dd-6adf-43a2-9c49-ab039839ef0d/clips/scene_2.mp4",
+      "http://localhost:5000/generated-media/566058dd-6adf-43a2-9c49-ab039839ef0d/clips/scene_3.mp4",
+      "http://localhost:5000/generated-media/566058dd-6adf-43a2-9c49-ab039839ef0d/clips/scene_4.mp4",
+      "http://localhost:5000/generated-media/566058dd-6adf-43a2-9c49-ab039839ef0d/clips/scene_5.mp4",
+      "http://localhost:5000/generated-media/566058dd-6adf-43a2-9c49-ab039839ef0d/clips/scene_6.mp4"
+    ],
+    "generatedAt": "2026-04-28T09:40:48.820Z"
+  },
+  "audio": {
+    "config": {
+      "enabled": true,
+      "mode": "auto",
+      "languageCode": "en",
+      "tone": "professional",
+      "voiceGender": "female",
+      "voiceVolume": 1.1,
+      "musicVolume": 0.24,
+      "manualAudioData": "",
+      "manualAudioUrl": "",
+      "soundEffectUrls": []
+    },
+    "tracks": {
+      "manualUrl": null,
+      "voiceUrl": "http://localhost:5000/generated-media/566058dd-6adf-43a2-9c49-ab039839ef0d/audio/voice_track.mp3",
+      "backgroundUrl": "http://localhost:5000/generated-media/566058dd-6adf-43a2-9c49-ab039839ef0d/audio/background_track.mp3",
+      "soundEffectUrls": []
+    },
+    "generatedAt": "2026-04-28T09:41:44.505Z"
+  },
+  "mix": {
+    "finalAudioUrl": "http://localhost:5000/generated-media/566058dd-6adf-43a2-9c49-ab039839ef0d/final/final_audio.mp3",
+    "mixedAt": "2026-04-28T09:42:16.931Z"
+  },
+  "merge": {
+    "finalVideoUrl": "http://localhost:5000/generated-media/566058dd-6adf-43a2-9c49-ab039839ef0d/final/final_video.mp4",
+    "finalOutputUrl": "http://localhost:5000/generated-media/566058dd-6adf-43a2-9c49-ab039839ef0d/final/final_output.mp4",
+    "subtitlesUrl": null,
+    "mergedAt": "2026-04-28T09:42:24.456Z"
+  },
+  "content": {
+    "thumbnailUrl": "https://res.cloudinary.com/dhe8jowyt/image/upload/v1777369414/nebula-campaign-posts/cyd1a6xuxxrsgzvzswh6.jpg",
+    "caption": "Unleash your potential with the Apple MacBook Air M2! Experience unparalleled performance, 24-hour battery life, and seamless multitasking for all your editing and coding needs. Get yours today!",
+    "hashtags": [
+      "#MacBookAirM2",
+      "#AppleMacBook",
+      "#HighPerformanceLaptop",
+      "#24HourBattery",
+      "#VideoEditing",
+      "#CodingLife",
+      "#TechGadgets",
+      "#ProductivityBoost",
+      "#NewLaptop",
+      "#AppleTech"
+    ],
+    "generatedAt": "2026-04-28T09:44:03.642Z"
+  },
+  "platform": {
+    "selectedPlatforms": [
+      "instagram"
+    ]
+  },
+  "schedule": {
+    "publishNow": true,
+    "scheduledAt": "2026-04-28T09:45:02.947Z",
+    "status": "published_pending_provider",
+    "updatedAt": "2026-04-28T09:45:02.951Z"
+  },
+  "outputs": {
+    "directories": {
+      "images": "C:\\Users\\abine\\Desktop\\Office\\Nebulaa\\Marketing-agent---nebula\\backend\\storage\\ai-videos\\566058dd-6adf-43a2-9c49-ab039839ef0d\\images",
+      "clips": "C:\\Users\\abine\\Desktop\\Office\\Nebulaa\\Marketing-agent---nebula\\backend\\storage\\ai-videos\\566058dd-6adf-43a2-9c49-ab039839ef0d\\clips",
+      "audio": "C:\\Users\\abine\\Desktop\\Office\\Nebulaa\\Marketing-agent---nebula\\backend\\storage\\ai-videos\\566058dd-6adf-43a2-9c49-ab039839ef0d\\audio",
+      "final": "C:\\Users\\abine\\Desktop\\Office\\Nebulaa\\Marketing-agent---nebula\\backend\\storage\\ai-videos\\566058dd-6adf-43a2-9c49-ab039839ef0d\\final"
+    }
+  }
+}

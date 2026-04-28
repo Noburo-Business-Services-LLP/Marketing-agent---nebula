@@ -7,6 +7,7 @@ const { spawn, spawnSync } = require('child_process');
 const Product = require('../models/Product');
 const { callGemini, parseGeminiJSON, generateCampaignImageNanoBanana } = require('./geminiAI');
 const { getPublicBaseUrl, normalizeTone, audioFilePathForTone } = require('../utils/toneAudio');
+const { generateVideoClip } = require('./videoService');
 
 const STORAGE_ROOT = path.resolve(__dirname, '../storage/ai-videos');
 const VIDEO_TARGET = { width: 1080, height: 1920, fps: 30 };
@@ -632,41 +633,72 @@ async function createSceneVideoClip({ scene, outputPath }) {
   await runFfmpeg(args);
 }
 
+async function normalizeSceneVideoClip({ inputPath, outputPath, durationSeconds }) {
+  const safeDuration = clamp(Number.parseInt(String(durationSeconds || 4), 10), 1, 120);
+  const filterChain = [
+    `scale=${VIDEO_TARGET.width}:${VIDEO_TARGET.height}:force_original_aspect_ratio=increase`,
+    `crop=${VIDEO_TARGET.width}:${VIDEO_TARGET.height}`,
+    `fps=${VIDEO_TARGET.fps}`,
+    'format=yuv420p'
+  ].join(',');
+
+  const args = [
+    '-y',
+    '-stream_loop', '-1',
+    '-i', inputPath,
+    '-t', String(safeDuration),
+    '-vf', filterChain,
+    '-r', String(VIDEO_TARGET.fps),
+    '-c:v', 'libx264',
+    '-pix_fmt', 'yuv420p',
+    '-preset', 'veryfast',
+    '-crf', '20',
+    '-an',
+    outputPath
+  ];
+
+  await runFfmpeg(args);
+}
+
 async function generateSceneClips({
   scenes,
   context,
   logger = null,
   onSceneDone = null
 }) {
-  const outputScenes = [];
-  for (let index = 0; index < scenes.length; index += 1) {
-    const scene = scenes[index];
+  const tasks = scenes.map(async (scene, index) => {
     const clipName = `scene_${scene.index}.mp4`;
     const clipPath = path.join(context.dirs.clips, clipName);
+    const rawClipPath = path.join(context.dirs.temp, `fal_${sanitizeSegment(scene.sceneId || scene.index, 'scene')}.mp4`);
     const clipUrl = buildMediaUrl(context.baseUrl, context.jobId, ['clips', clipName]);
 
-    await runWithRetries(
-      `clip generation for ${scene.sceneId}`,
-      async () => createSceneVideoClip({ scene, outputPath: clipPath }),
-      1,
-      logger
-    );
+    if (logger) logger(`Generating Fal.ai clip for ${scene.sceneId}`);
+    const falScene = await generateVideoClip(scene);
+    await materializeSourceToFile({ source: falScene.video_url, destinationPath: rawClipPath });
+    await normalizeSceneVideoClip({
+      inputPath: rawClipPath,
+      outputPath: clipPath,
+      durationSeconds: scene.durationSeconds
+    });
 
     const stat = await fs.promises.stat(clipPath);
     if (!stat.size) throw new Error(`Generated clip is empty for ${scene.sceneId}`);
 
     const enriched = {
-      ...scene,
+      ...falScene,
       clipPath,
-      clipUrl
+      clipUrl,
+      falVideoUrl: falScene.video_url
     };
-    outputScenes.push(enriched);
 
     if (typeof onSceneDone === 'function') {
       onSceneDone(index, scenes.length, enriched);
     }
-  }
-  return outputScenes;
+
+    return enriched;
+  });
+
+  return Promise.all(tasks);
 }
 
 function buildConcatListContent(paths = []) {
@@ -1147,21 +1179,26 @@ async function saveManifest({ context, data }) {
 function ensureSceneInputForClipStage(scene = {}, index = 0) {
   const idx = Number.parseInt(String(scene.index || index + 1), 10) || (index + 1);
   const startSec = Number.isFinite(Number(scene.startSec)) ? Number(scene.startSec) : 0;
-  const duration = clamp(Number.parseInt(String(scene.durationSeconds || 4), 10), 1, 120);
+  const duration = clamp(Number.parseInt(String(scene.durationSeconds || scene.duration || 4), 10), 1, 120);
   const endSec = Number.isFinite(Number(scene.endSec)) ? Number(scene.endSec) : (startSec + duration);
+  const imageUrl = String(scene.imageUrl || scene.image_url || '').trim();
+  const videoUrl = String(scene.video_url || scene.videoUrl || scene.falVideoUrl || '').trim();
   return {
     index: idx,
-    sceneId: String(scene.sceneId || `scene_${idx}`),
+    sceneId: String(scene.sceneId || scene.id || `scene_${idx}`),
     title: String(scene.title || `Scene ${idx}`),
     durationSeconds: duration,
     startSec,
     endSec,
-    imageUrl: String(scene.imageUrl || '').trim(),
+    imageUrl,
+    image_url: imageUrl,
+    video_url: videoUrl,
+    videoUrl,
     imagePath: String(scene.imagePath || '').trim(),
     voiceLine: String(scene.voiceLine || ''),
     onScreenText: String(scene.onScreenText || ''),
-    imagePrompt: String(scene.imagePrompt || ''),
-    videoPrompt: String(scene.videoPrompt || '')
+    imagePrompt: String(scene.imagePrompt || scene.image_prompt || ''),
+    videoPrompt: String(scene.videoPrompt || scene.video_prompt || '')
   };
 }
 
@@ -1278,6 +1315,9 @@ async function runCreateVideoPipeline({
       voiceLine: scene.voiceLine,
       onScreenText: scene.onScreenText,
       imageUrl: scene.imageUrl,
+      video_url: scene.video_url || scene.falVideoUrl || scene.videoUrl || '',
+      videoUrl: scene.videoUrl || scene.video_url || scene.falVideoUrl || '',
+      falVideoUrl: scene.falVideoUrl || scene.video_url || scene.videoUrl || '',
       clipUrl: scene.clipUrl
     })),
     plan: {

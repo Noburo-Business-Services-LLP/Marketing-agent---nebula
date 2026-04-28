@@ -92,6 +92,46 @@ async function loadDraftForUser(jobId, userId = null) {
   return draft;
 }
 
+function resolveDraftStatus(draft = {}) {
+  const scheduleStatus = String(draft?.schedule?.status || '').toLowerCase();
+  if (scheduleStatus.includes('published')) return 'posted';
+  if (scheduleStatus === 'scheduled') return 'scheduled';
+  if (draft?.merge?.finalOutputUrl || draft?.merge?.finalVideoUrl) return 'created';
+  return 'draft';
+}
+
+async function listDraftsForUser(userId = null) {
+  await fs.promises.mkdir(STORAGE_ROOT, { recursive: true });
+  const entries = await fs.promises.readdir(STORAGE_ROOT, { withFileTypes: true });
+  const drafts = [];
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    try {
+      const draft = await readDraft(entry.name);
+      if (userId && draft.userId && String(draft.userId) !== String(userId)) continue;
+      drafts.push({
+        jobId: draft.jobId,
+        title: String(draft?.input?.description || 'AI Video').slice(0, 90),
+        status: resolveDraftStatus(draft),
+        currentStep: draft.currentStep || 1,
+        durationSeconds: draft?.input?.durationSeconds || null,
+        sceneCount: draft?.input?.sceneCount || draft?.scenes?.sceneData?.length || null,
+        finalVideoUrl: draft?.merge?.finalOutputUrl || draft?.merge?.finalVideoUrl || null,
+        thumbnailUrl: draft?.content?.thumbnailUrl || draft?.images?.sceneData?.[0]?.imageUrl || null,
+        scheduledAt: draft?.schedule?.scheduledAt || null,
+        platforms: draft?.platform?.selectedPlatforms || [],
+        createdAt: draft.createdAt,
+        updatedAt: draft.updatedAt
+      });
+    } catch (_) {
+      // Ignore incomplete job folders.
+    }
+  }
+
+  return drafts.sort((a, b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0));
+}
+
 async function updateDraft(jobId, userId = null, updater = null) {
   const existing = await loadDraftForUser(jobId, userId);
   const next = typeof updater === 'function' ? await updater(existing) : existing;
@@ -196,6 +236,7 @@ module.exports = {
   STORAGE_ROOT,
   buildMediaUrl,
   toUserId,
+  listDraftsForUser,
   ensureJobDirectories,
   draftPathForJob,
   writeDraft,

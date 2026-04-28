@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-ses": "^3.958.0",
+    "@fal-ai/serverless-client": "^0.15.0",
     "@sendgrid/mail": "^8.1.6",
     "bcryptjs": "^2.4.3",
     "canvas": "^3.2.1",

@@ -17,6 +17,7 @@ const {
 } = require('../services/videoGenerationPipeline');
 const {
   createDraft,
+  listDraftsForUser,
   loadDraftForUser,
   updateDraft,
   buildMediaUrl,
@@ -62,7 +63,7 @@ function sanitizeSceneData(sceneData = [], totalDurationSeconds = 60) {
   const safeTotal = normalizedDurationSeconds(totalDurationSeconds, 60);
 
   const durations = input.map((scene) => {
-    const n = Number(scene?.durationSeconds);
+    const n = Number(scene?.durationSeconds || scene?.duration);
     return Number.isFinite(n) && n > 0 ? n : null;
   });
   const hasAllDurations = durations.every((value) => Number.isFinite(value));
@@ -88,20 +89,26 @@ function sanitizeSceneData(sceneData = [], totalDurationSeconds = 60) {
     const startSec = cursor;
     const endSec = cursor + durationSeconds;
     cursor = endSec;
+    const sceneId = String(scene?.sceneId || scene?.id || `scene_${index + 1}`);
+    const imageUrl = scene?.imageUrl || scene?.image_url;
+    const clipUrl = scene?.clipUrl || scene?.clip_url;
+    const videoUrl = scene?.video_url || scene?.videoUrl || scene?.falVideoUrl;
 
     return {
       index: Number.parseInt(String(scene?.index || index + 1), 10) || (index + 1),
-      sceneId: String(scene?.sceneId || `scene_${index + 1}`),
+      sceneId,
       title: String(scene?.title || `Scene ${index + 1}`),
       durationSeconds,
       startSec,
       endSec,
-      imagePrompt: String(scene?.imagePrompt || '').trim(),
-      videoPrompt: String(scene?.videoPrompt || '').trim(),
+      imagePrompt: String(scene?.imagePrompt || scene?.image_prompt || '').trim(),
+      videoPrompt: String(scene?.videoPrompt || scene?.video_prompt || '').trim(),
       voiceLine: String(scene?.voiceLine || '').trim(),
       onScreenText: String(scene?.onScreenText || '').trim(),
-      imageUrl: scene?.imageUrl ? String(scene.imageUrl) : undefined,
-      clipUrl: scene?.clipUrl ? String(scene.clipUrl) : undefined
+      imageUrl: imageUrl ? String(imageUrl) : undefined,
+      video_url: videoUrl ? String(videoUrl) : undefined,
+      videoUrl: videoUrl ? String(videoUrl) : undefined,
+      clipUrl: clipUrl ? String(clipUrl) : undefined
     };
   });
 }
@@ -346,6 +353,15 @@ router.get('/jobs/:jobId', protect, async (req, res) => {
 // -----------------------------------------------------------------------------
 // Wizard endpoints (step-by-step with draft state)
 // -----------------------------------------------------------------------------
+router.get('/drafts', protect, async (req, res) => {
+  try {
+    const drafts = await listDraftsForUser(toUserId(req.user));
+    return res.json({ success: true, drafts });
+  } catch (error) {
+    return responseError(res, error, 'Failed to load AI videos');
+  }
+});
+
 router.get('/draft/:jobId', protect, async (req, res) => {
   try {
     const userId = toUserId(req.user);

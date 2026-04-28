@@ -3188,6 +3188,10 @@ export const videoGenerationAPI = {
     return apiCall(`/video-generation/draft/${encodeURIComponent(jobId)}`, { method: 'GET' }, true);
   },
 
+  getDrafts: async (): Promise<any> => {
+    return apiCall('/video-generation/drafts', { method: 'GET' }, true);
+  },
+
   generatePrompt: async (payload: {
     jobId: string;
     promptText?: string;

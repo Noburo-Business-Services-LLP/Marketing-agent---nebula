@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Loader2,
   Film,
+  Plus,
   Image as ImageIcon,
   Package,
   Captions,
@@ -15,6 +16,7 @@ import { inventoryAPI, videoGenerationAPI } from '../services/api';
 import { Product } from '../types';
 
 type AudioMode = 'off' | 'auto' | 'upload';
+type VideoStatusFilter = 'all' | 'draft' | 'created' | 'scheduled' | 'posted';
 
 const WIZARD_STEPS = [
   'Input',
@@ -54,6 +56,9 @@ const ReelGenerator: React.FC = () => {
   const [error, setError] = useState('');
   const [jobId, setJobId] = useState('');
   const [draft, setDraft] = useState<any>(null);
+  const [videoDrafts, setVideoDrafts] = useState<any[]>([]);
+  const [statusFilter, setStatusFilter] = useState<VideoStatusFilter>('all');
+  const [showWizard, setShowWizard] = useState(false);
 
   const [products, setProducts] = useState<Product[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(false);
@@ -101,6 +106,10 @@ const ReelGenerator: React.FC = () => {
 
   const hasSceneImages = scenes.some((scene) => scene.imageUrl);
   const hasSceneClips = scenes.some((scene) => scene.clipUrl);
+  const filteredVideoDrafts = useMemo(
+    () => videoDrafts.filter((item) => statusFilter === 'all' || item.status === statusFilter),
+    [videoDrafts, statusFilter]
+  );
 
   useEffect(() => {
     const loadProducts = async () => {
@@ -117,6 +126,21 @@ const ReelGenerator: React.FC = () => {
       }
     };
     loadProducts();
+  }, []);
+
+  const loadVideoDrafts = async () => {
+    try {
+      const response = await videoGenerationAPI.getDrafts();
+      if (response?.success && Array.isArray(response?.drafts)) {
+        setVideoDrafts(response.drafts);
+      }
+    } catch (_) {
+      // Non-blocking library refresh.
+    }
+  };
+
+  useEffect(() => {
+    loadVideoDrafts();
   }, []);
 
   const refreshDraft = async (id = jobId) => {
@@ -243,6 +267,7 @@ const ReelGenerator: React.FC = () => {
     }
     setJobId(response.jobId);
     setDraft(response.draft || null);
+    await loadVideoDrafts();
     setStep(2);
   });
 
@@ -362,6 +387,7 @@ const ReelGenerator: React.FC = () => {
     setFinalVideoUrl(response?.merge?.finalVideoUrl || '');
     setFinalOutputUrl(response?.merge?.finalOutputUrl || '');
     setDraft(response?.draft || draft);
+    await loadVideoDrafts();
   });
 
   const generateContent = async () => withBusy(async () => {
@@ -397,6 +423,7 @@ const ReelGenerator: React.FC = () => {
     if (!response?.success) throw new Error(response?.message || 'Scheduling failed');
     setDraft(response?.draft || draft);
     await refreshDraft(jobId);
+    await loadVideoDrafts();
     setStep(11);
   });
 
@@ -408,19 +435,154 @@ const ReelGenerator: React.FC = () => {
     ));
   };
 
+  const resetWizard = () => {
+    setShowWizard(true);
+    setStep(1);
+    setJobId('');
+    setDraft(null);
+    setDescription('');
+    setSceneCount('');
+    setSelectedProductId('');
+    setInputImageData('');
+    setInputImageName('');
+    setPromptText('');
+    setScenes([]);
+    setGeneratedTracks(null);
+    setFinalAudioUrl('');
+    setFinalVideoUrl('');
+    setFinalOutputUrl('');
+    setThumbnailUrl('');
+    setCaption('');
+    setHashtagsText('');
+    setSelectedPlatforms([]);
+    setScheduleDate('');
+    setScheduleTime('');
+    setError('');
+  };
+
+  const openVideoDraft = async (id: string) => {
+    setShowWizard(true);
+    setJobId(id);
+    await refreshDraft(id);
+    setStep(11);
+  };
+
+  const statusLabel = (status: string) => {
+    if (status === 'posted') return 'Posted';
+    if (status === 'scheduled') return 'Scheduled';
+    if (status === 'created') return 'Created';
+    return 'Draft';
+  };
+
+  const statusPillClass = (status: string) => {
+    if (status === 'posted') return 'bg-green-500/15 text-green-300 border-green-500/30';
+    if (status === 'scheduled') return 'bg-blue-500/15 text-blue-300 border-blue-500/30';
+    if (status === 'created') return 'bg-[#ffcc29]/15 text-[#ffcc29] border-[#ffcc29]/30';
+    return isDarkMode ? 'bg-slate-800 text-slate-300 border-slate-700' : 'bg-slate-100 text-slate-700 border-slate-300';
+  };
+
   return (
     <div className={`p-6 min-h-screen ${isDarkMode ? 'bg-[#070A12]' : 'bg-slate-50'}`}>
       <div className="max-w-6xl mx-auto space-y-6">
-        <div className="flex items-center gap-3">
-          <Film className="w-8 h-8 text-[#ffcc29]" />
-          <div>
-            <h1 className={`text-3xl font-black tracking-tight ${theme.text}`}>AI Video Wizard</h1>
-            <p className={`text-sm ${theme.textSecondary}`}>
-              Step-by-step video generation with edit + preview control at each stage.
-            </p>
+        <div>
+          <h1 className={`text-2xl font-bold ${theme.text}`}>AI Video Manager</h1>
+          <p className={theme.textSecondary}>Create, schedule, and track your AI videos in one place.</p>
+        </div>
+
+        <div className={`border-b overflow-x-auto ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'}`}>
+          <div className="flex space-x-6 min-w-max">
+            {[
+              { id: 'create', label: 'Create', icon: Plus },
+              { id: 'all', label: 'All AI Videos', icon: null },
+              { id: 'draft', label: 'Drafts', icon: null },
+              { id: 'created', label: 'Created', icon: null },
+              { id: 'scheduled', label: 'Scheduled', icon: null },
+              { id: 'posted', label: 'Posted', icon: null }
+            ].map((tab) => {
+              const active = tab.id === 'create' ? showWizard : (!showWizard && statusFilter === tab.id);
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => {
+                    if (tab.id === 'create') {
+                      resetWizard();
+                    } else {
+                      setShowWizard(false);
+                      setStatusFilter(tab.id as VideoStatusFilter);
+                    }
+                  }}
+                  className={`pb-4 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
+                    active
+                      ? 'border-[#ffcc29] text-[#ffcc29]'
+                      : `border-transparent ${theme.text} hover:text-[#ffcc29] hover:border-[#ffcc29]/30`
+                  }`}
+                >
+                  {Icon && <Icon className="w-4 h-4" />}
+                  {tab.label}
+                </button>
+              );
+            })}
           </div>
         </div>
 
+        {!showWizard && (
+        <div className="space-y-4">
+          {filteredVideoDrafts.length ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5">
+              {filteredVideoDrafts.map((item) => (
+                <button
+                  key={item.jobId}
+                  type="button"
+                  onClick={() => openVideoDraft(item.jobId)}
+                  className={`text-left rounded-2xl border overflow-hidden shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg ${
+                    isDarkMode ? 'bg-[#161b22] border-slate-700/50 hover:border-[#ffcc29]/50' : 'bg-white border-slate-200 hover:border-[#ffcc29]/60'
+                  }`}
+                >
+                  {item.thumbnailUrl ? (
+                    <img src={item.thumbnailUrl} alt={item.title} className="w-full h-44 object-cover" />
+                  ) : (
+                    <div className={`w-full h-44 flex items-center justify-center ${isDarkMode ? 'bg-slate-900' : 'bg-slate-100'}`}>
+                      <Film className="w-8 h-8 text-slate-500" />
+                    </div>
+                  )}
+                  <div className="p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <p
+                        className={`text-base font-semibold leading-snug ${theme.text}`}
+                        style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+                      >
+                        {item.title}
+                      </p>
+                      <span className={`shrink-0 px-2.5 py-1 rounded-full border text-[11px] font-bold ${statusPillClass(item.status)}`}>
+                        {statusLabel(item.status)}
+                      </span>
+                    </div>
+                    <div className={`flex flex-wrap gap-2 text-xs ${theme.textSecondary}`}>
+                      {item.durationSeconds && <span>{item.durationSeconds}s</span>}
+                      {item.sceneCount && <span>{item.sceneCount} scenes</span>}
+                      {item.platforms?.length > 0 && <span>{item.platforms.join(', ')}</span>}
+                    </div>
+                    {item.scheduledAt && (
+                      <p className={`text-xs ${theme.textSecondary}`}>Scheduled for {new Date(item.scheduledAt).toLocaleString()}</p>
+                    )}
+                  </div>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className={`${panelClass} p-8 text-center`}>
+              <Film className="w-8 h-8 mx-auto text-[#ffcc29] mb-3" />
+              <p className={`font-semibold ${theme.text}`}>No AI videos in this tab yet.</p>
+              <p className={`text-sm mt-1 ${theme.textSecondary}`}>Create a new AI video to see it here.</p>
+            </div>
+          )}
+        </div>
+        )}
+
+        {showWizard && (
+          <>
         <div className={`${panelClass} p-4`}>
           <div className="grid grid-cols-2 md:grid-cols-6 lg:grid-cols-11 gap-2">
             {WIZARD_STEPS.map((label, idx) => {
@@ -522,7 +684,7 @@ const ReelGenerator: React.FC = () => {
               <button onClick={generatePromptAndScenes} disabled={busy} className="px-4 py-2 rounded-xl border border-[#ffcc29] text-[#ffcc29] font-semibold">
                 {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Generate Prompt + Scenes'}
               </button>
-              <button onClick={refreshDraft} className="px-4 py-2 rounded-xl border border-slate-500 text-slate-300">
+              <button onClick={() => refreshDraft()} className="px-4 py-2 rounded-xl border border-slate-500 text-slate-300">
                 <RefreshCcw className="w-4 h-4 inline mr-1" /> Refresh
               </button>
             </div>
@@ -868,6 +1030,12 @@ const ReelGenerator: React.FC = () => {
                   <p className={`text-sm mt-1 ${theme.text}`}>{selectedPlatforms.join(', ') || 'None'}</p>
                 </div>
                 <div>
+                  <p className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Status</p>
+                  <p className={`text-sm mt-1 ${theme.text}`}>
+                    {statusLabel(draft?.schedule?.status?.includes('published') ? 'posted' : (draft?.schedule?.status || (finalOutputUrl || finalVideoUrl ? 'created' : 'draft')))}
+                  </p>
+                </div>
+                <div>
                   <p className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Scheduled</p>
                   <p className={`text-sm mt-1 ${theme.text}`}>
                     {draft?.schedule?.scheduledAt ? new Date(draft.schedule.scheduledAt).toLocaleString() : 'Not scheduled'}
@@ -881,11 +1049,7 @@ const ReelGenerator: React.FC = () => {
                 Publish
               </button>
               <button
-                onClick={() => {
-                  setStep(1);
-                  setJobId('');
-                  setDraft(null);
-                }}
+                onClick={resetWizard}
                 className="px-6 py-3 rounded-xl border border-slate-500 text-slate-200 font-semibold"
               >
                 Start New Wizard
@@ -901,6 +1065,8 @@ const ReelGenerator: React.FC = () => {
           </p>
           {jobId && <p className={`text-xs mt-1 ${theme.textSecondary}`}>Current jobId: {jobId}</p>}
         </div>
+          </>
+        )}
       </div>
     </div>
   );
