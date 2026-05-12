@@ -3,6 +3,7 @@ const User = require('../models/User');
 const { publishCampaignToSocial } = require('./campaignPublisher');
 const { getPostStatus } = require('./socialMediaAPI');
 const { computeNextRecurringStartDate } = require('../utils/scheduling');
+const { learnCampaignPublish } = require('./aiCampaignLearning');
 
 function isEnabled() {
   return String(process.env.ENABLE_CAMPAIGN_SCHEDULER || 'true').toLowerCase() !== 'false';
@@ -262,7 +263,8 @@ async function processDueCampaigns({ now = new Date(), limit = 20 } = {}) {
           update.status = 'posted';
         }
 
-        await Campaign.findByIdAndUpdate(campaign._id, { $set: update });
+        const updatedCampaign = await Campaign.findByIdAndUpdate(campaign._id, { $set: update }, { new: true });
+        await learnCampaignPublish(updatedCampaign || campaign, result);
         continue;
       }
 
@@ -290,7 +292,8 @@ async function processDueCampaigns({ now = new Date(), limit = 20 } = {}) {
           update.status = 'posted';
         }
 
-        await Campaign.findByIdAndUpdate(campaign._id, { $set: update });
+        const updatedCampaign = await Campaign.findByIdAndUpdate(campaign._id, { $set: update }, { new: true });
+        await learnCampaignPublish(updatedCampaign || campaign, update.publishResult);
         continue;
       }
 

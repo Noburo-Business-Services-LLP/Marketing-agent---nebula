@@ -516,6 +516,12 @@ const BrandIntelligenceProfile = require('../models/BrandIntelligenceProfile');
 const { detectLogoInImage } = require('../services/geminiAI');
 const { publishCampaignToSocial } = require('../services/campaignPublisher');
 const { buildGenerationGuidelines } = require('../services/brandIntelligenceService');
+const { buildAIContext } = require('../services/aiContextBuilder');
+const {
+  learnCampaignGeneration,
+  learnCaptionGeneration,
+  learnCampaignPublish
+} = require('../services/aiCampaignLearning');
 
 async function resolveBrandIntelligenceContext(userId, businessProfile = {}) {
   const profile = await BrandIntelligenceProfile.findOne({ userId }).lean();
@@ -1269,6 +1275,13 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
     const lockedPalette = lockedPaletteArray.join(', ');
     const primaryLockedColor = String(lockedPaletteArray[0] || '').trim();
     const secondaryLockedColor = String(lockedPaletteArray[1] || '').trim();
+    const aiMemoryContext = await buildAIContext({
+      userId,
+      user,
+      platform: Array.isArray(platformsInput) ? platformsInput[0] : String(platformsInput || 'instagram').split(',')[0],
+      product: linkedProduct || null,
+      category: linkedProduct?.category || ''
+    });
 
     const platforms = Array.isArray(platformsInput) ? platformsInput : (platformsInput ? platformsInput.split(',') : ['instagram']);
     const preferredDays = Array.isArray(daysInput) ? daysInput : (daysInput ? daysInput.split(',') : ['monday', 'wednesday', 'friday']);
@@ -1344,6 +1357,7 @@ ${strictBrandText ? `- ${strictBrandText}` : ''}
 ${lockedPalette ? `- Locked Brand Palette: ${lockedPalette}` : ''}
 ${keyMessages ? `- MANDATORY CONTENT STRUCTURES (STRICTLY FOLLOW THESE):\n${keyMessages}` : ''}
 ${brandGuidelinesText}
+${aiMemoryContext.reusablePromptText}
 
 INSTRUCTIONS:
 1. Create exactly ${totalPosts} campaign posts.
@@ -1572,6 +1586,29 @@ Return ONLY valid JSON (no markdown, no backticks):
 
     // Done
     const updatedUser = await User.findById(userId).select('credits.balance');
+    await learnCampaignGeneration({
+      userId,
+      user,
+      campaignName,
+      objective,
+      platforms,
+      tone: enforcedTone,
+      language: selectedLanguage,
+      prompt: captionPrompt,
+      userInput: req.body,
+      generatedPosts: postsToProcess.map((post, index) => ({
+        ...post,
+        imageUrl: slotImageCache.get(Math.floor(index / platforms.length))?.imageUrl || ''
+      })),
+      cta: '',
+      scheduling: { startDate, preferredDays, duration },
+      aiSettings: {
+        strictBrandMode,
+        memoryInjected: Boolean(aiMemoryContext.reusablePromptText),
+        streamed: true
+      },
+      linkedProduct
+    });
     sendEvent('complete', {
       totalPosts: postsToProcess.length,
       creditsRemaining: updatedUser?.credits?.balance ?? 0
@@ -1637,6 +1674,11 @@ router.post('/reel/generate', protect, checkTrial, requireCredits('campaign_full
     }
 
     const user = await User.findById(userId).select('businessProfile');
+    const aiMemoryContext = await buildAIContext({
+      userId,
+      user,
+      platform: 'instagram'
+    });
 
     const reel = await generateReelFromImage({
       imageData,
@@ -1644,7 +1686,7 @@ router.post('/reel/generate', protect, checkTrial, requireCredits('campaign_full
       promptType,
       language,
       durationSeconds,
-      customPrompt,
+      customPrompt: [customPrompt, aiMemoryContext.reusablePromptText].filter(Boolean).join('\n\n'),
       businessProfile: user?.businessProfile || {},
       req
     });
@@ -1708,6 +1750,28 @@ router.post('/reel/generate', protect, checkTrial, requireCredits('campaign_full
     });
 
     await campaign.save();
+    const { learnReelGeneration } = require('../services/aiVideoLearning');
+    await learnReelGeneration({
+      userId,
+      user,
+      campaignId: campaign._id,
+      prompt: reel.prompt?.promptTemplate || customPrompt || '',
+      userInput: { promptType, language, durationSeconds, customPrompt },
+      script: voiceoverScript,
+      captions: [caption],
+      hashtags: hashtagList,
+      cta,
+      scenePrompts: Array.isArray(reel.script?.scenePlan) ? reel.script.scenePlan.map((scene) => scene.prompt || scene.description || scene.title) : [],
+      sceneData: Array.isArray(reel.script?.scenePlan) ? reel.script.scenePlan : [],
+      audioSettings: { audioMode: reel.audioMode, audioUrl: reel.audioUrl },
+      voiceSettings: { tone: reel.tone },
+      language: languageLabel,
+      duration: reel.durationSeconds,
+      generatedVideos: [reel.video.url],
+      generatedImages: [reel.sourceImageUrl],
+      thumbnails: [reel.sourceImageUrl],
+      aiSettings: { memoryInjected: Boolean(aiMemoryContext.reusablePromptText) }
+    });
 
     const creditResult = await deductCredits(
       userId,
@@ -3015,6 +3079,15 @@ router.post('/:id/publish', protect, async (req, res) => {
           })();
         }
       }
+
+      await learnCampaignPublish(updatedCampaign || campaign, {
+        allResults,
+        instagramResult,
+        otherPlatformsResult,
+        socialPostIds,
+        extractedPostId,
+        scheduled: isScheduled
+      });
       
       res.json({
         success: true,
@@ -3354,6 +3427,13 @@ router.post('/generate-campaign-posts', protect, checkTrial, async (req, res) =>
     const visualHints = brandCtx?.visualHints || '';
     const strictBrandText = strictBrandMode ? buildStrictBrandLockText(brandCtx) : '';
     const lockedPalette = getBrandPalette(brandCtx).join(', ');
+    const aiMemoryContext = await buildAIContext({
+      userId,
+      user,
+      platform: content?.platforms?.[0] || 'instagram',
+      product: content?.linkedProduct || content?.product || null,
+      category: content?.linkedProduct?.category || content?.product?.category || ''
+    });
 
     if (!campaignName) {
       return res.status(400).json({ success: false, message: 'Campaign name is required' });
@@ -3444,6 +3524,7 @@ ${visualHints ? `- Visual Tokens: ${visualHints}` : ''}
 ${strictBrandText ? `- ${strictBrandText}` : ''}
 ${lockedPalette ? `- Locked Brand Palette: ${lockedPalette}` : ''}
 ${brandGuidelinesText}
+${aiMemoryContext.reusablePromptText}
 
 REQUIREMENTS:
 1. Create exactly ${totalPosts} unique, engaging posts
@@ -3590,6 +3671,27 @@ Return ONLY valid JSON (no markdown, no code blocks):
     // Fetch latest credit balance for frontend update
     const updatedUser = await User.findById(userId).select('credits.balance');
     const creditsRemaining = updatedUser?.credits?.balance ?? 0;
+
+    await learnCampaignGeneration({
+      userId,
+      user,
+      campaignName,
+      objective,
+      platforms,
+      tone: enforcedTone,
+      language: 'English',
+      prompt,
+      userInput: req.body,
+      generatedPosts: postsWithImages,
+      cta: content?.callToAction || '',
+      scheduling,
+      aiSettings: {
+        strictBrandMode,
+        memoryInjected: Boolean(aiMemoryContext.reusablePromptText)
+      },
+      sourceResponse: { posts: postsWithImages },
+      linkedProduct: content?.linkedProduct || content?.product || null
+    });
 
     res.json({
       success: true,
@@ -3766,12 +3868,18 @@ router.post('/generate-caption', protect, checkTrial, requireCredits('campaign_t
       ? brandCtx.effectiveTone
       : String(brandCtx?.effectiveTone || bp?.brandVoice || 'professional').toLowerCase();
     const strictBrandText = strictBrandMode ? buildStrictBrandLockText(brandCtx) : '';
+    const aiMemoryContext = await buildAIContext({
+      userId,
+      user,
+      platform: platform || 'instagram'
+    });
     const brandContext = `
 Business: ${brandCtx?.profile?.brandName || bp?.companyName || user?.companyName || 'Unknown'}
 Industry: ${bp?.industry || 'General'}
 Tone: ${enforcedTone || 'professional'}
 Visual tokens: ${brandCtx?.visualHints || 'Not set'}
-${strictBrandText ? strictBrandText : ''}`;
+${strictBrandText ? strictBrandText : ''}
+${aiMemoryContext.reusablePromptText}`;
     
     // Use Gemini to analyze image and generate caption
     
@@ -3872,6 +3980,22 @@ Return ONLY the caption text with hashtags. No JSON, no explanations.`;
 
     // Deduct 2 credits for caption generation
     const captionCreditResult = await deductCredits(userId, 'campaign_text', 1, `AI caption for ${platform || 'instagram'}`);
+    await learnCaptionGeneration({
+      userId,
+      user,
+      platform: platform || 'instagram',
+      platforms: [platform || 'instagram'],
+      tone: enforcedTone,
+      language: selectedLanguage,
+      prompt,
+      userInput: { platform, language: selectedLanguage, imageSource: image.startsWith('http') ? image : 'uploaded_image' },
+      caption: caption.trim(),
+      hashtags: hashtags.slice(0, 4),
+      aiSettings: {
+        model: 'gemini-2.0-flash',
+        memoryInjected: Boolean(aiMemoryContext.reusablePromptText)
+      }
+    });
     
     res.json({
       success: true,

@@ -3346,3 +3346,42 @@ export const paymentService = {
     return apiCall<any>('/payment/billing', { method: 'GET' }, true);
   }
 };
+
+// ================================
+// AI Memory API
+// ================================
+export const aiMemoryAPI = {
+  getSummary: async (platform?: string): Promise<any> => {
+    const query = platform ? `?platform=${encodeURIComponent(platform)}` : '';
+    return apiCall<any>(`/ai-memory/summary${query}`, { method: 'GET' }, true);
+  },
+
+  getCampaignHistory: async (filters: { platform?: string; action?: string; limit?: number } = {}): Promise<any> => {
+    const params = new URLSearchParams();
+    if (filters.platform) params.set('platform', filters.platform);
+    if (filters.action) params.set('action', filters.action);
+    if (filters.limit) params.set('limit', String(filters.limit));
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return apiCall<any>(`/ai-memory/campaign-history${query}`, { method: 'GET' }, true);
+  },
+
+  getVideoHistory: async (filters: { action?: string; limit?: number } = {}): Promise<any> => {
+    const params = new URLSearchParams();
+    if (filters.action) params.set('action', filters.action);
+    if (filters.limit) params.set('limit', String(filters.limit));
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return apiCall<any>(`/ai-memory/video-history${query}`, { method: 'GET' }, true);
+  },
+
+  getPerformance: async (filters: { platform?: string; limit?: number } = {}): Promise<any> => {
+    const params = new URLSearchParams();
+    if (filters.platform) params.set('platform', filters.platform);
+    if (filters.limit) params.set('limit', String(filters.limit));
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return apiCall<any>(`/ai-memory/performance${query}`, { method: 'GET' }, true);
+  },
+
+  reuseMemory: async (type: 'campaign' | 'video', id: string): Promise<any> => {
+    return apiCall<any>(`/ai-memory/reuse/${type}/${encodeURIComponent(id)}`, { method: 'POST' }, true);
+  }
+};

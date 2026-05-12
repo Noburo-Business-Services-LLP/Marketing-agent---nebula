@@ -17,6 +17,9 @@ import BrandAssets from './pages/BrandAssets';
 import Inventory from './pages/Inventory';
 import Settings from './pages/Settings';
 import Analytics from './pages/Analytics';
+import AIMemory from './pages/AIMemory';
+import AIHistory from './pages/AIHistory';
+import AIPerformance from './pages/AIPerformance';
 import TermsAndConditions from './pages/TermsAndConditions';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import { ThemeProvider } from './context/ThemeContext';
@@ -222,6 +225,9 @@ const App: React.FC = () => {
                     <Route path="/brand-assets" element={<BrandAssets />} />
                     <Route path="/inventory" element={<Inventory />} />
                     <Route path="/analytics" element={<Analytics />} />
+                    <Route path="/ai-memory" element={<AIMemory />} />
+                    <Route path="/ai-history" element={<AIHistory />} />
+                    <Route path="/ai-performance" element={<AIPerformance />} />
                     <Route path="/settings" element={<Settings user={user} onUserUpdate={setUser} />} />
                     <Route path="*" element={<Navigate to="/dashboard" replace />} />
                     </Routes>
