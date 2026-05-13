@@ -143,6 +143,50 @@ async function buildAIContext({ userId, user = null, organizationId = null, plat
     '- Use memory as guidance. Do not duplicate old captions verbatim.'
   ].filter(Boolean).join('\n');
 
+  console.log('AI CONTEXT:', {
+    organizationId: context.organizationId,
+    brandTone: context.brandTone,
+    writingStyle: context.writingStyle,
+    ctaStyle: context.ctaStyle,
+    visualStyle: context.visualStyle,
+    bestHashtags: context.bestHashtags,
+    hashtagCounts: context.hashtagCounts,
+    bestCaptions: context.bestCaptions,
+    bestCTAs: context.bestCTAs,
+    bestSceneStyles: context.bestSceneStyles,
+    previousCampaigns: context.recentCampaigns.map((item) => ({
+      id: item._id,
+      campaignName: item.campaignName,
+      platform: item.platform,
+      platforms: item.platforms,
+      tone: item.tone,
+      generatedCaption: item.generatedCaption || item.generatedCaptions?.[0] || '',
+      hashtags: item.hashtags,
+      cta: item.cta,
+      createdAt: item.createdAt
+    })),
+    previousVideos: context.highPerformingVideos.map((item) => ({
+      id: item._id,
+      jobId: item.jobId,
+      action: item.action,
+      captions: item.captions,
+      hashtags: item.hashtags,
+      cta: item.cta,
+      scenePrompts: item.scenePrompts?.slice?.(0, 5) || [],
+      createdAt: item.createdAt
+    })),
+    performanceWinners: context.performanceWinners.map((item) => ({
+      id: item._id,
+      platform: item.platform,
+      caption: item.caption,
+      hashtags: item.hashtags,
+      cta: item.cta,
+      tier: item.learning?.tier,
+      score: item.learning?.score
+    })),
+    reusablePromptText: context.reusablePromptText
+  });
+
   return context;
 }
 

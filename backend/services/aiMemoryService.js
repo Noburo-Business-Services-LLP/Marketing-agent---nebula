@@ -61,6 +61,25 @@ function normalizeProductReference(product = {}) {
   };
 }
 
+function extractCTAFromText(text = '') {
+  const lines = String(text || '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  return lines.find((line) => {
+    const normalized = line.toLowerCase();
+    return (
+      normalized.includes('[link]') ||
+      normalized.includes('learn more') ||
+      normalized.includes('shop now') ||
+      normalized.includes('buy now') ||
+      normalized.includes('get started') ||
+      normalized.includes('check it out') ||
+      normalized.includes('read more')
+    );
+  }) || '';
+}
+
 async function syncBrandMemoryFromProfile({ userId, organizationId, profile = null, businessProfile = {} }) {
   if (!userId) return null;
   const resolvedOrg = organizationId || String(userId);
@@ -124,6 +143,11 @@ async function rememberCampaignGeneration(payload = {}) {
       ...generatedPosts.flatMap((post) => post.hashtags || []),
       ...(payload.hashtags || [])
     ], 100);
+    const cta =
+      payload.cta ||
+      generatedPosts.find((post) => post.callToAction)?.callToAction ||
+      captions.map(extractCTAFromText).find(Boolean) ||
+      '';
     const imagePrompts = uniqueStrings([
       ...generatedPosts.map((post) => post.imageDescription),
       ...(payload.imagePrompts || [])
@@ -132,6 +156,21 @@ async function rememberCampaignGeneration(payload = {}) {
       ...generatedPosts.map((post) => post.imageUrl),
       ...(payload.generatedImages || [])
     ], 100);
+    const generatedVideos = uniqueStrings([
+      ...generatedPosts.map((post) => post.videoUrl),
+      ...(payload.generatedVideos || [])
+    ], 100);
+    const scenes = Array.isArray(payload.scenes)
+      ? payload.scenes
+      : generatedPosts.map((post, index) => ({
+          index,
+          platform: post.platform || payload.platform || '',
+          caption: post.caption || '',
+          imageDescription: post.imageDescription || '',
+          imagePrompt: post.imageDescription || '',
+          imageText: post.imageText || '',
+          contentTheme: post.contentTheme || ''
+        }));
     const productRef = normalizeProductReference(payload.product || payload.linkedProduct);
 
     const doc = await AICampaignHistory.create({
@@ -148,10 +187,13 @@ async function rememberCampaignGeneration(payload = {}) {
       prompt: payload.prompt || '',
       userInput: compactObject(payload.userInput || {}),
       generatedCaptions: captions,
+      generatedCaption: captions[0] || '',
       hashtags,
-      cta: payload.cta || generatedPosts.find((post) => post.callToAction)?.callToAction || '',
+      cta,
       generatedImages,
+      generatedVideos,
       imagePrompts,
+      scenes: compactObject(scenes, 12000) || [],
       thumbnails: uniqueStrings(payload.thumbnails || []),
       inventoryReferences: productRef ? [productRef] : [],
       scheduling: compactObject(payload.scheduling || {}),
@@ -171,7 +213,7 @@ async function rememberCampaignGeneration(payload = {}) {
       organizationId,
       tone: payload.tone,
       hashtags,
-      cta: payload.cta,
+      cta,
       product: productRef
     });
 

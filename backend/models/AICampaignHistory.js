@@ -39,10 +39,13 @@ const aiCampaignHistorySchema = new mongoose.Schema(
     prompt: { type: String, default: '' },
     userInput: { type: mongoose.Schema.Types.Mixed, default: {} },
     generatedCaptions: { type: [String], default: [] },
+    generatedCaption: { type: String, default: '' },
     hashtags: { type: [String], default: [] },
     cta: { type: String, default: '' },
     generatedImages: { type: [String], default: [] },
+    generatedVideos: { type: [String], default: [] },
     imagePrompts: { type: [String], default: [] },
+    scenes: { type: [mongoose.Schema.Types.Mixed], default: [] },
     thumbnails: { type: [String], default: [] },
     inventoryReferences: [
       {

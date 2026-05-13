@@ -24,7 +24,7 @@ const PLATFORM_LIMITS: Record<string, { charLimit: number; label: string; imageM
   youtube:   { charLimit: 5000,   label: 'YouTube',    imageMaxMB: 2,  videoMaxMB: 12800, bestRatio: '16:9' },
 };
 
-/** Instagram Reel tone ? backend `tone-audio/*.mp3` (see backend/utils/toneAudio.js) */
+/** Instagram Reel tone audio files served by the backend. */
 const REEL_TONE_AUDIO_FILES: Record<string, string> = {
   fun: 'fun.mp3',
   luxury: 'luxury.mp3',
@@ -36,7 +36,7 @@ const REEL_TONE_AUDIO_FILES: Record<string, string> = {
 function getReelTonePreviewAudioSrc(tone: string): string | null {
   const file = REEL_TONE_AUDIO_FILES[String(tone || '').trim().toLowerCase()];
   if (!file) return null;
-  // Same-origin `/audio/*` ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ Vite dev server proxies to the backend (see vite.config.ts)
+  // Same-origin `/audio/*` is proxied to the backend by Vite (see vite.config.ts).
   return `/audio/${encodeURIComponent(file)}`;
 }
 
@@ -232,19 +232,33 @@ const PLATFORM_CONTENT_TEMPLATES: Record<string, { id: string; label: string; st
   ]
 };
 
+const cleanTemplateEncodingArtifacts = (text: string) => {
+  return text
+    .replace(/ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½/g, '-')
+    .replace(/�/g, '-')
+    .replace(/\b([1-9])\?\?/g, '$1.')
+    .replace(/\s*\?\?\s*(?=[A-Z])/g, '\n')
+    .replace(/\s+\?\?(?=\n|$)/g, '')
+    .replace(/\?\?\s+\[/g, '[Link]')
+    .replace(/\s+\?\?\s+/g, ' ')
+    .replace(/\?{2,}/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+};
+
 const applyTemplate = (structure: string, name: string, desc: string, obj: string) => {
-  return structure
+  return cleanTemplateEncodingArtifacts(structure)
     .replace(/{name}/g, name || '[Campaign Name]')
     .replace(/{desc}/g, desc || '[Description]')
     .replace(/{obj}/g, obj || '[Objective]');
 };
 
 const PLATFORM_DISPLAY_DATA: Record<string, { icon: string; color: string; borderColor: string; bgColor: string; darkBgColor: string }> = {
-  instagram: { icon: '??', color: 'from-pink-500 to-purple-600', borderColor: 'border-pink-500/40', bgColor: 'bg-pink-50', darkBgColor: 'bg-pink-500/10' },
-  linkedin:  { icon: '??', color: 'from-blue-600 to-blue-800', borderColor: 'border-blue-500/40', bgColor: 'bg-blue-50', darkBgColor: 'bg-blue-500/10' },
-  twitter:   { icon: '??', color: 'from-sky-400 to-sky-600', borderColor: 'border-sky-500/40', bgColor: 'bg-sky-50', darkBgColor: 'bg-sky-500/10' },
-  facebook:  { icon: '??', color: 'from-blue-500 to-indigo-600', borderColor: 'border-blue-400/40', bgColor: 'bg-blue-50', darkBgColor: 'bg-blue-400/10' },
-  youtube:   { icon: '??', color: 'from-red-500 to-red-700', borderColor: 'border-red-500/40', bgColor: 'bg-red-50', darkBgColor: 'bg-red-500/10' },
+  instagram: { icon: 'IG', color: 'from-pink-500 to-purple-600', borderColor: 'border-pink-500/40', bgColor: 'bg-pink-50', darkBgColor: 'bg-pink-500/10' },
+  linkedin:  { icon: 'in', color: 'from-blue-600 to-blue-800', borderColor: 'border-blue-500/40', bgColor: 'bg-blue-50', darkBgColor: 'bg-blue-500/10' },
+  twitter:   { icon: 'X', color: 'from-sky-400 to-sky-600', borderColor: 'border-sky-500/40', bgColor: 'bg-sky-50', darkBgColor: 'bg-sky-500/10' },
+  facebook:  { icon: 'f', color: 'from-blue-500 to-indigo-600', borderColor: 'border-blue-400/40', bgColor: 'bg-blue-50', darkBgColor: 'bg-blue-400/10' },
+  youtube:   { icon: 'YT', color: 'from-red-500 to-red-700', borderColor: 'border-red-500/40', bgColor: 'bg-red-50', darkBgColor: 'bg-red-500/10' },
 };
 
 /** Reusable character counter bar for caption textareas */
