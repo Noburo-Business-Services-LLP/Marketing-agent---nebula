@@ -23,7 +23,8 @@ import {
   MessageSquare,
   PenTool,
   Layers,
-  PlayCircle
+  PlayCircle,
+  Brain
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { User } from '../types';
@@ -132,6 +133,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
     { path: '/brand-assets', label: 'Brand Assets', icon: Palette },
     { path: '/inventory', label: 'Inventory', icon: Package },
     { path: '/analytics', label: 'Analytics & Ads', icon: BarChart3 },
+    { path: '/ai-memory', label: 'AI Memory', icon: Brain },
   ];
 
   const resolveTopBarMeta = (pathname: string) => {
@@ -173,6 +175,16 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
     }
     if (pathname.startsWith('/analytics')) {
       return { title: 'Analytics & Ads', subtitle: 'Review ad performance and control active ads.', actions: [] };
+    }
+    if (pathname.startsWith('/ai-memory') || pathname.startsWith('/ai-history') || pathname.startsWith('/ai-performance')) {
+      return {
+        title: 'AI Memory',
+        subtitle: 'Review what Nebulaa has learned from prompts, campaigns, videos, products, and performance.',
+        actions: [
+          { label: 'History', path: '/ai-history' },
+          { label: 'Performance', path: '/ai-performance' }
+        ]
+      };
     }
     return {
       title: 'Dashboard',

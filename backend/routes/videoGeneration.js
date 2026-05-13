@@ -26,6 +26,8 @@ const {
   saveDataUrlToJob
 } = require('../services/videoDraftStore');
 const { callGemini, parseGeminiJSON, generateCampaignImageNanoBanana } = require('../services/geminiAI');
+const { buildAIContext } = require('../services/aiContextBuilder');
+const { learnVideoStep } = require('../services/aiVideoLearning');
 
 function responseError(res, error, fallbackMessage) {
   const statusCode = Number(error?.statusCode) || 500;
@@ -56,6 +58,76 @@ function normalizedDurationSeconds(raw, fallback = 60) {
   const n = Number.parseInt(String(raw || ''), 10);
   if (!Number.isFinite(n)) return fallback;
   return Math.max(6, Math.min(180, n));
+}
+
+function normalizeAudioLanguageCode(code = 'en') {
+  const normalized = String(code || '').toLowerCase().trim().split(/[-_]/)[0];
+  const allowed = new Set(['en', 'hi', 'ta', 'te', 'kn', 'ml']);
+  return allowed.has(normalized) ? normalized : 'en';
+}
+
+function audioLanguageLabel(code = 'en') {
+  const labels = {
+    en: 'English',
+    hi: 'Hindi',
+    ta: 'Tamil',
+    te: 'Telugu',
+    kn: 'Kannada',
+    ml: 'Malayalam'
+  };
+  return labels[normalizeAudioLanguageCode(code)] || labels.en;
+}
+
+function audioScriptLabel(code = 'en') {
+  const labels = {
+    en: 'Latin',
+    hi: 'Devanagari',
+    ta: 'Tamil',
+    te: 'Telugu',
+    kn: 'Kannada',
+    ml: 'Malayalam'
+  };
+  return labels[normalizeAudioLanguageCode(code)] || labels.en;
+}
+
+async function localizeAudioScript({ text, languageCode }) {
+  const source = String(text || '').replace(/\s+/g, ' ').trim();
+  const normalizedLanguage = normalizeAudioLanguageCode(languageCode);
+  if (!source || normalizedLanguage === 'en') return source;
+
+  const language = audioLanguageLabel(normalizedLanguage);
+  const script = audioScriptLabel(normalizedLanguage);
+  const prompt = `Translate and adapt this short reel voiceover for text-to-speech.
+
+Target language: ${language}
+Target script: ${script}
+
+Rules:
+- Return only the final voiceover text. No markdown, labels, or quotes.
+- Translate the narration into ${language}; do not return English for this target language.
+- Keep brand names, product names, prices, URLs, and technical model names unchanged when needed.
+- Keep it natural for a short social media reel.
+
+Voiceover:
+${source}`;
+
+  try {
+    const localized = await callGemini(prompt, {
+      skipCache: true,
+      temperature: 0.25,
+      maxTokens: 900,
+      timeout: 45000
+    });
+    const clean = String(localized || '')
+      .replace(/^```(?:\w+)?/i, '')
+      .replace(/```$/i, '')
+      .replace(/^\s*(?:voiceover|translation|translated text)\s*:\s*/i, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return clean || source;
+  } catch (_) {
+    return source;
+  }
 }
 
 function sanitizeSceneData(sceneData = [], totalDurationSeconds = 60) {
@@ -155,6 +227,11 @@ async function generateStructuredPrompt(draft) {
   const sourceHint = draft?.input?.sourceImage?.url
     ? 'User provided reference image'
     : (productName ? 'Use product metadata as visual anchor' : 'No reference image');
+  const aiMemoryContext = await buildAIContext({
+    userId: draft?.userId,
+    product: draft?.input?.product || null,
+    category: draft?.input?.product?.category || ''
+  });
 
   const prompt = `You are an AI video strategist.
 Return STRICT JSON:
@@ -173,6 +250,7 @@ Context:
 - Product Name: ${productName || 'N/A'}
 - Product Description: ${productDescription || 'N/A'}
 - Reference: ${sourceHint}
+${aiMemoryContext.reusablePromptText}
 
 Rules:
 - structuredPrompt must be concise but actionable for scene generation.
@@ -216,6 +294,13 @@ async function generateCaptionAndHashtags({ draft, selectedPlatforms = [] }) {
         .join(' | ')
     : '';
 
+  const aiMemoryContext = await buildAIContext({
+    userId: draft?.userId,
+    platform: selectedPlatforms[0] || 'instagram',
+    product: draft?.input?.product || null,
+    category: draft?.input?.product?.category || ''
+  });
+
   const prompt = `Create social caption and hashtags.
 Return STRICT JSON:
 {
@@ -228,6 +313,7 @@ Context:
 - Prompt: ${draft?.prompt?.promptText || ''}
 - Scene summary: ${sceneSummary || 'N/A'}
 - Platforms: ${selectedPlatforms.join(', ') || 'instagram'}
+${aiMemoryContext.reusablePromptText}
 
 Rules:
 - caption: 1-3 lines, conversion-aware, no markdown.
@@ -458,6 +544,16 @@ router.post('/generatePrompt', protect, checkTrial, async (req, res) => {
       prompt: promptPayload
     }));
 
+    await learnVideoStep({
+      userId,
+      jobId,
+      action: 'video_prompt',
+      prompt: promptPayload?.promptText || '',
+      userInput: existingDraft.input || {},
+      aiSettings: { saveOnly: Boolean(saveOnly), edited: Boolean(promptPayload?.edited) },
+      product: existingDraft?.input?.product || null
+    });
+
     return res.json({
       success: true,
       jobId,
@@ -504,9 +600,14 @@ router.post('/generateScenes', protect, checkTrial, async (req, res) => {
     const promptToUse = String(
       promptText || draft?.prompt?.promptText || promptFallbackFromDraft(draft)
     ).trim();
+    const aiMemoryContext = await buildAIContext({
+      userId,
+      product: draft?.input?.product || null,
+      category: draft?.input?.product?.category || ''
+    });
     const generated = await runGenerateScenes({
       payload: {
-        description: promptToUse,
+        description: [promptToUse, aiMemoryContext.reusablePromptText].filter(Boolean).join('\n\n'),
         durationSeconds,
         sceneCount: draft?.input?.sceneCount || undefined,
         productId: draft?.input?.productId || undefined,
@@ -527,6 +628,19 @@ router.post('/generateScenes', protect, checkTrial, async (req, res) => {
       }
     }));
 
+    await learnVideoStep({
+      userId,
+      jobId,
+      action: 'scene_generation',
+      prompt: promptToUse,
+      userInput: draft.input || {},
+      sceneData: updated.scenes.sceneData,
+      scenePrompts: updated.scenes.sceneData?.map((scene) => scene.imagePrompt || scene.videoPrompt || scene.title) || [],
+      script: updated.scenes.voiceScript || '',
+      duration: durationSeconds,
+      product: draft?.input?.product || null,
+      aiSettings: { memoryInjected: Boolean(aiMemoryContext.reusablePromptText) }
+    });
     return res.json({
       success: true,
       jobId,
@@ -645,6 +759,19 @@ router.post('/generateImages', protect, checkTrial, async (req, res) => {
       }
     }));
 
+    await learnVideoStep({
+      userId,
+      jobId,
+      action: 'image_generation',
+      prompt: String(imagePrompt || draft?.prompt?.promptText || draft?.input?.description || ''),
+      userInput: draft.input || {},
+      sceneData: nextScenes,
+      generatedImages: nextScenes.map((scene) => scene.imageUrl).filter(Boolean),
+      duration: durationSeconds,
+      product: draft?.input?.product || null,
+      aiSettings: { action }
+    });
+
     return res.json({
       success: true,
       jobId,
@@ -695,6 +822,17 @@ router.post('/generateClips', protect, checkTrial, async (req, res) => {
       }
     }));
 
+    await learnVideoStep({
+      userId,
+      jobId,
+      action: 'clip_generation',
+      prompt: draft?.prompt?.promptText || '',
+      userInput: draft.input || {},
+      sceneData: updated.clips.sceneData,
+      generatedVideos: updated.clips.clipUrls || [],
+      product: draft?.input?.product || null
+    });
+
     return res.json({
       success: true,
       jobId,
@@ -716,15 +854,31 @@ router.post('/generateAudio', protect, checkTrial, async (req, res) => {
 
     const userId = toUserId(req.user);
     const draft = await loadDraftForUser(jobId, userId);
+    const requestedLanguageCode = normalizeAudioLanguageCode(audio?.languageCode || 'en');
+    const sourceVoiceScript = String(
+      audio?.voiceScript ||
+        draft?.scenes?.voiceScript ||
+        (Array.isArray(draft?.scenes?.sceneData)
+          ? draft.scenes.sceneData.map((scene) => scene?.voiceLine).filter(Boolean).join(' ')
+          : '') ||
+        draft?.input?.description ||
+        ''
+    ).trim();
+    const effectiveVoiceScript = await localizeAudioScript({
+      text: sourceVoiceScript,
+      languageCode: requestedLanguageCode
+    });
+
     const audioConfig = {
       enabled: audio?.enabled !== false,
       mode: String(audio?.mode || 'auto').toLowerCase(),
-      languageCode: String(audio?.languageCode || 'en').toLowerCase(),
+      languageCode: requestedLanguageCode,
       tone: String(audio?.tone || 'professional').toLowerCase(),
       voiceGender: String(audio?.voiceGender || 'female').toLowerCase(),
       voiceVolume: Number.isFinite(Number(audio?.voiceVolume)) ? Number(audio.voiceVolume) : 1,
       musicVolume: Number.isFinite(Number(audio?.musicVolume)) ? Number(audio.musicVolume) : 0.24,
-      voiceScript: typeof audio?.voiceScript === 'string' ? audio.voiceScript.trim() : '',
+      voiceScript: effectiveVoiceScript,
+      sourceVoiceScript,
       manualAudioData: typeof audio?.manualAudioData === 'string' ? audio.manualAudioData : '',
       manualAudioUrl: typeof audio?.manualAudioUrl === 'string' ? audio.manualAudioUrl : '',
       soundEffectUrls: Array.isArray(audio?.soundEffectUrls) ? audio.soundEffectUrls : []
@@ -734,8 +888,8 @@ router.post('/generateAudio', protect, checkTrial, async (req, res) => {
       payload: {
         jobId,
         skipMix: true,
-        description: String(audioConfig.voiceScript || draft?.scenes?.voiceScript || draft?.input?.description || ''),
-        voiceScript: String(audioConfig.voiceScript || ''),
+        description: String(audioConfig.voiceScript || sourceVoiceScript || draft?.input?.description || ''),
+        voiceScript: String(audioConfig.voiceScript || sourceVoiceScript || ''),
         durationSeconds: draft?.input?.durationSeconds || 60,
         audio: audioConfig
       },
@@ -751,6 +905,25 @@ router.post('/generateAudio', protect, checkTrial, async (req, res) => {
         generatedAt: new Date().toISOString()
       }
     }));
+
+    await learnVideoStep({
+      userId,
+      jobId,
+      action: 'audio_generation',
+      prompt: String(audioConfig.voiceScript || sourceVoiceScript || ''),
+      userInput: draft.input || {},
+      script: audioConfig.voiceScript,
+      audioSettings: audioConfig,
+      voiceSettings: {
+        voiceGender: audioConfig.voiceGender,
+        voiceVolume: audioConfig.voiceVolume,
+        musicVolume: audioConfig.musicVolume
+      },
+      language: requestedLanguageCode,
+      duration: draft?.input?.durationSeconds || 60,
+      product: draft?.input?.product || null,
+      sourceResponse: generated
+    });
 
     return res.json({
       success: true,
@@ -850,6 +1023,20 @@ router.post('/mergeVideo', protect, checkTrial, async (req, res) => {
       }
     }));
 
+    await learnVideoStep({
+      userId,
+      jobId,
+      action: 'video_merge',
+      prompt: draft?.prompt?.promptText || '',
+      userInput: draft.input || {},
+      sceneData: draft?.clips?.sceneData || draft?.images?.sceneData || draft?.scenes?.sceneData || [],
+      generatedVideos: [updated.merge.finalOutputUrl || updated.merge.finalVideoUrl].filter(Boolean),
+      audioSettings: draft?.audio?.config || {},
+      duration: draft?.input?.durationSeconds || null,
+      product: draft?.input?.product || null,
+      sourceResponse: merged
+    });
+
     return res.json({
       success: true,
       jobId,
@@ -884,6 +1071,20 @@ router.post('/generateContent', protect, checkTrial, async (req, res) => {
         generatedAt: new Date().toISOString()
       }
     }));
+
+    await learnVideoStep({
+      userId,
+      jobId,
+      action: 'video_content',
+      prompt: draft?.prompt?.promptText || '',
+      userInput: draft.input || {},
+      captions: [socialContent.caption],
+      hashtags: socialContent.hashtags,
+      thumbnails: [thumbnailUrl].filter(Boolean),
+      generatedVideos: [draft?.merge?.finalOutputUrl || draft?.merge?.finalVideoUrl].filter(Boolean),
+      product: draft?.input?.product || null,
+      aiSettings: { selectedPlatforms: platforms }
+    });
 
     return res.json({
       success: true,
@@ -929,6 +1130,22 @@ router.post('/schedulePost', protect, checkTrial, async (req, res) => {
         updatedAt: new Date().toISOString()
       }
     }));
+
+    await learnVideoStep({
+      userId,
+      jobId,
+      action: 'video_schedule',
+      prompt: updated?.prompt?.promptText || '',
+      userInput: updated.input || {},
+      captions: [updated?.content?.caption].filter(Boolean),
+      hashtags: updated?.content?.hashtags || [],
+      thumbnails: [updated?.content?.thumbnailUrl].filter(Boolean),
+      generatedVideos: [updated?.merge?.finalOutputUrl || updated?.merge?.finalVideoUrl].filter(Boolean),
+      scheduling: updated.schedule,
+      status: publishNow ? 'published' : 'scheduled',
+      product: updated?.input?.product || null,
+      aiSettings: { selectedPlatforms: platforms }
+    });
 
     return res.json({
       success: true,

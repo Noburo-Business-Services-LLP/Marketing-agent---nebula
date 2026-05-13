@@ -78,6 +78,7 @@ const contentRoutes = require('./routes/content');
 const googleCalendarRoutes = require('./routes/googleCalendar');
 const productRoutes = require('./routes/products');
 const videoGenerationRoutes = require('./routes/videoGeneration');
+const aiMemoryRoutes = require('./routes/aiMemory');
 
 // Notification scheduler service
 const notificationScheduler = require('./services/notificationScheduler');
@@ -260,6 +261,7 @@ app.use('/api/content', contentRoutes);
 app.use('/api/google-calendar', googleCalendarRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/video-generation', aiLimiter, videoGenerationRoutes);
+app.use('/api/ai-memory', aiMemoryRoutes);
 
 // Health check endpoint (handled before rate limiter above)
 

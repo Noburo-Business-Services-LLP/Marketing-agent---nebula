@@ -24,7 +24,7 @@ const PLATFORM_LIMITS: Record<string, { charLimit: number; label: string; imageM
   youtube:   { charLimit: 5000,   label: 'YouTube',    imageMaxMB: 2,  videoMaxMB: 12800, bestRatio: '16:9' },
 };
 
-/** Instagram Reel tone ? backend `tone-audio/*.mp3` (see backend/utils/toneAudio.js) */
+/** Instagram Reel tone audio files served by the backend. */
 const REEL_TONE_AUDIO_FILES: Record<string, string> = {
   fun: 'fun.mp3',
   luxury: 'luxury.mp3',
@@ -36,7 +36,7 @@ const REEL_TONE_AUDIO_FILES: Record<string, string> = {
 function getReelTonePreviewAudioSrc(tone: string): string | null {
   const file = REEL_TONE_AUDIO_FILES[String(tone || '').trim().toLowerCase()];
   if (!file) return null;
-  // Same-origin `/audio/*` ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ Vite dev server proxies to the backend (see vite.config.ts)
+  // Same-origin `/audio/*` is proxied to the backend by Vite (see vite.config.ts).
   return `/audio/${encodeURIComponent(file)}`;
 }
 
@@ -232,19 +232,33 @@ const PLATFORM_CONTENT_TEMPLATES: Record<string, { id: string; label: string; st
   ]
 };
 
+const cleanTemplateEncodingArtifacts = (text: string) => {
+  return text
+    .replace(/ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½/g, '-')
+    .replace(/�/g, '-')
+    .replace(/\b([1-9])\?\?/g, '$1.')
+    .replace(/\s*\?\?\s*(?=[A-Z])/g, '\n')
+    .replace(/\s+\?\?(?=\n|$)/g, '')
+    .replace(/\?\?\s+\[/g, '[Link]')
+    .replace(/\s+\?\?\s+/g, ' ')
+    .replace(/\?{2,}/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+};
+
 const applyTemplate = (structure: string, name: string, desc: string, obj: string) => {
-  return structure
+  return cleanTemplateEncodingArtifacts(structure)
     .replace(/{name}/g, name || '[Campaign Name]')
     .replace(/{desc}/g, desc || '[Description]')
     .replace(/{obj}/g, obj || '[Objective]');
 };
 
 const PLATFORM_DISPLAY_DATA: Record<string, { icon: string; color: string; borderColor: string; bgColor: string; darkBgColor: string }> = {
-  instagram: { icon: '??', color: 'from-pink-500 to-purple-600', borderColor: 'border-pink-500/40', bgColor: 'bg-pink-50', darkBgColor: 'bg-pink-500/10' },
-  linkedin:  { icon: '??', color: 'from-blue-600 to-blue-800', borderColor: 'border-blue-500/40', bgColor: 'bg-blue-50', darkBgColor: 'bg-blue-500/10' },
-  twitter:   { icon: '??', color: 'from-sky-400 to-sky-600', borderColor: 'border-sky-500/40', bgColor: 'bg-sky-50', darkBgColor: 'bg-sky-500/10' },
-  facebook:  { icon: '??', color: 'from-blue-500 to-indigo-600', borderColor: 'border-blue-400/40', bgColor: 'bg-blue-50', darkBgColor: 'bg-blue-400/10' },
-  youtube:   { icon: '??', color: 'from-red-500 to-red-700', borderColor: 'border-red-500/40', bgColor: 'bg-red-50', darkBgColor: 'bg-red-500/10' },
+  instagram: { icon: 'IG', color: 'from-pink-500 to-purple-600', borderColor: 'border-pink-500/40', bgColor: 'bg-pink-50', darkBgColor: 'bg-pink-500/10' },
+  linkedin:  { icon: 'in', color: 'from-blue-600 to-blue-800', borderColor: 'border-blue-500/40', bgColor: 'bg-blue-50', darkBgColor: 'bg-blue-500/10' },
+  twitter:   { icon: 'X', color: 'from-sky-400 to-sky-600', borderColor: 'border-sky-500/40', bgColor: 'bg-sky-50', darkBgColor: 'bg-sky-500/10' },
+  facebook:  { icon: 'f', color: 'from-blue-500 to-indigo-600', borderColor: 'border-blue-400/40', bgColor: 'bg-blue-50', darkBgColor: 'bg-blue-400/10' },
+  youtube:   { icon: 'YT', color: 'from-red-500 to-red-700', borderColor: 'border-red-500/40', bgColor: 'bg-red-50', darkBgColor: 'bg-red-500/10' },
 };
 
 /** Reusable character counter bar for caption textareas */
@@ -5464,32 +5478,32 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
     const sidebarStepCount = isReelFlow ? (isReelOnlyFlow ? 3 : 5) : 4;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-            <div className={`relative rounded-2xl shadow-xl w-full max-w-5xl max-h-[90vh] flex overflow-hidden ${theme.bgCard}`}>
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 backdrop-blur-sm p-2 sm:p-4 sm:items-center">
+            <div className={`relative rounded-2xl shadow-xl w-full max-w-5xl h-[calc(100vh-1rem)] max-h-[calc(100vh-1rem)] sm:h-auto sm:max-h-[90vh] flex flex-col md:flex-row overflow-hidden ${theme.bgCard}`}>
                 {/* X Close Button - top right of modal */}
                 <button
                   onClick={onClose}
-                  className={`absolute top-4 right-4 z-20 p-1.5 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-slate-200 text-slate-500'}`}
+                  className={`absolute top-3 right-3 sm:top-4 sm:right-4 z-20 p-1.5 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-slate-200 text-slate-500'}`}
                 >
                   <X className="w-5 h-5" />
                 </button>
                 {/* Sidebar */}
-                <div className={`w-72 border-r p-6 flex flex-col shrink-0 ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-slate-50 border-slate-200'}`}>
-                    <div className="flex items-center gap-3 mb-8">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#ffcc29] to-[#ffa500] flex items-center justify-center">
+                <div className={`w-full md:w-72 border-b md:border-b-0 md:border-r p-4 sm:p-6 flex flex-col shrink-0 ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-slate-50 border-slate-200'}`}>
+                    <div className="flex items-center gap-3 mb-4 md:mb-8 pr-10 md:pr-0">
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#ffcc29] to-[#ffa500] flex items-center justify-center shrink-0">
                           <Sparkles className="w-5 h-5 text-black" />
                         </div>
-                        <div>
+                        <div className="min-w-0">
                           <h2 className={`text-lg font-bold ${theme.text}`}>{isReelOnlyFlow ? 'Create Reel' : 'Create Campaign'}</h2>
                           <p className={`text-xs ${theme.textMuted}`}>Powered by Gravity</p>
                         </div>
                     </div>
                     
-                    <div className="space-y-3 flex-1">
+                    <div className="flex gap-2 overflow-x-auto pb-1 md:block md:space-y-3 md:overflow-visible md:pb-0 md:flex-1">
                       {stepTitles.slice(0, sidebarStepCount).map((title, idx) => (
                         <div 
                           key={idx}
-                          className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-all ${
+                          className={`flex min-w-[4.5rem] flex-col items-center justify-center gap-1 p-2 rounded-lg cursor-pointer transition-all md:min-w-0 md:flex-row md:justify-start md:gap-3 md:p-3 ${
                             step === idx + 1 
                               ? 'bg-[#ffcc29]/20 border border-[#ffcc29]/30' 
                               : step > idx + 1 
@@ -5498,7 +5512,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                           }`}
                           onClick={() => step > idx + 1 && setStep(idx + 1)}
                         >
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${
                             step === idx + 1 
                               ? 'bg-[#ffcc29] text-black' 
                               : step > idx + 1 
@@ -5507,7 +5521,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                           }`}>
                             {step > idx + 1 ? <Check className="w-4 h-4" /> : idx + 1}
                           </div>
-                          <span className={`text-sm ${step === idx + 1 ? 'text-[#ffcc29] font-bold' : theme.textSecondary}`}>
+                          <span className={`max-w-[5rem] text-center text-[11px] leading-tight md:max-w-none md:text-left md:text-sm ${step === idx + 1 ? 'text-[#ffcc29] font-bold' : theme.textSecondary}`}>
                             {title}
                           </span>
                         </div>
@@ -5516,7 +5530,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                     
                     
                     {step === 5 && !isReelFlow && (
-                      <div className="mt-4 p-4 rounded-xl bg-gradient-to-br from-[#ffcc29]/20 to-[#ffa500]/10 border border-[#ffcc29]/30">
+                      <div className="mt-4 hidden p-4 rounded-xl bg-gradient-to-br from-[#ffcc29]/20 to-[#ffa500]/10 border border-[#ffcc29]/30 md:block">
                         <p className={`text-sm font-medium ${theme.text}`}>?? Generated Posts</p>
                         <p className={`text-xs ${theme.textMuted} mt-1`}>
                           {generatedPosts.filter(p => p.status === 'accepted').length}/{generatedPosts.length} posts accepted
@@ -5531,9 +5545,9 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                 </div>
                 
                 {/* Main Content */}
-                <div className="flex-1 flex flex-col overflow-hidden">
+                <div className="flex-1 flex flex-col overflow-hidden min-h-0">
                     <div className="flex-1 flex overflow-hidden">
-                        <div className="flex-1 overflow-y-auto p-8">
+                        <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8">
                         {/* Step 1: Campaign Details */}
                         {step === 1 && !isReelOnlyFlow && (
                             <div className="space-y-6 animate-in fade-in duration-300">
@@ -5616,18 +5630,18 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                                 
                                 <div>
                                   <label className={labelClasses}>Campaign Objective *</label>
-                                  <div className="grid grid-cols-5 gap-2">
+                                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
                                     {[
-                                      { id: 'awareness', label: 'Awareness', icon: '???', desc: 'Increase brand visibility' },
-                                      { id: 'engagement', label: 'Engagement', icon: '??', desc: 'Boost interactions' },
-                                      { id: 'traffic', label: 'Traffic', icon: '??', desc: 'Drive website visits' },
-                                      { id: 'sales', label: 'Sales', icon: '??', desc: 'Generate purchases' },
-                                      { id: 'leads', label: 'Leads', icon: '??', desc: 'Collect contacts' }
+                                      { id: 'awareness', label: 'Awareness', icon: Eye, desc: 'Increase brand visibility' },
+                                      { id: 'engagement', label: 'Engagement', icon: Heart, desc: 'Boost interactions' },
+                                      { id: 'traffic', label: 'Traffic', icon: MousePointer, desc: 'Drive website visits' },
+                                      { id: 'sales', label: 'Sales', icon: DollarSign, desc: 'Generate purchases' },
+                                      { id: 'leads', label: 'Leads', icon: Users, desc: 'Collect contacts' }
                                     ].map(obj => (
                                       <button 
                                         key={obj.id}
                                         onClick={() => setObjective(obj.id as any)} 
-                                        className={`p-4 border rounded-xl transition-all text-center ${
+                                        className={`min-h-[5.5rem] p-3 sm:p-4 border rounded-xl transition-all text-center flex flex-col items-center justify-center ${
                                           objective === obj.id 
                                             ? 'bg-[#ffcc29]/20 border-[#ffcc29] text-[#ffcc29]' 
                                             : isDarkMode 
@@ -5635,7 +5649,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                                               : 'border-slate-200 text-slate-600 hover:border-[#ffcc29]/50'
                                         }`}
                                       >
-                                        <span className="text-2xl block mb-1">{obj.icon}</span>
+                                        <obj.icon className="w-5 h-5 sm:w-6 sm:h-6 mb-2" />
                                         <span className="text-sm font-medium block">{obj.label}</span>
                                       </button>
                                     ))}
@@ -6760,10 +6774,10 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                 </div>
                 
                 {/* Modal Footer */}
-                <div className={`p-6 border-t flex items-center justify-between ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'}`}>
+                <div className={`p-4 sm:p-6 border-t flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'}`}>
                           <button 
                             onClick={step === 1 ? onClose : () => setStep(s => s - 1)} 
-                            className={`px-4 py-2 rounded-lg font-medium ${theme.textSecondary} hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors mr-auto`}
+                            className={`w-full px-4 py-2 rounded-lg font-medium ${theme.textSecondary} hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors sm:w-auto sm:mr-auto`}
                           >
                             {step === 1 ? 'Cancel' : 'Back'}
                           </button>
@@ -6775,7 +6789,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                                 caption: platformContents[platforms[0]] || '',
                                 imageUrl: getPreviewUrl(platforms[0]) || ''
                               })}
-                              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium mr-4 border ${isDarkMode ? 'border-slate-700/50 hover:bg-slate-800 text-slate-300' : 'border-slate-200 hover:bg-slate-100 text-slate-700'} transition-colors`}
+                              className={`flex w-full items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium border ${isDarkMode ? 'border-slate-700/50 hover:bg-slate-800 text-slate-300' : 'border-slate-200 hover:bg-slate-100 text-slate-700'} transition-colors sm:w-auto sm:mr-4`}
                             >
                               <Eye className="w-4 h-4 text-[#ffcc29]" />
                               Preview Layout
@@ -6791,7 +6805,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                                 (isReelFlow && isReelOnlyFlow && step === 1 && !generatedReel) ||
                                 (isReelFlow && !isReelOnlyFlow && step === 4 && !generatedReel)
                               }
-                              className="px-6 py-2.5 bg-[#ffcc29] text-black rounded-lg font-semibold hover:bg-[#e6b825] transition-colors disabled:opacity-50 flex items-center gap-2"
+                              className="w-full px-6 py-2.5 bg-[#ffcc29] text-black rounded-lg font-semibold hover:bg-[#e6b825] transition-colors disabled:opacity-50 flex items-center justify-center gap-2 sm:w-auto"
                             >
                               Next
                               <ChevronRight className="w-4 h-4" />
@@ -6802,7 +6816,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                           <button 
                             onClick={handleGenerateReelInCampaignFlow}
                             disabled={isGeneratingReel || (!reelImageFile && !reelImagePreview) || !reelPromptType || platforms.length === 0}
-                            className="px-6 py-2.5 bg-gradient-to-r from-[#ffcc29] to-[#ffa500] text-black rounded-lg font-semibold hover:shadow-lg transition-all disabled:opacity-50 flex items-center gap-2"
+                            className="w-full px-6 py-2.5 bg-gradient-to-r from-[#ffcc29] to-[#ffa500] text-black rounded-lg font-semibold hover:shadow-lg transition-all disabled:opacity-50 flex items-center justify-center gap-2 sm:w-auto"
                           >
                             {isGeneratingReel ? (
                               <>
@@ -6840,18 +6854,18 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                         )}
                         
                         {step === reelSchedulingStep && isReelFlow && (
-                          <div className="flex items-center gap-3">
+                          <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
                             <button
                               onClick={handlePostReelNow}
                               disabled={isPublishingReel || !generatedReel?.campaignId || platforms.length === 0}
-                              className="px-5 py-2.5 rounded-lg font-semibold border border-slate-500/40 hover:bg-slate-500/10 disabled:opacity-50"
+                              className="w-full px-5 py-2.5 rounded-lg font-semibold border border-slate-500/40 hover:bg-slate-500/10 disabled:opacity-50 sm:w-auto"
                             >
                               {isPublishingReel ? 'Posting...' : 'Post Now'}
                             </button>
                             <button
                               onClick={handleScheduleReelPublish}
                               disabled={isPublishingReel || !generatedReel?.campaignId || platforms.length === 0}
-                              className="px-6 py-2.5 bg-gradient-to-r from-[#ffcc29] to-[#ffa500] text-black rounded-lg font-semibold hover:shadow-lg transition-all disabled:opacity-50 flex items-center gap-2"
+                              className="w-full px-6 py-2.5 bg-gradient-to-r from-[#ffcc29] to-[#ffa500] text-black rounded-lg font-semibold hover:shadow-lg transition-all disabled:opacity-50 flex items-center justify-center gap-2 sm:w-auto"
                             >
                               {isPublishingReel ? (
                                 <>
@@ -6869,7 +6883,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                         )}
                         
                         {step === 5 && !isReelFlow && (
-                          <div className="flex items-center gap-4">
+                          <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center sm:gap-4">
                             {/* Status indicator */}
                             <span className={`text-sm ${
                               generatedPosts.every(p => p.status === 'accepted') 
@@ -6881,7 +6895,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                             <button 
                               onClick={handleSaveAndSchedule}
                               disabled={savingPosts || !generatedPosts.every(p => p.status === 'accepted') || generatedPosts.some(p => p.isRegenerating)}
-                              className="px-6 py-2.5 bg-gradient-to-r from-[#ffcc29] to-[#ffa500] text-black rounded-lg font-semibold hover:shadow-lg transition-all disabled:opacity-50 flex items-center gap-2"
+                              className="w-full px-6 py-2.5 bg-gradient-to-r from-[#ffcc29] to-[#ffa500] text-black rounded-lg font-semibold hover:shadow-lg transition-all disabled:opacity-50 flex items-center justify-center gap-2 sm:w-auto"
                               title={!generatedPosts.every(p => p.status === 'accepted') ? 'Accept all posts to continue' : ''}
                             >
                               {savingPosts ? (

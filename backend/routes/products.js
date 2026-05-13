@@ -10,6 +10,8 @@ const XLSX = require('xlsx');
 const fetch = require('node-fetch');
 const fs = require('fs');
 const path = require('path');
+const { buildAIContext } = require('../services/aiContextBuilder');
+const { learnCampaignGeneration } = require('../services/aiCampaignLearning');
 
 // Multer: in-memory storage, allow csv & excel only (max 5 MB)
 const upload = multer({
@@ -419,6 +421,13 @@ router.post('/:id/generate-ad-image', protect, async (req, res) => {
     const headline = requestedImageText || `${product.name} Premium Edition`;
 
     const strictPromptTemplate = getStrictAdPromptTemplate();
+    const aiMemoryContext = await buildAIContext({
+      userId,
+      user: req.user,
+      platform,
+      product,
+      category: product.category || ''
+    });
     const imageDescription = replaceTemplateTokens(strictPromptTemplate, {
       brand_name: brandName,
       primary_color: primaryColor,
@@ -429,7 +438,7 @@ router.post('/:id/generate-ad-image', protect, async (req, res) => {
       headline,
       target_language: targetLanguage,
       image_text: headline
-    });
+    }) + `\n\n${aiMemoryContext.reusablePromptText}`;
 
     const hasProductReference = Boolean(
       product.imageUrl &&
@@ -479,6 +488,30 @@ router.post('/:id/generate-ad-image', protect, async (req, res) => {
         message: result.error || 'Image generation failed'
       });
     }
+
+    await learnCampaignGeneration({
+      userId,
+      user: req.user,
+      action: 'image_generation',
+      campaignName: `${product.name} Product Ad`,
+      objective: 'sales',
+      platforms: [platform],
+      tone,
+      language: targetLanguage,
+      prompt: imageDescription,
+      userInput: requestBody,
+      generatedPosts: [{
+        platform,
+        caption: headline,
+        hashtags: aiMemoryContext.bestHashtags || [],
+        imageDescription,
+        imageUrl: result.imageUrl,
+        callToAction: aiMemoryContext.bestCTAs?.[0] || 'Shop now'
+      }],
+      generatedImages: [result.imageUrl],
+      linkedProduct: product,
+      aiSettings: { aspectRatio, memoryInjected: Boolean(aiMemoryContext.reusablePromptText) }
+    });
 
     return res.json({
       success: true,

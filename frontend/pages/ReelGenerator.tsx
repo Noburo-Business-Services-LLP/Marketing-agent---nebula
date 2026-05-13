@@ -34,15 +34,6 @@ const WIZARD_STEPS = [
   'Final Output'
 ];
 
-const AUDIO_PREVIEW_TEXT_BY_LANGUAGE: Record<string, string> = {
-  en: 'This is an audio preview test for the selected voice and music settings.',
-  hi: 'यह चुनी हुई आवाज और संगीत सेटिंग्स के लिए ऑडियो प्रीव्यू टेस्ट है।',
-  ta: 'தேர்ந்தெடுத்த குரல் மற்றும் இசை அமைப்புகளுக்கான ஆடியோ முன்னோட்ட சோதனை இது.',
-  te: 'ఎంచుకున్న వాయిస్ మరియు మ్యూజిక్ సెట్టింగ్స్ కోసం ఇది ఆడియో ప్రివ్యూ టెస్ట్.',
-  kn: 'ಆಯ್ಕೆ ಮಾಡಿದ ಧ್ವನಿ ಮತ್ತು ಸಂಗೀತ ಸೆಟ್ಟಿಂಗ್‌ಗಳಿಗಾಗಿ ಇದು ಆಡಿಯೋ ಪ್ರಿವ್ಯೂ ಪರೀಕ್ಷೆ.',
-  ml: 'തിരഞ്ഞെടുത്ത ശബ്ദവും സംഗീത ക്രമീകരണങ്ങളും പരിശോധിക്കുന്ന ഓഡിയോ പ്രിവ്യൂ ടെസ്റ്റാണിത്.'
-};
-
 function fileToDataUrl(file: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -383,11 +374,10 @@ const ReelGenerator: React.FC = () => {
   });
 
   const generateAudioPreview = async () => withBusy(async () => {
-    const previewText = AUDIO_PREVIEW_TEXT_BY_LANGUAGE[audioLanguageCode] || AUDIO_PREVIEW_TEXT_BY_LANGUAGE.en;
-    const audioJobId = await ensureDraftForAudioTest(previewText);
+    const audioJobId = await ensureDraftForAudioTest(description);
     const response = await videoGenerationAPI.generateAudio({
       jobId: audioJobId,
-      audio: buildAudioPayload({ voiceScript: previewText })
+      audio: buildAudioPayload()
     });
     if (!response?.success) throw new Error(response?.message || 'Audio generation failed');
     setGeneratedTracks(response?.audio?.tracks || null);
@@ -570,6 +560,7 @@ const ReelGenerator: React.FC = () => {
   const canStep8Next = !busy && !!caption.trim();
   const canStep9Next = !busy && selectedPlatforms.length > 0;
   const canSchedule = !busy && !!scheduleDate && !!scheduleTime;
+  const activeAudioScript = String(draft?.audio?.config?.voiceScript || '').trim();
 
   return (
     <div className={`p-6 min-h-screen ${isDarkMode ? 'bg-[#070A12]' : 'bg-slate-50'}`}>
@@ -967,8 +958,8 @@ const ReelGenerator: React.FC = () => {
                 <div>
                   <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Voice</label>
                   <select value={voiceGender} onChange={(e) => setVoiceGender(e.target.value as 'male' | 'female')} className={`${inputClass} mt-2`}>
-                    <option value="female">Female (Edge Neural)</option>
-                    <option value="male">Male (Edge Neural)</option>
+                    <option value="female">Female</option>
+                    <option value="male">Male</option>
                   </select>
                 </div>
                 <div>
@@ -1015,6 +1006,12 @@ const ReelGenerator: React.FC = () => {
 
             {(generatedTracks?.voiceUrl || generatedTracks?.backgroundUrl || generatedTracks?.manualUrl || finalAudioUrl) && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {activeAudioScript && (
+                  <div className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3 md:col-span-2`}>
+                    <p className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Voice Script</p>
+                    <p className={`text-sm mt-2 leading-relaxed whitespace-pre-wrap ${theme.text}`}>{activeAudioScript}</p>
+                  </div>
+                )}
                 {generatedTracks?.voiceUrl && (
                   <div className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3`}>
                     <p className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Voice Preview</p>
@@ -1047,6 +1044,12 @@ const ReelGenerator: React.FC = () => {
         {step === 6 && (
           <div className={`${panelClass} p-6 space-y-4`}>
             <h2 className={`font-bold text-lg ${theme.text}`}>Step 6: Audio Mixing Preview</h2>
+            {activeAudioScript && (
+              <div className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3`}>
+                <p className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Voice Script</p>
+                <p className={`text-sm mt-2 leading-relaxed whitespace-pre-wrap ${theme.text}`}>{activeAudioScript}</p>
+              </div>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {generatedTracks?.voiceUrl && (
                 <div className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3`}>
