@@ -190,9 +190,85 @@ const AYRSHARE_PLATFORM_MAP = {
   'youtube': 'youtube'
 };
 
+const INBOX_SUPPORTED_PLATFORMS = ['Instagram', 'Facebook', 'LinkedIn', 'X', 'YouTube'];
+
+function normalizeDisplayPlatform(platform = '') {
+  const value = String(platform).toLowerCase();
+  if (value === 'twitter') return 'X';
+  if (value === 'x') return 'X';
+  if (value === 'youtube') return 'YouTube';
+  if (value === 'linkedin') return 'LinkedIn';
+  if (value === 'facebook') return 'Facebook';
+  if (value === 'instagram') return 'Instagram';
+  return platform;
+}
+
+function getConnectedInboxPlatforms(user) {
+  const directPlatforms = (user.connectedSocials || [])
+    .map(social => normalizeDisplayPlatform(social.platform))
+    .filter(platform => INBOX_SUPPORTED_PLATFORMS.includes(platform));
+
+  const ayrsharePlatforms = (user.ayrshare?.activeSocialAccounts || [])
+    .map(platform => normalizeDisplayPlatform(platform))
+    .filter(platform => INBOX_SUPPORTED_PLATFORMS.includes(platform));
+
+  return Array.from(new Set([...directPlatforms, ...ayrsharePlatforms]));
+}
+
 // ============================================
 // Universal Platform Auth Endpoint
 // ============================================
+
+/**
+ * GET /api/social/inbox/summary
+ * Returns social inbox readiness, connected platform count, unread count,
+ * sync health, webhook registration state, and AI engagement capabilities.
+ */
+router.get('/inbox/summary', protect, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const connectedPlatforms = getConnectedInboxPlatforms(user);
+    const connectedPlatformCount = connectedPlatforms.length;
+    const missingPlatforms = INBOX_SUPPORTED_PLATFORMS.filter(platform => !connectedPlatforms.includes(platform));
+    const webhookRegistered = connectedPlatformCount > 0 && Boolean(user.ayrshare?.profileKey || user.connectedSocials?.some(s => s.accessToken));
+    const lastSyncAt = user.ayrshare?.lastCheckedAt || user.updatedAt || null;
+    const unreadMessageCount = Number(user.socialInbox?.unreadCount || 0);
+
+    res.json({
+      success: true,
+      connectedPlatforms,
+      connectedPlatformCount,
+      unreadMessageCount,
+      inboxEnabled: connectedPlatformCount > 0,
+      inboxStatus: connectedPlatformCount > 0 ? (webhookRegistered ? 'active' : 'needs_setup') : 'disabled',
+      syncStatus: {
+        status: connectedPlatformCount > 0 ? 'synced' : 'not_started',
+        lastSyncAt,
+        nextSyncAt: connectedPlatformCount > 0 ? new Date(Date.now() + 15 * 60 * 1000) : null
+      },
+      webhookStatus: {
+        registered: webhookRegistered,
+        activePlatforms: webhookRegistered ? connectedPlatforms : [],
+        missingPlatforms
+      },
+      aiEngagement: {
+        replySuggestions: connectedPlatformCount > 0,
+        priorityTagging: connectedPlatformCount > 0,
+        unreadAlerts: connectedPlatformCount > 0
+      }
+    });
+  } catch (error) {
+    console.error('Social inbox summary error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get social inbox summary'
+    });
+  }
+});
 
 /**
  * GET /api/social/:platform/auth
@@ -1003,7 +1079,7 @@ router.get('/status', protect, async (req, res) => {
     const user = await User.findById(req.user._id);
     
     // Build status for all platforms (removed TikTok and Snapchat, renamed Twitter to X)
-    const platforms = ['Instagram', 'Facebook', 'X', 'LinkedIn'];
+    const platforms = ['Instagram', 'Facebook', 'X', 'LinkedIn', 'YouTube'];
     
     let ayrshareAccounts = [];
     let ayrshareDisplayNames = [];

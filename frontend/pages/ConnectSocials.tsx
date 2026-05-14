@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { apiService } from '../services/api';
 import { SocialConnection } from '../types';
-import { Loader2, RefreshCw, Check, X, Instagram, Facebook, Linkedin, Youtube, Video, AlertCircle, ShieldCheck, MessageCircle, Pin, ExternalLink } from 'lucide-react';
+import { Loader2, RefreshCw, Check, X, Instagram, Facebook, Linkedin, Youtube, Video, AlertCircle, ShieldCheck, MessageCircle, Pin, ExternalLink, Inbox, Lock, Bell, Sparkles, Tag, Activity, KeyRound, RadioTower, ArrowRight, CheckCircle2, Clock3 } from 'lucide-react';
 import { useTheme, getThemeClasses } from '../context/ThemeContext';
+import UnifiedInbox from './UnifiedInbox';
 
 // X (Twitter) logo SVG component
 const XLogo = ({ className }: { className?: string }) => (
@@ -12,12 +13,41 @@ const XLogo = ({ className }: { className?: string }) => (
   </svg>
 );
 
+type InboxSummary = {
+  success: boolean;
+  connectedPlatforms: string[];
+  connectedPlatformCount: number;
+  unreadMessageCount: number;
+  inboxEnabled: boolean;
+  inboxStatus: string;
+  syncStatus: {
+    status: string;
+    lastSyncAt?: string | null;
+    nextSyncAt?: string | null;
+  };
+  webhookStatus: {
+    registered: boolean;
+    activePlatforms: string[];
+    missingPlatforms: string[];
+  };
+  aiEngagement: {
+    replySuggestions: boolean;
+    priorityTagging: boolean;
+    unreadAlerts: boolean;
+  };
+};
+
+const INBOX_PLATFORMS = ['Instagram', 'Facebook', 'LinkedIn', 'X', 'YouTube'];
+
 const ConnectSocials: React.FC = () => {
   const { isDarkMode } = useTheme();
   const theme = getThemeClasses(isDarkMode);
   const location = useLocation();
+  const navigate = useNavigate();
   const [socials, setSocials] = useState<SocialConnection[]>([]);
   const [loading, setLoading] = useState(true);
+  const [inboxSummary, setInboxSummary] = useState<InboxSummary | null>(null);
+  const [inboxSummaryLoading, setInboxSummaryLoading] = useState(false);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   
   // Connection State
@@ -31,6 +61,11 @@ const ConnectSocials: React.FC = () => {
   
   // Loading states per platform
   const [loadingPlatform, setLoadingPlatform] = useState<string | null>(null);
+  const isInboxRoute = location.pathname.startsWith('/connect-socials/inbox');
+  const connectedSocials = socials.filter(social => social.connected);
+  const connectedPlatformCount = inboxSummary?.connectedPlatformCount ?? connectedSocials.length;
+  const inboxEnabled = (inboxSummary?.inboxEnabled ?? connectedPlatformCount > 0) && connectedPlatformCount > 0;
+  const unreadMessageCount = inboxSummary?.unreadMessageCount ?? 0;
 
   const clearAuthPopupMonitor = () => {
     if (authPopupMonitorRef.current !== null) {
@@ -239,11 +274,35 @@ const ConnectSocials: React.FC = () => {
     try {
       const res = await apiService.getSocials();
       setSocials(res.connections || []);
+      loadInboxSummary(res.connections || []);
     } catch (e) {
       console.error(e);
       setNotification({ type: "error", message: "Could not load social connection status. Please try again in a moment." });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadInboxSummary = async (currentSocials: SocialConnection[] = socials) => {
+    setInboxSummaryLoading(true);
+    try {
+      const summary = await apiService.getSocialInboxSummary();
+      setInboxSummary(summary);
+    } catch (error) {
+      const connected = currentSocials.filter(social => social.connected).map(social => social.platform);
+      setInboxSummary({
+        success: false,
+        connectedPlatforms: connected,
+        connectedPlatformCount: connected.length,
+        unreadMessageCount: 0,
+        inboxEnabled: connected.length > 0,
+        inboxStatus: connected.length > 0 ? 'needs_setup' : 'disabled',
+        syncStatus: { status: connected.length > 0 ? 'pending' : 'not_started', lastSyncAt: null, nextSyncAt: null },
+        webhookStatus: { registered: false, activePlatforms: [], missingPlatforms: connected },
+        aiEngagement: { replySuggestions: true, priorityTagging: true, unreadAlerts: true },
+      });
+    } finally {
+      setInboxSummaryLoading(false);
     }
   };
 
@@ -363,6 +422,33 @@ const ConnectSocials: React.FC = () => {
        return getIcon(platform);
   };
 
+  const isPlatformConnected = (platform: string) => {
+    const normalized = platform.toLowerCase();
+    return connectedSocials.some(social => {
+      const socialPlatform = social.platform.toLowerCase();
+      return socialPlatform === normalized ||
+        (normalized === 'x' && socialPlatform === 'twitter') ||
+        (normalized === 'twitter' && socialPlatform === 'x');
+    });
+  };
+
+  const tabs = [
+    { id: 'accounts', label: 'Accounts', icon: ShieldCheck, path: '/connect-socials' },
+    { id: 'permissions', label: 'Permissions', icon: KeyRound, path: '/connect-socials?tab=permissions' },
+    { id: 'sync', label: 'Sync Status', icon: Activity, path: '/connect-socials?tab=sync' },
+    { id: 'inbox', label: 'Social Inbox', icon: Inbox, path: '/connect-socials/inbox' },
+  ];
+  const activeTab = isInboxRoute ? 'inbox' : new URLSearchParams(location.search).get('tab') || 'accounts';
+
+  const handleTabClick = (tab: typeof tabs[number]) => {
+    navigate(tab.path);
+  };
+
+  const openInbox = () => {
+    if (!inboxEnabled) return;
+    navigate('/connect-socials/inbox');
+  };
+
   return (
     <div className="max-w-5xl mx-auto relative">
       {/* Notification Toast */}
@@ -433,6 +519,32 @@ const ConnectSocials: React.FC = () => {
         </div>
       </div>
 
+      <div className={`mb-6 flex flex-wrap gap-2 rounded-xl border p-2 ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-slate-200'}`}>
+        {tabs.map((tab) => {
+          const Icon = tab.icon;
+          const active = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => handleTabClick(tab)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                active
+                  ? 'bg-[#ffcc29] text-[#070A12]'
+                  : isDarkMode
+                    ? 'text-slate-300 hover:bg-slate-800'
+                    : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <Icon className="w-4 h-4" />
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {activeTab === 'accounts' && (
+        <>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {socials.map((social) => (
               <div key={social.platform} className={`rounded-xl p-5 shadow-sm border transition-all duration-200 relative overflow-hidden group ${theme.bgCard} ${
@@ -532,6 +644,191 @@ const ConnectSocials: React.FC = () => {
               </div>
           ))}
       </div>
+
+      <div className={`mt-8 rounded-2xl border overflow-hidden ${theme.bgCard} ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'}`}>
+        <div className={`p-5 border-b ${isDarkMode ? 'border-slate-700/50 bg-[#0d1117]' : 'border-slate-100 bg-slate-50'}`}>
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-xl bg-[#ffcc29] text-[#070A12] flex items-center justify-center shrink-0">
+                <Inbox className="w-6 h-6" />
+              </div>
+              <div>
+                <h2 className={`text-xl font-bold ${theme.text}`}>Social Inbox</h2>
+                <p className={`mt-1 text-sm max-w-2xl ${theme.textSecondary}`}>
+                  Manage messages, comments, mentions, and replies from all connected social platforms in one place.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={openInbox}
+              disabled={!inboxEnabled}
+              className="px-5 py-3 rounded-lg bg-[#ffcc29] text-[#070A12] font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {inboxEnabled ? <Inbox className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+              Open Unified Social Inbox
+            </button>
+          </div>
+        </div>
+
+        <div className="p-5 grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-5">
+          <div className="space-y-5">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className={`rounded-xl border p-4 ${isDarkMode ? 'border-slate-700/50 bg-[#0f1419]' : 'border-slate-200 bg-white'}`}>
+                <p className={`text-xs font-semibold uppercase tracking-wide ${theme.textSecondary}`}>Inbox Status</p>
+                <p className={`mt-2 text-lg font-bold capitalize ${inboxEnabled ? 'text-green-400' : 'text-slate-400'}`}>
+                  {inboxSummaryLoading ? 'Checking...' : inboxEnabled ? (inboxSummary?.inboxStatus || 'Active') : 'Disabled'}
+                </p>
+              </div>
+              <div className={`rounded-xl border p-4 ${isDarkMode ? 'border-slate-700/50 bg-[#0f1419]' : 'border-slate-200 bg-white'}`}>
+                <p className={`text-xs font-semibold uppercase tracking-wide ${theme.textSecondary}`}>Connected Platforms</p>
+                <p className={`mt-2 text-lg font-bold ${theme.text}`}>{connectedPlatformCount}</p>
+              </div>
+              <div className={`rounded-xl border p-4 ${isDarkMode ? 'border-slate-700/50 bg-[#0f1419]' : 'border-slate-200 bg-white'}`}>
+                <p className={`text-xs font-semibold uppercase tracking-wide ${theme.textSecondary}`}>Unread Messages</p>
+                <p className={`mt-2 text-lg font-bold ${unreadMessageCount > 0 ? 'text-[#ffcc29]' : theme.text}`}>{unreadMessageCount}</p>
+              </div>
+            </div>
+
+            {!inboxEnabled && (
+              <div className={`rounded-xl border p-4 flex items-center gap-3 ${isDarkMode ? 'border-amber-500/30 bg-amber-500/10 text-amber-200' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>
+                <AlertCircle className="w-5 h-5 shrink-0" />
+                <p className="text-sm font-medium">Connect social accounts to enable inbox management.</p>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className={`rounded-xl border p-4 ${isDarkMode ? 'border-slate-700/50 bg-[#0f1419]' : 'border-slate-200 bg-white'}`}>
+                <div className="flex items-center gap-2 text-sm font-semibold">
+                  <Sparkles className="w-4 h-4 text-[#ffcc29]" /> AI reply suggestions
+                </div>
+                <p className={`mt-1 text-xs ${theme.textSecondary}`}>Draft fast, on-brand responses for conversations.</p>
+              </div>
+              <div className={`rounded-xl border p-4 ${isDarkMode ? 'border-slate-700/50 bg-[#0f1419]' : 'border-slate-200 bg-white'}`}>
+                <div className="flex items-center gap-2 text-sm font-semibold">
+                  <Tag className="w-4 h-4 text-[#ffcc29]" /> Priority tagging
+                </div>
+                <p className={`mt-1 text-xs ${theme.textSecondary}`}>Spot urgent leads, complaints, and high-value messages.</p>
+              </div>
+              <div className={`rounded-xl border p-4 ${isDarkMode ? 'border-slate-700/50 bg-[#0f1419]' : 'border-slate-200 bg-white'}`}>
+                <div className="flex items-center gap-2 text-sm font-semibold">
+                  <Bell className="w-4 h-4 text-[#ffcc29]" /> Unread alerts
+                </div>
+                <p className={`mt-1 text-xs ${theme.textSecondary}`}>Never miss engagement that needs a response.</p>
+              </div>
+            </div>
+          </div>
+
+          <div className={`rounded-xl border p-4 ${isDarkMode ? 'border-slate-700/50 bg-[#0f1419]' : 'border-slate-200 bg-white'}`}>
+            <p className={`text-xs font-semibold uppercase tracking-wide mb-3 ${theme.textSecondary}`}>Platform Indicators</p>
+            <div className="space-y-2">
+              {INBOX_PLATFORMS.map(platform => {
+                const connected = isPlatformConnected(platform);
+                return (
+                  <div key={platform} className={`flex items-center justify-between rounded-lg px-3 py-2 ${isDarkMode ? 'bg-[#0d1117]' : 'bg-slate-50'}`}>
+                    <div className="flex items-center gap-2">
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${getBgColor(platform)}`}>
+                        {getCustomIcon(platform)}
+                      </div>
+                      <span className={`text-sm font-medium ${theme.text}`}>{platform === 'X' ? 'X/Twitter' : platform}</span>
+                    </div>
+                    <span className={`text-xs font-bold ${connected ? 'text-green-400' : 'text-slate-400'}`}>
+                      {connected ? 'Connected' : 'Not connected'}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+        </>
+      )}
+
+      {activeTab === 'permissions' && (
+        <div className={`rounded-2xl border p-6 ${theme.bgCard} ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'}`}>
+          <h2 className={`text-xl font-bold ${theme.text}`}>Permissions</h2>
+          <p className={`mt-1 text-sm ${theme.textSecondary}`}>Nebulaa requests only the scopes needed for publishing, analytics, comments, mentions, webhooks, and inbox replies.</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-5">
+            {[
+              ['OAuth Authentication', 'Secure account linking through provider-approved OAuth flows.'],
+              ['Webhook Registration', 'Incoming messages, comments, mentions, and replies are delivered to Nebulaa in real time.'],
+              ['Reply Access', 'Replies are sent back through the original connected platform API.'],
+              ['Analytics Read Access', 'Used to show performance, follower, and sync health signals.'],
+            ].map(([title, description]) => (
+              <div key={title} className={`rounded-xl border p-4 ${isDarkMode ? 'border-slate-700/50 bg-[#0f1419]' : 'border-slate-200 bg-white'}`}>
+                <div className="flex items-start gap-3">
+                  <CheckCircle2 className="w-5 h-5 text-green-400 mt-0.5" />
+                  <div>
+                    <p className={`font-semibold ${theme.text}`}>{title}</p>
+                    <p className={`text-sm mt-1 ${theme.textSecondary}`}>{description}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'sync' && (
+        <div className={`rounded-2xl border p-6 ${theme.bgCard} ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'}`}>
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <h2 className={`text-xl font-bold ${theme.text}`}>Sync Status</h2>
+              <p className={`mt-1 text-sm ${theme.textSecondary}`}>Track social account syncs, webhook health, and inbox readiness.</p>
+            </div>
+            <button onClick={() => { loadSocials(); loadInboxSummary(); }} className="px-4 py-2 rounded-lg bg-[#ffcc29] text-[#070A12] text-sm font-bold flex items-center gap-2">
+              <RefreshCw className="w-4 h-4" /> Refresh
+            </button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-5">
+            <div className={`rounded-xl border p-4 ${isDarkMode ? 'border-slate-700/50 bg-[#0f1419]' : 'border-slate-200 bg-white'}`}>
+              <Activity className="w-5 h-5 text-[#ffcc29]" />
+              <p className={`mt-3 text-xs font-semibold uppercase tracking-wide ${theme.textSecondary}`}>Sync</p>
+              <p className={`mt-1 text-lg font-bold capitalize ${theme.text}`}>{inboxSummary?.syncStatus?.status || 'Not started'}</p>
+              <p className={`text-xs mt-1 ${theme.textSecondary}`}>Last sync: {inboxSummary?.syncStatus?.lastSyncAt ? new Date(inboxSummary.syncStatus.lastSyncAt).toLocaleString() : 'Not available'}</p>
+            </div>
+            <div className={`rounded-xl border p-4 ${isDarkMode ? 'border-slate-700/50 bg-[#0f1419]' : 'border-slate-200 bg-white'}`}>
+              <RadioTower className="w-5 h-5 text-[#ffcc29]" />
+              <p className={`mt-3 text-xs font-semibold uppercase tracking-wide ${theme.textSecondary}`}>Webhooks</p>
+              <p className={`mt-1 text-lg font-bold ${inboxSummary?.webhookStatus?.registered ? 'text-green-400' : theme.text}`}>{inboxSummary?.webhookStatus?.registered ? 'Registered' : 'Pending'}</p>
+              <p className={`text-xs mt-1 ${theme.textSecondary}`}>{inboxSummary?.webhookStatus?.activePlatforms?.length || 0} active platform hooks</p>
+            </div>
+            <div className={`rounded-xl border p-4 ${isDarkMode ? 'border-slate-700/50 bg-[#0f1419]' : 'border-slate-200 bg-white'}`}>
+              <Clock3 className="w-5 h-5 text-[#ffcc29]" />
+              <p className={`mt-3 text-xs font-semibold uppercase tracking-wide ${theme.textSecondary}`}>Next Sync</p>
+              <p className={`mt-1 text-lg font-bold ${theme.text}`}>{inboxSummary?.syncStatus?.nextSyncAt ? new Date(inboxSummary.syncStatus.nextSyncAt).toLocaleTimeString() : 'On demand'}</p>
+              <p className={`text-xs mt-1 ${theme.textSecondary}`}>Background queue runs for connected platforms.</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'inbox' && (
+        inboxEnabled ? (
+          <div className="space-y-4">
+            <div className={`rounded-2xl border p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3 ${theme.bgCard} ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'}`}>
+              <div>
+                <h2 className={`text-lg font-bold ${theme.text}`}>Unified Social Inbox</h2>
+                <p className={`text-sm ${theme.textSecondary}`}>Connect Socials to OAuth Authentication to Webhook Registration to Social Inbox Access.</p>
+              </div>
+              <div className="flex items-center gap-2 text-xs font-bold text-green-400">
+                <CheckCircle2 className="w-4 h-4" /> {connectedPlatformCount} connected
+              </div>
+            </div>
+            <UnifiedInbox />
+          </div>
+        ) : (
+          <div className={`rounded-2xl border p-8 text-center ${theme.bgCard} ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'}`}>
+            <Lock className="w-10 h-10 mx-auto text-slate-400" />
+            <h2 className={`mt-3 text-xl font-bold ${theme.text}`}>Social Inbox is disabled</h2>
+            <p className={`mt-1 text-sm ${theme.textSecondary}`}>Connect social accounts to enable inbox management.</p>
+            <button onClick={() => navigate('/connect-socials')} className="mt-5 px-5 py-3 rounded-lg bg-[#ffcc29] text-[#070A12] font-bold inline-flex items-center gap-2">
+              Connect Accounts <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+        )
+      )}
 
       {/* Simulated OAuth Popup Modal */}
       {showFakeAuthWindow && (

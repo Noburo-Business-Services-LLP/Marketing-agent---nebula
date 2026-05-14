@@ -222,6 +222,7 @@ const App: React.FC = () => {
                     <Route path="/ad-campaigns" element={<AdCampaigns />} />
                     <Route path="/competitors" element={<Competitors />} />
                     <Route path="/connect-socials" element={<ConnectSocials />} />
+                    <Route path="/connect-socials/inbox" element={<ConnectSocials />} />
                     <Route path="/brand-assets" element={<BrandAssets />} />
                     <Route path="/inventory" element={<Inventory />} />
                     <Route path="/analytics" element={<Analytics />} />

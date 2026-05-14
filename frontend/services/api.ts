@@ -1141,6 +1141,32 @@ export const apiService = {
     return { campaign: response.campaign };
   },
 
+  getSocialInboxSummary: async (): Promise<{
+    success: boolean;
+    connectedPlatforms: string[];
+    connectedPlatformCount: number;
+    unreadMessageCount: number;
+    inboxEnabled: boolean;
+    inboxStatus: 'active' | 'disabled' | 'needs_setup' | string;
+    syncStatus: {
+      status: 'synced' | 'pending' | 'not_started' | string;
+      lastSyncAt?: string | null;
+      nextSyncAt?: string | null;
+    };
+    webhookStatus: {
+      registered: boolean;
+      activePlatforms: string[];
+      missingPlatforms: string[];
+    };
+    aiEngagement: {
+      replySuggestions: boolean;
+      priorityTagging: boolean;
+      unreadAlerts: boolean;
+    };
+  }> => {
+    return apiCall('/social/inbox/summary', { method: 'GET' }, true);
+  },
+
   updateCampaignPostIds: async (
     id: string,
     data: { facebookPostId?: string; instagramPostId?: string }
@@ -3384,4 +3410,133 @@ export const aiMemoryAPI = {
   reuseMemory: async (type: 'campaign' | 'video', id: string): Promise<any> => {
     return apiCall<any>(`/ai-memory/reuse/${type}/${encodeURIComponent(id)}`, { method: 'POST' }, true);
   }
+};
+
+// ================================
+// Unified Social Inbox API
+// ================================
+export interface InboxConversation {
+  id: string;
+  user_id?: string;
+  social_account_id: string;
+  platform: 'instagram' | 'facebook' | 'linkedin' | 'x' | 'youtube';
+  provider_thread_id?: string;
+  participant_id?: string;
+  participant_name: string;
+  participant_username?: string;
+  avatar_url?: string;
+  subject?: string;
+  last_message_preview: string;
+  last_message_at: string;
+  status: 'unread' | 'read' | 'replied' | 'closed' | string;
+  priority: 'low' | 'normal' | 'high' | 'urgent' | string;
+  tags: string[];
+  sentiment: string;
+  spam_score: number;
+}
+
+export interface InboxMessage {
+  id: string;
+  conversation_id: string;
+  social_account_id?: string;
+  platform: 'instagram' | 'facebook' | 'linkedin' | 'x' | 'youtube';
+  provider_message_id?: string;
+  provider_parent_id?: string;
+  direction: 'inbound' | 'outbound';
+  message_type: string;
+  author_id?: string;
+  author_name: string;
+  body: string;
+  media_urls?: string[];
+  permalink?: string;
+  sentiment: string;
+  spam_score: number;
+  created_at: string;
+}
+
+const INBOX_API_BASE_URL = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+  ? '/api/inbox'
+  : 'http://localhost:8080/api/inbox';
+
+async function inboxCall<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+    ...options.headers,
+  };
+  const token = getToken();
+  if (token) {
+    (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
+  }
+  const response = await fetch(`${INBOX_API_BASE_URL}${endpoint}`, {
+    ...options,
+    headers,
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.message || data.error || 'Inbox request failed');
+  }
+  return data as T;
+}
+
+export const inboxAPI = {
+  getAccounts: async (): Promise<any> => inboxCall('/accounts'),
+
+  getOAuthUrl: async (platform: string): Promise<{ success: boolean; auth_url: string }> => {
+    return inboxCall(`/oauth/${encodeURIComponent(platform)}`);
+  },
+
+  getConversations: async (filters: {
+    status?: string;
+    platform?: string;
+    priority?: string;
+    search?: string;
+  } = {}): Promise<{ success: boolean; conversations: InboxConversation[] }> => {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value) params.set(key, value);
+    });
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return inboxCall(`/conversations${query}`);
+  },
+
+  getMessages: async (conversationId: string): Promise<{
+    success: boolean;
+    conversation: InboxConversation;
+    messages: InboxMessage[];
+    ai?: { suggestions?: string[]; sentiment?: string; spam_score?: number; priority?: string };
+  }> => {
+    return inboxCall(`/conversations/${encodeURIComponent(conversationId)}/messages`);
+  },
+
+  reply: async (conversationId: string, body: string): Promise<{ success: boolean; message: InboxMessage }> => {
+    return inboxCall(`/conversations/${encodeURIComponent(conversationId)}/reply`, {
+      method: 'POST',
+      body: JSON.stringify({ body }),
+    });
+  },
+
+  updateStatus: async (conversationId: string, status: string): Promise<{ success: boolean }> => {
+    return inboxCall(`/conversations/${encodeURIComponent(conversationId)}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    });
+  },
+
+  updateMeta: async (conversationId: string, data: { tags: string[]; priority: string }): Promise<{ success: boolean }> => {
+    return inboxCall(`/conversations/${encodeURIComponent(conversationId)}/meta`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
+  syncAccount: async (accountId: string): Promise<{ success: boolean; queued: boolean }> => {
+    return inboxCall(`/sync/${encodeURIComponent(accountId)}`, { method: 'POST' });
+  },
+
+  openSocket: (userId = 'demo-user'): WebSocket | null => {
+    if (typeof window === 'undefined') return null;
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = window.location.hostname === 'localhost' ? 'localhost:8080' : window.location.host;
+    return new WebSocket(`${protocol}//${host}/ws/inbox?user_id=${encodeURIComponent(userId)}`);
+  },
 };
