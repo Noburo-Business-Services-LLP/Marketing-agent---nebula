@@ -3455,8 +3455,8 @@ export interface InboxMessage {
 }
 
 const INBOX_API_BASE_URL = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
-  ? '/api/inbox'
-  : 'http://localhost:8080/api/inbox';
+  ? '/api/social/inbox'
+  : 'http://localhost:5000/api/social/inbox';
 
 async function inboxCall<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const headers: HeadersInit = {
@@ -3533,10 +3533,9 @@ export const inboxAPI = {
     return inboxCall(`/sync/${encodeURIComponent(accountId)}`, { method: 'POST' });
   },
 
-  openSocket: (userId = 'demo-user'): WebSocket | null => {
-    if (typeof window === 'undefined') return null;
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.hostname === 'localhost' ? 'localhost:8080' : window.location.host;
-    return new WebSocket(`${protocol}//${host}/ws/inbox?user_id=${encodeURIComponent(userId)}`);
+  openSocket: (_userId = 'demo-user'): WebSocket | null => {
+    // MERN implementation uses the existing Express API. Real-time transport can be
+    // enabled later with Socket.IO/SSE without changing page-level inbox behavior.
+    return null;
   },
 };
