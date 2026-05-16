@@ -1448,20 +1448,26 @@ Return ONLY valid JSON (no markdown, no backticks):
       return { isValid: errs.length === 0, errorDetails: errs.join('; ') };
     };
 
+    const campaignContentGenerationId = `campaign_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     let attempts = 0;
-    let maxAttempts = 3;
+    // IMPORTANT: keep this to a single attempt to avoid extra token usage.
+    let maxAttempts = 1;
     let parsed = null;
-    let currentPrompt = captionPrompt;
+    const currentPrompt = captionPrompt;
 
     while (attempts < maxAttempts) {
       if (aborted) return res.end();
       attempts++;
       
-      if (attempts > 1) {
-        sendEvent('status', { message: `Regenerating to fix formatting (Attempt ${attempts})...` });
-      }
-
-      const textRes = await callGemini(currentPrompt, { maxTokens: 8000, temperature: 0.85, skipCache: true });
+      console.log(`🧠 [CAMPAIGN_CONTENT] ${campaignContentGenerationId} Gemini call #${attempts}`, { userId, totalPosts });
+      const textRes = await callGemini(currentPrompt, {
+        maxTokens: 8000,
+        temperature: 0.85,
+        skipCache: true,
+        // Enforce a single provider request for this workflow.
+        maxRetries: 1,
+        models: ['gemini-2.5-pro']
+      });
       parsed = parseGeminiJSON(textRes);
 
       if (parsed?.posts?.length) {
@@ -1471,15 +1477,10 @@ Return ONLY valid JSON (no markdown, no backticks):
           break;
         } else {
           console.log(`⚠️ Attempt ${attempts} failed validation: ${validation.errorDetails}`);
-          // Update prompt with feedback for next attempt
-          currentPrompt = `${captionPrompt}\n\nCRITICAL FIX REQUIRED: Your previous response failed validation with the following errors: ${validation.errorDetails}. 
-- You MUST replace every single bracketed placeholder (e.g. [Key Point], [Tip], [Outcome]) with actual meaningful content. 
-- Do NOT leave any square brackets except for [Link] or [Your CTA Link].
-- Follow the structure STRICTLY while filling in the details. 
-- DO NOT USE PARAGRAPHS.`;
+          // No regeneration: handle any cleanup locally to avoid extra token usage.
         }
       } else if (attempts === maxAttempts) {
-        sendEvent('error', { message: 'Failed to generate campaign content after multiple attempts' });
+        sendEvent('error', { message: 'Failed to generate campaign content' });
         return res.end();
       }
     }
@@ -1490,18 +1491,114 @@ Return ONLY valid JSON (no markdown, no backticks):
     }
 
     if (strictBrandMode) {
-      const refinedPosts = await enforceBrandProfileOnGeneratedPosts(parsed.posts, {
-        brandCtx,
-        campaignName,
-        objective,
-        platforms
+      console.log(`🧠 [CAMPAIGN_CONTENT] ${campaignContentGenerationId} strict brand lock enabled; skipping AI refinement pass to avoid extra token usage.`);
+    }
+
+    // Local formatting cleanup (no additional AI calls).
+    const platformTemplates = (() => {
+      const templates = {};
+      if (!keyMessages) return templates;
+      const blocks = String(keyMessages || '').split(/\n\n---\n\n/);
+      blocks.forEach((block) => {
+        const match = block.match(/\[([A-Z]+) CONTENT FORMAT\]\n([\s\S]*)/);
+        if (!match) return;
+        const platform = match[1].toLowerCase();
+        const lines = match[2].split('\n').filter((l) => l.trim().length > 0);
+        const markers = lines
+          .map((l) => {
+            const cIdx = l.indexOf(':');
+            return cIdx !== -1 ? l.substring(0, cIdx + 1).trim() : l.trim();
+          })
+          .filter((m) => m.length > 2);
+        templates[platform] = markers;
       });
-      const refinedValidation = validateCaptionsSchema(refinedPosts, keyMessages);
-      if (refinedValidation.isValid) {
-        parsed.posts = refinedPosts;
-      } else {
-        console.warn('Skipping refined posts due to schema drift after brand lock pass:', refinedValidation.errorDetails);
+      return templates;
+    })();
+
+    const normalizeHashtags = (raw) => {
+      const input = Array.isArray(raw) ? raw : [];
+      const tags = input
+        .map((h) => String(h || '').trim())
+        .filter(Boolean)
+        .map((h) => (h.startsWith('#') ? h : `#${h}`))
+        .filter((h) => /^#[A-Za-z0-9_]{2,}$/.test(h));
+      return Array.from(new Set(tags)).slice(0, 8);
+    };
+
+    const clampImageText = (raw) => {
+      const cleaned = String(raw || '').replace(/\s+/g, ' ').trim();
+      if (!cleaned) return '';
+      return cleaned.split(' ').filter(Boolean).slice(0, 5).join(' ');
+    };
+
+    const cleanupCaption = (caption, markers = []) => {
+      let text = String(caption || '').replace(/\r\n/g, '\n').trim();
+      if (!text) return text;
+
+      // Remove unfilled placeholders like [Key Point], keep [Link]/[Your CTA Link].
+      text = text.replace(/\[([^\]]+)\]/g, (full, inner) => {
+        const token = String(inner || '').toLowerCase();
+        if (token.includes('link') || token.includes('cta')) return full;
+        return '';
+      });
+
+      // Avoid paragraph blocks; keep as structured lines.
+      text = text.replace(/[ \t]{2,}/g, ' ').replace(/\n{2,}/g, '\n').trim();
+
+      if (Array.isArray(markers) && markers.length > 0) {
+        const lower = text.toLowerCase();
+        const missing = markers.filter((m) => !lower.includes(String(m).toLowerCase()));
+        if (missing.length > 0) {
+          const fallbackFor = (marker) => {
+            const m = String(marker || '').toLowerCase();
+            if (m.includes('hook')) return `Quick idea about ${campaignName || 'this campaign'}`;
+            if (m.includes('problem')) return `A common challenge your audience faces today`;
+            if (m.includes('solution') || m.includes('how')) return `A simple, actionable way to improve outcomes`;
+            if (m.includes('benefit') || m.includes('value')) return `A clear benefit and what changes for them`;
+            if (m.includes('cta') || m.includes('action')) return `Try it today: [Link]`;
+            if (m.includes('tip')) return `One practical tip they can apply immediately`;
+            if (m.includes('proof') || m.includes('result')) return `A believable outcome they can expect`;
+            return `Details aligned to ${objective || 'your goal'}`;
+          };
+
+          text = `${text}\n${missing.map((m) => `${m} ${fallbackFor(m)}`).join('\n')}`.trim();
+        }
       }
+
+      return text;
+    };
+
+    parsed.posts = (Array.isArray(parsed.posts) ? parsed.posts : []).map((post, idx) => {
+      const schedule = scheduleDates[idx] || {};
+      const platform = String(post?.platform || schedule.platform || '').trim().toLowerCase();
+      const markers = platformTemplates[platform] || [];
+      const hashtags = normalizeHashtags(post?.hashtags);
+      return {
+        ...post,
+        platform,
+        caption: cleanupCaption(post?.caption, markers),
+        hashtags: hashtags.length ? hashtags : ['#marketing'],
+        contentTheme: String(post?.contentTheme || 'promotional').trim(),
+        imageDescription: String(post?.imageDescription || '').trim(),
+        imageText: clampImageText(post?.imageText)
+      };
+    });
+
+    // Enforce shared imageDescription per slot across platforms (best effort).
+    for (let slotIndex = 0; slotIndex < numSlots; slotIndex += 1) {
+      const startIdx = slotIndex * platforms.length;
+      const canonical = String(parsed.posts?.[startIdx]?.imageDescription || '').trim();
+      if (!canonical) continue;
+      for (let j = startIdx; j < startIdx + platforms.length && j < parsed.posts.length; j += 1) {
+        parsed.posts[j].imageDescription = canonical;
+      }
+    }
+
+    const finalValidation = validateCaptionsSchema(parsed.posts, keyMessages);
+    if (!finalValidation.isValid) {
+      console.warn(`⚠️ [CAMPAIGN_CONTENT] ${campaignContentGenerationId} validation still failed after local cleanup (no regeneration): ${finalValidation.errorDetails}`);
+    } else {
+      console.log(`✅ [CAMPAIGN_CONTENT] ${campaignContentGenerationId} validation OK after local cleanup`);
     }
 
     if (aborted) return res.end();
@@ -3557,7 +3654,16 @@ Return ONLY valid JSON (no markdown, no code blocks):
   ]
 }`;
 
-    const response = await callGemini(prompt, { maxTokens: 4000, temperature: 0.8, skipCache: true });
+    const campaignPostsGenerationId = `campaign_posts_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    console.log(`[CAMPAIGN_POSTS] ${campaignPostsGenerationId} Gemini call #1`, { userId, totalPosts });
+    const response = await callGemini(prompt, {
+      maxTokens: 4000,
+      temperature: 0.8,
+      skipCache: true,
+      // Enforce a single provider request for this workflow.
+      maxRetries: 1,
+      models: ['gemini-2.5-pro']
+    });
     const parsed = parseGeminiJSON(response);
     const fallbackPost = {
       platform: platforms[0] || 'instagram',
@@ -3571,13 +3677,8 @@ Return ONLY valid JSON (no markdown, no code blocks):
       ? parsed.posts
       : [fallbackPost];
 
-    if (strictBrandMode && parsedPosts.length > 0) {
-      parsedPosts = await enforceBrandProfileOnGeneratedPosts(parsedPosts, {
-        brandCtx,
-        campaignName,
-        objective,
-        platforms
-      });
+    if (strictBrandMode) {
+      console.log(`[CAMPAIGN_POSTS] ${campaignPostsGenerationId} strict brand lock enabled; skipping AI refinement pass to avoid extra token usage.`);
     }
 
     // Use stock placeholder images — NO bulk AI image generation

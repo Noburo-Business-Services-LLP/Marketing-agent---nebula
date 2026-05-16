@@ -364,10 +364,46 @@ const ReelGenerator: React.FC = () => {
 
   const generateClips = async () => withBusy(async () => {
     if (!jobId) throw new Error('Draft missing');
+
     const response = await videoGenerationAPI.generateClips({
       jobId,
-      sceneData: scenes
+      sceneData: scenes,
+      async: true
     });
+
+    // If the backend queued the clip generation, poll the job status.
+    const queueJobId = response?.queueJobId;
+    if (queueJobId) {
+      const startedAt = Date.now();
+      const timeoutMs = 15 * 60 * 1000;
+
+      while (true) {
+        if (Date.now() - startedAt > timeoutMs) {
+          throw new Error('Clip generation is taking too long. Please try again.');
+        }
+
+        const job = await videoGenerationAPI.getJobStatus(queueJobId);
+        const status = String(job?.status || '').toLowerCase();
+
+        if (status === 'completed') {
+          const result = job?.result;
+          if (!result?.success) throw new Error(result?.message || 'Clip generation failed');
+          setScenes(result.sceneData || []);
+          setDraft(result.draft || draft);
+          break;
+        }
+
+        if (status === 'failed') {
+          throw new Error(job?.error?.message || 'Clip generation failed');
+        }
+
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+
+      return;
+    }
+
+    // Fallback: synchronous response (local/dev or fast runs)
     if (!response?.success) throw new Error(response?.message || 'Clip generation failed');
     setScenes(response.sceneData || []);
     setDraft(response.draft || draft);

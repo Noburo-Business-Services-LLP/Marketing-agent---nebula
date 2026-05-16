@@ -8,6 +8,18 @@ const mongoSanitize = require('express-mongo-sanitize');
 const hpp = require('hpp');
 const sanitizeHtml = require('sanitize-html');
 const path = require('path');
+const fs = require('fs');
+
+// ============================================
+// Process-level crash logging (prevents silent 502s)
+// ============================================
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled Promise Rejection:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+});
 
 // ============================================
 // Environment Validation (Fail Fast)
@@ -182,6 +194,63 @@ app.get('/api/health', (req, res) => {
   res.status(200).json({ status: 'ok' });
 });
 
+// More detailed health check for debugging production 502s (does not expose secrets)
+app.get('/api/health/details', (req, res) => {
+  let ffmpegPath = null;
+  let ffprobePath = null;
+
+  try {
+    // Optional dependency check (installed in backend/package.json)
+    ffmpegPath = require('ffmpeg-static');
+  } catch (_) { }
+
+  try {
+    ffprobePath = require('ffprobe-static')?.path || null;
+  } catch (_) { }
+
+  const safeExists = (p) => {
+    if (!p || typeof p !== 'string') return false;
+    try {
+      return fs.existsSync(p);
+    } catch (_) {
+      return false;
+    }
+  };
+
+  const mongoState = mongoose.connection?.readyState ?? 0;
+  const mongoStates = {
+    0: 'disconnected',
+    1: 'connected',
+    2: 'connecting',
+    3: 'disconnecting'
+  };
+
+  return res.status(200).json({
+    status: 'ok',
+    checks: {
+      env: {
+        NODE_ENV: process.env.NODE_ENV || 'development',
+        PORT: process.env.PORT || null,
+        MONGODB_URI: Boolean(process.env.MONGODB_URI),
+        JWT_SECRET: Boolean(process.env.JWT_SECRET),
+        GEMINI_API_KEY: Boolean(process.env.GEMINI_API_KEY),
+      },
+      mongo: {
+        readyState: mongoState,
+        state: mongoStates[mongoState] || 'unknown'
+      },
+      ffmpeg: {
+        path: ffmpegPath,
+        exists: safeExists(ffmpegPath)
+      },
+      ffprobe: {
+        path: ffprobePath,
+        exists: safeExists(ffprobePath)
+      }
+    }
+  });
+});
+
 // Apply general limiter to all API routes
 app.use('/api', generalLimiter);
 
@@ -333,10 +402,33 @@ app.use((req, res) => {
 
 // Global error handler
 app.use((err, req, res, next) => {
-  console.error('Server Error:', err);
-  res.status(500).json({
+  if (res.headersSent) return next(err);
+
+  const status = Number(err?.statusCode || err?.status || 500);
+  const message = String(err?.message || 'Internal server error');
+  const isApiRequest = req.path.startsWith('/api');
+
+  console.error('Server Error:', {
+    status,
+    method: req.method,
+    path: req.path,
+    message,
+    stack: err?.stack
+  });
+
+  // Always return JSON for API requests (prevents HTML error pages breaking JSON parsing).
+  if (isApiRequest) {
+    return res.status(status).json({
+      success: false,
+      message,
+      errorCode: err?.code || err?.name || undefined,
+      error: process.env.NODE_ENV === 'development' ? (err?.stack || String(err)) : undefined
+    });
+  }
+
+  return res.status(status).json({
     success: false,
-    message: 'Internal server error'
+    message
   });
 });
 

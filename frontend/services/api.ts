@@ -62,6 +62,24 @@ Business Context:
 `.trim();
 };
 
+async function safeReadJson(response: Response): Promise<any> {
+  const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+  const rawText = await response.text();
+
+  if (response.status === 204) return {};
+
+  try {
+    return rawText ? JSON.parse(rawText) : {};
+  } catch (_) {
+    const preview = rawText ? rawText.slice(0, 500) : '';
+    const parseErr: any = new Error(`Non-JSON response from server (HTTP ${response.status}).`);
+    parseErr.status = response.status;
+    parseErr.contentType = contentType;
+    parseErr.preview = preview;
+    throw parseErr;
+  }
+}
+
 // Generic API call function with real backend integration
 async function apiCall<T>(
   endpoint: string,
@@ -87,7 +105,7 @@ async function apiCall<T>(
       headers,
     });
 
-    const data = await response.json();
+    const data = await safeReadJson(response);
     // Handle trial/credit expiry responses
     if (response.status === 403 && (data.trialExpired || data.creditsExhausted)) {
       // Dispatch custom event so App.tsx can catch it
@@ -120,6 +138,9 @@ async function apiCall<T>(
     return data as T;
   } catch (error: any) {
     console.error('[API] Error for', endpoint, ':', error.message);
+    if (error?.preview) {
+      console.error('[API] Non-JSON response preview:', error.preview);
+    }
     // Handle network errors
     if (error.message === 'Failed to fetch') {
       throw new Error('Unable to connect to server. Please check your connection.');
@@ -2654,7 +2675,7 @@ export const apiService = {
       body: formData
     });
 
-    const data = await response.json();
+    const data = await safeReadJson(response);
     if (!response.ok) {
       throw new Error(data.error || 'Failed to upload file');
     }
@@ -2674,7 +2695,7 @@ export const apiService = {
       body: formData
     });
 
-    const data = await response.json();
+    const data = await safeReadJson(response);
     if (!response.ok) {
       throw new Error(data.error || 'Failed to preview file');
     }
@@ -3128,7 +3149,7 @@ export const inventoryAPI = {
       body: formData,
     });
 
-    const data = await response.json();
+    const data = await safeReadJson(response);
     if (!response.ok && !data.success) {
       throw new Error(data.message || 'Bulk import failed');
     }
@@ -3471,7 +3492,7 @@ async function inboxCall<T>(endpoint: string, options: RequestInit = {}): Promis
     ...options,
     headers,
   });
-  const data = await response.json();
+  const data = await safeReadJson(response);
   if (!response.ok) {
     throw new Error(data.message || data.error || 'Inbox request failed');
   }

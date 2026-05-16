@@ -141,9 +141,15 @@ async function callGemini(prompt, options = {}) {
   }
 
   const timeout = options.timeout || API_TIMEOUT;
-  const maxRetries = 3; // Retry up to 3 times for rate limiting
+  const maxRetries = Number.isFinite(Number(options.maxRetries))
+    ? Math.max(1, Number.parseInt(String(options.maxRetries), 10))
+    : 3; // Default: retry up to 3 times for rate limiting
 
-  for (const model of GEMINI_MODELS) {
+  const models = Array.isArray(options.models) && options.models.length > 0
+    ? options.models.map((m) => String(m || '').trim()).filter(Boolean)
+    : GEMINI_MODELS;
+
+  for (const model of models) {
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
