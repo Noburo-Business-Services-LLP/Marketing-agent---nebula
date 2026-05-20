@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Campaign, Product } from '../types';
 import { apiService, icpStrategyService, inventoryAPI, brandAssetsAPI } from '../services/api';
@@ -228,6 +228,73 @@ const PLATFORM_CONTENT_TEMPLATES: Record<string, { id: string; label: string; st
       tone: 'casual',
       label: 'Community Engagement', 
       structure: "Hey guys! We're excited to share {name} with you today. ??\n\n{desc}\n\nWe're aiming to {obj}. What do you think about [Point]? ??" 
+    }
+  ],
+  youtube: [
+    // PROFESSIONAL
+    {
+      id: 'yt_prof_launch',
+      tone: 'professional',
+      label: 'Video Launch',
+      structure: "🎥 NEW VIDEO: Launching {name} - Full Reveal!\n\n💼 STRATEGIC OVERVIEW:\nWelcome to our official launch showcase for {name}. In this video, we go deep into how our new solution solves {desc} and drives {obj}.\n\n🔥 KEY HIGHLIGHTS & INNOVATIONS:\n• [Core Innovation 1]\n• [Strategic Advantage 2]\n• [Key Performance Metric 3]\n\n📈 BUSINESS IMPACT:\n{obj}\n\n🚀 PROFESSIONAL INSIGHTS:\n• [Industry Use Case 1]\n• [Operational Efficiency 2]\n\n👇 WATCH THE FULL VIDEO HERE:\n[Link]\n\n#ProductLaunch #BusinessGrowth #Innovation #{name}"
+    },
+    {
+      id: 'yt_prof_dive',
+      tone: 'professional',
+      label: 'Feature Deep Dive',
+      structure: "🎥 FEATURE SPOTLIGHT: Deep Diving into {name}\n\n🔍 TECHNICAL ARCHITECTURE:\nToday, we are analyzing the core mechanics of {name} and how it directly addresses {desc}. If you want to achieve {obj}, this deep dive is for you.\n\n🛠️ KEY CAPABILITIES BREAKDOWN:\n• [Advanced Capability 1]\n• [Under-the-Hood Feature 2]\n• [Performance Optimization 3]\n\n📊 BUSINESS VALUE:\n{obj}\n\n💡 IMPLEMENTATION STRATEGY:\n• [System Integration 1]\n• [Scalability Benefit 2]\n\n👇 ACCESS THE FULL DEEP DIVE:\n[Link]\n\n#TechDeepDive #SoftwareEngineering #BusinessValue #{name}"
+    },
+    {
+      id: 'yt_prof_explainer',
+      tone: 'professional',
+      label: 'Tech Explainer',
+      structure: "🎥 THE TECH EXPLAINER: How {name} Reinvents {obj}\n\n🎓 THE CONCEPT:\nWhy is traditional workflow failing at {desc}? In this video, we break down the technological shift behind {name} and how we enable {obj}.\n\n🧠 CORE PILLARS OF THE TECH:\n• [Architectural Shift 1]\n• [Data Processing Logic 2]\n• [Automation Engine 3]\n\n⚡ METRIC ELEVATION:\n{obj}\n\n📈 ENTERPRISE ROADMAP:\n• [Deployment Step 1]\n• [ROI Realization 2]\n\n👇 WATCH THE EXPLAINER NOW:\n[Link]\n\n#TechExplainer #EnterpriseTech #SystemDesign #{name}"
+    },
+    // CASUAL
+    {
+      id: 'yt_cas_review',
+      tone: 'casual',
+      label: 'Product Review',
+      structure: "🎥 HONEST REVIEW: Testing {name} - Is it actually worth it?\n\n👋 HEY EVERYONE:\nToday, we are getting hands-on with {name}! We're reviewing how it actually handles {desc} and whether it can help you {obj}.\n\n🌟 WHAT WE LIKED MOST:\n• [Stellar Feature 1]\n• [User Experience Delight 2]\n• [Workflow Time-Saver 3]\n\n📈 THE REAL IMPACT:\n{obj}\n\n⚠️ WHAT COULD BE BETTER:\n• [Minor Drawback 1]\n• [Learning Curve Note 2]\n\n👇 SEE THE FULL REVIEW:\n[Link]\n\n#ProductReview #HonestOpinion #TechReview #{name}"
+    },
+    {
+      id: 'yt_cas_bts',
+      tone: 'casual',
+      label: 'Behind The Scenes',
+      structure: "🎥 BEHIND THE SCENES: How we built {name}!\n\n☕ GRAB A COFFEE:\nEver wondered what goes on behind closed doors? We are taking you backstage to show you the chaotic, fun journey of creating {name} to solve {desc}.\n\n🎬 WHAT YOU'LL SEE:\n• [Developer Late Nights 1]\n• [Unfiltered Design Decisions 2]\n• [The Breakthrough Moment 3]\n\n✨ THE MISSION:\n{obj}\n\n💬 TEAM REFLECTIONS:\n• [Lessons Learned 1]\n• [What's Next 2]\n\n👇 WATCH THE BTS VLOG:\n[Link]\n\n#BehindTheScenes #Vlog #StartupLife #{name}"
+    },
+    // INSPIRATIONAL
+    {
+      id: 'yt_insp_story',
+      tone: 'inspirational',
+      label: 'Creator Story',
+      structure: "🎥 MY STORY: Why I built {name} to change {obj}\n\n✨ THE SPARK:\nEvery journey starts with a problem. For me, it was struggling with {desc}. This is the story of how {name} was born to achieve {obj}.\n\n🌅 THE CHALLENGES WE FACED:\n• [The Initial Roadblock 1]\n• [The Moment We Almost Quit 2]\n• [The Pivotal Breakthrough 3]\n\n💫 THE VISION:\n{obj}\n\n🙌 MY PROMISE TO YOU:\n• [Audience Empowerment 1]\n• [Long-term Commitment 2]\n\n👇 JOIN THE JOURNEY:\n[Link]\n\n#FounderStory #Inspiration #Entrepreneurship #{name}"
+    },
+    // EDUCATIONAL
+    {
+      id: 'yt_edu_tutorial',
+      tone: 'educational',
+      label: 'Tutorial Breakdown',
+      structure: "🎥 STEP-BY-STEP TUTORIAL: How to master {name} in 10 Minutes!\n\n📚 GETTING STARTED:\nStop wasting time on manual setup. In this tutorial, we will show you exactly how to configure {name} to solve {desc} and effortlessly achieve {obj}.\n\n🛠️ WHAT YOU WILL LEARN:\n• [Step 1: Setup & Initialization]\n• [Step 2: Core Configuration]\n• [Step 3: Advanced Optimization]\n\n🎯 THE TARGET RESULT:\n{obj}\n\n💡 PRO-TIPS FOR SUCCESS:\n• [Hidden Feature Hack 1]\n• [Common Pitfall to Avoid 2]\n\n👇 WATCH THE FULL TUTORIAL:\n[Link]\n\n#Tutorial #HowTo #Masterclass #{name}"
+    },
+    {
+      id: 'yt_edu_breakdown',
+      tone: 'educational',
+      label: 'Educational Breakdown',
+      structure: "🎥 DEEP BREAKDOWN: The Science of {obj} using {name}\n\n🧠 THE CONCEPT:\nMost creators struggle with {desc}. Today, we are breaking down the first-principles science of how {name} tackles this to deliver {obj}.\n\n🧬 KEY PRINCIPLES EXPLAINED:\n• [Scientific Principle 1]\n• [Data-Backed Insight 2]\n• [Cognitive Loop 3]\n\n📈 ACADEMIC IMPACT:\n{obj}\n\n📝 SUMMARY & ROADMAP:\n• [Key Lesson 1]\n• [Execution Tactic 2]\n\n👇 LEVEL UP YOUR KNOWLEDGE:\n[Link]\n\n#Education #ScienceOfSuccess #HowItWorks #{name}"
+    },
+    // BOLD
+    {
+      id: 'yt_bold_community',
+      tone: 'bold',
+      label: 'Community Update',
+      structure: "🎥 THE TRUTH: An Important Update for the {name} Community\n\n📢 NO BULLSHIT:\nIt's time to speak directly. We are shaking up {desc} because traditional methods are broken. This is how {name} will enforce {obj}.\n\n⚡ THE NEW PARADIGM:\n• [Bold Commitment 1]\n• [Disruptive Action 2]\n• [Direct Community Value 3]\n\n🔥 OUR UNCOMPROMISING GOAL:\n{obj}\n\n✊ JOIN THE MOVEMENT:\n• [Action Step 1]\n• [Community Stand 2]\n\n👇 WATCH THE FULL DECLARATION:\n[Link]\n\n#CommunityUpdate #BoldTalk #IndustryShift #{name}"
+    },
+    {
+      id: 'yt_bold_viral',
+      tone: 'bold',
+      label: 'Viral Hook Format',
+      structure: "🎥 DO NOT IGNORE: The Shocking Reality of {obj}!\n\n🚨 THE WAKE UP CALL:\n99% of people are completely wrong about {desc}. We are breaking the silence to show you how {name} is destroying old limits to achieve {obj}.\n\n⚡ SHOCKING REVELATIONS:\n• [Untold Industry Truth 1]\n• [The Cheat Code Feature 2]\n• [Instant Value Lever 3]\n\n💥 THE ULTIMATE OUTCOME:\n{obj}\n\n🛑 STOP WASTING TIME:\n• [Action Shift 1]\n• [Immediate Upgrade 2]\n\n👇 GET THE SECRET LINK:\n[Link]\n\n#ViralHook #MindBlown #GameChanger #{name}"
     }
   ]
 };
@@ -4399,6 +4466,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
     const [showBrandLogoSelector, setShowBrandLogoSelector] = useState(false);
     const [isPopulating, setIsPopulating] = useState<Record<string, boolean>>({});
     const manuallyEditedTemplates = useRef<Set<string>>(new Set());
+    const lastAppliedTemplateIds = useRef<Record<string, string>>({});
 
     const isReelFlow = contentType === 'reel';
     const isReelOnlyFlow = reelsOnly && isReelFlow;
@@ -4445,8 +4513,11 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
         });
         const data = await response.json();
         if (data.success) {
-          setPlatformContents(curr => ({ ...curr, [platform]: data.filledContent }));
-          return data.filledContent;
+          const cleanedContent = cleanTemplateEncodingArtifacts(data.filledContent || '');
+          console.log(`[smartPopulateTemplate] Successfully populated content for ${platform}:`, cleanedContent);
+          manuallyEditedTemplates.current.add(platform);
+          setPlatformContents(curr => ({ ...curr, [platform]: cleanedContent }));
+          return cleanedContent;
         }
       } catch (err) {
         console.error('Smart populate failed:', err);
@@ -4867,14 +4938,24 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
           let updated = false;
           const next = { ...curr };
           platforms.forEach(p => {
-            // Re-apply if not edited or manually reset? Actually, if tone changes, we should update.
             const currentToneTemplates = (PLATFORM_CONTENT_TEMPLATES[p] || []).filter(t => t.tone === contentTone);
             const template = currentToneTemplates.find(t => t.id === selectedTemplateIds[p]) || currentToneTemplates[0] || (PLATFORM_CONTENT_TEMPLATES[p] || [])[0];
             
-            if (next[p] === undefined || !manuallyEditedTemplates.current.has(p)) {
-              if (template) {
+            if (template) {
+              const lastAppliedId = lastAppliedTemplateIds.current[p];
+              if (lastAppliedId !== template.id) {
+                // Template ID changed! Reset manual edit flag for this platform.
+                manuallyEditedTemplates.current.delete(p);
+                lastAppliedTemplateIds.current[p] = template.id;
                 next[p] = applyTemplate(template.structure, campaignName, campaignDescription, objective);
                 updated = true;
+              } else if (next[p] === undefined || !manuallyEditedTemplates.current.has(p)) {
+                const applied = applyTemplate(template.structure, campaignName, campaignDescription, objective);
+                if (next[p] !== applied) {
+                  next[p] = applied;
+                  updated = true;
+                }
+                lastAppliedTemplateIds.current[p] = template.id;
               }
             }
           });
@@ -4905,7 +4986,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
         
         autoPopulate();
       }
-    }, [step, platforms, campaignName, campaignDescription, objective, isReelFlow]);
+    }, [step, platforms, campaignName, campaignDescription, objective, isReelFlow, contentTone, selectedTemplateIds]);
 
     const togglePlatform = (platform: string) => {
       setPlatforms(prev => prev.includes(platform) ? prev.filter(p => p !== platform) : [...prev, platform]);

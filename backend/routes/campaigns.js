@@ -513,21 +513,47 @@ const BrandAsset = require('../models/BrandAsset');
 const BrandIntelligenceProfile = require('../models/BrandIntelligenceProfile');
 
 // Import logo detection from Gemini
-const { detectLogoInImage } = require('../services/geminiAI');
+const { detectLogoInImage, getRelevantImage } = require('../services/geminiAI');
 const { publishCampaignToSocial } = require('../services/campaignPublisher');
 const { buildGenerationGuidelines } = require('../services/brandIntelligenceService');
 const { buildAIContext } = require('../services/aiContextBuilder');
+const { uploadLogo, uploadImageWithLogoOverlay } = require('../services/imageUploader');
+const { campaignImageQueue } = require('../services/campaignImageQueue');
 const {
   learnCampaignGeneration,
   learnCaptionGeneration,
   learnCampaignPublish
 } = require('../services/aiCampaignLearning');
 
+const BRAND_CONTEXT_CACHE_TTL_MS = Math.max(5000, Number.parseInt(process.env.BRAND_CONTEXT_CACHE_TTL_MS || '30000', 10) || 30000);
+const brandContextCache = new Map();
+
+function getCachedBrandContext(userId) {
+  const key = String(userId || '');
+  const item = brandContextCache.get(key);
+  if (!item) return null;
+  if ((Date.now() - item.savedAt) > BRAND_CONTEXT_CACHE_TTL_MS) {
+    brandContextCache.delete(key);
+    return null;
+  }
+  return item.value;
+}
+
+function setCachedBrandContext(userId, value) {
+  brandContextCache.set(String(userId || ''), { savedAt: Date.now(), value });
+  if (brandContextCache.size > 1000) {
+    const firstKey = brandContextCache.keys().next().value;
+    if (firstKey) brandContextCache.delete(firstKey);
+  }
+}
+
 async function resolveBrandIntelligenceContext(userId, businessProfile = {}) {
-  const profile = await BrandIntelligenceProfile.findOne({ userId }).lean();
-  const primaryLogoAsset =
-    (await BrandAsset.findOne({ user: userId, type: 'logo', isPrimary: true }).sort({ createdAt: -1 })) ||
-    (await BrandAsset.findOne({ user: userId, type: 'logo' }).sort({ createdAt: -1 }));
+  const cached = getCachedBrandContext(userId);
+  if (cached) return cached;
+  const [profile, primaryLogoAsset] = await Promise.all([
+    BrandIntelligenceProfile.findOne({ userId }).lean(),
+    BrandAsset.findOne({ user: userId, type: 'logo' }).sort({ isPrimary: -1, createdAt: -1 }).lean()
+  ]);
 
   const profileAssets = profile?.assets || {};
   const primaryLogoUrl = String(profileAssets.primaryLogoUrl || primaryLogoAsset?.url || '').trim();
@@ -566,13 +592,15 @@ async function resolveBrandIntelligenceContext(userId, businessProfile = {}) {
     .filter(Boolean)
     .join(', ');
 
-  return {
+  const resolved = {
     profile: profileForRules,
     guidelineBundle,
     effectiveTone,
     primaryLogoUrl,
     visualHints
   };
+  setCachedBrandContext(userId, resolved);
+  return resolved;
 }
 
 function isStrictBrandLockEnabled(brandCtx = {}) {
@@ -672,6 +700,115 @@ function releaseGenerationLock(userId, signature) {
   if (signature && lock.signature !== signature) return;
   generationLocks.delete(key);
   recentGenerationRequests.set(key, { signature: lock.signature, at: Date.now() });
+}
+
+function logPerf(scope, step, startedAt) {
+  console.log(`[${scope}] ${step} took ${Date.now() - startedAt}ms`);
+}
+
+function buildImageDescription({
+  customPrompt,
+  caption,
+  mergedBrandContext,
+  strictBrandText
+}) {
+  let imageDescription = customPrompt || caption?.substring(0, 200) || 'Professional marketing image';
+  imageDescription += `. Brand: ${mergedBrandContext.companyName || 'Brand'}, Industry: ${mergedBrandContext.industry || 'business'}.`;
+  if (strictBrandText) {
+    imageDescription += ` ${strictBrandText}`;
+  }
+  return imageDescription;
+}
+
+async function executeRegeneratePostImage({
+  userId,
+  payload = {},
+  progress = () => {},
+  log = () => {}
+}) {
+  const totalStart = Date.now();
+  progress({ progress: 10, currentStep: 'loading_context' });
+  const userStart = Date.now();
+  const user = await User.findById(userId).select('businessProfile companyName').lean();
+  logPerf('CAMPAIGN_IMAGE', 'user_fetch', userStart);
+  const bp = user?.businessProfile || {};
+
+  const {
+    postId,
+    platform,
+    caption,
+    customPrompt,
+    productLogo,
+    brandContext
+  } = payload;
+
+  const brandStart = Date.now();
+  const brandCtx = await resolveBrandIntelligenceContext(userId, bp);
+  logPerf('CAMPAIGN_IMAGE', 'brand_context_resolve', brandStart);
+  const strictBrandMode = isStrictBrandLockEnabled(brandCtx);
+  const strictBrandText = strictBrandMode ? buildStrictBrandLockText(brandCtx) : '';
+  const autoBrandContext = buildBrandContextForImages(brandCtx, {
+    companyName: bp?.companyName || user?.companyName || '',
+    industry: bp?.industry || '',
+    description: bp?.description || '',
+    targetAudience: bp?.targetAudience || '',
+    brandVoice: strictBrandMode ? brandCtx.effectiveTone : bp?.brandVoice || 'professional'
+  });
+  const mergedBrandContext = { ...(brandContext || {}), ...(autoBrandContext || {}) };
+  const imageDescription = buildImageDescription({ customPrompt, caption, mergedBrandContext, strictBrandText });
+  log(`Image prompt ready (${imageDescription.length} chars)`);
+
+  const logoUploadPromise = productLogo
+    ? (async () => {
+      const logoStart = Date.now();
+      const logoResult = await uploadLogo(productLogo, true);
+      logPerf('CAMPAIGN_IMAGE', 'logo_upload', logoStart);
+      return logoResult;
+    })()
+    : Promise.resolve(null);
+
+  progress({ progress: 45, currentStep: 'generating_image' });
+  const providerStart = Date.now();
+  let imageUrl = await getRelevantImage(
+    imageDescription,
+    mergedBrandContext.industry || 'business',
+    'awareness',
+    'Campaign',
+    platform || 'instagram',
+    mergedBrandContext
+  );
+  logPerf('CAMPAIGN_IMAGE', 'provider_generation', providerStart);
+
+  progress({ progress: 75, currentStep: 'post_processing' });
+  const logoResult = await logoUploadPromise;
+  if (productLogo && logoResult?.success && imageUrl) {
+    const overlayStart = Date.now();
+    const overlayResult = await uploadImageWithLogoOverlay(imageUrl, logoResult.publicId, {
+      position: 'south_east',
+      width: 180,
+      opacity: 95,
+      margin: 25
+    });
+    logPerf('CAMPAIGN_IMAGE', 'logo_overlay', overlayStart);
+    if (overlayResult.success) {
+      imageUrl = overlayResult.url;
+      log('Logo overlay applied');
+    }
+  }
+
+  progress({ progress: 90, currentStep: 'saving' });
+  const creditStart = Date.now();
+  const editResult = await deductCredits(userId, 'image_edit', 1, 'Regenerated post image');
+  logPerf('CAMPAIGN_IMAGE', 'credit_write', creditStart);
+
+  progress({ progress: 100, currentStep: 'completed' });
+  logPerf('CAMPAIGN_IMAGE', 'total', totalStart);
+  return {
+    success: true,
+    imageUrl,
+    postId,
+    creditsRemaining: editResult.creditsRemaining
+  };
 }
 
 async function enforceBrandProfileOnGeneratedPosts(
@@ -1066,7 +1203,16 @@ router.get('/icp-strategy', protect, async (req, res) => {
 router.post('/smart-populate-template', protect, async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id || req.user._id;
-    const { template, campaignName, campaignDescription, objective, language: languageInput } = req.body;
+    const {
+      template,
+      campaignName,
+      campaignDescription,
+      objective,
+      platform: platformInput,
+      tone: toneInput,
+      strategyLabel,
+      language: languageInput
+    } = req.body;
     
     if (!template) {
       return res.status(400).json({ success: false, message: 'Template is required' });
@@ -1078,8 +1224,10 @@ router.post('/smart-populate-template', protect, async (req, res) => {
     const strictBrandMode = isStrictBrandLockEnabled(brandCtx);
     const enforcedTone = strictBrandMode
       ? brandCtx.effectiveTone
-      : String(brandCtx?.effectiveTone || bp?.brandVoice || 'professional').toLowerCase();
+      : String(toneInput || brandCtx?.effectiveTone || bp?.brandVoice || 'professional').toLowerCase();
     const strictBrandText = strictBrandMode ? buildStrictBrandLockText(brandCtx) : '';
+    const platform = String(platformInput || 'instagram').trim().toLowerCase();
+    const strategy = String(strategyLabel || '').trim();
     const normalizeCampaignLanguage = (value = '') => {
       const normalized = String(value || '').trim().toLowerCase();
       const languageMap = {
@@ -1099,36 +1247,208 @@ router.post('/smart-populate-template', protect, async (req, res) => {
       return languageMap[normalized] || 'English';
     };
     const selectedLanguage = normalizeCampaignLanguage(languageInput);
+    const normalizeTemplateText = (raw = '') =>
+      String(raw || '')
+        .replace(/\r\n/g, '\n')
+        .replace(/ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½/g, '\u2022')
+        .replace(/�/g, '\u2022')
+        .replace(/^\s*[-*]\s+/gm, '\u2022 ')
+        .replace(/^\s*\?\?\s*/gm, '')
+        .replace(/^\s*\?\s*/gm, '')
+        .replace(/\?{2,}/g, '')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
 
-    const prompt = `You are a professional social media content editor. 
-Your task is to fill in the bracketed placeholders in a post template with high-quality, meaningful content.
+    const sanitizedTemplate = normalizeTemplateText(template);
+    const templateLines = sanitizedTemplate.split('\n');
+    const placeholderTokens = Array.from(
+      new Set(
+        (sanitizedTemplate.match(/\[([^\]]+)\]/g) || [])
+          .map((token) => token.slice(1, -1).trim())
+          .filter((token) => token && !/link|cta/i.test(token))
+      )
+    );
 
-CAMPAIGN DETAILS:
+    const sectionLabels = Array.from(
+      new Set(
+        templateLines
+          .map((line) => String(line || '').trim())
+          .filter(Boolean)
+          .filter((line) => /:\s*$/.test(line))
+          .map((line) => line.replace(/^\u2022\s*/, '').replace(/:\s*$/, '').trim())
+          .filter(Boolean)
+      )
+    );
+
+    const platformRule = (() => {
+      if (platform === 'facebook') return 'Readable storytelling style, fuller but structured copy blocks.';
+      if (platform === 'linkedin') return 'Executive corporate style with strategic and business framing.';
+      if (platform === 'twitter' || platform === 'x') return 'Short high-impact lines, concise value statements.';
+      if (platform === 'instagram') return 'Visually structured concise sections, highlight-led engagement style.';
+      if (platform === 'youtube') return 'Longer creator-style storytelling, highly engaging video narrative format, strong viewer retention hooks, structured copy with clear headers and bullet points.';
+      return 'Professional campaign copy with clear section-level readability.';
+    })();
+
+    const prompt = `You are a senior campaign copywriter.
+Generate STRICT JSON only for filling a fixed template.
+
+CAMPAIGN:
 - Name: ${campaignName || 'General'}
 - Description: ${campaignDescription || 'N/A'}
 - Objective: ${objective || 'awareness'}
-- Tone to follow: ${enforcedTone || 'professional'}
-- Output language: ${selectedLanguage}
+- Platform: ${platform}
+- Strategy: ${strategy || 'default'}
+- Tone: ${enforcedTone || 'professional'}
+- Language: ${selectedLanguage}
+- Platform style: ${platformRule}
 ${strictBrandMode ? `- ${strictBrandText}` : ''}
 ${brandCtx?.guidelineBundle?.instructions || ''}
 
-TEMPLATE TO FILL:
-${template}
+SECTIONS TO FILL:
+${sectionLabels.map((label) => `- ${label}`).join('\n')}
+
+PLACEHOLDER TOKENS TO FILL:
+${placeholderTokens.map((token) => `- ${token}`).join('\n') || '- none'}
 
 RULES:
-1. Replace every bracketed placeholder (e.g., [Key Point 1], [Tip 1], [Point], [Outcome], [Date/Time], [Location]) with REAL meaningful content based on the campaign details.
-2. If details like Date/Location are not provided, invent realistic ones (e.g., "This Friday at 10 AM", "Our Online Event Hub").
-3. DO NOT change the structure, symbols (like 🎯, •, 📸), or headings.
-4. Keep the output EXACTLY the same format as the input template, just with placeholders filled.
-5. ONLY leave "[Link]" or "[Your CTA Link]" as is.
-6. Translate/adapt all generated and existing template text to ${selectedLanguage} while preserving structure and marketing intent.
-7. If the template is already filled (few/no placeholders), still rewrite it fully into ${selectedLanguage}.
-8. ${selectedLanguage === 'English' ? 'English is allowed.' : 'Do NOT output English words unless they are brand names, product names, or hashtags.'}
-9. Return ONLY the filled content. No introduction or extra text.`;
+1) Provide meaningful, campaign-ready content for EVERY section.
+2) No placeholders like [Fun Fact 1], [Point], [Outcome] in output values.
+3) Keep language strictly ${selectedLanguage}.
+4) ${selectedLanguage === 'English' ? 'English allowed.' : 'No English words except brand/product names and hashtags.'}
+5) Provide richer details, not generic filler.
+6) Provide CTA text but DO NOT include a URL; URL placeholders remain in template.
+7) For bullet-worthy sections (highlights, benefits, pillars, deliverables, takeaways), provide 3-4 bullet items.
 
-    const filledContent = await callGemini(prompt, { temperature: 0.7, maxTokens: 1000, skipCache: true });
-    
-    res.json({ success: true, filledContent: filledContent.trim() });
+Return JSON only with this schema:
+{
+  "sectionParagraphs": { "Section Label": "2-4 sentence detailed content" },
+  "sectionBullets": { "Section Label": ["bullet 1", "bullet 2", "bullet 3"] },
+  "placeholderFills": { "Placeholder Token": "replacement text" },
+  "ctaText": "single CTA sentence"
+}`;
+
+    const aiRaw = await callGemini(prompt, { temperature: 0.65, maxTokens: 1600, skipCache: true });
+    const aiData = parseGeminiJSON(aiRaw) || {};
+    const sectionParagraphs = aiData?.sectionParagraphs && typeof aiData.sectionParagraphs === 'object' ? aiData.sectionParagraphs : {};
+    const sectionBullets = aiData?.sectionBullets && typeof aiData.sectionBullets === 'object' ? aiData.sectionBullets : {};
+    const placeholderFills = aiData?.placeholderFills && typeof aiData.placeholderFills === 'object' ? aiData.placeholderFills : {};
+    const ctaText = String(aiData?.ctaText || '').trim();
+
+    const fallbackSentence = (label = '') => {
+      const key = String(label || '').toLowerCase();
+      if (key.includes('mission')) return `Deliver a high-value campaign around ${campaignName || 'this launch'} with clear differentiation and measurable outcomes.`;
+      if (key.includes('objective') || key.includes('goal')) return `Drive ${objective || 'awareness'} through stronger positioning, platform-native messaging, and conversion-focused storytelling.`;
+      if (key.includes('impact')) return `Improve audience confidence, accelerate decision-making, and increase high-intent engagement across the funnel.`;
+      if (key.includes('summary')) return `${campaignDescription || 'A strategic initiative designed to deliver stronger adoption and market relevance.'}`;
+      if (key.includes('cta')) return ctaText || 'Take the next step and explore this solution today.';
+      return `Strengthen ${objective || 'campaign performance'} with a clearer value proposition and platform-specific execution.`;
+    };
+
+    const fallbackBullets = (label = '') => {
+      const base = [
+        `Clear value delivery aligned to ${objective || 'business goals'}`,
+        `Stronger audience relevance through platform-fit messaging`,
+        `Credible feature-to-benefit mapping for conversion intent`,
+        `Consistent brand positioning across campaign touchpoints`
+      ];
+      if (String(label || '').toLowerCase().includes('twitter') || platform === 'twitter' || platform === 'x') {
+        return base.slice(0, 3);
+      }
+      return base;
+    };
+
+    const getSectionValue = (label = '') => {
+      const keys = Object.keys(sectionParagraphs || {});
+      const match = keys.find((k) => String(k).trim().toLowerCase() === String(label).trim().toLowerCase());
+      return String((match && sectionParagraphs[match]) || '').trim() || fallbackSentence(label);
+    };
+
+    const getSectionBullets = (label = '') => {
+      const keys = Object.keys(sectionBullets || {});
+      const match = keys.find((k) => String(k).trim().toLowerCase() === String(label).trim().toLowerCase());
+      const list = Array.isArray(match ? sectionBullets[match] : null) ? sectionBullets[match] : [];
+      const normalized = list.map((item) => String(item || '').trim()).filter(Boolean);
+      return (normalized.length ? normalized : fallbackBullets(label)).slice(0, platform === 'twitter' || platform === 'x' ? 3 : 4);
+    };
+
+    const replacedTemplateLines = [];
+    for (let i = 0; i < templateLines.length; i += 1) {
+      let line = String(templateLines[i] || '');
+      if (!line.trim()) {
+        replacedTemplateLines.push('');
+        continue;
+      }
+
+      line = line.replace(/\[([^\]]+)\]/g, (full, token) => {
+        const key = String(token || '').trim();
+        if (/link|cta/i.test(key)) return full;
+        const mapKey = Object.keys(placeholderFills).find((k) => String(k).trim().toLowerCase() === key.toLowerCase());
+        const value = String((mapKey && placeholderFills[mapKey]) || '').trim();
+        return value || fallbackSentence(key);
+      });
+
+      line = line.replace(/^\s*[-*]\s+/, '\u2022 ');
+      replacedTemplateLines.push(line);
+
+      const trimmed = line.trim();
+      const isSectionLabel = /:\s*$/.test(trimmed);
+      const nextLine = String(templateLines[i + 1] || '').trim();
+      const nextIsSectionOrBlank = !nextLine || /:\s*$/.test(nextLine);
+      if (!isSectionLabel || !nextIsSectionOrBlank) continue;
+
+      const label = trimmed.replace(/^\u2022\s*/, '').replace(/:\s*$/, '').trim();
+      const labelLower = label.toLowerCase();
+      const shouldUseBullets =
+        /(highlight|benefit|pillar|deliverable|takeaway|analysis|feature|impact|value)/i.test(labelLower);
+
+      if (shouldUseBullets) {
+        const bullets = getSectionBullets(label);
+        bullets.forEach((item) => replacedTemplateLines.push(`\u2022 ${item}`));
+      } else {
+        replacedTemplateLines.push(getSectionValue(label));
+      }
+    }
+
+    let filledContent = replacedTemplateLines.join('\n');
+    filledContent = normalizeTemplateText(filledContent)
+      .replace(/^\s*[-*]\s+/gm, '\u2022 ')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+
+    // Validation checks: shape, placeholders, CTA, bullet style
+    const templateShape = templateLines
+      .map((line) => String(line || '').trim())
+      .filter(Boolean)
+      .filter((line) => /:\s*$/.test(line) || /\[(?:your\s+cta\s+link|link)\]/i.test(line))
+      .map((line) => line.replace(/^\u2022\s*/, '').replace(/\s+/g, ' ').toLowerCase());
+    const outputShape = filledContent
+      .split('\n')
+      .map((line) => String(line || '').trim())
+      .filter(Boolean)
+      .filter((line) => /:\s*$/.test(line) || /\[(?:your\s+cta\s+link|link)\]/i.test(line))
+      .map((line) => line.replace(/^\u2022\s*/, '').replace(/\s+/g, ' ').toLowerCase());
+
+    const shapeOk = templateShape.every((token, idx) => outputShape[idx] === token);
+    const unresolvedPlaceholders = (filledContent.match(/\[([^\]]+)\]/g) || [])
+      .map((token) => token.slice(1, -1).trim())
+      .filter((token) => !/link|cta/i.test(token));
+    const hasCtaBlock = /\[(?:your\s+cta\s+link|link)\]/i.test(sanitizedTemplate)
+      ? /\[(?:your\s+cta\s+link|link)\]/i.test(filledContent)
+      : true;
+    const bulletStyleOk = !/^\s*[-*]\s+/m.test(filledContent) && !/\?{2,}/.test(filledContent);
+
+    const validation = {
+      shapeOk,
+      unresolvedPlaceholders,
+      hasCtaBlock,
+      bulletStyleOk
+    };
+
+    res.json({
+      success: true,
+      filledContent,
+      validation
+    });
   } catch (error) {
     console.error('Smart populate error:', error);
     res.status(500).json({ success: false, message: 'Failed to populate template' });
@@ -1397,7 +1717,67 @@ Return ONLY valid JSON (no markdown, no backticks):
   ]
 }`;
 
-    // Helper to validate captains against template structure markers
+    const normalizeTemplateText = (raw = '') => {
+      return String(raw || '')
+        .replace(/\r\n/g, '\n')
+        .replace(/ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¿Ãƒâ€šÃ‚Â½/g, '\u2022')
+        .replace(/\uFFFD/g, '\u2022')
+        .replace(/^\s*[-*]\s+/gm, '\u2022 ')
+        .replace(/^\s*\?\?\s*/gm, '')
+        .replace(/^\s*\?\s*/gm, '')
+        .replace(/\?{2,}/g, '')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+    };
+
+    const normalizeCaptionText = (raw = '') => {
+      return normalizeTemplateText(raw)
+        .replace(/[ \t]+/g, ' ')
+        .replace(/[ \t]+\n/g, '\n')
+        .trim();
+    };
+
+    const templateMarkersFromText = (templateText = '') => {
+      return String(templateText || '')
+        .split('\n')
+        .map((line) => String(line || '').trim())
+        .filter(Boolean)
+        .map((line) => {
+          const cIdx = line.indexOf(':');
+          return cIdx !== -1 ? line.substring(0, cIdx + 1).trim() : line.trim();
+        })
+        .filter((m) => m.length > 2);
+    };
+
+    const extractTemplateShape = (templateText = '') => {
+      return String(templateText || '')
+        .split('\n')
+        .map((line) => String(line || '').trim())
+        .filter(Boolean)
+        .filter((line) => line.includes(':') || /^\[.*link.*\]$/i.test(line) || /^\[.*cta.*\]$/i.test(line))
+        .map((line) => {
+          const normalized = line.replace(/^[-*]\s+/, '• ').replace(/\s+/g, ' ').trim();
+          const cIdx = normalized.indexOf(':');
+          return cIdx !== -1 ? normalized.substring(0, cIdx + 1).toLowerCase() : normalized.toLowerCase();
+        });
+    };
+
+    const matchesTemplateShape = (caption = '', templateText = '') => {
+      const expected = extractTemplateShape(templateText);
+      if (!expected.length) return { ok: true, reason: '' };
+      const actual = extractTemplateShape(caption);
+      if (actual.length < expected.length) {
+        return { ok: false, reason: `shape too short: expected ${expected.length}, got ${actual.length}` };
+      }
+      for (let i = 0; i < expected.length; i += 1) {
+        if (actual[i] !== expected[i]) {
+          return { ok: false, reason: `shape mismatch at line ${i + 1}: expected "${expected[i]}", got "${actual[i] || ''}"` };
+        }
+      }
+      return { ok: true, reason: '' };
+    };
+
+    // Helper to validate captions against template structure markers
     const validateCaptionsSchema = (posts, keyMessages) => {
       if (!keyMessages) return { isValid: true };
       
@@ -1407,30 +1787,47 @@ Return ONLY valid JSON (no markdown, no backticks):
         const match = block.match(/\[([A-Z]+) CONTENT FORMAT\]\n([\s\S]*)/);
         if (match) {
           const platform = match[1].toLowerCase();
-          const lines = match[2].split('\n').filter(l => l.trim().length > 0);
-          const mkrs = lines.map(l => {
-            const cIdx = l.indexOf(':');
-            return cIdx !== -1 ? l.substring(0, cIdx + 1).trim() : l.trim();
-          }).filter(m => m.length > 2);
-          pTemplates[platform] = mkrs;
+          const templateText = normalizeTemplateText(match[2] || '');
+          const mkrs = templateMarkersFromText(templateText);
+          pTemplates[platform] = { mkrs, templateText };
         }
       });
 
       const errs = [];
       posts.forEach((post, i) => {
         const platform = post.platform?.toLowerCase();
-        const mkrs = pTemplates[platform];
+        const template = pTemplates[platform];
+        const mkrs = template?.mkrs || [];
+        const templateText = template?.templateText || '';
+        const normalizedCaption = normalizeCaptionText(post.caption || '');
         
         if (mkrs) {
-          const miss = mkrs.filter(m => !post.caption.includes(m));
+          const miss = mkrs.filter(m => !normalizedCaption.toLowerCase().includes(String(m).toLowerCase()));
           if (miss.length > 0) {
             errs.push(`Post ${i + 1} (${post.platform}) is missing markers: ${miss.join(', ')}`);
           }
         }
 
+        if (templateText) {
+          const shape = matchesTemplateShape(normalizedCaption, templateText);
+          if (!shape.ok) {
+            errs.push(`Post ${i + 1} (${post.platform}) template shape invalid: ${shape.reason}`);
+          }
+
+          const templateNeedsCTA = /\[(?:your\s+cta\s+link|link)\]/i.test(templateText);
+          const captionHasCTA = /\[(?:your\s+cta\s+link|link)\]/i.test(normalizedCaption);
+          if (templateNeedsCTA && !captionHasCTA) {
+            errs.push(`Post ${i + 1} (${post.platform}) missing CTA placeholder block`);
+          }
+        }
+
+        if (/^\s*[-*]\s+/m.test(normalizedCaption) || /\?{2,}/.test(normalizedCaption)) {
+          errs.push(`Post ${i + 1} (${post.platform}) has non-standard bullets or corrupted markers`);
+        }
+
         // CRITICAL CHECK: Detect if any placeholders from the template were left unfilled
         const placeholderRegex = /\[[^\]]*[A-Z0-9][^\]]*\]/g;
-        const foundPlaceholders = post.caption.match(placeholderRegex);
+        const foundPlaceholders = normalizedCaption.match(placeholderRegex);
         
         if (foundPlaceholders && foundPlaceholders.length > 0) {
           // Filter out valid [Link] or [Your CTA Link] placeholders
@@ -1503,14 +1900,15 @@ Return ONLY valid JSON (no markdown, no backticks):
         const match = block.match(/\[([A-Z]+) CONTENT FORMAT\]\n([\s\S]*)/);
         if (!match) return;
         const platform = match[1].toLowerCase();
-        const lines = match[2].split('\n').filter((l) => l.trim().length > 0);
+        const templateText = normalizeTemplateText(match[2] || '');
+        const lines = templateText.split('\n').filter((l) => l.trim().length > 0);
         const markers = lines
           .map((l) => {
             const cIdx = l.indexOf(':');
             return cIdx !== -1 ? l.substring(0, cIdx + 1).trim() : l.trim();
           })
           .filter((m) => m.length > 2);
-        templates[platform] = markers;
+        templates[platform] = { markers, templateText };
       });
       return templates;
     })();
@@ -1531,8 +1929,8 @@ Return ONLY valid JSON (no markdown, no backticks):
       return cleaned.split(' ').filter(Boolean).slice(0, 5).join(' ');
     };
 
-    const cleanupCaption = (caption, markers = []) => {
-      let text = String(caption || '').replace(/\r\n/g, '\n').trim();
+    const cleanupCaption = (caption, markers = [], templateText = '') => {
+      let text = normalizeCaptionText(caption || '');
       if (!text) return text;
 
       // Remove unfilled placeholders like [Key Point], keep [Link]/[Your CTA Link].
@@ -1565,18 +1963,98 @@ Return ONLY valid JSON (no markdown, no backticks):
         }
       }
 
+      if (templateText) {
+        const sourceBits = text
+          .split(/\n|[.!?]\s+/)
+          .map((part) => String(part || '').trim())
+          .filter((part) => part.length > 16)
+          .filter((part) => !/^\s*#/.test(part));
+        let sourceIndex = 0;
+        const nextSource = () => {
+          const value = sourceBits[sourceIndex];
+          if (value) {
+            sourceIndex += 1;
+            return value.replace(/\s+/g, ' ').trim();
+          }
+          return '';
+        };
+        const richFallback = (token) => {
+          const key = String(token || '').toLowerCase();
+          if (key.includes('impact') || key.includes('outcome')) return `Drives measurable gains in ${objective || 'campaign performance'} and improves conversion quality.`;
+          if (key.includes('summary') || key.includes('description')) return `${campaignDescription || 'Built for performance-led growth with premium positioning and practical value.'}`;
+          if (key.includes('goal') || key.includes('objective')) return `${objective || 'awareness'} with stronger audience intent and retention.`;
+          if (key.includes('pillar')) return `Execution focus, audience relevance, and consistent brand delivery across each touchpoint.`;
+          if (key.includes('highlight') || key.includes('point')) return `Clear positioning, faster adoption, and better user confidence from first interaction.`;
+          return `Built to improve ${objective || 'results'} with a clear, practical value proposition.`;
+        };
+
+        const templateLines = templateText.split('\n');
+        const rebuiltLines = [];
+        for (let lineIndex = 0; lineIndex < templateLines.length; lineIndex += 1) {
+          const rawLine = templateLines[lineIndex];
+          let line = String(rawLine || '');
+          if (!line.trim()) {
+            rebuiltLines.push('');
+            continue;
+          }
+          line = line.replace(/^[-*]\s+/, '\u2022 ');
+          line = line
+            .replace(/{name}/g, campaignName || 'Campaign')
+            .replace(/{desc}/g, campaignDescription || 'A high-impact initiative designed for performance and relevance.')
+            .replace(/{obj}/g, objective || 'awareness');
+
+          line = line.replace(/\[([^\]]+)\]/g, (full, inner) => {
+            const token = String(inner || '').trim();
+            const tokenLower = token.toLowerCase();
+            if (tokenLower.includes('link') || tokenLower.includes('cta')) return full;
+            return nextSource() || richFallback(token);
+          });
+          rebuiltLines.push(line);
+
+          const normalizedLine = line.trim().toLowerCase();
+          const isSectionLabel = /:\s*$/.test(line.trim());
+          const nextLine = String(templateLines[lineIndex + 1] || '').trim();
+          const nextIsAnotherSection = !nextLine || /:\s*$/.test(nextLine);
+          if (isSectionLabel && nextIsAnotherSection) {
+            const label = normalizedLine.replace(/:\s*$/, '');
+            if (label.includes('benefit') || label.includes('highlight') || label.includes('pillar') || label.includes('deliverable')) {
+              rebuiltLines.push(`\u2022 ${nextSource() || richFallback(label)}`);
+              rebuiltLines.push(`\u2022 ${nextSource() || richFallback(label)}`);
+              rebuiltLines.push(`\u2022 ${nextSource() || richFallback(label)}`);
+            } else if (label.includes('cta')) {
+              rebuiltLines.push(`${nextSource() || 'Learn more and take action today.'}`);
+            } else {
+              rebuiltLines.push(`${nextSource() || richFallback(label)}`);
+            }
+          }
+        }
+
+        const rebuilt = rebuiltLines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+
+        if (rebuilt) {
+          text = rebuilt;
+        }
+      }
+
+      text = text
+        .replace(/^\s*[-*]\s+/gm, '\u2022 ')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+
       return text;
     };
 
     parsed.posts = (Array.isArray(parsed.posts) ? parsed.posts : []).map((post, idx) => {
       const schedule = scheduleDates[idx] || {};
       const platform = String(post?.platform || schedule.platform || '').trim().toLowerCase();
-      const markers = platformTemplates[platform] || [];
+      const templateMeta = platformTemplates[platform] || {};
+      const markers = Array.isArray(templateMeta.markers) ? templateMeta.markers : [];
+      const templateText = String(templateMeta.templateText || '');
       const hashtags = normalizeHashtags(post?.hashtags);
       return {
         ...post,
         platform,
-        caption: cleanupCaption(post?.caption, markers),
+        caption: cleanupCaption(post?.caption, markers, templateText),
         hashtags: hashtags.length ? hashtags : ['#marketing'],
         contentTheme: String(post?.contentTheme || 'promotional').trim(),
         imageDescription: String(post?.imageDescription || '').trim(),
@@ -3706,13 +4184,9 @@ Return ONLY valid JSON (no markdown, no code blocks):
       'https://images.unsplash.com/photo-1543286386-713bdd548da4?w=800&h=600&fit=crop',
     ];
 
-    const postsWithImages = [];
     const postsToProcess = parsedPosts.slice(0, Math.max(totalPosts, 1));
-    
-    for (let index = 0; index < postsToProcess.length; index++) {
-      const post = postsToProcess[index];
+    const postsWithImages = await Promise.all(postsToProcess.map(async (post, index) => {
       const schedule = scheduleDates[index] || { date: startDate, time: '10:00' };
-
       const scheduleInput = `${schedule.date}T${schedule.time}:00`;
       let validated;
       try {
@@ -3743,9 +4217,9 @@ Return ONLY valid JSON (no markdown, no code blocks):
           }
         };
       }
-      const normalizedSchedule = validated.post.scheduleDate ? new Date(validated.post.scheduleDate) : null;
 
-      postsWithImages.push({
+      const normalizedSchedule = validated.post.scheduleDate ? new Date(validated.post.scheduleDate) : null;
+      return {
         id: `post-${index + 1}`,
         platform: validated.post.platform,
         caption: validated.post.caption,
@@ -3757,8 +4231,8 @@ Return ONLY valid JSON (no markdown, no code blocks):
         suggestedTime: normalizedSchedule ? normalizedSchedule.toISOString().slice(11, 16) : schedule.time,
         contentTheme: post.contentTheme || 'promotional',
         callToAction: post.callToAction || content?.callToAction || 'Learn more'
-      });
-    }
+      };
+    }));
 
     console.log(`✅ Generated ${postsWithImages.length} text-only posts for campaign: ${campaignName}`);
 
@@ -3827,94 +4301,70 @@ Return ONLY valid JSON (no markdown, no code blocks):
 router.post('/regenerate-post-image', protect, checkTrial, requireCredits('image_edit'), async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id || req.user._id;
-    const user = await User.findById(userId).select('businessProfile companyName');
-    const bp = user?.businessProfile || {};
-    const { 
-      postId,
-      platform,
-      caption,
-      customPrompt,
-      referenceImageUrl,
-      productLogo, // logo for overlay
-      brandContext
-    } = req.body;
+    const asyncMode = req.body?.async === true || String(req.query?.async || '').toLowerCase() === 'true';
 
-    const brandCtx = await resolveBrandIntelligenceContext(userId, bp);
-    const strictBrandMode = isStrictBrandLockEnabled(brandCtx);
-    const strictBrandText = strictBrandMode ? buildStrictBrandLockText(brandCtx) : '';
-    const autoBrandContext = buildBrandContextForImages(brandCtx, {
-      companyName: bp?.companyName || user?.companyName || '',
-      industry: bp?.industry || '',
-      description: bp?.description || '',
-      targetAudience: bp?.targetAudience || '',
-      brandVoice: strictBrandMode ? brandCtx.effectiveTone : bp?.brandVoice || 'professional'
-    });
-    const mergedBrandContext = { ...(brandContext || {}), ...(autoBrandContext || {}) };
+    if (asyncMode) {
+      const queued = campaignImageQueue.enqueue({
+        userId,
+        payload: req.body || {},
+        handler: async ({ update, log }) => executeRegeneratePostImage({
+          userId,
+          payload: req.body || {},
+          progress: (patch) => update(patch),
+          log
+        })
+      });
 
-    console.log(`🎨 Regenerating image for post ${postId || 'new'}...`);
-
-    const { getRelevantImage } = require('../services/geminiAI');
-    const { uploadLogo, uploadImageWithLogoOverlay } = require('../services/imageUploader');
-
-    // Build image description
-    let imageDescription = customPrompt || caption?.substring(0, 200) || 'Professional marketing image';
-    imageDescription += `. Brand: ${mergedBrandContext.companyName || 'Brand'}, Industry: ${mergedBrandContext.industry || 'business'}.`;
-    if (strictBrandText) {
-      imageDescription += ` ${strictBrandText}`;
+      return res.status(202).json({
+        success: true,
+        async: true,
+        message: 'Campaign image regeneration queued',
+        jobId: queued.jobId,
+        status: queued.status,
+        progress: queued.progress,
+        currentStep: queued.currentStep
+      });
     }
 
-    console.log('🖼️ Image prompt:', imageDescription.substring(0, 100) + '...');
-
-    // Generate the image
-    let imageUrl = await getRelevantImage(
-      imageDescription,
-      mergedBrandContext.industry || 'business',
-      'awareness',
-      'Campaign',
-      platform || 'instagram',
-      mergedBrandContext
-    );
-
-    // If logo is provided, overlay it
-    if (productLogo && imageUrl) {
-      console.log('🏷️ Overlaying logo on regenerated image...');
-      const logoResult = await uploadLogo(productLogo, true); // true = remove background
-      if (logoResult.success) {
-        const overlayResult = await uploadImageWithLogoOverlay(imageUrl, logoResult.publicId, {
-          position: 'south_east',
-          width: 180,
-          opacity: 95,
-          margin: 25
-        });
-        if (overlayResult.success) {
-          imageUrl = overlayResult.url;
-          console.log('✅ Logo overlay applied');
-        }
-      }
-    }
-
-    console.log('✅ Image regenerated successfully');
-
-    // Deduct credits for image edit/regenerate
-    const editResult = await deductCredits(userId, 'image_edit', 1, 'Regenerated post image');
-
-    res.json({
-      success: true,
-      imageUrl,
-      postId,
-      creditsRemaining: editResult.creditsRemaining
+    const result = await executeRegeneratePostImage({
+      userId,
+      payload: req.body || {}
     });
-
+    return res.json(result);
   } catch (error) {
     console.error('Regenerate post image error:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Failed to regenerate image', 
-      error: error.message 
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to regenerate image',
+      error: error.message
     });
   }
 });
 
+router.get('/image-jobs/:jobId', protect, async (req, res) => {
+  try {
+    const userId = req.user.userId || req.user.id || req.user._id;
+    const job = campaignImageQueue.getJob(req.params.jobId, userId);
+    if (!job) {
+      return res.status(404).json({
+        success: false,
+        message: 'Job not found'
+      });
+    }
+
+    return res.json({
+      success: true,
+      ...job
+    });
+  } catch (error) {
+    console.error('Get campaign image job error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch image job',
+      error: error.message
+    });
+  }
+});
 // ============================================
 // TEMPLATE POSTER GENERATION (Canvas + AI Fallback)
 // ============================================
@@ -4823,3 +5273,7 @@ router.post('/template-poster/batch', protect, checkTrial, requireCredits('image
 });
 
 module.exports = router;
+
+
+
+

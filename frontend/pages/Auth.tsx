@@ -23,6 +23,10 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
   const [showFpPassword, setShowFpPassword] = useState(false);
   const [firstName, setFirstName] = useState('');
   const [companyName, setCompanyName] = useState('');
+  const [website, setWebsite] = useState('');
+  const [brandPrimaryColor, setBrandPrimaryColor] = useState('#ffcc29');
+  const [brandSecondaryColor, setBrandSecondaryColor] = useState('#e6b825');
+  const [detectingBrandColors, setDetectingBrandColors] = useState(false);
 
   // OTP Verification State
   const [showOtpScreen, setShowOtpScreen] = useState(false);
@@ -60,6 +64,7 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
   }, [password]);
 
   const isPasswordValid = Object.values(pwdCriteria).every(Boolean);
+  const brandButtonTextColor = getReadableTextColor(brandPrimaryColor);
 
   // Resend cooldown timer
   useEffect(() => {
@@ -107,7 +112,8 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
           email,
           password,
           firstName,
-          companyName
+          companyName,
+          website
         });
       }
 
@@ -138,6 +144,25 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
       setError(err.message || 'An error occurred during authentication.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const detectSignupBrandColors = async () => {
+    if (!website || website.trim().length < 4) return;
+    setDetectingBrandColors(true);
+    setError(null);
+    try {
+      const response = await apiService.getSignupBrandColors(website.trim());
+      if (response?.primaryColor) {
+        setBrandPrimaryColor(response.primaryColor);
+      }
+      if (response?.secondaryColor) {
+        setBrandSecondaryColor(response.secondaryColor);
+      }
+    } catch (err: any) {
+      setError(err.message || 'Could not detect website brand colors.');
+    } finally {
+      setDetectingBrandColors(false);
     }
   };
 
@@ -644,7 +669,12 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
         }`}>
 
         {/* Header */}
-        <div className="bg-gradient-to-r from-[#ffcc29] to-[#e6b825] p-8 text-center">
+        <div
+          className="p-8 text-center"
+          style={{
+            backgroundImage: `linear-gradient(to right, ${brandPrimaryColor}, ${brandSecondaryColor})`
+          }}
+        >
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[#070A12]/20 mb-4 backdrop-blur-sm">
             <img src="/assets/logo.png" alt="Nebulaa Gravity" className="w-12 h-12" />
           </div>
@@ -696,6 +726,34 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
                     onChange={(e) => setCompanyName(e.target.value)}
                     placeholder="Acme Inc."
                   />
+                </div>
+                <div>
+                  <label className={`block text-xs font-bold uppercase mb-1 ${theme === 'dark' ? 'text-[#ededed]/70' : 'text-gray-600'}`}>Company Website</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      className={`flex-1 px-4 py-2 border rounded-lg focus:ring-2 outline-none transition-all ${theme === 'dark'
+                          ? 'bg-[#070A12] border-[#ffcc29]/30 focus:ring-[#ffcc29]/50 focus:border-[#ffcc29] text-[#ededed] placeholder-[#ededed]/40'
+                          : 'bg-gray-50 border-gray-300 focus:ring-[#ffcc29]/50 focus:border-[#ffcc29] text-gray-900 placeholder-gray-400'
+                        }`}
+                      value={website}
+                      onChange={(e) => setWebsite(e.target.value)}
+                      onBlur={detectSignupBrandColors}
+                      placeholder="acme.com"
+                    />
+                    <button
+                      type="button"
+                      onClick={detectSignupBrandColors}
+                      disabled={!website || detectingBrandColors}
+                      className="px-3 py-2 rounded-lg font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                      style={{
+                        backgroundColor: brandPrimaryColor,
+                        color: brandButtonTextColor
+                      }}
+                    >
+                      {detectingBrandColors ? 'Detecting...' : 'Detect'}
+                    </button>
+                  </div>
                 </div>
               </>
             )}
@@ -773,7 +831,11 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
             <button
               type="submit"
               disabled={loading || (!isLogin && !isPasswordValid)}
-              className="w-full bg-[#ffcc29] hover:bg-[#e6b825] text-[#070A12] font-bold py-3 rounded-lg transition-colors mt-6 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full font-bold py-3 rounded-lg transition-colors mt-6 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{
+                backgroundColor: brandPrimaryColor,
+                color: brandButtonTextColor
+              }}
             >
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}
               {isLogin ? 'Sign In' : 'Create Account'}
@@ -803,5 +865,15 @@ const CriteriaItem: React.FC<{ met: boolean; label: string; theme?: string }> = 
     <span>{label}</span>
   </li>
 );
+
+function getReadableTextColor(hexColor: string): string {
+  const cleaned = String(hexColor || '').replace('#', '');
+  if (!/^[0-9A-Fa-f]{6}$/.test(cleaned)) return '#070A12';
+  const r = parseInt(cleaned.slice(0, 2), 16);
+  const g = parseInt(cleaned.slice(2, 4), 16);
+  const b = parseInt(cleaned.slice(4, 6), 16);
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.62 ? '#070A12' : '#FFFFFF';
+}
 
 export default Auth;

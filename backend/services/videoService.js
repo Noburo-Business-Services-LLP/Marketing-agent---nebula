@@ -124,12 +124,31 @@ async function retry(label, fn, maxRetries = 2) {
       return await fn(attempt);
     } catch (error) {
       lastError = error;
+      if (Number(error?.status) === 403) {
+        break;
+      }
       if (attempt < maxRetries) {
         await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
       }
     }
   }
   throw lastError || new Error(`${label} failed`);
+}
+
+function mapFalError(error, model) {
+  const status = Number(error?.status || 0);
+  const message = String(error?.message || '').trim();
+  if (status === 403 || /^forbidden$/i.test(message)) {
+    return new Error(
+      `Fal.ai access denied (403) for model "${model}". ` +
+      `Your Fal.ai payment/subscription may be incomplete or inactive. ` +
+      `Update \`FAL_KEY\` with a key that has access to this model, or set \`FAL_IMAGE_TO_VIDEO_MODEL\` to a model your key can use.`
+    );
+  }
+  if (status === 401 || /^unauthorized$/i.test(message)) {
+    return new Error('Fal.ai authentication failed (401). Check `FAL_KEY` in backend/.env.');
+  }
+  return error;
 }
 
 async function generateVideoClip(scene = {}) {
@@ -170,11 +189,16 @@ async function generateVideoClip(scene = {}) {
     input.image_url = imageUrl;
   }
 
-  const result = await retry(
-    `Fal.ai video clip for ${scene.sceneId || scene.id || 'scene'}`,
-    () => fal.subscribe(model, { input }),
-    2
-  );
+  let result;
+  try {
+    result = await retry(
+      `Fal.ai video clip for ${scene.sceneId || scene.id || 'scene'}`,
+      () => fal.subscribe(model, { input }),
+      2
+    );
+  } catch (error) {
+    throw mapFalError(error, model);
+  }
 
   const videoUrl = extractVideoUrl(result);
   return {

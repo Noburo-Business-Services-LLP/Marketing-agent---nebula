@@ -5,6 +5,37 @@ const AIContentPerformance = require('../models/AIContentPerformance');
 const BrandIntelligenceProfile = require('../models/BrandIntelligenceProfile');
 const { resolveOrganizationId, uniqueStrings, syncBrandMemoryFromProfile } = require('./aiMemoryService');
 
+const AI_CONTEXT_CACHE_TTL_MS = Math.max(5000, Number.parseInt(process.env.AI_CONTEXT_CACHE_TTL_MS || '30000', 10) || 30000);
+const aiContextCache = new Map();
+
+function contextCacheKey({ userId, organizationId, platform, category, limit }) {
+  return [
+    String(userId || ''),
+    String(organizationId || ''),
+    String(platform || ''),
+    String(category || ''),
+    String(limit || '')
+  ].join('::');
+}
+
+function getCachedContext(key) {
+  const item = aiContextCache.get(key);
+  if (!item) return null;
+  if ((Date.now() - item.savedAt) > AI_CONTEXT_CACHE_TTL_MS) {
+    aiContextCache.delete(key);
+    return null;
+  }
+  return item.value;
+}
+
+function setCachedContext(key, value) {
+  aiContextCache.set(key, { savedAt: Date.now(), value });
+  if (aiContextCache.size > 500) {
+    const firstKey = aiContextCache.keys().next().value;
+    if (firstKey) aiContextCache.delete(firstKey);
+  }
+}
+
 function topCounts(items = [], max = 12) {
   const counts = new Map();
   items.flat().filter(Boolean).forEach((item) => {
@@ -36,6 +67,11 @@ async function buildAIContext({ userId, user = null, organizationId = null, plat
   }
 
   const orgId = organizationId || resolveOrganizationId({ user, userId });
+  const categoryName = String(category || productCategoryFrom({ product })).trim();
+  const cacheKey = contextCacheKey({ userId, organizationId: orgId, platform, category: categoryName, limit });
+  const cached = getCachedContext(cacheKey);
+  if (cached) return cached;
+
   const brandProfile = await BrandIntelligenceProfile.findOne({ userId }).lean();
   const businessProfile = user?.businessProfile || {};
   const brandMemory = await syncBrandMemoryFromProfile({
@@ -45,7 +81,6 @@ async function buildAIContext({ userId, user = null, organizationId = null, plat
     businessProfile
   }) || await AIBrandMemory.findOne({ organizationId: orgId, userId }).lean();
 
-  const categoryName = String(category || productCategoryFrom({ product })).trim();
   const platformFilter = platform ? { $or: [{ platform }, { platforms: platform }] } : {};
 
   const [campaigns, videos, winners] = await Promise.all([
@@ -187,6 +222,7 @@ async function buildAIContext({ userId, user = null, organizationId = null, plat
     reusablePromptText: context.reusablePromptText
   });
 
+  setCachedContext(cacheKey, context);
   return context;
 }
 

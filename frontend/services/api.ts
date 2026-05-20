@@ -287,7 +287,7 @@ export const apiService = {
   // REAL AUTHENTICATION ENDPOINTS
   // ============================================
 
-  register: async (data: { email: string; password: string; firstName: string; companyName?: string }): Promise<AuthResponse & { requiresVerification?: boolean }> => {
+  register: async (data: { email: string; password: string; firstName: string; companyName?: string; website?: string }): Promise<AuthResponse & { requiresVerification?: boolean }> => {
     const response = await apiCall<{ success: boolean; message: string; token: string; user: User; requiresVerification?: boolean }>(
       '/auth/signup',
       { method: 'POST', body: JSON.stringify(data) }
@@ -2680,6 +2680,19 @@ export const apiService = {
       throw new Error(data.error || 'Failed to upload file');
     }
     return data;
+  },
+
+  getSignupBrandColors: async (website: string): Promise<{
+    success: boolean;
+    primaryColor: string;
+    secondaryColor: string;
+    source: string;
+    confidence: number;
+  }> => {
+    return apiCall('/auth/signup-brand-colors', {
+      method: 'POST',
+      body: JSON.stringify({ website })
+    });
   },
 
   previewLeadsFile: async (file: File): Promise<any> => {
