@@ -24,19 +24,22 @@ const allowedOrigins = [
   'http://127.0.0.1:5173',
   'https://nebulaa.ai',
   'https://www.nebulaa.ai',
-  'https://payment.nebulaa.ai',
-  'https://www.payment.nebulaa.ai',
+  'https://payments.nebulaa.ai',
+  'https://www.payments.nebulaa.ai',
 ];
 
-app.use(cors({
+const corsMiddleware = cors({
   origin(origin, callback) {
     if (!origin) return callback(null, true);
     if (allowedOrigins.includes(origin)) return callback(null, true);
+    if (/\.onrender\.com$/.test(new URL(origin).hostname)) return callback(null, true);
     console.warn(`CORS blocked: ${origin}`);
     callback(new Error('Not allowed by CORS'));
   },
   credentials: true,
-}));
+});
+
+app.use('/api', corsMiddleware);
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
