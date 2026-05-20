@@ -1,5 +1,5 @@
 {
-  "name": "copy-of-nebulaa-ai---marketing-agent",
+  "name": "nebulaa-payment-frontend",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -9,12 +9,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "jspdf": "^4.1.0",
     "lucide-react": "^0.560.0",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
-    "react-router-dom": "^7.10.1",
-    "recharts": "^3.5.1"
+    "react-router-dom": "^7.10.1"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
