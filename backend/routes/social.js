@@ -17,6 +17,16 @@ const {
   deleteAyrshareProfile
 } = require('../services/socialMediaAPI');
 const { publishSocialPostWithSafetyWrapper } = require('../services/instagram-fix');
+const SocialInboxConversation = require('../models/SocialInboxConversation');
+const {
+  normalizePlatform,
+  analyzeEngagement,
+  normalizeWebhookPayload,
+  ingestEvent,
+  createOutboundReply,
+  toConversationDTO,
+  toMessageDTO
+} = require('../services/socialInboxService');
 const {
   normalizePlatforms,
   normalizeScheduleDate,
@@ -127,7 +137,7 @@ const PINTEREST_SCOPES = [
   'user_accounts:read'
 ].join(',');
 
-// Store state tokens temporarily (in production, use Redis or similar)
+// Store state tokens temporarily. For durable production state, use a MongoDB TTL collection.
 const pendingOAuthStates = new Map();
 
 // Helper to clean old states
@@ -190,9 +200,256 @@ const AYRSHARE_PLATFORM_MAP = {
   'youtube': 'youtube'
 };
 
+const INBOX_SUPPORTED_PLATFORMS = ['Instagram', 'Facebook', 'LinkedIn', 'X', 'YouTube'];
+
+function normalizeDisplayPlatform(platform = '') {
+  const value = String(platform).toLowerCase();
+  if (value === 'twitter') return 'X';
+  if (value === 'x') return 'X';
+  if (value === 'youtube') return 'YouTube';
+  if (value === 'linkedin') return 'LinkedIn';
+  if (value === 'facebook') return 'Facebook';
+  if (value === 'instagram') return 'Instagram';
+  return platform;
+}
+
+function getConnectedInboxPlatforms(user) {
+  const directPlatforms = (user.connectedSocials || [])
+    .map(social => normalizeDisplayPlatform(social.platform))
+    .filter(platform => INBOX_SUPPORTED_PLATFORMS.includes(platform));
+
+  const ayrsharePlatforms = (user.ayrshare?.activeSocialAccounts || [])
+    .map(platform => normalizeDisplayPlatform(platform))
+    .filter(platform => INBOX_SUPPORTED_PLATFORMS.includes(platform));
+
+  return Array.from(new Set([...directPlatforms, ...ayrsharePlatforms]));
+}
+
 // ============================================
 // Universal Platform Auth Endpoint
 // ============================================
+
+/**
+ * GET /api/social/inbox/summary
+ * Returns social inbox readiness, connected platform count, unread count,
+ * sync health, webhook registration state, and AI engagement capabilities.
+ */
+router.get('/inbox/summary', protect, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const connectedPlatforms = getConnectedInboxPlatforms(user);
+    const connectedPlatformCount = connectedPlatforms.length;
+    const missingPlatforms = INBOX_SUPPORTED_PLATFORMS.filter(platform => !connectedPlatforms.includes(platform));
+    const webhookRegistered = connectedPlatformCount > 0 && Boolean(user.ayrshare?.profileKey || user.connectedSocials?.some(s => s.accessToken));
+    const lastSyncAt = user.ayrshare?.lastCheckedAt || user.updatedAt || null;
+    const unreadMessageCount = await SocialInboxConversation.countDocuments({
+      userId: user._id,
+      status: 'unread'
+    });
+    const latestConversation = await SocialInboxConversation.findOne({ userId: user._id })
+      .sort({ lastSyncedAt: -1, updatedAt: -1 })
+      .select('lastSyncedAt webhookRegistered')
+      .lean();
+
+    res.json({
+      success: true,
+      connectedPlatforms,
+      connectedPlatformCount,
+      unreadMessageCount,
+      inboxEnabled: connectedPlatformCount > 0,
+      inboxStatus: connectedPlatformCount > 0 ? (webhookRegistered ? 'active' : 'needs_setup') : 'disabled',
+      syncStatus: {
+        status: connectedPlatformCount > 0 ? (latestConversation?.lastSyncedAt ? 'synced' : 'pending') : 'not_started',
+        lastSyncAt: latestConversation?.lastSyncedAt || lastSyncAt,
+        nextSyncAt: connectedPlatformCount > 0 ? new Date(Date.now() + 15 * 60 * 1000) : null
+      },
+      webhookStatus: {
+        registered: webhookRegistered,
+        activePlatforms: webhookRegistered ? connectedPlatforms : [],
+        missingPlatforms
+      },
+      aiEngagement: {
+        replySuggestions: connectedPlatformCount > 0,
+        priorityTagging: connectedPlatformCount > 0,
+        unreadAlerts: connectedPlatformCount > 0
+      }
+    });
+  } catch (error) {
+    console.error('Social inbox summary error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get social inbox summary'
+    });
+  }
+});
+
+router.get('/inbox/conversations', protect, async (req, res) => {
+  try {
+    const {
+      status = '',
+      platform = '',
+      priority = '',
+      search = '',
+      limit = 50,
+      offset = 0
+    } = req.query;
+
+    const query = { userId: req.user._id };
+    if (status) query.status = status;
+    if (platform) query.platform = normalizePlatform(platform);
+    if (priority) query.priority = priority;
+    if (search) {
+      query.$or = [
+        { participantName: { $regex: search, $options: 'i' } },
+        { participantUsername: { $regex: search, $options: 'i' } },
+        { lastMessagePreview: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    const conversations = await SocialInboxConversation.find(query)
+      .sort({ lastMessageAt: -1 })
+      .skip(Math.max(0, Number(offset) || 0))
+      .limit(Math.min(100, Math.max(1, Number(limit) || 50)));
+
+    res.json({
+      success: true,
+      conversations: conversations.map(toConversationDTO)
+    });
+  } catch (error) {
+    console.error('List social inbox conversations error:', error);
+    res.status(500).json({ success: false, message: 'Failed to load inbox conversations' });
+  }
+});
+
+router.get('/inbox/conversations/:id/messages', protect, async (req, res) => {
+  try {
+    const conversation = await SocialInboxConversation.findOne({
+      _id: req.params.id,
+      userId: req.user._id
+    });
+    if (!conversation) {
+      return res.status(404).json({ success: false, message: 'Conversation not found' });
+    }
+
+    const insights = analyzeEngagement(conversation.lastMessagePreview);
+    res.json({
+      success: true,
+      conversation: toConversationDTO(conversation),
+      messages: conversation.messages
+        .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+        .map(message => toMessageDTO(message, conversation)),
+      ai: insights
+    });
+  } catch (error) {
+    console.error('Get social inbox thread error:', error);
+    res.status(500).json({ success: false, message: 'Failed to load inbox thread' });
+  }
+});
+
+router.post('/inbox/conversations/:id/reply', protect, async (req, res) => {
+  try {
+    const body = String(req.body?.body || '').trim();
+    if (!body) {
+      return res.status(400).json({ success: false, message: 'Reply body is required' });
+    }
+
+    const conversation = await SocialInboxConversation.findOne({
+      _id: req.params.id,
+      userId: req.user._id
+    });
+    if (!conversation) {
+      return res.status(404).json({ success: false, message: 'Conversation not found' });
+    }
+
+    // Provider API dispatch belongs here:
+    // Meta Graph, LinkedIn, X, and YouTube reply calls should use the stored connected account token.
+    const message = await createOutboundReply(conversation, body);
+    res.json({
+      success: true,
+      message: toMessageDTO(message, conversation)
+    });
+  } catch (error) {
+    console.error('Reply social inbox error:', error);
+    res.status(500).json({ success: false, message: 'Failed to send reply' });
+  }
+});
+
+router.patch('/inbox/conversations/:id/status', protect, async (req, res) => {
+  try {
+    const status = String(req.body?.status || '');
+    if (!['unread', 'read', 'replied', 'closed'].includes(status)) {
+      return res.status(400).json({ success: false, message: 'Invalid status' });
+    }
+
+    await SocialInboxConversation.updateOne(
+      { _id: req.params.id, userId: req.user._id },
+      { $set: { status } }
+    );
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Update social inbox status error:', error);
+    res.status(500).json({ success: false, message: 'Failed to update status' });
+  }
+});
+
+router.patch('/inbox/conversations/:id/meta', protect, async (req, res) => {
+  try {
+    const tags = Array.isArray(req.body?.tags) ? req.body.tags.map(tag => String(tag).trim()).filter(Boolean).slice(0, 12) : [];
+    const priority = ['low', 'normal', 'high', 'urgent'].includes(req.body?.priority)
+      ? req.body.priority
+      : 'normal';
+
+    await SocialInboxConversation.updateOne(
+      { _id: req.params.id, userId: req.user._id },
+      { $set: { tags, priority } }
+    );
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Update social inbox meta error:', error);
+    res.status(500).json({ success: false, message: 'Failed to update conversation' });
+  }
+});
+
+router.post('/inbox/sync/:platform', protect, async (req, res) => {
+  try {
+    const platform = normalizePlatform(req.params.platform);
+    await SocialInboxConversation.updateMany(
+      { userId: req.user._id, platform },
+      { $set: { lastSyncedAt: new Date() } }
+    );
+    res.json({ success: true, queued: true, platform });
+  } catch (error) {
+    console.error('Social inbox sync error:', error);
+    res.status(500).json({ success: false, message: 'Failed to queue inbox sync' });
+  }
+});
+
+router.get('/inbox/webhooks/:platform', (req, res) => {
+  if (req.query['hub.challenge']) {
+    return res.send(req.query['hub.challenge']);
+  }
+  res.json({ success: true, platform: normalizePlatform(req.params.platform), status: 'ready' });
+});
+
+router.post('/inbox/webhooks/:platform', async (req, res) => {
+  try {
+    const userId = req.query.userId || req.body?.userId;
+    if (!userId) {
+      return res.status(400).json({ success: false, message: 'Webhook userId is required' });
+    }
+
+    const event = normalizeWebhookPayload(req.params.platform, userId, req.body || {});
+    await ingestEvent(event);
+    res.json({ success: true, received: 1 });
+  } catch (error) {
+    console.error('Social inbox webhook error:', error);
+    res.status(500).json({ success: false, message: 'Failed to process webhook' });
+  }
+});
 
 /**
  * GET /api/social/:platform/auth
@@ -1003,7 +1260,7 @@ router.get('/status', protect, async (req, res) => {
     const user = await User.findById(req.user._id);
     
     // Build status for all platforms (removed TikTok and Snapchat, renamed Twitter to X)
-    const platforms = ['Instagram', 'Facebook', 'X', 'LinkedIn'];
+    const platforms = ['Instagram', 'Facebook', 'X', 'LinkedIn', 'YouTube'];
     
     let ayrshareAccounts = [];
     let ayrshareDisplayNames = [];

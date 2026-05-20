@@ -804,6 +804,69 @@ router.post('/generateClips', protect, checkTrial, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Scene images are required before clip generation' });
     }
 
+    const shouldQueue =
+      req.body?.async === true ||
+      String(req.query?.async || '').toLowerCase() === 'true' ||
+      String(process.env.VIDEO_STEP_ASYNC || '').toLowerCase() === 'true';
+
+    if (shouldQueue) {
+      const baseUrl = reqBaseUrl(req);
+      const queued = videoGenerationQueue.enqueue({
+        userId,
+        payload: { jobId },
+        handler: async ({ update, log }) => {
+          update({ progress: 5, currentStep: 'generate_clips' });
+          log(`Generating clips for draft ${jobId}`);
+
+          const generated = await runGenerateVideoClips({
+            payload: { jobId, sceneData: sourceScenes },
+            baseUrl
+          });
+
+          update({ progress: 70, currentStep: 'saving_clips' });
+          const updated = await updateDraft(jobId, userId, (current) => ({
+            ...current,
+            currentStep: Math.max(Number(current.currentStep || 1), 4),
+            clips: {
+              sceneData: generated.sceneData || [],
+              clipUrls: generated.clipUrls || [],
+              generatedAt: new Date().toISOString()
+            }
+          }));
+
+          update({ progress: 90, currentStep: 'learning' });
+          await learnVideoStep({
+            userId,
+            jobId,
+            action: 'clip_generation',
+            prompt: draft?.prompt?.promptText || '',
+            userInput: draft.input || {},
+            sceneData: updated.clips.sceneData,
+            generatedVideos: updated.clips.clipUrls || [],
+            product: draft?.input?.product || null
+          });
+
+          return {
+            success: true,
+            jobId,
+            sceneData: updated.clips.sceneData,
+            clipUrls: updated.clips.clipUrls,
+            draft: updated
+          };
+        }
+      });
+
+      return res.status(202).json({
+        success: true,
+        message: 'Clip generation queued',
+        draftJobId: jobId,
+        queueJobId: queued.jobId,
+        status: queued.status,
+        progress: queued.progress,
+        currentStep: queued.currentStep
+      });
+    }
+
     const generated = await runGenerateVideoClips({
       payload: {
         jobId,

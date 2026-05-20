@@ -20,7 +20,6 @@ import {
   ChevronDown,
   TrendingUp,
   ImageIcon,
-  MessageSquare,
   PenTool,
   Layers,
   PlayCircle,

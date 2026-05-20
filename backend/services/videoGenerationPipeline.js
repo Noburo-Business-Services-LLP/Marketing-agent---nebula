@@ -26,6 +26,9 @@ const ELEVENLABS_MODEL_ID = String(process.env.ELEVENLABS_MODEL_ID || 'eleven_mu
 const MAX_SCENES = 10;
 const MIN_SCENES = 1;
 const DEFAULT_DURATION_SECONDS = 60;
+const SCENE_IMAGE_CONCURRENCY = Math.max(1, Number.parseInt(process.env.AI_VIDEO_SCENE_IMAGE_CONCURRENCY || '3', 10) || 3);
+const SCENE_CLIP_CONCURRENCY = Math.max(1, Number.parseInt(process.env.AI_VIDEO_SCENE_CLIP_CONCURRENCY || '2', 10) || 2);
+const MEDIA_IO_CONCURRENCY = Math.max(1, Number.parseInt(process.env.AI_VIDEO_MEDIA_IO_CONCURRENCY || '4', 10) || 4);
 
 const fetchImpl = (() => {
   if (typeof global.fetch === 'function') return global.fetch.bind(global);
@@ -51,7 +54,7 @@ function resolveFfmpegPath() {
       const candidate = String(res.stdout).trim().split(/\r?\n/)[0];
       if (candidate) return candidate;
     }
-  } catch (_) {}
+  } catch (_) { }
   return null;
 }
 
@@ -63,6 +66,37 @@ let googleTtsTokenExpiry = 0;
 function clamp(n, min, max) {
   const value = Number.isFinite(n) ? n : min;
   return Math.min(max, Math.max(min, value));
+}
+
+async function runWithConcurrency(items = [], limit = 2, task = async () => null) {
+  const list = Array.isArray(items) ? items : [];
+  if (!list.length) return [];
+  const safeLimit = Math.max(1, Number.parseInt(String(limit || 1), 10) || 1);
+  const results = new Array(list.length);
+  let cursor = 0;
+
+  const worker = async () => {
+    while (true) {
+      const index = cursor;
+      cursor += 1;
+      if (index >= list.length) return;
+      results[index] = await task(list[index], index);
+    }
+  };
+
+  await Promise.all(Array.from({ length: Math.min(safeLimit, list.length) }, () => worker()));
+  return results;
+}
+
+async function measureStep(label, fn, logger = null) {
+  const startedAt = Date.now();
+  try {
+    return await fn();
+  } finally {
+    if (typeof logger === 'function') {
+      logger(`${label} completed in ${Date.now() - startedAt}ms`);
+    }
+  }
 }
 
 function sanitizeSegment(value, fallback = 'asset') {
@@ -115,22 +149,56 @@ async function downloadToFile(url, outputPath) {
   if (!fetchImpl) {
     throw new Error('No fetch implementation available to download media');
   }
-  const response = await fetchImpl(url);
-  if (!response.ok) {
-    const text = await response.text().catch(() => '');
-    throw new Error(`Download failed (${response.status}): ${text.slice(0, 240)}`);
+  const retriableStatusCodes = new Set([403, 404, 408, 409, 425, 429, 500, 502, 503, 504]);
+  const maxAttempts = 4;
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const response = await fetchImpl(url, {
+        headers: {
+          // Some media CDNs reject unknown/empty clients; keep this browser-like.
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+          'Accept': '*/*'
+        }
+      });
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        const status = Number(response.status || 0);
+        const err = new Error(`Download failed (${status}): ${text.slice(0, 240)}`);
+        if (attempt < maxAttempts && retriableStatusCodes.has(status)) {
+          const waitMs = 600 * attempt;
+          await new Promise((resolve) => setTimeout(resolve, waitMs));
+          lastError = err;
+          continue;
+        }
+        throw err;
+      }
+
+      const arrayBuffer = typeof response.arrayBuffer === 'function'
+        ? await response.arrayBuffer()
+        : await response.buffer();
+      const data = Buffer.from(arrayBuffer);
+      await fs.promises.writeFile(outputPath, data);
+      const stat = await fs.promises.stat(outputPath);
+      if (!stat.size) throw new Error('Downloaded file is empty');
+      return {
+        bytes: stat.size,
+        mimeType: String(response.headers?.get?.('content-type') || '')
+      };
+    } catch (error) {
+      lastError = error;
+      if (attempt < maxAttempts) {
+        const waitMs = 600 * attempt;
+        await new Promise((resolve) => setTimeout(resolve, waitMs));
+        continue;
+      }
+      throw error;
+    }
   }
-  const arrayBuffer = typeof response.arrayBuffer === 'function'
-    ? await response.arrayBuffer()
-    : await response.buffer();
-  const data = Buffer.from(arrayBuffer);
-  await fs.promises.writeFile(outputPath, data);
-  const stat = await fs.promises.stat(outputPath);
-  if (!stat.size) throw new Error('Downloaded file is empty');
-  return {
-    bytes: stat.size,
-    mimeType: String(response.headers?.get?.('content-type') || '')
-  };
+
+  throw lastError || new Error('Download failed');
 }
 
 function runFfmpeg(args = []) {
@@ -373,6 +441,33 @@ function sceneProgress(currentIndex, total) {
   return Math.round(((currentIndex + 1) / total) * 100);
 }
 
+function resolveLocalGeneratedMediaPath(sourceUrl = '') {
+  try {
+    const parsed = new URL(String(sourceUrl || '').trim());
+    const pathname = decodeURIComponent(String(parsed.pathname || ''));
+    const prefix = '/generated-media/';
+    if (!pathname.startsWith(prefix)) return null;
+
+    const relativeParts = pathname
+      .slice(prefix.length)
+      .split('/')
+      .map((part) => sanitizeSegment(part, ''))
+      .filter(Boolean);
+
+    if (!relativeParts.length) return null;
+
+    const root = path.resolve(STORAGE_ROOT);
+    const candidate = path.resolve(path.join(root, ...relativeParts));
+    if (candidate === root || !candidate.startsWith(`${root}${path.sep}`)) return null;
+
+    const stat = fs.statSync(candidate);
+    if (!stat.isFile()) return null;
+    return candidate;
+  } catch (_) {
+    return null;
+  }
+}
+
 async function materializeSourceToFile({ source, destinationPath }) {
   const raw = String(source || '').trim();
   if (!raw) throw new Error('Missing source media');
@@ -385,6 +480,13 @@ async function materializeSourceToFile({ source, destinationPath }) {
   }
 
   if (isHttpUrl(raw)) {
+    const localGeneratedMediaPath = resolveLocalGeneratedMediaPath(raw);
+    if (localGeneratedMediaPath) {
+      await fs.promises.copyFile(localGeneratedMediaPath, destinationPath);
+      const stat = await fs.promises.stat(destinationPath);
+      if (!stat.size) throw new Error('Copied generated media file is empty');
+      return { mimeType: '' };
+    }
     return downloadToFile(raw, destinationPath);
   }
 
@@ -580,10 +682,10 @@ async function generateSceneImages({
     input.imageData || input.imageUrl || product?.imageUrl || referenceImage?.source || ''
   ).trim();
 
-  const outputScenes = [];
-
-  for (let index = 0; index < sceneData.length; index += 1) {
-    const scene = sceneData[index];
+  const outputScenes = await runWithConcurrency(
+    sceneData,
+    SCENE_IMAGE_CONCURRENCY,
+    async (scene, index) => {
     const fileName = `scene_${scene.index}.jpg`;
     const localPath = path.join(context.dirs.images, fileName);
     const mediaUrl = buildMediaUrl(context.baseUrl, context.jobId, ['images', fileName]);
@@ -591,16 +693,15 @@ async function generateSceneImages({
     // First scene can use uploaded image or product image directly.
     const canUseReferenceDirectly = index === 0 && referenceImage?.localPath;
 
-    if (canUseReferenceDirectly) {
+      if (canUseReferenceDirectly) {
       await fs.promises.copyFile(referenceImage.localPath, localPath);
-      outputScenes.push({
+        return {
         ...scene,
         imageUrl: mediaUrl,
         imagePath: localPath,
         imageSource: referenceImage.type
-      });
-      continue;
-    }
+        };
+      }
 
     const promptWithConsistency = [
       scene.imagePrompt,
@@ -608,10 +709,10 @@ async function generateSceneImages({
       'Keep same lead subject identity, lighting logic, and palette continuity with earlier scenes.'
     ].join(' ');
 
-    const imageResult = await runWithRetries(
-      `image generation for ${scene.sceneId}`,
-      async () => {
-        const result = await generateCampaignImageNanoBanana(promptWithConsistency, {
+      const imageResult = await runWithRetries(
+        `image generation for ${scene.sceneId}`,
+        async () => {
+          const result = await generateCampaignImageNanoBanana(promptWithConsistency, {
           aspectRatio: '9:16',
           brandName: String(profile.name || ''),
           industry: String(profile.industry || ''),
@@ -623,27 +724,28 @@ async function generateSceneImages({
             imageUrl: product.imageUrl
           } : null
         });
-        if (!result?.success || !result?.imageUrl) {
-          throw new Error(result?.error || 'AI image generation failed');
-        }
-        return result.imageUrl;
-      },
-      2,
-      logger
-    );
+          if (!result?.success || !result?.imageUrl) {
+            throw new Error(result?.error || 'AI image generation failed');
+          }
+          return result.imageUrl;
+        },
+        2,
+        logger
+      );
 
-    await materializeSourceToFile({
-      source: imageResult,
-      destinationPath: localPath
-    });
+      await materializeSourceToFile({
+        source: imageResult,
+        destinationPath: localPath
+      });
 
-    outputScenes.push({
-      ...scene,
-      imageUrl: mediaUrl,
-      imagePath: localPath,
-      imageSource: 'ai_generated'
-    });
-  }
+      return {
+        ...scene,
+        imageUrl: mediaUrl,
+        imagePath: localPath,
+        imageSource: 'ai_generated'
+      };
+    }
+  );
 
   return outputScenes;
 }
@@ -704,7 +806,7 @@ async function generateSceneClips({
   logger = null,
   onSceneDone = null
 }) {
-  const tasks = scenes.map(async (scene, index) => {
+  return runWithConcurrency(scenes, SCENE_CLIP_CONCURRENCY, async (scene, index) => {
     const clipName = `scene_${scene.index}.mp4`;
     const clipPath = path.join(context.dirs.clips, clipName);
     const rawClipPath = path.join(context.dirs.temp, `fal_${sanitizeSegment(scene.sceneId || scene.index, 'scene')}.mp4`);
@@ -735,8 +837,6 @@ async function generateSceneClips({
 
     return enriched;
   });
-
-  return Promise.all(tasks);
 }
 
 function buildConcatListContent(paths = []) {
@@ -1654,22 +1754,27 @@ async function runCreateVideoPipeline({
 
   update(5, 'generateScenes');
   log('Generating structured scene plan');
-  const plan = await generateScenesPlan({ input, product, user, logger: log });
+  const plan = await measureStep('generateScenes', () => generateScenesPlan({ input, product, user, logger: log }), log);
 
   update(20, 'generateImages', { scenes: plan.scenes.length });
   log('Generating scene images with consistency');
-  const scenesWithImages = await generateSceneImages({
+  const audioTracksPromise = measureStep(
+    'generateAudio',
+    () => generateAudioTracks({ input, plan, context, logger: log }),
+    log
+  );
+  const scenesWithImages = await measureStep('generateImages', () => generateSceneImages({
     input,
     product,
     plan,
     user,
     context,
     logger: log
-  });
+  }), log);
 
   update(45, 'generateVideoClips');
   log('Rendering scene video clips');
-  const scenesWithClips = await generateSceneClips({
+  const scenesWithClips = await measureStep('generateVideoClips', () => generateSceneClips({
     scenes: scenesWithImages,
     context,
     logger: log,
@@ -1677,54 +1782,54 @@ async function runCreateVideoPipeline({
       const stepProgress = 45 + Math.round((sceneProgress(sceneIndex, totalScenes) / 100) * 20);
       update(stepProgress, 'generateVideoClips', { completed: sceneIndex + 1, total: totalScenes });
     }
-  });
+  }), log);
 
   update(66, 'mergeVideo');
   log('Merging scene clips into final_video.mp4');
-  const mergedVideo = await mergeSceneVideos({ scenes: scenesWithClips, context });
+  const mergedVideo = await measureStep('mergeVideo', () => mergeSceneVideos({ scenes: scenesWithClips, context }), log);
 
   update(74, 'generateAudio');
   log('Preparing audio tracks');
-  const audioTracks = await generateAudioTracks({ input, plan, context, logger: log });
+  const audioTracks = await audioTracksPromise;
 
   update(82, 'mergeAudio');
   let mergedAudio = null;
   if (audioTracks.enabled) {
     log('Mixing final_audio.mp3');
-    mergedAudio = await mergeAudioTracks({
+    mergedAudio = await measureStep('mergeAudio', () => mergeAudioTracks({
       audioTracks: audioTracks.tracks,
       durationSeconds: input.durationSeconds,
       context,
       audioOptions: input.audio
-    });
+    }), log);
   }
 
   update(88, 'subtitles');
   let subtitles = null;
   if (input.subtitles.enabled) {
     log('Generating subtitles.srt');
-    subtitles = await generateSrtFile({ sceneData: scenesWithClips, context });
+    subtitles = await measureStep('subtitles', () => generateSrtFile({ sceneData: scenesWithClips, context }), log);
   }
 
   update(92, 'finalMerge');
   log('Merging final video and audio into final_output.mp4');
-  const finalOutput = await mergeFinalOutput({
+  const finalOutput = await measureStep('finalMerge', () => mergeFinalOutput({
     mergedVideo,
     mergedAudio,
     subtitles,
     context
-  });
+  }), log);
 
   update(96, 'thumbnail');
   log('Generating thumbnail');
-  const thumbnail = await generateThumbnail({
+  const thumbnail = await measureStep('thumbnail', () => generateThumbnail({
     input,
     product,
     plan,
     sceneData: scenesWithClips,
     context,
     logger: log
-  });
+  }), log);
 
   const responsePayload = {
     success: true,
@@ -1801,11 +1906,11 @@ async function runGenerateImages({
   const product = await resolveProductContext({ user, payload: input });
   const plan = payload?.sceneData && Array.isArray(payload.sceneData)
     ? {
-        scenes: payload.sceneData.map((scene, idx) => ensureSceneInputForClipStage(scene, idx)),
-        globalVisualStyle: String(payload.globalVisualStyle || 'Consistent cinematic ad style.').trim(),
-        voiceScript: String(payload.voiceScript || input.description).trim(),
-        thumbnailPrompt: String(payload.thumbnailPrompt || input.description).trim()
-      }
+      scenes: payload.sceneData.map((scene, idx) => ensureSceneInputForClipStage(scene, idx)),
+      globalVisualStyle: String(payload.globalVisualStyle || 'Consistent cinematic ad style.').trim(),
+      voiceScript: String(payload.voiceScript || input.description).trim(),
+      thumbnailPrompt: String(payload.thumbnailPrompt || input.description).trim()
+    }
     : await generateScenesPlan({ input, product, user });
 
   const scenesWithImages = await generateSceneImages({
@@ -1835,21 +1940,20 @@ async function runGenerateVideoClips({
   const rawScenes = Array.isArray(payload?.sceneData) ? payload.sceneData : [];
   if (!rawScenes.length) throw new Error('sceneData is required for generateVideoClips');
 
-  const scenes = [];
-  for (let i = 0; i < rawScenes.length; i += 1) {
-    const normalized = ensureSceneInputForClipStage(rawScenes[i], i);
+  const scenes = await runWithConcurrency(rawScenes, MEDIA_IO_CONCURRENCY, async (rawScene, i) => {
+    const normalized = ensureSceneInputForClipStage(rawScene, i);
     const source = normalized.imagePath || normalized.imageUrl;
     if (!source) throw new Error(`Scene ${normalized.sceneId} is missing image input`);
     const ext = fileExtFromSource(source, '.jpg');
     const imageName = `scene_${normalized.index}${ext}`;
     const imagePath = path.join(context.dirs.images, imageName);
     await materializeSourceToFile({ source, destinationPath: imagePath });
-    scenes.push({
+    return {
       ...normalized,
       imagePath,
       imageUrl: buildMediaUrl(context.baseUrl, context.jobId, ['images', imageName])
-    });
-  }
+    };
+  });
 
   const scenesWithClips = await generateSceneClips({ scenes, context });
   return {
@@ -1928,8 +2032,8 @@ async function runMergeAudio({
     ['background', payload?.backgroundAudioUrl || payload?.tracks?.backgroundUrl || '']
   ];
 
-  for (const [key, source] of sources) {
-    if (!source) continue;
+  await Promise.all(sources.map(async ([key, source]) => {
+    if (!source) return;
     const ext = fileExtFromSource(source, '.mp3');
     const outputName = `${key}${ext}`;
     const outputPath = path.join(context.dirs.audio, outputName);
@@ -1938,21 +2042,22 @@ async function runMergeAudio({
       path: outputPath,
       url: buildMediaUrl(context.baseUrl, context.jobId, ['audio', outputName])
     };
-  }
+  }));
 
   const sfxSources = Array.isArray(payload?.soundEffectUrls) ? payload.soundEffectUrls : [];
-  for (let i = 0; i < sfxSources.length; i += 1) {
-    const source = sfxSources[i];
-    if (!source) continue;
+  const sfxResolved = await runWithConcurrency(sfxSources, MEDIA_IO_CONCURRENCY, async (source, i) => {
+    if (!source) return null;
     const ext = fileExtFromSource(source, '.mp3');
     const outputName = `sfx_${i + 1}${ext}`;
     const outputPath = path.join(context.dirs.audio, outputName);
     await materializeSourceToFile({ source, destinationPath: outputPath });
-    trackConfig.soundEffects.push({
+    return {
       path: outputPath,
-      url: buildMediaUrl(context.baseUrl, context.jobId, ['audio', outputName])
-    });
-  }
+      url: buildMediaUrl(context.baseUrl, context.jobId, ['audio', outputName]),
+      index: i
+    };
+  });
+  trackConfig.soundEffects = sfxResolved.filter(Boolean).sort((a, b) => a.index - b.index).map(({ path: p, url }) => ({ path: p, url }));
 
   const mergedAudio = await mergeAudioTracks({
     audioTracks: trackConfig,
