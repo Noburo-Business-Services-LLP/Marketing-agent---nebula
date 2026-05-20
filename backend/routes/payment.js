@@ -15,6 +15,7 @@ const User = require('../models/User');
 const Coupon = require('../models/Coupon');
 const { migrateUserData } = require('../services/migrationService');
 const { createInvoice } = require('../services/zohoBooks');
+const { PLANS, findPlan } = require('../config/plans');
 
 // Initialize Razorpay
 const razorpay = new Razorpay({
@@ -93,8 +94,16 @@ router.post('/validate-coupon', protect, async (req, res) => {
 });
 
 /**
+ * GET /api/payment/plans
+ * Public — returns the 9-tier plan catalogue (Pro/Growth/Scale × Monthly/Quarterly/Annual)
+ */
+router.get('/plans', (_req, res) => {
+  res.json({ success: true, plans: PLANS });
+});
+
+/**
  * POST /api/payment/create-subscription
- * Creates a Razorpay monthly subscription (₹7,500/month)
+ * Creates a Razorpay subscription for the chosen plan (tier + cycle)
  */
 router.post('/create-subscription', protect, async (req, res) => {
   try {
@@ -106,11 +115,18 @@ router.post('/create-subscription', protect, async (req, res) => {
       return res.status(400).json({ success: false, message: 'You already have an active subscription' });
     }
 
-    // Validate coupon if provided
-    let finalAmount = MONTHLY_AMOUNT;
-    let appliedCoupon = null;
-    const { couponCode } = req.body;
+    const { planId, couponCode } = req.body;
+    if (!planId) {
+      return res.status(400).json({ success: false, message: 'planId is required' });
+    }
 
+    const plan = findPlan(planId);
+    if (!plan) {
+      return res.status(400).json({ success: false, message: 'Invalid plan selected' });
+    }
+
+    // Validate coupon if provided — coupons just record discount metadata, plan price is unchanged
+    let appliedCoupon = null;
     if (couponCode) {
       const coupon = await Coupon.findOne({ code: couponCode.toUpperCase().trim() });
       if (!coupon || !coupon.isActive || coupon.usedCount >= coupon.maxUses) {
@@ -120,19 +136,20 @@ router.post('/create-subscription', protect, async (req, res) => {
       if (alreadyUsed) {
         return res.status(400).json({ success: false, message: 'You have already used this coupon' });
       }
-      finalAmount = coupon.discountedAmount;
       appliedCoupon = coupon;
     }
 
-    const planId = await getOrCreatePlan(finalAmount);
+    const totalCount = plan.cycle === 'monthly' ? 120 : plan.cycle === 'quarterly' ? 40 : 10;
 
     const subscription = await razorpay.subscriptions.create({
       plan_id: planId,
       customer_notify: 1,
-      total_count: 120,
+      total_count: totalCount,
       notes: {
         userId: userId.toString(),
         email: user.email,
+        tier: plan.tier,
+        cycle: plan.cycle,
         couponCode: appliedCoupon?.code || ''
       }
     });
@@ -141,11 +158,12 @@ router.post('/create-subscription', protect, async (req, res) => {
       success: true,
       subscription_id: subscription.id,
       key: process.env.RAZORPAY_KEY_ID,
-      amount: finalAmount,
+      amount: plan.amount,
+      plan: { tier: plan.tier, cycle: plan.cycle, tierName: plan.tierName, per: plan.per },
       prefill: {
         name: `${user.firstName} ${user.lastName || ''}`.trim(),
         email: user.email,
-        contact: ''
+        contact: user.mobileNumber || ''
       }
     });
   } catch (error) {
@@ -184,6 +202,10 @@ router.post('/verify-subscription', protect, async (req, res) => {
 
     // Fetch subscription details from Razorpay
     const rzpSub = await razorpay.subscriptions.fetch(razorpay_subscription_id);
+    const planInfo = findPlan(rzpSub.plan_id);
+    const tier = planInfo?.tier || rzpSub.notes?.tier || 'pro';
+    const cycle = planInfo?.cycle || rzpSub.notes?.cycle || 'monthly';
+    const paidAmount = planInfo?.amount || MONTHLY_AMOUNT;
 
     // Mark coupon as used if one was applied
     const couponCode = rzpSub.notes?.couponCode;
@@ -196,7 +218,8 @@ router.post('/verify-subscription', protect, async (req, res) => {
 
     // Update subscription on user
     user.subscription = {
-      plan: 'pro',
+      plan: tier,
+      cycle,
       status: 'active',
       razorpaySubscriptionId: razorpay_subscription_id,
       razorpayPlanId: rzpSub.plan_id,
@@ -208,7 +231,7 @@ router.post('/verify-subscription', protect, async (req, res) => {
     user.payments.push({
       razorpayOrderId: razorpay_subscription_id,
       razorpayPaymentId: razorpay_payment_id,
-      amount: MONTHLY_AMOUNT,
+      amount: paidAmount,
       currency: PLAN_CURRENCY,
       credits: MONTHLY_CREDITS,
       status: 'paid',
@@ -223,7 +246,7 @@ router.post('/verify-subscription', protect, async (req, res) => {
         firstName: user.firstName,
         lastName: user.lastName || '',
         companyName: user.companyName || user.businessProfile?.name || '',
-        amount: MONTHLY_AMOUNT,
+        amount: paidAmount,
         credits: MONTHLY_CREDITS,
         razorpayPaymentId: razorpay_payment_id
       });

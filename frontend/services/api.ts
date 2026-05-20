@@ -285,8 +285,12 @@ export const apiService = {
     return apiCall('/payment/verify', { method: 'POST', body: JSON.stringify(data) }, true);
   },
 
-  createSubscription: async (couponCode?: string): Promise<any> => {
-    return apiCall('/payment/create-subscription', { method: 'POST', body: JSON.stringify({ couponCode: couponCode || '' }) }, true);
+  createSubscription: async (planId: string, couponCode?: string): Promise<any> => {
+    return apiCall('/payment/create-subscription', { method: 'POST', body: JSON.stringify({ planId, couponCode: couponCode || '' }) }, true);
+  },
+
+  getPlans: async (): Promise<any> => {
+    return apiCall('/payment/plans', { method: 'GET' }, false);
   },
 
   validateCoupon: async (code: string): Promise<any> => {
