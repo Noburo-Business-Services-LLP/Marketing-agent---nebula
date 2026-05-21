@@ -125,6 +125,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
   const navItems = [
     { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/campaigns', label: 'Campaigns', icon: Megaphone },
+    { path: '/influencer-portal', label: 'Influencer Portal', icon: PenTool },
     { path: '/reels', label: 'AI Reels', icon: PlayCircle },
     { path: '/ad-campaigns', label: 'Ad Campaigns', icon: Layers },
     { path: '/competitors', label: 'Competitors', icon: Users },
@@ -151,6 +152,13 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
         title: 'AI Reels',
         subtitle: 'Generate full AI videos from description, uploaded images, or inventory products.',
         actions: [{ label: 'Go to Campaigns', path: '/campaigns' }]
+      };
+    }
+    if (pathname.startsWith('/influencer-portal')) {
+      return {
+        title: 'Influencer Portal',
+        subtitle: 'Manage creator invites, submissions, approvals, and analytics in one workspace.',
+        actions: []
       };
     }
     if (pathname.startsWith('/ad-campaigns')) {
@@ -210,6 +218,13 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
         from { opacity: 0; transform: translateY(-8px); }
         to { opacity: 1; transform: translateY(0); }
       }
+      .hide-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+      }
+      .hide-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
     `}</style>
     <div className={`flex h-screen font-sans ${isDarkMode ? 'bg-[#070A12] text-[#ededed]' : 'bg-[#ededed] text-[#070A12]'}`}>
       {/* Mobile Sidebar Overlay */}
@@ -226,8 +241,8 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
           isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <div className="flex flex-col h-full">
-            <div className="p-6">
+        <div className="flex flex-col h-full min-h-0 p-6">
+            <div className="flex-1 min-h-0 overflow-y-auto hide-scrollbar">
                 <div className="flex items-center gap-3 mb-2 text-[#070A12]">
                     <img src="/assets/logo.png" alt="Nebulaa Gravity" className="w-12 h-12" />
                     <div className="flex flex-col">
@@ -243,7 +258,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
                 )}
                 {!user?.businessProfile?.name && <div className="mb-6"></div>}
 
-                <nav className="space-y-1">
+                <nav className="space-y-1 pb-4">
                     {navItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = location.pathname === item.path;
@@ -264,7 +279,8 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
                     );
                     })}
                 </nav>
-
+            </div>
+            <div className="pt-3 mt-2 border-t border-[#070A12]/15">
                 <nav className="space-y-1">
                     <Link
                         to="/settings"

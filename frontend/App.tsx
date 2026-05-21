@@ -20,6 +20,12 @@ import Analytics from './pages/Analytics';
 import AIMemory from './pages/AIMemory';
 import AIHistory from './pages/AIHistory';
 import AIPerformance from './pages/AIPerformance';
+import InfluencerPortal from './pages/InfluencerPortal';
+import InfluencerList from './pages/InfluencerList';
+import Collaborations from './pages/Collaborations';
+import SubmissionReview from './pages/SubmissionReview';
+import InfluencerAnalytics from './pages/InfluencerAnalytics';
+import InfluencerProfile from './pages/InfluencerProfile';
 import TermsAndConditions from './pages/TermsAndConditions';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import { ThemeProvider } from './context/ThemeContext';
@@ -226,6 +232,12 @@ const App: React.FC = () => {
                     <Route path="/brand-assets" element={<BrandAssets />} />
                     <Route path="/inventory" element={<Inventory />} />
                     <Route path="/analytics" element={<Analytics />} />
+                    <Route path="/influencer-portal" element={<InfluencerPortal />} />
+                    <Route path="/influencer-portal/list" element={<InfluencerList />} />
+                    <Route path="/influencer-portal/collaborations" element={<Collaborations />} />
+                    <Route path="/influencer-portal/submissions" element={<SubmissionReview />} />
+                    <Route path="/influencer-portal/analytics" element={<InfluencerAnalytics />} />
+                    <Route path="/influencer-portal/profile" element={<InfluencerProfile />} />
                     <Route path="/ai-memory" element={<AIMemory />} />
                     <Route path="/ai-history" element={<AIHistory />} />
                     <Route path="/ai-performance" element={<AIPerformance />} />
