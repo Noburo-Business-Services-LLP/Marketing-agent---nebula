@@ -1107,6 +1107,53 @@ export const apiService = {
     return response;
   },
 
+  // ============================================
+  // INFLUENCER COLLABORATION PORTAL (MVP)
+  // ============================================
+  getInfluencerPortalInfluencers: async (): Promise<any> => {
+    return apiCall('/influencers', { method: 'GET' }, true);
+  },
+
+  createInfluencerPortalInfluencer: async (data: any): Promise<any> => {
+    return apiCall('/influencers', { method: 'POST', body: JSON.stringify(data) }, true);
+  },
+
+  updateInfluencerPortalInfluencer: async (id: string, data: any): Promise<any> => {
+    return apiCall(`/influencers/${id}`, { method: 'PUT', body: JSON.stringify(data) }, true);
+  },
+
+  deleteInfluencerPortalInfluencer: async (id: string): Promise<any> => {
+    return apiCall(`/influencers/${id}`, { method: 'DELETE' }, true);
+  },
+
+  getCollaborations: async (): Promise<any> => {
+    return apiCall('/collaborations', { method: 'GET' }, true);
+  },
+
+  inviteCollaboration: async (data: any): Promise<any> => {
+    return apiCall('/collaborations/invite', { method: 'POST', body: JSON.stringify(data) }, true);
+  },
+
+  deleteCollaboration: async (id: string): Promise<any> => {
+    return apiCall(`/collaborations/${id}`, { method: 'DELETE' }, true);
+  },
+
+  getSubmissions: async (): Promise<any> => {
+    return apiCall('/submissions', { method: 'GET' }, true);
+  },
+
+  createSubmission: async (data: any): Promise<any> => {
+    return apiCall('/submissions', { method: 'POST', body: JSON.stringify(data) }, true);
+  },
+
+  updateSubmissionStatus: async (id: string, action: 'approve' | 'reject' | 'request-changes', feedback = ''): Promise<any> => {
+    return apiCall(`/submissions/${id}/${action}`, { method: 'PUT', body: JSON.stringify({ feedback }) }, true);
+  },
+
+  getInfluencerPortalAnalytics: async (): Promise<any> => {
+    return apiCall('/analytics/influencer', { method: 'GET' }, true);
+  },
+
   seedInfluencerSamples: async (): Promise<any> => {
     const response = await apiCall<{ success: boolean; message: string }>(
       '/influencers/seed-sample',

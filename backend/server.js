@@ -91,6 +91,10 @@ const googleCalendarRoutes = require('./routes/googleCalendar');
 const productRoutes = require('./routes/products');
 const videoGenerationRoutes = require('./routes/videoGeneration');
 const aiMemoryRoutes = require('./routes/aiMemory');
+const influencerRoutes = require('./routes/influencerRoutes');
+const collaborationRoutes = require('./routes/collaborationRoutes');
+const submissionRoutes = require('./routes/submissionRoutes');
+const influencerAnalyticsRoutes = require('./routes/analyticsRoutes');
 
 // Notification scheduler service
 const notificationScheduler = require('./services/notificationScheduler');
@@ -306,6 +310,7 @@ app.use('/api/ad-campaigns', adCampaignRoutes);
 
 // Routes - Real Data Features
 app.use('/api/brand', brandRoutes);
+app.use('/api/analytics', influencerAnalyticsRoutes);
 app.use('/api/analytics', analyticsRoutes);
 
 // Routes - Reachouts CRM - REMOVED
@@ -331,6 +336,9 @@ app.use('/api/google-calendar', googleCalendarRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/video-generation', aiLimiter, videoGenerationRoutes);
 app.use('/api/ai-memory', aiMemoryRoutes);
+app.use('/api/influencers', influencerRoutes);
+app.use('/api/collaborations', collaborationRoutes);
+app.use('/api/submissions', submissionRoutes);
 
 // Health check endpoint (handled before rate limiter above)
 

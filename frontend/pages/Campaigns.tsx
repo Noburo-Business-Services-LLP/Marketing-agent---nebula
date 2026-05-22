@@ -47,32 +47,32 @@ const PLATFORM_CONTENT_TEMPLATES: Record<string, { id: string; label: string; st
       id: 'ig_prof_1', 
       tone: 'professional',
       label: 'Strategic Standard', 
-      structure: "?? STRATEGIC OVERVIEW: {name}\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ Core Mission: {desc}\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ Key Objective: {obj}\n\n?? KEY HIGHLIGHTS:\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Strategic Point 1]\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Business Value 2]\n\n?? LEARN MORE: [Link]" 
+      structure: "?? STRATEGIC OVERVIEW: {name}\n-¯-‚Â¿-‚Â½ Core Mission: {desc}\n-¯-‚Â¿-‚Â½ Key Objective: {obj}\n\n?? KEY HIGHLIGHTS:\n-¯-‚Â¿-‚Â½ [Strategic Point 1]\n-¯-‚Â¿-‚Â½ [Business Value 2]\n\n?? LEARN MORE: [Link]" 
     },
     { 
       id: 'ig_prof_2', 
       tone: 'professional',
       label: 'Executive Summary', 
-      structure: "?? EXECUTIVE ANALYSIS: {name}\n\nSummary:\n{desc}\n\n?? PROJECTED OUTCOMES:\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Impact 1]\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Impact 2]\n\nGoal: {obj}\n\n?? VIEW DETAILS: [Your CTA Link]" 
+      structure: "?? EXECUTIVE ANALYSIS: {name}\n\nSummary:\n{desc}\n\n?? PROJECTED OUTCOMES:\n-¯-‚Â¿-‚Â½ [Impact 1]\n-¯-‚Â¿-‚Â½ [Impact 2]\n\nGoal: {obj}\n\n?? VIEW DETAILS: [Your CTA Link]" 
     },
     { 
       id: 'ig_prof_3', 
       tone: 'professional',
       label: 'Corporate Update', 
-      structure: "?? OFFICIAL ANNOUNCEMENT: {name}\n\nWe are focusing on {obj} through our latest initiative: {desc}.\n\n? KEY PILLARS:\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Pillar 1]\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Pillar 2]\n\n?? READ MORE: [Link]" 
+      structure: "?? OFFICIAL ANNOUNCEMENT: {name}\n\nWe are focusing on {obj} through our latest initiative: {desc}.\n\n? KEY PILLARS:\n-¯-‚Â¿-‚Â½ [Pillar 1]\n-¯-‚Â¿-‚Â½ [Pillar 2]\n\n?? READ MORE: [Link]" 
     },
     // CASUAL
     { 
       id: 'ig_cas_1', 
       tone: 'casual',
       label: 'Friendly BTS', 
-      structure: "Hey friends! ?? Just wanted to share what we've been working on: {name}.\n\n{desc}\n\nOur big goal is to {obj}. ??\n\n? COOL STUFF:\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Fun Fact 1]\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Behind the scenes 2]\n\nDrop a comment below! ??\n\n[Link]" 
+      structure: "Hey friends! ?? Just wanted to share what we've been working on: {name}.\n\n{desc}\n\nOur big goal is to {obj}. ??\n\n? COOL STUFF:\n-¯-‚Â¿-‚Â½ [Fun Fact 1]\n-¯-‚Â¿-‚Â½ [Behind the scenes 2]\n\nDrop a comment below! ??\n\n[Link]" 
     },
     { 
       id: 'ig_cas_2', 
       tone: 'casual',
       label: 'Real Talk', 
-      structure: "Let's be real for a second... {obj} is tough. ???\n\nThat's why we built {name}. {desc}\n\n?? WHY IT MATTERS:\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Reason 1]\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Reason 2]\n\nWhat do you think? ? [Link]" 
+      structure: "Let's be real for a second... {obj} is tough. ???\n\nThat's why we built {name}. {desc}\n\n?? WHY IT MATTERS:\n-¯-‚Â¿-‚Â½ [Reason 1]\n-¯-‚Â¿-‚Â½ [Reason 2]\n\nWhat do you think? ? [Link]" 
     },
     // INSPIRATIONAL
     { 
@@ -85,7 +85,7 @@ const PLATFORM_CONTENT_TEMPLATES: Record<string, { id: string; label: string; st
       id: 'ig_insp_2', 
       tone: 'inspirational',
       label: 'Big Dreams', 
-      structure: "?? DREAMING BIG: {obj}\n\nWe believe {name} is the key to {desc}.\n\n? VISION:\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Vision Point 1]\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Impact 2]\n\nStay inspired. ? [Link]" 
+      structure: "?? DREAMING BIG: {obj}\n\nWe believe {name} is the key to {desc}.\n\n? VISION:\n-¯-‚Â¿-‚Â½ [Vision Point 1]\n-¯-‚Â¿-‚Â½ [Impact 2]\n\nStay inspired. ? [Link]" 
     },
     // EDUCATIONAL
     { 
@@ -105,20 +105,20 @@ const PLATFORM_CONTENT_TEMPLATES: Record<string, { id: string; label: string; st
       id: 'ig_hum_1', 
       tone: 'humorous',
       label: 'Witty Observation', 
-      structure: "Me trying to {obj} without {name} ??\n\nSeriously though, {desc} is a game changer.\n\n?? THE STRUGGLE IS REAL:\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Funny Point 1]\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Witty Observation 2]\n\n?? DON'T BE A CLOWN: [Link]" 
+      structure: "Me trying to {obj} without {name} ??\n\nSeriously though, {desc} is a game changer.\n\n?? THE STRUGGLE IS REAL:\n-¯-‚Â¿-‚Â½ [Funny Point 1]\n-¯-‚Â¿-‚Â½ [Witty Observation 2]\n\n?? DON'T BE A CLOWN: [Link]" 
     },
     { 
       id: 'ig_hum_2', 
       tone: 'humorous',
       label: 'Relatable Meme', 
-      structure: "Current Status: Trying to {obj}. ??\n\n{name} entered the chat: {desc}\n\n?? CHEF'S KISS:\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Funny Highlight 1]\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Relatable Moment 2]\n\n?? CHECK IT OUT: [Link]" 
+      structure: "Current Status: Trying to {obj}. ??\n\n{name} entered the chat: {desc}\n\n?? CHEF'S KISS:\n-¯-‚Â¿-‚Â½ [Funny Highlight 1]\n-¯-‚Â¿-‚Â½ [Relatable Moment 2]\n\n?? CHECK IT OUT: [Link]" 
     },
     // BOLD
     { 
       id: 'ig_bold_1', 
       tone: 'bold',
       label: 'Bold Launch', 
-      structure: "?? THE FUTURE IS HERE: {name}\n\nStop settling for less. We are here to {obj}.\n\n?? WHY WE WIN:\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Disruptive Feature 1]\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Dominant Result 2]\n\n?? WITNESS THE POWER: [Link]" 
+      structure: "?? THE FUTURE IS HERE: {name}\n\nStop settling for less. We are here to {obj}.\n\n?? WHY WE WIN:\n-¯-‚Â¿-‚Â½ [Disruptive Feature 1]\n-¯-‚Â¿-‚Â½ [Dominant Result 2]\n\n?? WITNESS THE POWER: [Link]" 
     },
     { 
       id: 'ig_bold_2', 
@@ -133,19 +133,19 @@ const PLATFORM_CONTENT_TEMPLATES: Record<string, { id: string; label: string; st
       id: 'li_prof_1', 
       tone: 'professional',
       label: 'Standard Executive', 
-      structure: "Innovation is the difference between a leader and a follower. Today, we're choosing to lead. ??\n\n?? STRATEGIC INITIATIVE: {name}\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ Executive Summary: {desc}\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ Core Objective: {obj}\n\n?? CORPORATE ANALYSIS:\n1. [Market Positioning 1]\n2. [Operational Impact 2]\n\n?? KEY DELIVERABLES:\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Outcome]\n\n?? FULL REPORT: [Link]" 
+      structure: "Innovation is the difference between a leader and a follower. Today, we're choosing to lead. ??\n\n?? STRATEGIC INITIATIVE: {name}\n-¯-‚Â¿-‚Â½ Executive Summary: {desc}\n-¯-‚Â¿-‚Â½ Core Objective: {obj}\n\n?? CORPORATE ANALYSIS:\n1. [Market Positioning 1]\n2. [Operational Impact 2]\n\n?? KEY DELIVERABLES:\n-¯-‚Â¿-‚Â½ [Outcome]\n\n?? FULL REPORT: [Link]" 
     },
     { 
       id: 'li_prof_2', 
       tone: 'professional',
       label: 'Leadership Angle', 
-      structure: "The signal is often lost in the noise. It's time to talk about the future of {obj}. ??\n\n?? THE FUTURE OF {obj}\n\nI've been analyzing {name} lately. \n\n?? STRATEGIC INSIGHTS:\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ {desc}\n\nWhat are your thoughts on this industry shift? ??\n\n#Leadership #Innovation" 
+      structure: "The signal is often lost in the noise. It's time to talk about the future of {obj}. ??\n\n?? THE FUTURE OF {obj}\n\nI've been analyzing {name} lately. \n\n?? STRATEGIC INSIGHTS:\n-¯-‚Â¿-‚Â½ {desc}\n\nWhat are your thoughts on this industry shift? ??\n\n#Leadership #Innovation" 
     },
     { 
       id: 'li_prof_3', 
       tone: 'professional',
       label: 'Business Win', 
-      structure: "Operational excellence is table stakes. Real growth comes from a relentless focus on {obj}. ??\n\n?? BUSINESS UPDATE: Achieving {obj}\n\nThrilled to share how {name} is driving results.\n\n? KEY TAKEAWAYS:\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Point 1]\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Point 2]\n\n{desc}\n\n?? DETAILS: [Link]" 
+      structure: "Operational excellence is table stakes. Real growth comes from a relentless focus on {obj}. ??\n\n?? BUSINESS UPDATE: Achieving {obj}\n\nThrilled to share how {name} is driving results.\n\n? KEY TAKEAWAYS:\n-¯-‚Â¿-‚Â½ [Point 1]\n-¯-‚Â¿-‚Â½ [Point 2]\n\n{desc}\n\n?? DETAILS: [Link]" 
     },
     // EDUCATIONAL
     { 
@@ -158,14 +158,14 @@ const PLATFORM_CONTENT_TEMPLATES: Record<string, { id: string; label: string; st
       id: 'li_edu_2', 
       tone: 'educational',
       label: 'Case Study', 
-      structure: "Data tells a story, but results build a legacy. Our journey with {obj} is proof. ??\n\n?? CASE STUDY: Optimizing {obj}\n\nProject: {name}\n\n? THE CHALLENGE:\n{desc}\n\n?? THE RESULTS:\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Achievement 1]\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Achievement 2]\n\nRead the breakdown: [Link]" 
+      structure: "Data tells a story, but results build a legacy. Our journey with {obj} is proof. ??\n\n?? CASE STUDY: Optimizing {obj}\n\nProject: {name}\n\n? THE CHALLENGE:\n{desc}\n\n?? THE RESULTS:\n-¯-‚Â¿-‚Â½ [Achievement 1]\n-¯-‚Â¿-‚Â½ [Achievement 2]\n\nRead the breakdown: [Link]" 
     },
     // BOLD
     { 
       id: 'li_bold_1', 
       tone: 'bold',
       label: 'Industry Shakeup', 
-      structure: "Disruption isn't about doing things differently; it's about making the old ways obsolete. ?\n\n?? THE INDUSTRY IS CHANGED: {name}\n\nWe're officially disrupting {obj}.\n\n?? WHY THIS MATTERS:\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Point 1]\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Point 2]\n\n{desc}\n\nJoin the discussion: [Link]" 
+      structure: "Disruption isn't about doing things differently; it's about making the old ways obsolete. ?\n\n?? THE INDUSTRY IS CHANGED: {name}\n\nWe're officially disrupting {obj}.\n\n?? WHY THIS MATTERS:\n-¯-‚Â¿-‚Â½ [Point 1]\n-¯-‚Â¿-‚Â½ [Point 2]\n\n{desc}\n\nJoin the discussion: [Link]" 
     }
   ],
   twitter: [
@@ -187,13 +187,13 @@ const PLATFORM_CONTENT_TEMPLATES: Record<string, { id: string; label: string; st
       id: 'tw_prof_1', 
       tone: 'professional',
       label: 'Official Update', 
-      structure: "Performance is the only metric that matters. {name} update. ??\n\n?? STRATEGIC UPDATE: {name}\n\nWe're optimizing for {obj} through {desc}.\n\nKey pillars:\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Pillar 1]\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Pillar 2]\n\nDetails: [Link]" 
+      structure: "Performance is the only metric that matters. {name} update. ??\n\n?? STRATEGIC UPDATE: {name}\n\nWe're optimizing for {obj} through {desc}.\n\nKey pillars:\n-¯-‚Â¿-‚Â½ [Pillar 1]\n-¯-‚Â¿-‚Â½ [Pillar 2]\n\nDetails: [Link]" 
     },
     { 
       id: 'tw_prof_2', 
       tone: 'professional',
       label: 'Data Point', 
-      structure: "Numbers > Opinions. Check the impact of {obj}. ??\n\n?? DATA INSIGHT: {obj}\n\nOur latest launch, {name}, is addressing {desc}.\n\nKey metric impact:\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Metric 1]: +[X]%\nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ [Metric 2]: -[Y]%\n\nRead more: [Link]" 
+      structure: "Numbers > Opinions. Check the impact of {obj}. ??\n\n?? DATA INSIGHT: {obj}\n\nOur latest launch, {name}, is addressing {desc}.\n\nKey metric impact:\n-¯-‚Â¿-‚Â½ [Metric 1]: +[X]%\n-¯-‚Â¿-‚Â½ [Metric 2]: -[Y]%\n\nRead more: [Link]" 
     },
     // EDUCATIONAL
     { 
@@ -236,73 +236,73 @@ const PLATFORM_CONTENT_TEMPLATES: Record<string, { id: string; label: string; st
       id: 'yt_prof_launch',
       tone: 'professional',
       label: 'Video Launch',
-      structure: "🎥 NEW VIDEO: Launching {name} - Full Reveal!\n\n💼 STRATEGIC OVERVIEW:\nWelcome to our official launch showcase for {name}. In this video, we go deep into how our new solution solves {desc} and drives {obj}.\n\n🔥 KEY HIGHLIGHTS & INNOVATIONS:\n• [Core Innovation 1]\n• [Strategic Advantage 2]\n• [Key Performance Metric 3]\n\n📈 BUSINESS IMPACT:\n{obj}\n\n🚀 PROFESSIONAL INSIGHTS:\n• [Industry Use Case 1]\n• [Operational Efficiency 2]\n\n👇 WATCH THE FULL VIDEO HERE:\n[Link]\n\n#ProductLaunch #BusinessGrowth #Innovation #{name}"
+      structure: " NEW VIDEO: Launching {name} - Full Reveal!\n\n STRATEGIC OVERVIEW:\nWelcome to our official launch showcase for {name}. In this video, we go deep into how our new solution solves {desc} and drives {obj}.\n\n KEY HIGHLIGHTS & INNOVATIONS:\n- [Core Innovation 1]\n- [Strategic Advantage 2]\n- [Key Performance Metric 3]\n\n BUSINESS IMPACT:\n{obj}\n\n PROFESSIONAL INSIGHTS:\n- [Industry Use Case 1]\n- [Operational Efficiency 2]\n\n WATCH THE FULL VIDEO HERE:\n[Link]\n\n#ProductLaunch #BusinessGrowth #Innovation #{name}"
     },
     {
       id: 'yt_prof_dive',
       tone: 'professional',
       label: 'Feature Deep Dive',
-      structure: "🎥 FEATURE SPOTLIGHT: Deep Diving into {name}\n\n🔍 TECHNICAL ARCHITECTURE:\nToday, we are analyzing the core mechanics of {name} and how it directly addresses {desc}. If you want to achieve {obj}, this deep dive is for you.\n\n🛠️ KEY CAPABILITIES BREAKDOWN:\n• [Advanced Capability 1]\n• [Under-the-Hood Feature 2]\n• [Performance Optimization 3]\n\n📊 BUSINESS VALUE:\n{obj}\n\n💡 IMPLEMENTATION STRATEGY:\n• [System Integration 1]\n• [Scalability Benefit 2]\n\n👇 ACCESS THE FULL DEEP DIVE:\n[Link]\n\n#TechDeepDive #SoftwareEngineering #BusinessValue #{name}"
+      structure: " FEATURE SPOTLIGHT: Deep Diving into {name}\n\n TECHNICAL ARCHITECTURE:\nToday, we are analyzing the core mechanics of {name} and how it directly addresses {desc}. If you want to achieve {obj}, this deep dive is for you.\n\n KEY CAPABILITIES BREAKDOWN:\n- [Advanced Capability 1]\n- [Under-the-Hood Feature 2]\n- [Performance Optimization 3]\n\n BUSINESS VALUE:\n{obj}\n\n IMPLEMENTATION STRATEGY:\n- [System Integration 1]\n- [Scalability Benefit 2]\n\n ACCESS THE FULL DEEP DIVE:\n[Link]\n\n#TechDeepDive #SoftwareEngineering #BusinessValue #{name}"
     },
     {
       id: 'yt_prof_explainer',
       tone: 'professional',
       label: 'Tech Explainer',
-      structure: "🎥 THE TECH EXPLAINER: How {name} Reinvents {obj}\n\n🎓 THE CONCEPT:\nWhy is traditional workflow failing at {desc}? In this video, we break down the technological shift behind {name} and how we enable {obj}.\n\n🧠 CORE PILLARS OF THE TECH:\n• [Architectural Shift 1]\n• [Data Processing Logic 2]\n• [Automation Engine 3]\n\n⚡ METRIC ELEVATION:\n{obj}\n\n📈 ENTERPRISE ROADMAP:\n• [Deployment Step 1]\n• [ROI Realization 2]\n\n👇 WATCH THE EXPLAINER NOW:\n[Link]\n\n#TechExplainer #EnterpriseTech #SystemDesign #{name}"
+      structure: " THE TECH EXPLAINER: How {name} Reinvents {obj}\n\n THE CONCEPT:\nWhy is traditional workflow failing at {desc}? In this video, we break down the technological shift behind {name} and how we enable {obj}.\n\n CORE PILLARS OF THE TECH:\n- [Architectural Shift 1]\n- [Data Processing Logic 2]\n- [Automation Engine 3]\n\n- METRIC ELEVATION:\n{obj}\n\n ENTERPRISE ROADMAP:\n- [Deployment Step 1]\n- [ROI Realization 2]\n\n WATCH THE EXPLAINER NOW:\n[Link]\n\n#TechExplainer #EnterpriseTech #SystemDesign #{name}"
     },
     // CASUAL
     {
       id: 'yt_cas_review',
       tone: 'casual',
       label: 'Product Review',
-      structure: "🎥 HONEST REVIEW: Testing {name} - Is it actually worth it?\n\n👋 HEY EVERYONE:\nToday, we are getting hands-on with {name}! We're reviewing how it actually handles {desc} and whether it can help you {obj}.\n\n🌟 WHAT WE LIKED MOST:\n• [Stellar Feature 1]\n• [User Experience Delight 2]\n• [Workflow Time-Saver 3]\n\n📈 THE REAL IMPACT:\n{obj}\n\n⚠️ WHAT COULD BE BETTER:\n• [Minor Drawback 1]\n• [Learning Curve Note 2]\n\n👇 SEE THE FULL REVIEW:\n[Link]\n\n#ProductReview #HonestOpinion #TechReview #{name}"
+      structure: " HONEST REVIEW: Testing {name} - Is it actually worth it?\n\n HEY EVERYONE:\nToday, we are getting hands-on with {name}! We're reviewing how it actually handles {desc} and whether it can help you {obj}.\n\n WHAT WE LIKED MOST:\n- [Stellar Feature 1]\n- [User Experience Delight 2]\n- [Workflow Time-Saver 3]\n\n THE REAL IMPACT:\n{obj}\n\n- WHAT COULD BE BETTER:\n- [Minor Drawback 1]\n- [Learning Curve Note 2]\n\n SEE THE FULL REVIEW:\n[Link]\n\n#ProductReview #HonestOpinion #TechReview #{name}"
     },
     {
       id: 'yt_cas_bts',
       tone: 'casual',
       label: 'Behind The Scenes',
-      structure: "🎥 BEHIND THE SCENES: How we built {name}!\n\n☕ GRAB A COFFEE:\nEver wondered what goes on behind closed doors? We are taking you backstage to show you the chaotic, fun journey of creating {name} to solve {desc}.\n\n🎬 WHAT YOU'LL SEE:\n• [Developer Late Nights 1]\n• [Unfiltered Design Decisions 2]\n• [The Breakthrough Moment 3]\n\n✨ THE MISSION:\n{obj}\n\n💬 TEAM REFLECTIONS:\n• [Lessons Learned 1]\n• [What's Next 2]\n\n👇 WATCH THE BTS VLOG:\n[Link]\n\n#BehindTheScenes #Vlog #StartupLife #{name}"
+      structure: " BEHIND THE SCENES: How we built {name}!\n\n- GRAB A COFFEE:\nEver wondered what goes on behind closed doors? We are taking you backstage to show you the chaotic, fun journey of creating {name} to solve {desc}.\n\n WHAT YOU'LL SEE:\n- [Developer Late Nights 1]\n- [Unfiltered Design Decisions 2]\n- [The Breakthrough Moment 3]\n\n- THE MISSION:\n{obj}\n\n TEAM REFLECTIONS:\n- [Lessons Learned 1]\n- [What's Next 2]\n\n WATCH THE BTS VLOG:\n[Link]\n\n#BehindTheScenes #Vlog #StartupLife #{name}"
     },
     // INSPIRATIONAL
     {
       id: 'yt_insp_story',
       tone: 'inspirational',
       label: 'Creator Story',
-      structure: "🎥 MY STORY: Why I built {name} to change {obj}\n\n✨ THE SPARK:\nEvery journey starts with a problem. For me, it was struggling with {desc}. This is the story of how {name} was born to achieve {obj}.\n\n🌅 THE CHALLENGES WE FACED:\n• [The Initial Roadblock 1]\n• [The Moment We Almost Quit 2]\n• [The Pivotal Breakthrough 3]\n\n💫 THE VISION:\n{obj}\n\n🙌 MY PROMISE TO YOU:\n• [Audience Empowerment 1]\n• [Long-term Commitment 2]\n\n👇 JOIN THE JOURNEY:\n[Link]\n\n#FounderStory #Inspiration #Entrepreneurship #{name}"
+      structure: " MY STORY: Why I built {name} to change {obj}\n\n- THE SPARK:\nEvery journey starts with a problem. For me, it was struggling with {desc}. This is the story of how {name} was born to achieve {obj}.\n\n THE CHALLENGES WE FACED:\n- [The Initial Roadblock 1]\n- [The Moment We Almost Quit 2]\n- [The Pivotal Breakthrough 3]\n\n THE VISION:\n{obj}\n\n MY PROMISE TO YOU:\n- [Audience Empowerment 1]\n- [Long-term Commitment 2]\n\n JOIN THE JOURNEY:\n[Link]\n\n#FounderStory #Inspiration #Entrepreneurship #{name}"
     },
     // EDUCATIONAL
     {
       id: 'yt_edu_tutorial',
       tone: 'educational',
       label: 'Tutorial Breakdown',
-      structure: "🎥 STEP-BY-STEP TUTORIAL: How to master {name} in 10 Minutes!\n\n📚 GETTING STARTED:\nStop wasting time on manual setup. In this tutorial, we will show you exactly how to configure {name} to solve {desc} and effortlessly achieve {obj}.\n\n🛠️ WHAT YOU WILL LEARN:\n• [Step 1: Setup & Initialization]\n• [Step 2: Core Configuration]\n• [Step 3: Advanced Optimization]\n\n🎯 THE TARGET RESULT:\n{obj}\n\n💡 PRO-TIPS FOR SUCCESS:\n• [Hidden Feature Hack 1]\n• [Common Pitfall to Avoid 2]\n\n👇 WATCH THE FULL TUTORIAL:\n[Link]\n\n#Tutorial #HowTo #Masterclass #{name}"
+      structure: " STEP-BY-STEP TUTORIAL: How to master {name} in 10 Minutes!\n\n GETTING STARTED:\nStop wasting time on manual setup. In this tutorial, we will show you exactly how to configure {name} to solve {desc} and effortlessly achieve {obj}.\n\n WHAT YOU WILL LEARN:\n- [Step 1: Setup & Initialization]\n- [Step 2: Core Configuration]\n- [Step 3: Advanced Optimization]\n\n THE TARGET RESULT:\n{obj}\n\n PRO-TIPS FOR SUCCESS:\n- [Hidden Feature Hack 1]\n- [Common Pitfall to Avoid 2]\n\n WATCH THE FULL TUTORIAL:\n[Link]\n\n#Tutorial #HowTo #Masterclass #{name}"
     },
     {
       id: 'yt_edu_breakdown',
       tone: 'educational',
       label: 'Educational Breakdown',
-      structure: "🎥 DEEP BREAKDOWN: The Science of {obj} using {name}\n\n🧠 THE CONCEPT:\nMost creators struggle with {desc}. Today, we are breaking down the first-principles science of how {name} tackles this to deliver {obj}.\n\n🧬 KEY PRINCIPLES EXPLAINED:\n• [Scientific Principle 1]\n• [Data-Backed Insight 2]\n• [Cognitive Loop 3]\n\n📈 ACADEMIC IMPACT:\n{obj}\n\n📝 SUMMARY & ROADMAP:\n• [Key Lesson 1]\n• [Execution Tactic 2]\n\n👇 LEVEL UP YOUR KNOWLEDGE:\n[Link]\n\n#Education #ScienceOfSuccess #HowItWorks #{name}"
+      structure: " DEEP BREAKDOWN: The Science of {obj} using {name}\n\n THE CONCEPT:\nMost creators struggle with {desc}. Today, we are breaking down the first-principles science of how {name} tackles this to deliver {obj}.\n\n KEY PRINCIPLES EXPLAINED:\n- [Scientific Principle 1]\n- [Data-Backed Insight 2]\n- [Cognitive Loop 3]\n\n ACADEMIC IMPACT:\n{obj}\n\n SUMMARY & ROADMAP:\n- [Key Lesson 1]\n- [Execution Tactic 2]\n\n LEVEL UP YOUR KNOWLEDGE:\n[Link]\n\n#Education #ScienceOfSuccess #HowItWorks #{name}"
     },
     // BOLD
     {
       id: 'yt_bold_community',
       tone: 'bold',
       label: 'Community Update',
-      structure: "🎥 THE TRUTH: An Important Update for the {name} Community\n\n📢 NO BULLSHIT:\nIt's time to speak directly. We are shaking up {desc} because traditional methods are broken. This is how {name} will enforce {obj}.\n\n⚡ THE NEW PARADIGM:\n• [Bold Commitment 1]\n• [Disruptive Action 2]\n• [Direct Community Value 3]\n\n🔥 OUR UNCOMPROMISING GOAL:\n{obj}\n\n✊ JOIN THE MOVEMENT:\n• [Action Step 1]\n• [Community Stand 2]\n\n👇 WATCH THE FULL DECLARATION:\n[Link]\n\n#CommunityUpdate #BoldTalk #IndustryShift #{name}"
+      structure: " THE TRUTH: An Important Update for the {name} Community\n\n NO BULLSHIT:\nIt's time to speak directly. We are shaking up {desc} because traditional methods are broken. This is how {name} will enforce {obj}.\n\n- THE NEW PARADIGM:\n- [Bold Commitment 1]\n- [Disruptive Action 2]\n- [Direct Community Value 3]\n\n OUR UNCOMPROMISING GOAL:\n{obj}\n\n- JOIN THE MOVEMENT:\n- [Action Step 1]\n- [Community Stand 2]\n\n WATCH THE FULL DECLARATION:\n[Link]\n\n#CommunityUpdate #BoldTalk #IndustryShift #{name}"
     },
     {
       id: 'yt_bold_viral',
       tone: 'bold',
       label: 'Viral Hook Format',
-      structure: "🎥 DO NOT IGNORE: The Shocking Reality of {obj}!\n\n🚨 THE WAKE UP CALL:\n99% of people are completely wrong about {desc}. We are breaking the silence to show you how {name} is destroying old limits to achieve {obj}.\n\n⚡ SHOCKING REVELATIONS:\n• [Untold Industry Truth 1]\n• [The Cheat Code Feature 2]\n• [Instant Value Lever 3]\n\n💥 THE ULTIMATE OUTCOME:\n{obj}\n\n🛑 STOP WASTING TIME:\n• [Action Shift 1]\n• [Immediate Upgrade 2]\n\n👇 GET THE SECRET LINK:\n[Link]\n\n#ViralHook #MindBlown #GameChanger #{name}"
+      structure: " DO NOT IGNORE: The Shocking Reality of {obj}!\n\n THE WAKE UP CALL:\n99% of people are completely wrong about {desc}. We are breaking the silence to show you how {name} is destroying old limits to achieve {obj}.\n\n- SHOCKING REVELATIONS:\n- [Untold Industry Truth 1]\n- [The Cheat Code Feature 2]\n- [Instant Value Lever 3]\n\n THE ULTIMATE OUTCOME:\n{obj}\n\n STOP WASTING TIME:\n- [Action Shift 1]\n- [Immediate Upgrade 2]\n\n GET THE SECRET LINK:\n[Link]\n\n#ViralHook #MindBlown #GameChanger #{name}"
     }
   ]
 };
 
 const cleanTemplateEncodingArtifacts = (text: string) => {
   return text
-    .replace(/ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½/g, '-')
-    .replace(/�/g, '-')
+    .replace(/-¯-‚Â¿-‚Â½/g, '-')
+    .replace(/-/g, '-')
     .replace(/\b([1-9])\?\?/g, '$1.')
     .replace(/\s*\?\?\s*(?=[A-Z])/g, '\n')
     .replace(/\s+\?\?(?=\n|$)/g, '')
@@ -496,7 +496,7 @@ interface SuggestedCampaign {
 }
 
 // ============================================
-// CONTENT ANGLE POOL ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ Each regeneration picks a unique angle
+// CONTENT ANGLE POOL -¯-‚Â¿-‚Â½ Each regeneration picks a unique angle
 // ============================================
 const CONTENT_ANGLES = [
   'customer success story',
@@ -663,7 +663,7 @@ const SuggestionCard: React.FC<{
           : (isDarkMode ? 'border-slate-700/50 hover:border-slate-600' : 'border-slate-200 hover:border-[#ffcc29]/30')
       } ${isUsed ? '' : 'group hover:shadow-lg'}`}
     >
-      {/* Image ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ click to open platform preview */}
+      {/* Image -¯-‚Â¿-‚Â½ click to open platform preview */}
       <div className="relative h-48 overflow-hidden cursor-pointer" onClick={() => !isUsed && setShowPreview(true)}>
         <img
           src={suggestion.imageUrl}
@@ -1400,13 +1400,13 @@ const Campaigns: React.FC = () => {
               if (validation.issues && validation.issues.length > 0) {
                 console.log('   - Critical Issues:');
                 validation.issues.forEach((issue: string) => {
-                  console.log(`     ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ ${issue}`);
+                  console.log(`     -¯-‚Â¿-‚Â½ ${issue}`);
                 });
               }
               if (validation.warnings && validation.warnings.length > 0) {
                 console.log('   - Warnings:');
                 validation.warnings.forEach((warning: string) => {
-                  console.log(`     ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ ${warning}`);
+                  console.log(`     -¯-‚Â¿-‚Â½ ${warning}`);
                 });
               }
             }
@@ -1502,10 +1502,10 @@ const Campaigns: React.FC = () => {
   };
 
   // Always load campaigns from backend (MongoDB cache + Cloudinary URLs = single source of truth)
-  // No localStorage campaign cache ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ all browsers/devices stay in sync
+  // No localStorage campaign cache -¯-‚Â¿-‚Â½ all browsers/devices stay in sync
   useEffect(() => {
     if (activeTab === 'suggestions') {
-      // Create tab ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ no API calls needed, just shows action boxes
+      // Create tab -¯-‚Â¿-‚Â½ no API calls needed, just shows action boxes
       setLoadingSuggestions(false);
     } else {
       loadCampaigns();
@@ -1610,7 +1610,7 @@ const Campaigns: React.FC = () => {
         id: 'fb-2',
         title: `Value for ${targetAudience}`,
         caption: isB2B 
-          ? `?? 3 ways ${name} helps businesses grow:\n\n1?? Streamlined operations\n2?? Data-driven insights\n3?? Expert support\n\n?? See real results ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ link in bio!`
+          ? `?? 3 ways ${name} helps businesses grow:\n\n1?? Streamlined operations\n2?? Data-driven insights\n3?? Expert support\n\n?? See real results -¯-‚Â¿-‚Â½ link in bio!`
           : `? Why ${targetAudience || 'our customers'} love ${name}:\n\n?? Quality you can trust\n?? Service that cares\n?? Results that show\n\n?? Share your experience!`,
         imageUrl: images[1],
         platform: isB2B ? 'LinkedIn' : 'Instagram',
@@ -1644,7 +1644,7 @@ const Campaigns: React.FC = () => {
       {
         id: 'fb-5',
         title: `Limited Time Offer`,
-        caption: `?? SPECIAL OFFER for our amazing ${targetAudience || 'followers'}!\n\n${voice.emoji} For a limited time, get exclusive access to our best ${industry.toLowerCase()} solutions.\n\n? Don't wait ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ this won't last long!\n\n?? Link in bio`,
+        caption: `?? SPECIAL OFFER for our amazing ${targetAudience || 'followers'}!\n\n${voice.emoji} For a limited time, get exclusive access to our best ${industry.toLowerCase()} solutions.\n\n? Don't wait -¯-‚Â¿-‚Â½ this won't last long!\n\n?? Link in bio`,
         imageUrl: 'https://images.unsplash.com/photo-1607082350899-7e105aa886ae?w=800&h=600&fit=crop',
         platform: 'Instagram',
         objective: 'Sales',
@@ -1677,7 +1677,7 @@ const Campaigns: React.FC = () => {
       {
         id: 'fb-8',
         title: `${name} Milestone`,
-        caption: `?? Big news! ${name} has just hit an amazing milestone!\n\n${voice.emoji} Thank you to everyone who made this possible ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ our incredible ${targetAudience} and our dedicated team.\n\nHere's to even bigger things ahead! ??\n\n#Grateful`,
+        caption: `?? Big news! ${name} has just hit an amazing milestone!\n\n${voice.emoji} Thank you to everyone who made this possible -¯-‚Â¿-‚Â½ our incredible ${targetAudience} and our dedicated team.\n\nHere's to even bigger things ahead! ??\n\n#Grateful`,
         imageUrl: 'https://images.unsplash.com/photo-1533750349088-cd871a92f312?w=800&h=600&fit=crop',
         platform: 'Instagram',
         objective: 'Engagement',
@@ -1943,7 +1943,7 @@ const Campaigns: React.FC = () => {
   }, []);
 
   // ====== SERIALIZED REGENERATION QUEUE ======
-  // Only one regeneration runs at a time ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ prevents duplicate content
+  // Only one regeneration runs at a time -¯-‚Â¿-‚Â½ prevents duplicate content
   const regenQueueRef = useRef<Promise<void>>(Promise.resolve());
 
   const enqueueRegeneration = useCallback((fn: () => Promise<void>) => {
@@ -2132,7 +2132,7 @@ Generated by Nebulaa Gravity Marketing Agent
         bestDateTime.setHours(hours, minutes, 0, 0);
         
         if (bestDateTime <= now) {
-          // Best time already passed today ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ schedule for tomorrow
+          // Best time already passed today -¯-‚Â¿-‚Â½ schedule for tomorrow
           const tomorrow = new Date(now);
           tomorrow.setDate(tomorrow.getDate() + 1);
           startDate = tomorrow.toISOString().split('T')[0];
@@ -2737,7 +2737,7 @@ Generated by Nebulaa Gravity Marketing Agent
                         <ul className="space-y-1.5">
                           {(icpData.icp?.painPoints || []).map((point, i) => (
                             <li key={i} className={`text-xs flex items-start gap-2 ${theme.textSecondary}`}>
-                              <span className="text-[#ffcc29] mt-0.5">ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½</span>
+                              <span className="text-[#ffcc29] mt-0.5">-¯-‚Â¿-‚Â½</span>
                               {point}
                             </li>
                           ))}
@@ -2843,7 +2843,7 @@ Generated by Nebulaa Gravity Marketing Agent
 
                   {/* Selection hint */}
                   <p className={`text-[10px] mt-2 ${theme.textSecondary}`}>
-                    Click platforms to select/deselect ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ campaign suggestions will only use selected platforms
+                    Click platforms to select/deselect -¯-‚Â¿-‚Â½ campaign suggestions will only use selected platforms
                   </p>
                 </div>
 
@@ -3169,7 +3169,7 @@ Generated by Nebulaa Gravity Marketing Agent
                       )}
 
                       <p className={`text-xs ${theme.textMuted}`}>
-                        Applied only to Instagram. We publish Instagram as a video with your audio embedded (this plays as normal video sound, not as Instagram Music). Instagram web doesnÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½t support adding music to image posts. Other platforms publish without audio.
+                        Applied only to Instagram. We publish Instagram as a video with your audio embedded (this plays as normal video sound, not as Instagram Music). Instagram web doesn-¯-‚Â¿-‚Â½t support adding music to image posts. Other platforms publish without audio.
                       </p>
                     </div>
                   </div>
@@ -3565,7 +3565,7 @@ Generated by Nebulaa Gravity Marketing Agent
                         />
                         <div className="flex items-center justify-between mt-2">
                           <span className={`text-xs ${theme.textMuted}`}>
-                            {createPostLogo ? '? Logo selected' : 'No logo'} ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ {createPostAspectRatio}
+                            {createPostLogo ? '? Logo selected' : 'No logo'} -¯-‚Â¿-‚Â½ {createPostAspectRatio}
                           </span>
                           <button
                             onClick={async () => {
@@ -5174,7 +5174,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
         const creditData = await apiService.getCredits();
         const balance = creditData?.credits?.balance ?? 0;
         if (balance < creditCost) {
-          alert(`?? Insufficient credits. You have ${balance} credits but need ${creditCost} (7 per post ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ ${totalPosts} posts).`);
+          alert(`?? Insufficient credits. You have ${balance} credits but need ${creditCost} (7 per post -¯-‚Â¿-‚Â½ ${totalPosts} posts).`);
           generationRequestInFlightRef.current = false;
           return;
         }
@@ -5407,7 +5407,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
               continue;
             }
 
-            // Create the campaign as DRAFT first ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ only set to 'scheduled' after Ayrshare confirms
+            // Create the campaign as DRAFT first -¯-‚Â¿-‚Â½ only set to 'scheduled' after Ayrshare confirms
             const createResult = await apiService.createCampaign({
               name: `${campaignName} - ${platformForPost} ${post.suggestedDate}`,
               objective: objective as any,
@@ -7194,7 +7194,7 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
     const [isProcessingImage, setIsProcessingImage] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
 
-    // Instagram-only audio (optional) ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ only used when Instagram is selected
+    // Instagram-only audio (optional) -¯-‚Â¿-‚Â½ only used when Instagram is selected
     const [instagramAudio, setInstagramAudio] = useState<{ url: string; publicId?: string | null; originalName?: string | null; durationSeconds?: number | null } | null>(null);
     const [instagramAudioUrlInput, setInstagramAudioUrlInput] = useState('');
     const [isUploadingInstagramAudio, setIsUploadingInstagramAudio] = useState(false);
@@ -7269,11 +7269,11 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
       const fileArray = Array.from(files).filter(f => f.type.startsWith('image/') || f.type.startsWith('video/'));
       const rejected = Array.from(files).filter(f => !f.type.startsWith('image/') && !f.type.startsWith('video/'));
       if (rejected.length > 0) {
-        alert(`${rejected.map(f => f.name).join(', ')} skipped ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ only image and video files are accepted.`);
+        alert(`${rejected.map(f => f.name).join(', ')} skipped -¯-‚Â¿-‚Â½ only image and video files are accepted.`);
       }
       const oversized = fileArray.filter(f => f.size > MAX_FILE_SIZE);
       if (oversized.length > 0) {
-        alert(`${oversized.length} file${oversized.length > 1 ? 's' : ''} exceeded the 10MB limit and ${oversized.length > 1 ? 'were' : 'was'} skipped:\n${oversized.map(f => `ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ ${f.name} (${(f.size / 1024 / 1024).toFixed(1)}MB)`).join('\n')}`);
+        alert(`${oversized.length} file${oversized.length > 1 ? 's' : ''} exceeded the 10MB limit and ${oversized.length > 1 ? 'were' : 'was'} skipped:\n${oversized.map(f => `-¯-‚Â¿-‚Â½ ${f.name} (${(f.size / 1024 / 1024).toFixed(1)}MB)`).join('\n')}`);
       }
       const validFiles = fileArray.filter(f => f.size <= MAX_FILE_SIZE);
       if (validFiles.length === 0) return;
@@ -7369,7 +7369,7 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
       if (overLimitPosters.length > 0) {
         const details = overLimitPosters.map(p => {
           const charInfo = getCharLimitForPoster(p)!;
-          return `ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ ${charInfo.label}: ${p.content.length}/${charInfo.limit} chars`;
+          return `-¯-‚Â¿-‚Â½ ${charInfo.label}: ${p.content.length}/${charInfo.limit} chars`;
         }).join('\n');
         alert(`Some posters exceed the platform character limit:\n\n${details}\n\nPlease shorten the content before generating.`);
         return;
@@ -7838,7 +7838,7 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
         const message = isScheduleMode
           ? `Scheduled ${generatedPosters.length} poster(s) for ${new Date(`${scheduleDate}T${scheduleTime}`).toLocaleString()}`
           : anyBackendScheduled
-            ? `Queued ${generatedPosters.length} poster(s) for publishing ${lastBackendScheduledFor ? `(${new Date(lastBackendScheduledFor).toLocaleString()})` : '(pending)'} ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ check again in a few minutes`
+            ? `Queued ${generatedPosters.length} poster(s) for publishing ${lastBackendScheduledFor ? `(${new Date(lastBackendScheduledFor).toLocaleString()})` : '(pending)'} -¯-‚Â¿-‚Â½ check again in a few minutes`
             : `Posted ${generatedPosters.length} poster(s) to ${selectedPlatforms.join(', ')}`;
         
         setPublishResult({ success: true, message });
@@ -8083,7 +8083,7 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
               </div>
             )}
 
-            {/* STEP 2: Preview & Edit (merged with schedule ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ strategic advisor layout) */}
+            {/* STEP 2: Preview & Edit (merged with schedule -¯-‚Â¿-‚Â½ strategic advisor layout) */}
             {step === 'preview' && (
               <div className="space-y-4">
                 {/* Poster Thumbnails Strip (if multiple) */}
@@ -8125,7 +8125,7 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
                 )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Left Column ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ Image */}
+                  {/* Left Column -¯-‚Â¿-‚Â½ Image */}
                   <div>
                     <label className={`block text-xs font-semibold uppercase tracking-wide mb-2 ${theme.textSecondary}`}>Image</label>
                     {currentPoster && currentPoster.status === 'generating' || currentPoster?.status === 'editing' ? (
@@ -8238,7 +8238,7 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
                     )}
                   </div>
 
-                  {/* Right Column ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ Platform, Caption, Schedule */}
+                  {/* Right Column -¯-‚Â¿-‚Â½ Platform, Caption, Schedule */}
                   <div className="space-y-4">
                     {/* Platform Selection */}
                     <div>
@@ -8327,7 +8327,7 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
                           )}
 
                           <p className={`text-xs ${theme.textMuted}`}>
-                            Applied only to Instagram. We publish Instagram as a video with your audio embedded (this plays as normal video sound, not as Instagram Music). Instagram web doesnÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½t support adding music to image posts. Other platforms publish without audio.
+                            Applied only to Instagram. We publish Instagram as a video with your audio embedded (this plays as normal video sound, not as Instagram Music). Instagram web doesn-¯-‚Â¿-‚Â½t support adding music to image posts. Other platforms publish without audio.
                           </p>
                         </div>
                       </div>
@@ -8502,7 +8502,7 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
           </div>
         )}
 
-        {/* Aspect Ratio Modal ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ rendered outside overflow-hidden container */}
+        {/* Aspect Ratio Modal -¯-‚Â¿-‚Â½ rendered outside overflow-hidden container */}
         {showAspectRatioModal && (
           <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setShowAspectRatioModal(false)}>
             <div className={`${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white'} border rounded-2xl shadow-2xl w-full max-w-md p-6`} onClick={e => e.stopPropagation()}>
@@ -8912,7 +8912,7 @@ const UploadPublishModal: React.FC<UploadPublishModalProps> = ({ onClose, onSucc
     const [publishSummary, setPublishSummary] = useState<{ total: number; success: number; failed: number } | null>(null);
     const [showUploadPreview, setShowUploadPreview] = useState(false);
 
-    // Instagram-only audio (optional) ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ only used when Instagram is selected
+    // Instagram-only audio (optional) -¯-‚Â¿-‚Â½ only used when Instagram is selected
     const [instagramAudio, setInstagramAudio] = useState<{ url: string; publicId?: string | null; originalName?: string | null; durationSeconds?: number | null } | null>(null);
     const [instagramAudioUrlInput, setInstagramAudioUrlInput] = useState('');
     const [isUploadingInstagramAudio, setIsUploadingInstagramAudio] = useState(false);
@@ -8936,11 +8936,11 @@ const UploadPublishModal: React.FC<UploadPublishModalProps> = ({ onClose, onSucc
         const fileArray = Array.from(files).filter(f => f.type.startsWith('image/') || f.type.startsWith('video/'));
         const rejected = Array.from(files).filter(f => !f.type.startsWith('image/') && !f.type.startsWith('video/'));
         if (rejected.length > 0) {
-          alert(`${rejected.map(f => f.name).join(', ')} skipped ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ only image and video files are accepted.`);
+          alert(`${rejected.map(f => f.name).join(', ')} skipped -¯-‚Â¿-‚Â½ only image and video files are accepted.`);
         }
         const oversized = fileArray.filter(f => f.size > MAX_FILE_SIZE);
         if (oversized.length > 0) {
-            alert(`${oversized.length} file${oversized.length > 1 ? 's' : ''} exceeded the 10MB limit and ${oversized.length > 1 ? 'were' : 'was'} skipped:\n${oversized.map(f => `ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ ${f.name} (${(f.size / 1024 / 1024).toFixed(1)}MB)`).join('\n')}`);
+            alert(`${oversized.length} file${oversized.length > 1 ? 's' : ''} exceeded the 10MB limit and ${oversized.length > 1 ? 'were' : 'was'} skipped:\n${oversized.map(f => `-¯-‚Â¿-‚Â½ ${f.name} (${(f.size / 1024 / 1024).toFixed(1)}MB)`).join('\n')}`);
         }
         const validFiles = fileArray.filter(f => f.size <= MAX_FILE_SIZE);
         if (validFiles.length === 0) return;
@@ -9265,7 +9265,7 @@ const UploadPublishModal: React.FC<UploadPublishModalProps> = ({ onClose, onSucc
                             <p className={`text-xs ${theme.textSecondary}`}>
                                 {posts.length === 0 
                                     ? 'Drop or browse multiple images to create posts' 
-                                    : `${posts.length} image${posts.length > 1 ? 's' : ''} uploaded ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ ${readyCount} ready to publish`
+                                    : `${posts.length} image${posts.length > 1 ? 's' : ''} uploaded -¯-‚Â¿-‚Â½ ${readyCount} ready to publish`
                                 }
                             </p>
                         </div>
@@ -9308,7 +9308,7 @@ const UploadPublishModal: React.FC<UploadPublishModalProps> = ({ onClose, onSucc
                                         </div>
                                         <div>
                                             <p className={`font-medium ${theme.text}`}>{isDragging ? 'Drop images here!' : 'Drop your images here'}</p>
-                                            <p className={`text-sm ${theme.textSecondary}`}>or click to browse ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ multiple images supported (PNG, JPG)</p>
+                                            <p className={`text-sm ${theme.textSecondary}`}>or click to browse -¯-‚Â¿-‚Â½ multiple images supported (PNG, JPG)</p>
                                         </div>
                                     </>
                                 ) : (
@@ -9365,7 +9365,7 @@ const UploadPublishModal: React.FC<UploadPublishModalProps> = ({ onClose, onSucc
                                         if (!pl) return null;
                                         return (
                                             <span key={p} className={`text-[10px] px-2 py-0.5 rounded-full ${isDarkMode ? 'bg-slate-700/50 text-slate-400' : 'bg-slate-100 text-slate-500'}`}>
-                                                {pl.label}: {pl.charLimit.toLocaleString()} chars ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ {pl.imageMaxMB}MB max ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ {pl.bestRatio}
+                                                {pl.label}: {pl.charLimit.toLocaleString()} chars -¯-‚Â¿-‚Â½ {pl.imageMaxMB}MB max -¯-‚Â¿-‚Â½ {pl.bestRatio}
                                             </span>
                                         );
                                     })}
@@ -9433,7 +9433,7 @@ const UploadPublishModal: React.FC<UploadPublishModalProps> = ({ onClose, onSucc
                                 )}
 
                                 <p className={`text-xs ${theme.textMuted}`}>
-                                    Applied only to Instagram. We publish Instagram as a video with your audio embedded (this plays as normal video sound, not as Instagram Music). Instagram web doesnÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½t support adding music to image posts. Other platforms publish without audio.
+                                    Applied only to Instagram. We publish Instagram as a video with your audio embedded (this plays as normal video sound, not as Instagram Music). Instagram web doesn-¯-‚Â¿-‚Â½t support adding music to image posts. Other platforms publish without audio.
                                 </p>
                             </div>
                         </div>
@@ -9621,7 +9621,7 @@ const UploadPublishModal: React.FC<UploadPublishModalProps> = ({ onClose, onSucc
                                 {publishSummary.failed === 0 ? <Check className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
                                 <span className="font-medium">
                                     {publishSummary.success}/{publishSummary.total} posts published successfully
-                                    {publishSummary.failed > 0 && ` ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â½ ${publishSummary.failed} failed`}
+                                    {publishSummary.failed > 0 && ` -¯-‚Â¿-‚Â½ ${publishSummary.failed} failed`}
                                 </span>
                             </div>
                         </div>
@@ -9685,4 +9685,6 @@ const UploadPublishModal: React.FC<UploadPublishModalProps> = ({ onClose, onSucc
 };
 
 export default Campaigns;
+
+
 
