@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Campaign, Product } from '../types';
 import { apiService, icpStrategyService, inventoryAPI, brandAssetsAPI } from '../services/api';
