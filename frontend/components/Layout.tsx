@@ -128,11 +128,11 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
     { path: '/influencer-portal', label: 'Influencer Portal', icon: PenTool },
     { path: '/reels', label: 'AI Reels', icon: PlayCircle },
     { path: '/ad-campaigns', label: 'Ad Campaigns', icon: Layers },
-    { path: '/competitors', label: 'Competitors', icon: Users },
     { path: '/connect-socials', label: 'Connect Socials', icon: Link2 },
     { path: '/brand-assets', label: 'Brand Assets', icon: Palette },
     { path: '/inventory', label: 'Inventory', icon: Package },
     { path: '/analytics', label: 'Analytics & Ads', icon: BarChart3 },
+    { path: '/competitors', label: 'Competitors', icon: Users },
     { path: '/ai-memory', label: 'AI Memory', icon: Brain },
   ];
 

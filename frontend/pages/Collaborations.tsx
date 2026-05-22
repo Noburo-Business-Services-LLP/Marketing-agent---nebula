@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { apiService } from '../services/api';
 import { useTheme } from '../context/ThemeContext';
-import { Plus, X, Sparkles } from 'lucide-react';
+import { Plus, X, Sparkles, Trash2, Calendar } from 'lucide-react';
 import InfluencerPortalTabs from '../components/InfluencerPortalTabs';
 
 const Collaborations: React.FC = () => {
@@ -10,7 +10,7 @@ const Collaborations: React.FC = () => {
   const [influencers, setInfluencers] = useState<any[]>([]);
   const [campaigns, setCampaigns] = useState<any[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [form, setForm] = useState({ campaignId: '', influencerId: '', platform: 'instagram', contentType: 'Reel', dueDate: '' });
+  const [form, setForm] = useState({ campaignId: '', influencerId: '', platform: 'instagram', contentType: 'Campaign Post', dueDate: '' });
 
   const load = async () => {
     const [cRes, iRes, camRes] = await Promise.all([
@@ -27,8 +27,15 @@ const Collaborations: React.FC = () => {
 
   const invite = async () => {
     await apiService.inviteCollaboration(form);
-    setForm({ campaignId: '', influencerId: '', platform: 'instagram', contentType: 'Reel', dueDate: '' });
+    setForm({ campaignId: '', influencerId: '', platform: 'instagram', contentType: 'Campaign Post', dueDate: '' });
     setShowCreateModal(false);
+    load();
+  };
+
+  const remove = async (id: string) => {
+    const confirmed = window.confirm('Delete this collaboration?');
+    if (!confirmed) return;
+    await apiService.deleteCollaboration(id);
     load();
   };
 
@@ -40,6 +47,7 @@ const Collaborations: React.FC = () => {
     : 'w-full p-2.5 rounded-lg bg-white border border-slate-300 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#ffcc29]';
   const headerClass = isDarkMode ? 'text-slate-100 border-b border-slate-700/70' : 'text-slate-800 border-b border-slate-200';
   const rowClass = isDarkMode ? 'border-b border-slate-800 text-slate-200' : 'border-b border-slate-100 text-slate-700';
+  const contentTypeOptions = ['Campaign Post', 'Social Post', 'Instagram Reel', 'YouTube Video', 'LinkedIn Post', 'Facebook Post', 'X Thread', 'AI Video'];
 
   return (
     <div className="max-w-7xl mx-auto space-y-4">
@@ -85,7 +93,9 @@ const Collaborations: React.FC = () => {
               <th className="p-3 font-semibold">Influencer</th>
               <th className="p-3 font-semibold">Platform</th>
               <th className="p-3 font-semibold">Content</th>
+              <th className="p-3 font-semibold">Due Date</th>
               <th className="p-3 font-semibold">Status</th>
+              <th className="p-3 font-semibold text-right">Action</th>
             </tr>
           </thead>
           <tbody>
@@ -95,16 +105,28 @@ const Collaborations: React.FC = () => {
                 <td className="p-3">{item.influencerId?.name || '-'}</td>
                 <td className="p-3 capitalize">{item.platform}</td>
                 <td className="p-3">{item.contentType}</td>
+                <td className="p-3">{item.dueDate ? new Date(item.dueDate).toLocaleDateString() : '-'}</td>
                 <td className="p-3">
                   <span className={`px-2 py-1 rounded-full text-xs font-medium ${isDarkMode ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-700'}`}>
                     {item.status}
                   </span>
                 </td>
+                <td className="p-3 text-right">
+                  <button
+                    className={`inline-flex items-center gap-1 rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${
+                      isDarkMode ? 'bg-red-500/10 text-red-300 hover:bg-red-500/20' : 'bg-red-50 text-red-600 hover:bg-red-100'
+                    }`}
+                    onClick={() => remove(item._id)}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Delete
+                  </button>
+                </td>
               </tr>
             ))}
             {!items.length && (
               <tr>
-                <td className={`p-6 text-center ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`} colSpan={5}>
+                <td className={`p-6 text-center ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`} colSpan={7}>
                   No collaborations yet. Click Create Collaboration to start.
                 </td>
               </tr>
@@ -121,7 +143,7 @@ const Collaborations: React.FC = () => {
               <div>
                 <h2 className={`text-xl font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Create Collaboration</h2>
                 <p className={`text-sm mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                  Pick campaign, influencer, platform, and collaboration type.
+                  Pick campaign, influencer, platform, content type, and due date.
                 </p>
               </div>
               <button className={`p-2 rounded-lg ${isDarkMode ? 'hover:bg-slate-800 text-slate-300' : 'hover:bg-slate-100 text-slate-600'}`} onClick={() => setShowCreateModal(false)}>
@@ -141,8 +163,18 @@ const Collaborations: React.FC = () => {
               <select className={inputClass} value={form.platform} onChange={(e) => setForm({ ...form, platform: e.target.value })}>
                 {['instagram', 'youtube', 'linkedin', 'facebook', 'twitter', 'x'].map((p) => <option key={p} value={p}>{p}</option>)}
               </select>
-              <input className={inputClass} placeholder="Content Type (Reel, Review, Thread...)" value={form.contentType} onChange={(e) => setForm({ ...form, contentType: e.target.value })} />
-              <input className={inputClass} type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} />
+              <select className={inputClass} value={form.contentType} onChange={(e) => setForm({ ...form, contentType: e.target.value })}>
+                {contentTypeOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+              </select>
+              <label className={`flex items-center gap-2 rounded-lg px-3 py-2.5 border ${isDarkMode ? 'border-slate-700 bg-[#070A12]' : 'border-slate-300 bg-white'}`}>
+                <Calendar className={`w-4 h-4 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`} />
+                <input
+                  className={`w-full bg-transparent outline-none ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}
+                  type="date"
+                  value={form.dueDate}
+                  onChange={(e) => setForm({ ...form, dueDate: e.target.value })}
+                />
+              </label>
             </div>
 
             <div className={`flex items-center gap-2 mt-3 text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>

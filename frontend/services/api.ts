@@ -1118,12 +1118,24 @@ export const apiService = {
     return apiCall('/influencers', { method: 'POST', body: JSON.stringify(data) }, true);
   },
 
+  updateInfluencerPortalInfluencer: async (id: string, data: any): Promise<any> => {
+    return apiCall(`/influencers/${id}`, { method: 'PUT', body: JSON.stringify(data) }, true);
+  },
+
+  deleteInfluencerPortalInfluencer: async (id: string): Promise<any> => {
+    return apiCall(`/influencers/${id}`, { method: 'DELETE' }, true);
+  },
+
   getCollaborations: async (): Promise<any> => {
     return apiCall('/collaborations', { method: 'GET' }, true);
   },
 
   inviteCollaboration: async (data: any): Promise<any> => {
     return apiCall('/collaborations/invite', { method: 'POST', body: JSON.stringify(data) }, true);
+  },
+
+  deleteCollaboration: async (id: string): Promise<any> => {
+    return apiCall(`/collaborations/${id}`, { method: 'DELETE' }, true);
   },
 
   getSubmissions: async (): Promise<any> => {
