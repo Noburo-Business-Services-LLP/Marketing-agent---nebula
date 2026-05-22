@@ -20,7 +20,9 @@
         "./*"
       ]
     },
-    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
     "noEmit": true
   },
   "include": ["**/*.ts", "**/*.tsx"]
