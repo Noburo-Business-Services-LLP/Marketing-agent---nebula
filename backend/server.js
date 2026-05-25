@@ -160,10 +160,19 @@ app.use(cors({
 // General API rate limit — 200 requests per 15 minutes per IP
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 200,
+  max: 2000,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Too many requests, please try again later.' }
+  message: { error: 'Too many requests, please try again later.' },
+  skip: (req) => {
+    const url = String(req.originalUrl || '');
+    if (req.method !== 'GET') return false;
+    return (
+      url.startsWith('/api/notifications') ||
+      url.startsWith('/api/credits') ||
+      url.startsWith('/api/video-generation/jobs/')
+    );
+  }
 });
 
 // Auth rate limit — 20 requests per 15 minutes (login, register, OTP)
@@ -334,7 +343,8 @@ app.use('/api/payment', paymentRoutes);
 app.use('/api/content', contentRoutes);
 app.use('/api/google-calendar', googleCalendarRoutes);
 app.use('/api/products', productRoutes);
-app.use('/api/video-generation', aiLimiter, videoGenerationRoutes);
+// Video generation has its own per-route limiters (job polling must not trip AI limiter).
+app.use('/api/video-generation', videoGenerationRoutes);
 app.use('/api/ai-memory', aiMemoryRoutes);
 app.use('/api/influencers', influencerRoutes);
 app.use('/api/collaborations', collaborationRoutes);

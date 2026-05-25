@@ -282,10 +282,31 @@ function normalizeAudioOptions(raw = {}) {
       : 'female',
     voiceVolume: Number.isFinite(Number(raw?.voiceVolume)) ? Number(raw.voiceVolume) : 1,
     musicVolume: Number.isFinite(Number(raw?.musicVolume)) ? Number(raw.musicVolume) : 0.24,
+    fitVoiceToDuration: raw?.fitVoiceToDuration !== false,
     manualAudioData: typeof raw?.manualAudioData === 'string' ? raw.manualAudioData : '',
     manualAudioUrl: typeof raw?.manualAudioUrl === 'string' ? raw.manualAudioUrl.trim() : '',
     soundEffectUrls: Array.isArray(raw?.soundEffectUrls) ? raw.soundEffectUrls.filter(Boolean).map(String) : []
   };
+}
+
+function fitVoiceScriptToDuration(text = '', durationSeconds = 60) {
+  const clean = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!clean) return clean;
+
+  const safeDuration = clamp(Number(durationSeconds) || 60, 6, 1800);
+  // Approx narration pacing ~130 wpm (2.17 wps). Keep slightly conservative.
+  const targetWords = Math.max(8, Math.round(safeDuration * 2.2));
+  const words = clean.split(' ').filter(Boolean);
+  if (words.length <= Math.round(targetWords * 1.15)) return clean;
+
+  const shortened = words.slice(0, targetWords).join(' ');
+  const lastStop = Math.max(
+    shortened.lastIndexOf('.'),
+    shortened.lastIndexOf('!'),
+    shortened.lastIndexOf('?')
+  );
+  const trimmed = lastStop > 40 ? shortened.slice(0, lastStop + 1) : shortened;
+  return trimmed.trim() || shortened.trim();
 }
 
 function normalizeSubtitleOptions(raw = {}) {
@@ -1250,14 +1271,21 @@ async function synthesizeVoiceTrack({
   voiceScript,
   languageCode,
   voiceGender = 'female',
+  targetDurationSeconds = null,
+  fitToDuration = true,
   context,
   logger = null
 }) {
-  const localizedVoiceScript = await localizeVoiceScriptForTts({
+  const localizedVoiceScriptRaw = await localizeVoiceScriptForTts({
     text: voiceScript,
     languageCode,
     logger
   });
+
+  const localizedVoiceScript = (fitToDuration && Number.isFinite(Number(targetDurationSeconds)))
+    ? fitVoiceScriptToDuration(localizedVoiceScriptRaw, Number(targetDurationSeconds))
+    : localizedVoiceScriptRaw;
+
   const chunks = chunkTextForTts(localizedVoiceScript, 170);
   if (!chunks.length) return null;
 
@@ -1267,9 +1295,9 @@ async function synthesizeVoiceTrack({
   const finalVoiceFileName = `voice_track_${normalizedGender}.mp3`;
   const finalVoicePath = path.join(context.dirs.audio, finalVoiceFileName);
 
-  for (let i = 0; i < chunks.length; i += 1) {
-    const text = chunks[i];
-    const outPath = path.join(context.dirs.audio, `voice_chunk_${i + 1}.mp3`);
+  const chunkResults = await runWithConcurrency(chunks, 2, async (text, index) => {
+    const outPath = path.join(context.dirs.audio, `voice_chunk_${index + 1}.mp3`);
+
     try {
       const edgeOk = await synthesizeEdgeTts({
         text,
@@ -1278,12 +1306,9 @@ async function synthesizeVoiceTrack({
         outputPath: outPath,
         logger
       });
-      if (edgeOk) {
-        chunkPaths.push(outPath);
-        continue;
-      }
+      if (edgeOk) return outPath;
     } catch (error) {
-      if (logger) logger(`Edge TTS chunk ${i + 1} failed: ${error.message || error}`);
+      if (logger) logger(`Edge TTS chunk ${index + 1} failed: ${error.message || error}`);
     }
 
     try {
@@ -1293,12 +1318,9 @@ async function synthesizeVoiceTrack({
         voiceGender: normalizedGender,
         outputPath: outPath
       });
-      if (elevenLabsOk) {
-        chunkPaths.push(outPath);
-        continue;
-      }
+      if (elevenLabsOk) return outPath;
     } catch (error) {
-      if (logger) logger(`ElevenLabs male voice chunk ${i + 1} failed: ${error.message || error}`);
+      if (logger) logger(`ElevenLabs male voice chunk ${index + 1} failed: ${error.message || error}`);
     }
 
     try {
@@ -1308,12 +1330,9 @@ async function synthesizeVoiceTrack({
         voiceGender: normalizedGender,
         outputPath: outPath
       });
-      if (cloudOk) {
-        chunkPaths.push(outPath);
-        continue;
-      }
+      if (cloudOk) return outPath;
     } catch (error) {
-      if (logger) logger(`Google Cloud TTS chunk ${i + 1} failed: ${error.message || error}`);
+      if (logger) logger(`Google Cloud TTS chunk ${index + 1} failed: ${error.message || error}`);
     }
 
     try {
@@ -1334,11 +1353,15 @@ async function synthesizeVoiceTrack({
       await fs.promises.writeFile(outPath, Buffer.from(arrayBuffer));
       const stat = await fs.promises.stat(outPath);
       if (stat.size < 1200) throw new Error('TTS chunk too small');
-      chunkPaths.push(outPath);
+      return outPath;
     } catch (error) {
-      if (logger) logger(`Voice chunk ${i + 1} failed: ${error.message || error}`);
+      if (logger) logger(`Voice chunk ${index + 1} failed: ${error.message || error}`);
     }
-  }
+
+    return null;
+  });
+
+  chunkResults.filter(Boolean).forEach((p) => chunkPaths.push(p));
 
   if (!chunkPaths.length) return null;
   if (chunkPaths.length === 1) {
@@ -1485,6 +1508,8 @@ async function generateAudioTracks({
       voiceScript: plan.voiceScript || input.description,
       languageCode: audioOptions.languageCode,
       voiceGender: audioOptions.voiceGender,
+      targetDurationSeconds: input.durationSeconds,
+      fitToDuration: audioOptions.fitVoiceToDuration,
       context,
       logger
     });
@@ -1934,7 +1959,9 @@ async function runGenerateImages({
 
 async function runGenerateVideoClips({
   payload,
-  baseUrl
+  baseUrl,
+  onProgress = null,
+  onLog = null
 }) {
   const context = createJobContext({ baseUrl: baseUrl || getPublicBaseUrl(), providedJobId: payload?.jobId });
   const rawScenes = Array.isArray(payload?.sceneData) ? payload.sceneData : [];
@@ -1955,7 +1982,27 @@ async function runGenerateVideoClips({
     };
   });
 
-  const scenesWithClips = await generateSceneClips({ scenes, context });
+  const scenesWithClips = await generateSceneClips({
+    scenes,
+    context,
+    logger: typeof onLog === 'function' ? onLog : null,
+    onSceneDone: typeof onProgress === 'function'
+      ? (sceneIndex, totalScenes, enriched) => {
+          const base = 5;
+          const span = 60;
+          const pct = base + Math.round(((sceneIndex + 1) / Math.max(1, totalScenes)) * span);
+          onProgress({
+            progress: pct,
+            currentStep: 'generate_clips',
+            metadata: {
+              completed: sceneIndex + 1,
+              total: totalScenes,
+              sceneId: enriched?.sceneId || null
+            }
+          });
+        }
+      : null
+  });
   return {
     success: true,
     jobId: context.jobId,

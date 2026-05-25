@@ -152,7 +152,53 @@ const ReelGenerator: React.FC = () => {
     loadVideoDrafts();
   }, []);
 
-  const refreshDraft = async (id = jobId) => {
+  useEffect(() => {
+    try {
+      if (jobId) {
+        localStorage.setItem('nebula_ai_video_wizard_jobId', jobId);
+      } else {
+        localStorage.removeItem('nebula_ai_video_wizard_jobId');
+      }
+    } catch (_) {}
+  }, [jobId]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('nebula_ai_video_wizard_step', String(step));
+    } catch (_) {}
+  }, [step]);
+
+  useEffect(() => {
+    // Resume last open draft after refresh.
+    try {
+      const savedJobId = localStorage.getItem('nebula_ai_video_wizard_jobId') || '';
+      if (!savedJobId) return;
+      setShowWizard(true);
+      setJobId(savedJobId);
+      refreshDraft(savedJobId, { syncStep: true });
+    } catch (_) {
+      // ignore
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const deriveStepFromDraft = (d: any) => {
+    const explicit = Number.parseInt(String(d?.currentStep || ''), 10);
+    if (Number.isFinite(explicit) && explicit >= 1) return Math.min(11, Math.max(1, explicit));
+    if (d?.final?.finalOutputUrl || d?.finalOutputUrl) return 11;
+    if (d?.schedule?.scheduledAt || d?.schedule?.postedAt) return 10;
+    if (Array.isArray(d?.platform?.selectedPlatforms) && d.platform.selectedPlatforms.length) return 9;
+    if (d?.content?.thumbnailUrl || d?.content?.caption) return 8;
+    if (d?.merge?.finalOutputUrl || d?.merge?.finalVideoUrl) return 7;
+    if (d?.mix?.finalAudioUrl) return 6;
+    if (d?.audio?.tracks || d?.audio?.config) return 5;
+    if (d?.clips?.sceneData?.length) return 4;
+    if (d?.images?.sceneData?.length) return 3;
+    if (d?.scenes?.sceneData?.length) return 2;
+    return 1;
+  };
+
+  const refreshDraft = async (id = jobId, options: { syncStep?: boolean } = {}) => {
     if (!id) return;
     const response = await videoGenerationAPI.getDraft(id);
     if (!response?.success) return;
@@ -180,6 +226,10 @@ const ReelGenerator: React.FC = () => {
         setScheduleDate(dateObj.toISOString().slice(0, 10));
         setScheduleTime(dateObj.toISOString().slice(11, 16));
       }
+    }
+
+    if (options.syncStep) {
+      setStep(deriveStepFromDraft(nextDraft));
     }
   };
 
@@ -376,14 +426,36 @@ const ReelGenerator: React.FC = () => {
     if (queueJobId) {
       const startedAt = Date.now();
       const timeoutMs = 15 * 60 * 1000;
+      let pollDelayMs = 2000;
+      let lastUpdatedAt = '';
+      let unchangedTicks = 0;
 
       while (true) {
         if (Date.now() - startedAt > timeoutMs) {
           throw new Error('Clip generation is taking too long. Please try again.');
         }
 
-        const job = await videoGenerationAPI.getJobStatus(queueJobId);
+        let job: any;
+        try {
+          job = await videoGenerationAPI.getJobStatus(queueJobId);
+          pollDelayMs = 2000;
+        } catch (err: any) {
+          const status = Number(err?.status || 0);
+          if (status === 429) {
+            pollDelayMs = Math.min(15000, Math.round(pollDelayMs * 1.8));
+            await new Promise((r) => setTimeout(r, pollDelayMs));
+            continue;
+          }
+          throw err;
+        }
         const status = String(job?.status || '').toLowerCase();
+        const updatedAt = String(job?.updatedAt || '');
+        if (updatedAt && updatedAt === lastUpdatedAt) {
+          unchangedTicks += 1;
+        } else {
+          unchangedTicks = 0;
+          lastUpdatedAt = updatedAt;
+        }
 
         if (status === 'completed') {
           const result = job?.result;
@@ -397,7 +469,12 @@ const ReelGenerator: React.FC = () => {
           throw new Error(job?.error?.message || 'Clip generation failed');
         }
 
-        await new Promise((r) => setTimeout(r, 2000));
+        // If the backend isn't updating job state, back off to reduce load.
+        if (unchangedTicks >= 5) {
+          pollDelayMs = Math.min(15000, Math.round(pollDelayMs * 1.5));
+        }
+
+        await new Promise((r) => setTimeout(r, pollDelayMs));
       }
 
       return;
@@ -449,8 +526,70 @@ const ReelGenerator: React.FC = () => {
     if (!jobId) throw new Error('Draft missing');
     const response = await videoGenerationAPI.mergeVideo({
       jobId,
-      finalAudioUrl: finalAudioUrl || undefined
+      finalAudioUrl: finalAudioUrl || undefined,
+      async: true
     });
+
+    const queueJobId = response?.queueJobId;
+    if (queueJobId) {
+      const startedAt = Date.now();
+      const timeoutMs = 20 * 60 * 1000;
+      let pollDelayMs = 2500;
+      let lastUpdatedAt = '';
+      let unchangedTicks = 0;
+
+      while (true) {
+        if (Date.now() - startedAt > timeoutMs) {
+          throw new Error('Video merge is taking too long. Please try again.');
+        }
+
+        let job: any;
+        try {
+          job = await videoGenerationAPI.getJobStatus(queueJobId);
+          pollDelayMs = 2500;
+        } catch (err: any) {
+          const status = Number(err?.status || 0);
+          if (status === 429) {
+            pollDelayMs = Math.min(15000, Math.round(pollDelayMs * 1.8));
+            await new Promise((r) => setTimeout(r, pollDelayMs));
+            continue;
+          }
+          throw err;
+        }
+
+        const status = String(job?.status || '').toLowerCase();
+        const updatedAt = String(job?.updatedAt || '');
+        if (updatedAt && updatedAt === lastUpdatedAt) {
+          unchangedTicks += 1;
+        } else {
+          unchangedTicks = 0;
+          lastUpdatedAt = updatedAt;
+        }
+
+        if (status === 'completed') {
+          const result = job?.result;
+          if (!result?.success) throw new Error(result?.message || 'Video merge failed');
+          setFinalVideoUrl(result?.merge?.finalVideoUrl || result?.draft?.merge?.finalVideoUrl || '');
+          setFinalOutputUrl(result?.merge?.finalOutputUrl || result?.draft?.merge?.finalOutputUrl || '');
+          setDraft(result?.draft || draft);
+          await loadVideoDrafts();
+          break;
+        }
+
+        if (status === 'failed') {
+          throw new Error(job?.error?.message || 'Video merge failed');
+        }
+
+        if (unchangedTicks >= 5) {
+          pollDelayMs = Math.min(15000, Math.round(pollDelayMs * 1.5));
+        }
+
+        await new Promise((r) => setTimeout(r, pollDelayMs));
+      }
+
+      return;
+    }
+
     if (!response?.success) throw new Error(response?.message || 'Video merge failed');
     setFinalVideoUrl(response?.merge?.finalVideoUrl || '');
     setFinalOutputUrl(response?.merge?.finalOutputUrl || '');
@@ -535,8 +674,7 @@ const ReelGenerator: React.FC = () => {
   const openVideoDraft = async (id: string) => {
     setShowWizard(true);
     setJobId(id);
-    await refreshDraft(id);
-    setStep(11);
+    await refreshDraft(id, { syncStep: true });
   };
 
   const deleteVideoDraft = async (id: string, title = 'this AI video') => {

@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const rateLimit = require('express-rate-limit');
 
 const Product = require('../models/Product');
 const { protect } = require('../middleware/auth');
@@ -28,6 +29,25 @@ const {
 const { callGemini, parseGeminiJSON, generateCampaignImageNanoBanana } = require('../services/geminiAI');
 const { buildAIContext } = require('../services/aiContextBuilder');
 const { learnVideoStep } = require('../services/aiVideoLearning');
+
+// Keep heavy AI generation protected, but allow frequent job polling.
+const videoAiWriteLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many AI generation requests, please try again later.' },
+  keyGenerator: (req) => String(req.user?._id || req.user?.id || req.ip)
+});
+
+const videoJobReadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 2000,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many job status requests, please try again later.' },
+  keyGenerator: (req) => String(req.user?._id || req.user?.id || req.ip)
+});
 
 function responseError(res, error, fallbackMessage) {
   const statusCode = Number(error?.statusCode) || 500;
@@ -384,7 +404,7 @@ async function generateThumbnailFromDraft({ draft, baseUrl }) {
 // -----------------------------------------------------------------------------
 // Existing one-shot pipeline endpoints
 // -----------------------------------------------------------------------------
-router.post('/createVideo', protect, checkTrial, async (req, res) => {
+router.post('/createVideo', protect, checkTrial, videoAiWriteLimiter, async (req, res) => {
   try {
     const userId = req.user?._id ? String(req.user._id) : (req.user?.id ? String(req.user.id) : null);
     const payload = req.body || {};
@@ -418,7 +438,7 @@ router.post('/createVideo', protect, checkTrial, async (req, res) => {
   }
 });
 
-router.get('/jobs/:jobId', protect, async (req, res) => {
+router.get('/jobs/:jobId', protect, videoJobReadLimiter, async (req, res) => {
   try {
     const userId = req.user?._id ? String(req.user._id) : (req.user?.id ? String(req.user.id) : null);
     const job = videoGenerationQueue.getJob(req.params.jobId, userId);
@@ -440,7 +460,7 @@ router.get('/jobs/:jobId', protect, async (req, res) => {
 // -----------------------------------------------------------------------------
 // Wizard endpoints (step-by-step with draft state)
 // -----------------------------------------------------------------------------
-router.get('/drafts', protect, async (req, res) => {
+router.get('/drafts', protect, videoJobReadLimiter, async (req, res) => {
   try {
     const drafts = await listDraftsForUser(toUserId(req.user));
     return res.json({ success: true, drafts });
@@ -449,7 +469,7 @@ router.get('/drafts', protect, async (req, res) => {
   }
 });
 
-router.get('/draft/:jobId', protect, async (req, res) => {
+router.get('/draft/:jobId', protect, videoJobReadLimiter, async (req, res) => {
   try {
     const userId = toUserId(req.user);
     const draft = await loadDraftForUser(req.params.jobId, userId);
@@ -459,7 +479,7 @@ router.get('/draft/:jobId', protect, async (req, res) => {
   }
 });
 
-router.delete('/draft/:jobId', protect, async (req, res) => {
+router.delete('/draft/:jobId', protect, videoAiWriteLimiter, async (req, res) => {
   try {
     const userId = toUserId(req.user);
     const draft = await deleteDraftForUser(req.params.jobId, userId);
@@ -473,7 +493,7 @@ router.delete('/draft/:jobId', protect, async (req, res) => {
   }
 });
 
-router.post('/createDraft', protect, checkTrial, async (req, res) => {
+router.post('/createDraft', protect, checkTrial, videoAiWriteLimiter, async (req, res) => {
   try {
     const payload = req.body || {};
     const description = String(payload.description || '').trim();
@@ -508,7 +528,7 @@ router.post('/createDraft', protect, checkTrial, async (req, res) => {
   }
 });
 
-router.post('/generatePrompt', protect, checkTrial, async (req, res) => {
+router.post('/generatePrompt', protect, checkTrial, videoAiWriteLimiter, async (req, res) => {
   try {
     const { jobId, promptText, saveOnly = false } = req.body || {};
     if (!jobId) {
@@ -565,7 +585,7 @@ router.post('/generatePrompt', protect, checkTrial, async (req, res) => {
   }
 });
 
-router.post('/generateScenes', protect, checkTrial, async (req, res) => {
+router.post('/generateScenes', protect, checkTrial, videoAiWriteLimiter, async (req, res) => {
   try {
     const { jobId, sceneData, saveOnly = false, promptText } = req.body || {};
     if (!jobId) {
@@ -655,7 +675,7 @@ router.post('/generateScenes', protect, checkTrial, async (req, res) => {
   }
 });
 
-router.post('/generateImages', protect, checkTrial, async (req, res) => {
+router.post('/generateImages', protect, checkTrial, videoAiWriteLimiter, async (req, res) => {
   try {
     const { jobId, action = 'generateAll', sceneId, sceneData, imagePrompt, imageData, imageUrl } = req.body || {};
     if (!jobId) {
@@ -783,7 +803,7 @@ router.post('/generateImages', protect, checkTrial, async (req, res) => {
   }
 });
 
-router.post('/generateClips', protect, checkTrial, async (req, res) => {
+router.post('/generateClips', protect, checkTrial, videoAiWriteLimiter, async (req, res) => {
   try {
     const { jobId, sceneData } = req.body || {};
     if (!jobId) {
@@ -820,7 +840,9 @@ router.post('/generateClips', protect, checkTrial, async (req, res) => {
 
           const generated = await runGenerateVideoClips({
             payload: { jobId, sceneData: sourceScenes },
-            baseUrl
+            baseUrl,
+            onLog: (line) => log(line),
+            onProgress: ({ progress, currentStep, metadata } = {}) => update({ progress, currentStep, metadata })
           });
 
           update({ progress: 70, currentStep: 'saving_clips' });
@@ -908,7 +930,7 @@ router.post('/generateClips', protect, checkTrial, async (req, res) => {
   }
 });
 
-router.post('/generateAudio', protect, checkTrial, async (req, res) => {
+router.post('/generateAudio', protect, checkTrial, videoAiWriteLimiter, async (req, res) => {
   try {
     const { jobId, audio = {} } = req.body || {};
     if (!jobId) {
@@ -999,7 +1021,7 @@ router.post('/generateAudio', protect, checkTrial, async (req, res) => {
   }
 });
 
-router.post('/mixAudio', protect, checkTrial, async (req, res) => {
+router.post('/mixAudio', protect, checkTrial, videoAiWriteLimiter, async (req, res) => {
   try {
     const { jobId, tracks = {}, durationSeconds } = req.body || {};
     if (!jobId) {
@@ -1048,7 +1070,7 @@ router.post('/mixAudio', protect, checkTrial, async (req, res) => {
   }
 });
 
-router.post('/mergeVideo', protect, checkTrial, async (req, res) => {
+router.post('/mergeVideo', protect, checkTrial, videoAiWriteLimiter, async (req, res) => {
   try {
     const { jobId, clipUrls, finalAudioUrl, subtitles = { enabled: false } } = req.body || {};
     if (!jobId) {
@@ -1062,6 +1084,78 @@ router.post('/mergeVideo', protect, checkTrial, async (req, res) => {
       : (draft?.clips?.sceneData || []).map((scene) => scene.clipUrl).filter(Boolean);
     if (!effectiveClipUrls.length) {
       return res.status(400).json({ success: false, message: 'No clip URLs available' });
+    }
+
+    const shouldQueue =
+      req.body?.async === true ||
+      String(req.query?.async || '').toLowerCase() === 'true' ||
+      String(process.env.VIDEO_STEP_ASYNC || '').toLowerCase() === 'true';
+
+    if (shouldQueue) {
+      const baseUrl = reqBaseUrl(req);
+      const queued = videoGenerationQueue.enqueue({
+        userId,
+        payload: { jobId },
+        handler: async ({ update, log }) => {
+          update({ progress: 5, currentStep: 'merge_video' });
+          log(`Merging video for draft ${jobId}`);
+
+          const merged = await runMergeVideo({
+            payload: {
+              jobId,
+              clipUrls: effectiveClipUrls,
+              finalAudioUrl: finalAudioUrl || draft?.mix?.finalAudioUrl || null,
+              subtitles: { enabled: subtitles?.enabled === true },
+              sceneData: draft?.clips?.sceneData || draft?.images?.sceneData || draft?.scenes?.sceneData || []
+            },
+            baseUrl
+          });
+
+          update({ progress: 80, currentStep: 'saving_merge' });
+          const updated = await updateDraft(jobId, userId, (current) => ({
+            ...current,
+            currentStep: Math.max(Number(current.currentStep || 1), 7),
+            merge: {
+              finalVideoUrl: merged?.finalVideoUrl || null,
+              finalOutputUrl: merged?.finalOutputUrl || null,
+              subtitlesUrl: merged?.subtitlesUrl || null,
+              mergedAt: new Date().toISOString()
+            }
+          }));
+
+          update({ progress: 90, currentStep: 'learning' });
+          await learnVideoStep({
+            userId,
+            jobId,
+            action: 'video_merge',
+            prompt: draft?.prompt?.promptText || '',
+            userInput: draft.input || {},
+            sceneData: draft?.clips?.sceneData || draft?.images?.sceneData || draft?.scenes?.sceneData || [],
+            generatedVideos: [updated.merge.finalOutputUrl || updated.merge.finalVideoUrl].filter(Boolean),
+            audioSettings: draft?.audio?.config || {},
+            duration: draft?.input?.durationSeconds || null,
+            product: draft?.input?.product || null,
+            sourceResponse: merged
+          });
+
+          return {
+            success: true,
+            jobId,
+            merge: merged,
+            draft: updated
+          };
+        }
+      });
+
+      return res.status(202).json({
+        success: true,
+        message: 'Video merge queued',
+        draftJobId: jobId,
+        queueJobId: queued.jobId,
+        status: queued.status,
+        progress: queued.progress,
+        currentStep: queued.currentStep
+      });
     }
 
     const merged = await runMergeVideo({
@@ -1111,7 +1205,7 @@ router.post('/mergeVideo', protect, checkTrial, async (req, res) => {
   }
 });
 
-router.post('/generateContent', protect, checkTrial, async (req, res) => {
+router.post('/generateContent', protect, checkTrial, videoAiWriteLimiter, async (req, res) => {
   try {
     const { jobId, selectedPlatforms = [] } = req.body || {};
     if (!jobId) {
@@ -1160,7 +1254,7 @@ router.post('/generateContent', protect, checkTrial, async (req, res) => {
   }
 });
 
-router.post('/schedulePost', protect, checkTrial, async (req, res) => {
+router.post('/schedulePost', protect, checkTrial, videoAiWriteLimiter, async (req, res) => {
   try {
     const { jobId, selectedPlatforms = [], scheduledAt, publishNow = false } = req.body || {};
     if (!jobId) {
@@ -1224,7 +1318,7 @@ router.post('/schedulePost', protect, checkTrial, async (req, res) => {
 // -----------------------------------------------------------------------------
 // Backward compatibility aliases for existing clients
 // -----------------------------------------------------------------------------
-router.post('/generateVideoClips', protect, checkTrial, async (req, res) => {
+router.post('/generateVideoClips', protect, checkTrial, videoAiWriteLimiter, async (req, res) => {
   try {
     const result = await runGenerateVideoClips({
       payload: req.body || {},
@@ -1236,7 +1330,7 @@ router.post('/generateVideoClips', protect, checkTrial, async (req, res) => {
   }
 });
 
-router.post('/mergeAudio', protect, checkTrial, async (req, res) => {
+router.post('/mergeAudio', protect, checkTrial, videoAiWriteLimiter, async (req, res) => {
   try {
     const result = await runMergeAudio({
       payload: req.body || {},

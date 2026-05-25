@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { Blob: BufferBlob } = require('buffer');
 
 const DEFAULT_MODEL = 'fal-ai/ltx-2.3-22b/text-to-video';
 const IMAGE_TO_VIDEO_MODEL = process.env.FAL_IMAGE_TO_VIDEO_MODEL || 'fal-ai/bytedance/seedance/v1/pro/image-to-video';
@@ -93,11 +94,21 @@ async function uploadSceneImageIfNeeded({ fal, scene, imageUrl }) {
   const imagePath = String(scene.imagePath || scene.image_path || '').trim();
   if (!imagePath) return imageUrl;
   if (imageUrl && !isLocalhostUrl(imageUrl)) return imageUrl;
-  if (!fal.storage?.upload) return imageUrl;
+  if (!fal.storage?.upload) {
+    throw new Error(
+      'Cannot upload scene image to Fal.ai storage. ' +
+      'This usually happens when `@fal-ai/serverless-client` is missing storage support. ' +
+      'Upgrade the dependency and/or provide a publicly accessible image URL.'
+    );
+  }
 
   const buffer = await fs.promises.readFile(imagePath);
   const fileName = path.basename(imagePath) || 'scene.jpg';
-  const blob = new Blob([buffer], { type: getMimeType(imagePath) });
+  const BlobImpl = globalThis.Blob || BufferBlob;
+  if (!BlobImpl) {
+    throw new Error('Node.js Blob is not available. Upgrade Node.js to v18+ to upload images to Fal.ai.');
+  }
+  const blob = new BlobImpl([buffer], { type: getMimeType(imagePath) });
   blob.name = fileName;
   return fal.storage.upload(blob);
 }
