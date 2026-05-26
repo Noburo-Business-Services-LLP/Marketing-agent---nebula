@@ -949,10 +949,13 @@ router.post('/generateAudio', protect, checkTrial, videoAiWriteLimiter, async (r
         draft?.input?.description ||
         ''
     ).trim();
-    const effectiveVoiceScript = await localizeAudioScript({
-      text: sourceVoiceScript,
-      languageCode: requestedLanguageCode
-    });
+
+    const sceneDataForTiming =
+      (Array.isArray(draft?.scenes?.sceneData) && draft.scenes.sceneData.length ? draft.scenes.sceneData : null) ||
+      (Array.isArray(draft?.clips?.sceneData) && draft.clips.sceneData.length ? draft.clips.sceneData : null) ||
+      (Array.isArray(draft?.images?.sceneData) && draft.images.sceneData.length ? draft.images.sceneData : null) ||
+      (Array.isArray(draft?.scenes?.scenes) && draft.scenes.scenes.length ? draft.scenes.scenes : null) ||
+      [];
 
     const audioConfig = {
       enabled: audio?.enabled !== false,
@@ -962,8 +965,10 @@ router.post('/generateAudio', protect, checkTrial, videoAiWriteLimiter, async (r
       voiceGender: String(audio?.voiceGender || 'female').toLowerCase(),
       voiceVolume: Number.isFinite(Number(audio?.voiceVolume)) ? Number(audio.voiceVolume) : 1,
       musicVolume: Number.isFinite(Number(audio?.musicVolume)) ? Number(audio.musicVolume) : 0.24,
-      voiceScript: effectiveVoiceScript,
       sourceVoiceScript,
+      voiceScript: sourceVoiceScript,
+      localizedVoiceScript: null,
+      localizedSceneData: null,
       manualAudioData: typeof audio?.manualAudioData === 'string' ? audio.manualAudioData : '',
       manualAudioUrl: typeof audio?.manualAudioUrl === 'string' ? audio.manualAudioUrl : '',
       soundEffectUrls: Array.isArray(audio?.soundEffectUrls) ? audio.soundEffectUrls : []
@@ -973,8 +978,12 @@ router.post('/generateAudio', protect, checkTrial, videoAiWriteLimiter, async (r
       payload: {
         jobId,
         skipMix: true,
-        description: String(audioConfig.voiceScript || sourceVoiceScript || draft?.input?.description || ''),
-        voiceScript: String(audioConfig.voiceScript || sourceVoiceScript || ''),
+        description: String(sourceVoiceScript || draft?.input?.description || ''),
+        // Always pass the *source* (English) script; the pipeline will translate
+        // in a duration-aware, scene-timed way when languageCode != 'en'.
+        voiceScript: String(sourceVoiceScript || ''),
+        sourceVoiceScript: String(sourceVoiceScript || ''),
+        sceneData: sceneDataForTiming,
         durationSeconds: draft?.input?.durationSeconds || 60,
         audio: audioConfig
       },
@@ -985,7 +994,11 @@ router.post('/generateAudio', protect, checkTrial, videoAiWriteLimiter, async (r
       ...current,
       currentStep: Math.max(Number(current.currentStep || 1), 5),
       audio: {
-        config: audioConfig,
+        config: {
+          ...audioConfig,
+          localizedVoiceScript: generated?.localizedVoiceScript || null,
+          localizedSceneData: generated?.localizedSceneData || null
+        },
         tracks: generated?.tracks || {},
         generatedAt: new Date().toISOString()
       }
@@ -995,9 +1008,9 @@ router.post('/generateAudio', protect, checkTrial, videoAiWriteLimiter, async (r
       userId,
       jobId,
       action: 'audio_generation',
-      prompt: String(audioConfig.voiceScript || sourceVoiceScript || ''),
+      prompt: String(generated?.localizedVoiceScript || sourceVoiceScript || ''),
       userInput: draft.input || {},
-      script: audioConfig.voiceScript,
+      script: String(generated?.localizedVoiceScript || sourceVoiceScript || ''),
       audioSettings: audioConfig,
       voiceSettings: {
         voiceGender: audioConfig.voiceGender,
@@ -1100,15 +1113,25 @@ router.post('/mergeVideo', protect, checkTrial, videoAiWriteLimiter, async (req,
           update({ progress: 5, currentStep: 'merge_video' });
           log(`Merging video for draft ${jobId}`);
 
+          const translatedSceneData = Array.isArray(draft?.audio?.config?.localizedSceneData)
+            ? draft.audio.config.localizedSceneData
+            : null;
+          const sceneDataForSubtitles =
+            subtitles?.enabled === true && draft?.audio?.config?.languageCode && draft.audio.config.languageCode !== 'en' && translatedSceneData?.length
+              ? translatedSceneData
+              : (draft?.clips?.sceneData || draft?.images?.sceneData || draft?.scenes?.sceneData || []);
+
           const merged = await runMergeVideo({
             payload: {
               jobId,
               clipUrls: effectiveClipUrls,
               finalAudioUrl: finalAudioUrl || draft?.mix?.finalAudioUrl || null,
               subtitles: { enabled: subtitles?.enabled === true },
-              sceneData: draft?.clips?.sceneData || draft?.images?.sceneData || draft?.scenes?.sceneData || []
+              sceneData: sceneDataForSubtitles
             },
-            baseUrl
+            baseUrl,
+            onProgress: ({ progress, currentStep, metadata }) => update({ progress, currentStep, metadata }),
+            onLog: (line) => log(line)
           });
 
           update({ progress: 80, currentStep: 'saving_merge' });
@@ -1164,7 +1187,15 @@ router.post('/mergeVideo', protect, checkTrial, videoAiWriteLimiter, async (req,
         clipUrls: effectiveClipUrls,
         finalAudioUrl: finalAudioUrl || draft?.mix?.finalAudioUrl || null,
         subtitles: { enabled: subtitles?.enabled === true },
-        sceneData: draft?.clips?.sceneData || draft?.images?.sceneData || draft?.scenes?.sceneData || []
+        sceneData: (
+          subtitles?.enabled === true &&
+          draft?.audio?.config?.languageCode &&
+          draft.audio.config.languageCode !== 'en' &&
+          Array.isArray(draft?.audio?.config?.localizedSceneData) &&
+          draft.audio.config.localizedSceneData.length
+        )
+          ? draft.audio.config.localizedSceneData
+          : (draft?.clips?.sceneData || draft?.images?.sceneData || draft?.scenes?.sceneData || [])
       },
       baseUrl: reqBaseUrl(req)
     });

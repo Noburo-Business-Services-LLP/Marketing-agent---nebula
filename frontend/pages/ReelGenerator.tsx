@@ -734,7 +734,11 @@ const ReelGenerator: React.FC = () => {
   const canStep8Next = !busy && !!caption.trim();
   const canStep9Next = !busy && selectedPlatforms.length > 0;
   const canSchedule = !busy && !!scheduleDate && !!scheduleTime;
-  const activeAudioScript = String(draft?.audio?.config?.voiceScript || '').trim();
+  const activeAudioScript = String(
+    draft?.audio?.config?.localizedVoiceScript ||
+      draft?.audio?.config?.voiceScript ||
+      ''
+  ).trim();
 
   return (
     <div className={`p-6 min-h-screen ${isDarkMode ? 'bg-[#070A12]' : 'bg-slate-50'}`}>
