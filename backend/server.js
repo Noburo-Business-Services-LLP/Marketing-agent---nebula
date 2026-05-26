@@ -259,6 +259,11 @@ app.get('/api/health/details', (req, res) => {
       ffprobe: {
         path: ffprobePath,
         exists: safeExists(ffprobePath)
+      },
+      aiVideo: {
+        mediaDownloadTimeoutMs: Number.parseInt(String(process.env.AI_VIDEO_MEDIA_DOWNLOAD_TIMEOUT_MS || ''), 10) || null,
+        mediaMaxDownloadBytes: Number.parseInt(String(process.env.AI_VIDEO_MEDIA_MAX_DOWNLOAD_BYTES || ''), 10) || null,
+        ffmpegTimeoutMs: Number.parseInt(String(process.env.AI_VIDEO_FFMPEG_TIMEOUT_MS || ''), 10) || null
       }
     }
   });

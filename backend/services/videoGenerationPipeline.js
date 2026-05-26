@@ -2,6 +2,8 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
+const { Readable } = require('stream');
+const { pipeline } = require('stream/promises');
 const { spawn, spawnSync } = require('child_process');
 const { GoogleAuth } = require('google-auth-library');
 
@@ -59,6 +61,25 @@ function resolveFfmpegPath() {
 }
 
 const ffmpegPath = resolveFfmpegPath();
+
+function resolveFfprobePath() {
+  try {
+    const fp = require('ffprobe-static');
+    if (fp?.path) return fp.path;
+  } catch (_) { }
+  const whichCmd = process.platform === 'win32' ? 'where' : 'which';
+  try {
+    const res = spawnSync(whichCmd, ['ffprobe'], { windowsHide: true });
+    if (res.status === 0 && res.stdout) {
+      const candidate = String(res.stdout).trim().split(/\r?\n/)[0];
+      if (candidate) return candidate;
+    }
+  } catch (_) { }
+  return null;
+}
+
+const ffprobePath = resolveFfprobePath();
+
 let googleTtsAuth = null;
 let googleTtsAccessToken = null;
 let googleTtsTokenExpiry = 0;
@@ -152,15 +173,37 @@ async function downloadToFile(url, outputPath) {
   const retriableStatusCodes = new Set([403, 404, 408, 409, 425, 429, 500, 502, 503, 504]);
   const maxAttempts = 4;
   let lastError = null;
+  const timeoutMs = Math.max(
+    5000,
+    Number.parseInt(String(process.env.AI_VIDEO_MEDIA_DOWNLOAD_TIMEOUT_MS || '180000'), 10) || 180000
+  );
+  const maxBytes = Math.max(
+    5 * 1024 * 1024,
+    Number.parseInt(String(process.env.AI_VIDEO_MEDIA_MAX_DOWNLOAD_BYTES || String(750 * 1024 * 1024)), 10) || (750 * 1024 * 1024)
+  );
+
+  function bodyToNodeStream(body) {
+    if (!body) return null;
+    // node-fetch v2: body is a Node.js readable stream
+    if (typeof body.pipe === 'function') return body;
+    // Node's WHATWG fetch: body is a web ReadableStream
+    if (typeof Readable.fromWeb === 'function' && typeof body.getReader === 'function') {
+      return Readable.fromWeb(body);
+    }
+    return null;
+  }
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
     try {
       const response = await fetchImpl(url, {
         headers: {
           // Some media CDNs reject unknown/empty clients; keep this browser-like.
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
           'Accept': '*/*'
-        }
+        },
+        signal: controller?.signal
       });
 
       if (!response.ok) {
@@ -176,11 +219,34 @@ async function downloadToFile(url, outputPath) {
         throw err;
       }
 
-      const arrayBuffer = typeof response.arrayBuffer === 'function'
-        ? await response.arrayBuffer()
-        : await response.buffer();
-      const data = Buffer.from(arrayBuffer);
-      await fs.promises.writeFile(outputPath, data);
+      const contentLengthHeader = response.headers?.get?.('content-length');
+      if (contentLengthHeader) {
+        const contentLength = Number.parseInt(String(contentLengthHeader), 10);
+        if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+          throw new Error(`Download too large (${contentLength} bytes) for ${url}`);
+        }
+      }
+
+      const bodyStream = bodyToNodeStream(response.body);
+      if (bodyStream) {
+        let total = 0;
+        bodyStream.on('data', (chunk) => {
+          total += chunk?.length || 0;
+          if (total > maxBytes) {
+            bodyStream.destroy(new Error(`Download exceeded ${maxBytes} bytes for ${url}`));
+          }
+        });
+        await pipeline(bodyStream, fs.createWriteStream(outputPath));
+      } else {
+        // Fallback (should be rare): buffer in memory.
+        const arrayBuffer = typeof response.arrayBuffer === 'function'
+          ? await response.arrayBuffer()
+          : await response.buffer();
+        const data = Buffer.from(arrayBuffer);
+        if (data.length > maxBytes) throw new Error(`Download exceeded ${maxBytes} bytes for ${url}`);
+        await fs.promises.writeFile(outputPath, data);
+      }
+
       const stat = await fs.promises.stat(outputPath);
       if (!stat.size) throw new Error('Downloaded file is empty');
       return {
@@ -195,22 +261,37 @@ async function downloadToFile(url, outputPath) {
         continue;
       }
       throw error;
+    } finally {
+      if (timer) clearTimeout(timer);
     }
   }
 
   throw lastError || new Error('Download failed');
 }
 
-function runFfmpeg(args = []) {
+function runFfmpeg(args = [], options = {}) {
   return new Promise((resolve, reject) => {
     if (!ffmpegPath) {
       return reject(new Error('ffmpeg is not available (install ffmpeg-static or ffmpeg on PATH)'));
     }
+    const timeoutMs = Math.max(
+      10000,
+      Number.parseInt(String(options.timeoutMs || process.env.AI_VIDEO_FFMPEG_TIMEOUT_MS || '900000'), 10) || 900000
+    );
     const proc = spawn(ffmpegPath, args, { windowsHide: true });
     let stderr = '';
     proc.stderr.on('data', (d) => { stderr += d.toString(); });
     proc.on('error', (error) => reject(error));
+
+    const timer = setTimeout(() => {
+      try {
+        proc.kill('SIGKILL');
+      } catch (_) {}
+      reject(new Error(`ffmpeg timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+
     proc.on('close', (code) => {
+      clearTimeout(timer);
       if (code === 0) return resolve();
       reject(new Error(`ffmpeg exited with code ${code}: ${stderr.slice(-1200)}`));
     });
@@ -971,46 +1052,259 @@ function targetScriptName(code = 'en') {
   return scripts[toTtsLanguageCode(code)] || scripts.en;
 }
 
-async function localizeVoiceScriptForTts({ text, languageCode, logger = null }) {
-  const source = String(text || '').replace(/\s+/g, ' ').trim();
+function wordCount(text = '') {
+  const clean = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!clean) return 0;
+  return clean.split(' ').filter(Boolean).length;
+}
+
+function speechWpmForLanguage(languageCode = 'en', voiceGender = 'female') {
   const lang = toTtsLanguageCode(languageCode);
-  if (!source || lang === 'en') return source;
+  const gender = String(voiceGender || 'female').toLowerCase() === 'male' ? 'male' : 'female';
+
+  // Cinematic reel pacing (conservative). These are *targets* for script shaping,
+  // not absolute truth across voices.
+  const base = {
+    en: 135,
+    hi: 125,
+    ta: 120,
+    te: 120,
+    kn: 118,
+    ml: 118
+  };
+
+  const wpm = base[lang] || base.en;
+  // Slightly slower for deep male voices (more "cinematic")
+  return gender === 'male' ? Math.round(wpm * 0.95) : wpm;
+}
+
+function estimateSpeechSeconds(text, languageCode = 'en', voiceGender = 'female') {
+  const wc = wordCount(text);
+  if (!wc) return 0;
+  const wpm = speechWpmForLanguage(languageCode, voiceGender);
+  return (wc / Math.max(60, wpm)) * 60;
+}
+
+function targetWordRange(durationSeconds, languageCode = 'en', voiceGender = 'female') {
+  const safe = clamp(Number(durationSeconds) || DEFAULT_DURATION_SECONDS, 6, 1800);
+  const wpm = speechWpmForLanguage(languageCode, voiceGender);
+  const target = Math.max(10, Math.round((safe / 60) * wpm));
+  // Allow some natural variation, but prevent "aggressive compression"
+  return {
+    min: Math.max(8, Math.round(target * 0.92)),
+    max: Math.max(12, Math.round(target * 1.12)),
+    target
+  };
+}
+
+function normalizeSceneTimingForTranslation(sceneData = [], totalDurationSeconds = 60) {
+  // We want stable start/end seconds so translation can match timing.
+  // Input scenes may or may not include timing; build if missing.
+  const scenes = Array.isArray(sceneData) ? sceneData : [];
+  if (!scenes.length) return [];
+
+  const withTiming = scenes.every((s) => Number.isFinite(Number(s?.startSec)) && Number.isFinite(Number(s?.endSec)));
+  if (withTiming) {
+    return scenes.map((s, idx) => ({
+      index: Number.parseInt(String(s?.index || idx + 1), 10) || (idx + 1),
+      sceneId: String(s?.sceneId || `scene_${idx + 1}`),
+      startSec: Number(s.startSec),
+      endSec: Number(s.endSec),
+      durationSeconds: Math.max(1, Number(s.durationSeconds) || (Number(s.endSec) - Number(s.startSec)) || 1),
+      voiceLine: String(s?.voiceLine || '').trim()
+    }));
+  }
+
+  const safeTotal = clamp(Number(totalDurationSeconds) || DEFAULT_DURATION_SECONDS, 6, 1800);
+  const durations = splitDurations(safeTotal, scenes.length);
+  let cursor = 0;
+  return scenes.map((s, idx) => {
+    const durationSeconds = durations[idx];
+    const startSec = cursor;
+    const endSec = cursor + durationSeconds;
+    cursor = endSec;
+    return {
+      index: Number.parseInt(String(s?.index || idx + 1), 10) || (idx + 1),
+      sceneId: String(s?.sceneId || `scene_${idx + 1}`),
+      startSec,
+      endSec,
+      durationSeconds,
+      voiceLine: String(s?.voiceLine || '').trim()
+    };
+  });
+}
+
+async function getAudioDurationSecondsFromFile(filePath) {
+  if (!ffprobePath) return null;
+  const target = String(filePath || '').trim();
+  if (!target) return null;
+  try {
+    const { stdout } = await runProcess(ffprobePath, [
+      '-v', 'error',
+      '-show_entries', 'format=duration',
+      '-of', 'default=noprint_wrappers=1:nokey=1',
+      target
+    ]);
+    const n = Number.parseFloat(String(stdout || '').trim());
+    return Number.isFinite(n) && n > 0 ? n : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+async function translateScriptDurationAware({
+  sourceText,
+  sceneData = [],
+  targetDurationSeconds,
+  languageCode,
+  voiceGender = 'female',
+  logger = null
+}) {
+  const source = String(sourceText || '').replace(/\s+/g, ' ').trim();
+  const lang = toTtsLanguageCode(languageCode);
+  if (!source || lang === 'en') {
+    return { fullScript: source, scenes: normalizeSceneTimingForTranslation(sceneData, targetDurationSeconds) };
+  }
 
   const language = ttsLanguageLabel(lang);
   const script = targetScriptName(lang);
-  const prompt = `Translate and adapt this short video voiceover for Edge or Google Text-to-Speech.
+  const safeDuration = clamp(Number(targetDurationSeconds) || DEFAULT_DURATION_SECONDS, 6, 1800);
+  const range = targetWordRange(safeDuration, lang, voiceGender);
+  const scenes = normalizeSceneTimingForTranslation(sceneData, safeDuration);
+
+  const sceneBrief = scenes.length
+    ? scenes.map((s) => {
+        const line = s.voiceLine ? `EN: ${s.voiceLine}` : '';
+        return [
+          `Scene ${s.index} (${s.startSec}s-${s.endSec}s, ${s.durationSeconds}s)`,
+          line
+        ].filter(Boolean).join('\n');
+      }).join('\n\n')
+    : '';
+
+  const prompt = `You translate cinematic short-video voiceovers WITHOUT summarizing.
 
 Target language: ${language}
 Target script: ${script}
+Target total duration: ${safeDuration} seconds
+Target word count (approx): ${range.target} words (acceptable ${range.min}-${range.max})
+Voice style: ${String(voiceGender || 'female').toLowerCase() === 'male' ? 'deep, confident, cinematic' : 'warm, expressive, cinematic'}
+
+Hard rules:
+- DO NOT summarize or shorten. Preserve ALL details, emotion, pacing, and CTA impact.
+- Keep the same storytelling structure and sentence richness.
+- Keep brand names, product names, prices, URLs, and technical terms unchanged when needed.
+- Return ONLY strict JSON. No markdown.
+- Output must be mostly in ${language} (avoid English filler).
+- Preserve natural pauses: use short sentences where appropriate (do not make it robotic).
+- Match scene timing: each scene narration must comfortably fill its scene duration.
+
+Return JSON exactly in this schema:
+{
+  "fullScript": "string",
+  "scenes": [
+    { "sceneId": "scene_1", "voiceLine": "string" }
+  ]
+}
+
+English full voiceover:
+${source}
+
+Scene timing (English per scene when available):
+${sceneBrief || '(no per-scene lines provided; still keep full-length pacing)'}\n`;
+
+  const localized = await callGemini(prompt, {
+    skipCache: true,
+    temperature: 0.4,
+    maxTokens: 2000,
+    timeout: 90000
+  });
+
+  let parsed;
+  try {
+    parsed = parseGeminiJSON(localized);
+  } catch (error) {
+    if (logger) logger(`Translation JSON parse failed for ${language}: ${error.message || error}`);
+    return { fullScript: source, scenes };
+  }
+
+  const fullScript = String(parsed?.fullScript || '').replace(/\s+/g, ' ').trim();
+  const outScenesRaw = Array.isArray(parsed?.scenes) ? parsed.scenes : [];
+  const byId = new Map(outScenesRaw
+    .map((s) => ({ sceneId: String(s?.sceneId || '').trim(), voiceLine: String(s?.voiceLine || '').trim() }))
+    .filter((s) => s.sceneId && s.voiceLine));
+
+  const mergedScenes = scenes.length
+    ? scenes.map((s) => ({
+        ...s,
+        voiceLine: byId.get(s.sceneId)?.voiceLine || s.voiceLine
+      }))
+    : scenes;
+
+  return {
+    fullScript: fullScript || source,
+    scenes: mergedScenes
+  };
+}
+
+async function expandIfTooShort({
+  localizedText,
+  sourceText,
+  languageCode,
+  targetDurationSeconds,
+  voiceGender = 'female',
+  logger = null
+}) {
+  const lang = toTtsLanguageCode(languageCode);
+  const safeDuration = clamp(Number(targetDurationSeconds) || DEFAULT_DURATION_SECONDS, 6, 1800);
+  if (!localizedText || lang === 'en') return localizedText;
+
+  const estimated = estimateSpeechSeconds(localizedText, lang, voiceGender);
+  if (estimated >= safeDuration * 0.92) return localizedText;
+
+  const language = ttsLanguageLabel(lang);
+  const script = targetScriptName(lang);
+  const range = targetWordRange(safeDuration, lang, voiceGender);
+
+  const prompt = `You are improving a translated cinematic voiceover to match the ORIGINAL duration and richness.
+
+Target language: ${language}
+Target script: ${script}
+Target duration: ${safeDuration} seconds
+Target word count: ${range.target} words (acceptable ${range.min}-${range.max})
+Voice style: ${String(voiceGender || 'female').toLowerCase() === 'male' ? 'deep, confident, cinematic' : 'warm, expressive, cinematic'}
 
 Rules:
-- Return only the final voiceover text. No markdown, labels, or quotes.
-- At least 80% of the words must be in ${language}.
-- If the source is English, translate it. Do not return English for this target language.
-- Keep brand names, product names, prices, URLs, and technical model names unchanged when needed.
-- Keep it natural for a 30-60 second social media reel.
-- Do not mix in English filler words unless absolutely necessary.
+- DO NOT summarize or delete meaning.
+- Add natural connective phrasing, emotion, and descriptive beats to restore pacing.
+- Do not invent new facts not present in the English source.
+- Return only the improved translated text. No markdown, labels, or quotes.
 
-Voiceover:
-${source}`;
+English source (ground truth):
+${String(sourceText || '').replace(/\\s+/g, ' ').trim()}
+
+Current translation (too short):
+${String(localizedText || '').replace(/\\s+/g, ' ').trim()}\n`;
 
   try {
-    const localized = await callGemini(prompt, {
+    const improved = await callGemini(prompt, {
       skipCache: true,
-      temperature: 0.25,
-      maxTokens: 700,
-      timeout: 45000
+      temperature: 0.45,
+      maxTokens: 1800,
+      timeout: 90000
     });
-    const clean = String(localized || '')
-      .replace(/^```(?:\w+)?/i, '')
+    const clean = String(improved || '')
+      .replace(/^```(?:\\w+)?/i, '')
       .replace(/```$/i, '')
-      .replace(/^\s*(?:voiceover|translation|translated text)\s*:\s*/i, '')
-      .replace(/\s+/g, ' ')
+      .replace(/^\\s*(?:voiceover|translation|translated text)\\s*:\\s*/i, '')
+      .replace(/\\s+/g, ' ')
       .trim();
-    return clean || source;
+
+    if (!clean) return localizedText;
+    return clean;
   } catch (error) {
-    if (logger) logger(`Voice script localization failed for ${language}: ${error.message || error}`);
-    return source;
+    if (logger) logger(`Translation expansion failed for ${language}: ${error.message || error}`);
+    return localizedText;
   }
 }
 
@@ -1057,13 +1351,55 @@ function googleCloudTtsVoice(languageCode = 'en', voiceGender = 'female') {
   };
 }
 
-function googleCloudTtsAudioConfig(voiceGender = 'female') {
+function googleCloudTtsAudioConfig(voiceGender = 'female', opts = {}) {
   const gender = String(voiceGender || 'female').toLowerCase() === 'male' ? 'male' : 'female';
+  const speakingRate = Number(opts?.speakingRate);
   return {
     audioEncoding: 'MP3',
-    speakingRate: gender === 'male' ? 0.9 : 1,
+    speakingRate: Number.isFinite(speakingRate) ? clamp(speakingRate, 0.82, 1.06) : (gender === 'male' ? 0.9 : 1),
     pitch: gender === 'male' ? -6 : 0
   };
+}
+
+function speakingRateForTts({
+  languageCode = 'en',
+  voiceGender = 'female',
+  targetDurationSeconds = null,
+  estimatedScriptSeconds = null
+}) {
+  const lang = toTtsLanguageCode(languageCode);
+  const gender = String(voiceGender || 'female').toLowerCase() === 'male' ? 'male' : 'female';
+
+  // Baseline "cinematic" pace: slightly slower for non-English + male.
+  const base = {
+    en: gender === 'male' ? 0.93 : 1.0,
+    hi: gender === 'male' ? 0.90 : 0.97,
+    ta: gender === 'male' ? 0.90 : 0.97,
+    te: gender === 'male' ? 0.90 : 0.97,
+    kn: gender === 'male' ? 0.89 : 0.96,
+    ml: gender === 'male' ? 0.89 : 0.96
+  };
+
+  let rate = base[lang] || base.en;
+
+  // If our *estimated* narration is still short vs target, slow down a bit.
+  const target = Number(targetDurationSeconds);
+  const estimated = Number(estimatedScriptSeconds);
+  if (Number.isFinite(target) && target > 0 && Number.isFinite(estimated) && estimated > 0) {
+    const ratio = estimated / target;
+    if (ratio < 0.9) rate *= 0.92;
+    else if (ratio < 0.95) rate *= 0.96;
+    else if (ratio > 1.15) rate *= 1.04;
+  }
+
+  return clamp(rate, 0.82, 1.06);
+}
+
+function edgeTtsRateString(rate = 1) {
+  // edge-tts expects "+10%" / "-10%"
+  const pct = Math.round((Number(rate) - 1) * 100);
+  if (!Number.isFinite(pct) || pct === 0) return '+0%';
+  return `${pct > 0 ? '+' : ''}${pct}%`;
 }
 
 function getEdgeVoice(languageCode = 'en', voiceGender = 'female') {
@@ -1142,7 +1478,8 @@ async function synthesizeGoogleCloudTts({
   text,
   languageCode,
   voiceGender,
-  outputPath
+  outputPath,
+  speakingRate = null
 }) {
   if (!fetchImpl) return false;
   const token = await getGoogleTtsAccessToken();
@@ -1158,7 +1495,7 @@ async function synthesizeGoogleCloudTts({
     body: JSON.stringify({
       input: { text },
       voice,
-      audioConfig: googleCloudTtsAudioConfig(voiceGender)
+      audioConfig: googleCloudTtsAudioConfig(voiceGender, { speakingRate })
     })
   });
 
@@ -1191,22 +1528,24 @@ async function synthesizeEdgeTts({
   languageCode,
   voiceGender,
   outputPath,
+  speakingRate = 1,
   logger = null
 }) {
   if (!EDGE_TTS_ENABLED) return false;
   const voice = getEdgeVoice(languageCode, voiceGender);
+  const rate = edgeTtsRateString(speakingRate);
   const attempts = [
     {
       command: 'python',
-      args: ['-m', 'edge_tts', '--voice', voice, '--text', text, '--write-media', outputPath]
+      args: ['-m', 'edge_tts', '--voice', voice, '--rate', rate, '--text', text, '--write-media', outputPath]
     },
     {
       command: 'py',
-      args: ['-m', 'edge_tts', '--voice', voice, '--text', text, '--write-media', outputPath]
+      args: ['-m', 'edge_tts', '--voice', voice, '--rate', rate, '--text', text, '--write-media', outputPath]
     },
     {
       command: 'edge-tts',
-      args: ['--voice', voice, '--text', text, '--write-media', outputPath]
+      args: ['--voice', voice, '--rate', rate, '--text', text, '--write-media', outputPath]
     }
   ];
 
@@ -1269,6 +1608,8 @@ async function synthesizeElevenLabsTts({
 
 async function synthesizeVoiceTrack({
   voiceScript,
+  sourceVoiceScript = '',
+  sceneData = [],
   languageCode,
   voiceGender = 'female',
   targetDurationSeconds = null,
@@ -1276,24 +1617,93 @@ async function synthesizeVoiceTrack({
   context,
   logger = null
 }) {
-  const localizedVoiceScriptRaw = await localizeVoiceScriptForTts({
-    text: voiceScript,
+  const normalizedLang = toTtsLanguageCode(languageCode);
+  const safeTarget = Number.isFinite(Number(targetDurationSeconds)) ? Number(targetDurationSeconds) : null;
+
+  // Step 1: Translate with duration awareness (scene-timed) and avoid summarization.
+  let scriptForTts = String(voiceScript || '').replace(/\s+/g, ' ').trim();
+  let localizedScenes = normalizeSceneTimingForTranslation(sceneData, safeTarget || DEFAULT_DURATION_SECONDS);
+
+  if (normalizedLang !== 'en' && sourceVoiceScript) {
+    try {
+      const translated = await translateScriptDurationAware({
+        sourceText: sourceVoiceScript,
+        sceneData,
+        targetDurationSeconds: safeTarget || DEFAULT_DURATION_SECONDS,
+        languageCode,
+        voiceGender,
+        logger
+      });
+      scriptForTts = translated.fullScript || scriptForTts;
+      localizedScenes = translated.scenes || localizedScenes;
+    } catch (error) {
+      if (logger) logger(`Duration-aware translation failed: ${error.message || error}`);
+    }
+  }
+
+  // Step 2: If still too short, expand slightly while keeping meaning.
+  if (fitToDuration && safeTarget && normalizedLang !== 'en' && sourceVoiceScript) {
+    scriptForTts = await expandIfTooShort({
+      localizedText: scriptForTts,
+      sourceText: sourceVoiceScript,
+      languageCode,
+      targetDurationSeconds: safeTarget,
+      voiceGender,
+      logger
+    });
+  }
+
+  // Step 3: If too long, trim carefully (this is the only shortening step).
+  if (fitToDuration && safeTarget) {
+    const estimated = estimateSpeechSeconds(scriptForTts, languageCode, voiceGender);
+    if (estimated > safeTarget * 1.18) {
+      scriptForTts = fitVoiceScriptToDuration(scriptForTts, safeTarget);
+    }
+  }
+
+  const estimatedForRate = safeTarget ? estimateSpeechSeconds(scriptForTts, languageCode, voiceGender) : null;
+  const speakingRate = speakingRateForTts({
     languageCode,
-    logger
+    voiceGender,
+    targetDurationSeconds: safeTarget,
+    estimatedScriptSeconds: estimatedForRate
   });
 
-  const localizedVoiceScript = (fitToDuration && Number.isFinite(Number(targetDurationSeconds)))
-    ? fitVoiceScriptToDuration(localizedVoiceScriptRaw, Number(targetDurationSeconds))
-    : localizedVoiceScriptRaw;
-
-  const chunks = chunkTextForTts(localizedVoiceScript, 170);
+  const chunks = chunkTextForTts(scriptForTts, 170);
   if (!chunks.length) return null;
 
   const chunkPaths = [];
   const normalizedGender = String(voiceGender || 'female').toLowerCase() === 'male' ? 'male' : 'female';
-  const lang = toTtsVoiceLocale(languageCode, normalizedGender);
+  const ttsLocale = toTtsVoiceLocale(languageCode, normalizedGender);
   const finalVoiceFileName = `voice_track_${normalizedGender}.mp3`;
   const finalVoicePath = path.join(context.dirs.audio, finalVoiceFileName);
+
+  const maybeStretchToTarget = async () => {
+    if (!fitToDuration || !safeTarget) return;
+    const actual = await getAudioDurationSecondsFromFile(finalVoicePath);
+    if (!Number.isFinite(actual) || actual <= 0) return;
+    if (actual >= safeTarget * 0.92) return;
+
+    const ratio = actual / safeTarget;
+    // Only stretch up to 2x (atempo >= 0.5).
+    if (ratio < 0.5) return;
+
+    const atempo = clamp(ratio, 0.5, 1.0); // output duration = input/atempo
+    const stretchedPath = path.join(context.dirs.audio, `voice_track_${normalizedGender}_stretched.mp3`);
+    if (logger) logger(`Voice track short (${actual.toFixed(2)}s vs ${safeTarget}s). Stretching with atempo=${atempo.toFixed(3)}`);
+
+    await runFfmpeg([
+      '-y',
+      '-i', finalVoicePath,
+      '-vn',
+      '-af', `atempo=${atempo.toFixed(3)}`,
+      '-c:a', 'libmp3lame',
+      '-q:a', '2',
+      stretchedPath
+    ]);
+
+    await fs.promises.copyFile(stretchedPath, finalVoicePath);
+  };
 
   const chunkResults = await runWithConcurrency(chunks, 2, async (text, index) => {
     const outPath = path.join(context.dirs.audio, `voice_chunk_${index + 1}.mp3`);
@@ -1304,6 +1714,7 @@ async function synthesizeVoiceTrack({
         languageCode,
         voiceGender: normalizedGender,
         outputPath: outPath,
+        speakingRate,
         logger
       });
       if (edgeOk) return outPath;
@@ -1328,7 +1739,8 @@ async function synthesizeVoiceTrack({
         text,
         languageCode,
         voiceGender: normalizedGender,
-        outputPath: outPath
+        outputPath: outPath,
+        speakingRate
       });
       if (cloudOk) return outPath;
     } catch (error) {
@@ -1336,7 +1748,7 @@ async function synthesizeVoiceTrack({
     }
 
     try {
-      const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${encodeURIComponent(lang)}&q=${encodeURIComponent(text)}`;
+      const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${encodeURIComponent(ttsLocale)}&q=${encodeURIComponent(text)}`;
       const response = await fetchImpl(ttsUrl, {
         method: 'GET',
         headers: {
@@ -1370,9 +1782,13 @@ async function synthesizeVoiceTrack({
     if (normalizedGender === 'male') {
       await deepenMaleVoice(voiceOutputPath, finalVoicePath);
     }
+
+    await maybeStretchToTarget();
     return {
       path: finalVoicePath,
-      url: publicAudioUrl(context, finalVoiceFileName)
+      url: publicAudioUrl(context, finalVoiceFileName),
+      script: scriptForTts,
+      sceneData: localizedScenes
     };
   }
 
@@ -1406,9 +1822,12 @@ async function synthesizeVoiceTrack({
     await deepenMaleVoice(concatOutput, finalVoicePath);
   }
 
+  await maybeStretchToTarget();
   return {
     path: finalVoicePath,
-    url: publicAudioUrl(context, finalVoiceFileName)
+    url: publicAudioUrl(context, finalVoiceFileName),
+    script: scriptForTts,
+    sceneData: localizedScenes
   };
 }
 
@@ -1506,6 +1925,8 @@ async function generateAudioTracks({
   if (audioOptions.mode === 'auto') {
     voice = await synthesizeVoiceTrack({
       voiceScript: plan.voiceScript || input.description,
+      sourceVoiceScript: plan.sourceVoiceScript || plan.voiceScript || input.description,
+      sceneData: plan.sceneData || [],
       languageCode: audioOptions.languageCode,
       voiceGender: audioOptions.voiceGender,
       targetDurationSeconds: input.durationSeconds,
@@ -2030,7 +2451,9 @@ async function runGenerateAudio({
   }, { requireDescription: false });
 
   const plan = {
-    voiceScript: String(payload?.voiceScript || payload?.description || '').trim()
+    voiceScript: String(payload?.voiceScript || payload?.description || '').trim(),
+    sourceVoiceScript: String(payload?.sourceVoiceScript || payload?.voiceScript || payload?.description || '').trim(),
+    sceneData: Array.isArray(payload?.sceneData) ? payload.sceneData : []
   };
 
   const audioTracks = await generateAudioTracks({ input, plan, context });
@@ -2050,6 +2473,8 @@ async function runGenerateAudio({
     audioMode: audioTracks.mode,
     mixed: Boolean(mergedAudio?.url),
     finalAudioUrl: mergedAudio?.url || null,
+    localizedVoiceScript: audioTracks.tracks?.voice?.script || null,
+    localizedSceneData: audioTracks.tracks?.voice?.sceneData || null,
     tracks: {
       manualUrl: audioTracks.tracks?.manual?.url || null,
       voiceUrl: audioTracks.tracks?.voice?.url || null,
@@ -2122,7 +2547,9 @@ async function runMergeAudio({
 
 async function runMergeVideo({
   payload,
-  baseUrl
+  baseUrl,
+  onProgress = null,
+  onLog = null
 }) {
   const context = createJobContext({ baseUrl: baseUrl || getPublicBaseUrl(), providedJobId: payload?.jobId });
   const sceneClips = Array.isArray(payload?.clipUrls) ? payload.clipUrls : [];
@@ -2131,16 +2558,32 @@ async function runMergeVideo({
     throw new Error('clipUrls is required for mergeVideo');
   }
 
+  const reportProgress = (progress, currentStep, metadata = null) => {
+    if (typeof onProgress === 'function') {
+      onProgress({ progress, currentStep, metadata });
+    }
+  };
+
+  const logLine = (line) => {
+    if (typeof onLog === 'function') onLog(String(line || '').trim());
+  };
+
   const localClipPaths = [];
   for (let i = 0; i < sceneClips.length; i += 1) {
     const source = String(sceneClips[i] || '').trim();
     if (!source) continue;
     const outputName = `scene_${i + 1}.mp4`;
     const outputPath = path.join(context.dirs.clips, outputName);
+    reportProgress(10 + Math.round((i / Math.max(1, sceneClips.length)) * 35), 'downloading_clips', {
+      index: i + 1,
+      total: sceneClips.length
+    });
+    logLine(`Downloading clip ${i + 1}/${sceneClips.length}`);
     await materializeSourceToFile({ source, destinationPath: outputPath });
     localClipPaths.push(outputPath);
   }
 
+  reportProgress(50, 'merging_clips');
   const scenes = localClipPaths.map((clipPath, index) => ({
     index: index + 1,
     sceneId: `scene_${index + 1}`,
@@ -2153,6 +2596,8 @@ async function runMergeVideo({
   const audioSource = String(payload?.finalAudioUrl || '').trim();
   if (audioSource) {
     const audioPath = path.join(context.dirs.audio, 'input_audio.mp3');
+    reportProgress(65, 'downloading_audio');
+    logLine('Downloading final audio track');
     await materializeSourceToFile({ source: audioSource, destinationPath: audioPath });
     mergedAudio = {
       path: audioPath,
@@ -2162,12 +2607,14 @@ async function runMergeVideo({
 
   let subtitles = null;
   if (payload?.subtitles?.enabled && Array.isArray(payload?.sceneData)) {
+    reportProgress(75, 'generating_subtitles');
     subtitles = await generateSrtFile({
       sceneData: payload.sceneData.map((scene, idx) => ensureSceneInputForClipStage(scene, idx)),
       context
     });
   }
 
+  reportProgress(88, 'merging_final_output');
   const finalOutput = await mergeFinalOutput({
     mergedVideo,
     mergedAudio,
@@ -2175,6 +2622,7 @@ async function runMergeVideo({
     context
   });
 
+  reportProgress(98, 'finalizing');
   return {
     success: true,
     jobId: context.jobId,
