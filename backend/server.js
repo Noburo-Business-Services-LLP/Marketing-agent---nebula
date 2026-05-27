@@ -472,6 +472,14 @@ const startServer = async () => {
     console.log('✅ MongoDB connected successfully');
     mongoConnected = true;
 
+    // Start persistent video generation queue worker
+    try {
+      const { videoGenerationQueue } = require('./services/videoGenerationQueue');
+      videoGenerationQueue.startWorker();
+    } catch (queueError) {
+      console.warn('⚠️  Video generation queue worker failed to start:', queueError.message);
+    }
+
     // Start notification scheduler for campaign reminders
     try {
       notificationScheduler.start();

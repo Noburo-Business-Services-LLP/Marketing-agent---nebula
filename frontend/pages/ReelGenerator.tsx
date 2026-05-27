@@ -64,6 +64,12 @@ const ReelGenerator: React.FC = () => {
   const [deletingDraftId, setDeletingDraftId] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
+  // Persistent Queue background worker progress states
+  const [activeJobStatus, setActiveJobStatus] = useState<string>('');
+  const [activeJobProgress, setActiveJobProgress] = useState<number>(0);
+  const [activeJobStep, setActiveJobStep] = useState<string>('');
+  const [activeJobLogs, setActiveJobLogs] = useState<string[]>([]);
+
   const [products, setProducts] = useState<Product[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [description, setDescription] = useState('');
@@ -80,6 +86,9 @@ const ReelGenerator: React.FC = () => {
   const [audioMode, setAudioMode] = useState<AudioMode>('auto');
   const [audioTone, setAudioTone] = useState('professional');
   const [audioLanguageCode, setAudioLanguageCode] = useState('en');
+  // TEMP (testing): allow selecting server music library by duration bucket.
+  const [musicSource, setMusicSource] = useState<'tone' | 'library'>('library');
+  const [musicTrack, setMusicTrack] = useState('');
   const [voiceGender, setVoiceGender] = useState<'male' | 'female'>('female');
   const [voiceVolume, setVoiceVolume] = useState(1);
   const [musicVolume, setMusicVolume] = useState(0.24);
@@ -198,13 +207,99 @@ const ReelGenerator: React.FC = () => {
     return 1;
   };
 
+  const pollJob = async (queueJobId: string, successCallback: (result: any) => void) => {
+    setBusy(true);
+    setError('');
+    setActiveJobStatus('queued');
+    setActiveJobProgress(0);
+    setActiveJobStep('queued');
+    setActiveJobLogs(['[SYSTEM] Connected to background persistent queue.']);
+
+    const startedAt = Date.now();
+    const timeoutMs = 20 * 60 * 1000;
+    let pollDelayMs = 2000;
+    let lastUpdatedAt = '';
+    let unchangedTicks = 0;
+
+    while (true) {
+      if (Date.now() - startedAt > timeoutMs) {
+        setActiveJobStatus('failed');
+        throw new Error('Background task took too long. Please try again.');
+      }
+
+      let job: any;
+      try {
+        job = await videoGenerationAPI.getJobStatus(queueJobId);
+        pollDelayMs = 2000;
+      } catch (err: any) {
+        const status = Number(err?.status || 0);
+        if (status === 429) {
+          pollDelayMs = Math.min(15000, Math.round(pollDelayMs * 1.8));
+          await new Promise((r) => setTimeout(r, pollDelayMs));
+          continue;
+        }
+        setActiveJobStatus('failed');
+        throw err;
+      }
+
+      const status = String(job?.status || '').toLowerCase();
+      const progress = Number(job?.progress) || 0;
+      const currentStep = String(job?.currentStep || '');
+      const logs = Array.isArray(job?.logs) ? job.logs : [];
+      const updatedAt = String(job?.updatedAt || '');
+
+      setActiveJobStatus(status);
+      setActiveJobProgress(progress);
+      setActiveJobStep(currentStep);
+      setActiveJobLogs(logs);
+
+      if (updatedAt && updatedAt === lastUpdatedAt) {
+        unchangedTicks += 1;
+      } else {
+        unchangedTicks = 0;
+        lastUpdatedAt = updatedAt;
+      }
+
+      if (status === 'completed') {
+        const result = job?.result;
+        if (!result?.success) throw new Error(result?.message || 'Execution failed');
+        await successCallback(result);
+        setActiveJobStatus('');
+        break;
+      }
+
+      if (status === 'failed') {
+        setActiveJobStatus('failed');
+        throw new Error(job?.error?.message || 'Execution failed');
+      }
+
+      if (unchangedTicks >= 5) {
+        pollDelayMs = Math.min(15000, Math.round(pollDelayMs * 1.5));
+      }
+
+      await new Promise((r) => setTimeout(r, pollDelayMs));
+    }
+  };
+
   const refreshDraft = async (id = jobId, options: { syncStep?: boolean } = {}) => {
     if (!id) return;
     const response = await videoGenerationAPI.getDraft(id);
     if (!response?.success) return;
     const nextDraft = response.draft;
     setDraft(nextDraft);
+    setDescription(String(nextDraft?.input?.description || ''));
+    if (Number.isFinite(Number(nextDraft?.input?.durationSeconds))) {
+      setDurationSeconds(Number(nextDraft.input.durationSeconds));
+    }
+    if (Number.isFinite(Number(nextDraft?.input?.sceneCount))) {
+      setSceneCount(Number(nextDraft.input.sceneCount));
+    }
     setPromptText(nextDraft?.prompt?.promptText || '');
+    const draftMusicSource = String(nextDraft?.audio?.config?.musicSource || '').toLowerCase();
+    if (draftMusicSource === 'tone' || draftMusicSource === 'library') {
+      setMusicSource(draftMusicSource);
+    }
+    setMusicTrack(String(nextDraft?.audio?.config?.musicTrack || ''));
     if (Array.isArray(nextDraft?.images?.sceneData) && nextDraft.images.sceneData.length) {
       setScenes(nextDraft.images.sceneData);
     } else if (Array.isArray(nextDraft?.clips?.sceneData) && nextDraft.clips.sceneData.length) {
@@ -230,6 +325,31 @@ const ReelGenerator: React.FC = () => {
 
     if (options.syncStep) {
       setStep(deriveStepFromDraft(nextDraft));
+    }
+
+    // Sync / resume running queue jobs after page refresh or load
+    const draftJobs = (nextDraft && typeof nextDraft === 'object' ? nextDraft.jobs : null) || {};
+    const clipsJob = draftJobs.clips;
+    const mergeJob = draftJobs.merge;
+
+    if (clipsJob && ['queued', 'processing'].includes(String(clipsJob.status).toLowerCase())) {
+      console.log(`Reconnecting to active clips job: ${clipsJob.queueJobId}`);
+      pollJob(clipsJob.queueJobId, async (result) => {
+        setScenes(result.sceneData || []);
+        setDraft(result.draft || nextDraft);
+      }).catch((e: any) => {
+        setError(e?.message || 'Clip generation task failed.');
+      });
+    } else if (mergeJob && ['queued', 'processing'].includes(String(mergeJob.status).toLowerCase())) {
+      console.log(`Reconnecting to active merge job: ${mergeJob.queueJobId}`);
+      pollJob(mergeJob.queueJobId, async (result) => {
+        setFinalVideoUrl(result?.merge?.finalVideoUrl || result?.draft?.merge?.finalVideoUrl || '');
+        setFinalOutputUrl(result?.merge?.finalOutputUrl || result?.draft?.merge?.finalOutputUrl || '');
+        setDraft(result?.draft || nextDraft);
+        await loadVideoDrafts();
+      }).catch((e: any) => {
+        setError(e?.message || 'Video merge task failed.');
+      });
     }
   };
 
@@ -314,6 +434,8 @@ const ReelGenerator: React.FC = () => {
     mode: audioEnabled ? audioMode : 'off',
     languageCode: audioLanguageCode,
     tone: audioTone,
+    musicSource,
+    musicTrack: musicTrack.trim() || undefined,
     voiceGender,
     voiceVolume,
     musicVolume,
@@ -322,11 +444,11 @@ const ReelGenerator: React.FC = () => {
   });
 
   const ensureDraftForAudioTest = async (fallbackDescription = '') => {
+    if (jobId) return jobId;
     const effectiveDescription = description.trim() || fallbackDescription.trim();
     if (!effectiveDescription) {
       throw new Error('Description is required');
     }
-    if (jobId) return jobId;
 
     const response = await videoGenerationAPI.createDraft({
       description: effectiveDescription,
@@ -421,62 +543,12 @@ const ReelGenerator: React.FC = () => {
       async: true
     });
 
-    // If the backend queued the clip generation, poll the job status.
     const queueJobId = response?.queueJobId;
     if (queueJobId) {
-      const startedAt = Date.now();
-      const timeoutMs = 15 * 60 * 1000;
-      let pollDelayMs = 2000;
-      let lastUpdatedAt = '';
-      let unchangedTicks = 0;
-
-      while (true) {
-        if (Date.now() - startedAt > timeoutMs) {
-          throw new Error('Clip generation is taking too long. Please try again.');
-        }
-
-        let job: any;
-        try {
-          job = await videoGenerationAPI.getJobStatus(queueJobId);
-          pollDelayMs = 2000;
-        } catch (err: any) {
-          const status = Number(err?.status || 0);
-          if (status === 429) {
-            pollDelayMs = Math.min(15000, Math.round(pollDelayMs * 1.8));
-            await new Promise((r) => setTimeout(r, pollDelayMs));
-            continue;
-          }
-          throw err;
-        }
-        const status = String(job?.status || '').toLowerCase();
-        const updatedAt = String(job?.updatedAt || '');
-        if (updatedAt && updatedAt === lastUpdatedAt) {
-          unchangedTicks += 1;
-        } else {
-          unchangedTicks = 0;
-          lastUpdatedAt = updatedAt;
-        }
-
-        if (status === 'completed') {
-          const result = job?.result;
-          if (!result?.success) throw new Error(result?.message || 'Clip generation failed');
-          setScenes(result.sceneData || []);
-          setDraft(result.draft || draft);
-          break;
-        }
-
-        if (status === 'failed') {
-          throw new Error(job?.error?.message || 'Clip generation failed');
-        }
-
-        // If the backend isn't updating job state, back off to reduce load.
-        if (unchangedTicks >= 5) {
-          pollDelayMs = Math.min(15000, Math.round(pollDelayMs * 1.5));
-        }
-
-        await new Promise((r) => setTimeout(r, pollDelayMs));
-      }
-
+      await pollJob(queueJobId, async (result) => {
+        setScenes(result.sceneData || []);
+        setDraft(result.draft || draft);
+      });
       return;
     }
 
@@ -532,61 +604,12 @@ const ReelGenerator: React.FC = () => {
 
     const queueJobId = response?.queueJobId;
     if (queueJobId) {
-      const startedAt = Date.now();
-      const timeoutMs = 20 * 60 * 1000;
-      let pollDelayMs = 2500;
-      let lastUpdatedAt = '';
-      let unchangedTicks = 0;
-
-      while (true) {
-        if (Date.now() - startedAt > timeoutMs) {
-          throw new Error('Video merge is taking too long. Please try again.');
-        }
-
-        let job: any;
-        try {
-          job = await videoGenerationAPI.getJobStatus(queueJobId);
-          pollDelayMs = 2500;
-        } catch (err: any) {
-          const status = Number(err?.status || 0);
-          if (status === 429) {
-            pollDelayMs = Math.min(15000, Math.round(pollDelayMs * 1.8));
-            await new Promise((r) => setTimeout(r, pollDelayMs));
-            continue;
-          }
-          throw err;
-        }
-
-        const status = String(job?.status || '').toLowerCase();
-        const updatedAt = String(job?.updatedAt || '');
-        if (updatedAt && updatedAt === lastUpdatedAt) {
-          unchangedTicks += 1;
-        } else {
-          unchangedTicks = 0;
-          lastUpdatedAt = updatedAt;
-        }
-
-        if (status === 'completed') {
-          const result = job?.result;
-          if (!result?.success) throw new Error(result?.message || 'Video merge failed');
-          setFinalVideoUrl(result?.merge?.finalVideoUrl || result?.draft?.merge?.finalVideoUrl || '');
-          setFinalOutputUrl(result?.merge?.finalOutputUrl || result?.draft?.merge?.finalOutputUrl || '');
-          setDraft(result?.draft || draft);
-          await loadVideoDrafts();
-          break;
-        }
-
-        if (status === 'failed') {
-          throw new Error(job?.error?.message || 'Video merge failed');
-        }
-
-        if (unchangedTicks >= 5) {
-          pollDelayMs = Math.min(15000, Math.round(pollDelayMs * 1.5));
-        }
-
-        await new Promise((r) => setTimeout(r, pollDelayMs));
-      }
-
+      await pollJob(queueJobId, async (result) => {
+        setFinalVideoUrl(result?.merge?.finalVideoUrl || result?.draft?.merge?.finalVideoUrl || '');
+        setFinalOutputUrl(result?.merge?.finalOutputUrl || result?.draft?.merge?.finalOutputUrl || '');
+        setDraft(result?.draft || draft);
+        await loadVideoDrafts();
+      });
       return;
     }
 
@@ -932,6 +955,64 @@ const ReelGenerator: React.FC = () => {
           </div>
         )}
 
+        {activeJobStatus && (
+          <div className={`mt-6 p-6 rounded-2xl border shadow-xl flex flex-col gap-4 ${
+            isDarkMode ? 'bg-[#0f141c]/90 border-slate-700/80' : 'bg-white/95 border-slate-200'
+          }`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Loader2 className="w-5 h-5 text-[#ffcc29] animate-spin" />
+                <div>
+                  <h3 className={`font-bold ${theme.text}`}>Background Worker Processing...</h3>
+                  <p className={`text-xs ${theme.textSecondary}`}>
+                    Job: <span className="font-mono text-[#ffcc29]">{jobId}</span> | Status: <span className="capitalize">{activeJobStatus}</span>
+                  </p>
+                </div>
+              </div>
+              <span className="text-xl font-black text-[#ffcc29]">{activeJobProgress}%</span>
+            </div>
+
+            {/* Progress Bar */}
+            <div className={`w-full h-2 rounded-full overflow-hidden ${isDarkMode ? 'bg-slate-800' : 'bg-slate-100'}`}>
+              <div
+                className="h-full bg-gradient-to-r from-[#ffcc29] to-[#f0bd18] transition-all duration-500 ease-out"
+                style={{ width: `${activeJobProgress}%` }}
+              />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className={`text-xs font-bold px-2 py-0.5 rounded ${
+                isDarkMode ? 'bg-slate-800 text-slate-200' : 'bg-slate-100 text-slate-700'
+              }`}>
+                Step: {activeJobStep || 'Initializing'}
+              </span>
+            </div>
+
+            {/* Terminal Logs Viewer */}
+            <div className="flex flex-col">
+              <div className={`flex items-center justify-between px-4 py-2 text-xs font-mono border-b ${
+                isDarkMode ? 'bg-[#0b0f17] border-slate-800 text-slate-400' : 'bg-slate-100 border-slate-200 text-slate-600'
+              } rounded-t-xl`}>
+                <span>CONSOLE OUTPUT</span>
+                <span>Streaming Live</span>
+              </div>
+              <div className={`p-4 font-mono text-xs overflow-y-auto max-h-48 flex flex-col gap-1 rounded-b-xl border border-t-0 ${
+                isDarkMode ? 'bg-[#070b12] border-slate-800 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-800'
+              }`} style={{ scrollBehavior: 'smooth' }}>
+                {activeJobLogs.length > 0 ? (
+                  activeJobLogs.map((logLine, index) => (
+                    <div key={index} className={logLine.includes('FAILED') ? 'text-red-400' : logLine.includes('completed') ? 'text-emerald-400' : ''}>
+                      {logLine}
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-slate-500 italic">Waiting for console stream...</div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {step === 1 && (
           <div className={`${panelClass} p-6 space-y-4`}>
             <h2 className={`font-bold text-lg ${theme.text}`}>Step 1: Input</h2>
@@ -1134,6 +1215,20 @@ const ReelGenerator: React.FC = () => {
                   </select>
                 </div>
                 <div>
+                  <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Music Source (Test)</label>
+                  <select
+                    value={musicSource}
+                    onChange={(e) => setMusicSource(e.target.value as 'tone' | 'library')}
+                    className={`${inputClass} mt-2`}
+                  >
+                    <option value="library">Library (by duration)</option>
+                    <option value="tone">Tone Pack (default)</option>
+                  </select>
+                  <p className={`text-[11px] mt-1 ${theme.textSecondary}`}>
+                    Uses backend `music/{duration}s` when Library is selected.
+                  </p>
+                </div>
+                <div>
                   <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Voice</label>
                   <select value={voiceGender} onChange={(e) => setVoiceGender(e.target.value as 'male' | 'female')} className={`${inputClass} mt-2`}>
                     <option value="female">Female</option>
@@ -1148,6 +1243,21 @@ const ReelGenerator: React.FC = () => {
                   <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Music Volume</label>
                   <input type="range" min={0} max={2} step={0.1} value={musicVolume} onChange={(e) => setMusicVolume(Number(e.target.value))} className="mt-3 w-full" />
                 </div>
+              </div>
+            )}
+
+            {audioEnabled && musicSource === 'library' && (
+              <div className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3`}>
+                <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Music Track (Optional)</label>
+                <input
+                  value={musicTrack}
+                  onChange={(e) => setMusicTrack(e.target.value)}
+                  placeholder="e.g. sonican-tropical-30-seconds-514742.mp3"
+                  className={`${inputClass} mt-2 w-full`}
+                />
+                <p className={`text-[11px] mt-1 ${theme.textSecondary}`}>
+                  Leave empty to auto-pick a track for this video duration.
+                </p>
               </div>
             )}
 
