@@ -204,6 +204,13 @@ const ReelGenerator: React.FC = () => {
     if (!response?.success) return;
     const nextDraft = response.draft;
     setDraft(nextDraft);
+    setDescription(String(nextDraft?.input?.description || ''));
+    if (Number.isFinite(Number(nextDraft?.input?.durationSeconds))) {
+      setDurationSeconds(Number(nextDraft.input.durationSeconds));
+    }
+    if (Number.isFinite(Number(nextDraft?.input?.sceneCount))) {
+      setSceneCount(Number(nextDraft.input.sceneCount));
+    }
     setPromptText(nextDraft?.prompt?.promptText || '');
     if (Array.isArray(nextDraft?.images?.sceneData) && nextDraft.images.sceneData.length) {
       setScenes(nextDraft.images.sceneData);
@@ -322,11 +329,11 @@ const ReelGenerator: React.FC = () => {
   });
 
   const ensureDraftForAudioTest = async (fallbackDescription = '') => {
+    if (jobId) return jobId;
     const effectiveDescription = description.trim() || fallbackDescription.trim();
     if (!effectiveDescription) {
       throw new Error('Description is required');
     }
-    if (jobId) return jobId;
 
     const response = await videoGenerationAPI.createDraft({
       description: effectiveDescription,

@@ -358,6 +358,10 @@ function normalizeAudioOptions(raw = {}) {
     mode,
     languageCode: String(raw?.languageCode || 'en').toLowerCase(),
     tone: normalizeTone(raw?.tone) || 'professional',
+    musicSource: ['tone', 'library'].includes(String(raw?.musicSource || '').toLowerCase())
+      ? String(raw.musicSource).toLowerCase()
+      : String(process.env.AI_VIDEO_MUSIC_SOURCE || 'tone').toLowerCase(),
+    musicTrack: typeof raw?.musicTrack === 'string' ? raw.musicTrack.trim() : '',
     voiceGender: ['male', 'female'].includes(String(raw?.voiceGender || '').toLowerCase())
       ? String(raw.voiceGender).toLowerCase()
       : 'female',
@@ -368,6 +372,53 @@ function normalizeAudioOptions(raw = {}) {
     manualAudioUrl: typeof raw?.manualAudioUrl === 'string' ? raw.manualAudioUrl.trim() : '',
     soundEffectUrls: Array.isArray(raw?.soundEffectUrls) ? raw.soundEffectUrls.filter(Boolean).map(String) : []
   };
+}
+
+function musicLibraryRoot() {
+  return path.resolve(__dirname, '../music');
+}
+
+function isAudioFileName(fileName = '') {
+  const ext = path.extname(String(fileName || '')).toLowerCase();
+  return ['.mp3', '.wav', '.m4a', '.aac', '.ogg'].includes(ext);
+}
+
+function listMusicCandidates(dirPath) {
+  try {
+    if (!fs.existsSync(dirPath)) return [];
+    const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+    return entries
+      .filter((e) => e.isFile() && isAudioFileName(e.name))
+      .map((e) => path.join(dirPath, e.name));
+  } catch (_) {
+    return [];
+  }
+}
+
+function bucketDurationSeconds(seconds = 60) {
+  const value = clamp(Number.parseInt(String(seconds || 0), 10) || 60, 6, 180);
+  const buckets = [15, 30, 45, 60];
+  let best = buckets[0];
+  let bestDiff = Math.abs(value - best);
+  for (const b of buckets.slice(1)) {
+    const diff = Math.abs(value - b);
+    if (diff < bestDiff) {
+      best = b;
+      bestDiff = diff;
+    }
+  }
+  return best;
+}
+
+function stablePick(items = [], seed = '') {
+  const list = Array.isArray(items) ? items : [];
+  if (!list.length) return null;
+  const str = String(seed || '');
+  let hash = 0;
+  for (let i = 0; i < str.length; i += 1) {
+    hash = (hash * 31 + str.charCodeAt(i)) >>> 0;
+  }
+  return list[hash % list.length];
 }
 
 function fitVoiceScriptToDuration(text = '', durationSeconds = 60) {
@@ -1865,8 +1916,51 @@ async function prepareManualAudioTrack({ audioOptions, context, logger = null })
   return null;
 }
 
-async function prepareBackgroundTrack({ audioOptions, context }) {
+async function prepareBackgroundTrack({ audioOptions, context, durationSeconds = 60 }) {
   const tone = normalizeTone(audioOptions.tone) || 'professional';
+  const durationBucket = bucketDurationSeconds(durationSeconds);
+
+  if (audioOptions.musicSource === 'library') {
+    const root = musicLibraryRoot();
+    const durationDir = path.join(root, `${durationBucket}s`);
+    const toneDir = path.join(durationDir, tone);
+
+    const preferredTrack = String(audioOptions.musicTrack || '').trim();
+    const searchDirs = [toneDir, durationDir];
+
+    let candidates = [];
+    for (const dirPath of searchDirs) {
+      candidates = candidates.concat(listMusicCandidates(dirPath));
+    }
+
+    let selectedPath = null;
+    if (preferredTrack) {
+      const lower = preferredTrack.toLowerCase();
+      selectedPath =
+        candidates.find((p) => path.basename(p).toLowerCase() === lower) ||
+        candidates.find((p) => p.toLowerCase().includes(lower)) ||
+        null;
+    }
+    if (!selectedPath) {
+      selectedPath = stablePick(candidates, context?.jobId || '') || null;
+    }
+
+    if (selectedPath) {
+      const ext = path.extname(selectedPath) || '.mp3';
+      const outputName = `background_track${ext}`;
+      const outputPath = path.join(context.dirs.audio, outputName);
+      await fs.promises.copyFile(selectedPath, outputPath);
+      return {
+        path: outputPath,
+        url: buildMediaUrl(context.baseUrl, context.jobId, ['audio', outputName]),
+        tone,
+        source: 'library',
+        durationBucketSeconds: durationBucket,
+        trackName: path.basename(selectedPath)
+      };
+    }
+  }
+
   const tonePath = audioFilePathForTone(tone) || audioFilePathForTone('professional');
   if (!tonePath) return null;
   const outputName = 'background_track.mp3';
@@ -1875,7 +1969,9 @@ async function prepareBackgroundTrack({ audioOptions, context }) {
   return {
     path: outputPath,
     url: buildMediaUrl(context.baseUrl, context.jobId, ['audio', outputName]),
-    tone
+    tone,
+    source: 'tone',
+    durationBucketSeconds: durationBucket
   };
 }
 
@@ -1918,7 +2014,11 @@ async function generateAudioTracks({
   }
 
   const manual = await prepareManualAudioTrack({ audioOptions, context, logger });
-  const background = await prepareBackgroundTrack({ audioOptions, context });
+  const background = await prepareBackgroundTrack({
+    audioOptions,
+    context,
+    durationSeconds: input.durationSeconds
+  });
   const sfx = await prepareSoundEffects({ audioOptions, context, logger });
 
   let voice = null;

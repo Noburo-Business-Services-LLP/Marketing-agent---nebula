@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const rateLimit = require('express-rate-limit');
+const { ipKeyGenerator } = rateLimit;
 
 const Product = require('../models/Product');
 const { protect } = require('../middleware/auth');
@@ -37,7 +38,7 @@ const videoAiWriteLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many AI generation requests, please try again later.' },
-  keyGenerator: (req) => String(req.user?._id || req.user?.id || req.ip)
+  keyGenerator: (req) => String(req.user?._id || req.user?.id || ipKeyGenerator(req.ip))
 });
 
 const videoJobReadLimiter = rateLimit({
@@ -46,7 +47,7 @@ const videoJobReadLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many job status requests, please try again later.' },
-  keyGenerator: (req) => String(req.user?._id || req.user?.id || req.ip)
+  keyGenerator: (req) => String(req.user?._id || req.user?.id || ipKeyGenerator(req.ip))
 });
 
 function responseError(res, error, fallbackMessage) {
@@ -206,6 +207,63 @@ function sanitizeSceneData(sceneData = [], totalDurationSeconds = 60) {
   });
 }
 
+function deriveWizardStepFromDraft(draft = {}) {
+  const derived = [];
+  if (draft?.prompt?.promptText) derived.push(2);
+  if (Array.isArray(draft?.scenes?.sceneData) && draft.scenes.sceneData.length) derived.push(2);
+  if (Array.isArray(draft?.images?.sceneData) && draft.images.sceneData.some((s) => s?.imageUrl)) derived.push(3);
+  if (Array.isArray(draft?.clips?.clipUrls) && draft.clips.clipUrls.length) derived.push(4);
+  if (draft?.audio?.tracks && (draft.audio.tracks.voiceUrl || draft.audio.tracks.manualUrl)) derived.push(5);
+  if (draft?.mix?.finalAudioUrl) derived.push(6);
+  if (draft?.merge?.finalOutputUrl || draft?.merge?.finalVideoUrl) derived.push(7);
+  if (draft?.content?.thumbnailUrl || draft?.content?.caption) derived.push(8);
+  if (Array.isArray(draft?.platform?.selectedPlatforms) && draft.platform.selectedPlatforms.length) derived.push(9);
+  if (draft?.schedule?.scheduledAt || draft?.schedule?.status) derived.push(10);
+
+  const current = Number(draft?.currentStep || 1) || 1;
+  return Math.max(current, derived.length ? Math.max(...derived) : 1);
+}
+
+function deriveVoiceScriptFromDraft(draft = {}) {
+  const explicit = String(draft?.scenes?.voiceScript || '').trim();
+  if (explicit) return explicit;
+
+  const sceneLines = Array.isArray(draft?.scenes?.sceneData)
+    ? draft.scenes.sceneData.map((scene) => String(scene?.voiceLine || '').trim()).filter(Boolean)
+    : [];
+  if (sceneLines.length) return sceneLines.join(' ');
+
+  const promptText = String(draft?.prompt?.promptText || '').trim();
+  if (promptText) return promptText;
+
+  return String(draft?.input?.description || '').trim();
+}
+
+function mergeClipUrlsIntoScenes(existingScenes = [], clipScenes = []) {
+  const base = Array.isArray(existingScenes) ? existingScenes : [];
+  const clips = Array.isArray(clipScenes) ? clipScenes : [];
+  if (!base.length || !clips.length) return base;
+
+  const bySceneId = new Map(
+    clips
+      .map((scene) => [String(scene?.sceneId || ''), scene])
+      .filter(([key]) => Boolean(key))
+  );
+
+  return base.map((scene, idx) => {
+    const sceneId = String(scene?.sceneId || '');
+    const clipMatch =
+      (sceneId && bySceneId.get(sceneId)) ||
+      clips[idx] ||
+      null;
+    if (!clipMatch?.clipUrl) return scene;
+    return {
+      ...scene,
+      clipUrl: clipMatch.clipUrl
+    };
+  });
+}
+
 async function resolveProductFromPayload({ payload, user }) {
   if (payload?.product && typeof payload.product === 'object') {
     return payload.product;
@@ -308,10 +366,10 @@ Rules:
 async function generateCaptionAndHashtags({ draft, selectedPlatforms = [] }) {
   const sceneSummary = Array.isArray(draft?.scenes?.sceneData)
     ? draft.scenes.sceneData
-        .map((scene) => String(scene?.voiceLine || scene?.onScreenText || scene?.title || '').trim())
-        .filter(Boolean)
-        .slice(0, 5)
-        .join(' | ')
+      .map((scene) => String(scene?.voiceLine || scene?.onScreenText || scene?.title || '').trim())
+      .filter(Boolean)
+      .slice(0, 5)
+      .join(' | ')
     : '';
 
   const aiMemoryContext = await buildAIContext({
@@ -369,9 +427,9 @@ Rules:
 async function generateThumbnailFromDraft({ draft, baseUrl }) {
   const prompt = String(
     draft?.scenes?.thumbnailPrompt ||
-      draft?.prompt?.promptText ||
-      draft?.input?.description ||
-      'Marketing video thumbnail'
+    draft?.prompt?.promptText ||
+    draft?.input?.description ||
+    'Marketing video thumbnail'
   ).trim();
 
   try {
@@ -473,7 +531,22 @@ router.get('/draft/:jobId', protect, videoJobReadLimiter, async (req, res) => {
   try {
     const userId = toUserId(req.user);
     const draft = await loadDraftForUser(req.params.jobId, userId);
-    return res.json({ success: true, draft });
+    const effectiveStep = deriveWizardStepFromDraft(draft);
+
+    const draftJobs = (draft && typeof draft === 'object' ? draft.jobs : null) || {};
+    const queueJobIds = Array.from(
+      new Set(
+        Object.values(draftJobs)
+          .map((entry) => entry?.queueJobId)
+          .filter(Boolean)
+          .map((id) => String(id))
+      )
+    );
+    const queueJobs = queueJobIds
+      .map((queueJobId) => videoGenerationQueue.getJob(queueJobId, userId))
+      .filter(Boolean);
+
+    return res.json({ success: true, draft, effectiveStep, queueJobs });
   } catch (error) {
     return responseError(res, error, 'Failed to load draft');
   }
@@ -688,9 +761,9 @@ router.post('/generateImages', protect, checkTrial, videoAiWriteLimiter, async (
     const durationSeconds = normalizedDurationSeconds(draft?.input?.durationSeconds || 60, 60);
     const sourceScenes = sanitizeSceneData(
       sceneData ||
-        draft?.images?.sceneData ||
-        draft?.scenes?.sceneData ||
-        [],
+      draft?.images?.sceneData ||
+      draft?.scenes?.sceneData ||
+      [],
       durationSeconds
     );
 
@@ -814,9 +887,9 @@ router.post('/generateClips', protect, checkTrial, videoAiWriteLimiter, async (r
     const draft = await loadDraftForUser(jobId, userId);
     const sourceScenes = sanitizeSceneData(
       sceneData ||
-        draft?.images?.sceneData ||
-        draft?.scenes?.sceneData ||
-        [],
+      draft?.images?.sceneData ||
+      draft?.scenes?.sceneData ||
+      [],
       draft?.input?.durationSeconds || 60
     );
 
@@ -849,6 +922,13 @@ router.post('/generateClips', protect, checkTrial, videoAiWriteLimiter, async (r
           const updated = await updateDraft(jobId, userId, (current) => ({
             ...current,
             currentStep: Math.max(Number(current.currentStep || 1), 4),
+            images: current?.images?.sceneData?.length
+              ? {
+                ...(current.images || {}),
+                sceneData: mergeClipUrlsIntoScenes(current.images.sceneData, generated.sceneData || []),
+                generatedAt: current.images.generatedAt || new Date().toISOString()
+              }
+              : (current.images || null),
             clips: {
               sceneData: generated.sceneData || [],
               clipUrls: generated.clipUrls || [],
@@ -878,6 +958,18 @@ router.post('/generateClips', protect, checkTrial, videoAiWriteLimiter, async (r
         }
       });
 
+      await updateDraft(jobId, userId, (current) => ({
+        ...current,
+        jobs: {
+          ...(current.jobs || {}),
+          clips: {
+            queueJobId: queued.jobId,
+            status: queued.status,
+            queuedAt: new Date().toISOString()
+          }
+        }
+      }));
+
       return res.status(202).json({
         success: true,
         message: 'Clip generation queued',
@@ -900,6 +992,13 @@ router.post('/generateClips', protect, checkTrial, videoAiWriteLimiter, async (r
     const updated = await updateDraft(jobId, userId, (current) => ({
       ...current,
       currentStep: Math.max(Number(current.currentStep || 1), 4),
+      images: current?.images?.sceneData?.length
+        ? {
+          ...(current.images || {}),
+          sceneData: mergeClipUrlsIntoScenes(current.images.sceneData, generated.sceneData || []),
+          generatedAt: current.images.generatedAt || new Date().toISOString()
+        }
+        : (current.images || null),
       clips: {
         sceneData: generated.sceneData || [],
         clipUrls: generated.clipUrls || [],
@@ -940,15 +1039,7 @@ router.post('/generateAudio', protect, checkTrial, videoAiWriteLimiter, async (r
     const userId = toUserId(req.user);
     const draft = await loadDraftForUser(jobId, userId);
     const requestedLanguageCode = normalizeAudioLanguageCode(audio?.languageCode || 'en');
-    const sourceVoiceScript = String(
-      audio?.voiceScript ||
-        draft?.scenes?.voiceScript ||
-        (Array.isArray(draft?.scenes?.sceneData)
-          ? draft.scenes.sceneData.map((scene) => scene?.voiceLine).filter(Boolean).join(' ')
-          : '') ||
-        draft?.input?.description ||
-        ''
-    ).trim();
+    const sourceVoiceScript = String(audio?.voiceScript || deriveVoiceScriptFromDraft(draft) || '').trim();
 
     const sceneDataForTiming =
       (Array.isArray(draft?.scenes?.sceneData) && draft.scenes.sceneData.length ? draft.scenes.sceneData : null) ||
@@ -957,11 +1048,23 @@ router.post('/generateAudio', protect, checkTrial, videoAiWriteLimiter, async (r
       (Array.isArray(draft?.scenes?.scenes) && draft.scenes.scenes.length ? draft.scenes.scenes : null) ||
       [];
 
+    if (!String(draft?.scenes?.voiceScript || '').trim() && sourceVoiceScript) {
+      await updateDraft(jobId, userId, (current) => ({
+        ...current,
+        scenes: {
+          ...(current.scenes || {}),
+          voiceScript: sourceVoiceScript
+        }
+      }));
+    }
+
     const audioConfig = {
       enabled: audio?.enabled !== false,
       mode: String(audio?.mode || 'auto').toLowerCase(),
       languageCode: requestedLanguageCode,
       tone: String(audio?.tone || 'professional').toLowerCase(),
+      musicSource: String(audio?.musicSource || process.env.AI_VIDEO_MUSIC_SOURCE || 'tone').toLowerCase(),
+      musicTrack: typeof audio?.musicTrack === 'string' ? audio.musicTrack : '',
       voiceGender: String(audio?.voiceGender || 'female').toLowerCase(),
       voiceVolume: Number.isFinite(Number(audio?.voiceVolume)) ? Number(audio.voiceVolume) : 1,
       musicVolume: Number.isFinite(Number(audio?.musicVolume)) ? Number(audio.musicVolume) : 0.24,
@@ -1169,6 +1272,18 @@ router.post('/mergeVideo', protect, checkTrial, videoAiWriteLimiter, async (req,
           };
         }
       });
+
+      await updateDraft(jobId, userId, (current) => ({
+        ...current,
+        jobs: {
+          ...(current.jobs || {}),
+          merge: {
+            queueJobId: queued.jobId,
+            status: queued.status,
+            queuedAt: new Date().toISOString()
+          }
+        }
+      }));
 
       return res.status(202).json({
         success: true,
