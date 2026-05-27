@@ -8,6 +8,7 @@ const { spawn, spawnSync } = require('child_process');
 const { GoogleAuth } = require('google-auth-library');
 
 const Product = require('../models/Product');
+const VideoDraft = require('../models/VideoDraft');
 const { callGemini, parseGeminiJSON, generateCampaignImageNanoBanana } = require('./geminiAI');
 const { getPublicBaseUrl, normalizeTone, audioFilePathForTone } = require('../utils/toneAudio');
 const { generateVideoClip } = require('./videoService');
@@ -278,9 +279,35 @@ function runFfmpeg(args = [], options = {}) {
       10000,
       Number.parseInt(String(options.timeoutMs || process.env.AI_VIDEO_FFMPEG_TIMEOUT_MS || '900000'), 10) || 900000
     );
-    const proc = spawn(ffmpegPath, args, { windowsHide: true });
+
+    // Global cap on CPU thread allocation to prevent server freezes/CPU starvation
+    const finalArgs = [...args];
+    if (!finalArgs.includes('-threads')) {
+      finalArgs.unshift('-threads', '2');
+    }
+
+    const proc = spawn(ffmpegPath, finalArgs, { windowsHide: true });
     let stderr = '';
-    proc.stderr.on('data', (d) => { stderr += d.toString(); });
+    
+    proc.stderr.on('data', (d) => {
+      const chunk = d.toString();
+      stderr += chunk;
+
+      // Real-time progress monitoring: Parse progress time (e.g. time=00:00:15.30)
+      if (typeof options.onProgress === 'function' && options.totalDuration > 0) {
+        const timeMatch = chunk.match(/time=(\d+):(\d+):(\d+)\.(\d+)/);
+        if (timeMatch) {
+          const hours = parseInt(timeMatch[1], 10);
+          const minutes = parseInt(timeMatch[2], 10);
+          const seconds = parseInt(timeMatch[3], 10);
+          const ms = parseInt(timeMatch[4], 10);
+          const currentTime = hours * 3600 + minutes * 60 + seconds + ms / 100;
+          const pct = Math.min(99, Math.round((currentTime / options.totalDuration) * 100));
+          options.onProgress(pct);
+        }
+      }
+    });
+
     proc.on('error', (error) => reject(error));
 
     const timer = setTimeout(() => {
@@ -839,12 +866,23 @@ async function generateSceneImages({
     sceneData,
     SCENE_IMAGE_CONCURRENCY,
     async (scene, index) => {
-    const fileName = `scene_${scene.index}.jpg`;
-    const localPath = path.join(context.dirs.images, fileName);
-    const mediaUrl = buildMediaUrl(context.baseUrl, context.jobId, ['images', fileName]);
+      const fileName = `scene_${scene.index}.jpg`;
+      const localPath = path.join(context.dirs.images, fileName);
+      const mediaUrl = buildMediaUrl(context.baseUrl, context.jobId, ['images', fileName]);
 
-    // First scene can use uploaded image or product image directly.
-    const canUseReferenceDirectly = index === 0 && referenceImage?.localPath;
+      // Cache guard: Check if the scene image is ALREADY generated in a prior attempt and exists!
+      if (scene.imageUrl && scene.imageUrl.startsWith('http') && fs.existsSync(localPath)) {
+        if (logger) logger(`Reusing existing generated image for scene ${scene.sceneId}`);
+        return {
+          ...scene,
+          imageUrl: scene.imageUrl,
+          imagePath: localPath,
+          imageSource: scene.imageSource || 'reused'
+        };
+      }
+
+      // First scene can use uploaded image or product image directly.
+      const canUseReferenceDirectly = index === 0 && referenceImage?.localPath;
 
       if (canUseReferenceDirectly) {
       await fs.promises.copyFile(referenceImage.localPath, localPath);
@@ -964,6 +1002,21 @@ async function generateSceneClips({
     const clipPath = path.join(context.dirs.clips, clipName);
     const rawClipPath = path.join(context.dirs.temp, `fal_${sanitizeSegment(scene.sceneId || scene.index, 'scene')}.mp4`);
     const clipUrl = buildMediaUrl(context.baseUrl, context.jobId, ['clips', clipName]);
+
+    // Cache guard: Check if the scene clip is ALREADY generated and exists!
+    if (scene.clipUrl && scene.clipUrl.startsWith('http') && fs.existsSync(clipPath)) {
+      if (logger) logger(`Reusing existing generated video clip for scene ${scene.sceneId}`);
+      const enriched = {
+        ...scene,
+        clipPath,
+        clipUrl,
+        falVideoUrl: scene.falVideoUrl || scene.video_url || scene.videoUrl || ''
+      };
+      if (typeof onSceneDone === 'function') {
+        onSceneDone(index, scenes.length, enriched);
+      }
+      return enriched;
+    }
 
     if (logger) logger(`Generating Fal.ai clip for ${scene.sceneId}`);
     const falScene = await generateVideoClip(scene);
@@ -1720,10 +1773,6 @@ async function synthesizeVoiceTrack({
     estimatedScriptSeconds: estimatedForRate
   });
 
-  const chunks = chunkTextForTts(scriptForTts, 170);
-  if (!chunks.length) return null;
-
-  const chunkPaths = [];
   const normalizedGender = String(voiceGender || 'female').toLowerCase() === 'male' ? 'male' : 'female';
   const ttsLocale = toTtsVoiceLocale(languageCode, normalizedGender);
   const finalVoiceFileName = `voice_track_${normalizedGender}.mp3`;
@@ -1733,29 +1782,121 @@ async function synthesizeVoiceTrack({
     if (!fitToDuration || !safeTarget) return;
     const actual = await getAudioDurationSecondsFromFile(finalVoicePath);
     if (!Number.isFinite(actual) || actual <= 0) return;
-    if (actual >= safeTarget * 0.92) return;
+    
+    // Negligible time differences (less than 0.2s) do not require modification
+    if (Math.abs(actual - safeTarget) < 0.2) return;
 
     const ratio = actual / safeTarget;
-    // Only stretch up to 2x (atempo >= 0.5).
-    if (ratio < 0.5) return;
+    // FFmpeg atempo supports speed ratios between 0.5 and 2.0.
+    if (ratio >= 0.5 && ratio <= 2.0) {
+      const atempo = clamp(ratio, 0.5, 2.0); // output duration = input/atempo
+      const stretchedPath = path.join(context.dirs.audio, `voice_track_${normalizedGender}_stretched.mp3`);
+      if (logger) logger(`Syncing voice duration: actual=${actual.toFixed(2)}s, target=${safeTarget}s. Stretching with atempo=${atempo.toFixed(3)}`);
 
-    const atempo = clamp(ratio, 0.5, 1.0); // output duration = input/atempo
-    const stretchedPath = path.join(context.dirs.audio, `voice_track_${normalizedGender}_stretched.mp3`);
-    if (logger) logger(`Voice track short (${actual.toFixed(2)}s vs ${safeTarget}s). Stretching with atempo=${atempo.toFixed(3)}`);
+      await runFfmpeg([
+        '-y',
+        '-i', finalVoicePath,
+        '-vn',
+        '-af', `atempo=${atempo.toFixed(3)}`,
+        '-c:a', 'libmp3lame',
+        '-q:a', '2',
+        stretchedPath
+      ]);
 
-    await runFfmpeg([
-      '-y',
-      '-i', finalVoicePath,
-      '-vn',
-      '-af', `atempo=${atempo.toFixed(3)}`,
-      '-c:a', 'libmp3lame',
-      '-q:a', '2',
-      stretchedPath
-    ]);
-
-    await fs.promises.copyFile(stretchedPath, finalVoicePath);
+      await fs.promises.copyFile(stretchedPath, finalVoicePath);
+    } else {
+      // If way out of bounds, trim precisely to safeTarget
+      const stretchedPath = path.join(context.dirs.audio, `voice_track_${normalizedGender}_stretched.mp3`);
+      if (logger) logger(`Voice track out of bounds (${actual.toFixed(2)}s vs ${safeTarget}s). Trimming precisely.`);
+      await runFfmpeg([
+        '-y',
+        '-i', finalVoicePath,
+        '-vn',
+        '-t', String(safeTarget),
+        '-c:a', 'libmp3lame',
+        '-q:a', '2',
+        stretchedPath
+      ]);
+      await fs.promises.copyFile(stretchedPath, finalVoicePath);
+    }
   };
 
+  // Try single pass synthesis for ultra fast TTS performance
+  let singlePassSuccess = false;
+  try {
+    if (logger) logger(`Attempting single-pass TTS synthesis for entire script (${scriptForTts.length} chars)`);
+    
+    let ok = false;
+    if (normalizedGender === 'male') {
+      const sourceVoicePath = path.join(context.dirs.audio, 'voice_track_male_source.mp3');
+      ok = await synthesizeEdgeTts({
+        text: scriptForTts,
+        languageCode,
+        voiceGender: normalizedGender,
+        outputPath: sourceVoicePath,
+        speakingRate,
+        logger
+      });
+      if (ok) {
+        await deepenMaleVoice(sourceVoicePath, finalVoicePath);
+      }
+    } else {
+      ok = await synthesizeEdgeTts({
+        text: scriptForTts,
+        languageCode,
+        voiceGender: normalizedGender,
+        outputPath: finalVoicePath,
+        speakingRate,
+        logger
+      });
+    }
+
+    if (!ok && normalizedGender === 'male') {
+      const sourceVoicePath = path.join(context.dirs.audio, 'voice_track_male_source.mp3');
+      ok = await synthesizeElevenLabsTts({
+        text: scriptForTts,
+        languageCode,
+        voiceGender: normalizedGender,
+        outputPath: sourceVoicePath
+      });
+      if (ok) {
+        await deepenMaleVoice(sourceVoicePath, finalVoicePath);
+      }
+    }
+
+    if (!ok) {
+      ok = await synthesizeGoogleCloudTts({
+        text: scriptForTts,
+        languageCode,
+        voiceGender: normalizedGender,
+        outputPath: finalVoicePath,
+        speakingRate
+      });
+    }
+
+    if (ok && fs.existsSync(finalVoicePath)) {
+      const stat = await fs.promises.stat(finalVoicePath);
+      if (stat.size > 2000) {
+        singlePassSuccess = true;
+        if (logger) logger(`✅ Single-pass TTS synthesis succeeded (size = ${stat.size} bytes)`);
+        await maybeStretchToTarget();
+        return {
+          path: finalVoicePath,
+          url: publicAudioUrl(context, finalVoiceFileName),
+          script: scriptForTts,
+          sceneData: localizedScenes
+        };
+      }
+    }
+  } catch (singlePassError) {
+    if (logger) logger(`⚠️ Single-pass TTS synthesis failed: ${singlePassError.message}. Falling back to chunked TTS.`);
+  }
+
+  // --- FALLBACK: Chunked TTS execution (preserves original safety mechanism) ---
+  const chunks = chunkTextForTts(scriptForTts, 170);
+  if (!chunks.length) return null;
+
+  const chunkPaths = [];
   const chunkResults = await runWithConcurrency(chunks, 2, async (text, index) => {
     const outPath = path.join(context.dirs.audio, `voice_chunk_${index + 1}.mp3`);
 
@@ -2022,7 +2163,28 @@ async function generateAudioTracks({
   const sfx = await prepareSoundEffects({ audioOptions, context, logger });
 
   let voice = null;
-  if (audioOptions.mode === 'auto') {
+  let cachedFemaleVoice = null;
+  let cachedMaleVoice = null;
+
+  // Attempt to fetch cached voice tracks from MongoDB draft to support instant gender switching
+  try {
+    const existingDraft = await VideoDraft.findOne({ jobId: context.jobId }).lean();
+    if (existingDraft?.audio?.tracks) {
+      cachedFemaleVoice = existingDraft.audio.tracks.voice_female || null;
+      cachedMaleVoice = existingDraft.audio.tracks.voice_male || null;
+      
+      // If we already generated this specific gender, load it directly
+      const targetCache = audioOptions.voiceGender === 'male' ? cachedMaleVoice : cachedFemaleVoice;
+      if (targetCache?.path && fs.existsSync(targetCache.path)) {
+        if (logger) logger(`♻️ Reusing cached ${audioOptions.voiceGender} voice track: ${targetCache.path}`);
+        voice = targetCache;
+      }
+    }
+  } catch (draftError) {
+    if (logger) logger(`⚠️ Failed to inspect cached voice tracks in MongoDB: ${draftError.message}`);
+  }
+
+  if (audioOptions.mode === 'auto' && !voice) {
     voice = await synthesizeVoiceTrack({
       voiceScript: plan.voiceScript || input.description,
       sourceVoiceScript: plan.sourceVoiceScript || plan.voiceScript || input.description,
@@ -2034,6 +2196,13 @@ async function generateAudioTracks({
       context,
       logger
     });
+
+    // Update local cache records
+    if (audioOptions.voiceGender === 'male') {
+      cachedMaleVoice = voice;
+    } else {
+      cachedFemaleVoice = voice;
+    }
   }
 
   return {
@@ -2044,7 +2213,9 @@ async function generateAudioTracks({
       manual,
       voice,
       background,
-      soundEffects: sfx
+      soundEffects: sfx,
+      voice_female: cachedFemaleVoice,
+      voice_male: cachedMaleVoice
     }
   };
 }
@@ -2168,7 +2339,9 @@ async function mergeFinalOutput({
   mergedVideo,
   mergedAudio,
   subtitles,
-  context
+  context,
+  onProgress = null,
+  totalDuration = 0
 }) {
   const outputPath = path.join(context.dirs.final, 'final_output.mp4');
   const outputUrl = buildMediaUrl(context.baseUrl, context.jobId, ['final', 'final_output.mp4']);
@@ -2201,7 +2374,7 @@ async function mergeFinalOutput({
   }
 
   args.push(outputPath);
-  await runFfmpeg(args);
+  await runFfmpeg(args, { onProgress, totalDuration });
   return { path: outputPath, url: outputUrl };
 }
 
@@ -2363,7 +2536,12 @@ async function runCreateVideoPipeline({
     mergedVideo,
     mergedAudio,
     subtitles,
-    context
+    context,
+    totalDuration: input.durationSeconds || 60,
+    onProgress: (pct) => {
+      const overallPct = 92 + Math.round((pct / 100) * 4);
+      update(overallPct, 'finalMerge');
+    }
   }), log);
 
   update(96, 'thumbnail');
@@ -2719,7 +2897,12 @@ async function runMergeVideo({
     mergedVideo,
     mergedAudio,
     subtitles,
-    context
+    context,
+    totalDuration: Number(payload?.durationSeconds) || 60,
+    onProgress: (pct) => {
+      const overallPct = 88 + Math.round((pct / 100) * 10);
+      reportProgress(overallPct, 'merging_final_output');
+    }
   });
 
   reportProgress(98, 'finalizing');

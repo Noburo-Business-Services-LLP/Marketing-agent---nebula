@@ -31,6 +31,143 @@ const { callGemini, parseGeminiJSON, generateCampaignImageNanoBanana } = require
 const { buildAIContext } = require('../services/aiContextBuilder');
 const { learnVideoStep } = require('../services/aiVideoLearning');
 
+// -----------------------------------------------------------------------------
+// Register persistent background handlers for queue tasks
+// -----------------------------------------------------------------------------
+videoGenerationQueue.registerHandler('create_video_pipeline', async (payload, { update, log }) => {
+  return runCreateVideoPipeline({
+    payload: payload.payload,
+    user: payload.user,
+    baseUrl: payload.baseUrl,
+    providedJobId: null,
+    onProgress: ({ progress, currentStep, metadata }) => update({ progress, currentStep, metadata }),
+    onLog: (line) => log(line)
+  });
+});
+
+videoGenerationQueue.registerHandler('generate_clips', async (payload, { update, log }) => {
+  const { jobId, userId, sourceScenes, baseUrl } = payload;
+  await update({ progress: 5, currentStep: 'generate_clips' });
+  await log(`Generating clips for draft ${jobId}`);
+
+  const generated = await runGenerateVideoClips({
+    payload: { jobId, sceneData: sourceScenes },
+    baseUrl,
+    onLog: (line) => log(line),
+    onProgress: ({ progress, currentStep, metadata } = {}) => update({ progress, currentStep, metadata })
+  });
+
+  await update({ progress: 70, currentStep: 'saving_clips' });
+  const updated = await updateDraft(jobId, userId, (current) => ({
+    ...current,
+    currentStep: Math.max(Number(current.currentStep || 1), 4),
+    images: current?.images?.sceneData?.length
+      ? {
+        ...(current.images || {}),
+        sceneData: mergeClipUrlsIntoScenes(current.images.sceneData, generated.sceneData || []),
+        generatedAt: current.images.generatedAt || new Date().toISOString()
+      }
+      : (current.images || null),
+    clips: {
+      sceneData: generated.sceneData || [],
+      clipUrls: generated.clipUrls || [],
+      generatedAt: new Date().toISOString()
+    }
+  }));
+
+  await update({ progress: 90, currentStep: 'learning' });
+  try {
+    const draft = await loadDraftForUser(jobId, userId);
+    await learnVideoStep({
+      userId,
+      jobId,
+      action: 'clip_generation',
+      prompt: draft?.prompt?.promptText || '',
+      userInput: draft.input || {},
+      sceneData: updated.clips.sceneData,
+      generatedVideos: updated.clips.clipUrls || [],
+      product: draft?.input?.product || null
+    });
+  } catch (learnError) {
+    await log(`⚠️ AI learning step skipped: ${learnError.message}`);
+  }
+
+  return {
+    success: true,
+    jobId,
+    sceneData: updated.clips.sceneData,
+    clipUrls: updated.clips.clipUrls,
+    draft: updated
+  };
+});
+
+videoGenerationQueue.registerHandler('merge_video', async (payload, { update, log }) => {
+  const { jobId, userId, effectiveClipUrls, finalAudioUrl, subtitles, baseUrl } = payload;
+  await update({ progress: 5, currentStep: 'merge_video' });
+  await log(`Merging video for draft ${jobId}`);
+
+  const draft = await loadDraftForUser(jobId, userId);
+
+  const translatedSceneData = Array.isArray(draft?.audio?.config?.localizedSceneData)
+    ? draft.audio.config.localizedSceneData
+    : null;
+  const sceneDataForSubtitles =
+    subtitles?.enabled === true && draft?.audio?.config?.languageCode && draft.audio.config.languageCode !== 'en' && translatedSceneData?.length
+      ? translatedSceneData
+      : (draft?.clips?.sceneData || draft?.images?.sceneData || draft?.scenes?.sceneData || []);
+
+  const merged = await runMergeVideo({
+    payload: {
+      jobId,
+      clipUrls: effectiveClipUrls,
+      finalAudioUrl: finalAudioUrl || draft?.mix?.finalAudioUrl || null,
+      subtitles: { enabled: subtitles?.enabled === true },
+      sceneData: sceneDataForSubtitles
+    },
+    baseUrl,
+    onProgress: ({ progress, currentStep, metadata }) => update({ progress, currentStep, metadata }),
+    onLog: (line) => log(line)
+  });
+
+  await update({ progress: 80, currentStep: 'saving_merge' });
+  const updated = await updateDraft(jobId, userId, (current) => ({
+    ...current,
+    currentStep: Math.max(Number(current.currentStep || 1), 7),
+    merge: {
+      finalVideoUrl: merged?.finalVideoUrl || null,
+      finalOutputUrl: merged?.finalOutputUrl || null,
+      subtitlesUrl: merged?.subtitlesUrl || null,
+      mergedAt: new Date().toISOString()
+    }
+  }));
+
+  await update({ progress: 90, currentStep: 'learning' });
+  try {
+    await learnVideoStep({
+      userId,
+      jobId,
+      action: 'video_merge',
+      prompt: draft?.prompt?.promptText || '',
+      userInput: draft.input || {},
+      sceneData: draft?.clips?.sceneData || draft?.images?.sceneData || draft?.scenes?.sceneData || [],
+      generatedVideos: [updated.merge.finalOutputUrl || updated.merge.finalVideoUrl].filter(Boolean),
+      audioSettings: draft?.audio?.config || {},
+      duration: draft?.input?.durationSeconds || null,
+      product: draft?.input?.product || null,
+      sourceResponse: merged
+    });
+  } catch (learnError) {
+    await log(`⚠️ AI learning step skipped: ${learnError.message}`);
+  }
+
+  return {
+    success: true,
+    jobId,
+    merge: merged,
+    draft: updated
+  };
+});
+
 // Keep heavy AI generation protected, but allow frequent job polling.
 const videoAiWriteLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -468,18 +605,17 @@ router.post('/createVideo', protect, checkTrial, videoAiWriteLimiter, async (req
     const payload = req.body || {};
     const baseUrl = reqBaseUrl(req);
 
-    const queued = videoGenerationQueue.enqueue({
+    const queued = await videoGenerationQueue.enqueue({
       userId,
-      payload,
-      handler: async ({ update, log }) => {
-        return runCreateVideoPipeline({
-          payload,
-          user: req.user,
-          baseUrl,
-          providedJobId: null,
-          onProgress: ({ progress, currentStep, metadata }) => update({ progress, currentStep, metadata }),
-          onLog: (line) => log(line)
-        });
+      jobType: 'create_video_pipeline',
+      payload: {
+        payload,
+        user: {
+          _id: req.user?._id,
+          id: req.user?.id,
+          businessProfile: req.user?.businessProfile
+        },
+        baseUrl
       }
     });
 
@@ -499,7 +635,7 @@ router.post('/createVideo', protect, checkTrial, videoAiWriteLimiter, async (req
 router.get('/jobs/:jobId', protect, videoJobReadLimiter, async (req, res) => {
   try {
     const userId = req.user?._id ? String(req.user._id) : (req.user?.id ? String(req.user.id) : null);
-    const job = videoGenerationQueue.getJob(req.params.jobId, userId);
+    const job = await videoGenerationQueue.getJob(req.params.jobId, userId);
     if (!job) {
       return res.status(404).json({
         success: false,
@@ -542,9 +678,8 @@ router.get('/draft/:jobId', protect, videoJobReadLimiter, async (req, res) => {
           .map((id) => String(id))
       )
     );
-    const queueJobs = queueJobIds
-      .map((queueJobId) => videoGenerationQueue.getJob(queueJobId, userId))
-      .filter(Boolean);
+    const queueJobsPromises = queueJobIds.map((queueJobId) => videoGenerationQueue.getJob(queueJobId, userId));
+    const queueJobs = (await Promise.all(queueJobsPromises)).filter(Boolean);
 
     return res.json({ success: true, draft, effectiveStep, queueJobs });
   } catch (error) {
@@ -904,71 +1039,41 @@ router.post('/generateClips', protect, checkTrial, videoAiWriteLimiter, async (r
 
     if (shouldQueue) {
       const baseUrl = reqBaseUrl(req);
-      const queued = videoGenerationQueue.enqueue({
-        userId,
-        payload: { jobId },
-        handler: async ({ update, log }) => {
-          update({ progress: 5, currentStep: 'generate_clips' });
-          log(`Generating clips for draft ${jobId}`);
+      
+      // Cache guard: Check if an active queue job already exists for this draft step
+      const existingJobId = draft?.jobs?.clips?.queueJobId;
+      let queued;
+      if (existingJobId) {
+        const existingJob = await videoGenerationQueue.getJob(existingJobId, userId);
+        if (existingJob && ['queued', 'processing'].includes(existingJob.status)) {
+          queued = existingJob;
+        }
+      }
 
-          const generated = await runGenerateVideoClips({
-            payload: { jobId, sceneData: sourceScenes },
-            baseUrl,
-            onLog: (line) => log(line),
-            onProgress: ({ progress, currentStep, metadata } = {}) => update({ progress, currentStep, metadata })
-          });
-
-          update({ progress: 70, currentStep: 'saving_clips' });
-          const updated = await updateDraft(jobId, userId, (current) => ({
-            ...current,
-            currentStep: Math.max(Number(current.currentStep || 1), 4),
-            images: current?.images?.sceneData?.length
-              ? {
-                ...(current.images || {}),
-                sceneData: mergeClipUrlsIntoScenes(current.images.sceneData, generated.sceneData || []),
-                generatedAt: current.images.generatedAt || new Date().toISOString()
-              }
-              : (current.images || null),
-            clips: {
-              sceneData: generated.sceneData || [],
-              clipUrls: generated.clipUrls || [],
-              generatedAt: new Date().toISOString()
-            }
-          }));
-
-          update({ progress: 90, currentStep: 'learning' });
-          await learnVideoStep({
+      if (!queued) {
+        queued = await videoGenerationQueue.enqueue({
+          userId,
+          jobType: 'generate_clips',
+          payload: {
+            jobId,
             userId,
-            jobId,
-            action: 'clip_generation',
-            prompt: draft?.prompt?.promptText || '',
-            userInput: draft.input || {},
-            sceneData: updated.clips.sceneData,
-            generatedVideos: updated.clips.clipUrls || [],
-            product: draft?.input?.product || null
-          });
-
-          return {
-            success: true,
-            jobId,
-            sceneData: updated.clips.sceneData,
-            clipUrls: updated.clips.clipUrls,
-            draft: updated
-          };
-        }
-      });
-
-      await updateDraft(jobId, userId, (current) => ({
-        ...current,
-        jobs: {
-          ...(current.jobs || {}),
-          clips: {
-            queueJobId: queued.jobId,
-            status: queued.status,
-            queuedAt: new Date().toISOString()
+            sourceScenes,
+            baseUrl
           }
-        }
-      }));
+        });
+
+        await updateDraft(jobId, userId, (current) => ({
+          ...current,
+          jobs: {
+            ...(current.jobs || {}),
+            clips: {
+              queueJobId: queued.jobId,
+              status: queued.status,
+              queuedAt: new Date().toISOString()
+            }
+          }
+        }));
+      }
 
       return res.status(202).json({
         success: true,
@@ -1209,81 +1314,43 @@ router.post('/mergeVideo', protect, checkTrial, videoAiWriteLimiter, async (req,
 
     if (shouldQueue) {
       const baseUrl = reqBaseUrl(req);
-      const queued = videoGenerationQueue.enqueue({
-        userId,
-        payload: { jobId },
-        handler: async ({ update, log }) => {
-          update({ progress: 5, currentStep: 'merge_video' });
-          log(`Merging video for draft ${jobId}`);
 
-          const translatedSceneData = Array.isArray(draft?.audio?.config?.localizedSceneData)
-            ? draft.audio.config.localizedSceneData
-            : null;
-          const sceneDataForSubtitles =
-            subtitles?.enabled === true && draft?.audio?.config?.languageCode && draft.audio.config.languageCode !== 'en' && translatedSceneData?.length
-              ? translatedSceneData
-              : (draft?.clips?.sceneData || draft?.images?.sceneData || draft?.scenes?.sceneData || []);
+      // Cache guard: Check if an active queue job already exists for this draft step
+      const existingJobId = draft?.jobs?.merge?.queueJobId;
+      let queued;
+      if (existingJobId) {
+        const existingJob = await videoGenerationQueue.getJob(existingJobId, userId);
+        if (existingJob && ['queued', 'processing'].includes(existingJob.status)) {
+          queued = existingJob;
+        }
+      }
 
-          const merged = await runMergeVideo({
-            payload: {
-              jobId,
-              clipUrls: effectiveClipUrls,
-              finalAudioUrl: finalAudioUrl || draft?.mix?.finalAudioUrl || null,
-              subtitles: { enabled: subtitles?.enabled === true },
-              sceneData: sceneDataForSubtitles
-            },
-            baseUrl,
-            onProgress: ({ progress, currentStep, metadata }) => update({ progress, currentStep, metadata }),
-            onLog: (line) => log(line)
-          });
-
-          update({ progress: 80, currentStep: 'saving_merge' });
-          const updated = await updateDraft(jobId, userId, (current) => ({
-            ...current,
-            currentStep: Math.max(Number(current.currentStep || 1), 7),
-            merge: {
-              finalVideoUrl: merged?.finalVideoUrl || null,
-              finalOutputUrl: merged?.finalOutputUrl || null,
-              subtitlesUrl: merged?.subtitlesUrl || null,
-              mergedAt: new Date().toISOString()
-            }
-          }));
-
-          update({ progress: 90, currentStep: 'learning' });
-          await learnVideoStep({
+      if (!queued) {
+        queued = await videoGenerationQueue.enqueue({
+          userId,
+          jobType: 'merge_video',
+          payload: {
+            jobId,
             userId,
-            jobId,
-            action: 'video_merge',
-            prompt: draft?.prompt?.promptText || '',
-            userInput: draft.input || {},
-            sceneData: draft?.clips?.sceneData || draft?.images?.sceneData || draft?.scenes?.sceneData || [],
-            generatedVideos: [updated.merge.finalOutputUrl || updated.merge.finalVideoUrl].filter(Boolean),
-            audioSettings: draft?.audio?.config || {},
-            duration: draft?.input?.durationSeconds || null,
-            product: draft?.input?.product || null,
-            sourceResponse: merged
-          });
-
-          return {
-            success: true,
-            jobId,
-            merge: merged,
-            draft: updated
-          };
-        }
-      });
-
-      await updateDraft(jobId, userId, (current) => ({
-        ...current,
-        jobs: {
-          ...(current.jobs || {}),
-          merge: {
-            queueJobId: queued.jobId,
-            status: queued.status,
-            queuedAt: new Date().toISOString()
+            effectiveClipUrls,
+            finalAudioUrl: finalAudioUrl || draft?.mix?.finalAudioUrl || null,
+            subtitles,
+            baseUrl
           }
-        }
-      }));
+        });
+
+        await updateDraft(jobId, userId, (current) => ({
+          ...current,
+          jobs: {
+            ...(current.jobs || {}),
+            merge: {
+              queueJobId: queued.jobId,
+              status: queued.status,
+              queuedAt: new Date().toISOString()
+            }
+          }
+        }));
+      }
 
       return res.status(202).json({
         success: true,

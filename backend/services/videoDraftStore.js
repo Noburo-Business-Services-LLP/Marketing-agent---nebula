@@ -3,6 +3,7 @@ const path = require('path');
 const crypto = require('crypto');
 
 const { STORAGE_ROOT } = require('./videoGenerationPipeline');
+const VideoDraft = require('../models/VideoDraft');
 
 function sanitizeSegment(value, fallback = 'asset') {
   const raw = String(value || '').trim();
@@ -67,16 +68,43 @@ function draftPathForJob(jobId) {
 }
 
 async function writeDraft(draft) {
-  const draftPath = draftPathForJob(draft.jobId);
   const payload = {
     ...draft,
     updatedAt: new Date().toISOString()
   };
-  await fs.promises.writeFile(draftPath, JSON.stringify(payload, null, 2), 'utf8');
+
+  // 1. Persist to MongoDB
+  try {
+    await VideoDraft.findOneAndUpdate(
+      { jobId: draft.jobId },
+      payload,
+      { upsert: true, new: true }
+    );
+  } catch (dbError) {
+    console.error('⚠️ Failed to save draft to MongoDB:', dbError.message);
+  }
+
+  // 2. Persist to Disk (local folder backup)
+  try {
+    const draftPath = draftPathForJob(draft.jobId);
+    await fs.promises.writeFile(draftPath, JSON.stringify(payload, null, 2), 'utf8');
+  } catch (fsError) {
+    console.error('⚠️ Failed to save draft to disk:', fsError.message);
+  }
+
   return payload;
 }
 
 async function readDraft(jobId) {
+  // 1. Try reading from MongoDB
+  try {
+    const draft = await VideoDraft.findOne({ jobId }).lean();
+    if (draft) return draft;
+  } catch (dbError) {
+    console.error('⚠️ Failed to read draft from MongoDB:', dbError.message);
+  }
+
+  // 2. Fallback to Disk
   const draftPath = draftPathForJob(jobId);
   const text = await fs.promises.readFile(draftPath, 'utf8');
   return JSON.parse(text);
@@ -95,14 +123,28 @@ async function loadDraftForUser(jobId, userId = null) {
 async function deleteDraftForUser(jobId, userId = null) {
   const safeJobId = sanitizeSegment(jobId);
   const draft = await loadDraftForUser(safeJobId, userId);
-  const root = path.resolve(STORAGE_ROOT);
-  const target = path.resolve(path.join(root, safeJobId));
 
-  if (target === root || !target.startsWith(`${root}${path.sep}`)) {
-    throw new Error('Invalid draft path');
+  // 1. Delete from MongoDB
+  try {
+    await VideoDraft.deleteOne({ jobId: safeJobId });
+  } catch (dbError) {
+    console.error('⚠️ Failed to delete draft from MongoDB:', dbError.message);
   }
 
-  await fs.promises.rm(target, { recursive: true, force: true });
+  // 2. Delete from Disk
+  try {
+    const root = path.resolve(STORAGE_ROOT);
+    const target = path.resolve(path.join(root, safeJobId));
+
+    if (target === root || !target.startsWith(`${root}${path.sep}`)) {
+      throw new Error('Invalid draft path');
+    }
+
+    await fs.promises.rm(target, { recursive: true, force: true });
+  } catch (fsError) {
+    console.error('⚠️ Failed to delete draft from disk:', fsError.message);
+  }
+
   return draft;
 }
 
@@ -115,16 +157,12 @@ function resolveDraftStatus(draft = {}) {
 }
 
 async function listDraftsForUser(userId = null) {
-  await fs.promises.mkdir(STORAGE_ROOT, { recursive: true });
-  const entries = await fs.promises.readdir(STORAGE_ROOT, { withFileTypes: true });
-  const drafts = [];
-
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    try {
-      const draft = await readDraft(entry.name);
-      if (userId && draft.userId && String(draft.userId) !== String(userId)) continue;
-      drafts.push({
+  // 1. Try listing from MongoDB (instant query)
+  try {
+    const query = userId ? { userId } : {};
+    const dbDrafts = await VideoDraft.find(query).sort({ updatedAt: -1 }).lean();
+    if (dbDrafts && dbDrafts.length > 0) {
+      return dbDrafts.map((draft) => ({
         jobId: draft.jobId,
         title: String(draft?.input?.description || 'AI Video').slice(0, 90),
         status: resolveDraftStatus(draft),
@@ -137,13 +175,46 @@ async function listDraftsForUser(userId = null) {
         platforms: draft?.platform?.selectedPlatforms || [],
         createdAt: draft.createdAt,
         updatedAt: draft.updatedAt
-      });
-    } catch (_) {
-      // Ignore incomplete job folders.
+      }));
     }
+  } catch (dbError) {
+    console.error('⚠️ Failed to list drafts from MongoDB, falling back to disk:', dbError.message);
   }
 
-  return drafts.sort((a, b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0));
+  // 2. Fallback to scanning disk directory
+  try {
+    await fs.promises.mkdir(STORAGE_ROOT, { recursive: true });
+    const entries = await fs.promises.readdir(STORAGE_ROOT, { withFileTypes: true });
+    const drafts = [];
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      try {
+        const draft = await readDraft(entry.name);
+        if (userId && draft.userId && String(draft.userId) !== String(userId)) continue;
+        drafts.push({
+          jobId: draft.jobId,
+          title: String(draft?.input?.description || 'AI Video').slice(0, 90),
+          status: resolveDraftStatus(draft),
+          currentStep: draft.currentStep || 1,
+          durationSeconds: draft?.input?.durationSeconds || null,
+          sceneCount: draft?.input?.sceneCount || draft?.scenes?.sceneData?.length || null,
+          finalVideoUrl: draft?.merge?.finalOutputUrl || draft?.merge?.finalVideoUrl || null,
+          thumbnailUrl: draft?.content?.thumbnailUrl || draft?.images?.sceneData?.[0]?.imageUrl || null,
+          scheduledAt: draft?.schedule?.scheduledAt || null,
+          platforms: draft?.platform?.selectedPlatforms || [],
+          createdAt: draft.createdAt,
+          updatedAt: draft.updatedAt
+        });
+      } catch (_) {
+        // Ignore incomplete folders
+      }
+    }
+    return drafts.sort((a, b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0));
+  } catch (fsError) {
+    console.error('⚠️ Failed to list drafts from disk:', fsError.message);
+    return [];
+  }
 }
 
 async function updateDraft(jobId, userId = null, updater = null) {
