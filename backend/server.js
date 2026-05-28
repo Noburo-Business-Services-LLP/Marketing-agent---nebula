@@ -455,10 +455,127 @@ app.use((err, req, res, next) => {
   });
 });
 
+// ============================================
+// Production Environment Health Validation
+// ============================================
+const validateProductionEnvironment = async () => {
+  console.log('\n🏥 Running Production Environment Health Checks...');
+  
+  // 1. Validate Fal.ai API key
+  const falKey = process.env.FAL_KEY;
+  if (falKey) {
+    console.log(`   ✅ FAL_KEY is configured (Length: ${falKey.length})`);
+  } else {
+    console.warn(`   ⚠️  FAL_KEY is NOT configured. Fal.ai video generation will fail.`);
+  }
+
+  // 2. Validate FFmpeg
+  let resolvedFfmpeg = null;
+  try {
+    resolvedFfmpeg = require('ffmpeg-static');
+    console.log(`   ✅ ffmpeg-static resolved path: ${resolvedFfmpeg}`);
+  } catch (err) {
+    console.warn(`   ⚠️  ffmpeg-static require failed, checking system path...`);
+  }
+
+  if (!resolvedFfmpeg) {
+    const whichCmd = process.platform === 'win32' ? 'where' : 'which';
+    try {
+      const { spawnSync } = require('child_process');
+      const res = spawnSync(whichCmd, ['ffmpeg'], { windowsHide: true });
+      if (res.status === 0 && res.stdout) {
+        resolvedFfmpeg = String(res.stdout).trim().split(/\r?\n/)[0];
+        console.log(`   ✅ System ffmpeg resolved: ${resolvedFfmpeg}`);
+      }
+    } catch (_) {}
+  }
+
+  if (resolvedFfmpeg && fs.existsSync(resolvedFfmpeg)) {
+    try {
+      const { spawnSync } = require('child_process');
+      const ver = spawnSync(resolvedFfmpeg, ['-version'], { windowsHide: true });
+      if (ver.status === 0) {
+        const firstLine = String(ver.stdout).split('\n')[0];
+        console.log(`   ✅ FFmpeg is accessible and working: ${firstLine}`);
+      } else {
+        console.error(`   ❌ FFmpeg found but failed to run with status ${ver.status}`);
+      }
+    } catch (err) {
+      console.error(`   ❌ Failed to run FFmpeg:`, err.message);
+    }
+  } else {
+    console.error(`   ❌ FFmpeg was NOT found on this system! Video merging will fail.`);
+  }
+
+  // 3. Validate FFprobe
+  let resolvedFfprobe = null;
+  try {
+    resolvedFfprobe = require('ffprobe-static')?.path;
+    if (resolvedFfprobe) console.log(`   ✅ ffprobe-static resolved path: ${resolvedFfprobe}`);
+  } catch (err) {
+    console.warn(`   ⚠️  ffprobe-static require failed, checking system path...`);
+  }
+
+  if (!resolvedFfprobe) {
+    const whichCmd = process.platform === 'win32' ? 'where' : 'which';
+    try {
+      const { spawnSync } = require('child_process');
+      const res = spawnSync(whichCmd, ['ffprobe'], { windowsHide: true });
+      if (res.status === 0 && res.stdout) {
+        resolvedFfprobe = String(res.stdout).trim().split(/\r?\n/)[0];
+        console.log(`   ✅ System ffprobe resolved: ${resolvedFfprobe}`);
+      }
+    } catch (_) {}
+  }
+
+  if (resolvedFfprobe && fs.existsSync(resolvedFfprobe)) {
+    try {
+      const { spawnSync } = require('child_process');
+      const ver = spawnSync(resolvedFfprobe, ['-version'], { windowsHide: true });
+      if (ver.status === 0) {
+        const firstLine = String(ver.stdout).split('\n')[0];
+        console.log(`   ✅ FFprobe is accessible and working: ${firstLine}`);
+      } else {
+        console.error(`   ❌ FFprobe found but failed to run with status ${ver.status}`);
+      }
+    } catch (err) {
+      console.error(`   ❌ Failed to run FFprobe:`, err.message);
+    }
+  } else {
+    console.error(`   ❌ FFprobe was NOT found on this system! Subtitles/audio timing analysis may fail.`);
+  }
+
+  // 4. Validate Storage Directories and Permissions
+  const storagePaths = [
+    path.join(__dirname, 'storage'),
+    path.join(__dirname, 'storage', 'ai-videos'),
+    path.join(__dirname, 'temp'),
+  ];
+
+  for (const dir of storagePaths) {
+    try {
+      fs.mkdirSync(dir, { recursive: true });
+      // Test write and delete permissions
+      const testFile = path.join(dir, '.write-test');
+      fs.writeFileSync(testFile, 'test');
+      fs.unlinkSync(testFile);
+      console.log(`   ✅ Storage directory exists and is writeable: ${dir}`);
+    } catch (err) {
+      console.error(`   ❌ Storage directory error for ${dir}:`, err.message);
+    }
+  }
+  console.log('🏥 Environment Health Checks Completed.\n');
+};
+
 // Database connection and server start
 const PORT = process.env.PORT || 5000;
 
 const startServer = async () => {
+  // Run environment health checks at boot
+  await validateProductionEnvironment().catch((err) => {
+    console.error('⚠️  Failed running startup health checks:', err.message);
+  });
+
   let mongoConnected = false;
   try {
     console.log('Connecting to MongoDB...');

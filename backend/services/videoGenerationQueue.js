@@ -17,6 +17,7 @@ class PersistentVideoGenerationQueue {
     this.handlers = new Map();
     this.workerTimer = null;
     this.gcTimer = null;
+    this.recoveryTimer = null;
   }
 
   /**
@@ -33,10 +34,11 @@ class PersistentVideoGenerationQueue {
   }
 
   /**
-   * Starts the background queue worker and GC loops
+   * Starts the background queue worker and GC/recovery loops
    */
   startWorker() {
     this._startGcTimer();
+    this._startRecoveryTimer();
     
     if (this.workerTimer) clearInterval(this.workerTimer);
     
@@ -50,39 +52,98 @@ class PersistentVideoGenerationQueue {
     this.workerTimer.unref?.();
     console.log(`🚀 Persistent Queue: Background worker successfully started (concurrency = ${this.concurrency})`);
 
-    // Run crash recovery on startup (non-blocking)
-    this.recoverInterruptedJobs().catch((err) => {
-      console.error('⚠️ Persistent Queue recovery error:', err.message);
+    // Run crash recovery on startup (non-blocking, safe for rolling updates)
+    this.recoverStaleJobs().catch((err) => {
+      console.error('⚠️ Persistent Queue startup recovery error:', err.message);
     });
   }
 
-  /**
-   * Resumes jobs that were interrupted by a server restart/crash
-   */
-  async recoverInterruptedJobs() {
-    try {
-      const interrupted = await VideoJob.find({ status: 'processing' });
-      if (interrupted.length === 0) return;
+  _startRecoveryTimer() {
+    if (this.recoveryTimer) clearInterval(this.recoveryTimer);
+    this.recoveryTimer = setInterval(async () => {
+      try {
+        await this.recoverStaleJobs();
+      } catch (err) {
+        console.error('⚠️ Persistent Queue stale job recovery loop failed:', err.message);
+      }
+    }, 60000); // Scan every 1 minute
+    this.recoveryTimer.unref?.();
+  }
 
-      console.log(`🔄 Persistent Queue: Found ${interrupted.length} interrupted jobs in 'processing' state.`);
+  /**
+   * Periodically scans for processing jobs that have hung or crashed (no updates for 5 minutes)
+   */
+  async recoverStaleJobs() {
+    const STALE_TIMEOUT_MS = Number(process.env.VIDEO_JOB_STALE_TIMEOUT_MS) || (5 * 60 * 1000); // Default 5 minutes
+    const threshold = new Date(Date.now() - STALE_TIMEOUT_MS);
+
+    try {
+      // Find all processing jobs that haven't been updated since threshold
+      const staleJobs = await VideoJob.find({
+        status: 'processing',
+        updatedAt: { $lt: threshold }
+      });
+
+      if (staleJobs.length === 0) return;
+
+      console.log(`⚠️ Persistent Queue: Found ${staleJobs.length} stale/hung jobs in 'processing' state.`);
       
-      // Reset all 'processing' jobs to 'queued' so they are picked up again
-      const result = await VideoJob.updateMany(
-        { status: 'processing' },
-        { 
-          $set: { 
-            status: 'queued', 
-            currentStep: 'interrupted_restart'
-          },
-          $push: { 
-            logs: `[${new Date().toISOString()}] Server restarted. Interrupted job automatically queued for recovery.` 
+      for (const job of staleJobs) {
+        const maxAttempts = Number(process.env.VIDEO_JOB_MAX_ATTEMPTS || '3');
+        if (job.attempts < maxAttempts) {
+          console.log(`🔄 Resetting stale job ${job.jobId} to 'queued' (Attempts: ${job.attempts}/${maxAttempts})`);
+          await VideoJob.updateOne(
+            { jobId: job.jobId },
+            {
+              $set: {
+                status: 'queued',
+                currentStep: 'stale_recovery_retry',
+                updatedAt: new Date()
+              },
+              $push: {
+                logs: `[${new Date().toISOString()}] Job detected as stale/hung (no updates for ${Math.round(STALE_TIMEOUT_MS / 60000)}m). Automatically resetting to queued for retry.`
+              }
+            }
+          );
+        } else {
+          console.log(`❌ Stale job ${job.jobId} exceeded max attempts (${job.attempts}/${maxAttempts}). Marking as failed.`);
+          await VideoJob.updateOne(
+            { jobId: job.jobId },
+            {
+              $set: {
+                status: 'failed',
+                currentStep: 'stale_recovery_failed',
+                completedAt: new Date(),
+                updatedAt: new Date(),
+                error: {
+                  message: `Job timed out and exceeded maximum recovery attempts (${maxAttempts}).`,
+                  stack: null
+                }
+              },
+              $push: {
+                logs: `[${new Date().toISOString()}] Job detected as stale/hung (no updates for ${Math.round(STALE_TIMEOUT_MS / 60000)}m). Exceeded max attempts (${maxAttempts}). Marking as failed.`
+              }
+            }
+          );
+
+          // Refund credits to user on stale failure
+          if (job.userId) {
+            try {
+              const { refundCredits } = require('../middleware/trialGuard');
+              await refundCredits(
+                job.userId,
+                'campaign_full',
+                1,
+                `Refund: Stale AI video generation job ${job.jobId} failed`
+              );
+            } catch (refundError) {
+              console.error(`⚠️ Failed to refund credits for stale job ${job.jobId}:`, refundError.message);
+            }
           }
         }
-      );
-      
-      console.log(`✅ Persistent Queue: Successfully recovered and re-queued ${result.modifiedCount} jobs.`);
+      }
     } catch (err) {
-      console.error('⚠️ Failed to recover interrupted jobs:', err.message);
+      console.error('⚠️ Failed to recover stale jobs:', err.message);
     }
   }
 
@@ -250,6 +311,24 @@ class PersistentVideoGenerationQueue {
         }
       });
       await this._pushLog(jobId, `FAILED: ${error?.message || error}`);
+
+      // Refund credits to user on job failure
+      if (jobDoc.userId) {
+        try {
+          const { refundCredits } = require('../middleware/trialGuard');
+          const refundResult = await refundCredits(
+            jobDoc.userId,
+            'campaign_full',
+            1,
+            `Refund: AI video generation job ${jobId} failed`
+          );
+          if (refundResult.success) {
+            await this._pushLog(jobId, `Credits automatically refunded (Balance: ${refundResult.creditsRemaining})`);
+          }
+        } catch (refundError) {
+          console.error(`⚠️ Failed to refund credits for job ${jobId}:`, refundError.message);
+        }
+      }
     }
   }
 

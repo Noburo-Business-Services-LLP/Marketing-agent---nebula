@@ -186,4 +186,60 @@ const requireCredits = (action, countOrFn = 1) => {
   };
 };
 
-module.exports = { checkTrial, deductCredits, requireCredits, CREDIT_COSTS };
+/**
+ * Refund credits to user account
+ * @param {string} userId - User ID
+ * @param {string} action - Action type that failed (from CREDIT_COSTS)
+ * @param {number} count - Number of units to refund
+ * @param {string} description - Human-readable description
+ * @returns {{ success: boolean, creditsRemaining: number, creditsRefunded: number, error?: string }}
+ */
+const refundCredits = async (userId, action, count = 1, description = '') => {
+  try {
+    const cost = CREDIT_COSTS[action];
+    if (cost === undefined || cost === 0) {
+      return { success: true, creditsRemaining: -1, creditsRefunded: 0 };
+    }
+
+    const totalRefund = cost * count;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return { success: false, creditsRemaining: 0, creditsRefunded: 0, error: 'User not found' };
+    }
+
+    // Refund credits and log history
+    const result = await User.findByIdAndUpdate(
+      userId,
+      {
+        $inc: {
+          'credits.balance': totalRefund,
+          'credits.totalUsed': -totalRefund
+        },
+        $push: {
+          'credits.history': {
+            $each: [{
+              action: `${action}_refund`,
+              amount: totalRefund,
+              description: description || `Refund: ${action} x${count}`,
+              createdAt: new Date()
+            }],
+            $slice: -100 // Keep only last 100 entries
+          }
+        }
+      },
+      { new: true }
+    );
+
+    return {
+      success: true,
+      creditsRemaining: result.credits.balance,
+      creditsRefunded: totalRefund
+    };
+  } catch (error) {
+    console.error('Credit refund error:', error);
+    return { success: false, creditsRemaining: 0, creditsRefunded: 0, error: error.message };
+  }
+};
+
+module.exports = { checkTrial, deductCredits, requireCredits, refundCredits, CREDIT_COSTS };

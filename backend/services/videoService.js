@@ -114,6 +114,7 @@ async function uploadSceneImageIfNeeded({ fal, scene, imageUrl }) {
 }
 
 function extractVideoUrl(result) {
+  console.log(`[Fal.ai Debug] Full Response JSON:`, JSON.stringify(result, null, 2));
   const candidates = [
     result?.video?.url,
     result?.data?.video?.url,
@@ -123,6 +124,7 @@ function extractVideoUrl(result) {
   ];
   const url = candidates.find((item) => typeof item === 'string' && item.trim());
   if (!url) {
+    console.error(`[Fal.ai Error] Missing video URL in response:`, JSON.stringify(result, null, 2));
     throw new Error('Fal.ai response did not include a video URL');
   }
   return url.trim();
