@@ -58,9 +58,11 @@ videoGenerationQueue.registerHandler('generate_clips', async (payload, { update,
   });
 
   await update({ progress: 70, currentStep: 'saving_clips' });
+  const nextScenes = generated.sceneData || [];
   const updated = await updateDraft(jobId, userId, (current) => ({
     ...current,
     currentStep: Math.max(Number(current.currentStep || 1), 4),
+    scenes: nextScenes,
     images: current?.images?.sceneData?.length
       ? {
         ...(current.images || {}),
@@ -74,6 +76,17 @@ videoGenerationQueue.registerHandler('generate_clips', async (payload, { update,
       generatedAt: new Date().toISOString()
     }
   }));
+
+  try {
+    const VideoDraft = require('../models/VideoDraft');
+    const draftDoc = await VideoDraft.findOne({ jobId });
+    if (draftDoc) {
+      draftDoc.scenes = nextScenes;
+      await draftDoc.save();
+    }
+  } catch (saveErr) {
+    console.error("⚠️ Failed to immediately save background draft scenes clipUrl in MongoDB:", saveErr.message);
+  }
 
   await update({ progress: 90, currentStep: 'learning' });
   try {
@@ -130,9 +143,11 @@ videoGenerationQueue.registerHandler('merge_video', async (payload, { update, lo
   });
 
   await update({ progress: 80, currentStep: 'saving_merge' });
+  const finalVideoUrl = merged?.finalOutputUrl || merged?.finalVideoUrl || null;
   const updated = await updateDraft(jobId, userId, (current) => ({
     ...current,
     currentStep: Math.max(Number(current.currentStep || 1), 7),
+    finalVideoUrl,
     merge: {
       finalVideoUrl: merged?.finalVideoUrl || null,
       finalOutputUrl: merged?.finalOutputUrl || null,
@@ -140,6 +155,17 @@ videoGenerationQueue.registerHandler('merge_video', async (payload, { update, lo
       mergedAt: new Date().toISOString()
     }
   }));
+
+  try {
+    const VideoDraft = require('../models/VideoDraft');
+    const draftDoc = await VideoDraft.findOne({ jobId });
+    if (draftDoc) {
+      draftDoc.finalVideoUrl = finalVideoUrl;
+      await draftDoc.save();
+    }
+  } catch (saveErr) {
+    console.error("⚠️ Failed to immediately save background draft finalVideoUrl in MongoDB:", saveErr.message);
+  }
 
   await update({ progress: 90, currentStep: 'learning' });
   try {
@@ -347,13 +373,16 @@ function sanitizeSceneData(sceneData = [], totalDurationSeconds = 60) {
 function deriveWizardStepFromDraft(draft = {}) {
   const derived = [];
   if (draft?.prompt?.promptText) derived.push(2);
+  if (Array.isArray(draft?.scenes) && draft.scenes.length) derived.push(2);
   if (Array.isArray(draft?.scenes?.sceneData) && draft.scenes.sceneData.length) derived.push(2);
+  if (Array.isArray(draft?.scenes) && draft.scenes.some((s) => s?.imageUrl)) derived.push(3);
   if (Array.isArray(draft?.images?.sceneData) && draft.images.sceneData.some((s) => s?.imageUrl)) derived.push(3);
+  if (Array.isArray(draft?.scenes) && draft.scenes.some((s) => s?.clipUrl)) derived.push(4);
   if (Array.isArray(draft?.clips?.clipUrls) && draft.clips.clipUrls.length) derived.push(4);
   if (draft?.audio?.tracks && (draft.audio.tracks.voiceUrl || draft.audio.tracks.manualUrl)) derived.push(5);
   if (draft?.mix?.finalAudioUrl) derived.push(6);
-  if (draft?.merge?.finalOutputUrl || draft?.merge?.finalVideoUrl) derived.push(7);
-  if (draft?.content?.thumbnailUrl || draft?.content?.caption) derived.push(8);
+  if (draft?.finalVideoUrl || draft?.merge?.finalOutputUrl || draft?.merge?.finalVideoUrl) derived.push(7);
+  if (draft?.thumbnailUrl || draft?.content?.thumbnailUrl || draft?.content?.caption) derived.push(8);
   if (Array.isArray(draft?.platform?.selectedPlatforms) && draft.platform.selectedPlatforms.length) derived.push(9);
   if (draft?.schedule?.scheduledAt || draft?.schedule?.status) derived.push(10);
 
@@ -362,12 +391,11 @@ function deriveWizardStepFromDraft(draft = {}) {
 }
 
 function deriveVoiceScriptFromDraft(draft = {}) {
-  const explicit = String(draft?.scenes?.voiceScript || '').trim();
+  const explicit = String(draft?.scenesMetadata?.voiceScript || draft?.scenes?.voiceScript || '').trim();
   if (explicit) return explicit;
 
-  const sceneLines = Array.isArray(draft?.scenes?.sceneData)
-    ? draft.scenes.sceneData.map((scene) => String(scene?.voiceLine || '').trim()).filter(Boolean)
-    : [];
+  const scenesArray = Array.isArray(draft?.scenes) ? draft.scenes : (draft?.scenes?.sceneData || []);
+  const sceneLines = scenesArray.map((scene) => String(scene?.voiceLine || '').trim()).filter(Boolean);
   if (sceneLines.length) return sceneLines.join(' ');
 
   const promptText = String(draft?.prompt?.promptText || '').trim();
@@ -563,6 +591,7 @@ Rules:
 
 async function generateThumbnailFromDraft({ draft, baseUrl }) {
   const prompt = String(
+    draft?.scenesMetadata?.thumbnailPrompt ||
     draft?.scenes?.thumbnailPrompt ||
     draft?.prompt?.promptText ||
     draft?.input?.description ||
@@ -591,7 +620,10 @@ async function generateThumbnailFromDraft({ draft, baseUrl }) {
     }
     return result.imageUrl;
   } catch (_) {
-    const firstSceneImage = draft?.images?.sceneData?.[0]?.imageUrl || draft?.scenes?.sceneData?.[0]?.imageUrl || null;
+    const firstSceneImage = (Array.isArray(draft?.scenes) && draft.scenes[0]?.imageUrl) ||
+      draft?.images?.sceneData?.[0]?.imageUrl ||
+      draft?.scenes?.sceneData?.[0]?.imageUrl ||
+      null;
     return firstSceneImage;
   }
 }
@@ -830,18 +862,17 @@ router.post('/generateScenes', protect, checkTrial, videoAiWriteLimiter, async (
       const saved = await updateDraft(jobId, userId, (current) => ({
         ...current,
         currentStep: Math.max(Number(current.currentStep || 1), 2),
-        scenes: {
-          ...(current.scenes || {}),
-          sceneData: normalizedScenes,
-          voiceScript: current?.scenes?.voiceScript || '',
-          thumbnailPrompt: current?.scenes?.thumbnailPrompt || '',
-          globalVisualStyle: current?.scenes?.globalVisualStyle || ''
+        scenes: normalizedScenes,
+        scenesMetadata: {
+          voiceScript: current?.scenesMetadata?.voiceScript || current?.scenes?.voiceScript || '',
+          thumbnailPrompt: current?.scenesMetadata?.thumbnailPrompt || current?.scenes?.thumbnailPrompt || '',
+          globalVisualStyle: current?.scenesMetadata?.globalVisualStyle || current?.scenes?.globalVisualStyle || ''
         }
       }));
       return res.json({
         success: true,
         jobId,
-        sceneData: saved.scenes?.sceneData || [],
+        sceneData: saved.scenes || [],
         draft: saved
       });
     }
@@ -869,8 +900,8 @@ router.post('/generateScenes', protect, checkTrial, videoAiWriteLimiter, async (
     const updated = await updateDraft(jobId, userId, (current) => ({
       ...current,
       currentStep: Math.max(Number(current.currentStep || 1), 2),
-      scenes: {
-        sceneData: normalizedScenes,
+      scenes: normalizedScenes,
+      scenesMetadata: {
         voiceScript: generated.voiceScript || '',
         thumbnailPrompt: generated.thumbnailPrompt || '',
         globalVisualStyle: generated.globalVisualStyle || ''
@@ -883,9 +914,9 @@ router.post('/generateScenes', protect, checkTrial, videoAiWriteLimiter, async (
       action: 'scene_generation',
       prompt: promptToUse,
       userInput: draft.input || {},
-      sceneData: updated.scenes.sceneData,
-      scenePrompts: updated.scenes.sceneData?.map((scene) => scene.imagePrompt || scene.videoPrompt || scene.title) || [],
-      script: updated.scenes.voiceScript || '',
+      sceneData: updated.scenes,
+      scenePrompts: updated.scenes?.map((scene) => scene.imagePrompt || scene.videoPrompt || scene.title) || [],
+      script: updated.scenesMetadata.voiceScript || '',
       duration: durationSeconds,
       product: draft?.input?.product || null,
       aiSettings: { memoryInjected: Boolean(aiMemoryContext.reusablePromptText) }
@@ -893,10 +924,10 @@ router.post('/generateScenes', protect, checkTrial, videoAiWriteLimiter, async (
     return res.json({
       success: true,
       jobId,
-      sceneData: updated.scenes.sceneData,
-      voiceScript: updated.scenes.voiceScript,
-      thumbnailPrompt: updated.scenes.thumbnailPrompt,
-      globalVisualStyle: updated.scenes.globalVisualStyle,
+      sceneData: updated.scenes,
+      voiceScript: updated.scenesMetadata.voiceScript,
+      thumbnailPrompt: updated.scenesMetadata.thumbnailPrompt,
+      globalVisualStyle: updated.scenesMetadata.globalVisualStyle,
       draft: updated
     });
   } catch (error) {
@@ -989,9 +1020,9 @@ router.post('/generateImages', protect, checkTrial, videoAiWriteLimiter, async (
           productId: draft?.input?.productId || undefined,
           product: draft?.input?.product || undefined,
           sceneData: sourceScenes,
-          globalVisualStyle: draft?.scenes?.globalVisualStyle || '',
-          voiceScript: draft?.scenes?.voiceScript || '',
-          thumbnailPrompt: draft?.scenes?.thumbnailPrompt || ''
+          globalVisualStyle: draft?.scenesMetadata?.globalVisualStyle || draft?.scenes?.globalVisualStyle || '',
+          voiceScript: draft?.scenesMetadata?.voiceScript || draft?.scenes?.voiceScript || '',
+          thumbnailPrompt: draft?.scenesMetadata?.thumbnailPrompt || draft?.scenes?.thumbnailPrompt || ''
         },
         user: req.user,
         baseUrl
@@ -1002,11 +1033,23 @@ router.post('/generateImages', protect, checkTrial, videoAiWriteLimiter, async (
     const updated = await updateDraft(jobId, userId, (current) => ({
       ...current,
       currentStep: Math.max(Number(current.currentStep || 1), 3),
+      scenes: nextScenes,
       images: {
         sceneData: nextScenes,
         generatedAt: new Date().toISOString()
       }
     }));
+
+    try {
+      const VideoDraft = require('../models/VideoDraft');
+      const draftDoc = await VideoDraft.findOne({ jobId });
+      if (draftDoc) {
+        draftDoc.scenes = nextScenes;
+        await draftDoc.save();
+      }
+    } catch (saveErr) {
+      console.error("⚠️ Failed to immediately save draft scenes imageUrl in MongoDB:", saveErr.message);
+    }
 
     await learnVideoStep({
       userId,
@@ -1024,7 +1067,7 @@ router.post('/generateImages', protect, checkTrial, videoAiWriteLimiter, async (
     return res.json({
       success: true,
       jobId,
-      sceneData: updated.images.sceneData,
+      sceneData: updated.scenes,
       draft: updated
     });
   } catch (error) {
@@ -1115,9 +1158,11 @@ router.post('/generateClips', protect, checkTrial, videoAiWriteLimiter, async (r
       baseUrl: reqBaseUrl(req)
     });
 
+    const nextScenes = generated.sceneData || [];
     const updated = await updateDraft(jobId, userId, (current) => ({
       ...current,
       currentStep: Math.max(Number(current.currentStep || 1), 4),
+      scenes: nextScenes,
       images: current?.images?.sceneData?.length
         ? {
           ...(current.images || {}),
@@ -1131,6 +1176,17 @@ router.post('/generateClips', protect, checkTrial, videoAiWriteLimiter, async (r
         generatedAt: new Date().toISOString()
       }
     }));
+
+    try {
+      const VideoDraft = require('../models/VideoDraft');
+      const draftDoc = await VideoDraft.findOne({ jobId });
+      if (draftDoc) {
+        draftDoc.scenes = nextScenes;
+        await draftDoc.save();
+      }
+    } catch (saveErr) {
+      console.error("⚠️ Failed to immediately save draft scenes clipUrl in MongoDB:", saveErr.message);
+    }
 
     await learnVideoStep({
       userId,
@@ -1403,9 +1459,11 @@ router.post('/mergeVideo', protect, checkTrial, videoAiWriteLimiter, async (req,
       baseUrl: reqBaseUrl(req)
     });
 
+    const finalVideoUrl = merged?.finalOutputUrl || merged?.finalVideoUrl || null;
     const updated = await updateDraft(jobId, userId, (current) => ({
       ...current,
       currentStep: Math.max(Number(current.currentStep || 1), 7),
+      finalVideoUrl,
       merge: {
         finalVideoUrl: merged?.finalVideoUrl || null,
         finalOutputUrl: merged?.finalOutputUrl || null,
@@ -1413,6 +1471,17 @@ router.post('/mergeVideo', protect, checkTrial, videoAiWriteLimiter, async (req,
         mergedAt: new Date().toISOString()
       }
     }));
+
+    try {
+      const VideoDraft = require('../models/VideoDraft');
+      const draftDoc = await VideoDraft.findOne({ jobId });
+      if (draftDoc) {
+        draftDoc.finalVideoUrl = finalVideoUrl;
+        await draftDoc.save();
+      }
+    } catch (saveErr) {
+      console.error("⚠️ Failed to immediately save draft finalVideoUrl in MongoDB:", saveErr.message);
+    }
 
     await learnVideoStep({
       userId,
@@ -1455,6 +1524,7 @@ router.post('/generateContent', protect, checkTrial, videoAiWriteLimiter, async 
     const updated = await updateDraft(jobId, userId, (current) => ({
       ...current,
       currentStep: Math.max(Number(current.currentStep || 1), 8),
+      thumbnailUrl,
       content: {
         thumbnailUrl,
         caption: socialContent.caption,
@@ -1462,6 +1532,17 @@ router.post('/generateContent', protect, checkTrial, videoAiWriteLimiter, async 
         generatedAt: new Date().toISOString()
       }
     }));
+
+    try {
+      const VideoDraft = require('../models/VideoDraft');
+      const draftDoc = await VideoDraft.findOne({ jobId });
+      if (draftDoc) {
+        draftDoc.thumbnailUrl = thumbnailUrl;
+        await draftDoc.save();
+      }
+    } catch (saveErr) {
+      console.error("⚠️ Failed to immediately save draft thumbnailUrl in MongoDB:", saveErr.message);
+    }
 
     await learnVideoStep({
       userId,
