@@ -5,7 +5,7 @@ const { ipKeyGenerator } = rateLimit;
 
 const Product = require('../models/Product');
 const { protect } = require('../middleware/auth');
-const { checkTrial } = require('../middleware/trialGuard');
+const { checkTrial, deductCredits, refundCredits } = require('../middleware/trialGuard');
 const { getPublicBaseUrl } = require('../utils/toneAudio');
 const { videoGenerationQueue } = require('../services/videoGenerationQueue');
 const {
@@ -600,8 +600,23 @@ async function generateThumbnailFromDraft({ draft, baseUrl }) {
 // Existing one-shot pipeline endpoints
 // -----------------------------------------------------------------------------
 router.post('/createVideo', protect, checkTrial, videoAiWriteLimiter, async (req, res) => {
+  const userId = req.user?._id ? String(req.user._id) : (req.user?.id ? String(req.user.id) : null);
+  
+  if (!userId) {
+    return res.status(401).json({ success: false, message: 'Authentication required' });
+  }
+
+  // Deduct 7 credits synchronously before enqueuing
+  const creditResult = await deductCredits(userId, 'campaign_full', 1, 'AI video generation pipeline');
+  if (!creditResult.success) {
+    return res.status(403).json({
+      success: false,
+      creditsExhausted: true,
+      message: creditResult.error || 'Insufficient credits. Need 7 credits for full campaign.'
+    });
+  }
+
   try {
-    const userId = req.user?._id ? String(req.user._id) : (req.user?.id ? String(req.user.id) : null);
     const payload = req.body || {};
     const baseUrl = reqBaseUrl(req);
 
@@ -628,6 +643,12 @@ router.post('/createVideo', protect, checkTrial, videoAiWriteLimiter, async (req
       currentStep: queued.currentStep
     });
   } catch (error) {
+    // Refund credits immediately if enqueuing fails
+    try {
+      await refundCredits(userId, 'campaign_full', 1, 'Refund: AI video enqueuing failed');
+    } catch (refundErr) {
+      console.error('⚠️ Failed to refund credits after enqueuing error:', refundErr.message);
+    }
     return responseError(res, error, 'Failed to queue video generation');
   }
 });

@@ -1019,23 +1019,66 @@ async function generateSceneClips({
     }
 
     if (logger) logger(`Generating Fal.ai clip for ${scene.sceneId}`);
-    const falScene = await generateVideoClip(scene);
-    await materializeSourceToFile({ source: falScene.video_url, destinationPath: rawClipPath });
-    await normalizeSceneVideoClip({
-      inputPath: rawClipPath,
-      outputPath: clipPath,
-      durationSeconds: scene.durationSeconds
-    });
+    let enriched;
+    try {
+      console.log(`[${new Date().toISOString()}] [Job ID: ${context.jobId}] STEP 4: Fal.ai render started for scene ${scene.sceneId}`);
+      const falScene = await generateVideoClip(scene);
+      console.log(`[${new Date().toISOString()}] [Job ID: ${context.jobId}] STEP 5: Fal.ai render completed for scene ${scene.sceneId}`);
+      
+      await materializeSourceToFile({ source: falScene.video_url, destinationPath: rawClipPath });
+      await normalizeSceneVideoClip({
+        inputPath: rawClipPath,
+        outputPath: clipPath,
+        durationSeconds: scene.durationSeconds
+      });
 
-    const stat = await fs.promises.stat(clipPath);
-    if (!stat.size) throw new Error(`Generated clip is empty for ${scene.sceneId}`);
+      const stat = await fs.promises.stat(clipPath);
+      if (!stat.size) throw new Error(`Generated clip is empty for ${scene.sceneId}`);
 
-    const enriched = {
-      ...falScene,
-      clipPath,
-      clipUrl,
-      falVideoUrl: falScene.video_url
-    };
+      enriched = {
+        ...falScene,
+        clipPath,
+        clipUrl,
+        falVideoUrl: falScene.video_url
+      };
+    } catch (error) {
+      const isFallbackAllowed = process.env.NODE_ENV === 'development' || 
+                                 process.env.DEMO_MODE === 'true' || 
+                                 process.env.VIDEO_FALLBACK_ALLOWED === 'true';
+
+      if (!isFallbackAllowed) {
+        if (logger) {
+          logger(`❌ Fal.ai clip generation failed for scene ${scene.sceneId} and fallback is disabled: ${error.message}`);
+        }
+        throw new Error("AI video rendering failed due to Fal.ai timeout. Please retry.");
+      }
+
+      if (logger) {
+        logger(`⚠️ Fal.ai clip generation failed for scene ${scene.sceneId}: ${error.message}. Falling back to static image to video clip conversion via FFmpeg.`);
+      }
+      console.warn(`[Fal.ai Fallback] scene ${scene.sceneId}:`, error.message);
+
+      // Verify that the static image exists
+      if (!scene.imagePath || !fs.existsSync(scene.imagePath)) {
+        throw new Error(`Fallback failed: Scene ${scene.sceneId} is missing static imagePath`);
+      }
+
+      await createSceneVideoClip({ scene, outputPath: clipPath });
+
+      const stat = await fs.promises.stat(clipPath);
+      if (!stat.size) throw new Error(`Fallback generated clip is empty for ${scene.sceneId}`);
+
+      enriched = {
+        ...scene,
+        clipPath,
+        clipUrl,
+        falVideoUrl: scene.imageUrl || '',
+        video_url: scene.imageUrl || '',
+        videoUrl: scene.imageUrl || '',
+        clipUrl: scene.imageUrl || '',
+        fallbackUsed: true
+      };
+    }
 
     if (typeof onSceneDone === 'function') {
       onSceneDone(index, scenes.length, enriched);
@@ -1061,6 +1104,20 @@ async function mergeSceneVideos({
   const concatPath = path.join(context.dirs.temp, 'scene_clips_concat.txt');
   const outputPath = path.join(context.dirs.final, 'final_video.mp4');
   const outputUrl = buildMediaUrl(context.baseUrl, context.jobId, ['final', 'final_video.mp4']);
+
+  // Validate that all clip files exist and are non-empty before merging
+  for (const scene of scenes) {
+    if (!scene.clipPath) {
+      throw new Error(`Scene ${scene.sceneId || scene.index} is missing clipPath`);
+    }
+    if (!fs.existsSync(scene.clipPath)) {
+      throw new Error(`Scene clip file does not exist: ${scene.clipPath}`);
+    }
+    const stat = fs.statSync(scene.clipPath);
+    if (stat.size === 0) {
+      throw new Error(`Scene clip file is empty (0 bytes): ${scene.clipPath}`);
+    }
+  }
 
   await fs.promises.writeFile(
     concatPath,
@@ -2471,9 +2528,15 @@ async function runCreateVideoPipeline({
     if (typeof onLog === 'function') onLog(message);
   };
 
+  console.log(`[${new Date().toISOString()}] [Job ID: ${context.jobId}] STEP 1: Prompt generation completed`);
+  log(`STEP 1: Prompt generation completed`);
+
   update(5, 'generateScenes');
   log('Generating structured scene plan');
   const plan = await measureStep('generateScenes', () => generateScenesPlan({ input, product, user, logger: log }), log);
+
+  console.log(`[${new Date().toISOString()}] [Job ID: ${context.jobId}] STEP 2: Scene generation completed. Storyboard with ${plan.scenes?.length} scenes generated successfully.`);
+  log(`STEP 2: Scene generation completed`);
 
   update(20, 'generateImages', { scenes: plan.scenes.length });
   log('Generating scene images with consistency');
@@ -2491,8 +2554,15 @@ async function runCreateVideoPipeline({
     logger: log
   }), log);
 
+  console.log(`[${new Date().toISOString()}] [Job ID: ${context.jobId}] STEP 3: Scene image generation completed`);
+  log(`STEP 3: Scene image generation completed`);
+
   update(45, 'generateVideoClips');
   log('Rendering scene video clips');
+  
+  console.log(`[${new Date().toISOString()}] [Job ID: ${context.jobId}] STEP 4: Fal.ai render started`);
+  log(`STEP 4: Fal.ai render started`);
+  
   const scenesWithClips = await measureStep('generateVideoClips', () => generateSceneClips({
     scenes: scenesWithImages,
     context,
@@ -2503,13 +2573,23 @@ async function runCreateVideoPipeline({
     }
   }), log);
 
+  console.log(`[${new Date().toISOString()}] [Job ID: ${context.jobId}] STEP 5: Fal.ai render completed`);
+  log(`STEP 5: Fal.ai render completed`);
+
   update(66, 'mergeVideo');
   log('Merging scene clips into final_video.mp4');
+  
+  console.log(`[${new Date().toISOString()}] [Job ID: ${context.jobId}] STEP 7: FFmpeg merge started (Video clips merge)`);
+  log(`STEP 7: FFmpeg merge started`);
+  
   const mergedVideo = await measureStep('mergeVideo', () => mergeSceneVideos({ scenes: scenesWithClips, context }), log);
 
   update(74, 'generateAudio');
   log('Preparing audio tracks');
   const audioTracks = await audioTracksPromise;
+
+  console.log(`[${new Date().toISOString()}] [Job ID: ${context.jobId}] STEP 6: Audio generation completed`);
+  log(`STEP 6: Audio generation completed`);
 
   update(82, 'mergeAudio');
   let mergedAudio = null;
@@ -2543,6 +2623,9 @@ async function runCreateVideoPipeline({
       update(overallPct, 'finalMerge');
     }
   }), log);
+
+  console.log(`[${new Date().toISOString()}] [Job ID: ${context.jobId}] STEP 8: FFmpeg merge completed`);
+  log(`STEP 8: FFmpeg merge completed`);
 
   update(96, 'thumbnail');
   log('Generating thumbnail');
@@ -2597,6 +2680,10 @@ async function runCreateVideoPipeline({
   };
 
   await saveManifest({ context, data: responsePayload });
+  
+  console.log(`[${new Date().toISOString()}] [Job ID: ${context.jobId}] STEP 9: Final DB update completed`);
+  log(`STEP 9: Final DB update completed`);
+  
   update(100, 'completed');
 
   return responsePayload;
