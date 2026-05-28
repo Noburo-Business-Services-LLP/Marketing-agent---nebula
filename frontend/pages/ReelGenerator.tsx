@@ -1225,7 +1225,7 @@ const ReelGenerator: React.FC = () => {
                     <option value="tone">Tone Pack (default)</option>
                   </select>
                   <p className={`text-[11px] mt-1 ${theme.textSecondary}`}>
-                    Uses backend `music/{duration}s` when Library is selected.
+                    Uses backend `music/{durationSeconds}s` when Library is selected.
                   </p>
                 </div>
                 <div>
