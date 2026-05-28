@@ -202,34 +202,53 @@ async function generateVideoClip(scene = {}) {
     input.image_url = imageUrl;
   }
 
+  const payload = { model, input };
+  console.log("Fal request payload:", JSON.stringify(payload, null, 2));
+
+  const startTime = Date.now();
   let result;
   try {
     result = await retry(
       `Fal.ai video clip for ${scene.sceneId || scene.id || 'scene'}`,
-      () => fal.subscribe(model, { input }),
+      async (attempt) => {
+        console.log(`Fal render attempt ${attempt + 1} starting...`);
+        const subStart = Date.now();
+        const res = await fal.subscribe(model, { input });
+        const subDuration = Date.now() - subStart;
+        console.log(`Fal render attempt ${attempt + 1} completed in ${subDuration}ms. Status: Success`);
+        return res;
+      },
       2
     );
+    const durationMs = Date.now() - startTime;
+    console.log(`Scene ${scene.sceneId || scene.id || 'unknown'} render duration: ${durationMs}ms`);
+    console.log("Fal response JSON:", JSON.stringify(result, null, 2));
+
+    const videoUrl = extractVideoUrl(result);
+    console.log("Fal response URL:", videoUrl);
+
+    return {
+      ...scene,
+      video_url: videoUrl,
+      videoUrl,
+      clipUrl: videoUrl,
+      fal: {
+        model,
+        seed,
+        num_frames: seedance ? undefined : numFrames,
+        width: seedance ? undefined : VIDEO_SIZE.width,
+        height: seedance ? undefined : VIDEO_SIZE.height,
+        aspect_ratio: seedance ? FAL_VIDEO_ASPECT_RATIO : undefined,
+        resolution: seedance ? FAL_VIDEO_RESOLUTION : undefined,
+        duration: seedance ? getSeedanceDuration(scene) : undefined
+      }
+    };
   } catch (error) {
+    const durationMs = Date.now() - startTime;
+    console.error("Fal render failed after duration:", durationMs, "ms. Error:", error);
+    console.log(`Scene ${scene.sceneId || scene.id || 'unknown'} render duration: ${durationMs}ms`);
     throw mapFalError(error, model);
   }
-
-  const videoUrl = extractVideoUrl(result);
-  return {
-    ...scene,
-    video_url: videoUrl,
-    videoUrl,
-    clipUrl: videoUrl,
-    fal: {
-      model,
-      seed,
-      num_frames: seedance ? undefined : numFrames,
-      width: seedance ? undefined : VIDEO_SIZE.width,
-      height: seedance ? undefined : VIDEO_SIZE.height,
-      aspect_ratio: seedance ? FAL_VIDEO_ASPECT_RATIO : undefined,
-      resolution: seedance ? FAL_VIDEO_RESOLUTION : undefined,
-      duration: seedance ? getSeedanceDuration(scene) : undefined
-    }
-  };
 }
 
 async function generateVideoClips(scenes = []) {

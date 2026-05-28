@@ -20,7 +20,6 @@ import {
   ChevronDown,
   TrendingUp,
   ImageIcon,
-  PenTool,
   Layers,
   PlayCircle,
   Brain
@@ -125,7 +124,6 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
   const navItems = [
     { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/campaigns', label: 'Campaigns', icon: Megaphone },
-    { path: '/influencer-portal', label: 'Influencer Portal', icon: PenTool },
     { path: '/reels', label: 'AI Reels', icon: PlayCircle },
     { path: '/ad-campaigns', label: 'Ad Campaigns', icon: Layers },
     { path: '/connect-socials', label: 'Connect Socials', icon: Link2 },

@@ -194,16 +194,16 @@ const ReelGenerator: React.FC = () => {
   const deriveStepFromDraft = (d: any) => {
     const explicit = Number.parseInt(String(d?.currentStep || ''), 10);
     if (Number.isFinite(explicit) && explicit >= 1) return Math.min(11, Math.max(1, explicit));
-    if (d?.final?.finalOutputUrl || d?.finalOutputUrl) return 11;
+    if (d?.final?.finalOutputUrl || d?.finalOutputUrl || d?.finalVideoUrl) return 11;
     if (d?.schedule?.scheduledAt || d?.schedule?.postedAt) return 10;
     if (Array.isArray(d?.platform?.selectedPlatforms) && d.platform.selectedPlatforms.length) return 9;
-    if (d?.content?.thumbnailUrl || d?.content?.caption) return 8;
-    if (d?.merge?.finalOutputUrl || d?.merge?.finalVideoUrl) return 7;
+    if (d?.thumbnailUrl || d?.content?.thumbnailUrl || d?.content?.caption) return 8;
+    if (d?.finalVideoUrl || d?.merge?.finalOutputUrl || d?.merge?.finalVideoUrl) return 7;
     if (d?.mix?.finalAudioUrl) return 6;
     if (d?.audio?.tracks || d?.audio?.config) return 5;
-    if (d?.clips?.sceneData?.length) return 4;
-    if (d?.images?.sceneData?.length) return 3;
-    if (d?.scenes?.sceneData?.length) return 2;
+    if ((Array.isArray(d?.scenes) && d.scenes.some((s: any) => s.clipUrl)) || d?.clips?.sceneData?.length) return 4;
+    if ((Array.isArray(d?.scenes) && d.scenes.some((s: any) => s.imageUrl)) || d?.images?.sceneData?.length) return 3;
+    if ((Array.isArray(d?.scenes) && d.scenes.length) || d?.scenes?.sceneData?.length) return 2;
     return 1;
   };
 
@@ -300,7 +300,9 @@ const ReelGenerator: React.FC = () => {
       setMusicSource(draftMusicSource);
     }
     setMusicTrack(String(nextDraft?.audio?.config?.musicTrack || ''));
-    if (Array.isArray(nextDraft?.images?.sceneData) && nextDraft.images.sceneData.length) {
+    if (Array.isArray(nextDraft?.scenes) && nextDraft.scenes.length) {
+      setScenes(nextDraft.scenes);
+    } else if (Array.isArray(nextDraft?.images?.sceneData) && nextDraft.images.sceneData.length) {
       setScenes(nextDraft.images.sceneData);
     } else if (Array.isArray(nextDraft?.clips?.sceneData) && nextDraft.clips.sceneData.length) {
       setScenes(nextDraft.clips.sceneData);
@@ -309,9 +311,21 @@ const ReelGenerator: React.FC = () => {
     }
     if (nextDraft?.audio?.tracks) setGeneratedTracks(nextDraft.audio.tracks);
     if (nextDraft?.mix?.finalAudioUrl) setFinalAudioUrl(nextDraft.mix.finalAudioUrl);
-    if (nextDraft?.merge?.finalVideoUrl) setFinalVideoUrl(nextDraft.merge.finalVideoUrl);
-    if (nextDraft?.merge?.finalOutputUrl) setFinalOutputUrl(nextDraft.merge.finalOutputUrl);
-    if (nextDraft?.content?.thumbnailUrl) setThumbnailUrl(nextDraft.content.thumbnailUrl);
+    if (nextDraft?.finalVideoUrl) {
+      setFinalVideoUrl(nextDraft.finalVideoUrl);
+    } else if (nextDraft?.merge?.finalVideoUrl) {
+      setFinalVideoUrl(nextDraft.merge.finalVideoUrl);
+    }
+    if (nextDraft?.finalVideoUrl) {
+      setFinalOutputUrl(nextDraft.finalVideoUrl);
+    } else if (nextDraft?.merge?.finalOutputUrl) {
+      setFinalOutputUrl(nextDraft.merge.finalOutputUrl);
+    }
+    if (nextDraft?.thumbnailUrl) {
+      setThumbnailUrl(nextDraft.thumbnailUrl);
+    } else if (nextDraft?.content?.thumbnailUrl) {
+      setThumbnailUrl(nextDraft.content.thumbnailUrl);
+    }
     if (nextDraft?.content?.caption) setCaption(nextDraft.content.caption);
     if (Array.isArray(nextDraft?.content?.hashtags)) setHashtagsText(nextDraft.content.hashtags.join(' '));
     if (Array.isArray(nextDraft?.platform?.selectedPlatforms)) setSelectedPlatforms(nextDraft.platform.selectedPlatforms);

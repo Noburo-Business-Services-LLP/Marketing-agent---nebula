@@ -16,7 +16,9 @@ const videoDraftSchema = new mongoose.Schema(
     content: { type: mongoose.Schema.Types.Mixed, default: null },
     platform: { type: mongoose.Schema.Types.Mixed, default: null },
     schedule: { type: mongoose.Schema.Types.Mixed, default: null },
-    jobs: { type: mongoose.Schema.Types.Mixed, default: {} } // Links background queue Job IDs (e.g. merge/clips)
+    jobs: { type: mongoose.Schema.Types.Mixed, default: {} }, // Links background queue Job IDs (e.g. merge/clips)
+    finalVideoUrl: { type: String, default: null },
+    thumbnailUrl: { type: String, default: null }
   },
   { collection: 'video_drafts', timestamps: true }
 );

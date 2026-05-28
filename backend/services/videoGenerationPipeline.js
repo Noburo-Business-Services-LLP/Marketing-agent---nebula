@@ -30,7 +30,7 @@ const MAX_SCENES = 10;
 const MIN_SCENES = 1;
 const DEFAULT_DURATION_SECONDS = 60;
 const SCENE_IMAGE_CONCURRENCY = Math.max(1, Number.parseInt(process.env.AI_VIDEO_SCENE_IMAGE_CONCURRENCY || '3', 10) || 3);
-const SCENE_CLIP_CONCURRENCY = Math.max(1, Number.parseInt(process.env.AI_VIDEO_SCENE_CLIP_CONCURRENCY || '2', 10) || 2);
+const SCENE_CLIP_CONCURRENCY = Math.max(1, Number.parseInt(process.env.AI_VIDEO_SCENE_CLIP_CONCURRENCY || '1', 10) || 1);
 const MEDIA_IO_CONCURRENCY = Math.max(1, Number.parseInt(process.env.AI_VIDEO_MEDIA_IO_CONCURRENCY || '4', 10) || 4);
 
 const fetchImpl = (() => {

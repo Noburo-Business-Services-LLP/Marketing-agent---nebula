@@ -96,18 +96,43 @@ async function writeDraft(draft) {
 }
 
 async function readDraft(jobId) {
-  // 1. Try reading from MongoDB
+  let dbDraft = null;
+  let diskDraft = null;
+
+  // 1) Try reading from MongoDB (fast, but can be stale if writes fail intermittently)
   try {
-    const draft = await VideoDraft.findOne({ jobId }).lean();
-    if (draft) return draft;
+    dbDraft = await VideoDraft.findOne({ jobId }).lean();
   } catch (dbError) {
     console.error('⚠️ Failed to read draft from MongoDB:', dbError.message);
   }
 
-  // 2. Fallback to Disk
-  const draftPath = draftPathForJob(jobId);
-  const text = await fs.promises.readFile(draftPath, 'utf8');
-  return JSON.parse(text);
+  // 2) Try reading from Disk (backup source of truth)
+  try {
+    const draftPath = draftPathForJob(jobId);
+    const text = await fs.promises.readFile(draftPath, 'utf8');
+    diskDraft = JSON.parse(text);
+  } catch (_) {
+    // ignore (disk draft might not exist in some environments)
+  }
+
+  if (dbDraft && !diskDraft) return dbDraft;
+  if (!dbDraft && diskDraft) return diskDraft;
+  if (!dbDraft && !diskDraft) {
+    const error = new Error('Draft not found');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const dbUpdatedAt = new Date(String(dbDraft.updatedAt || dbDraft.updated_at || dbDraft.createdAt || 0)).getTime();
+  const diskUpdatedAt = new Date(String(diskDraft.updatedAt || diskDraft.updated_at || diskDraft.createdAt || 0)).getTime();
+
+  // Prefer the most recently updated draft.
+  if (Number.isFinite(diskUpdatedAt) && Number.isFinite(dbUpdatedAt)) {
+    return diskUpdatedAt >= dbUpdatedAt ? diskDraft : dbDraft;
+  }
+
+  // If timestamps are missing/unparseable on either side, prefer disk (written on every updateDraft call).
+  return diskDraft || dbDraft;
 }
 
 async function loadDraftForUser(jobId, userId = null) {
