@@ -138,7 +138,18 @@ videoGenerationQueue.registerHandler('merge_video', async (payload, { update, lo
       sceneData: sceneDataForSubtitles
     },
     baseUrl,
-    onProgress: ({ progress, currentStep, metadata }) => update({ progress, currentStep, metadata }),
+    onProgress: ({ progress, currentStep, metadata }) => {
+      update({ progress, currentStep, metadata });
+      updateDraft(jobId, userId, (current) => ({
+        ...current,
+        mergeProgress: {
+          progress: Number(progress) || 0,
+          stage: friendlyVideoMessage(currentStep, 'Synchronizing audio and video...'),
+          metadata: metadata || null,
+          updatedAt: new Date().toISOString()
+        }
+      })).catch(() => {});
+    },
     onLog: (line) => log(line)
   });
 
@@ -153,7 +164,11 @@ videoGenerationQueue.registerHandler('merge_video', async (payload, { update, lo
       finalOutputUrl: merged?.finalOutputUrl || null,
       subtitlesUrl: merged?.subtitlesUrl || null,
       mergedAt: new Date().toISOString()
-    }
+    },
+    subtitles: merged?.subtitlesUrl
+      ? { url: merged.subtitlesUrl, generatedAt: new Date().toISOString() }
+      : current.subtitles,
+    mergeProgress: { progress: 100, stage: 'Finalizing your video...', updatedAt: new Date().toISOString() }
   }));
 
   try {
@@ -213,12 +228,36 @@ const videoJobReadLimiter = rateLimit({
   keyGenerator: (req) => String(req.user?._id || req.user?.id || ipKeyGenerator(req.ip))
 });
 
+function friendlyVideoMessage(message = '', fallbackMessage = 'Retrying video generation...') {
+  const raw = String(message || '').trim();
+  const technicalPatterns = [
+    /job not found/i,
+    /draft not found/i,
+    /ffmpeg/i,
+    /fal\.?ai/i,
+    /queue/i,
+    /http\s*\d{3}/i,
+    /\b502\b/i,
+    /internal server error/i,
+    /timeout/i,
+    /timed out/i,
+    /failed/i,
+    /error/i
+  ];
+  if (!raw || technicalPatterns.some((pattern) => pattern.test(raw))) {
+    const fallback = String(fallbackMessage || '').trim();
+    return fallback && !technicalPatterns.some((pattern) => pattern.test(fallback))
+      ? fallback
+      : 'Retrying video generation...';
+  }
+  return raw;
+}
+
 function responseError(res, error, fallbackMessage) {
   const statusCode = Number(error?.statusCode) || 500;
   return res.status(statusCode).json({
     success: false,
-    message: error?.message || fallbackMessage || 'Request failed',
-    error: process.env.NODE_ENV === 'development' ? (error?.stack || String(error)) : undefined
+    message: friendlyVideoMessage(error?.message, fallbackMessage || 'Retrying video generation...')
   });
 }
 
@@ -245,19 +284,29 @@ function normalizedDurationSeconds(raw, fallback = 60) {
 }
 
 function normalizeAudioLanguageCode(code = 'en') {
-  const normalized = String(code || '').toLowerCase().trim().split(/[-_]/)[0];
-  const allowed = new Set(['en', 'hi', 'ta', 'te', 'kn', 'ml']);
-  return allowed.has(normalized) ? normalized : 'en';
+  const normalized = String(code || '').toLowerCase().trim().replace(/_/g, '-');
+  const allowed = new Set(['en', 'en-in', 'en-us', 'en-gb', 'hi', 'hi-in', 'ta', 'ta-in', 'te', 'te-in', 'kn', 'kn-in', 'ml', 'ml-in']);
+  if (allowed.has(normalized)) return normalized;
+  const base = normalized.split('-')[0];
+  return allowed.has(base) ? base : 'en-in';
 }
 
 function audioLanguageLabel(code = 'en') {
   const labels = {
-    en: 'English',
+    en: 'English (India)',
+    'en-in': 'English (India)',
+    'en-us': 'English (US)',
+    'en-gb': 'English (UK)',
     hi: 'Hindi',
+    'hi-in': 'Hindi',
     ta: 'Tamil',
+    'ta-in': 'Tamil',
     te: 'Telugu',
+    'te-in': 'Telugu',
     kn: 'Kannada',
-    ml: 'Malayalam'
+    'kn-in': 'Kannada',
+    ml: 'Malayalam',
+    'ml-in': 'Malayalam'
   };
   return labels[normalizeAudioLanguageCode(code)] || labels.en;
 }
@@ -265,11 +314,19 @@ function audioLanguageLabel(code = 'en') {
 function audioScriptLabel(code = 'en') {
   const labels = {
     en: 'Latin',
+    'en-in': 'Latin',
+    'en-us': 'Latin',
+    'en-gb': 'Latin',
     hi: 'Devanagari',
+    'hi-in': 'Devanagari',
     ta: 'Tamil',
+    'ta-in': 'Tamil',
     te: 'Telugu',
+    'te-in': 'Telugu',
     kn: 'Kannada',
-    ml: 'Malayalam'
+    'kn-in': 'Kannada',
+    ml: 'Malayalam',
+    'ml-in': 'Malayalam'
   };
   return labels[normalizeAudioLanguageCode(code)] || labels.en;
 }
@@ -277,7 +334,7 @@ function audioScriptLabel(code = 'en') {
 async function localizeAudioScript({ text, languageCode }) {
   const source = String(text || '').replace(/\s+/g, ' ').trim();
   const normalizedLanguage = normalizeAudioLanguageCode(languageCode);
-  if (!source || normalizedLanguage === 'en') return source;
+  if (!source || normalizedLanguage.startsWith('en')) return source;
 
   const language = audioLanguageLabel(normalizedLanguage);
   const script = audioScriptLabel(normalizedLanguage);
@@ -692,7 +749,7 @@ router.get('/jobs/:jobId', protect, videoJobReadLimiter, async (req, res) => {
     if (!job) {
       return res.status(404).json({
         success: false,
-        message: 'Job not found'
+        message: 'Retrying video generation...'
       });
     }
     return res.json({
@@ -1258,6 +1315,7 @@ router.post('/generateAudio', protect, checkTrial, videoAiWriteLimiter, async (r
       manualAudioUrl: typeof audio?.manualAudioUrl === 'string' ? audio.manualAudioUrl : '',
       soundEffectUrls: Array.isArray(audio?.soundEffectUrls) ? audio.soundEffectUrls : []
     };
+    audioConfig.voiceGender = audioConfig.voiceGender === 'male' ? 'male' : 'female';
 
     const generated = await runGenerateAudio({
       payload: {
@@ -1278,6 +1336,7 @@ router.post('/generateAudio', protect, checkTrial, videoAiWriteLimiter, async (r
     const updated = await updateDraft(jobId, userId, (current) => ({
       ...current,
       currentStep: Math.max(Number(current.currentStep || 1), 5),
+      finalVideoUrl: null,
       audio: {
         config: {
           ...audioConfig,
@@ -1286,6 +1345,12 @@ router.post('/generateAudio', protect, checkTrial, videoAiWriteLimiter, async (r
         },
         tracks: generated?.tracks || {},
         generatedAt: new Date().toISOString()
+      },
+      mix: null,
+      merge: null,
+      jobs: {
+        ...(current.jobs || {}),
+        merge: null
       }
     }));
 
@@ -1469,7 +1534,11 @@ router.post('/mergeVideo', protect, checkTrial, videoAiWriteLimiter, async (req,
         finalOutputUrl: merged?.finalOutputUrl || null,
         subtitlesUrl: merged?.subtitlesUrl || null,
         mergedAt: new Date().toISOString()
-      }
+      },
+      subtitles: merged?.subtitlesUrl
+        ? { url: merged.subtitlesUrl, generatedAt: new Date().toISOString() }
+        : current.subtitles,
+      mergeProgress: { progress: 100, stage: 'Finalizing your video...', updatedAt: new Date().toISOString() }
     }));
 
     try {
@@ -1530,7 +1599,8 @@ router.post('/generateContent', protect, checkTrial, videoAiWriteLimiter, async 
         caption: socialContent.caption,
         hashtags: socialContent.hashtags,
         generatedAt: new Date().toISOString()
-      }
+      },
+      thumbnails: thumbnailUrl ? { url: thumbnailUrl, generatedAt: new Date().toISOString() } : current.thumbnails
     }));
 
     try {

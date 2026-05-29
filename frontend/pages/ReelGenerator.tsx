@@ -19,6 +19,7 @@ import { Product } from '../types';
 
 type AudioMode = 'off' | 'auto' | 'upload';
 type VideoStatusFilter = 'all' | 'draft' | 'created' | 'scheduled' | 'posted';
+type ProcessingType = 'scene_generation' | 'image_generation' | 'clip_generation' | 'audio_generation' | 'audio_merge' | 'video_merge' | 'final_render';
 
 const WIZARD_STEPS = [
   'Input',
@@ -42,6 +43,195 @@ function fileToDataUrl(file: Blob): Promise<string> {
     reader.readAsDataURL(file);
   });
 }
+
+function normalizeUiAudioLanguageCode(languageCode = '') {
+  const normalized = String(languageCode || '').toLowerCase();
+  if (normalized === 'en') return 'en-in';
+  if (normalized === 'hi') return 'hi-in';
+  return normalized || 'en-in';
+}
+
+const PROCESSING_ESTIMATES_SECONDS: Record<string, number> = {
+  scene_generation: 30,
+  image_generation: 30,
+  clip_generation: 120,
+  audio_generation: 15,
+  audio_merge: 20,
+  video_merge: 20,
+  final_render: 30
+};
+
+const TECHNICAL_ERROR_PATTERNS = [
+  /job not found/i,
+  /draft not found/i,
+  /ffmpeg/i,
+  /fal\.?ai/i,
+  /queue/i,
+  /http\s*\d{3}/i,
+  /\b502\b/i,
+  /internal server error/i,
+  /timeout/i,
+  /timed out/i,
+  /failed/i,
+  /error/i
+];
+
+const formatEta = (seconds: number) => {
+  const safeSeconds = Math.max(1, Math.round(seconds));
+  if (safeSeconds < 60) return `~${safeSeconds} sec`;
+  const minutes = Math.floor(safeSeconds / 60);
+  const remaining = safeSeconds % 60;
+  return remaining ? `~${minutes} min ${remaining} sec` : `~${minutes} min`;
+};
+
+const friendlyErrorMessage = (error: any, fallback = 'Retrying video generation...') => {
+  const raw = String(error?.message || error || '').trim();
+  if (!raw) return fallback;
+  return TECHNICAL_ERROR_PATTERNS.some((pattern) => pattern.test(raw))
+    ? fallback
+    : raw;
+};
+
+const normalizeProcessingStage = (rawStage = '', currentStep = 1) => {
+  const stage = String(rawStage || '').toLowerCase();
+  if (stage.includes('stale') || stage.includes('retry')) return 'Retrying video generation...';
+  if (stage.includes('clip') || stage.includes('fal') || currentStep === 4) return 'Generating video clips...';
+  if (stage.includes('audio') && !stage.includes('merge')) return 'Generating voice-over...';
+  if (stage.includes('merge') || stage.includes('sync')) return 'Synchronizing audio and video...';
+  if (stage.includes('subtitle')) return 'Generating subtitles...';
+  if (stage.includes('final') || stage.includes('render')) return 'Creating final video...';
+  if (stage.includes('image') || currentStep === 3) return 'Generating scene images...';
+  if (stage.includes('scene') || currentStep === 2) return 'Generating video scenes...';
+  if (stage.includes('saving')) return 'Finalizing your video...';
+  return 'Optimizing video quality...';
+};
+
+const progressTypeForStage = (rawStage = '', currentStep = 1) => {
+  const stage = String(rawStage || '').toLowerCase();
+  if (stage.includes('clip') || currentStep === 4) return 'clip_generation';
+  if (stage.includes('audio') && !stage.includes('merge')) return 'audio_generation';
+  if (stage.includes('merge') && stage.includes('audio')) return 'audio_merge';
+  if (stage.includes('merge')) return 'video_merge';
+  if (stage.includes('final') || stage.includes('render')) return 'final_render';
+  if (stage.includes('image') || currentStep === 3) return 'image_generation';
+  if (stage.includes('scene') || currentStep === 2) return 'scene_generation';
+  return 'final_render';
+};
+
+const estimateRemainingSeconds = ({
+  type,
+  progress,
+  startedAt,
+  serverEta
+}: {
+  type: ProcessingType;
+  progress: number;
+  startedAt?: number;
+  serverEta?: number;
+}) => {
+  if (Number.isFinite(serverEta) && Number(serverEta) > 0) return Number(serverEta);
+  const baseline = PROCESSING_ESTIMATES_SECONDS[type] || 30;
+  const safeProgress = Math.max(1, Math.min(99, Number(progress) || 1));
+  if (startedAt && safeProgress > 5) {
+    const elapsed = Math.max(1, (Date.now() - startedAt) / 1000);
+    return Math.max(1, Math.round((elapsed / safeProgress) * (100 - safeProgress)));
+  }
+  return Math.max(1, Math.round(baseline * (1 - safeProgress / 100)));
+};
+
+const ProcessingExperience: React.FC<{
+  isDarkMode: boolean;
+  theme: any;
+  stage: string;
+  type: ProcessingType;
+  progress: number;
+  etaSeconds: number;
+  sceneIndex?: number;
+  sceneTotal?: number;
+}> = ({ isDarkMode, theme, stage, type, progress, etaSeconds, sceneIndex, sceneTotal }) => {
+  const safeProgress = Math.max(3, Math.min(100, Math.round(progress)));
+  const showScenes = type === 'image_generation' || type === 'scene_generation';
+  const showWaveform = type === 'audio_generation' || type === 'audio_merge';
+  const title = showScenes && sceneTotal
+    ? `Generating Scene ${Math.max(1, sceneIndex || 1)} of ${sceneTotal}`
+    : stage;
+
+  return (
+    <div className={`mt-6 overflow-hidden rounded-2xl border shadow-xl ${
+      isDarkMode ? 'bg-[#0f141c]/95 border-slate-700/80' : 'bg-white border-slate-200'
+    }`}>
+      <style>{`
+        @keyframes nebulaShimmer { 0% { transform: translateX(-110%); } 100% { transform: translateX(110%); } }
+        @keyframes nebulaWave { 0%, 100% { transform: scaleY(.35); opacity: .55; } 50% { transform: scaleY(1); opacity: 1; } }
+        @keyframes nebulaPulse { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+      `}</style>
+      <div className="p-5 sm:p-6 space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="relative h-12 w-12 shrink-0 rounded-xl bg-[#ffcc29]/15 border border-[#ffcc29]/30 flex items-center justify-center overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent" style={{ animation: 'nebulaShimmer 1.8s infinite' }} />
+              {showWaveform ? <Mic className="w-5 h-5 text-[#ffcc29]" /> : <Film className="w-5 h-5 text-[#ffcc29]" />}
+            </div>
+            <div>
+              <h3 className={`font-bold ${theme.text}`}>{title}</h3>
+              <p className={`text-sm ${theme.textSecondary}`}>{stage}</p>
+            </div>
+          </div>
+          <div className="text-left sm:text-right">
+            <p className="text-2xl font-black text-[#ffcc29]">{safeProgress}%</p>
+            <p className={`text-xs ${theme.textMuted}`}>Estimated time: {formatEta(etaSeconds)}</p>
+          </div>
+        </div>
+
+        <div className={`h-3 rounded-full overflow-hidden ${isDarkMode ? 'bg-slate-800' : 'bg-slate-100'}`}>
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-[#ffcc29] via-amber-300 to-emerald-400 transition-all duration-500 ease-out"
+            style={{ width: `${safeProgress}%` }}
+          />
+        </div>
+
+        {showScenes && (
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+            {Array.from({ length: Math.max(1, Math.min(5, sceneTotal || 5)) }).map((_, idx) => (
+              <div key={idx} className={`relative aspect-[9/12] rounded-xl overflow-hidden border ${
+                isDarkMode ? 'border-slate-700 bg-slate-900' : 'border-slate-200 bg-slate-100'
+              }`}>
+                <div className="absolute inset-0 bg-gradient-to-br from-[#ffcc29]/15 via-transparent to-emerald-400/10" />
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent" style={{ animation: 'nebulaShimmer 1.6s infinite' }} />
+                <span className={`absolute bottom-2 left-2 text-[11px] font-semibold ${theme.textSecondary}`}>Scene {idx + 1}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {showWaveform && (
+          <div className={`h-20 rounded-xl border flex items-center justify-center gap-1.5 ${
+            isDarkMode ? 'border-slate-800 bg-slate-900' : 'border-slate-200 bg-slate-50'
+          }`}>
+            {Array.from({ length: 24 }).map((_, idx) => (
+              <span
+                key={idx}
+                className="w-1.5 h-12 rounded-full bg-[#ffcc29]"
+                style={{ animation: `nebulaWave ${0.75 + (idx % 5) * 0.08}s infinite`, animationDelay: `${idx * 0.035}s` }}
+              />
+            ))}
+          </div>
+        )}
+
+        {!showScenes && !showWaveform && (
+          <div className={`h-20 rounded-xl border flex items-center justify-center ${
+            isDarkMode ? 'border-slate-800 bg-slate-900' : 'border-slate-200 bg-slate-50'
+          }`}>
+            <div className="flex items-center gap-3" style={{ animation: 'nebulaPulse 1.4s infinite' }}>
+              <Sparkles className="w-5 h-5 text-[#ffcc29]" />
+              <span className={`text-sm font-semibold ${theme.text}`}>{stage}</span>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
 const ReelGenerator: React.FC = () => {
   const { isDarkMode } = useTheme();
@@ -68,7 +258,16 @@ const ReelGenerator: React.FC = () => {
   const [activeJobStatus, setActiveJobStatus] = useState<string>('');
   const [activeJobProgress, setActiveJobProgress] = useState<number>(0);
   const [activeJobStep, setActiveJobStep] = useState<string>('');
-  const [activeJobLogs, setActiveJobLogs] = useState<string[]>([]);
+  const [activeQueueJobId, setActiveQueueJobId] = useState<string>('');
+  const [processingState, setProcessingState] = useState<{
+    stage: string;
+    type: ProcessingType;
+    progress: number;
+    startedAt: number;
+    etaSeconds?: number;
+    sceneIndex?: number;
+    sceneTotal?: number;
+  } | null>(null);
 
   const [products, setProducts] = useState<Product[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(false);
@@ -85,7 +284,7 @@ const ReelGenerator: React.FC = () => {
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [audioMode, setAudioMode] = useState<AudioMode>('auto');
   const [audioTone, setAudioTone] = useState('professional');
-  const [audioLanguageCode, setAudioLanguageCode] = useState('en');
+  const [audioLanguageCode, setAudioLanguageCode] = useState('en-in');
   // TEMP (testing): allow selecting server music library by duration bucket.
   const [musicSource, setMusicSource] = useState<'tone' | 'library'>('library');
   const [musicTrack, setMusicTrack] = useState('');
@@ -191,7 +390,25 @@ const ReelGenerator: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    if (!processingState || activeJobStatus) return;
+    const timer = window.setInterval(() => {
+      setProcessingState((current) => {
+        if (!current) return current;
+        const baseline = PROCESSING_ESTIMATES_SECONDS[current.type] || 30;
+        const elapsed = (Date.now() - current.startedAt) / 1000;
+        const estimated = Math.min(94, Math.max(current.progress, Math.round((elapsed / baseline) * 92)));
+        return { ...current, progress: estimated };
+      });
+    }, 700);
+    return () => window.clearInterval(timer);
+  }, [processingState, activeJobStatus]);
+
   const deriveStepFromDraft = (d: any) => {
+    if (
+      (d?.final?.finalOutputUrl || d?.finalOutputUrl || d?.finalVideoUrl || d?.merge?.finalOutputUrl || d?.merge?.finalVideoUrl) &&
+      (d?.content?.caption || d?.thumbnailUrl || d?.content?.thumbnailUrl || d?.schedule?.scheduledAt || d?.schedule?.status)
+    ) return 11;
     const explicit = Number.parseInt(String(d?.currentStep || ''), 10);
     if (Number.isFinite(explicit) && explicit >= 1) return Math.min(11, Math.max(1, explicit));
     if (d?.final?.finalOutputUrl || d?.finalOutputUrl || d?.finalVideoUrl) return 11;
@@ -211,9 +428,15 @@ const ReelGenerator: React.FC = () => {
     setBusy(true);
     setError('');
     setActiveJobStatus('queued');
+    setActiveQueueJobId(queueJobId);
     setActiveJobProgress(0);
     setActiveJobStep('queued');
-    setActiveJobLogs(['[SYSTEM] Connected to background persistent queue.']);
+    setProcessingState({
+      stage: 'Generating video clips...',
+      type: 'clip_generation',
+      progress: 3,
+      startedAt: Date.now()
+    });
 
     const startedAt = Date.now();
     const timeoutMs = 20 * 60 * 1000;
@@ -224,7 +447,7 @@ const ReelGenerator: React.FC = () => {
     while (true) {
       if (Date.now() - startedAt > timeoutMs) {
         setActiveJobStatus('failed');
-        throw new Error('Background task took too long. Please try again.');
+        throw new Error('Retrying video generation...');
       }
 
       let job: any;
@@ -238,20 +461,33 @@ const ReelGenerator: React.FC = () => {
           await new Promise((r) => setTimeout(r, pollDelayMs));
           continue;
         }
-        setActiveJobStatus('failed');
-        throw err;
+        setActiveJobStatus('processing');
+        setActiveJobStep('retrying');
+        pollDelayMs = Math.min(15000, Math.round(pollDelayMs * 1.8));
+        await new Promise((r) => setTimeout(r, pollDelayMs));
+        continue;
       }
 
       const status = String(job?.status || '').toLowerCase();
       const progress = Number(job?.progress) || 0;
       const currentStep = String(job?.currentStep || '');
-      const logs = Array.isArray(job?.logs) ? job.logs : [];
       const updatedAt = String(job?.updatedAt || '');
+      const publicStep = String(job?.metadata?.publicStep || normalizeProcessingStage(currentStep, step));
+      const progressType = progressTypeForStage(currentStep, step) as ProcessingType;
+      const meta = job?.metadata || {};
 
       setActiveJobStatus(status);
       setActiveJobProgress(progress);
       setActiveJobStep(currentStep);
-      setActiveJobLogs(logs);
+      setProcessingState((current) => ({
+        stage: publicStep,
+        type: progressType,
+        progress,
+        startedAt: current?.startedAt || startedAt,
+        etaSeconds: Number(meta.estimatedCompletionSeconds) || undefined,
+        sceneIndex: Number(meta.completed || meta.index || 0) || undefined,
+        sceneTotal: Number(meta.total || meta.scenes || 0) || undefined
+      }));
 
       if (updatedAt && updatedAt === lastUpdatedAt) {
         unchangedTicks += 1;
@@ -262,15 +498,17 @@ const ReelGenerator: React.FC = () => {
 
       if (status === 'completed') {
         const result = job?.result;
-        if (!result?.success) throw new Error(result?.message || 'Execution failed');
+        if (!result?.success) throw new Error('Finalizing your video...');
         await successCallback(result);
         setActiveJobStatus('');
+        setActiveQueueJobId('');
+        setProcessingState(null);
         break;
       }
 
       if (status === 'failed') {
         setActiveJobStatus('failed');
-        throw new Error(job?.error?.message || 'Execution failed');
+        throw new Error('Retrying video generation...');
       }
 
       if (unchangedTicks >= 5) {
@@ -298,6 +536,20 @@ const ReelGenerator: React.FC = () => {
     const draftMusicSource = String(nextDraft?.audio?.config?.musicSource || '').toLowerCase();
     if (draftMusicSource === 'tone' || draftMusicSource === 'library') {
       setMusicSource(draftMusicSource);
+    }
+    const draftLanguageCode = normalizeUiAudioLanguageCode(nextDraft?.audio?.config?.languageCode || '');
+    if (draftLanguageCode) {
+      setAudioLanguageCode(draftLanguageCode);
+    }
+    const draftVoiceGender = String(nextDraft?.audio?.config?.voiceGender || '').toLowerCase();
+    if (draftVoiceGender === 'male' || draftVoiceGender === 'female') {
+      setVoiceGender(draftVoiceGender);
+    }
+    if (Number.isFinite(Number(nextDraft?.audio?.config?.voiceVolume))) {
+      setVoiceVolume(Number(nextDraft.audio.config.voiceVolume));
+    }
+    if (Number.isFinite(Number(nextDraft?.audio?.config?.musicVolume))) {
+      setMusicVolume(Number(nextDraft.audio.config.musicVolume));
     }
     setMusicTrack(String(nextDraft?.audio?.config?.musicTrack || ''));
     if (Array.isArray(nextDraft?.scenes) && nextDraft.scenes.length) {
@@ -341,41 +593,65 @@ const ReelGenerator: React.FC = () => {
       setStep(deriveStepFromDraft(nextDraft));
     }
 
-    // Sync / resume running queue jobs after page refresh or load
+    // Sync / resume only queue jobs that still exist in persistent queue storage.
+    const activeQueueJobs = Array.isArray(response.queueJobs)
+      ? response.queueJobs.filter((queueJob: any) => ['queued', 'processing'].includes(String(queueJob?.status || '').toLowerCase()))
+      : [];
     const draftJobs = (nextDraft && typeof nextDraft === 'object' ? nextDraft.jobs : null) || {};
-    const clipsJob = draftJobs.clips;
-    const mergeJob = draftJobs.merge;
+    const findActiveJob = (stepName: string) => {
+      const queueJobId = draftJobs?.[stepName]?.queueJobId;
+      return activeQueueJobs.find((queueJob: any) => String(queueJob?.jobId || '') === String(queueJobId || '')) || null;
+    };
+    const clipsJob = findActiveJob('clips');
+    const mergeJob = findActiveJob('merge');
 
-    if (clipsJob && ['queued', 'processing'].includes(String(clipsJob.status).toLowerCase())) {
-      console.log(`Reconnecting to active clips job: ${clipsJob.queueJobId}`);
-      pollJob(clipsJob.queueJobId, async (result) => {
+    if (clipsJob) {
+      console.log(`Reconnecting to active clips job: ${clipsJob.jobId}`);
+      pollJob(clipsJob.jobId, async (result) => {
         setScenes(result.sceneData || []);
         setDraft(result.draft || nextDraft);
       }).catch((e: any) => {
-        setError(e?.message || 'Clip generation task failed.');
+        setError(friendlyErrorMessage(e, 'Retrying video generation...'));
       });
-    } else if (mergeJob && ['queued', 'processing'].includes(String(mergeJob.status).toLowerCase())) {
-      console.log(`Reconnecting to active merge job: ${mergeJob.queueJobId}`);
-      pollJob(mergeJob.queueJobId, async (result) => {
+    } else if (mergeJob) {
+      console.log(`Reconnecting to active merge job: ${mergeJob.jobId}`);
+      pollJob(mergeJob.jobId, async (result) => {
         setFinalVideoUrl(result?.merge?.finalVideoUrl || result?.draft?.merge?.finalVideoUrl || '');
         setFinalOutputUrl(result?.merge?.finalOutputUrl || result?.draft?.merge?.finalOutputUrl || '');
         setDraft(result?.draft || nextDraft);
         await loadVideoDrafts();
       }).catch((e: any) => {
-        setError(e?.message || 'Video merge task failed.');
+        setError(friendlyErrorMessage(e, 'Retrying video generation...'));
       });
+    } else {
+      setActiveJobStatus('');
+      setActiveQueueJobId('');
+      setProcessingState(null);
     }
   };
 
-  const withBusy = async (fn: () => Promise<void>) => {
+  const withBusy = async (fn: () => Promise<void>, processing?: { stage: string; type: ProcessingType; progress?: number; sceneTotal?: number }) => {
     setBusy(true);
     setError('');
+    if (processing) {
+      setProcessingState({
+        stage: processing.stage,
+        type: processing.type,
+        progress: processing.progress || 6,
+        startedAt: Date.now(),
+        sceneIndex: 1,
+        sceneTotal: processing.sceneTotal
+      });
+    }
     try {
       await fn();
     } catch (e: any) {
-      setError(e?.message || 'Something went wrong');
+      setError(friendlyErrorMessage(e, 'Retrying video generation...'));
     } finally {
       setBusy(false);
+      if (!activeQueueJobId) {
+        setProcessingState(null);
+      }
     }
   };
 
@@ -409,6 +685,7 @@ const ReelGenerator: React.FC = () => {
     const data = await fileToDataUrl(file);
     setManualVoiceData(data);
     setManualVoiceName((file as File).name || 'voice-file');
+    clearGeneratedAudioOutputs();
   };
 
   const startVoiceRecording = async () => {
@@ -427,6 +704,7 @@ const ReelGenerator: React.FC = () => {
           const data = await fileToDataUrl(blob);
           setManualVoiceData(data);
           setManualVoiceName('recorded-voice.webm');
+          clearGeneratedAudioOutputs();
         }
         stream.getTracks().forEach((track) => track.stop());
       };
@@ -456,6 +734,21 @@ const ReelGenerator: React.FC = () => {
     manualAudioData: audioMode === 'upload' ? manualVoiceData : undefined,
     ...overrides
   });
+
+  const clearMergedVideoOutputs = () => {
+    setFinalVideoUrl('');
+    setFinalOutputUrl('');
+  };
+
+  const clearAudioMixOutputs = () => {
+    setFinalAudioUrl('');
+    clearMergedVideoOutputs();
+  };
+
+  const clearGeneratedAudioOutputs = () => {
+    setGeneratedTracks(null);
+    clearAudioMixOutputs();
+  };
 
   const ensureDraftForAudioTest = async (fallbackDescription = '') => {
     if (jobId) return jobId;
@@ -504,7 +797,7 @@ const ReelGenerator: React.FC = () => {
     }
     setScenes(sceneResponse.sceneData || []);
     setDraft(sceneResponse.draft || draft);
-  });
+  }, { stage: 'Generating video scenes...', type: 'scene_generation', progress: 8, sceneTotal: Number(sceneCount) || 5 });
 
   const saveStep2EditsAndNext = async () => withBusy(async () => {
     if (!jobId) throw new Error('Draft missing');
@@ -533,7 +826,7 @@ const ReelGenerator: React.FC = () => {
     if (!response?.success) throw new Error(response?.message || 'Image generation failed');
     setScenes(response.sceneData || []);
     setDraft(response.draft || draft);
-  });
+  }, { stage: `Generating Scene 1 of ${Math.max(1, scenes.length || 5)}`, type: 'image_generation', progress: 8, sceneTotal: Math.max(1, scenes.length || 5) });
 
   const regenerateSceneImage = async (scene: any) => withBusy(async () => {
     if (!jobId) throw new Error('Draft missing');
@@ -546,7 +839,7 @@ const ReelGenerator: React.FC = () => {
     if (!response?.success) throw new Error(response?.message || 'Image regeneration failed');
     setScenes(response.sceneData || []);
     setDraft(response.draft || draft);
-  });
+  }, { stage: 'Generating scene images...', type: 'image_generation', progress: 15, sceneTotal: 1 });
 
   const generateClips = async () => withBusy(async () => {
     if (!jobId) throw new Error('Draft missing');
@@ -570,7 +863,7 @@ const ReelGenerator: React.FC = () => {
     if (!response?.success) throw new Error(response?.message || 'Clip generation failed');
     setScenes(response.sceneData || []);
     setDraft(response.draft || draft);
-  });
+  }, { stage: 'Generating video clips...', type: 'clip_generation', progress: 4, sceneTotal: Math.max(1, scenes.length || 1) });
 
   const generateAudioPreview = async () => withBusy(async () => {
     const audioJobId = await ensureDraftForAudioTest(description);
@@ -581,8 +874,9 @@ const ReelGenerator: React.FC = () => {
     if (!response?.success) throw new Error(response?.message || 'Audio generation failed');
     setGeneratedTracks(response?.audio?.tracks || null);
     setFinalAudioUrl('');
+    clearMergedVideoOutputs();
     setDraft(response?.draft || draft);
-  });
+  }, { stage: 'Generating voice-over...', type: 'audio_generation', progress: 10 });
 
   const generateAudioTracks = async () => withBusy(async () => {
     if (!jobId) throw new Error('Draft missing');
@@ -592,9 +886,11 @@ const ReelGenerator: React.FC = () => {
     });
     if (!response?.success) throw new Error(response?.message || 'Audio generation failed');
     setGeneratedTracks(response?.audio?.tracks || null);
+    setFinalAudioUrl('');
+    clearMergedVideoOutputs();
     setDraft(response?.draft || draft);
     setStep(6);
-  });
+  }, { stage: 'Generating voice-over...', type: 'audio_generation', progress: 10 });
 
   const mixAudio = async () => withBusy(async () => {
     if (!jobId) throw new Error('Draft missing');
@@ -605,8 +901,9 @@ const ReelGenerator: React.FC = () => {
     });
     if (!response?.success) throw new Error(response?.message || 'Audio mix failed');
     setFinalAudioUrl(response.finalAudioUrl || '');
+    clearMergedVideoOutputs();
     setDraft(response.draft || draft);
-  });
+  }, { stage: 'Synchronizing audio tracks...', type: 'audio_merge', progress: 12 });
 
   const mergeVideo = async () => withBusy(async () => {
     if (!jobId) throw new Error('Draft missing');
@@ -632,7 +929,7 @@ const ReelGenerator: React.FC = () => {
     setFinalOutputUrl(response?.merge?.finalOutputUrl || '');
     setDraft(response?.draft || draft);
     await loadVideoDrafts();
-  });
+  }, { stage: 'Synchronizing audio and video...', type: 'video_merge', progress: 5 });
 
   const generateContent = async () => withBusy(async () => {
     if (!jobId) throw new Error('Draft missing');
@@ -646,7 +943,7 @@ const ReelGenerator: React.FC = () => {
     setCaption(content.caption || '');
     setHashtagsText(Array.isArray(content.hashtags) ? content.hashtags.join(' ') : '');
     setDraft(response?.draft || draft);
-  });
+  }, { stage: 'Creating final video...', type: 'final_render', progress: 12 });
 
   const schedulePost = async (publishNow = false) => withBusy(async () => {
     if (!jobId) throw new Error('Draft missing');
@@ -706,9 +1003,17 @@ const ReelGenerator: React.FC = () => {
     setScheduleTime('');
     setError('');
     setSuccessMessage('');
+    setActiveJobStatus('');
+    setActiveQueueJobId('');
+    setActiveJobProgress(0);
+    setActiveJobStep('');
+    setProcessingState(null);
   };
 
   const openVideoDraft = async (id: string) => {
+    setError('');
+    setActiveJobStatus('');
+    setActiveQueueJobId('');
     setShowWizard(true);
     setJobId(id);
     await refreshDraft(id, { syncStep: true });
@@ -732,7 +1037,7 @@ const ReelGenerator: React.FC = () => {
         setShowWizard(false);
       }
     } catch (e: any) {
-      setError(e?.message || 'Failed to delete AI video');
+      setError(friendlyErrorMessage(e, 'Retrying video generation...'));
     } finally {
       setDeletingDraftId('');
     }
@@ -969,62 +1274,22 @@ const ReelGenerator: React.FC = () => {
           </div>
         )}
 
-        {activeJobStatus && (
-          <div className={`mt-6 p-6 rounded-2xl border shadow-xl flex flex-col gap-4 ${
-            isDarkMode ? 'bg-[#0f141c]/90 border-slate-700/80' : 'bg-white/95 border-slate-200'
-          }`}>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Loader2 className="w-5 h-5 text-[#ffcc29] animate-spin" />
-                <div>
-                  <h3 className={`font-bold ${theme.text}`}>Background Worker Processing...</h3>
-                  <p className={`text-xs ${theme.textSecondary}`}>
-                    Job: <span className="font-mono text-[#ffcc29]">{jobId}</span> | Status: <span className="capitalize">{activeJobStatus}</span>
-                  </p>
-                </div>
-              </div>
-              <span className="text-xl font-black text-[#ffcc29]">{activeJobProgress}%</span>
-            </div>
-
-            {/* Progress Bar */}
-            <div className={`w-full h-2 rounded-full overflow-hidden ${isDarkMode ? 'bg-slate-800' : 'bg-slate-100'}`}>
-              <div
-                className="h-full bg-gradient-to-r from-[#ffcc29] to-[#f0bd18] transition-all duration-500 ease-out"
-                style={{ width: `${activeJobProgress}%` }}
-              />
-            </div>
-
-            <div className="flex items-center gap-2">
-              <span className={`text-xs font-bold px-2 py-0.5 rounded ${
-                isDarkMode ? 'bg-slate-800 text-slate-200' : 'bg-slate-100 text-slate-700'
-              }`}>
-                Step: {activeJobStep || 'Initializing'}
-              </span>
-            </div>
-
-            {/* Terminal Logs Viewer */}
-            <div className="flex flex-col">
-              <div className={`flex items-center justify-between px-4 py-2 text-xs font-mono border-b ${
-                isDarkMode ? 'bg-[#0b0f17] border-slate-800 text-slate-400' : 'bg-slate-100 border-slate-200 text-slate-600'
-              } rounded-t-xl`}>
-                <span>CONSOLE OUTPUT</span>
-                <span>Streaming Live</span>
-              </div>
-              <div className={`p-4 font-mono text-xs overflow-y-auto max-h-48 flex flex-col gap-1 rounded-b-xl border border-t-0 ${
-                isDarkMode ? 'bg-[#070b12] border-slate-800 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-800'
-              }`} style={{ scrollBehavior: 'smooth' }}>
-                {activeJobLogs.length > 0 ? (
-                  activeJobLogs.map((logLine, index) => (
-                    <div key={index} className={logLine.includes('FAILED') ? 'text-red-400' : logLine.includes('completed') ? 'text-emerald-400' : ''}>
-                      {logLine}
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-slate-500 italic">Waiting for console stream...</div>
-                )}
-              </div>
-            </div>
-          </div>
+        {processingState && (
+          <ProcessingExperience
+            isDarkMode={isDarkMode}
+            theme={theme}
+            stage={normalizeProcessingStage(processingState.stage, step)}
+            type={processingState.type}
+            progress={activeJobStatus ? activeJobProgress : processingState.progress}
+            etaSeconds={estimateRemainingSeconds({
+              type: processingState.type,
+              progress: activeJobStatus ? activeJobProgress : processingState.progress,
+              startedAt: processingState.startedAt,
+              serverEta: processingState.etaSeconds
+            })}
+            sceneIndex={processingState.sceneIndex}
+            sceneTotal={processingState.sceneTotal}
+          />
         )}
 
         {step === 1 && (
@@ -1191,13 +1456,28 @@ const ReelGenerator: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Audio</label>
-                <button type="button" onClick={() => setAudioEnabled((v) => !v)} className={`${inputClass} mt-2 text-left`}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAudioEnabled((v) => !v);
+                    clearGeneratedAudioOutputs();
+                  }}
+                  className={`${inputClass} mt-2 text-left`}
+                >
                   {audioEnabled ? 'ON' : 'OFF'}
                 </button>
               </div>
               <div>
                 <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Voice Mode</label>
-                <select value={audioMode} onChange={(e) => setAudioMode(e.target.value as AudioMode)} className={`${inputClass} mt-2`} disabled={!audioEnabled}>
+                <select
+                  value={audioMode}
+                  onChange={(e) => {
+                    setAudioMode(e.target.value as AudioMode);
+                    clearGeneratedAudioOutputs();
+                  }}
+                  className={`${inputClass} mt-2`}
+                  disabled={!audioEnabled}
+                >
                   <option value="auto">TTS</option>
                   <option value="upload">Upload Voice</option>
                   <option value="off">No Voice</option>
@@ -1205,7 +1485,15 @@ const ReelGenerator: React.FC = () => {
               </div>
               <div>
                 <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Music</label>
-                <select value={audioTone} onChange={(e) => setAudioTone(e.target.value)} className={`${inputClass} mt-2`} disabled={!audioEnabled}>
+                <select
+                  value={audioTone}
+                  onChange={(e) => {
+                    setAudioTone(e.target.value);
+                    clearGeneratedAudioOutputs();
+                  }}
+                  className={`${inputClass} mt-2`}
+                  disabled={!audioEnabled}
+                >
                   <option value="professional">Professional</option>
                   <option value="normal">Normal</option>
                   <option value="fun">Fun</option>
@@ -1219,9 +1507,18 @@ const ReelGenerator: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div>
                   <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Language</label>
-                  <select value={audioLanguageCode} onChange={(e) => setAudioLanguageCode(e.target.value)} className={`${inputClass} mt-2`}>
-                    <option value="en">English</option>
-                    <option value="hi">Hindi</option>
+                  <select
+                    value={audioLanguageCode}
+                    onChange={(e) => {
+                      setAudioLanguageCode(e.target.value);
+                      clearGeneratedAudioOutputs();
+                    }}
+                    className={`${inputClass} mt-2`}
+                  >
+                    <option value="en-in">English (India)</option>
+                    <option value="en-us">English (US)</option>
+                    <option value="en-gb">English (UK)</option>
+                    <option value="hi-in">Hindi</option>
                     <option value="ta">Tamil</option>
                     <option value="te">Telugu</option>
                     <option value="kn">Kannada</option>
@@ -1232,7 +1529,10 @@ const ReelGenerator: React.FC = () => {
                   <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Music Source (Test)</label>
                   <select
                     value={musicSource}
-                    onChange={(e) => setMusicSource(e.target.value as 'tone' | 'library')}
+                    onChange={(e) => {
+                      setMusicSource(e.target.value as 'tone' | 'library');
+                      clearAudioMixOutputs();
+                    }}
                     className={`${inputClass} mt-2`}
                   >
                     <option value="library">Library (by duration)</option>
@@ -1244,18 +1544,25 @@ const ReelGenerator: React.FC = () => {
                 </div>
                 <div>
                   <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Voice</label>
-                  <select value={voiceGender} onChange={(e) => setVoiceGender(e.target.value as 'male' | 'female')} className={`${inputClass} mt-2`}>
+                  <select
+                    value={voiceGender}
+                    onChange={(e) => {
+                      setVoiceGender(e.target.value as 'male' | 'female');
+                      clearGeneratedAudioOutputs();
+                    }}
+                    className={`${inputClass} mt-2`}
+                  >
                     <option value="female">Female</option>
                     <option value="male">Male</option>
                   </select>
                 </div>
                 <div>
                   <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Voice Volume</label>
-                  <input type="range" min={0} max={2} step={0.1} value={voiceVolume} onChange={(e) => setVoiceVolume(Number(e.target.value))} className="mt-3 w-full" />
+                  <input type="range" min={0} max={2} step={0.1} value={voiceVolume} onChange={(e) => { setVoiceVolume(Number(e.target.value)); clearAudioMixOutputs(); }} className="mt-3 w-full" />
                 </div>
                 <div>
                   <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Music Volume</label>
-                  <input type="range" min={0} max={2} step={0.1} value={musicVolume} onChange={(e) => setMusicVolume(Number(e.target.value))} className="mt-3 w-full" />
+                  <input type="range" min={0} max={2} step={0.1} value={musicVolume} onChange={(e) => { setMusicVolume(Number(e.target.value)); clearAudioMixOutputs(); }} className="mt-3 w-full" />
                 </div>
               </div>
             )}
@@ -1265,7 +1572,10 @@ const ReelGenerator: React.FC = () => {
                 <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Music Track (Optional)</label>
                 <input
                   value={musicTrack}
-                  onChange={(e) => setMusicTrack(e.target.value)}
+                  onChange={(e) => {
+                    setMusicTrack(e.target.value);
+                    clearAudioMixOutputs();
+                  }}
                   placeholder="e.g. sonican-tropical-30-seconds-514742.mp3"
                   className={`${inputClass} mt-2 w-full`}
                 />

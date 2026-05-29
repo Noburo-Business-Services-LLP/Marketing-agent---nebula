@@ -18,8 +18,14 @@ const VIDEO_TARGET = { width: 1080, height: 1920, fps: 30 };
 const VIDEO_ENCODE_PRESET = String(process.env.AI_VIDEO_ENCODE_PRESET || 'slow');
 const VIDEO_ENCODE_CRF = String(process.env.AI_VIDEO_ENCODE_CRF || '16');
 const GOOGLE_TTS_PROJECT_ID = process.env.VERTEX_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT_ID || '';
-const GOOGLE_TTS_EN_MALE_VOICE = String(process.env.GOOGLE_TTS_EN_MALE_VOICE || 'en-US-Wavenet-D').trim();
-const GOOGLE_TTS_EN_FEMALE_VOICE = String(process.env.GOOGLE_TTS_EN_FEMALE_VOICE || 'en-US-Wavenet-F').trim();
+const GOOGLE_TTS_EN_MALE_VOICE = String(process.env.GOOGLE_TTS_EN_MALE_VOICE || 'en-US-Neural2-J').trim();
+const GOOGLE_TTS_EN_FEMALE_VOICE = String(process.env.GOOGLE_TTS_EN_FEMALE_VOICE || 'en-US-Neural2-F').trim();
+const GOOGLE_TTS_EN_IN_MALE_VOICE = String(process.env.GOOGLE_TTS_EN_IN_MALE_VOICE || 'en-IN-Wavenet-B').trim();
+const GOOGLE_TTS_EN_IN_FEMALE_VOICE = String(process.env.GOOGLE_TTS_EN_IN_FEMALE_VOICE || 'en-IN-Wavenet-A').trim();
+const GOOGLE_TTS_EN_GB_MALE_VOICE = String(process.env.GOOGLE_TTS_EN_GB_MALE_VOICE || 'en-GB-Neural2-B').trim();
+const GOOGLE_TTS_EN_GB_FEMALE_VOICE = String(process.env.GOOGLE_TTS_EN_GB_FEMALE_VOICE || 'en-GB-Neural2-A').trim();
+const GOOGLE_TTS_HI_IN_MALE_VOICE = String(process.env.GOOGLE_TTS_HI_IN_MALE_VOICE || 'hi-IN-Wavenet-B').trim();
+const GOOGLE_TTS_HI_IN_FEMALE_VOICE = String(process.env.GOOGLE_TTS_HI_IN_FEMALE_VOICE || 'hi-IN-Wavenet-A').trim();
 const EDGE_TTS_ENABLED = String(process.env.EDGE_TTS_ENABLED || 'true').toLowerCase() !== 'false';
 const EDGE_TTS_MALE_VOICE = String(process.env.EDGE_TTS_MALE_VOICE || '').trim();
 const EDGE_TTS_FEMALE_VOICE = String(process.env.EDGE_TTS_FEMALE_VOICE || '').trim();
@@ -1050,7 +1056,7 @@ async function generateSceneClips({
         if (logger) {
           logger(`❌ Fal.ai clip generation failed for scene ${scene.sceneId} and fallback is disabled: ${error.message}`);
         }
-        throw new Error("AI video rendering failed due to Fal.ai timeout. Please retry.");
+        throw new Error('Retrying video generation...');
       }
 
       if (logger) {
@@ -1189,6 +1195,27 @@ function toTtsLanguageCode(code = 'en') {
   return allowed.has(normalized) ? normalized : 'en';
 }
 
+function toTtsLocaleCode(code = 'en') {
+  const normalized = String(code || '').toLowerCase().trim().replace(/_/g, '-');
+  const localeAliases = {
+    en: 'en-in',
+    'en-in': 'en-in',
+    'en-us': 'en-us',
+    'en-gb': 'en-gb',
+    hi: 'hi-in',
+    'hi-in': 'hi-in',
+    ta: 'ta-in',
+    'ta-in': 'ta-in',
+    te: 'te-in',
+    'te-in': 'te-in',
+    kn: 'kn-in',
+    'kn-in': 'kn-in',
+    ml: 'ml-in',
+    'ml-in': 'ml-in'
+  };
+  return localeAliases[normalized] || `${toTtsLanguageCode(normalized)}-in`;
+}
+
 function ttsLanguageLabel(code = 'en') {
   const labels = {
     en: 'English',
@@ -1311,6 +1338,10 @@ async function getAudioDurationSecondsFromFile(filePath) {
   } catch (_) {
     return null;
   }
+}
+
+async function getMediaDurationSecondsFromFile(filePath) {
+  return getAudioDurationSecondsFromFile(filePath);
 }
 
 async function translateScriptDurationAware({
@@ -1470,41 +1501,51 @@ ${String(localizedText || '').replace(/\\s+/g, ' ').trim()}\n`;
 }
 
 function googleCloudTtsVoice(languageCode = 'en', voiceGender = 'female') {
-  const lang = toTtsLanguageCode(languageCode);
+  const locale = toTtsLocaleCode(languageCode);
   const gender = String(voiceGender || 'female').toLowerCase() === 'male' ? 'male' : 'female';
   const voices = {
-    en: {
+    'en-in': {
+      languageCode: 'en-IN',
+      male: GOOGLE_TTS_EN_IN_MALE_VOICE,
+      female: GOOGLE_TTS_EN_IN_FEMALE_VOICE
+    },
+    'en-us': {
       languageCode: 'en-US',
       male: GOOGLE_TTS_EN_MALE_VOICE,
       female: GOOGLE_TTS_EN_FEMALE_VOICE
     },
-    hi: {
-      languageCode: 'hi-IN',
-      male: 'hi-IN-Wavenet-B',
-      female: 'hi-IN-Wavenet-A'
+    'en-gb': {
+      languageCode: 'en-GB',
+      male: GOOGLE_TTS_EN_GB_MALE_VOICE,
+      female: GOOGLE_TTS_EN_GB_FEMALE_VOICE
     },
-    ta: {
+    'hi-in': {
+      languageCode: 'hi-IN',
+      male: GOOGLE_TTS_HI_IN_MALE_VOICE,
+      female: GOOGLE_TTS_HI_IN_FEMALE_VOICE
+    },
+    'ta-in': {
       languageCode: 'ta-IN',
       male: 'ta-IN-Wavenet-B',
       female: 'ta-IN-Wavenet-A'
     },
-    te: {
+    'te-in': {
       languageCode: 'te-IN',
       male: 'te-IN-Wavenet-B',
       female: 'te-IN-Wavenet-A'
     },
-    kn: {
+    'kn-in': {
       languageCode: 'kn-IN',
       male: 'kn-IN-Wavenet-B',
       female: 'kn-IN-Wavenet-A'
     },
-    ml: {
+    'ml-in': {
       languageCode: 'ml-IN',
       male: 'ml-IN-Wavenet-B',
       female: 'ml-IN-Wavenet-A'
     }
   };
-  const voice = voices[lang] || voices.en;
+  const voice = voices[locale] || voices['en-in'];
   return {
     languageCode: voice.languageCode,
     name: voice[gender],
@@ -1518,8 +1559,22 @@ function googleCloudTtsAudioConfig(voiceGender = 'female', opts = {}) {
   return {
     audioEncoding: 'MP3',
     speakingRate: Number.isFinite(speakingRate) ? clamp(speakingRate, 0.82, 1.06) : (gender === 'male' ? 0.9 : 1),
-    pitch: gender === 'male' ? -6 : 0
+    pitch: 0
   };
+}
+
+function voiceCacheHash(value = '') {
+  return crypto.createHash('sha1').update(String(value || '').replace(/\s+/g, ' ').trim()).digest('hex');
+}
+
+function isMatchingVoiceCache(cache, expected = {}) {
+  if (!cache?.path || !fs.existsSync(cache.path)) return false;
+  return (
+    String(cache.voiceGender || '').toLowerCase() === String(expected.voiceGender || '').toLowerCase() &&
+    String(cache.languageCode || '').toLowerCase() === String(expected.languageCode || '').toLowerCase() &&
+    String(cache.sourceScriptHash || '') === String(expected.sourceScriptHash || '') &&
+    Number(cache.durationSeconds || 0) === Number(expected.durationSeconds || 0)
+  );
 }
 
 function speakingRateForTts({
@@ -1564,44 +1619,22 @@ function edgeTtsRateString(rate = 1) {
 }
 
 function getEdgeVoice(languageCode = 'en', voiceGender = 'female') {
-  const language = toTtsLanguageCode(languageCode);
+  const locale = toTtsLocaleCode(languageCode);
   const gender = String(voiceGender || 'female').toLowerCase() === 'male' ? 'male' : 'female';
   const voices = {
-    en: { male: 'en-US-GuyNeural', female: 'en-US-JennyNeural' },
-    hi: { male: 'hi-IN-MadhurNeural', female: 'hi-IN-SwaraNeural' },
-    ta: { male: 'ta-IN-ValluvarNeural', female: 'ta-IN-PallaviNeural' },
-    te: { male: 'te-IN-MohanNeural', female: 'te-IN-ShrutiNeural' },
-    kn: { male: 'kn-IN-GaganNeural', female: 'kn-IN-SapnaNeural' },
-    ml: { male: 'ml-IN-MidhunNeural', female: 'ml-IN-SobhanaNeural' }
+    'en-in': { male: 'en-IN-PrabhatNeural', female: 'en-IN-NeerjaNeural' },
+    'en-us': { male: 'en-US-GuyNeural', female: 'en-US-JennyNeural' },
+    'en-gb': { male: 'en-GB-RyanNeural', female: 'en-GB-SoniaNeural' },
+    'hi-in': { male: 'hi-IN-MadhurNeural', female: 'hi-IN-SwaraNeural' },
+    'ta-in': { male: 'ta-IN-ValluvarNeural', female: 'ta-IN-PallaviNeural' },
+    'te-in': { male: 'te-IN-MohanNeural', female: 'te-IN-ShrutiNeural' },
+    'kn-in': { male: 'kn-IN-GaganNeural', female: 'kn-IN-SapnaNeural' },
+    'ml-in': { male: 'ml-IN-MidhunNeural', female: 'ml-IN-SobhanaNeural' }
   };
-  const configuredOverride = language === 'en'
+  const configuredOverride = locale.startsWith('en-')
     ? (gender === 'male' ? EDGE_TTS_MALE_VOICE : EDGE_TTS_FEMALE_VOICE)
     : '';
-  return configuredOverride || voices[language]?.[gender] || voices.en[gender];
-}
-
-function maleVoiceEnhancementFilter() {
-  return [
-    'aresample=44100',
-    'asetrate=44100*0.90',
-    'atempo=1.11',
-    'highpass=f=70',
-    'equalizer=f=140:t=q:w=1:g=1.5',
-    'equalizer=f=3000:t=q:w=1:g=1.2',
-    'loudnorm=I=-16:TP=-1.5:LRA=11',
-    'aresample=44100'
-  ].join(',');
-}
-
-async function deepenMaleVoice(sourcePath, outputPath) {
-  await runFfmpeg([
-    '-y',
-    '-i', sourcePath,
-    '-af', maleVoiceEnhancementFilter(),
-    '-c:a', 'libmp3lame',
-    '-q:a', '2',
-    outputPath
-  ]);
+  return configuredOverride || voices[locale]?.[gender] || voices['en-in'][gender];
 }
 
 async function getGoogleTtsAccessToken() {
@@ -1674,10 +1707,7 @@ async function synthesizeGoogleCloudTts({
 }
 
 function toTtsVoiceLocale(code = 'en', voiceGender = 'female') {
-  const normalized = toTtsLanguageCode(code);
-  const gender = String(voiceGender || 'female').toLowerCase() === 'male' ? 'male' : 'female';
-  if (normalized === 'en') return gender === 'male' ? 'en-GB' : 'en-US';
-  return normalized;
+  return toTtsLocaleCode(code);
 }
 
 function publicAudioUrl(context, fileName) {
@@ -1834,6 +1864,13 @@ async function synthesizeVoiceTrack({
   const ttsLocale = toTtsVoiceLocale(languageCode, normalizedGender);
   const finalVoiceFileName = `voice_track_${normalizedGender}.mp3`;
   const finalVoicePath = path.join(context.dirs.audio, finalVoiceFileName);
+  const voiceMetadata = {
+    voiceGender: normalizedGender,
+    languageCode: toTtsLocaleCode(languageCode),
+    sourceScriptHash: voiceCacheHash(sourceVoiceScript || voiceScript || scriptForTts),
+    durationSeconds: Number(safeTarget || 0),
+    voiceProvider: 'auto-neural'
+  };
 
   const maybeStretchToTarget = async () => {
     if (!fitToDuration || !safeTarget) return;
@@ -1883,42 +1920,22 @@ async function synthesizeVoiceTrack({
   try {
     if (logger) logger(`Attempting single-pass TTS synthesis for entire script (${scriptForTts.length} chars)`);
     
-    let ok = false;
-    if (normalizedGender === 'male') {
-      const sourceVoicePath = path.join(context.dirs.audio, 'voice_track_male_source.mp3');
-      ok = await synthesizeEdgeTts({
-        text: scriptForTts,
-        languageCode,
-        voiceGender: normalizedGender,
-        outputPath: sourceVoicePath,
-        speakingRate,
-        logger
-      });
-      if (ok) {
-        await deepenMaleVoice(sourceVoicePath, finalVoicePath);
-      }
-    } else {
-      ok = await synthesizeEdgeTts({
-        text: scriptForTts,
-        languageCode,
-        voiceGender: normalizedGender,
-        outputPath: finalVoicePath,
-        speakingRate,
-        logger
-      });
-    }
+    let ok = await synthesizeEdgeTts({
+      text: scriptForTts,
+      languageCode,
+      voiceGender: normalizedGender,
+      outputPath: finalVoicePath,
+      speakingRate,
+      logger
+    });
 
     if (!ok && normalizedGender === 'male') {
-      const sourceVoicePath = path.join(context.dirs.audio, 'voice_track_male_source.mp3');
       ok = await synthesizeElevenLabsTts({
         text: scriptForTts,
         languageCode,
         voiceGender: normalizedGender,
-        outputPath: sourceVoicePath
+        outputPath: finalVoicePath
       });
-      if (ok) {
-        await deepenMaleVoice(sourceVoicePath, finalVoicePath);
-      }
     }
 
     if (!ok) {
@@ -1941,7 +1958,8 @@ async function synthesizeVoiceTrack({
           path: finalVoicePath,
           url: publicAudioUrl(context, finalVoiceFileName),
           script: scriptForTts,
-          sceneData: localizedScenes
+          sceneData: localizedScenes,
+          ...voiceMetadata
         };
       }
     }
@@ -2026,23 +2044,19 @@ async function synthesizeVoiceTrack({
 
   if (!chunkPaths.length) return null;
   if (chunkPaths.length === 1) {
-    const voiceOutputPath = path.join(context.dirs.audio, normalizedGender === 'male' ? 'voice_track_male_source.mp3' : finalVoiceFileName);
-    await fs.promises.copyFile(chunkPaths[0], voiceOutputPath);
-    if (normalizedGender === 'male') {
-      await deepenMaleVoice(voiceOutputPath, finalVoicePath);
-    }
+    await fs.promises.copyFile(chunkPaths[0], finalVoicePath);
 
     await maybeStretchToTarget();
     return {
       path: finalVoicePath,
       url: publicAudioUrl(context, finalVoiceFileName),
       script: scriptForTts,
-      sceneData: localizedScenes
+      sceneData: localizedScenes,
+      ...voiceMetadata
     };
   }
 
   const concatListPath = path.join(context.dirs.temp, 'voice_chunks_concat.txt');
-  const concatOutput = path.join(context.dirs.audio, normalizedGender === 'male' ? 'voice_track_male_source.mp3' : finalVoiceFileName);
   await fs.promises.writeFile(concatListPath, buildConcatListContent(chunkPaths), 'utf8');
 
   try {
@@ -2052,7 +2066,7 @@ async function synthesizeVoiceTrack({
       '-safe', '0',
       '-i', concatListPath,
       '-c', 'copy',
-      concatOutput
+      finalVoicePath
     ]);
   } catch (_) {
     // Fallback: re-encode if copy concat fails.
@@ -2063,12 +2077,8 @@ async function synthesizeVoiceTrack({
       '-i', concatListPath,
       '-c:a', 'libmp3lame',
       '-q:a', '2',
-      concatOutput
+      finalVoicePath
     ]);
-  }
-
-  if (normalizedGender === 'male') {
-    await deepenMaleVoice(concatOutput, finalVoicePath);
   }
 
   await maybeStretchToTarget();
@@ -2076,7 +2086,8 @@ async function synthesizeVoiceTrack({
     path: finalVoicePath,
     url: publicAudioUrl(context, finalVoiceFileName),
     script: scriptForTts,
-    sceneData: localizedScenes
+    sceneData: localizedScenes,
+    ...voiceMetadata
   };
 }
 
@@ -2222,6 +2233,14 @@ async function generateAudioTracks({
   let voice = null;
   let cachedFemaleVoice = null;
   let cachedMaleVoice = null;
+  const requestedVoiceScript = plan.voiceScript || input.description;
+  const requestedSourceVoiceScript = plan.sourceVoiceScript || plan.voiceScript || input.description;
+  const expectedVoiceCache = {
+    voiceGender: audioOptions.voiceGender,
+    languageCode: toTtsLocaleCode(audioOptions.languageCode),
+    sourceScriptHash: voiceCacheHash(requestedSourceVoiceScript || requestedVoiceScript),
+    durationSeconds: Number(input.durationSeconds || 0)
+  };
 
   // Attempt to fetch cached voice tracks from MongoDB draft to support instant gender switching
   try {
@@ -2232,8 +2251,8 @@ async function generateAudioTracks({
       
       // If we already generated this specific gender, load it directly
       const targetCache = audioOptions.voiceGender === 'male' ? cachedMaleVoice : cachedFemaleVoice;
-      if (targetCache?.path && fs.existsSync(targetCache.path)) {
-        if (logger) logger(`♻️ Reusing cached ${audioOptions.voiceGender} voice track: ${targetCache.path}`);
+      if (isMatchingVoiceCache(targetCache, expectedVoiceCache)) {
+        if (logger) logger(`Reusing cached ${audioOptions.voiceGender} ${expectedVoiceCache.languageCode} voice track: ${targetCache.path}`);
         voice = targetCache;
       }
     }
@@ -2243,8 +2262,8 @@ async function generateAudioTracks({
 
   if (audioOptions.mode === 'auto' && !voice) {
     voice = await synthesizeVoiceTrack({
-      voiceScript: plan.voiceScript || input.description,
-      sourceVoiceScript: plan.sourceVoiceScript || plan.voiceScript || input.description,
+      voiceScript: requestedVoiceScript,
+      sourceVoiceScript: requestedSourceVoiceScript,
       sceneData: plan.sceneData || [],
       languageCode: audioOptions.languageCode,
       voiceGender: audioOptions.voiceGender,
@@ -2408,9 +2427,40 @@ async function mergeFinalOutput({
     return { path: outputPath, url: outputUrl };
   }
 
-  const args = ['-y', '-i', mergedVideo.path];
+  let syncedAudio = mergedAudio;
   if (mergedAudio?.path) {
-    args.push('-i', mergedAudio.path);
+    const videoDuration = await getMediaDurationSecondsFromFile(mergedVideo.path);
+    const audioDuration = await getMediaDurationSecondsFromFile(mergedAudio.path);
+    const targetDuration = Number.isFinite(videoDuration) && videoDuration > 0
+      ? videoDuration
+      : (Number(totalDuration) || 0);
+    if (Number.isFinite(audioDuration) && audioDuration > 0 && targetDuration > 0 && Math.abs(audioDuration - targetDuration) > 0.15) {
+      const syncedPath = path.join(context.dirs.audio, 'final_audio_synced.m4a');
+      const ratio = clamp(audioDuration / targetDuration, 0.5, 2.0);
+      await runFfmpeg([
+        '-y',
+        '-i', mergedAudio.path,
+        '-vn',
+        '-af', `atempo=${ratio.toFixed(3)},apad,atrim=0:${targetDuration.toFixed(3)}`,
+        '-c:a', 'aac',
+        '-b:a', '192k',
+        syncedPath
+      ]);
+      syncedAudio = {
+        ...mergedAudio,
+        path: syncedPath,
+        durationValidation: {
+          videoDurationSeconds: targetDuration,
+          originalAudioDurationSeconds: audioDuration,
+          synced: true
+        }
+      };
+    }
+  }
+
+  const args = ['-y', '-i', mergedVideo.path];
+  if (syncedAudio?.path) {
+    args.push('-i', syncedAudio.path);
   }
 
   if (subtitles?.path) {
@@ -2424,7 +2474,7 @@ async function mergeFinalOutput({
     args.push('-c:v', 'copy');
   }
 
-  if (mergedAudio?.path) {
+  if (syncedAudio?.path) {
     args.push('-af', 'apad', '-c:a', 'aac', '-b:a', '192k', '-shortest');
   } else {
     args.push('-an');
