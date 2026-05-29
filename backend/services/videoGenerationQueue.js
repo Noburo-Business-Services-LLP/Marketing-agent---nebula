@@ -10,6 +10,54 @@ const DEFAULT_JOB_TTL_MS = Math.max(
   Number.parseInt(process.env.VIDEO_JOB_TTL_MS || String(6 * 60 * 60 * 1000), 10) || (6 * 60 * 60 * 1000)
 );
 
+const PUBLIC_STEP_MESSAGES = {
+  queued: 'Preparing your video...',
+  retrying: 'Retrying video generation...',
+  stale_recovery_retry: 'Retrying video generation...',
+  stale_recovery_failed: 'Retrying video generation...',
+  missing_handler: 'Retrying video generation...',
+  failed: 'Retrying video generation...',
+  generate_clips: 'Generating video clips...',
+  generateVideoClips: 'Generating video clips...',
+  downloading_clips: 'Generating video clips...',
+  saving_clips: 'Finalizing your video...',
+  merge_video: 'Synchronizing audio and video...',
+  merging_clips: 'Optimizing video quality...',
+  downloading_audio: 'Synchronizing audio and video...',
+  generating_subtitles: 'Generating subtitles...',
+  merging_final_output: 'Creating final video...',
+  finalizing: 'Finalizing your video...',
+  learning: 'Finalizing your video...',
+  completed: 'Your video is ready.'
+};
+
+function publicStepMessage(step = '') {
+  const raw = String(step || '').trim();
+  if (PUBLIC_STEP_MESSAGES[raw]) return PUBLIC_STEP_MESSAGES[raw];
+  const normalized = raw.toLowerCase();
+  if (normalized.includes('retry') || normalized.includes('stale')) return 'Retrying video generation...';
+  if (normalized.includes('clip') || normalized.includes('fal')) return 'Generating video clips...';
+  if (normalized.includes('audio') && !normalized.includes('merge')) return 'Generating voice-over...';
+  if (normalized.includes('merge') || normalized.includes('sync')) return 'Synchronizing audio and video...';
+  if (normalized.includes('final') || normalized.includes('render')) return 'Creating final video...';
+  if (normalized.includes('image')) return 'Generating scene images...';
+  if (normalized.includes('scene')) return 'Generating video scenes...';
+  return 'Optimizing video quality...';
+}
+
+function estimateRemainingSeconds(job = {}) {
+  const progress = Math.max(0, Math.min(99, Number(job.progress) || 0));
+  const startedAt = job.startedAt ? new Date(job.startedAt).getTime() : 0;
+  if (startedAt && Number.isFinite(startedAt) && progress > 2) {
+    const elapsed = Math.max(1, (Date.now() - startedAt) / 1000);
+    return Math.max(1, Math.round((elapsed / progress) * (100 - progress)));
+  }
+  const type = String(job?.metadata?.jobType || '').toLowerCase();
+  if (type.includes('clip')) return 120;
+  if (type.includes('merge')) return 50;
+  return 30;
+}
+
 class PersistentVideoGenerationQueue {
   constructor({ concurrency = DEFAULT_CONCURRENCY, jobTtlMs = DEFAULT_JOB_TTL_MS } = {}) {
     this.concurrency = concurrency;
@@ -267,6 +315,15 @@ class PersistentVideoGenerationQueue {
 
     try {
       await this._pushLog(jobId, `Starting job execution [${jobType}]`);
+      const heartbeatTimer = setInterval(() => {
+        this._updateJob(jobId, {
+          metadata: {
+            ...(jobDoc.metadata || {}),
+            heartbeatAt: new Date().toISOString()
+          }
+        }).catch(() => {});
+      }, 30000);
+      heartbeatTimer.unref?.();
       
       const controls = {
         update: async ({ progress, currentStep, metadata: stepMetadata } = {}) => {
@@ -287,7 +344,12 @@ class PersistentVideoGenerationQueue {
         log: async (message) => await this._pushLog(jobId, message)
       };
 
-      const result = await handler(jobDoc.payload, controls);
+      let result;
+      try {
+        result = await handler(jobDoc.payload, controls);
+      } finally {
+        clearInterval(heartbeatTimer);
+      }
 
       await this._updateJob(jobId, {
         status: 'completed',
@@ -300,7 +362,20 @@ class PersistentVideoGenerationQueue {
       await this._pushLog(jobId, `Successfully completed job execution [${jobType}]`);
     } catch (error) {
       console.error(`❌ Video job ${jobId} failed:`, error);
-      
+      const maxAttempts = Number(process.env.VIDEO_JOB_MAX_ATTEMPTS || '3');
+      if ((Number(jobDoc.attempts) || 0) < maxAttempts) {
+        await this._updateJob(jobId, {
+          status: 'queued',
+          currentStep: 'retrying',
+          error: {
+            message: error?.message || 'Video generation job failed',
+            stack: null
+          }
+        });
+        await this._pushLog(jobId, `Retrying failed job automatically (${jobDoc.attempts}/${maxAttempts})`);
+        return;
+      }
+
       await this._updateJob(jobId, {
         status: 'failed',
         currentStep: 'failed',
@@ -380,9 +455,15 @@ class PersistentVideoGenerationQueue {
       startedAt: job.startedAt,
       completedAt: job.completedAt,
       result: job.result,
-      error: job.error,
-      logs: job.logs,
-      metadata: job.metadata || null
+      error: job.status === 'failed'
+        ? { message: publicStepMessage(job.currentStep), stack: null }
+        : null,
+      logs: [],
+      metadata: {
+        ...(job.metadata || {}),
+        publicStep: publicStepMessage(job.currentStep),
+        estimatedCompletionSeconds: estimateRemainingSeconds(job)
+      }
     };
   }
 }

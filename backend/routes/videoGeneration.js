@@ -138,7 +138,18 @@ videoGenerationQueue.registerHandler('merge_video', async (payload, { update, lo
       sceneData: sceneDataForSubtitles
     },
     baseUrl,
-    onProgress: ({ progress, currentStep, metadata }) => update({ progress, currentStep, metadata }),
+    onProgress: ({ progress, currentStep, metadata }) => {
+      update({ progress, currentStep, metadata });
+      updateDraft(jobId, userId, (current) => ({
+        ...current,
+        mergeProgress: {
+          progress: Number(progress) || 0,
+          stage: friendlyVideoMessage(currentStep, 'Synchronizing audio and video...'),
+          metadata: metadata || null,
+          updatedAt: new Date().toISOString()
+        }
+      })).catch(() => {});
+    },
     onLog: (line) => log(line)
   });
 
@@ -153,7 +164,11 @@ videoGenerationQueue.registerHandler('merge_video', async (payload, { update, lo
       finalOutputUrl: merged?.finalOutputUrl || null,
       subtitlesUrl: merged?.subtitlesUrl || null,
       mergedAt: new Date().toISOString()
-    }
+    },
+    subtitles: merged?.subtitlesUrl
+      ? { url: merged.subtitlesUrl, generatedAt: new Date().toISOString() }
+      : current.subtitles,
+    mergeProgress: { progress: 100, stage: 'Finalizing your video...', updatedAt: new Date().toISOString() }
   }));
 
   try {
@@ -213,12 +228,36 @@ const videoJobReadLimiter = rateLimit({
   keyGenerator: (req) => String(req.user?._id || req.user?.id || ipKeyGenerator(req.ip))
 });
 
+function friendlyVideoMessage(message = '', fallbackMessage = 'Retrying video generation...') {
+  const raw = String(message || '').trim();
+  const technicalPatterns = [
+    /job not found/i,
+    /draft not found/i,
+    /ffmpeg/i,
+    /fal\.?ai/i,
+    /queue/i,
+    /http\s*\d{3}/i,
+    /\b502\b/i,
+    /internal server error/i,
+    /timeout/i,
+    /timed out/i,
+    /failed/i,
+    /error/i
+  ];
+  if (!raw || technicalPatterns.some((pattern) => pattern.test(raw))) {
+    const fallback = String(fallbackMessage || '').trim();
+    return fallback && !technicalPatterns.some((pattern) => pattern.test(fallback))
+      ? fallback
+      : 'Retrying video generation...';
+  }
+  return raw;
+}
+
 function responseError(res, error, fallbackMessage) {
   const statusCode = Number(error?.statusCode) || 500;
   return res.status(statusCode).json({
     success: false,
-    message: error?.message || fallbackMessage || 'Request failed',
-    error: process.env.NODE_ENV === 'development' ? (error?.stack || String(error)) : undefined
+    message: friendlyVideoMessage(error?.message, fallbackMessage || 'Retrying video generation...')
   });
 }
 
@@ -710,7 +749,7 @@ router.get('/jobs/:jobId', protect, videoJobReadLimiter, async (req, res) => {
     if (!job) {
       return res.status(404).json({
         success: false,
-        message: 'Job not found'
+        message: 'Retrying video generation...'
       });
     }
     return res.json({
@@ -1495,7 +1534,11 @@ router.post('/mergeVideo', protect, checkTrial, videoAiWriteLimiter, async (req,
         finalOutputUrl: merged?.finalOutputUrl || null,
         subtitlesUrl: merged?.subtitlesUrl || null,
         mergedAt: new Date().toISOString()
-      }
+      },
+      subtitles: merged?.subtitlesUrl
+        ? { url: merged.subtitlesUrl, generatedAt: new Date().toISOString() }
+        : current.subtitles,
+      mergeProgress: { progress: 100, stage: 'Finalizing your video...', updatedAt: new Date().toISOString() }
     }));
 
     try {
@@ -1556,7 +1599,8 @@ router.post('/generateContent', protect, checkTrial, videoAiWriteLimiter, async 
         caption: socialContent.caption,
         hashtags: socialContent.hashtags,
         generatedAt: new Date().toISOString()
-      }
+      },
+      thumbnails: thumbnailUrl ? { url: thumbnailUrl, generatedAt: new Date().toISOString() } : current.thumbnails
     }));
 
     try {

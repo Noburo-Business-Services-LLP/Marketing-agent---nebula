@@ -1056,7 +1056,7 @@ async function generateSceneClips({
         if (logger) {
           logger(`❌ Fal.ai clip generation failed for scene ${scene.sceneId} and fallback is disabled: ${error.message}`);
         }
-        throw new Error("AI video rendering failed due to Fal.ai timeout. Please retry.");
+        throw new Error('Retrying video generation...');
       }
 
       if (logger) {
@@ -1338,6 +1338,10 @@ async function getAudioDurationSecondsFromFile(filePath) {
   } catch (_) {
     return null;
   }
+}
+
+async function getMediaDurationSecondsFromFile(filePath) {
+  return getAudioDurationSecondsFromFile(filePath);
 }
 
 async function translateScriptDurationAware({
@@ -2423,9 +2427,40 @@ async function mergeFinalOutput({
     return { path: outputPath, url: outputUrl };
   }
 
-  const args = ['-y', '-i', mergedVideo.path];
+  let syncedAudio = mergedAudio;
   if (mergedAudio?.path) {
-    args.push('-i', mergedAudio.path);
+    const videoDuration = await getMediaDurationSecondsFromFile(mergedVideo.path);
+    const audioDuration = await getMediaDurationSecondsFromFile(mergedAudio.path);
+    const targetDuration = Number.isFinite(videoDuration) && videoDuration > 0
+      ? videoDuration
+      : (Number(totalDuration) || 0);
+    if (Number.isFinite(audioDuration) && audioDuration > 0 && targetDuration > 0 && Math.abs(audioDuration - targetDuration) > 0.15) {
+      const syncedPath = path.join(context.dirs.audio, 'final_audio_synced.m4a');
+      const ratio = clamp(audioDuration / targetDuration, 0.5, 2.0);
+      await runFfmpeg([
+        '-y',
+        '-i', mergedAudio.path,
+        '-vn',
+        '-af', `atempo=${ratio.toFixed(3)},apad,atrim=0:${targetDuration.toFixed(3)}`,
+        '-c:a', 'aac',
+        '-b:a', '192k',
+        syncedPath
+      ]);
+      syncedAudio = {
+        ...mergedAudio,
+        path: syncedPath,
+        durationValidation: {
+          videoDurationSeconds: targetDuration,
+          originalAudioDurationSeconds: audioDuration,
+          synced: true
+        }
+      };
+    }
+  }
+
+  const args = ['-y', '-i', mergedVideo.path];
+  if (syncedAudio?.path) {
+    args.push('-i', syncedAudio.path);
   }
 
   if (subtitles?.path) {
@@ -2439,7 +2474,7 @@ async function mergeFinalOutput({
     args.push('-c:v', 'copy');
   }
 
-  if (mergedAudio?.path) {
+  if (syncedAudio?.path) {
     args.push('-af', 'apad', '-c:a', 'aac', '-b:a', '192k', '-shortest');
   } else {
     args.push('-an');
