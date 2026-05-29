@@ -43,6 +43,13 @@ function fileToDataUrl(file: Blob): Promise<string> {
   });
 }
 
+function normalizeUiAudioLanguageCode(languageCode = '') {
+  const normalized = String(languageCode || '').toLowerCase();
+  if (normalized === 'en') return 'en-in';
+  if (normalized === 'hi') return 'hi-in';
+  return normalized || 'en-in';
+}
+
 const ReelGenerator: React.FC = () => {
   const { isDarkMode } = useTheme();
   const theme = getThemeClasses(isDarkMode);
@@ -69,6 +76,7 @@ const ReelGenerator: React.FC = () => {
   const [activeJobProgress, setActiveJobProgress] = useState<number>(0);
   const [activeJobStep, setActiveJobStep] = useState<string>('');
   const [activeJobLogs, setActiveJobLogs] = useState<string[]>([]);
+  const [activeQueueJobId, setActiveQueueJobId] = useState<string>('');
 
   const [products, setProducts] = useState<Product[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(false);
@@ -85,7 +93,7 @@ const ReelGenerator: React.FC = () => {
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [audioMode, setAudioMode] = useState<AudioMode>('auto');
   const [audioTone, setAudioTone] = useState('professional');
-  const [audioLanguageCode, setAudioLanguageCode] = useState('en');
+  const [audioLanguageCode, setAudioLanguageCode] = useState('en-in');
   // TEMP (testing): allow selecting server music library by duration bucket.
   const [musicSource, setMusicSource] = useState<'tone' | 'library'>('library');
   const [musicTrack, setMusicTrack] = useState('');
@@ -192,6 +200,10 @@ const ReelGenerator: React.FC = () => {
   }, []);
 
   const deriveStepFromDraft = (d: any) => {
+    if (
+      (d?.final?.finalOutputUrl || d?.finalOutputUrl || d?.finalVideoUrl || d?.merge?.finalOutputUrl || d?.merge?.finalVideoUrl) &&
+      (d?.content?.caption || d?.thumbnailUrl || d?.content?.thumbnailUrl || d?.schedule?.scheduledAt || d?.schedule?.status)
+    ) return 11;
     const explicit = Number.parseInt(String(d?.currentStep || ''), 10);
     if (Number.isFinite(explicit) && explicit >= 1) return Math.min(11, Math.max(1, explicit));
     if (d?.final?.finalOutputUrl || d?.finalOutputUrl || d?.finalVideoUrl) return 11;
@@ -211,6 +223,7 @@ const ReelGenerator: React.FC = () => {
     setBusy(true);
     setError('');
     setActiveJobStatus('queued');
+    setActiveQueueJobId(queueJobId);
     setActiveJobProgress(0);
     setActiveJobStep('queued');
     setActiveJobLogs(['[SYSTEM] Connected to background persistent queue.']);
@@ -265,6 +278,7 @@ const ReelGenerator: React.FC = () => {
         if (!result?.success) throw new Error(result?.message || 'Execution failed');
         await successCallback(result);
         setActiveJobStatus('');
+        setActiveQueueJobId('');
         break;
       }
 
@@ -298,6 +312,20 @@ const ReelGenerator: React.FC = () => {
     const draftMusicSource = String(nextDraft?.audio?.config?.musicSource || '').toLowerCase();
     if (draftMusicSource === 'tone' || draftMusicSource === 'library') {
       setMusicSource(draftMusicSource);
+    }
+    const draftLanguageCode = normalizeUiAudioLanguageCode(nextDraft?.audio?.config?.languageCode || '');
+    if (draftLanguageCode) {
+      setAudioLanguageCode(draftLanguageCode);
+    }
+    const draftVoiceGender = String(nextDraft?.audio?.config?.voiceGender || '').toLowerCase();
+    if (draftVoiceGender === 'male' || draftVoiceGender === 'female') {
+      setVoiceGender(draftVoiceGender);
+    }
+    if (Number.isFinite(Number(nextDraft?.audio?.config?.voiceVolume))) {
+      setVoiceVolume(Number(nextDraft.audio.config.voiceVolume));
+    }
+    if (Number.isFinite(Number(nextDraft?.audio?.config?.musicVolume))) {
+      setMusicVolume(Number(nextDraft.audio.config.musicVolume));
     }
     setMusicTrack(String(nextDraft?.audio?.config?.musicTrack || ''));
     if (Array.isArray(nextDraft?.scenes) && nextDraft.scenes.length) {
@@ -341,22 +369,29 @@ const ReelGenerator: React.FC = () => {
       setStep(deriveStepFromDraft(nextDraft));
     }
 
-    // Sync / resume running queue jobs after page refresh or load
+    // Sync / resume only queue jobs that still exist in persistent queue storage.
+    const activeQueueJobs = Array.isArray(response.queueJobs)
+      ? response.queueJobs.filter((queueJob: any) => ['queued', 'processing'].includes(String(queueJob?.status || '').toLowerCase()))
+      : [];
     const draftJobs = (nextDraft && typeof nextDraft === 'object' ? nextDraft.jobs : null) || {};
-    const clipsJob = draftJobs.clips;
-    const mergeJob = draftJobs.merge;
+    const findActiveJob = (stepName: string) => {
+      const queueJobId = draftJobs?.[stepName]?.queueJobId;
+      return activeQueueJobs.find((queueJob: any) => String(queueJob?.jobId || '') === String(queueJobId || '')) || null;
+    };
+    const clipsJob = findActiveJob('clips');
+    const mergeJob = findActiveJob('merge');
 
-    if (clipsJob && ['queued', 'processing'].includes(String(clipsJob.status).toLowerCase())) {
-      console.log(`Reconnecting to active clips job: ${clipsJob.queueJobId}`);
-      pollJob(clipsJob.queueJobId, async (result) => {
+    if (clipsJob) {
+      console.log(`Reconnecting to active clips job: ${clipsJob.jobId}`);
+      pollJob(clipsJob.jobId, async (result) => {
         setScenes(result.sceneData || []);
         setDraft(result.draft || nextDraft);
       }).catch((e: any) => {
         setError(e?.message || 'Clip generation task failed.');
       });
-    } else if (mergeJob && ['queued', 'processing'].includes(String(mergeJob.status).toLowerCase())) {
-      console.log(`Reconnecting to active merge job: ${mergeJob.queueJobId}`);
-      pollJob(mergeJob.queueJobId, async (result) => {
+    } else if (mergeJob) {
+      console.log(`Reconnecting to active merge job: ${mergeJob.jobId}`);
+      pollJob(mergeJob.jobId, async (result) => {
         setFinalVideoUrl(result?.merge?.finalVideoUrl || result?.draft?.merge?.finalVideoUrl || '');
         setFinalOutputUrl(result?.merge?.finalOutputUrl || result?.draft?.merge?.finalOutputUrl || '');
         setDraft(result?.draft || nextDraft);
@@ -364,6 +399,9 @@ const ReelGenerator: React.FC = () => {
       }).catch((e: any) => {
         setError(e?.message || 'Video merge task failed.');
       });
+    } else {
+      setActiveJobStatus('');
+      setActiveQueueJobId('');
     }
   };
 
@@ -409,6 +447,7 @@ const ReelGenerator: React.FC = () => {
     const data = await fileToDataUrl(file);
     setManualVoiceData(data);
     setManualVoiceName((file as File).name || 'voice-file');
+    clearGeneratedAudioOutputs();
   };
 
   const startVoiceRecording = async () => {
@@ -427,6 +466,7 @@ const ReelGenerator: React.FC = () => {
           const data = await fileToDataUrl(blob);
           setManualVoiceData(data);
           setManualVoiceName('recorded-voice.webm');
+          clearGeneratedAudioOutputs();
         }
         stream.getTracks().forEach((track) => track.stop());
       };
@@ -456,6 +496,21 @@ const ReelGenerator: React.FC = () => {
     manualAudioData: audioMode === 'upload' ? manualVoiceData : undefined,
     ...overrides
   });
+
+  const clearMergedVideoOutputs = () => {
+    setFinalVideoUrl('');
+    setFinalOutputUrl('');
+  };
+
+  const clearAudioMixOutputs = () => {
+    setFinalAudioUrl('');
+    clearMergedVideoOutputs();
+  };
+
+  const clearGeneratedAudioOutputs = () => {
+    setGeneratedTracks(null);
+    clearAudioMixOutputs();
+  };
 
   const ensureDraftForAudioTest = async (fallbackDescription = '') => {
     if (jobId) return jobId;
@@ -581,6 +636,7 @@ const ReelGenerator: React.FC = () => {
     if (!response?.success) throw new Error(response?.message || 'Audio generation failed');
     setGeneratedTracks(response?.audio?.tracks || null);
     setFinalAudioUrl('');
+    clearMergedVideoOutputs();
     setDraft(response?.draft || draft);
   });
 
@@ -592,6 +648,8 @@ const ReelGenerator: React.FC = () => {
     });
     if (!response?.success) throw new Error(response?.message || 'Audio generation failed');
     setGeneratedTracks(response?.audio?.tracks || null);
+    setFinalAudioUrl('');
+    clearMergedVideoOutputs();
     setDraft(response?.draft || draft);
     setStep(6);
   });
@@ -605,6 +663,7 @@ const ReelGenerator: React.FC = () => {
     });
     if (!response?.success) throw new Error(response?.message || 'Audio mix failed');
     setFinalAudioUrl(response.finalAudioUrl || '');
+    clearMergedVideoOutputs();
     setDraft(response.draft || draft);
   });
 
@@ -706,9 +765,17 @@ const ReelGenerator: React.FC = () => {
     setScheduleTime('');
     setError('');
     setSuccessMessage('');
+    setActiveJobStatus('');
+    setActiveQueueJobId('');
+    setActiveJobProgress(0);
+    setActiveJobStep('');
+    setActiveJobLogs([]);
   };
 
   const openVideoDraft = async (id: string) => {
+    setError('');
+    setActiveJobStatus('');
+    setActiveQueueJobId('');
     setShowWizard(true);
     setJobId(id);
     await refreshDraft(id, { syncStep: true });
@@ -979,7 +1046,7 @@ const ReelGenerator: React.FC = () => {
                 <div>
                   <h3 className={`font-bold ${theme.text}`}>Background Worker Processing...</h3>
                   <p className={`text-xs ${theme.textSecondary}`}>
-                    Job: <span className="font-mono text-[#ffcc29]">{jobId}</span> | Status: <span className="capitalize">{activeJobStatus}</span>
+                    Job: <span className="font-mono text-[#ffcc29]">{activeQueueJobId || jobId}</span> | Status: <span className="capitalize">{activeJobStatus}</span>
                   </p>
                 </div>
               </div>
@@ -1191,13 +1258,28 @@ const ReelGenerator: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Audio</label>
-                <button type="button" onClick={() => setAudioEnabled((v) => !v)} className={`${inputClass} mt-2 text-left`}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAudioEnabled((v) => !v);
+                    clearGeneratedAudioOutputs();
+                  }}
+                  className={`${inputClass} mt-2 text-left`}
+                >
                   {audioEnabled ? 'ON' : 'OFF'}
                 </button>
               </div>
               <div>
                 <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Voice Mode</label>
-                <select value={audioMode} onChange={(e) => setAudioMode(e.target.value as AudioMode)} className={`${inputClass} mt-2`} disabled={!audioEnabled}>
+                <select
+                  value={audioMode}
+                  onChange={(e) => {
+                    setAudioMode(e.target.value as AudioMode);
+                    clearGeneratedAudioOutputs();
+                  }}
+                  className={`${inputClass} mt-2`}
+                  disabled={!audioEnabled}
+                >
                   <option value="auto">TTS</option>
                   <option value="upload">Upload Voice</option>
                   <option value="off">No Voice</option>
@@ -1205,7 +1287,15 @@ const ReelGenerator: React.FC = () => {
               </div>
               <div>
                 <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Music</label>
-                <select value={audioTone} onChange={(e) => setAudioTone(e.target.value)} className={`${inputClass} mt-2`} disabled={!audioEnabled}>
+                <select
+                  value={audioTone}
+                  onChange={(e) => {
+                    setAudioTone(e.target.value);
+                    clearGeneratedAudioOutputs();
+                  }}
+                  className={`${inputClass} mt-2`}
+                  disabled={!audioEnabled}
+                >
                   <option value="professional">Professional</option>
                   <option value="normal">Normal</option>
                   <option value="fun">Fun</option>
@@ -1219,9 +1309,18 @@ const ReelGenerator: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div>
                   <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Language</label>
-                  <select value={audioLanguageCode} onChange={(e) => setAudioLanguageCode(e.target.value)} className={`${inputClass} mt-2`}>
-                    <option value="en">English</option>
-                    <option value="hi">Hindi</option>
+                  <select
+                    value={audioLanguageCode}
+                    onChange={(e) => {
+                      setAudioLanguageCode(e.target.value);
+                      clearGeneratedAudioOutputs();
+                    }}
+                    className={`${inputClass} mt-2`}
+                  >
+                    <option value="en-in">English (India)</option>
+                    <option value="en-us">English (US)</option>
+                    <option value="en-gb">English (UK)</option>
+                    <option value="hi-in">Hindi</option>
                     <option value="ta">Tamil</option>
                     <option value="te">Telugu</option>
                     <option value="kn">Kannada</option>
@@ -1232,7 +1331,10 @@ const ReelGenerator: React.FC = () => {
                   <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Music Source (Test)</label>
                   <select
                     value={musicSource}
-                    onChange={(e) => setMusicSource(e.target.value as 'tone' | 'library')}
+                    onChange={(e) => {
+                      setMusicSource(e.target.value as 'tone' | 'library');
+                      clearAudioMixOutputs();
+                    }}
                     className={`${inputClass} mt-2`}
                   >
                     <option value="library">Library (by duration)</option>
@@ -1244,18 +1346,25 @@ const ReelGenerator: React.FC = () => {
                 </div>
                 <div>
                   <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Voice</label>
-                  <select value={voiceGender} onChange={(e) => setVoiceGender(e.target.value as 'male' | 'female')} className={`${inputClass} mt-2`}>
+                  <select
+                    value={voiceGender}
+                    onChange={(e) => {
+                      setVoiceGender(e.target.value as 'male' | 'female');
+                      clearGeneratedAudioOutputs();
+                    }}
+                    className={`${inputClass} mt-2`}
+                  >
                     <option value="female">Female</option>
                     <option value="male">Male</option>
                   </select>
                 </div>
                 <div>
                   <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Voice Volume</label>
-                  <input type="range" min={0} max={2} step={0.1} value={voiceVolume} onChange={(e) => setVoiceVolume(Number(e.target.value))} className="mt-3 w-full" />
+                  <input type="range" min={0} max={2} step={0.1} value={voiceVolume} onChange={(e) => { setVoiceVolume(Number(e.target.value)); clearAudioMixOutputs(); }} className="mt-3 w-full" />
                 </div>
                 <div>
                   <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Music Volume</label>
-                  <input type="range" min={0} max={2} step={0.1} value={musicVolume} onChange={(e) => setMusicVolume(Number(e.target.value))} className="mt-3 w-full" />
+                  <input type="range" min={0} max={2} step={0.1} value={musicVolume} onChange={(e) => { setMusicVolume(Number(e.target.value)); clearAudioMixOutputs(); }} className="mt-3 w-full" />
                 </div>
               </div>
             )}
@@ -1265,7 +1374,10 @@ const ReelGenerator: React.FC = () => {
                 <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Music Track (Optional)</label>
                 <input
                   value={musicTrack}
-                  onChange={(e) => setMusicTrack(e.target.value)}
+                  onChange={(e) => {
+                    setMusicTrack(e.target.value);
+                    clearAudioMixOutputs();
+                  }}
                   placeholder="e.g. sonican-tropical-30-seconds-514742.mp3"
                   className={`${inputClass} mt-2 w-full`}
                 />

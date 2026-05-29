@@ -245,19 +245,29 @@ function normalizedDurationSeconds(raw, fallback = 60) {
 }
 
 function normalizeAudioLanguageCode(code = 'en') {
-  const normalized = String(code || '').toLowerCase().trim().split(/[-_]/)[0];
-  const allowed = new Set(['en', 'hi', 'ta', 'te', 'kn', 'ml']);
-  return allowed.has(normalized) ? normalized : 'en';
+  const normalized = String(code || '').toLowerCase().trim().replace(/_/g, '-');
+  const allowed = new Set(['en', 'en-in', 'en-us', 'en-gb', 'hi', 'hi-in', 'ta', 'ta-in', 'te', 'te-in', 'kn', 'kn-in', 'ml', 'ml-in']);
+  if (allowed.has(normalized)) return normalized;
+  const base = normalized.split('-')[0];
+  return allowed.has(base) ? base : 'en-in';
 }
 
 function audioLanguageLabel(code = 'en') {
   const labels = {
-    en: 'English',
+    en: 'English (India)',
+    'en-in': 'English (India)',
+    'en-us': 'English (US)',
+    'en-gb': 'English (UK)',
     hi: 'Hindi',
+    'hi-in': 'Hindi',
     ta: 'Tamil',
+    'ta-in': 'Tamil',
     te: 'Telugu',
+    'te-in': 'Telugu',
     kn: 'Kannada',
-    ml: 'Malayalam'
+    'kn-in': 'Kannada',
+    ml: 'Malayalam',
+    'ml-in': 'Malayalam'
   };
   return labels[normalizeAudioLanguageCode(code)] || labels.en;
 }
@@ -265,11 +275,19 @@ function audioLanguageLabel(code = 'en') {
 function audioScriptLabel(code = 'en') {
   const labels = {
     en: 'Latin',
+    'en-in': 'Latin',
+    'en-us': 'Latin',
+    'en-gb': 'Latin',
     hi: 'Devanagari',
+    'hi-in': 'Devanagari',
     ta: 'Tamil',
+    'ta-in': 'Tamil',
     te: 'Telugu',
+    'te-in': 'Telugu',
     kn: 'Kannada',
-    ml: 'Malayalam'
+    'kn-in': 'Kannada',
+    ml: 'Malayalam',
+    'ml-in': 'Malayalam'
   };
   return labels[normalizeAudioLanguageCode(code)] || labels.en;
 }
@@ -277,7 +295,7 @@ function audioScriptLabel(code = 'en') {
 async function localizeAudioScript({ text, languageCode }) {
   const source = String(text || '').replace(/\s+/g, ' ').trim();
   const normalizedLanguage = normalizeAudioLanguageCode(languageCode);
-  if (!source || normalizedLanguage === 'en') return source;
+  if (!source || normalizedLanguage.startsWith('en')) return source;
 
   const language = audioLanguageLabel(normalizedLanguage);
   const script = audioScriptLabel(normalizedLanguage);
@@ -1258,6 +1276,7 @@ router.post('/generateAudio', protect, checkTrial, videoAiWriteLimiter, async (r
       manualAudioUrl: typeof audio?.manualAudioUrl === 'string' ? audio.manualAudioUrl : '',
       soundEffectUrls: Array.isArray(audio?.soundEffectUrls) ? audio.soundEffectUrls : []
     };
+    audioConfig.voiceGender = audioConfig.voiceGender === 'male' ? 'male' : 'female';
 
     const generated = await runGenerateAudio({
       payload: {
@@ -1278,6 +1297,7 @@ router.post('/generateAudio', protect, checkTrial, videoAiWriteLimiter, async (r
     const updated = await updateDraft(jobId, userId, (current) => ({
       ...current,
       currentStep: Math.max(Number(current.currentStep || 1), 5),
+      finalVideoUrl: null,
       audio: {
         config: {
           ...audioConfig,
@@ -1286,6 +1306,12 @@ router.post('/generateAudio', protect, checkTrial, videoAiWriteLimiter, async (r
         },
         tracks: generated?.tracks || {},
         generatedAt: new Date().toISOString()
+      },
+      mix: null,
+      merge: null,
+      jobs: {
+        ...(current.jobs || {}),
+        merge: null
       }
     }));
 
