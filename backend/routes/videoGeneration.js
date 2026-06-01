@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const rateLimit = require('express-rate-limit');
 const { ipKeyGenerator } = rateLimit;
+const fs = require('fs');
+const path = require('path');
 
 const Product = require('../models/Product');
 const { protect } = require('../middleware/auth');
@@ -74,6 +76,12 @@ videoGenerationQueue.registerHandler('generate_clips', async (payload, { update,
       sceneData: generated.sceneData || [],
       clipUrls: generated.clipUrls || [],
       generatedAt: new Date().toISOString()
+    },
+    jobs: {
+      ...(current.jobs || {}),
+      clips: current.jobs?.clips
+        ? { ...current.jobs.clips, status: 'completed', completedAt: new Date().toISOString() }
+        : null
     }
   }));
 
@@ -135,20 +143,23 @@ videoGenerationQueue.registerHandler('merge_video', async (payload, { update, lo
       clipUrls: effectiveClipUrls,
       finalAudioUrl: finalAudioUrl || draft?.mix?.finalAudioUrl || null,
       subtitles: { enabled: subtitles?.enabled === true },
-      sceneData: sceneDataForSubtitles
+      sceneData: sceneDataForSubtitles,
+      durationSeconds: draft?.input?.durationSeconds || null
     },
     baseUrl,
-    onProgress: ({ progress, currentStep, metadata }) => {
-      update({ progress, currentStep, metadata });
-      updateDraft(jobId, userId, (current) => ({
-        ...current,
-        mergeProgress: {
-          progress: Number(progress) || 0,
-          stage: friendlyVideoMessage(currentStep, 'Synchronizing audio and video...'),
-          metadata: metadata || null,
-          updatedAt: new Date().toISOString()
-        }
-      })).catch(() => {});
+    onProgress: async ({ progress, currentStep, metadata }) => {
+      await update({ progress, currentStep, metadata });
+      try {
+        await updateDraft(jobId, userId, (current) => ({
+          ...current,
+          mergeProgress: {
+            progress: Number(progress) || 0,
+            stage: friendlyVideoMessage(currentStep, 'Synchronizing audio and video...'),
+            metadata: metadata || null,
+            updatedAt: new Date().toISOString()
+          }
+        }));
+      } catch (_) {}
     },
     onLog: (line) => log(line)
   });
@@ -168,7 +179,13 @@ videoGenerationQueue.registerHandler('merge_video', async (payload, { update, lo
     subtitles: merged?.subtitlesUrl
       ? { url: merged.subtitlesUrl, generatedAt: new Date().toISOString() }
       : current.subtitles,
-    mergeProgress: { progress: 100, stage: 'Finalizing your video...', updatedAt: new Date().toISOString() }
+    mergeProgress: { progress: 100, stage: 'Finalizing your video...', updatedAt: new Date().toISOString() },
+    jobs: {
+      ...(current.jobs || {}),
+      merge: current.jobs?.merge
+        ? { ...current.jobs.merge, status: 'completed', completedAt: new Date().toISOString() }
+        : null
+    }
   }));
 
   try {
@@ -265,6 +282,25 @@ function reqBaseUrl(req) {
   return getPublicBaseUrl({ req });
 }
 
+router.get('/music-tracks', protect, videoJobReadLimiter, async (req, res) => {
+  try {
+    const durationSeconds = normalizedDurationSeconds(req.query?.durationSeconds || req.query?.duration || 60, 60);
+    const { bucket, tracks } = listMusicTracksForDuration(durationSeconds);
+    return res.json({
+      success: true,
+      durationSeconds,
+      durationBucketSeconds: bucket,
+      tracks
+    });
+  } catch (error) {
+    console.error('List music tracks error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Unable to load music tracks'
+    });
+  }
+});
+
 function normalizePlatforms(rawPlatforms) {
   const allowed = new Set(['instagram', 'facebook', 'linkedin', 'youtube']);
   const input = Array.isArray(rawPlatforms) ? rawPlatforms : [];
@@ -283,12 +319,77 @@ function normalizedDurationSeconds(raw, fallback = 60) {
   return Math.max(6, Math.min(180, n));
 }
 
+function musicDurationBucket(seconds = 60) {
+  const value = normalizedDurationSeconds(seconds, 60);
+  const buckets = [15, 30, 45, 60];
+  return buckets.reduce((best, current) => (
+    Math.abs(value - current) < Math.abs(value - best) ? current : best
+  ), buckets[0]);
+}
+
+function isMusicFile(fileName = '') {
+  return ['.mp3', '.wav', '.m4a', '.aac', '.ogg'].includes(path.extname(String(fileName || '')).toLowerCase());
+}
+
+function cleanMusicTrackTitle(fileName = '') {
+  return String(fileName || '')
+    .replace(/\.[^.]+$/, '')
+    .replace(/\(\s*\d+\s*\)/g, '')
+    .replace(/\b\d+\s*(sec|secs|second|seconds|s)\b/gi, '')
+    .replace(/\b\d{4,}\b/g, '')
+    .replace(/\bamp\b/gi, 'and')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function musicTrackCategory(fileName = '') {
+  const text = String(fileName || '').toLowerCase();
+  if (/technology|documentary|podcast|corporate|gloss|motion|stylish/.test(text)) return 'Professional';
+  if (/fun|ukulele|reggae|tropical|feelgood|reels|trending|rock|energetic/.test(text)) return 'Fun';
+  if (/study|lofi|rainy|window|acoustic/.test(text)) return 'Work';
+  if (/hopeful|optimistic|harmony|golden|waves|unforgettable|moments/.test(text)) return 'Inspiring';
+  return 'Balanced';
+}
+
+function listMusicTracksForDuration(durationSeconds = 60) {
+  const bucket = musicDurationBucket(durationSeconds);
+  const dirPath = path.resolve(__dirname, '..', 'music', `${bucket}s`);
+  if (!fs.existsSync(dirPath)) return { bucket, tracks: [] };
+
+  const tracks = fs.readdirSync(dirPath, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && isMusicFile(entry.name))
+    .map((entry) => {
+      const title = cleanMusicTrackTitle(entry.name);
+      const category = musicTrackCategory(entry.name);
+      return {
+        fileName: entry.name,
+        label: `${category} - ${title}`,
+        durationBucketSeconds: bucket
+      };
+    })
+    .sort((a, b) => a.label.localeCompare(b.label));
+
+  return { bucket, tracks };
+}
+
 function normalizeAudioLanguageCode(code = 'en') {
   const normalized = String(code || '').toLowerCase().trim().replace(/_/g, '-');
-  const allowed = new Set(['en', 'en-in', 'en-us', 'en-gb', 'hi', 'hi-in', 'ta', 'ta-in', 'te', 'te-in', 'kn', 'kn-in', 'ml', 'ml-in']);
+  const aliases = {
+    'en-us': 'en-in',
+    'en-gb': 'en-in',
+    hi: 'hi-in',
+    ta: 'ta-in',
+    te: 'te-in',
+    kn: 'kn-in',
+    ml: 'ml-in'
+  };
+  const allowed = new Set(['en', 'en-in', 'hi-in', 'ta-in', 'te-in', 'kn-in', 'ml-in']);
+  if (aliases[normalized]) return aliases[normalized];
   if (allowed.has(normalized)) return normalized;
   const base = normalized.split('-')[0];
-  return allowed.has(base) ? base : 'en-in';
+  return aliases[base] || (allowed.has(base) ? base : 'en-in');
 }
 
 function audioLanguageLabel(code = 'en') {
@@ -1231,6 +1332,12 @@ router.post('/generateClips', protect, checkTrial, videoAiWriteLimiter, async (r
         sceneData: generated.sceneData || [],
         clipUrls: generated.clipUrls || [],
         generatedAt: new Date().toISOString()
+      },
+      jobs: {
+        ...(current.jobs || {}),
+        clips: current.jobs?.clips
+          ? { ...current.jobs.clips, status: 'completed', completedAt: new Date().toISOString() }
+          : null
       }
     }));
 
@@ -1302,7 +1409,7 @@ router.post('/generateAudio', protect, checkTrial, videoAiWriteLimiter, async (r
       mode: String(audio?.mode || 'auto').toLowerCase(),
       languageCode: requestedLanguageCode,
       tone: String(audio?.tone || 'professional').toLowerCase(),
-      musicSource: String(audio?.musicSource || process.env.AI_VIDEO_MUSIC_SOURCE || 'tone').toLowerCase(),
+      musicSource: String(audio?.musicSource || process.env.AI_VIDEO_MUSIC_SOURCE || 'library').toLowerCase(),
       musicTrack: typeof audio?.musicTrack === 'string' ? audio.musicTrack : '',
       voiceGender: String(audio?.voiceGender || 'female').toLowerCase(),
       voiceVolume: Number.isFinite(Number(audio?.voiceVolume)) ? Number(audio.voiceVolume) : 1,
@@ -1511,6 +1618,7 @@ router.post('/mergeVideo', protect, checkTrial, videoAiWriteLimiter, async (req,
         clipUrls: effectiveClipUrls,
         finalAudioUrl: finalAudioUrl || draft?.mix?.finalAudioUrl || null,
         subtitles: { enabled: subtitles?.enabled === true },
+        durationSeconds: draft?.input?.durationSeconds || null,
         sceneData: (
           subtitles?.enabled === true &&
           draft?.audio?.config?.languageCode &&
@@ -1538,7 +1646,13 @@ router.post('/mergeVideo', protect, checkTrial, videoAiWriteLimiter, async (req,
       subtitles: merged?.subtitlesUrl
         ? { url: merged.subtitlesUrl, generatedAt: new Date().toISOString() }
         : current.subtitles,
-      mergeProgress: { progress: 100, stage: 'Finalizing your video...', updatedAt: new Date().toISOString() }
+      mergeProgress: { progress: 100, stage: 'Finalizing your video...', updatedAt: new Date().toISOString() },
+      jobs: {
+        ...(current.jobs || {}),
+        merge: current.jobs?.merge
+          ? { ...current.jobs.merge, status: 'completed', completedAt: new Date().toISOString() }
+          : null
+      }
     }));
 
     try {

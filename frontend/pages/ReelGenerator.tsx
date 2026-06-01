@@ -35,6 +35,15 @@ const WIZARD_STEPS = [
   'Final Output'
 ];
 
+const AUDIO_LANGUAGE_OPTIONS = [
+  { value: 'en-in', label: 'English' },
+  { value: 'ta-in', label: 'Tamil' },
+  { value: 'hi-in', label: 'Hindi' },
+  { value: 'ml-in', label: 'Malayalam' },
+  { value: 'te-in', label: 'Telugu' },
+  { value: 'kn-in', label: 'Kannada' }
+];
+
 function fileToDataUrl(file: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -45,10 +54,15 @@ function fileToDataUrl(file: Blob): Promise<string> {
 }
 
 function normalizeUiAudioLanguageCode(languageCode = '') {
-  const normalized = String(languageCode || '').toLowerCase();
+  const normalized = String(languageCode || '').toLowerCase().replace(/_/g, '-');
   if (normalized === 'en') return 'en-in';
+  if (normalized === 'en-us' || normalized === 'en-gb') return 'en-in';
   if (normalized === 'hi') return 'hi-in';
-  return normalized || 'en-in';
+  if (normalized === 'ta') return 'ta-in';
+  if (normalized === 'te') return 'te-in';
+  if (normalized === 'kn') return 'kn-in';
+  if (normalized === 'ml') return 'ml-in';
+  return AUDIO_LANGUAGE_OPTIONS.some((option) => option.value === normalized) ? normalized : 'en-in';
 }
 
 const PROCESSING_ESTIMATES_SECONDS: Record<string, number> = {
@@ -283,11 +297,13 @@ const ReelGenerator: React.FC = () => {
 
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [audioMode, setAudioMode] = useState<AudioMode>('auto');
-  const [audioTone, setAudioTone] = useState('professional');
+  const [audioTone] = useState('professional');
   const [audioLanguageCode, setAudioLanguageCode] = useState('en-in');
-  // TEMP (testing): allow selecting server music library by duration bucket.
   const [musicSource, setMusicSource] = useState<'tone' | 'library'>('library');
   const [musicTrack, setMusicTrack] = useState('');
+  const [musicTracks, setMusicTracks] = useState<Array<{ fileName: string; label: string; durationBucketSeconds: number }>>([]);
+  const [musicBucketSeconds, setMusicBucketSeconds] = useState<number | null>(null);
+  const [loadingMusicTracks, setLoadingMusicTracks] = useState(false);
   const [voiceGender, setVoiceGender] = useState<'male' | 'female'>('female');
   const [voiceVolume, setVoiceVolume] = useState(1);
   const [musicVolume, setMusicVolume] = useState(0.24);
@@ -359,6 +375,39 @@ const ReelGenerator: React.FC = () => {
   useEffect(() => {
     loadVideoDrafts();
   }, []);
+
+  useEffect(() => {
+    if (!audioEnabled || musicSource !== 'library') return;
+
+    let cancelled = false;
+    const loadMusicTracks = async () => {
+      setLoadingMusicTracks(true);
+      try {
+        const response = await videoGenerationAPI.getMusicTracks(durationSeconds);
+        if (cancelled) return;
+        const tracks = Array.isArray(response?.tracks) ? response.tracks : [];
+        setMusicTracks(tracks);
+        setMusicBucketSeconds(Number(response?.durationBucketSeconds) || null);
+        if (musicTrack && !tracks.some((track: any) => track.fileName === musicTrack)) {
+          setMusicTrack('');
+          clearAudioMixOutputs();
+        }
+      } catch (_) {
+        if (!cancelled) {
+          setMusicTracks([]);
+          setMusicBucketSeconds(null);
+        }
+      } finally {
+        if (!cancelled) setLoadingMusicTracks(false);
+      }
+    };
+
+    loadMusicTracks();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [audioEnabled, musicSource, durationSeconds, musicTrack]);
 
   useEffect(() => {
     try {
@@ -447,6 +496,7 @@ const ReelGenerator: React.FC = () => {
     while (true) {
       if (Date.now() - startedAt > timeoutMs) {
         setActiveJobStatus('failed');
+        setBusy(false);
         throw new Error('Retrying video generation...');
       }
 
@@ -503,11 +553,15 @@ const ReelGenerator: React.FC = () => {
         setActiveJobStatus('');
         setActiveQueueJobId('');
         setProcessingState(null);
+        setBusy(false);
         break;
       }
 
       if (status === 'failed') {
         setActiveJobStatus('failed');
+        setActiveQueueJobId('');
+        setProcessingState(null);
+        setBusy(false);
         throw new Error('Retrying video generation...');
       }
 
@@ -533,10 +587,7 @@ const ReelGenerator: React.FC = () => {
       setSceneCount(Number(nextDraft.input.sceneCount));
     }
     setPromptText(nextDraft?.prompt?.promptText || '');
-    const draftMusicSource = String(nextDraft?.audio?.config?.musicSource || '').toLowerCase();
-    if (draftMusicSource === 'tone' || draftMusicSource === 'library') {
-      setMusicSource(draftMusicSource);
-    }
+    setMusicSource('library');
     const draftLanguageCode = normalizeUiAudioLanguageCode(nextDraft?.audio?.config?.languageCode || '');
     if (draftLanguageCode) {
       setAudioLanguageCode(draftLanguageCode);
@@ -594,26 +645,44 @@ const ReelGenerator: React.FC = () => {
     }
 
     // Sync / resume only queue jobs that still exist in persistent queue storage.
-    const activeQueueJobs = Array.isArray(response.queueJobs)
-      ? response.queueJobs.filter((queueJob: any) => ['queued', 'processing'].includes(String(queueJob?.status || '').toLowerCase()))
-      : [];
+    const queueJobs = Array.isArray(response.queueJobs) ? response.queueJobs : [];
+    const activeQueueJobs = queueJobs.filter((queueJob: any) => ['queued', 'processing'].includes(String(queueJob?.status || '').toLowerCase()));
     const draftJobs = (nextDraft && typeof nextDraft === 'object' ? nextDraft.jobs : null) || {};
-    const findActiveJob = (stepName: string) => {
+    const findQueueJob = (stepName: string) => {
       const queueJobId = draftJobs?.[stepName]?.queueJobId;
-      return activeQueueJobs.find((queueJob: any) => String(queueJob?.jobId || '') === String(queueJobId || '')) || null;
+      return queueJobs.find((queueJob: any) => String(queueJob?.jobId || '') === String(queueJobId || '')) || null;
     };
-    const clipsJob = findActiveJob('clips');
-    const mergeJob = findActiveJob('merge');
+    const clipsJob = findQueueJob('clips');
+    const mergeJob = findQueueJob('merge');
+    const clipsStatus = String(clipsJob?.status || '').toLowerCase();
+    const mergeStatus = String(mergeJob?.status || '').toLowerCase();
 
-    if (clipsJob) {
+    if (clipsStatus === 'completed' && clipsJob?.result?.success) {
+      setScenes(clipsJob.result.sceneData || nextDraft?.clips?.sceneData || []);
+      setDraft(clipsJob.result.draft || nextDraft);
+      setActiveJobStatus('');
+      setActiveQueueJobId('');
+      setProcessingState(null);
+      setBusy(false);
+    } else if (mergeStatus === 'completed' && mergeJob?.result?.success) {
+      setFinalVideoUrl(mergeJob.result?.merge?.finalVideoUrl || mergeJob.result?.draft?.merge?.finalVideoUrl || nextDraft?.merge?.finalVideoUrl || '');
+      setFinalOutputUrl(mergeJob.result?.merge?.finalOutputUrl || mergeJob.result?.draft?.merge?.finalOutputUrl || nextDraft?.merge?.finalOutputUrl || nextDraft?.finalVideoUrl || '');
+      setDraft(mergeJob.result?.draft || nextDraft);
+      setActiveJobStatus('');
+      setActiveQueueJobId('');
+      setProcessingState(null);
+      setBusy(false);
+      await loadVideoDrafts();
+    } else if (clipsJob && ['queued', 'processing'].includes(clipsStatus)) {
       console.log(`Reconnecting to active clips job: ${clipsJob.jobId}`);
       pollJob(clipsJob.jobId, async (result) => {
         setScenes(result.sceneData || []);
         setDraft(result.draft || nextDraft);
       }).catch((e: any) => {
         setError(friendlyErrorMessage(e, 'Retrying video generation...'));
+        setBusy(false);
       });
-    } else if (mergeJob) {
+    } else if (mergeJob && ['queued', 'processing'].includes(mergeStatus)) {
       console.log(`Reconnecting to active merge job: ${mergeJob.jobId}`);
       pollJob(mergeJob.jobId, async (result) => {
         setFinalVideoUrl(result?.merge?.finalVideoUrl || result?.draft?.merge?.finalVideoUrl || '');
@@ -622,11 +691,13 @@ const ReelGenerator: React.FC = () => {
         await loadVideoDrafts();
       }).catch((e: any) => {
         setError(friendlyErrorMessage(e, 'Retrying video generation...'));
+        setBusy(false);
       });
     } else {
       setActiveJobStatus('');
       setActiveQueueJobId('');
       setProcessingState(null);
+      setBusy(false);
     }
   };
 
@@ -724,9 +795,9 @@ const ReelGenerator: React.FC = () => {
   const buildAudioPayload = (overrides: Record<string, any> = {}) => ({
     enabled: audioEnabled,
     mode: audioEnabled ? audioMode : 'off',
-    languageCode: audioLanguageCode,
+    languageCode: normalizeUiAudioLanguageCode(audioLanguageCode),
     tone: audioTone,
-    musicSource,
+    musicSource: 'library',
     musicTrack: musicTrack.trim() || undefined,
     voiceGender,
     voiceVolume,
@@ -1301,7 +1372,7 @@ const ReelGenerator: React.FC = () => {
               className={`${inputClass} min-h-[120px]`}
               placeholder="Describe the video you want to create..."
             />
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Duration</label>
                 <select value={durationSeconds} onChange={(e) => setDurationSeconds(Number(e.target.value))} className={`${inputClass} mt-2`}>
@@ -1483,24 +1554,6 @@ const ReelGenerator: React.FC = () => {
                   <option value="off">No Voice</option>
                 </select>
               </div>
-              <div>
-                <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Music</label>
-                <select
-                  value={audioTone}
-                  onChange={(e) => {
-                    setAudioTone(e.target.value);
-                    clearGeneratedAudioOutputs();
-                  }}
-                  className={`${inputClass} mt-2`}
-                  disabled={!audioEnabled}
-                >
-                  <option value="professional">Professional</option>
-                  <option value="normal">Normal</option>
-                  <option value="fun">Fun</option>
-                  <option value="luxury">Luxury</option>
-                  <option value="simple">Simple</option>
-                </select>
-              </div>
             </div>
 
             {audioEnabled && (
@@ -1510,37 +1563,15 @@ const ReelGenerator: React.FC = () => {
                   <select
                     value={audioLanguageCode}
                     onChange={(e) => {
-                      setAudioLanguageCode(e.target.value);
+                      setAudioLanguageCode(normalizeUiAudioLanguageCode(e.target.value));
                       clearGeneratedAudioOutputs();
                     }}
                     className={`${inputClass} mt-2`}
                   >
-                    <option value="en-in">English (India)</option>
-                    <option value="en-us">English (US)</option>
-                    <option value="en-gb">English (UK)</option>
-                    <option value="hi-in">Hindi</option>
-                    <option value="ta">Tamil</option>
-                    <option value="te">Telugu</option>
-                    <option value="kn">Kannada</option>
-                    <option value="ml">Malayalam</option>
+                    {AUDIO_LANGUAGE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
                   </select>
-                </div>
-                <div>
-                  <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Music Source (Test)</label>
-                  <select
-                    value={musicSource}
-                    onChange={(e) => {
-                      setMusicSource(e.target.value as 'tone' | 'library');
-                      clearAudioMixOutputs();
-                    }}
-                    className={`${inputClass} mt-2`}
-                  >
-                    <option value="library">Library (by duration)</option>
-                    <option value="tone">Tone Pack (default)</option>
-                  </select>
-                  <p className={`text-[11px] mt-1 ${theme.textSecondary}`}>
-                    Uses backend `music/{durationSeconds}s` when Library is selected.
-                  </p>
                 </div>
                 <div>
                   <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Voice</label>
@@ -1567,20 +1598,27 @@ const ReelGenerator: React.FC = () => {
               </div>
             )}
 
-            {audioEnabled && musicSource === 'library' && (
+            {audioEnabled && (
               <div className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3`}>
-                <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Music Track (Optional)</label>
-                <input
+                <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>
+                  Music Track {musicBucketSeconds ? `(${musicBucketSeconds}s)` : ''}
+                </label>
+                <select
                   value={musicTrack}
                   onChange={(e) => {
                     setMusicTrack(e.target.value);
                     clearAudioMixOutputs();
                   }}
-                  placeholder="e.g. sonican-tropical-30-seconds-514742.mp3"
                   className={`${inputClass} mt-2 w-full`}
-                />
+                  disabled={loadingMusicTracks}
+                >
+                  <option value="">{loadingMusicTracks ? 'Loading tracks...' : 'Auto pick best track'}</option>
+                  {musicTracks.map((track) => (
+                    <option key={track.fileName} value={track.fileName}>{track.label}</option>
+                  ))}
+                </select>
                 <p className={`text-[11px] mt-1 ${theme.textSecondary}`}>
-                  Leave empty to auto-pick a track for this video duration.
+                  Tracks are loaded from the nearest duration bucket for this video.
                 </p>
               </div>
             )}
