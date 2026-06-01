@@ -101,9 +101,53 @@ class PersistentVideoGenerationQueue {
     console.log(`🚀 Persistent Queue: Background worker successfully started (concurrency = ${this.concurrency})`);
 
     // Run crash recovery on startup (non-blocking, safe for rolling updates)
+    this.recoverInterruptedJobsOnStartup().catch((err) => {
+      console.error('Persistent Queue startup interrupted-job recovery error:', err.message);
+    });
     this.recoverStaleJobs().catch((err) => {
       console.error('⚠️ Persistent Queue startup recovery error:', err.message);
     });
+  }
+
+  async recoverInterruptedJobsOnStartup() {
+    if (String(process.env.VIDEO_JOB_RECOVER_PROCESSING_ON_STARTUP || 'true').toLowerCase() === 'false') return;
+
+    const processingJobs = await VideoJob.find({ status: 'processing' });
+    if (!processingJobs.length) return;
+
+    console.log(`Persistent Queue: Re-queueing ${processingJobs.length} interrupted processing job(s) after startup.`);
+    for (const job of processingJobs) {
+      const maxAttempts = Number(process.env.VIDEO_JOB_MAX_ATTEMPTS || '3');
+      if ((Number(job.attempts) || 0) >= maxAttempts) {
+        await VideoJob.updateOne(
+          { jobId: job.jobId },
+          {
+            $set: {
+              status: 'failed',
+              currentStep: 'stale_recovery_failed',
+              completedAt: new Date(),
+              updatedAt: new Date(),
+              error: { message: `Job interrupted and exceeded maximum attempts (${maxAttempts}).`, stack: null }
+            }
+          }
+        );
+        continue;
+      }
+
+      await VideoJob.updateOne(
+        { jobId: job.jobId },
+        {
+          $set: {
+            status: 'queued',
+            currentStep: 'stale_recovery_retry',
+            updatedAt: new Date()
+          },
+          $push: {
+            logs: `[${new Date().toISOString()}] App restarted while job was processing. Re-queued automatically.`
+          }
+        }
+      );
+    }
   }
 
   _startRecoveryTimer() {

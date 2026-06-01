@@ -15,8 +15,9 @@ const { generateVideoClip } = require('./videoService');
 
 const STORAGE_ROOT = path.resolve(__dirname, '../storage/ai-videos');
 const VIDEO_TARGET = { width: 1080, height: 1920, fps: 30 };
-const VIDEO_ENCODE_PRESET = String(process.env.AI_VIDEO_ENCODE_PRESET || 'slow');
-const VIDEO_ENCODE_CRF = String(process.env.AI_VIDEO_ENCODE_CRF || '16');
+const VIDEO_ENCODE_PRESET = String(process.env.AI_VIDEO_ENCODE_PRESET || 'ultrafast');
+const VIDEO_ENCODE_CRF = String(process.env.AI_VIDEO_ENCODE_CRF || '23');
+const AUDIO_SYNC_THRESHOLD_SECONDS = Math.max(0, Number(process.env.AI_VIDEO_AUDIO_SYNC_THRESHOLD_SECONDS || 1.25) || 1.25);
 const GOOGLE_TTS_PROJECT_ID = process.env.VERTEX_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT_ID || '';
 const GOOGLE_TTS_EN_MALE_VOICE = String(process.env.GOOGLE_TTS_EN_MALE_VOICE || 'en-US-Neural2-J').trim();
 const GOOGLE_TTS_EN_FEMALE_VOICE = String(process.env.GOOGLE_TTS_EN_FEMALE_VOICE || 'en-US-Neural2-F').trim();
@@ -393,7 +394,7 @@ function normalizeAudioOptions(raw = {}) {
     tone: normalizeTone(raw?.tone) || 'professional',
     musicSource: ['tone', 'library'].includes(String(raw?.musicSource || '').toLowerCase())
       ? String(raw.musicSource).toLowerCase()
-      : String(process.env.AI_VIDEO_MUSIC_SOURCE || 'tone').toLowerCase(),
+      : String(process.env.AI_VIDEO_MUSIC_SOURCE || 'library').toLowerCase(),
     musicTrack: typeof raw?.musicTrack === 'string' ? raw.musicTrack.trim() : '',
     voiceGender: ['male', 'female'].includes(String(raw?.voiceGender || '').toLowerCase())
       ? String(raw.voiceGender).toLowerCase()
@@ -668,6 +669,11 @@ async function materializeSourceToFile({ source, destinationPath }) {
   if (isHttpUrl(raw)) {
     const localGeneratedMediaPath = resolveLocalGeneratedMediaPath(raw);
     if (localGeneratedMediaPath) {
+      if (path.resolve(localGeneratedMediaPath) === path.resolve(destinationPath)) {
+        const stat = await fs.promises.stat(destinationPath);
+        if (!stat.size) throw new Error('Generated media file is empty');
+        return { mimeType: '' };
+      }
       await fs.promises.copyFile(localGeneratedMediaPath, destinationPath);
       const stat = await fs.promises.stat(destinationPath);
       if (!stat.size) throw new Error('Copied generated media file is empty');
@@ -1131,20 +1137,34 @@ async function mergeSceneVideos({
     'utf8'
   );
 
-  const args = [
-    '-y',
-    '-f', 'concat',
-    '-safe', '0',
-    '-i', concatPath,
-    '-c:v', 'libx264',
-    '-pix_fmt', 'yuv420p',
-    '-r', String(VIDEO_TARGET.fps),
-    '-preset', VIDEO_ENCODE_PRESET,
-    '-crf', VIDEO_ENCODE_CRF,
-    '-an',
-    outputPath
-  ];
-  await runFfmpeg(args);
+  try {
+    await runFfmpeg([
+      '-y',
+      '-f', 'concat',
+      '-safe', '0',
+      '-i', concatPath,
+      '-c', 'copy',
+      '-an',
+      '-movflags', '+faststart',
+      outputPath
+    ]);
+  } catch (_) {
+    const args = [
+      '-y',
+      '-f', 'concat',
+      '-safe', '0',
+      '-i', concatPath,
+      '-c:v', 'libx264',
+      '-pix_fmt', 'yuv420p',
+      '-r', String(VIDEO_TARGET.fps),
+      '-preset', VIDEO_ENCODE_PRESET,
+      '-crf', VIDEO_ENCODE_CRF,
+      '-an',
+      '-movflags', '+faststart',
+      outputPath
+    ];
+    await runFfmpeg(args);
+  }
 
   return {
     path: outputPath,
@@ -1797,6 +1817,74 @@ async function synthesizeElevenLabsTts({
   return stat.size > 1200;
 }
 
+async function synthesizeNeuralTts({
+  text,
+  languageCode,
+  voiceGender,
+  outputPath,
+  speakingRate = 1,
+  logger = null
+}) {
+  const normalizedGender = String(voiceGender || 'female').toLowerCase() === 'male' ? 'male' : 'female';
+  const normalizedLocale = toTtsLocaleCode(languageCode);
+  const preferGoogleMale = normalizedGender === 'male' && /^(en-in|hi-in|ta-in|te-in|kn-in|ml-in)$/.test(normalizedLocale);
+
+  const tryGoogle = async () => {
+    try {
+      const ok = await synthesizeGoogleCloudTts({
+        text,
+        languageCode,
+        voiceGender: normalizedGender,
+        outputPath,
+        speakingRate
+      });
+      if (ok) {
+        if (logger) logger(`Google Cloud TTS ${googleCloudTtsVoice(languageCode, normalizedGender).name} succeeded`);
+        return true;
+      }
+    } catch (error) {
+      if (logger) logger(`Google Cloud TTS failed: ${error.message || error}`);
+    }
+    return false;
+  };
+
+  const tryEdge = async () => {
+    try {
+      return await synthesizeEdgeTts({
+        text,
+        languageCode,
+        voiceGender: normalizedGender,
+        outputPath,
+        speakingRate,
+        logger
+      });
+    } catch (error) {
+      if (logger) logger(`Edge TTS failed: ${error.message || error}`);
+    }
+    return false;
+  };
+
+  const tryElevenLabs = async () => {
+    try {
+      return await synthesizeElevenLabsTts({
+        text,
+        languageCode,
+        voiceGender: normalizedGender,
+        outputPath
+      });
+    } catch (error) {
+      if (logger) logger(`ElevenLabs male voice failed: ${error.message || error}`);
+    }
+    return false;
+  };
+
+  if (preferGoogleMale && await tryGoogle()) return true;
+  if (await tryEdge()) return true;
+  if (normalizedGender === 'male' && await tryElevenLabs()) return true;
+  if (!preferGoogleMale && await tryGoogle()) return true;
+  return false;
+}
+
 async function synthesizeVoiceTrack({
   voiceScript,
   sourceVoiceScript = '',
@@ -1919,8 +2007,8 @@ async function synthesizeVoiceTrack({
   let singlePassSuccess = false;
   try {
     if (logger) logger(`Attempting single-pass TTS synthesis for entire script (${scriptForTts.length} chars)`);
-    
-    let ok = await synthesizeEdgeTts({
+
+    const ok = await synthesizeNeuralTts({
       text: scriptForTts,
       languageCode,
       voiceGender: normalizedGender,
@@ -1928,25 +2016,6 @@ async function synthesizeVoiceTrack({
       speakingRate,
       logger
     });
-
-    if (!ok && normalizedGender === 'male') {
-      ok = await synthesizeElevenLabsTts({
-        text: scriptForTts,
-        languageCode,
-        voiceGender: normalizedGender,
-        outputPath: finalVoicePath
-      });
-    }
-
-    if (!ok) {
-      ok = await synthesizeGoogleCloudTts({
-        text: scriptForTts,
-        languageCode,
-        voiceGender: normalizedGender,
-        outputPath: finalVoicePath,
-        speakingRate
-      });
-    }
 
     if (ok && fs.existsSync(finalVoicePath)) {
       const stat = await fs.promises.stat(finalVoicePath);
@@ -1975,44 +2044,15 @@ async function synthesizeVoiceTrack({
   const chunkResults = await runWithConcurrency(chunks, 2, async (text, index) => {
     const outPath = path.join(context.dirs.audio, `voice_chunk_${index + 1}.mp3`);
 
-    try {
-      const edgeOk = await synthesizeEdgeTts({
-        text,
-        languageCode,
-        voiceGender: normalizedGender,
-        outputPath: outPath,
-        speakingRate,
-        logger
-      });
-      if (edgeOk) return outPath;
-    } catch (error) {
-      if (logger) logger(`Edge TTS chunk ${index + 1} failed: ${error.message || error}`);
-    }
-
-    try {
-      const elevenLabsOk = await synthesizeElevenLabsTts({
-        text,
-        languageCode,
-        voiceGender: normalizedGender,
-        outputPath: outPath
-      });
-      if (elevenLabsOk) return outPath;
-    } catch (error) {
-      if (logger) logger(`ElevenLabs male voice chunk ${index + 1} failed: ${error.message || error}`);
-    }
-
-    try {
-      const cloudOk = await synthesizeGoogleCloudTts({
-        text,
-        languageCode,
-        voiceGender: normalizedGender,
-        outputPath: outPath,
-        speakingRate
-      });
-      if (cloudOk) return outPath;
-    } catch (error) {
-      if (logger) logger(`Google Cloud TTS chunk ${index + 1} failed: ${error.message || error}`);
-    }
+    const neuralOk = await synthesizeNeuralTts({
+      text,
+      languageCode,
+      voiceGender: normalizedGender,
+      outputPath: outPath,
+      speakingRate,
+      logger: logger ? (line) => logger(`Voice chunk ${index + 1}: ${line}`) : null
+    });
+    if (neuralOk) return outPath;
 
     try {
       const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${encodeURIComponent(ttsLocale)}&q=${encodeURIComponent(text)}`;
@@ -2132,10 +2172,9 @@ async function prepareBackgroundTrack({ audioOptions, context, durationSeconds =
   if (audioOptions.musicSource === 'library') {
     const root = musicLibraryRoot();
     const durationDir = path.join(root, `${durationBucket}s`);
-    const toneDir = path.join(durationDir, tone);
 
     const preferredTrack = String(audioOptions.musicTrack || '').trim();
-    const searchDirs = [toneDir, durationDir];
+    const searchDirs = [durationDir];
 
     let candidates = [];
     for (const dirPath of searchDirs) {
@@ -2428,20 +2467,25 @@ async function mergeFinalOutput({
   }
 
   let syncedAudio = mergedAudio;
+  let progressDuration = Number(totalDuration) || 0;
   if (mergedAudio?.path) {
     const videoDuration = await getMediaDurationSecondsFromFile(mergedVideo.path);
     const audioDuration = await getMediaDurationSecondsFromFile(mergedAudio.path);
     const targetDuration = Number.isFinite(videoDuration) && videoDuration > 0
       ? videoDuration
       : (Number(totalDuration) || 0);
-    if (Number.isFinite(audioDuration) && audioDuration > 0 && targetDuration > 0 && Math.abs(audioDuration - targetDuration) > 0.15) {
+    progressDuration = targetDuration || progressDuration;
+    if (Number.isFinite(audioDuration) && audioDuration > 0 && targetDuration > 0) {
       const syncedPath = path.join(context.dirs.audio, 'final_audio_synced.m4a');
-      const ratio = clamp(audioDuration / targetDuration, 0.5, 2.0);
+      const shouldRetempo = Math.abs(audioDuration - targetDuration) > AUDIO_SYNC_THRESHOLD_SECONDS;
+      const audioFilter = shouldRetempo
+        ? `atempo=${clamp(audioDuration / targetDuration, 0.5, 2.0).toFixed(3)},apad,atrim=0:${targetDuration.toFixed(3)}`
+        : `apad,atrim=0:${targetDuration.toFixed(3)}`;
       await runFfmpeg([
         '-y',
         '-i', mergedAudio.path,
         '-vn',
-        '-af', `atempo=${ratio.toFixed(3)},apad,atrim=0:${targetDuration.toFixed(3)}`,
+        '-af', audioFilter,
         '-c:a', 'aac',
         '-b:a', '192k',
         syncedPath
@@ -2452,9 +2496,15 @@ async function mergeFinalOutput({
         durationValidation: {
           videoDurationSeconds: targetDuration,
           originalAudioDurationSeconds: audioDuration,
-          synced: true
+          synced: true,
+          retimed: shouldRetempo
         }
       };
+    }
+  } else if (subtitles?.path) {
+    const videoDuration = await getMediaDurationSecondsFromFile(mergedVideo.path);
+    if (Number.isFinite(videoDuration) && videoDuration > 0) {
+      progressDuration = videoDuration;
     }
   }
 
@@ -2475,13 +2525,13 @@ async function mergeFinalOutput({
   }
 
   if (syncedAudio?.path) {
-    args.push('-af', 'apad', '-c:a', 'aac', '-b:a', '192k', '-shortest');
+    args.push('-c:a', 'aac', '-b:a', '192k', '-shortest');
   } else {
     args.push('-an');
   }
 
   args.push(outputPath);
-  await runFfmpeg(args, { onProgress, totalDuration });
+  await runFfmpeg(args, { onProgress, totalDuration: progressDuration || totalDuration });
   return { path: outputPath, url: outputUrl };
 }
 
@@ -2973,9 +3023,9 @@ async function runMergeVideo({
     throw new Error('clipUrls is required for mergeVideo');
   }
 
-  const reportProgress = (progress, currentStep, metadata = null) => {
+  const reportProgress = async (progress, currentStep, metadata = null) => {
     if (typeof onProgress === 'function') {
-      onProgress({ progress, currentStep, metadata });
+      await onProgress({ progress, currentStep, metadata });
     }
   };
 
@@ -2983,23 +3033,23 @@ async function runMergeVideo({
     if (typeof onLog === 'function') onLog(String(line || '').trim());
   };
 
-  const localClipPaths = [];
-  for (let i = 0; i < sceneClips.length; i += 1) {
+  const localClipPaths = await runWithConcurrency(sceneClips, MEDIA_IO_CONCURRENCY, async (clipSource, i) => {
     const source = String(sceneClips[i] || '').trim();
-    if (!source) continue;
+    if (!source) return null;
     const outputName = `scene_${i + 1}.mp4`;
     const outputPath = path.join(context.dirs.clips, outputName);
-    reportProgress(10 + Math.round((i / Math.max(1, sceneClips.length)) * 35), 'downloading_clips', {
+    await reportProgress(10 + Math.round((i / Math.max(1, sceneClips.length)) * 35), 'downloading_clips', {
       index: i + 1,
       total: sceneClips.length
     });
     logLine(`Downloading clip ${i + 1}/${sceneClips.length}`);
     await materializeSourceToFile({ source, destinationPath: outputPath });
-    localClipPaths.push(outputPath);
-  }
+    return outputPath;
+  });
+  const resolvedClipPaths = localClipPaths.filter(Boolean);
 
-  reportProgress(50, 'merging_clips');
-  const scenes = localClipPaths.map((clipPath, index) => ({
+  await reportProgress(50, 'merging_clips');
+  const scenes = resolvedClipPaths.map((clipPath, index) => ({
     index: index + 1,
     sceneId: `scene_${index + 1}`,
     clipPath
@@ -3011,7 +3061,7 @@ async function runMergeVideo({
   const audioSource = String(payload?.finalAudioUrl || '').trim();
   if (audioSource) {
     const audioPath = path.join(context.dirs.audio, 'input_audio.mp3');
-    reportProgress(65, 'downloading_audio');
+    await reportProgress(65, 'downloading_audio');
     logLine('Downloading final audio track');
     await materializeSourceToFile({ source: audioSource, destinationPath: audioPath });
     mergedAudio = {
@@ -3022,14 +3072,14 @@ async function runMergeVideo({
 
   let subtitles = null;
   if (payload?.subtitles?.enabled && Array.isArray(payload?.sceneData)) {
-    reportProgress(75, 'generating_subtitles');
+    await reportProgress(75, 'generating_subtitles');
     subtitles = await generateSrtFile({
       sceneData: payload.sceneData.map((scene, idx) => ensureSceneInputForClipStage(scene, idx)),
       context
     });
   }
 
-  reportProgress(88, 'merging_final_output');
+  await reportProgress(88, 'merging_final_output');
   const finalOutput = await mergeFinalOutput({
     mergedVideo,
     mergedAudio,
@@ -3038,11 +3088,11 @@ async function runMergeVideo({
     totalDuration: Number(payload?.durationSeconds) || 60,
     onProgress: (pct) => {
       const overallPct = 88 + Math.round((pct / 100) * 10);
-      reportProgress(overallPct, 'merging_final_output');
+      reportProgress(overallPct, 'merging_final_output').catch(() => {});
     }
   });
 
-  reportProgress(98, 'finalizing');
+  await reportProgress(98, 'finalizing');
   return {
     success: true,
     jobId: context.jobId,

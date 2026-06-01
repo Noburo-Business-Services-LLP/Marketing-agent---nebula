@@ -3349,6 +3349,12 @@ export const videoGenerationAPI = {
     }, true);
   },
 
+  getMusicTracks: async (durationSeconds: number): Promise<any> => {
+    return apiCall(`/video-generation/music-tracks?durationSeconds=${encodeURIComponent(String(durationSeconds || 60))}`, {
+      method: 'GET'
+    }, true);
+  },
+
   mergeAudio: async (payload: any): Promise<any> => {
     return apiCall('/video-generation/mergeAudio', {
       method: 'POST',
