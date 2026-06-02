@@ -622,6 +622,10 @@ const startServer = async () => {
     }
   } catch (error) {
     console.warn('⚠️  MongoDB not available:', error.message);
+    if (process.env.NODE_ENV === 'production') {
+      console.error('❌ MongoDB connection is required in production. Exiting.');
+      process.exit(1);
+    }
     console.warn('   Server will start in demo mode (no database persistence)');
   }
 
