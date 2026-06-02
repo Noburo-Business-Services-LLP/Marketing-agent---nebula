@@ -602,20 +602,6 @@ const ReelGenerator: React.FC = () => {
     if (Number.isFinite(Number(nextDraft?.audio?.config?.musicVolume))) {
       setMusicVolume(Number(nextDraft.audio.config.musicVolume));
     }
-    const draftLanguageCode = normalizeUiAudioLanguageCode(nextDraft?.audio?.config?.languageCode || '');
-    if (draftLanguageCode) {
-      setAudioLanguageCode(draftLanguageCode);
-    }
-    const draftVoiceGender = String(nextDraft?.audio?.config?.voiceGender || '').toLowerCase();
-    if (draftVoiceGender === 'male' || draftVoiceGender === 'female') {
-      setVoiceGender(draftVoiceGender);
-    }
-    if (Number.isFinite(Number(nextDraft?.audio?.config?.voiceVolume))) {
-      setVoiceVolume(Number(nextDraft.audio.config.voiceVolume));
-    }
-    if (Number.isFinite(Number(nextDraft?.audio?.config?.musicVolume))) {
-      setMusicVolume(Number(nextDraft.audio.config.musicVolume));
-    }
     setMusicTrack(String(nextDraft?.audio?.config?.musicTrack || ''));
     if (Array.isArray(nextDraft?.scenes) && nextDraft.scenes.length) {
       setScenes(nextDraft.scenes);
