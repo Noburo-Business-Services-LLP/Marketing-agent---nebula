@@ -10,7 +10,7 @@ const PLANS = {
       'Email support',
     ],
     cycles: {
-      monthly:   { planId: 'plan_Sra2nrsAk2M53U', amount: 10000,  label: 'Monthly',   per: '/month' },
+      monthly:   { planId: 'plan_Sra2nrsAk2M53U', amount: 5000,   label: 'Monthly',   per: '/month' },
       quarterly: { planId: 'plan_Sra8hXOnr41HRB', amount: 30000,  label: 'Quarterly', per: '/quarter' },
       annual:    { planId: 'plan_SraAlfXaHST15q', amount: 120000, label: 'Annual',    per: '/year' },
     },
