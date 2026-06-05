@@ -22,7 +22,8 @@ import {
   ImageIcon,
   Layers,
   PlayCircle,
-  Brain
+  Brain,
+  Gauge
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { User } from '../types';
@@ -130,6 +131,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
     { path: '/brand-assets', label: 'Brand Assets', icon: Palette },
     { path: '/inventory', label: 'Inventory', icon: Package },
     { path: '/analytics', label: 'Analytics & Ads', icon: BarChart3 },
+    { path: '/seo', label: 'AI SEO Assistant', icon: Gauge },
     { path: '/competitors', label: 'Competitors', icon: Users },
     { path: '/ai-memory', label: 'AI Memory', icon: Brain },
   ];
@@ -168,6 +170,17 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
     }
     if (pathname.startsWith('/competitors')) {
       return { title: 'Competitors', subtitle: 'Track competitor campaigns and strategic insights.', actions: [] };
+    }
+    if (pathname.startsWith('/seo')) {
+      return {
+        title: 'AI SEO Assistant',
+        subtitle: 'Generate keywords, metadata, hashtags, competitor insights, and growth recommendations.',
+        actions: [
+          { label: 'Keywords', path: '/seo/keywords' },
+          { label: 'Metadata', path: '/seo/metadata' },
+          { label: 'Hashtags', path: '/seo/hashtags' }
+        ]
+      };
     }
     if (pathname.startsWith('/connect-socials')) {
       return { title: 'Connect Socials', subtitle: 'Manage your social media account connections.', actions: [] };
