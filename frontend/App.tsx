@@ -17,6 +17,7 @@ import BrandAssets from './pages/BrandAssets';
 import Inventory from './pages/Inventory';
 import Settings from './pages/Settings';
 import Analytics from './pages/Analytics';
+import SEOAssistant from './pages/SEOAssistant';
 import AIMemory from './pages/AIMemory';
 import AIHistory from './pages/AIHistory';
 import AIPerformance from './pages/AIPerformance';
@@ -232,6 +233,11 @@ const App: React.FC = () => {
                     <Route path="/brand-assets" element={<BrandAssets />} />
                     <Route path="/inventory" element={<Inventory />} />
                     <Route path="/analytics" element={<Analytics />} />
+                    <Route path="/seo" element={<SEOAssistant />} />
+                    <Route path="/seo/keywords" element={<SEOAssistant />} />
+                    <Route path="/seo/metadata" element={<SEOAssistant />} />
+                    <Route path="/seo/hashtags" element={<SEOAssistant />} />
+                    <Route path="/seo/competitor" element={<SEOAssistant />} />
                     <Route path="/influencer-portal" element={<InfluencerPortal />} />
                     <Route path="/influencer-portal/list" element={<InfluencerList />} />
                     <Route path="/influencer-portal/collaborations" element={<Collaborations />} />

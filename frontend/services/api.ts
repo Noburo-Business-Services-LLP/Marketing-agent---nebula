@@ -3500,6 +3500,59 @@ export const aiMemoryAPI = {
 };
 
 // ================================
+// AI SEO Assistant API
+// ================================
+export const seoAPI = {
+  getDashboard: async (): Promise<any> => {
+    return apiCall<any>('/seo/dashboard', { method: 'GET' }, true);
+  },
+
+  getReports: async (type?: string): Promise<any> => {
+    const query = type ? `?type=${encodeURIComponent(type)}` : '';
+    return apiCall<any>(`/seo/reports${query}`, { method: 'GET' }, true);
+  },
+
+  keywordResearch: async (data: { topic: string; businessContext?: any }): Promise<any> => {
+    return apiCall<any>('/seo/keywords', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }, true);
+  },
+
+  generateMetadata: async (data: {
+    topic: string;
+    businessName?: string;
+    pageType?: string;
+    focusKeyword?: string;
+    businessContext?: any;
+  }): Promise<any> => {
+    return apiCall<any>('/seo/metadata', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }, true);
+  },
+
+  generateHashtags: async (data: {
+    content: string;
+    topic?: string;
+    platforms?: string[];
+    businessContext?: any;
+  }): Promise<any> => {
+    return apiCall<any>('/seo/hashtags', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }, true);
+  },
+
+  analyzeCompetitor: async (data: { competitorUrl: string; businessContext?: any }): Promise<any> => {
+    return apiCall<any>('/seo/competitor-analysis', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }, true);
+  }
+};
+
+// ================================
 // Unified Social Inbox API
 // ================================
 export interface InboxConversation {

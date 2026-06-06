@@ -58,6 +58,7 @@ const competitorRoutes = require('./routes/competitors');
 const reminderRoutes = require('./routes/reminders');
 const accountRoutes = require('./routes/accounts');
 const adCampaignRoutes = require('./routes/adCampaigns');
+const seoRoutes = require('./routes/seoRoutes');
 
 // New real-data routes
 const brandRoutes = require('./routes/brand');
@@ -323,6 +324,7 @@ app.use('/api/competitors', competitorRoutes);
 app.use('/api/reminders', reminderRoutes);
 app.use('/api/accounts', accountRoutes);
 app.use('/api/ad-campaigns', adCampaignRoutes);
+app.use('/api/seo', aiLimiter, seoRoutes);
 
 // Routes - Real Data Features
 app.use('/api/brand', brandRoutes);
