@@ -3558,6 +3558,8 @@ export const seoAPI = {
 export interface InboxConversation {
   id: string;
   user_id?: string;
+  workspace_id?: string;
+  assigned_user_id?: string;
   social_account_id: string;
   platform: 'instagram' | 'facebook' | 'linkedin' | 'x' | 'youtube';
   provider_thread_id?: string;
@@ -3573,6 +3575,10 @@ export interface InboxConversation {
   tags: string[];
   sentiment: string;
   spam_score: number;
+  lead_score?: number;
+  engagement_score?: number;
+  unread_count?: number;
+  message_types?: string[];
 }
 
 export interface InboxMessage {
@@ -3591,7 +3597,41 @@ export interface InboxMessage {
   permalink?: string;
   sentiment: string;
   spam_score: number;
+  lead_score?: number;
+  engagement_score?: number;
+  priority?: string;
+  ai?: {
+    suggestedReplies?: string[];
+    autoReplyCandidate?: string;
+    autoReplyStatus?: string;
+    autoReplyReason?: string;
+  };
   created_at: string;
+}
+
+export interface AutoReplySettings {
+  enabled: boolean;
+  automationMode: 'suggested' | 'approval_required' | 'fully_automatic';
+  channels: { messages: boolean; comments: boolean; mentions: boolean; replies: boolean };
+  platforms: { instagram: boolean; facebook: boolean; linkedin: boolean; x: boolean; youtube: boolean };
+  businessTone: string;
+  replyStyle: 'concise' | 'friendly' | 'detailed' | 'sales' | 'support';
+  responseRules: Array<{
+    _id?: string;
+    name: string;
+    enabled: boolean;
+    matchType: 'contains' | 'regex' | 'sentiment' | 'messageType' | 'platform';
+    value: string;
+    action: 'auto_reply' | 'suggest_only' | 'skip' | 'needs_approval';
+    priority: number;
+  }>;
+  guardrails: {
+    requireApprovalForNegative: boolean;
+    requireApprovalForHighPriority: boolean;
+    skipSpam: boolean;
+    maxAutoRepliesPerConversationPerDay: number;
+    signature?: string;
+  };
 }
 
 const INBOX_API_BASE_URL = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
@@ -3629,6 +3669,7 @@ export const inboxAPI = {
     status?: string;
     platform?: string;
     priority?: string;
+    assignedUserId?: string;
     search?: string;
   } = {}): Promise<{ success: boolean; conversations: InboxConversation[] }> => {
     const params = new URLSearchParams();
@@ -3648,10 +3689,10 @@ export const inboxAPI = {
     return inboxCall(`/conversations/${encodeURIComponent(conversationId)}/messages`);
   },
 
-  reply: async (conversationId: string, body: string): Promise<{ success: boolean; message: InboxMessage }> => {
+  reply: async (conversationId: string, body: string, dispatch = true): Promise<{ success: boolean; message: InboxMessage; dispatch?: any }> => {
     return inboxCall(`/conversations/${encodeURIComponent(conversationId)}/reply`, {
       method: 'POST',
-      body: JSON.stringify({ body }),
+      body: JSON.stringify({ body, dispatch }),
     });
   },
 
@@ -3662,7 +3703,7 @@ export const inboxAPI = {
     });
   },
 
-  updateMeta: async (conversationId: string, data: { tags: string[]; priority: string }): Promise<{ success: boolean }> => {
+  updateMeta: async (conversationId: string, data: { tags: string[]; priority: string; assignedUserId?: string }): Promise<{ success: boolean }> => {
     return inboxCall(`/conversations/${encodeURIComponent(conversationId)}/meta`, {
       method: 'PATCH',
       body: JSON.stringify(data),
@@ -3673,9 +3714,47 @@ export const inboxAPI = {
     return inboxCall(`/sync/${encodeURIComponent(accountId)}`, { method: 'POST' });
   },
 
-  openSocket: (_userId = 'demo-user'): WebSocket | null => {
-    // MERN implementation uses the existing Express API. Real-time transport can be
-    // enabled later with Socket.IO/SSE without changing page-level inbox behavior.
-    return null;
+  getSettings: async (): Promise<{ success: boolean; settings: AutoReplySettings }> => {
+    return inboxCall('/settings');
+  },
+
+  updateSettings: async (settings: Partial<AutoReplySettings>): Promise<{ success: boolean; settings: AutoReplySettings }> => {
+    return inboxCall('/settings', {
+      method: 'PUT',
+      body: JSON.stringify(settings),
+    });
+  },
+
+  createTestEvent: async (payload: any): Promise<any> => {
+    return inboxCall('/dev/ingest', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  openSocket: (_userId = 'current'): any | null => {
+    const token = getToken();
+    if (!token || typeof EventSource === 'undefined') return null;
+    const source = new EventSource(`${INBOX_API_BASE_URL}/stream?token=${encodeURIComponent(token)}`);
+    const adapter: any = {
+      onopen: null,
+      onclose: null,
+      onerror: null,
+      onmessage: null,
+      close: () => source.close()
+    };
+    source.onopen = (event) => adapter.onopen?.(event);
+    source.onerror = (event) => adapter.onerror?.(event);
+    ['inbox.message.created', 'inbox.message.replied', 'inbox.notification', 'inbox.connected'].forEach(eventName => {
+      source.addEventListener(eventName, (event: MessageEvent) => {
+        adapter.onmessage?.({
+          data: JSON.stringify({
+            type: eventName,
+            data: JSON.parse(event.data || '{}')
+          })
+        });
+      });
+    });
+    return adapter;
   },
 };

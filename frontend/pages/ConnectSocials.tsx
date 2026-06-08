@@ -5,6 +5,7 @@ import { SocialConnection } from '../types';
 import { Loader2, RefreshCw, Check, X, Instagram, Facebook, Linkedin, Youtube, Video, AlertCircle, ShieldCheck, MessageCircle, Pin, ExternalLink, Inbox, Lock, Bell, Sparkles, Tag, Activity, KeyRound, RadioTower, ArrowRight, CheckCircle2, Clock3 } from 'lucide-react';
 import { useTheme, getThemeClasses } from '../context/ThemeContext';
 import UnifiedInbox from './UnifiedInbox';
+import AutoReplySettingsPage from './AutoReplySettingsPage';
 
 // X (Twitter) logo SVG component
 const XLogo = ({ className }: { className?: string }) => (
@@ -437,6 +438,7 @@ const ConnectSocials: React.FC = () => {
     { id: 'permissions', label: 'Permissions', icon: KeyRound, path: '/connect-socials?tab=permissions' },
     { id: 'sync', label: 'Sync Status', icon: Activity, path: '/connect-socials?tab=sync' },
     { id: 'inbox', label: 'Social Inbox', icon: Inbox, path: '/connect-socials/inbox' },
+    { id: 'auto-reply', label: 'AI Auto Reply', icon: Sparkles, path: '/connect-socials?tab=auto-reply' },
   ];
   const activeTab = isInboxRoute ? 'inbox' : new URLSearchParams(location.search).get('tab') || 'accounts';
 
@@ -828,6 +830,10 @@ const ConnectSocials: React.FC = () => {
             </button>
           </div>
         )
+      )}
+
+      {activeTab === 'auto-reply' && (
+        <AutoReplySettingsPage />
       )}
 
       {/* Simulated OAuth Popup Modal */}

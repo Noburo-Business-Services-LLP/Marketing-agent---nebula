@@ -30,6 +30,8 @@ const socialInboxConversationSchema = new mongoose.Schema({
   participantName: { type: String, default: '' },
   participantUsername: { type: String, default: '' },
   avatarUrl: { type: String, default: '' },
+  assignedUserId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null, index: true },
+  workspaceId: { type: String, default: 'default', index: true },
   subject: { type: String, default: '' },
   lastMessagePreview: { type: String, default: '' },
   lastMessageAt: { type: Date, default: Date.now, index: true },
@@ -38,6 +40,10 @@ const socialInboxConversationSchema = new mongoose.Schema({
   tags: { type: [String], default: [] },
   sentiment: { type: String, default: 'neutral' },
   spamScore: { type: Number, default: 0 },
+  leadScore: { type: Number, default: 0 },
+  engagementScore: { type: Number, default: 0 },
+  messageTypes: { type: [String], default: [] },
+  unreadCount: { type: Number, default: 1 },
   webhookRegistered: { type: Boolean, default: false },
   lastSyncedAt: { type: Date, default: null },
   messages: { type: [socialInboxMessageSchema], default: [] }
@@ -47,6 +53,7 @@ const socialInboxConversationSchema = new mongoose.Schema({
 
 socialInboxConversationSchema.index({ userId: 1, platform: 1, providerThreadId: 1 }, { unique: true });
 socialInboxConversationSchema.index({ userId: 1, status: 1, platform: 1, priority: 1, lastMessageAt: -1 });
+socialInboxConversationSchema.index({ userId: 1, assignedUserId: 1, lastMessageAt: -1 });
 
 module.exports = mongoose.models.SocialInboxConversation ||
   mongoose.model('SocialInboxConversation', socialInboxConversationSchema);

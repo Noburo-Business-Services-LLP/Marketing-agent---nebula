@@ -146,8 +146,10 @@ const UnifiedInbox: React.FC = () => {
   const [status, setStatus] = useState('all');
   const [platform, setPlatform] = useState('all');
   const [priority, setPriority] = useState('all');
+  const [assignedUserId, setAssignedUserId] = useState('');
   const [search, setSearch] = useState('');
   const [reply, setReply] = useState('');
+  const [notifications, setNotifications] = useState<Array<{ id: string; title: string; message: string; type: string; createdAt: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [threadLoading, setThreadLoading] = useState(false);
   const [sending, setSending] = useState(false);
@@ -163,6 +165,7 @@ const UnifiedInbox: React.FC = () => {
         status: status === 'all' ? '' : status,
         platform: platform === 'all' ? '' : platform,
         priority: priority === 'all' ? '' : priority,
+        assignedUserId,
         search,
       });
       const list = result.conversations?.length ? result.conversations : fallbackConversations;
@@ -178,7 +181,7 @@ const UnifiedInbox: React.FC = () => {
 
   useEffect(() => {
     loadConversations();
-  }, [status, platform, priority]);
+  }, [status, platform, priority, assignedUserId]);
 
   useEffect(() => {
     const handle = window.setTimeout(loadConversations, 250);
@@ -224,6 +227,15 @@ const UnifiedInbox: React.FC = () => {
           const message = payload.data?.message as InboxMessage;
           setConversations(current => [conversation, ...current.filter(item => item.id !== conversation.id)]);
           if (conversation.id === selectedId) setMessages(current => [...current, message]);
+        }
+        if (payload.type === 'inbox.notification') {
+          setNotifications(current => [{
+            id: `${Date.now()}`,
+            title: payload.data?.title || 'New inbox activity',
+            message: payload.data?.message || '',
+            type: payload.data?.type || 'inbox',
+            createdAt: new Date().toISOString(),
+          }, ...current].slice(0, 8));
         }
         if (payload.type === 'inbox.message.replied') {
           const message = payload.data as InboxMessage;
@@ -275,6 +287,26 @@ const UnifiedInbox: React.FC = () => {
     }
   };
 
+  const createTestMessage = async () => {
+    try {
+      const result = await inboxAPI.createTestEvent({
+        platform: platform === 'all' ? 'instagram' : platform,
+        type: 'comment',
+        message: 'Hi, I am interested. Can you share pricing and availability?',
+        author_name: 'Demo Lead',
+        author_username: 'demo.lead',
+        thread_id: `demo-thread-${Date.now()}`,
+        message_id: `demo-message-${Date.now()}`
+      });
+      if (result?.conversation) {
+        setConversations(current => [result.conversation, ...current.filter(item => item.id !== result.conversation.id)]);
+        setSelectedId(result.conversation.id);
+      }
+    } catch {
+      // Development helper only.
+    }
+  };
+
   const shell = isDarkMode ? 'bg-[#0b0f18] border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-900';
   const muted = isDarkMode ? 'text-slate-400' : 'text-slate-500';
   const panel = isDarkMode ? 'bg-[#0d1117] border-slate-800' : 'bg-white border-slate-200';
@@ -319,6 +351,17 @@ const UnifiedInbox: React.FC = () => {
                 {priorities.map(item => <option key={item} value={item}>{item === 'all' ? 'Priority' : item}</option>)}
               </select>
             </div>
+            <div className="grid grid-cols-[1fr_auto] gap-2 mt-2">
+              <input
+                value={assignedUserId}
+                onChange={event => setAssignedUserId(event.target.value)}
+                placeholder="Assigned user ID"
+                className={`px-2 py-2 rounded-lg border text-xs outline-none ${panel}`}
+              />
+              <button onClick={createTestMessage} className="px-3 py-2 rounded-lg bg-[#ffcc29] text-[#070A12] text-xs font-bold">
+                Test
+              </button>
+            </div>
           </div>
 
           <div className="flex-1 overflow-y-auto">
@@ -347,6 +390,7 @@ const UnifiedInbox: React.FC = () => {
                       <p className={`text-xs truncate mt-1 ${muted}`}>{item.last_message_preview}</p>
                       <div className="flex items-center gap-1.5 mt-2 flex-wrap">
                         <span className={`px-2 py-0.5 rounded-full text-[11px] capitalize ${item.priority === 'urgent' ? 'bg-red-500/15 text-red-400' : item.priority === 'high' ? 'bg-amber-500/15 text-amber-400' : 'bg-slate-500/10 text-slate-400'}`}>{item.priority}</span>
+                        {(item.unread_count || 0) > 0 && <span className="px-2 py-0.5 rounded-full text-[11px] bg-[#ffcc29]/10 text-[#d8ad20]">{item.unread_count} unread</span>}
                         {item.tags?.slice(0, 2).map(tag => <span key={tag} className="px-2 py-0.5 rounded-full text-[11px] bg-[#ffcc29]/10 text-[#d8ad20]">{tag}</span>)}
                       </div>
                     </div>
@@ -439,7 +483,21 @@ const UnifiedInbox: React.FC = () => {
                         <div><p className={muted}>Spam</p><p className="font-semibold">{Math.round((selected.spam_score || 0) * 100)}%</p></div>
                         <div><p className={muted}>Priority</p><p className="font-semibold capitalize">{selected.priority}</p></div>
                         <div><p className={muted}>Status</p><p className="font-semibold capitalize">{selected.status}</p></div>
+                        <div><p className={muted}>Lead</p><p className="font-semibold">{selected.lead_score || 0}/100</p></div>
+                        <div><p className={muted}>Engagement</p><p className="font-semibold">{selected.engagement_score || 0}/100</p></div>
                       </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Notification Center</p>
+                      {notifications.length ? notifications.map(notification => (
+                        <div key={notification.id} className={`rounded-lg border p-3 ${panel}`}>
+                          <p className="text-sm font-semibold">{notification.title}</p>
+                          <p className={`mt-1 text-xs ${muted}`}>{notification.message}</p>
+                        </div>
+                      )) : (
+                        <div className={`rounded-lg border p-3 text-sm ${panel} ${muted}`}>Live inbox notifications will appear here.</div>
+                      )}
                     </div>
 
                     <div className="space-y-2">
