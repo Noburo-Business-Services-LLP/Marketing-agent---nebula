@@ -181,6 +181,9 @@ router.get('/users', adminAuth, async (req, res) => {
         'businessProfile.targetGender': 1,
         'businessProfile.geographicReach': 1,
         'businessProfile.customerType': 1,
+        'businessProfile.pricePositioning': 1,
+        'businessProfile.keyDifferentiator': 1,
+        'businessProfile.brandStory': 1,
       }
     ).sort({ createdAt: -1 }).lean();
 
@@ -223,6 +226,9 @@ router.get('/users/:id/usage', adminAuth, async (req, res) => {
         'businessProfile.targetGender': 1,
         'businessProfile.geographicReach': 1,
         'businessProfile.customerType': 1,
+        'businessProfile.pricePositioning': 1,
+        'businessProfile.keyDifferentiator': 1,
+        'businessProfile.brandStory': 1,
       }).lean(),
       FeatureEvent.aggregate([
         { $match: { userId: oid } },
@@ -427,11 +433,15 @@ router.post('/users/:id/brand-dna', adminAuth, async (req, res) => {
     const allowedGender = ['mostly_men', 'mostly_women', 'both_equally', 'families', ''];
     const allowedReach = ['hyperlocal', 'local_city', 'regional', ''];
     const allowedCustomerType = ['mostly_new', 'mix_new_repeat', 'mostly_loyal', ''];
+    const allowedPricePositioning = ['budget', 'affordable', 'mid_range', 'premium', 'luxury', ''];
 
     const targetCustomerProfile = String(req.body.targetCustomerProfile || '').trim().slice(0, 2000);
     const targetGender = allowedGender.includes(req.body.targetGender) ? req.body.targetGender : '';
     const geographicReach = allowedReach.includes(req.body.geographicReach) ? req.body.geographicReach : '';
     const customerType = allowedCustomerType.includes(req.body.customerType) ? req.body.customerType : '';
+    const pricePositioning = allowedPricePositioning.includes(req.body.pricePositioning) ? req.body.pricePositioning : '';
+    const keyDifferentiator = String(req.body.keyDifferentiator || '').trim().slice(0, 150);
+    const brandStory = String(req.body.brandStory || '').trim().slice(0, 5000);
 
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
@@ -441,6 +451,9 @@ router.post('/users/:id/brand-dna', adminAuth, async (req, res) => {
     user.businessProfile.targetGender = targetGender;
     user.businessProfile.geographicReach = geographicReach;
     user.businessProfile.customerType = customerType;
+    user.businessProfile.pricePositioning = pricePositioning;
+    user.businessProfile.keyDifferentiator = keyDifferentiator;
+    user.businessProfile.brandStory = brandStory;
     await user.save({ validateBeforeSave: false });
 
     res.json({
@@ -450,6 +463,9 @@ router.post('/users/:id/brand-dna', adminAuth, async (req, res) => {
         targetGender: user.businessProfile.targetGender,
         geographicReach: user.businessProfile.geographicReach,
         customerType: user.businessProfile.customerType,
+        pricePositioning: user.businessProfile.pricePositioning,
+        keyDifferentiator: user.businessProfile.keyDifferentiator,
+        brandStory: user.businessProfile.brandStory,
       },
     });
   } catch (err) {

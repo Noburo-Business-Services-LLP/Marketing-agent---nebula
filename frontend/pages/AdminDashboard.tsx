@@ -32,6 +32,9 @@ interface UserRow {
     targetGender?: 'mostly_men' | 'mostly_women' | 'both_equally' | 'families' | '';
     geographicReach?: 'hyperlocal' | 'local_city' | 'regional' | '';
     customerType?: 'mostly_new' | 'mix_new_repeat' | 'mostly_loyal' | '';
+    pricePositioning?: 'budget' | 'affordable' | 'mid_range' | 'premium' | 'luxury' | '';
+    keyDifferentiator?: string;
+    brandStory?: string;
   };
 }
 
@@ -83,16 +86,29 @@ const adminFetch = async (path: string, options: RequestInit = {}) => {
   return res.json();
 };
 
+interface BrandDNAFields {
+  targetCustomerProfile: string;
+  targetGender: string;
+  geographicReach: string;
+  customerType: string;
+  pricePositioning: string;
+  keyDifferentiator: string;
+  brandStory: string;
+}
+
 const BrandDNAForm: React.FC<{
   user: UserRow;
   saving: boolean;
-  onSave: (userId: string, fields: { targetCustomerProfile: string; targetGender: string; geographicReach: string; customerType: string }) => void;
+  onSave: (userId: string, fields: BrandDNAFields) => void;
 }> = ({ user, saving, onSave }) => {
   const bp = user.businessProfile || {};
   const [targetCustomerProfile, setTargetCustomerProfile] = useState(bp.targetCustomerProfile || '');
   const [targetGender, setTargetGender] = useState<string>(bp.targetGender || '');
   const [geographicReach, setGeographicReach] = useState<string>(bp.geographicReach || '');
   const [customerType, setCustomerType] = useState<string>(bp.customerType || '');
+  const [pricePositioning, setPricePositioning] = useState<string>(bp.pricePositioning || '');
+  const [keyDifferentiator, setKeyDifferentiator] = useState(bp.keyDifferentiator || '');
+  const [brandStory, setBrandStory] = useState(bp.brandStory || '');
 
   // Reset local state when a different user is selected
   useEffect(() => {
@@ -100,6 +116,9 @@ const BrandDNAForm: React.FC<{
     setTargetGender(bp.targetGender || '');
     setGeographicReach(bp.geographicReach || '');
     setCustomerType(bp.customerType || '');
+    setPricePositioning(bp.pricePositioning || '');
+    setKeyDifferentiator(bp.keyDifferentiator || '');
+    setBrandStory(bp.brandStory || '');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user._id]);
 
@@ -107,7 +126,10 @@ const BrandDNAForm: React.FC<{
     targetCustomerProfile !== (bp.targetCustomerProfile || '') ||
     targetGender !== (bp.targetGender || '') ||
     geographicReach !== (bp.geographicReach || '') ||
-    customerType !== (bp.customerType || '');
+    customerType !== (bp.customerType || '') ||
+    pricePositioning !== (bp.pricePositioning || '') ||
+    keyDifferentiator !== (bp.keyDifferentiator || '') ||
+    brandStory !== (bp.brandStory || '');
 
   const SelectRow = (label: string, value: string, setValue: (v: string) => void, options: { value: string; label: string }[]) => (
     <div>
@@ -160,8 +182,41 @@ const BrandDNAForm: React.FC<{
         { value: 'mostly_loyal', label: 'Mostly loyal regulars' },
       ])}
 
+      {SelectRow('Price Positioning', pricePositioning, setPricePositioning, [
+        { value: 'budget', label: 'Budget' },
+        { value: 'affordable', label: 'Affordable' },
+        { value: 'mid_range', label: 'Mid-range' },
+        { value: 'premium', label: 'Premium' },
+        { value: 'luxury', label: 'Luxury' },
+      ])}
+
+      <div>
+        <p className="text-white/40 text-[11px] uppercase tracking-wider mb-1.5">
+          Key Differentiator <span className="text-white/30 normal-case">({keyDifferentiator.length}/150)</span>
+        </p>
+        <input
+          type="text"
+          maxLength={150}
+          value={keyDifferentiator}
+          onChange={e => setKeyDifferentiator(e.target.value)}
+          className="w-full bg-white/[0.05] border border-white/10 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-[#ffcc29]/50"
+          placeholder="One sentence — why choose this business over a competitor."
+        />
+      </div>
+
+      <div>
+        <p className="text-white/40 text-[11px] uppercase tracking-wider mb-1.5">Brand Story <span className="text-white/30 normal-case">(optional)</span></p>
+        <textarea
+          value={brandStory}
+          onChange={e => setBrandStory(e.target.value)}
+          rows={4}
+          className="w-full bg-white/[0.05] border border-white/10 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-[#ffcc29]/50 resize-none"
+          placeholder="Founding story, family legacy, awards, unique specialty."
+        />
+      </div>
+
       <button
-        onClick={() => onSave(user._id, { targetCustomerProfile, targetGender, geographicReach, customerType })}
+        onClick={() => onSave(user._id, { targetCustomerProfile, targetGender, geographicReach, customerType, pricePositioning, keyDifferentiator, brandStory })}
         disabled={saving || !dirty}
         className="w-full py-2.5 rounded-xl text-sm font-semibold bg-[#ffcc29]/10 text-[#ffcc29] hover:bg-[#ffcc29]/20 border border-[#ffcc29]/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
       >
@@ -271,6 +326,9 @@ const AdminDashboard: React.FC = () => {
     targetGender: string;
     geographicReach: string;
     customerType: string;
+    pricePositioning: string;
+    keyDifferentiator: string;
+    brandStory: string;
   }) => {
     setSavingBrandDNA(true);
     setAdminActionMsg('');

@@ -77,6 +77,9 @@ const userSchema = new mongoose.Schema({
     targetGender: { type: String, enum: ['mostly_men', 'mostly_women', 'both_equally', 'families', ''], default: '' },
     geographicReach: { type: String, enum: ['hyperlocal', 'local_city', 'regional', ''], default: '' },
     customerType: { type: String, enum: ['mostly_new', 'mix_new_repeat', 'mostly_loyal', ''], default: '' },
+    pricePositioning: { type: String, enum: ['budget', 'affordable', 'mid_range', 'premium', 'luxury', ''], default: '' },
+    keyDifferentiator: { type: String, default: '' },
+    brandStory: { type: String, default: '' },
 
     // Brand assets extracted from website
     brandAssets: {

@@ -2,6 +2,7 @@ export type BrandMaturity = 'established' | 'growing' | '';
 export type TargetGender = 'mostly_men' | 'mostly_women' | 'both_equally' | 'families' | '';
 export type GeographicReach = 'hyperlocal' | 'local_city' | 'regional' | '';
 export type CustomerType = 'mostly_new' | 'mix_new_repeat' | 'mostly_loyal' | '';
+export type PricePositioning = 'budget' | 'affordable' | 'mid_range' | 'premium' | 'luxury' | '';
 
 export interface BusinessProfile {
   name: string;
@@ -26,6 +27,9 @@ export interface BusinessProfile {
   targetGender?: TargetGender;
   geographicReach?: GeographicReach;
   customerType?: CustomerType;
+  pricePositioning?: PricePositioning;
+  keyDifferentiator?: string;
+  brandStory?: string;
 }
 
 export interface User {
