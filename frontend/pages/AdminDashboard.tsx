@@ -25,6 +25,14 @@ interface UserRow {
   trial?: { expiresAt?: string; isExpired?: boolean; migratedToProd?: boolean; reenabled?: boolean };
   mobileNumber?: string;
   isHidden?: boolean;
+  businessProfile?: {
+    yearsInBusiness?: number | null;
+    brandMaturity?: 'established' | 'growing' | '';
+    targetCustomerProfile?: string;
+    targetGender?: 'mostly_men' | 'mostly_women' | 'both_equally' | 'families' | '';
+    geographicReach?: 'hyperlocal' | 'local_city' | 'regional' | '';
+    customerType?: 'mostly_new' | 'mix_new_repeat' | 'mostly_loyal' | '';
+  };
 }
 
 interface FeatureUsage {
@@ -75,6 +83,94 @@ const adminFetch = async (path: string, options: RequestInit = {}) => {
   return res.json();
 };
 
+const BrandDNAForm: React.FC<{
+  user: UserRow;
+  saving: boolean;
+  onSave: (userId: string, fields: { targetCustomerProfile: string; targetGender: string; geographicReach: string; customerType: string }) => void;
+}> = ({ user, saving, onSave }) => {
+  const bp = user.businessProfile || {};
+  const [targetCustomerProfile, setTargetCustomerProfile] = useState(bp.targetCustomerProfile || '');
+  const [targetGender, setTargetGender] = useState<string>(bp.targetGender || '');
+  const [geographicReach, setGeographicReach] = useState<string>(bp.geographicReach || '');
+  const [customerType, setCustomerType] = useState<string>(bp.customerType || '');
+
+  // Reset local state when a different user is selected
+  useEffect(() => {
+    setTargetCustomerProfile(bp.targetCustomerProfile || '');
+    setTargetGender(bp.targetGender || '');
+    setGeographicReach(bp.geographicReach || '');
+    setCustomerType(bp.customerType || '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user._id]);
+
+  const dirty =
+    targetCustomerProfile !== (bp.targetCustomerProfile || '') ||
+    targetGender !== (bp.targetGender || '') ||
+    geographicReach !== (bp.geographicReach || '') ||
+    customerType !== (bp.customerType || '');
+
+  const SelectRow = (label: string, value: string, setValue: (v: string) => void, options: { value: string; label: string }[]) => (
+    <div>
+      <p className="text-white/40 text-[11px] uppercase tracking-wider mb-1.5">{label}</p>
+      <select
+        value={value}
+        onChange={e => setValue(e.target.value)}
+        className="w-full bg-white/[0.05] border border-white/10 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-[#ffcc29]/50"
+      >
+        <option value="">— Select —</option>
+        {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+    </div>
+  );
+
+  return (
+    <div className="px-5 py-4 border-b border-white/[0.04] space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-white/30 text-xs uppercase tracking-wider">Brand DNA <span className="text-white/20 normal-case">(CSM only)</span></p>
+        {dirty && <span className="text-[10px] text-amber-400">Unsaved</span>}
+      </div>
+
+      <div>
+        <p className="text-white/40 text-[11px] uppercase tracking-wider mb-1.5">Target Customer Profile</p>
+        <textarea
+          value={targetCustomerProfile}
+          onChange={e => setTargetCustomerProfile(e.target.value)}
+          rows={3}
+          className="w-full bg-white/[0.05] border border-white/10 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-[#ffcc29]/50 resize-none"
+          placeholder="Describe the typical customer — age, gender, occasion."
+        />
+      </div>
+
+      {SelectRow('Target Gender', targetGender, setTargetGender, [
+        { value: 'mostly_men', label: 'Mostly men' },
+        { value: 'mostly_women', label: 'Mostly women' },
+        { value: 'both_equally', label: 'Both equally' },
+        { value: 'families', label: 'Families together' },
+      ])}
+
+      {SelectRow('Geographic Reach', geographicReach, setGeographicReach, [
+        { value: 'hyperlocal', label: 'Hyperlocal — same street or area' },
+        { value: 'local_city', label: 'Local city' },
+        { value: 'regional', label: 'Regional — people come from nearby towns' },
+      ])}
+
+      {SelectRow('Customer Type', customerType, setCustomerType, [
+        { value: 'mostly_new', label: 'Mostly new customers' },
+        { value: 'mix_new_repeat', label: 'Mix of new and repeat' },
+        { value: 'mostly_loyal', label: 'Mostly loyal regulars' },
+      ])}
+
+      <button
+        onClick={() => onSave(user._id, { targetCustomerProfile, targetGender, geographicReach, customerType })}
+        disabled={saving || !dirty}
+        className="w-full py-2.5 rounded-xl text-sm font-semibold bg-[#ffcc29]/10 text-[#ffcc29] hover:bg-[#ffcc29]/20 border border-[#ffcc29]/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+      >
+        {saving ? 'Saving...' : dirty ? 'Save Brand DNA' : 'Saved'}
+      </button>
+    </div>
+  );
+};
+
 const getTrialInfo = (user: UserRow) => {
   if (user.trial?.migratedToProd) return { label: 'Converted', cls: 'text-blue-400 bg-blue-500/10 border border-blue-500/20' };
   if (user.trial?.isExpired) return { label: 'Expired', cls: 'text-red-400 bg-red-500/10 border border-red-500/20' };
@@ -111,6 +207,7 @@ const AdminDashboard: React.FC = () => {
   const [creditsToAdd, setCreditsToAdd] = useState('100');
   const [trialDaysToAdd, setTrialDaysToAdd] = useState('7');
   const [adminActionMsg, setAdminActionMsg] = useState('');
+  const [savingBrandDNA, setSavingBrandDNA] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -167,6 +264,29 @@ const AdminDashboard: React.FC = () => {
       }
     } catch { setAdminActionMsg('Failed to add credits'); }
     setAddingCredits(false);
+  };
+
+  const handleSaveBrandDNA = async (userId: string, fields: {
+    targetCustomerProfile: string;
+    targetGender: string;
+    geographicReach: string;
+    customerType: string;
+  }) => {
+    setSavingBrandDNA(true);
+    setAdminActionMsg('');
+    try {
+      const res = await adminFetch(`/users/${userId}/brand-dna`, { method: 'POST', body: JSON.stringify(fields) });
+      if (res.success) {
+        setAdminActionMsg('Brand DNA saved');
+        if (selected) setSelected(prev => prev ? {
+          ...prev,
+          user: { ...prev.user, businessProfile: { ...prev.user.businessProfile, ...fields } as any },
+        } : prev);
+      } else {
+        setAdminActionMsg(res.message || 'Failed to save Brand DNA');
+      }
+    } catch { setAdminActionMsg('Failed to save Brand DNA'); }
+    setSavingBrandDNA(false);
   };
 
   const createCoupon = async () => {
@@ -627,6 +747,28 @@ const AdminDashboard: React.FC = () => {
                           <p className="text-white text-sm font-medium">{selected.user.mobileNumber}</p>
                         </div>
                       )}
+
+                      {/* Customer-filled business profile snapshot */}
+                      {(selected.user.businessProfile?.yearsInBusiness !== undefined || selected.user.businessProfile?.brandMaturity) && (
+                        <div className="px-5 py-3 border-b border-white/[0.04] space-y-2">
+                          <p className="text-white/30 text-xs uppercase tracking-wider">Business Profile</p>
+                          {selected.user.businessProfile?.yearsInBusiness !== undefined && selected.user.businessProfile?.yearsInBusiness !== null && (
+                            <div className="flex justify-between text-sm">
+                              <span className="text-white/45">Years in business</span>
+                              <span className="text-white font-medium">{selected.user.businessProfile.yearsInBusiness}</span>
+                            </div>
+                          )}
+                          {selected.user.businessProfile?.brandMaturity && (
+                            <div className="flex justify-between text-sm">
+                              <span className="text-white/45">Brand maturity</span>
+                              <span className="text-white font-medium capitalize">{selected.user.businessProfile.brandMaturity}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Brand DNA — CSM-only */}
+                      <BrandDNAForm user={selected.user} saving={savingBrandDNA} onSave={handleSaveBrandDNA} />
 
                       {/* Admin Actions */}
                       <div className="px-5 py-4 border-b border-white/[0.04] space-y-3">

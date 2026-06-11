@@ -174,7 +174,13 @@ router.get('/users', adminAuth, async (req, res) => {
         createdAt: 1, lastLoginAt: 1, mobileNumber: 1, isHidden: 1,
         'credits.balance': 1, 'credits.totalUsed': 1,
         'trial.expiresAt': 1, 'trial.isExpired': 1, 'trial.migratedToProd': 1, 'trial.reenabled': 1,
-        connectedSocials: 1, onboardingCompleted: 1
+        connectedSocials: 1, onboardingCompleted: 1,
+        'businessProfile.yearsInBusiness': 1,
+        'businessProfile.brandMaturity': 1,
+        'businessProfile.targetCustomerProfile': 1,
+        'businessProfile.targetGender': 1,
+        'businessProfile.geographicReach': 1,
+        'businessProfile.customerType': 1,
       }
     ).sort({ createdAt: -1 }).lean();
 
@@ -207,10 +213,16 @@ router.get('/users/:id/usage', adminAuth, async (req, res) => {
     const [user, events, creditsBurned] = await Promise.all([
       User.findById(id, {
         email: 1, firstName: 1, lastName: 1, companyName: 1, isActive: 1,
-        createdAt: 1, lastLoginAt: 1,
+        createdAt: 1, lastLoginAt: 1, mobileNumber: 1, isHidden: 1,
         'credits.balance': 1, 'credits.totalUsed': 1,
         'trial.expiresAt': 1, 'trial.isExpired': 1, 'trial.migratedToProd': 1, 'trial.reenabled': 1,
-        connectedSocials: 1, onboardingCompleted: 1
+        connectedSocials: 1, onboardingCompleted: 1,
+        'businessProfile.yearsInBusiness': 1,
+        'businessProfile.brandMaturity': 1,
+        'businessProfile.targetCustomerProfile': 1,
+        'businessProfile.targetGender': 1,
+        'businessProfile.geographicReach': 1,
+        'businessProfile.customerType': 1,
       }).lean(),
       FeatureEvent.aggregate([
         { $match: { userId: oid } },
@@ -405,6 +417,44 @@ router.post('/users/:id/add-credits', adminAuth, async (req, res) => {
     res.json({ success: true, newBalance: user.credits.balance });
   } catch (err) {
     res.status(500).json({ error: 'Failed to add credits' });
+  }
+});
+
+// POST /api/admin/users/:id/brand-dna
+// CSM-only — saves the Brand DNA fields filled during the Brand DNA session
+router.post('/users/:id/brand-dna', adminAuth, async (req, res) => {
+  try {
+    const allowedGender = ['mostly_men', 'mostly_women', 'both_equally', 'families', ''];
+    const allowedReach = ['hyperlocal', 'local_city', 'regional', ''];
+    const allowedCustomerType = ['mostly_new', 'mix_new_repeat', 'mostly_loyal', ''];
+
+    const targetCustomerProfile = String(req.body.targetCustomerProfile || '').trim().slice(0, 2000);
+    const targetGender = allowedGender.includes(req.body.targetGender) ? req.body.targetGender : '';
+    const geographicReach = allowedReach.includes(req.body.geographicReach) ? req.body.geographicReach : '';
+    const customerType = allowedCustomerType.includes(req.body.customerType) ? req.body.customerType : '';
+
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    if (!user.businessProfile) user.businessProfile = {};
+    user.businessProfile.targetCustomerProfile = targetCustomerProfile;
+    user.businessProfile.targetGender = targetGender;
+    user.businessProfile.geographicReach = geographicReach;
+    user.businessProfile.customerType = customerType;
+    await user.save({ validateBeforeSave: false });
+
+    res.json({
+      success: true,
+      businessProfile: {
+        targetCustomerProfile: user.businessProfile.targetCustomerProfile,
+        targetGender: user.businessProfile.targetGender,
+        geographicReach: user.businessProfile.geographicReach,
+        customerType: user.businessProfile.customerType,
+      },
+    });
+  } catch (err) {
+    console.error('Save Brand DNA error:', err);
+    res.status(500).json({ success: false, message: 'Failed to save Brand DNA' });
   }
 });
 

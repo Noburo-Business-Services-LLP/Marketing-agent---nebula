@@ -70,7 +70,9 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
         brandVoice: [] as string[],
         marketingGoals: [],
         description: '',
-        competitors: []
+        competitors: [],
+        yearsInBusiness: undefined,
+        brandMaturity: '',
     });
     const [mobileNumber, setMobileNumber] = useState(savedState?.mobileNumber || '');
 
@@ -307,6 +309,10 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
             if (!formData.name || !formData.niche) return "Company Name and Niche are required.";
             if (!formData.businessType) return "Please select your business type (B2B, B2C, or Both).";
             if (!formData.businessLocation) return "Please enter your business location.";
+            if (formData.yearsInBusiness === undefined || formData.yearsInBusiness === null || Number.isNaN(Number(formData.yearsInBusiness)) || Number(formData.yearsInBusiness) < 0) {
+                return "Please enter your years in business (0 or more).";
+            }
+            if (!formData.brandMaturity) return "Please select your brand maturity.";
             if (formData.gstNumber && formData.gstNumber.trim().length > 0) {
                 if (formData.gstNumber.trim().length !== 15) return "GST number must be exactly 15 characters.";
                 if (gstStatus === 'invalid') return "GST number is invalid. Please enter a valid GST number.";
@@ -715,6 +721,55 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                     <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-[#ededed]/50' : 'text-gray-500'}`}>
                                         Enter the city/region where your business primarily operates
                                     </p>
+                                </div>
+                                <div>
+                                    <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Years in Business <span className="text-red-500">*</span></label>
+                                    <input
+                                        type="number"
+                                        min={0}
+                                        step={1}
+                                        className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#ffcc29] ${
+                                            theme === 'dark'
+                                                ? 'bg-[#070A12] border-[#ffcc29]/30 text-[#ededed] placeholder-[#ededed]/40'
+                                                : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
+                                        }`}
+                                        placeholder="e.g. 12"
+                                        value={formData.yearsInBusiness ?? ''}
+                                        onChange={e => {
+                                            const v = e.target.value;
+                                            if (v === '') {
+                                                handleChange('yearsInBusiness', undefined as any);
+                                            } else {
+                                                const n = Math.max(0, Math.floor(Number(v)));
+                                                handleChange('yearsInBusiness', n as any);
+                                            }
+                                        }}
+                                    />
+                                </div>
+                                <div>
+                                    <label className={`block text-sm font-bold mb-2 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Brand Maturity <span className="text-red-500">*</span></label>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        {[
+                                            { value: 'established', label: 'Established', desc: 'Well known locally' },
+                                            { value: 'growing', label: 'Growing', desc: 'Building our name' },
+                                        ].map(option => (
+                                            <button
+                                                key={option.value}
+                                                type="button"
+                                                onClick={() => handleChange('brandMaturity', option.value as any)}
+                                                className={`p-3 rounded-lg border text-left transition-all ${
+                                                    formData.brandMaturity === option.value
+                                                        ? 'border-[#ffcc29] bg-[#ffcc29]/10 text-[#ffcc29]'
+                                                        : theme === 'dark'
+                                                            ? 'border-[#ededed]/20 hover:border-[#ffcc29]/50 text-[#ededed]/70'
+                                                            : 'border-gray-200 hover:border-[#ffcc29]/50 text-gray-600'
+                                                }`}
+                                            >
+                                                <div className="font-bold text-sm">{option.label}</div>
+                                                <div className="text-xs opacity-70">{option.desc}</div>
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
                                 <div>
                                     <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>GST Number <span className={`text-xs font-normal ${theme === 'dark' ? 'text-[#ededed]/40' : 'text-gray-400'}`}>(optional)</span></label>

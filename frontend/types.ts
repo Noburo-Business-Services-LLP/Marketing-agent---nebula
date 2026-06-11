@@ -1,3 +1,8 @@
+export type BrandMaturity = 'established' | 'growing' | '';
+export type TargetGender = 'mostly_men' | 'mostly_women' | 'both_equally' | 'families' | '';
+export type GeographicReach = 'hyperlocal' | 'local_city' | 'regional' | '';
+export type CustomerType = 'mostly_new' | 'mix_new_repeat' | 'mostly_loyal' | '';
+
 export interface BusinessProfile {
   name: string;
   website: string;
@@ -11,6 +16,16 @@ export interface BusinessProfile {
   marketingGoals: string[]; // e.g., Brand Awareness, Sales, Leads
   description: string;
   competitors?: string[]; // Competitor names/brands to track
+
+  // Customer-filled during onboarding
+  yearsInBusiness?: number;
+  brandMaturity?: BrandMaturity;
+
+  // CSM-filled during Brand DNA session (admin dashboard only)
+  targetCustomerProfile?: string;
+  targetGender?: TargetGender;
+  geographicReach?: GeographicReach;
+  customerType?: CustomerType;
 }
 
 export interface User {

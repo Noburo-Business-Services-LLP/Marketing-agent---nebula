@@ -67,6 +67,17 @@ const userSchema = new mongoose.Schema({
     marketingGoals: [{ type: String }],
     description: { type: String, default: '' },
     competitors: [{ type: String }],
+
+    // Customer-filled during onboarding
+    yearsInBusiness: { type: Number, min: 0, default: null },
+    brandMaturity: { type: String, enum: ['established', 'growing', ''], default: '' },
+
+    // CSM-filled during Brand DNA session (admin dashboard only)
+    targetCustomerProfile: { type: String, default: '' },
+    targetGender: { type: String, enum: ['mostly_men', 'mostly_women', 'both_equally', 'families', ''], default: '' },
+    geographicReach: { type: String, enum: ['hyperlocal', 'local_city', 'regional', ''], default: '' },
+    customerType: { type: String, enum: ['mostly_new', 'mix_new_repeat', 'mostly_loyal', ''], default: '' },
+
     // Brand assets extracted from website
     brandAssets: {
       logoUrl: { type: String, default: '' },
