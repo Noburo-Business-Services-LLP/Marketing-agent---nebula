@@ -262,7 +262,7 @@ const App: React.FC = () => {
       </Routes>
       
       {/* Floating ChatBot - appears on all pages */}
-      <ChatBot />
+      {/* <ChatBot /> */}
       
       {/* Campaign Reminder Pop-ups - only for logged in users */}
       {user && user.onboardingCompleted && <CampaignReminderPopup />}

@@ -294,7 +294,7 @@ async function postToSocialMedia(platforms, content, options = {}) {
       'Content-Type': 'application/json'
     };
 
-    if (options.profileKey) {
+    if (options.profileKey && options.profileKey !== 'primary') {
       headers['Profile-Key'] = options.profileKey;
       console.log('Using Profile-Key for posting:', options.profileKey.substring(0, 20) + '...');
     }
@@ -376,7 +376,7 @@ async function retryPost(postId, options = {}) {
       'Authorization': `Bearer ${AYRSHARE_API_KEY}`
     };
 
-    if (options.profileKey) {
+    if (options.profileKey && options.profileKey !== 'primary') {
       headers['Profile-Key'] = options.profileKey;
       headers['X-Profile-Key'] = options.profileKey;
     }
@@ -450,7 +450,7 @@ async function getUserSocialAnalytics(profileKey, platforms = ['instagram', 'fac
         'Content-Type': 'application/json'
       };
 
-      if (profileKey) {
+      if (profileKey && profileKey !== 'primary') {
         headers['Profile-Key'] = profileKey;
       }
 
@@ -502,7 +502,7 @@ async function getPostHistory(options = {}) {
       'Authorization': `Bearer ${AYRSHARE_API_KEY}`,
       'Content-Type': 'application/json'
     };
-    if (options.profileKey) {
+    if (options.profileKey && options.profileKey !== 'primary') {
       headers['Profile-Key'] = options.profileKey;
       headers['X-Profile-Key'] = options.profileKey;
     }
@@ -536,7 +536,7 @@ async function getPostStatus(postId, options = {}) {
       'Authorization': `Bearer ${AYRSHARE_API_KEY}`,
       'Content-Type': 'application/json'
     };
-    if (options.profileKey) {
+    if (options.profileKey && options.profileKey !== 'primary') {
       headers['Profile-Key'] = options.profileKey;
       headers['X-Profile-Key'] = options.profileKey;
     }
@@ -570,7 +570,7 @@ async function deletePost(postId, options = {}) {
       'Authorization': `Bearer ${AYRSHARE_API_KEY}`,
       'Content-Type': 'application/json'
     };
-    if (options.profileKey) {
+    if (options.profileKey && options.profileKey !== 'primary') {
       headers['Profile-Key'] = options.profileKey;
       headers['X-Profile-Key'] = options.profileKey;
     }
@@ -792,12 +792,15 @@ async function getAyrshareUserProfile(profileKey) {
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
+      const headers = {
+        'Authorization': `Bearer ${AYRSHARE_API_KEY}`
+      };
+      if (profileKey && profileKey !== 'primary') {
+        headers['Profile-Key'] = profileKey;
+      }
       const response = await makeRequest('https://api.ayrshare.com/api/user', {
         method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${AYRSHARE_API_KEY}`,
-          'Profile-Key': profileKey
-        }
+        headers: headers
       });
 
       if (response.status === 200) {

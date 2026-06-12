@@ -517,11 +517,17 @@ router.get('/:platform/auth', protect, async (req, res) => {
           user.ayrshare.lastCheckedAt = user.ayrshare.lastCheckedAt || null;
           user.ayrshare.lastError = typeof user.ayrshare.lastError === "string" ? user.ayrshare.lastError : "";
         } else {
-          return res.status(500).json({
-            success: false,
-            message: 'Failed to create social linking profile',
-            error: createResult.error
-          });
+          console.log('[Platform Auth] Profile creation failed. Falling back to primary.');
+          profileKey = 'primary';
+          user.ayrshare = user.ayrshare || {};
+          user.ayrshare.profileKey = 'primary';
+          user.ayrshare.refId = 'primary-ref';
+          user.ayrshare.title = 'Primary Profile';
+          user.ayrshare.createdAt = new Date();
+          user.ayrshare.activeSocialAccounts = Array.isArray(user.ayrshare.activeSocialAccounts) ? user.ayrshare.activeSocialAccounts : [];
+          user.ayrshare.displayNames = Array.isArray(user.ayrshare.displayNames) ? user.ayrshare.displayNames : [];
+          user.ayrshare.lastCheckedAt = user.ayrshare.lastCheckedAt || null;
+          user.ayrshare.lastError = "";
         }
       } else {
         profileKey = createResult.profileKey;
@@ -546,6 +552,24 @@ router.get('/:platform/auth', protect, async (req, res) => {
     // Map platform to Ayrshare's expected format for allowedSocial
     const ayrshareplatform = AYRSHARE_PLATFORM_MAP[platformLower] || platformLower;
     
+    if (profileKey === 'primary') {
+      const connectUrlResult = getAyrshareConnectUrl(platformLower, redirectUrl);
+      if (!connectUrlResult.success) {
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to generate social linking URL',
+          error: connectUrlResult.error
+        });
+      }
+      return res.json({
+        success: true,
+        configured: true,
+        authUrl: connectUrlResult.connectUrl,
+        method: 'ayrshare_direct',
+        message: `Connect your ${platform} account securely`
+      });
+    }
+
     const jwtResult = await generateAyrshareJWT(profileKey, {
       redirect: redirectUrl,
       logout: true, // Force clear any existing Ayrshare browser session — prevents connecting to the wrong profile

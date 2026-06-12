@@ -812,7 +812,7 @@ const ConnectSocials: React.FC = () => {
             <div className={`rounded-2xl border p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3 ${theme.bgCard} ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'}`}>
               <div>
                 <h2 className={`text-lg font-bold ${theme.text}`}>Unified Social Inbox</h2>
-                <p className={`text-sm ${theme.textSecondary}`}>Connect Socials to OAuth Authentication to Webhook Registration to Social Inbox Access.</p>
+                <p className={`text-sm ${theme.textSecondary}`}>Real comments, DMs, mentions, and replies from connected social accounts.</p>
               </div>
               <div className="flex items-center gap-2 text-xs font-bold text-green-400">
                 <CheckCircle2 className="w-4 h-4" /> {connectedPlatformCount} connected

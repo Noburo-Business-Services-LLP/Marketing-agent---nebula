@@ -102,6 +102,34 @@
         background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.05) 50%, transparent 100%);
         background-size: 200% 100%;
       }
+          /* Hide standard browser password reveal and credential autofill icons */
+      input[type="password"]::-ms-reveal,
+      input[type="password"]::-ms-clear {
+        display: none;
+      }
+      input::-webkit-credentials-auto-fill-button {
+        visibility: hidden;
+        display: none !important;
+        pointer-events: none;
+      }
+    
+      /* Fix WebKit autofill styling to match theme */
+      .dark input:-webkit-autofill,
+      .dark input:-webkit-autofill:hover,
+      .dark input:-webkit-autofill:focus,
+      .dark input:-webkit-autofill:active {
+        -webkit-box-shadow: 0 0 0 30px #070A12 inset !important;
+        -webkit-text-fill-color: #ededed !important;
+        transition: background-color 5000s ease-in-out 0s;
+      }
+      input:-webkit-autofill,
+      input:-webkit-autofill:hover,
+      input:-webkit-autofill:focus,
+      input:-webkit-autofill:active {
+        -webkit-box-shadow: 0 0 0 30px #f9fafb inset !important;
+        -webkit-text-fill-color: #111827 !important;
+        transition: background-color 5000s ease-in-out 0s;
+      }
     </style>
   <script type="importmap">
 {

@@ -3,10 +3,7 @@ import {
   AlertTriangle,
   Bot,
   CheckCheck,
-  Clock,
   Facebook,
-  Filter,
-  Hash,
   Instagram,
   Linkedin,
   Loader2,
@@ -16,8 +13,6 @@ import {
   Send,
   ShieldAlert,
   Sparkles,
-  Star,
-  Tag,
   Twitter,
   Youtube,
 } from 'lucide-react';
@@ -25,96 +20,6 @@ import { inboxAPI, InboxConversation, InboxMessage } from '../services/api';
 import { useTheme } from '../context/ThemeContext';
 
 type Platform = 'instagram' | 'facebook' | 'linkedin' | 'x' | 'youtube';
-
-const fallbackConversations: InboxConversation[] = [
-  {
-    id: 'demo-ig-1',
-    platform: 'instagram',
-    participant_name: 'Priya Sharma',
-    participant_username: 'priya.shop',
-    last_message_preview: 'Is the blue variant available this week?',
-    last_message_at: new Date(Date.now() - 1000 * 60 * 14).toISOString(),
-    status: 'unread',
-    priority: 'high',
-    tags: ['lead', 'product'],
-    sentiment: 'neutral',
-    spam_score: 0.03,
-    social_account_id: 'demo',
-  },
-  {
-    id: 'demo-fb-1',
-    platform: 'facebook',
-    participant_name: 'Arjun Mehta',
-    participant_username: 'arjun.m',
-    last_message_preview: 'Thanks, the campaign offer looks great.',
-    last_message_at: new Date(Date.now() - 1000 * 60 * 78).toISOString(),
-    status: 'read',
-    priority: 'normal',
-    tags: ['support'],
-    sentiment: 'positive',
-    spam_score: 0.01,
-    social_account_id: 'demo',
-  },
-  {
-    id: 'demo-x-1',
-    platform: 'x',
-    participant_name: 'Growth Pulse',
-    participant_username: 'growthpulse',
-    last_message_preview: 'Urgent: can your team clarify the pricing?',
-    last_message_at: new Date(Date.now() - 1000 * 60 * 180).toISOString(),
-    status: 'unread',
-    priority: 'urgent',
-    tags: ['pricing'],
-    sentiment: 'negative',
-    spam_score: 0.08,
-    social_account_id: 'demo',
-  },
-];
-
-const fallbackMessages: Record<string, InboxMessage[]> = {
-  'demo-ig-1': [
-    {
-      id: 'm1',
-      conversation_id: 'demo-ig-1',
-      platform: 'instagram',
-      direction: 'inbound',
-      message_type: 'comment',
-      author_name: 'Priya Sharma',
-      body: 'Is the blue variant available this week?',
-      created_at: new Date(Date.now() - 1000 * 60 * 14).toISOString(),
-      sentiment: 'neutral',
-      spam_score: 0.03,
-    },
-  ],
-  'demo-fb-1': [
-    {
-      id: 'm2',
-      conversation_id: 'demo-fb-1',
-      platform: 'facebook',
-      direction: 'inbound',
-      message_type: 'message',
-      author_name: 'Arjun Mehta',
-      body: 'Thanks, the campaign offer looks great.',
-      created_at: new Date(Date.now() - 1000 * 60 * 78).toISOString(),
-      sentiment: 'positive',
-      spam_score: 0.01,
-    },
-  ],
-  'demo-x-1': [
-    {
-      id: 'm3',
-      conversation_id: 'demo-x-1',
-      platform: 'x',
-      direction: 'inbound',
-      message_type: 'mention',
-      author_name: 'Growth Pulse',
-      body: 'Urgent: can your team clarify the pricing?',
-      created_at: new Date(Date.now() - 1000 * 60 * 180).toISOString(),
-      sentiment: 'negative',
-      spam_score: 0.08,
-    },
-  ],
-};
 
 const platformMeta: Record<Platform, { label: string; icon: React.ElementType; className: string }> = {
   instagram: { label: 'Instagram', icon: Instagram, className: 'bg-pink-500/10 text-pink-400 border-pink-500/25' },
@@ -154,9 +59,11 @@ const UnifiedInbox: React.FC = () => {
   const [threadLoading, setThreadLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [live, setLive] = useState(false);
+  const [error, setError] = useState('');
+  const [threadError, setThreadError] = useState('');
   const threadEndRef = useRef<HTMLDivElement>(null);
 
-  const selected = conversations.find(item => item.id === selectedId) || conversations[0];
+  const selected = conversations.find(item => item.id === selectedId) || null;
 
   const loadConversations = async () => {
     setLoading(true);
@@ -168,12 +75,15 @@ const UnifiedInbox: React.FC = () => {
         assignedUserId,
         search,
       });
-      const list = result.conversations?.length ? result.conversations : fallbackConversations;
+      const list = result.conversations || [];
       setConversations(list);
-      setSelectedId(current => current || list[0]?.id || '');
-    } catch {
-      setConversations(fallbackConversations);
-      setSelectedId(current => current || fallbackConversations[0].id);
+      setSelectedId(current => list.some(item => item.id === current) ? current : list[0]?.id || '');
+      setError('');
+    } catch (err: any) {
+      setConversations([]);
+      setSelectedId('');
+      setMessages([]);
+      setError(err?.message || 'Failed to load real inbox conversations.');
     } finally {
       setLoading(false);
     }
@@ -194,14 +104,13 @@ const UnifiedInbox: React.FC = () => {
       setThreadLoading(true);
       try {
         const result = await inboxAPI.getMessages(selected.id);
-        setMessages(result.messages?.length ? result.messages : fallbackMessages[selected.id] || []);
+        setMessages(result.messages || []);
         setSuggestions(result.ai?.suggestions || []);
-      } catch {
-        setMessages(fallbackMessages[selected.id] || []);
-        setSuggestions([
-          'Thanks for reaching out. This is available, and we can help you choose the right option.',
-          'Happy to clarify. Could you share your preferred size or budget range?',
-        ]);
+        setThreadError('');
+      } catch (err: any) {
+        setMessages([]);
+        setSuggestions([]);
+        setThreadError(err?.message || 'Failed to load this conversation.');
       } finally {
         setThreadLoading(false);
       }
@@ -214,7 +123,7 @@ const UnifiedInbox: React.FC = () => {
   }, [messages]);
 
   useEffect(() => {
-    const ws = inboxAPI.openSocket('demo-user');
+    const ws = inboxAPI.openSocket();
     if (!ws) return;
     ws.onopen = () => setLive(true);
     ws.onclose = () => setLive(false);
@@ -259,35 +168,18 @@ const UnifiedInbox: React.FC = () => {
       const result = await inboxAPI.reply(selected.id, body);
       setMessages(current => [...current, result.message]);
       setConversations(current => current.map(item => item.id === selected.id ? { ...item, status: 'replied', last_message_preview: body } : item));
-    } catch {
-      setMessages(current => [...current, {
-        id: `local-${Date.now()}`,
-        conversation_id: selected.id,
-        platform: selected.platform,
-        direction: 'outbound',
-        message_type: 'reply',
-        author_name: 'Nebulaa',
-        body,
-        created_at: new Date().toISOString(),
-        sentiment: 'neutral',
-        spam_score: 0,
-      }]);
+    } catch (err: any) {
+      setReply(body);
+      setThreadError(err?.message || 'Reply could not be sent.');
     } finally {
       setSending(false);
     }
   };
 
-  const markStatus = async (nextStatus: string) => {
-    if (!selected) return;
-    setConversations(current => current.map(item => item.id === selected.id ? { ...item, status: nextStatus } : item));
-    try {
-      await inboxAPI.updateStatus(selected.id, nextStatus);
-    } catch {
-      // Keep optimistic UI for demo mode.
-    }
-  };
+  const [simulating, setSimulating] = useState(false);
 
-  const createTestMessage = async () => {
+  const simulateTestEvent = async () => {
+    setSimulating(true);
     try {
       const result = await inboxAPI.createTestEvent({
         platform: platform === 'all' ? 'instagram' : platform,
@@ -302,8 +194,20 @@ const UnifiedInbox: React.FC = () => {
         setConversations(current => [result.conversation, ...current.filter(item => item.id !== result.conversation.id)]);
         setSelectedId(result.conversation.id);
       }
-    } catch {
-      // Development helper only.
+    } catch (err: any) {
+      alert('Simulation failed: ' + (err?.message || err));
+    } finally {
+      setSimulating(false);
+    }
+  };
+
+  const markStatus = async (nextStatus: string) => {
+    if (!selected) return;
+    setConversations(current => current.map(item => item.id === selected.id ? { ...item, status: nextStatus } : item));
+    try {
+      await inboxAPI.updateStatus(selected.id, nextStatus);
+    } catch (err: any) {
+      setThreadError(err?.message || 'Could not update conversation status.');
     }
   };
 
@@ -356,10 +260,15 @@ const UnifiedInbox: React.FC = () => {
                 value={assignedUserId}
                 onChange={event => setAssignedUserId(event.target.value)}
                 placeholder="Assigned user ID"
-                className={`px-2 py-2 rounded-lg border text-xs outline-none ${panel}`}
+                className={`px-3 py-2 rounded-lg border text-xs outline-none ${panel}`}
               />
-              <button onClick={createTestMessage} className="px-3 py-2 rounded-lg bg-[#ffcc29] text-[#070A12] text-xs font-bold">
-                Test
+              <button
+                onClick={simulateTestEvent}
+                disabled={simulating}
+                className="px-3 py-2 rounded-lg bg-[#ffcc29] text-[#070A12] text-xs font-bold hover:bg-[#ffcc29]/80 disabled:opacity-50 flex items-center gap-1 shrink-0"
+              >
+                {simulating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                Simulate
               </button>
             </div>
           </div>
@@ -367,6 +276,25 @@ const UnifiedInbox: React.FC = () => {
           <div className="flex-1 overflow-y-auto">
             {loading ? (
               <div className="h-full flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-[#ffcc29]" /></div>
+            ) : error ? (
+              <div className="h-full flex items-center justify-center p-6 text-center">
+                <div>
+                  <AlertTriangle className="w-9 h-9 mx-auto text-amber-400 mb-3" />
+                  <p className="font-semibold">Inbox unavailable</p>
+                  <p className={`text-sm mt-1 ${muted}`}>{error}</p>
+                  <button onClick={loadConversations} className="mt-4 px-4 py-2 rounded-lg bg-[#ffcc29] text-[#070A12] text-sm font-bold">
+                    Retry
+                  </button>
+                </div>
+              </div>
+            ) : conversations.length === 0 ? (
+              <div className="h-full flex items-center justify-center p-6 text-center">
+                <div>
+                  <MessageCircle className="w-10 h-10 mx-auto text-slate-400 mb-3" />
+                  <p className="font-semibold">No real inbox messages yet</p>
+                  <p className={`text-sm mt-1 ${muted}`}>New comments, DMs, mentions, and replies from connected platforms will appear here.</p>
+                </div>
+              </div>
             ) : conversations.map(item => {
               const meta = platformMeta[item.platform as Platform];
               const Icon = meta?.icon || MessageCircle;
@@ -427,6 +355,22 @@ const UnifiedInbox: React.FC = () => {
                   <div className={`flex-1 overflow-y-auto p-4 space-y-4 ${isDarkMode ? 'bg-[#080b12]' : 'bg-slate-50'}`}>
                     {threadLoading ? (
                       <div className="h-full flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-[#ffcc29]" /></div>
+                    ) : threadError ? (
+                      <div className="h-full flex items-center justify-center text-center">
+                        <div>
+                          <AlertTriangle className="w-9 h-9 mx-auto text-amber-400 mb-3" />
+                          <p className="font-semibold">Conversation unavailable</p>
+                          <p className={`text-sm mt-1 ${muted}`}>{threadError}</p>
+                        </div>
+                      </div>
+                    ) : messages.length === 0 ? (
+                      <div className="h-full flex items-center justify-center text-center">
+                        <div>
+                          <MessageCircle className="w-10 h-10 mx-auto text-slate-400 mb-3" />
+                          <p className="font-semibold">No messages in this thread</p>
+                          <p className={`text-sm mt-1 ${muted}`}>Messages will show here when the platform sends real inbox events.</p>
+                        </div>
+                      </div>
                     ) : messages.map(message => {
                       const outbound = message.direction === 'outbound';
                       return (
@@ -502,20 +446,14 @@ const UnifiedInbox: React.FC = () => {
 
                     <div className="space-y-2">
                       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Suggestions</p>
-                      {suggestions.map(suggestion => (
+                      {suggestions.length ? suggestions.map(suggestion => (
                         <button key={suggestion} onClick={() => setReply(suggestion)} className={`w-full text-left rounded-lg border p-3 text-sm leading-relaxed ${panel} hover:border-[#ffcc29]/60`}>
                           <Bot className="w-4 h-4 text-[#ffcc29] mb-2" />
                           {suggestion}
                         </button>
-                      ))}
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2">
-                      {[Filter, Hash, Tag, Star, Clock, AlertTriangle].map((Icon, index) => (
-                        <button key={index} className={`p-3 rounded-lg border flex items-center justify-center ${panel}`}>
-                          <Icon className="w-4 h-4" />
-                        </button>
-                      ))}
+                      )) : (
+                        <div className={`rounded-lg border p-3 text-sm ${panel} ${muted}`}>No AI suggestions available for this real conversation yet.</div>
+                      )}
                     </div>
                   </div>
                 </aside>
