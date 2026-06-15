@@ -35,6 +35,10 @@ interface UserRow {
     pricePositioning?: 'budget' | 'affordable' | 'mid_range' | 'premium' | 'luxury' | '';
     keyDifferentiator?: string;
     brandStory?: string;
+    heroProduct?: string;
+    contentLanguage?: 'tamil' | 'english' | 'tamil_english_mix' | '';
+    contentRestrictions?: string;
+    firstMonthContentAngles?: string;
   };
 }
 
@@ -94,6 +98,10 @@ interface BrandDNAFields {
   pricePositioning: string;
   keyDifferentiator: string;
   brandStory: string;
+  heroProduct: string;
+  contentLanguage: string;
+  contentRestrictions: string;
+  firstMonthContentAngles: string;
 }
 
 const BrandDNAForm: React.FC<{
@@ -109,6 +117,10 @@ const BrandDNAForm: React.FC<{
   const [pricePositioning, setPricePositioning] = useState<string>(bp.pricePositioning || '');
   const [keyDifferentiator, setKeyDifferentiator] = useState(bp.keyDifferentiator || '');
   const [brandStory, setBrandStory] = useState(bp.brandStory || '');
+  const [heroProduct, setHeroProduct] = useState(bp.heroProduct || '');
+  const [contentLanguage, setContentLanguage] = useState<string>(bp.contentLanguage || '');
+  const [contentRestrictions, setContentRestrictions] = useState(bp.contentRestrictions || '');
+  const [firstMonthContentAngles, setFirstMonthContentAngles] = useState(bp.firstMonthContentAngles || '');
 
   // Reset local state when a different user is selected
   useEffect(() => {
@@ -119,6 +131,10 @@ const BrandDNAForm: React.FC<{
     setPricePositioning(bp.pricePositioning || '');
     setKeyDifferentiator(bp.keyDifferentiator || '');
     setBrandStory(bp.brandStory || '');
+    setHeroProduct(bp.heroProduct || '');
+    setContentLanguage(bp.contentLanguage || '');
+    setContentRestrictions(bp.contentRestrictions || '');
+    setFirstMonthContentAngles(bp.firstMonthContentAngles || '');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user._id]);
 
@@ -129,7 +145,11 @@ const BrandDNAForm: React.FC<{
     customerType !== (bp.customerType || '') ||
     pricePositioning !== (bp.pricePositioning || '') ||
     keyDifferentiator !== (bp.keyDifferentiator || '') ||
-    brandStory !== (bp.brandStory || '');
+    brandStory !== (bp.brandStory || '') ||
+    heroProduct !== (bp.heroProduct || '') ||
+    contentLanguage !== (bp.contentLanguage || '') ||
+    contentRestrictions !== (bp.contentRestrictions || '') ||
+    firstMonthContentAngles !== (bp.firstMonthContentAngles || '');
 
   const SelectRow = (label: string, value: string, setValue: (v: string) => void, options: { value: string; label: string }[]) => (
     <div>
@@ -215,8 +235,50 @@ const BrandDNAForm: React.FC<{
         />
       </div>
 
+      <div>
+        <p className="text-white/40 text-[11px] uppercase tracking-wider mb-1.5">
+          Hero Product / Service <span className="text-white/30 normal-case">({heroProduct.length}/100)</span>
+        </p>
+        <input
+          type="text"
+          maxLength={100}
+          value={heroProduct}
+          onChange={e => setHeroProduct(e.target.value)}
+          className="w-full bg-white/[0.05] border border-white/10 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-[#ffcc29]/50"
+          placeholder="e.g. Bridal gold sets, Custom sofas, Sunday biryani special"
+        />
+      </div>
+
+      {SelectRow('Content Language', contentLanguage, setContentLanguage, [
+        { value: 'tamil', label: 'Tamil only' },
+        { value: 'english', label: 'English only' },
+        { value: 'tamil_english_mix', label: 'Tamil + English mix' },
+      ])}
+
+      <div>
+        <p className="text-white/40 text-[11px] uppercase tracking-wider mb-1.5">Content Restrictions <span className="text-white/30 normal-case">(optional)</span></p>
+        <textarea
+          value={contentRestrictions}
+          onChange={e => setContentRestrictions(e.target.value)}
+          rows={3}
+          className="w-full bg-white/[0.05] border border-white/10 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-[#ffcc29]/50 resize-none"
+          placeholder="Anything the customer does NOT want posted. e.g. No political content. No competitor mentions."
+        />
+      </div>
+
+      <div>
+        <p className="text-white/40 text-[11px] uppercase tracking-wider mb-1.5">First Month Content Angles</p>
+        <textarea
+          value={firstMonthContentAngles}
+          onChange={e => setFirstMonthContentAngles(e.target.value)}
+          rows={3}
+          className="w-full bg-white/[0.05] border border-white/10 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-[#ffcc29]/50 resize-none"
+          placeholder="Festivals, offers, new products, or events in the next 30 days. Refreshed monthly."
+        />
+      </div>
+
       <button
-        onClick={() => onSave(user._id, { targetCustomerProfile, targetGender, geographicReach, customerType, pricePositioning, keyDifferentiator, brandStory })}
+        onClick={() => onSave(user._id, { targetCustomerProfile, targetGender, geographicReach, customerType, pricePositioning, keyDifferentiator, brandStory, heroProduct, contentLanguage, contentRestrictions, firstMonthContentAngles })}
         disabled={saving || !dirty}
         className="w-full py-2.5 rounded-xl text-sm font-semibold bg-[#ffcc29]/10 text-[#ffcc29] hover:bg-[#ffcc29]/20 border border-[#ffcc29]/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
       >
@@ -329,6 +391,10 @@ const AdminDashboard: React.FC = () => {
     pricePositioning: string;
     keyDifferentiator: string;
     brandStory: string;
+    heroProduct: string;
+    contentLanguage: string;
+    contentRestrictions: string;
+    firstMonthContentAngles: string;
   }) => {
     setSavingBrandDNA(true);
     setAdminActionMsg('');

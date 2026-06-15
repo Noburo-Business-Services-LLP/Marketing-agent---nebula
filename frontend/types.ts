@@ -3,6 +3,7 @@ export type TargetGender = 'mostly_men' | 'mostly_women' | 'both_equally' | 'fam
 export type GeographicReach = 'hyperlocal' | 'local_city' | 'regional' | '';
 export type CustomerType = 'mostly_new' | 'mix_new_repeat' | 'mostly_loyal' | '';
 export type PricePositioning = 'budget' | 'affordable' | 'mid_range' | 'premium' | 'luxury' | '';
+export type ContentLanguage = 'tamil' | 'english' | 'tamil_english_mix' | '';
 
 export interface BusinessProfile {
   name: string;
@@ -30,6 +31,10 @@ export interface BusinessProfile {
   pricePositioning?: PricePositioning;
   keyDifferentiator?: string;
   brandStory?: string;
+  heroProduct?: string;
+  contentLanguage?: ContentLanguage;
+  contentRestrictions?: string;
+  firstMonthContentAngles?: string;
 }
 
 export interface User {

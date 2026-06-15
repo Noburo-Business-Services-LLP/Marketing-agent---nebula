@@ -184,6 +184,10 @@ router.get('/users', adminAuth, async (req, res) => {
         'businessProfile.pricePositioning': 1,
         'businessProfile.keyDifferentiator': 1,
         'businessProfile.brandStory': 1,
+        'businessProfile.heroProduct': 1,
+        'businessProfile.contentLanguage': 1,
+        'businessProfile.contentRestrictions': 1,
+        'businessProfile.firstMonthContentAngles': 1,
       }
     ).sort({ createdAt: -1 }).lean();
 
@@ -229,6 +233,10 @@ router.get('/users/:id/usage', adminAuth, async (req, res) => {
         'businessProfile.pricePositioning': 1,
         'businessProfile.keyDifferentiator': 1,
         'businessProfile.brandStory': 1,
+        'businessProfile.heroProduct': 1,
+        'businessProfile.contentLanguage': 1,
+        'businessProfile.contentRestrictions': 1,
+        'businessProfile.firstMonthContentAngles': 1,
       }).lean(),
       FeatureEvent.aggregate([
         { $match: { userId: oid } },
@@ -434,6 +442,7 @@ router.post('/users/:id/brand-dna', adminAuth, async (req, res) => {
     const allowedReach = ['hyperlocal', 'local_city', 'regional', ''];
     const allowedCustomerType = ['mostly_new', 'mix_new_repeat', 'mostly_loyal', ''];
     const allowedPricePositioning = ['budget', 'affordable', 'mid_range', 'premium', 'luxury', ''];
+    const allowedContentLanguage = ['tamil', 'english', 'tamil_english_mix', ''];
 
     const targetCustomerProfile = String(req.body.targetCustomerProfile || '').trim().slice(0, 2000);
     const targetGender = allowedGender.includes(req.body.targetGender) ? req.body.targetGender : '';
@@ -442,6 +451,10 @@ router.post('/users/:id/brand-dna', adminAuth, async (req, res) => {
     const pricePositioning = allowedPricePositioning.includes(req.body.pricePositioning) ? req.body.pricePositioning : '';
     const keyDifferentiator = String(req.body.keyDifferentiator || '').trim().slice(0, 150);
     const brandStory = String(req.body.brandStory || '').trim().slice(0, 5000);
+    const heroProduct = String(req.body.heroProduct || '').trim().slice(0, 100);
+    const contentLanguage = allowedContentLanguage.includes(req.body.contentLanguage) ? req.body.contentLanguage : '';
+    const contentRestrictions = String(req.body.contentRestrictions || '').trim().slice(0, 2000);
+    const firstMonthContentAngles = String(req.body.firstMonthContentAngles || '').trim().slice(0, 3000);
 
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
@@ -454,6 +467,10 @@ router.post('/users/:id/brand-dna', adminAuth, async (req, res) => {
     user.businessProfile.pricePositioning = pricePositioning;
     user.businessProfile.keyDifferentiator = keyDifferentiator;
     user.businessProfile.brandStory = brandStory;
+    user.businessProfile.heroProduct = heroProduct;
+    user.businessProfile.contentLanguage = contentLanguage;
+    user.businessProfile.contentRestrictions = contentRestrictions;
+    user.businessProfile.firstMonthContentAngles = firstMonthContentAngles;
     await user.save({ validateBeforeSave: false });
 
     res.json({
@@ -466,6 +483,10 @@ router.post('/users/:id/brand-dna', adminAuth, async (req, res) => {
         pricePositioning: user.businessProfile.pricePositioning,
         keyDifferentiator: user.businessProfile.keyDifferentiator,
         brandStory: user.businessProfile.brandStory,
+        heroProduct: user.businessProfile.heroProduct,
+        contentLanguage: user.businessProfile.contentLanguage,
+        contentRestrictions: user.businessProfile.contentRestrictions,
+        firstMonthContentAngles: user.businessProfile.firstMonthContentAngles,
       },
     });
   } catch (err) {

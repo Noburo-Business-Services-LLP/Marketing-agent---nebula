@@ -80,6 +80,10 @@ const userSchema = new mongoose.Schema({
     pricePositioning: { type: String, enum: ['budget', 'affordable', 'mid_range', 'premium', 'luxury', ''], default: '' },
     keyDifferentiator: { type: String, default: '' },
     brandStory: { type: String, default: '' },
+    heroProduct: { type: String, default: '' },
+    contentLanguage: { type: String, enum: ['tamil', 'english', 'tamil_english_mix', ''], default: '' },
+    contentRestrictions: { type: String, default: '' },
+    firstMonthContentAngles: { type: String, default: '' },
 
     // Brand assets extracted from website
     brandAssets: {
