@@ -10,8 +10,11 @@ const razorpay = new Razorpay({
   key_secret: process.env.RAZORPAY_KEY_SECRET,
 });
 
+const TRIAL_DAYS = 7;
+const TRIAL_SECONDS = TRIAL_DAYS * 24 * 60 * 60;
+
 router.get('/plans', (_req, res) => {
-  res.json({ success: true, plans: PLANS });
+  res.json({ success: true, plans: PLANS, trialDays: TRIAL_DAYS });
 });
 
 router.post('/create-subscription', async (req, res) => {
@@ -32,12 +35,28 @@ router.post('/create-subscription', async (req, res) => {
 
     const totalCount = plan.cycle === 'monthly' ? 120 : plan.cycle === 'quarterly' ? 40 : 10;
 
+    // 7-day free trial: mandate is authorized today, first charge happens at start_at
+    const nowSec = Math.floor(Date.now() / 1000);
+    const startAt = nowSec + TRIAL_SECONDS;
+
     const subscription = await razorpay.subscriptions.create({
       plan_id: planId,
       customer_notify: 1,
       total_count: totalCount,
-      notes: { name, email, mobileNumber, shopName, tier: plan.tier, cycle: plan.cycle },
+      start_at: startAt,
+      notes: {
+        name,
+        email,
+        mobileNumber,
+        shopName,
+        tier: plan.tier,
+        cycle: plan.cycle,
+        trialDays: String(TRIAL_DAYS),
+      },
     });
+
+    const trialStartAt = new Date(nowSec * 1000);
+    const trialEndsAt = new Date(startAt * 1000);
 
     const customer = await Customer.create({
       name: name.trim(),
@@ -52,6 +71,8 @@ router.post('/create-subscription', async (req, res) => {
       },
       razorpaySubscriptionId: subscription.id,
       paymentStatus: 'pending',
+      trialStartAt,
+      trialEndsAt,
     });
 
     res.json({
@@ -60,6 +81,8 @@ router.post('/create-subscription', async (req, res) => {
       key: process.env.RAZORPAY_KEY_ID,
       amount: plan.amount,
       customer_id: customer._id,
+      trialDays: TRIAL_DAYS,
+      trialEndsAt: trialEndsAt.toISOString(),
       prefill: { name, email, contact: mobileNumber },
     });
   } catch (err) {
@@ -85,17 +108,25 @@ router.post('/verify-subscription', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid signature.' });
     }
 
+    // For trial subscriptions, this signature verifies the mandate authorisation —
+    // no money has been deducted. Mark the customer as "trialing" until the
+    // first auto-charge fires on trialEndsAt (handled by webhook).
     const customer = await Customer.findOneAndUpdate(
       { razorpaySubscriptionId: razorpay_subscription_id },
-      { paymentStatus: 'paid', razorpayPaymentId: razorpay_payment_id, paidAt: new Date() },
+      { paymentStatus: 'trialing', razorpayPaymentId: razorpay_payment_id },
       { new: true }
     );
 
     res.json({
       success: true,
-      message: 'Payment verified.',
+      message: 'Trial started. You will be charged after the trial ends.',
       customer: customer
-        ? { name: customer.name, email: customer.email, plan: customer.selectedPlan }
+        ? {
+            name: customer.name,
+            email: customer.email,
+            plan: customer.selectedPlan,
+            trialEndsAt: customer.trialEndsAt,
+          }
         : null,
     });
   } catch (err) {

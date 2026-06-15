@@ -17,10 +17,14 @@ const customerSchema = new mongoose.Schema({
   razorpayPaymentId: { type: String },
   paymentStatus: {
     type: String,
-    enum: ['pending', 'paid', 'failed', 'cancelled'],
+    enum: ['pending', 'trialing', 'paid', 'failed', 'cancelled'],
     default: 'pending',
   },
   paidAt: { type: Date },
+
+  // 7-day free trial — mandate authorized at signup, first charge happens at trialEndsAt
+  trialStartAt: { type: Date },
+  trialEndsAt: { type: Date },
 
   createdAt: { type: Date, default: Date.now },
 });

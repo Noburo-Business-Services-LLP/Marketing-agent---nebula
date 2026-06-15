@@ -43,6 +43,8 @@ export interface CreateSubscriptionResponse {
   key: string;
   amount: number;
   customer_id: string;
+  trialDays?: number;
+  trialEndsAt?: string;
   prefill: { name: string; email: string; contact: string };
   message?: string;
 }

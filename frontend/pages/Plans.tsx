@@ -82,9 +82,15 @@ const Plans: React.FC = () => {
           <h1 className="text-3xl md:text-5xl font-extrabold text-white mb-3 tracking-tight">
             Pick the plan that fits your brand
           </h1>
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 mb-5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+            <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="text-emerald-400 text-xs font-bold tracking-wide uppercase">
+              7-day free trial · No charge today
+            </span>
+          </div>
           <p className="text-[#ededed]/50 text-base md:text-lg max-w-2xl mx-auto">
             All plans include AI campaign generation, multi-platform posting and analytics.
-            Cancel anytime.
+            Try free for 7 days, then auto-renews. Cancel anytime.
           </p>
         </div>
 
@@ -155,7 +161,7 @@ const Plans: React.FC = () => {
                       ₹{info.amount.toLocaleString('en-IN')}
                     </div>
                     <p className="text-[#ededed]/35 text-xs mt-2 tracking-wide">
-                      {info.per} · Auto-renews · Cancel anytime
+                      <span className="text-emerald-400/80">Free for 7 days</span>, then {info.per.replace('/', '/ ')} · Cancel anytime
                     </p>
                   </div>
 
@@ -189,7 +195,7 @@ const Plans: React.FC = () => {
                           }
                     }
                   >
-                    Choose {plan.name} <ArrowRight className="w-4 h-4" />
+                    Start free trial <ArrowRight className="w-4 h-4" />
                   </button>
                 </div>
               </GlassCard>

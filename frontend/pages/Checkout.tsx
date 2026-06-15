@@ -74,7 +74,7 @@ const Checkout: React.FC = () => {
         key: sub.key,
         subscription_id: sub.subscription_id,
         name: 'Nebulaa Gravity',
-        description: `${plan.tierName} ${plan.per} — ₹${plan.amount.toLocaleString('en-IN')}`,
+        description: `${plan.tierName} — 7-day free trial, then ₹${plan.amount.toLocaleString('en-IN')} ${plan.per}`,
         prefill: sub.prefill,
         theme: { color: '#ffcc29', backdrop_color: 'rgba(7, 10, 18, 0.9)' },
         handler: async (response: any) => {
@@ -94,6 +94,8 @@ const Checkout: React.FC = () => {
                 amount: plan.amount,
                 per: plan.per,
                 paymentId: response.razorpay_payment_id,
+                trialDays: sub.trialDays ?? 7,
+                trialEndsAt: sub.trialEndsAt ?? null,
               }),
             );
             sessionStorage.removeItem('selectedPlan');
@@ -193,11 +195,13 @@ const Checkout: React.FC = () => {
                     </>
                   ) : (
                     <>
-                      <CreditCard className="w-4 h-4" /> Pay ₹
-                      {plan.amount.toLocaleString('en-IN')}
+                      <CreditCard className="w-4 h-4" /> Start 7-day free trial
                     </>
                   )}
                 </button>
+                <p className="mt-3 text-center text-[#ededed]/35 text-[11px]">
+                  No charge today. You'll be billed ₹{plan.amount.toLocaleString('en-IN')} on day 8 unless you cancel.
+                </p>
 
                 <div className="mt-4 flex items-center justify-center gap-2 text-[#ededed]/25 text-xs">
                   <Shield className="w-3.5 h-3.5" />
@@ -229,30 +233,40 @@ const Checkout: React.FC = () => {
                     <span>Subtotal</span>
                     <span>₹{plan.amount.toLocaleString('en-IN')}</span>
                   </div>
+                  <div className="flex justify-between text-emerald-400 text-sm mb-2">
+                    <span>7-day free trial</span>
+                    <span>−₹{plan.amount.toLocaleString('en-IN')}</span>
+                  </div>
                   <div className="flex justify-between text-[#ededed]/55 text-sm">
                     <span>Taxes</span>
                     <span>Included</span>
                   </div>
                   <div className="h-px bg-white/[0.04] my-4" />
                   <div className="flex justify-between items-baseline">
-                    <span className="text-white font-semibold">Total {plan.per}</span>
+                    <span className="text-white font-semibold">Due today</span>
                     <span
                       className="text-2xl font-extrabold"
                       style={{
                         background:
-                          'linear-gradient(180deg, #ffffff 0%, #d4d4d4 50%, #a0a0a0 100%)',
+                          'linear-gradient(180deg, #34d399 0%, #10b981 100%)',
                         WebkitBackgroundClip: 'text',
                         WebkitTextFillColor: 'transparent',
                       }}
                     >
-                      ₹{plan.amount.toLocaleString('en-IN')}
+                      ₹0
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-baseline mt-2">
+                    <span className="text-white/45 text-xs">After trial</span>
+                    <span className="text-white/65 text-sm font-semibold">
+                      ₹{plan.amount.toLocaleString('en-IN')} {plan.per}
                     </span>
                   </div>
                 </div>
 
                 <p className="text-[#ededed]/25 text-[11px] leading-relaxed">
-                  Auto-renews {plan.per}. Cancel anytime from your dashboard. You can
-                  also upgrade or change plan later.
+                  Free for 7 days. After that, auto-renews at ₹{plan.amount.toLocaleString('en-IN')} {plan.per}.
+                  Cancel anytime before day 7 and you won't be charged.
                 </p>
               </div>
             </GlassCard>
