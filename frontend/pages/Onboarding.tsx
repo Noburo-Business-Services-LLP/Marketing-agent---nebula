@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { apiService } from '../services/api';
 import { User, BusinessProfile, SocialConnection } from '../types';
-import { ChevronRight, Check, Users, Megaphone, Sparkles, Loader2, Building, AlertCircle, Share2, Instagram, Facebook, Linkedin, Youtube, Pin, MessageCircle, SkipForward, Sun, Moon, Globe, CheckCircle, XCircle, ExternalLink } from 'lucide-react';
+import { ChevronRight, Check, Users, Megaphone, Sparkles, Loader2, Building, AlertCircle, Share2, Instagram, Facebook, Linkedin, Youtube, Pin, MessageCircle, SkipForward, Sun, Moon, Globe, CheckCircle, XCircle, ExternalLink, ArrowLeft } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 
 // X (Twitter) logo SVG component
@@ -495,8 +495,30 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
         { num: 4, title: "Connect", icon: Share2 }
     ];
 
+    const handleBackToLanding = () => {
+        // Clear auth so App routes us to the public landing page
+        try { localStorage.removeItem('authToken'); } catch {}
+        try { sessionStorage.removeItem('onboardingState'); } catch {}
+        window.location.assign('/#/');
+        // Hash routes don't reload on hash change — force a full reload so App re-checks auth
+        window.location.reload();
+    };
+
     return (
         <div className={`min-h-screen flex items-center justify-center p-4 ${theme === 'dark' ? 'bg-[#070A12]' : 'bg-gray-100'}`}>
+            {/* Back to landing */}
+            <button
+                onClick={handleBackToLanding}
+                className={`fixed top-4 left-4 z-50 flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all backdrop-blur ${
+                    theme === 'dark'
+                        ? 'bg-[#ededed]/5 hover:bg-[#ededed]/10 text-[#ededed]/70 hover:text-[#ededed] border border-[#ededed]/10'
+                        : 'bg-white/80 hover:bg-white text-gray-700 border border-gray-200 shadow-sm'
+                }`}
+            >
+                <ArrowLeft className="w-4 h-4" />
+                Back
+            </button>
+
             {/* Duplicate Account Modal */}
             {duplicateCheck.show && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
