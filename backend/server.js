@@ -26,6 +26,8 @@ const allowedOrigins = [
   'https://www.nebulaa.ai',
   'https://payments.nebulaa.ai',
   'https://www.payments.nebulaa.ai',
+  'https://trial.nebulaa.ai',
+  'https://www.trial.nebulaa.ai',
 ];
 
 const corsMiddleware = cors({
