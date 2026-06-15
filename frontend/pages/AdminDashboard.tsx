@@ -90,203 +90,6 @@ const adminFetch = async (path: string, options: RequestInit = {}) => {
   return res.json();
 };
 
-interface BrandDNAFields {
-  targetCustomerProfile: string;
-  targetGender: string;
-  geographicReach: string;
-  customerType: string;
-  pricePositioning: string;
-  keyDifferentiator: string;
-  brandStory: string;
-  heroProduct: string;
-  contentLanguage: string;
-  contentRestrictions: string;
-  firstMonthContentAngles: string;
-}
-
-const BrandDNAForm: React.FC<{
-  user: UserRow;
-  saving: boolean;
-  onSave: (userId: string, fields: BrandDNAFields) => void;
-}> = ({ user, saving, onSave }) => {
-  const bp = user.businessProfile || {};
-  const [targetCustomerProfile, setTargetCustomerProfile] = useState(bp.targetCustomerProfile || '');
-  const [targetGender, setTargetGender] = useState<string>(bp.targetGender || '');
-  const [geographicReach, setGeographicReach] = useState<string>(bp.geographicReach || '');
-  const [customerType, setCustomerType] = useState<string>(bp.customerType || '');
-  const [pricePositioning, setPricePositioning] = useState<string>(bp.pricePositioning || '');
-  const [keyDifferentiator, setKeyDifferentiator] = useState(bp.keyDifferentiator || '');
-  const [brandStory, setBrandStory] = useState(bp.brandStory || '');
-  const [heroProduct, setHeroProduct] = useState(bp.heroProduct || '');
-  const [contentLanguage, setContentLanguage] = useState<string>(bp.contentLanguage || '');
-  const [contentRestrictions, setContentRestrictions] = useState(bp.contentRestrictions || '');
-  const [firstMonthContentAngles, setFirstMonthContentAngles] = useState(bp.firstMonthContentAngles || '');
-
-  // Reset local state when a different user is selected
-  useEffect(() => {
-    setTargetCustomerProfile(bp.targetCustomerProfile || '');
-    setTargetGender(bp.targetGender || '');
-    setGeographicReach(bp.geographicReach || '');
-    setCustomerType(bp.customerType || '');
-    setPricePositioning(bp.pricePositioning || '');
-    setKeyDifferentiator(bp.keyDifferentiator || '');
-    setBrandStory(bp.brandStory || '');
-    setHeroProduct(bp.heroProduct || '');
-    setContentLanguage(bp.contentLanguage || '');
-    setContentRestrictions(bp.contentRestrictions || '');
-    setFirstMonthContentAngles(bp.firstMonthContentAngles || '');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user._id]);
-
-  const dirty =
-    targetCustomerProfile !== (bp.targetCustomerProfile || '') ||
-    targetGender !== (bp.targetGender || '') ||
-    geographicReach !== (bp.geographicReach || '') ||
-    customerType !== (bp.customerType || '') ||
-    pricePositioning !== (bp.pricePositioning || '') ||
-    keyDifferentiator !== (bp.keyDifferentiator || '') ||
-    brandStory !== (bp.brandStory || '') ||
-    heroProduct !== (bp.heroProduct || '') ||
-    contentLanguage !== (bp.contentLanguage || '') ||
-    contentRestrictions !== (bp.contentRestrictions || '') ||
-    firstMonthContentAngles !== (bp.firstMonthContentAngles || '');
-
-  const SelectRow = (label: string, value: string, setValue: (v: string) => void, options: { value: string; label: string }[]) => (
-    <div>
-      <p className="text-white/40 text-[11px] uppercase tracking-wider mb-1.5">{label}</p>
-      <select
-        value={value}
-        onChange={e => setValue(e.target.value)}
-        className="w-full bg-white/[0.05] border border-white/10 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-[#ffcc29]/50"
-      >
-        <option value="">— Select —</option>
-        {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-      </select>
-    </div>
-  );
-
-  return (
-    <div className="px-5 py-4 border-b border-white/[0.04] space-y-3">
-      <div className="flex items-center justify-between">
-        <p className="text-white/30 text-xs uppercase tracking-wider">Brand DNA <span className="text-white/20 normal-case">(CSM only)</span></p>
-        {dirty && <span className="text-[10px] text-amber-400">Unsaved</span>}
-      </div>
-
-      <div>
-        <p className="text-white/40 text-[11px] uppercase tracking-wider mb-1.5">Target Customer Profile</p>
-        <textarea
-          value={targetCustomerProfile}
-          onChange={e => setTargetCustomerProfile(e.target.value)}
-          rows={3}
-          className="w-full bg-white/[0.05] border border-white/10 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-[#ffcc29]/50 resize-none"
-          placeholder="Describe the typical customer — age, gender, occasion."
-        />
-      </div>
-
-      {SelectRow('Target Gender', targetGender, setTargetGender, [
-        { value: 'mostly_men', label: 'Mostly men' },
-        { value: 'mostly_women', label: 'Mostly women' },
-        { value: 'both_equally', label: 'Both equally' },
-        { value: 'families', label: 'Families together' },
-      ])}
-
-      {SelectRow('Geographic Reach', geographicReach, setGeographicReach, [
-        { value: 'hyperlocal', label: 'Hyperlocal — same street or area' },
-        { value: 'local_city', label: 'Local city' },
-        { value: 'regional', label: 'Regional — people come from nearby towns' },
-      ])}
-
-      {SelectRow('Customer Type', customerType, setCustomerType, [
-        { value: 'mostly_new', label: 'Mostly new customers' },
-        { value: 'mix_new_repeat', label: 'Mix of new and repeat' },
-        { value: 'mostly_loyal', label: 'Mostly loyal regulars' },
-      ])}
-
-      {SelectRow('Price Positioning', pricePositioning, setPricePositioning, [
-        { value: 'budget', label: 'Budget' },
-        { value: 'affordable', label: 'Affordable' },
-        { value: 'mid_range', label: 'Mid-range' },
-        { value: 'premium', label: 'Premium' },
-        { value: 'luxury', label: 'Luxury' },
-      ])}
-
-      <div>
-        <p className="text-white/40 text-[11px] uppercase tracking-wider mb-1.5">
-          Key Differentiator <span className="text-white/30 normal-case">({keyDifferentiator.length}/150)</span>
-        </p>
-        <input
-          type="text"
-          maxLength={150}
-          value={keyDifferentiator}
-          onChange={e => setKeyDifferentiator(e.target.value)}
-          className="w-full bg-white/[0.05] border border-white/10 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-[#ffcc29]/50"
-          placeholder="One sentence — why choose this business over a competitor."
-        />
-      </div>
-
-      <div>
-        <p className="text-white/40 text-[11px] uppercase tracking-wider mb-1.5">Brand Story <span className="text-white/30 normal-case">(optional)</span></p>
-        <textarea
-          value={brandStory}
-          onChange={e => setBrandStory(e.target.value)}
-          rows={4}
-          className="w-full bg-white/[0.05] border border-white/10 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-[#ffcc29]/50 resize-none"
-          placeholder="Founding story, family legacy, awards, unique specialty."
-        />
-      </div>
-
-      <div>
-        <p className="text-white/40 text-[11px] uppercase tracking-wider mb-1.5">
-          Hero Product / Service <span className="text-white/30 normal-case">({heroProduct.length}/100)</span>
-        </p>
-        <input
-          type="text"
-          maxLength={100}
-          value={heroProduct}
-          onChange={e => setHeroProduct(e.target.value)}
-          className="w-full bg-white/[0.05] border border-white/10 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-[#ffcc29]/50"
-          placeholder="e.g. Bridal gold sets, Custom sofas, Sunday biryani special"
-        />
-      </div>
-
-      {SelectRow('Content Language', contentLanguage, setContentLanguage, [
-        { value: 'tamil', label: 'Tamil only' },
-        { value: 'english', label: 'English only' },
-        { value: 'tamil_english_mix', label: 'Tamil + English mix' },
-      ])}
-
-      <div>
-        <p className="text-white/40 text-[11px] uppercase tracking-wider mb-1.5">Content Restrictions <span className="text-white/30 normal-case">(optional)</span></p>
-        <textarea
-          value={contentRestrictions}
-          onChange={e => setContentRestrictions(e.target.value)}
-          rows={3}
-          className="w-full bg-white/[0.05] border border-white/10 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-[#ffcc29]/50 resize-none"
-          placeholder="Anything the customer does NOT want posted. e.g. No political content. No competitor mentions."
-        />
-      </div>
-
-      <div>
-        <p className="text-white/40 text-[11px] uppercase tracking-wider mb-1.5">First Month Content Angles</p>
-        <textarea
-          value={firstMonthContentAngles}
-          onChange={e => setFirstMonthContentAngles(e.target.value)}
-          rows={3}
-          className="w-full bg-white/[0.05] border border-white/10 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-[#ffcc29]/50 resize-none"
-          placeholder="Festivals, offers, new products, or events in the next 30 days. Refreshed monthly."
-        />
-      </div>
-
-      <button
-        onClick={() => onSave(user._id, { targetCustomerProfile, targetGender, geographicReach, customerType, pricePositioning, keyDifferentiator, brandStory, heroProduct, contentLanguage, contentRestrictions, firstMonthContentAngles })}
-        disabled={saving || !dirty}
-        className="w-full py-2.5 rounded-xl text-sm font-semibold bg-[#ffcc29]/10 text-[#ffcc29] hover:bg-[#ffcc29]/20 border border-[#ffcc29]/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-      >
-        {saving ? 'Saving...' : dirty ? 'Save Brand DNA' : 'Saved'}
-      </button>
-    </div>
-  );
-};
 
 const getTrialInfo = (user: UserRow) => {
   if (user.trial?.migratedToProd) return { label: 'Converted', cls: 'text-blue-400 bg-blue-500/10 border border-blue-500/20' };
@@ -324,7 +127,6 @@ const AdminDashboard: React.FC = () => {
   const [creditsToAdd, setCreditsToAdd] = useState('100');
   const [trialDaysToAdd, setTrialDaysToAdd] = useState('7');
   const [adminActionMsg, setAdminActionMsg] = useState('');
-  const [savingBrandDNA, setSavingBrandDNA] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -383,35 +185,6 @@ const AdminDashboard: React.FC = () => {
     setAddingCredits(false);
   };
 
-  const handleSaveBrandDNA = async (userId: string, fields: {
-    targetCustomerProfile: string;
-    targetGender: string;
-    geographicReach: string;
-    customerType: string;
-    pricePositioning: string;
-    keyDifferentiator: string;
-    brandStory: string;
-    heroProduct: string;
-    contentLanguage: string;
-    contentRestrictions: string;
-    firstMonthContentAngles: string;
-  }) => {
-    setSavingBrandDNA(true);
-    setAdminActionMsg('');
-    try {
-      const res = await adminFetch(`/users/${userId}/brand-dna`, { method: 'POST', body: JSON.stringify(fields) });
-      if (res.success) {
-        setAdminActionMsg('Brand DNA saved');
-        if (selected) setSelected(prev => prev ? {
-          ...prev,
-          user: { ...prev.user, businessProfile: { ...prev.user.businessProfile, ...fields } as any },
-        } : prev);
-      } else {
-        setAdminActionMsg(res.message || 'Failed to save Brand DNA');
-      }
-    } catch { setAdminActionMsg('Failed to save Brand DNA'); }
-    setSavingBrandDNA(false);
-  };
 
   const createCoupon = async () => {
     if (!couponForm.code.trim()) return;
@@ -890,9 +663,6 @@ const AdminDashboard: React.FC = () => {
                           )}
                         </div>
                       )}
-
-                      {/* Brand DNA — CSM-only */}
-                      <BrandDNAForm user={selected.user} saving={savingBrandDNA} onSave={handleSaveBrandDNA} />
 
                       {/* Admin Actions */}
                       <div className="px-5 py-4 border-b border-white/[0.04] space-y-3">
