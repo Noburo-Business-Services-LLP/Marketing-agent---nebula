@@ -248,9 +248,7 @@ exports.receiveWebhook = async (req, res) => {
 
 exports.devIngest = async (req, res) => {
   try {
-    if (process.env.NODE_ENV === 'production') {
-      return res.status(404).json({ success: false, message: 'Not found' });
-    }
+
     const event = normalizeWebhookPayload(req.body?.platform || 'instagram', getUserId(req), req.body || {});
     const result = await ingestEvent(event);
     res.json({

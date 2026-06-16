@@ -103,9 +103,23 @@ function extractBody(payload = {}) {
 }
 
 function normalizeWebhookPayload(platform, userId, payload = {}) {
-  const normalizedPlatform = normalizePlatform(platform || payload.platform);
+  let sourcePlatform = platform;
+  if (sourcePlatform === 'ayrshare' || !sourcePlatform) {
+    sourcePlatform = payload.platform || payload.source || 'instagram';
+  }
+  const normalizedPlatform = normalizePlatform(sourcePlatform);
   const now = new Date();
   
+  // Extract Ayrshare specific fields directly
+  const ayrUser = payload.user || payload.sender || payload.from || payload.author || {};
+  const authorId = ayrUser.id || 'unknown';
+  const authorName = ayrUser.name || ayrUser.username || '';
+  const authorUsername = ayrUser.username || '';
+  const authorAvatar = ayrUser.profilePicture || ayrUser.picture || ayrUser.profile_pic || payload.avatar_url || '';
+  
+  const messageText = payload.message?.text || payload.text || extractBody(payload);
+  const threadId = payload.conversation?.id || payload.threadId || payload.thread_id || payload.conversation_id || payload.parent_id || payload.post_id || payload.video_id || payload.entry?.[0]?.messaging?.[0]?.sender?.id || '';
+
   // Handle Instagram specific structure or fallbacks
   const rawMessageId =
     payload.id ||
@@ -118,17 +132,10 @@ function normalizeWebhookPayload(platform, userId, payload = {}) {
     `${normalizedPlatform}-${now.getTime()}`;
     
   const providerMessageId = String(rawMessageId);
-  const body = extractBody(payload);
+  const finalThreadId = String(threadId || providerMessageId);
+  
   const messageType = normalizeMessageType(payload.type || payload.message_type || payload.field || payload.object || 'message');
-  
-  // Correctly map thread ID
-  const threadId = String(payload.thread_id || payload.conversation_id || payload.parent_id || payload.post_id || payload.video_id || payload.entry?.[0]?.messaging?.[0]?.sender?.id || providerMessageId);
-  
-  // Correctly map sender and recipient
-  const senderId = payload.sender?.id || payload.author_id || payload.from?.id || payload.user?.id || 'unknown';
   const recipientId = payload.recipient?.id || payload.to?.id || 'unknown';
-  
-  const from = payload.from || payload.author || payload.user || payload.sender || {};
 
   // Extract created_time properly
   const timestampRaw = payload.created_time || payload.createdAt || payload.timestamp || payload.entry?.[0]?.time || payload.entry?.[0]?.messaging?.[0]?.timestamp;
@@ -139,18 +146,18 @@ function normalizeWebhookPayload(platform, userId, payload = {}) {
     platform: normalizedPlatform,
     workspaceId: String(payload.workspaceId || payload.workspace_id || 'default'),
     socialAccountId: String(payload.social_account_id || payload.account_id || payload.page_id || recipientId || ''),
-    providerThreadId: threadId,
+    providerThreadId: finalThreadId,
     providerMessageId,
     providerParentId: String(payload.parent_id || payload.in_reply_to_id || ''),
     messageType,
-    participantId: String(senderId),
-    participantName: String(payload.author_name || from.name || from.username || 'Social user'),
-    participantUsername: String(payload.author_username || payload.username || from.username || ''),
-    avatarUrl: String(payload.avatar_url || from.picture || from.profile_pic || ''),
-    authorId: String(senderId),
-    authorName: String(payload.author_name || from.name || from.username || 'Social user'),
+    participantId: String(authorId),
+    participantName: String(authorName),
+    participantUsername: String(authorUsername),
+    avatarUrl: String(authorAvatar),
+    authorId: String(authorId),
+    authorName: String(authorName),
     recipientId: String(recipientId),
-    body,
+    body: messageText,
     mediaUrls: Array.isArray(payload.media_urls) ? payload.media_urls : [],
     permalink: String(payload.permalink || payload.url || ''),
     rawPayload: payload,

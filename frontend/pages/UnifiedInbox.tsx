@@ -62,6 +62,7 @@ const UnifiedInbox: React.FC = () => {
   const [error, setError] = useState('');
   const [threadError, setThreadError] = useState('');
   const threadEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
 
   const selected = conversations.find(item => item.id === selectedId) || null;
 
@@ -119,7 +120,12 @@ const UnifiedInbox: React.FC = () => {
   }, [selected?.id]);
 
   useEffect(() => {
-    threadEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTo({
+        top: messagesContainerRef.current.scrollHeight,
+        behavior: 'smooth'
+      });
+    }
   }, [messages]);
 
   useEffect(() => {
@@ -224,10 +230,10 @@ const UnifiedInbox: React.FC = () => {
   const panel = isDarkMode ? 'bg-[#0d1117] border-slate-800' : 'bg-white border-slate-200';
 
   return (
-    <div className={`min-h-[calc(100vh-7rem)] rounded-lg border overflow-hidden ${shell}`}>
-      <div className={`flex flex-col lg:flex-row h-[calc(100vh-8rem)] min-h-[720px] ${isDarkMode ? 'divide-slate-800' : 'divide-slate-200'} lg:divide-x`}>
+    <div className={`h-[calc(100vh-16rem)] min-h-[400px] rounded-lg border overflow-hidden flex flex-col ${shell}`}>
+      <div className={`flex-1 flex flex-col lg:flex-row min-h-0 ${isDarkMode ? 'divide-slate-800' : 'divide-slate-200'} lg:divide-x`}>
         <aside className="w-full lg:w-[360px] flex flex-col min-h-0">
-          <div className={`p-4 border-b ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
+          <div className={`shrink-0 p-4 border-b ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
             <div className="flex items-center justify-between gap-3 mb-4">
               <div>
                 <h2 className="text-lg font-semibold">Unified Inbox</h2>
@@ -340,7 +346,7 @@ const UnifiedInbox: React.FC = () => {
         <section className="flex-1 flex flex-col min-w-0 min-h-0">
           {selected ? (
             <>
-              <header className={`p-4 border-b flex flex-wrap items-center justify-between gap-3 ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
+              <header className={`shrink-0 p-4 border-b flex flex-wrap items-center justify-between gap-3 ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
                 <div className="flex items-center gap-3 min-w-0">
                   {(() => {
                     const meta = platformMeta[selected.platform as Platform];
@@ -360,7 +366,7 @@ const UnifiedInbox: React.FC = () => {
 
               <div className="flex-1 grid xl:grid-cols-[1fr_320px] min-h-0">
                 <div className="flex flex-col min-h-0">
-                  <div className={`flex-1 overflow-y-auto p-4 space-y-4 ${isDarkMode ? 'bg-[#080b12]' : 'bg-slate-50'}`}>
+                  <div ref={messagesContainerRef} className={`flex-1 overflow-y-auto p-4 space-y-4 ${isDarkMode ? 'bg-[#080b12]' : 'bg-slate-50'}`}>
                     {threadLoading ? (
                       <div className="h-full flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-[#ffcc29]" /></div>
                     ) : threadError ? (
@@ -396,7 +402,7 @@ const UnifiedInbox: React.FC = () => {
                     <div ref={threadEndRef} />
                   </div>
 
-                  <div className={`p-4 border-t ${isDarkMode ? 'border-slate-800 bg-[#0d1117]' : 'border-slate-200 bg-white'}`}>
+                  <div className={`shrink-0 p-4 border-t ${isDarkMode ? 'border-slate-800 bg-[#0d1117]' : 'border-slate-200 bg-white'}`}>
                     <div className={`rounded-lg border ${panel} p-3`}>
                       <textarea
                         value={reply}
@@ -424,7 +430,7 @@ const UnifiedInbox: React.FC = () => {
                 </div>
 
                 <aside className={`hidden xl:flex flex-col border-l ${isDarkMode ? 'border-slate-800 bg-[#0d1117]' : 'border-slate-200 bg-white'}`}>
-                  <div className="p-4 border-b border-inherit">
+                  <div className="shrink-0 p-4 border-b border-inherit">
                     <h4 className="font-semibold flex items-center gap-2"><Sparkles className="w-4 h-4 text-[#ffcc29]" /> AI Assist</h4>
                     <p className={`text-xs mt-1 ${muted}`}>Reply suggestions, sentiment, spam risk, and priority tagging.</p>
                   </div>

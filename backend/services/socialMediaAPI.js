@@ -729,7 +729,7 @@ async function createAyrshareProfile(title, options = {}) {
 async function setAyrshareWebhook(profileKey, webhookUrl) {
   if (!AYRSHARE_API_KEY) return { success: false, error: 'API not configured' };
   try {
-    const response = await makeRequest('https://api.ayrshare.com/api/hook/set', {
+    const response = await makeRequest('https://app.ayrshare.com/api/hook/webhook', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${AYRSHARE_API_KEY}`,
@@ -858,7 +858,7 @@ async function getAyrshareUserProfile(profileKey) {
           data: response.data,
           activeSocialAccounts: response.data?.activeSocialAccounts || response.data?.grants || response.data?.profiles || []
         };
-        setCache(cacheKey, result);
+        apiCache.set(cacheKey, { data: result, timestamp: Date.now() - CACHE_TTL + 5000 });
         console.log(`[Ayrshare API] Raw /api/user response for Profile-Key ${profileKey.substring(0,8)}...:`, JSON.stringify(response.data, null, 2));
         return result;
       }
