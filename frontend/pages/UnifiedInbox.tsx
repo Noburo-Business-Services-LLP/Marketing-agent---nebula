@@ -131,11 +131,19 @@ const UnifiedInbox: React.FC = () => {
     ws.onmessage = event => {
       try {
         const payload = JSON.parse(event.data);
-        if (payload.type === 'inbox.message.created') {
+        if (payload.type === 'inbox.message.created' || ['message:new', 'comment:new', 'reply:new'].includes(payload.type)) {
           const conversation = payload.data?.conversation as InboxConversation;
           const message = payload.data?.message as InboxMessage;
-          setConversations(current => [conversation, ...current.filter(item => item.id !== conversation.id)]);
-          if (conversation.id === selectedId) setMessages(current => [...current, message]);
+          
+          if (conversation && message) {
+            setConversations(current => [conversation, ...current.filter(item => item.id !== conversation.id)]);
+            if (conversation.id === selectedId) {
+              setMessages(current => {
+                if (current.some(m => m.id === message.id)) return current;
+                return [...current, message];
+              });
+            }
+          }
         }
         if (payload.type === 'inbox.notification') {
           setNotifications(current => [{

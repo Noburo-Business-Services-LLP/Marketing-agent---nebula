@@ -212,12 +212,17 @@ exports.verifyWebhook = (req, res) => {
 
 exports.receiveWebhook = async (req, res) => {
   try {
+    console.log(`[Webhook] Received incoming webhook payload on platform: ${req.params.platform}`);
+    console.log(`[Webhook] Raw Payload:`, JSON.stringify(req.body, null, 2));
+
     if (!verifyWebhookRequest(req)) {
+      console.warn(`[Webhook] Invalid webhook secret for platform: ${req.params.platform}`);
       return res.status(401).json({ success: false, message: 'Invalid webhook secret' });
     }
 
     const userId = req.query.userId || req.body?.userId;
     if (!userId) {
+      console.warn(`[Webhook] Missing userId in payload for platform: ${req.params.platform}`);
       return res.status(400).json({ success: false, message: 'Webhook userId is required' });
     }
 
@@ -226,6 +231,7 @@ exports.receiveWebhook = async (req, res) => {
 
     for (const payload of payloads) {
       const event = normalizeWebhookPayload(req.params.platform, userId, payload);
+      console.log(`[Webhook] Processing event for user: ${userId}, platform: ${event.platform}, threadId: ${event.providerThreadId}, messageId: ${event.providerMessageId}`);
       results.push(await ingestEvent(event));
     }
 
@@ -256,5 +262,58 @@ exports.devIngest = async (req, res) => {
   } catch (error) {
     console.error('Dev social inbox ingest error:', error);
     res.status(500).json({ success: false, message: 'Failed to create test inbox event' });
+  }
+};
+
+exports.testWebhook = async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+
+    const testPayload = {
+      platform: req.body?.platform || 'instagram',
+      userId: userId,
+      events: [
+        {
+          id: `test-msg-${Date.now()}`,
+          message_id: `test-msg-${Date.now()}`,
+          message_type: req.body?.type || 'message',
+          text: req.body?.message || 'Hello, this is a test message from Instagram.',
+          thread_id: req.body?.thread_id || `test-thread-${Date.now()}`,
+          author_id: req.body?.author_id || 'testuser123',
+          author_name: req.body?.author_name || 'Test User',
+          author_username: req.body?.author_username || 'test.user',
+          created_time: new Date().toISOString()
+        }
+      ]
+    };
+
+    req.body = testPayload;
+    req.params.platform = testPayload.platform;
+    req.query.userId = userId;
+
+    // Call the receiveWebhook handler directly to simulate an inbound webhook
+    // Bypassing verifyWebhookRequest explicitly for this dev endpoint
+    const payloads = testPayload.events;
+    const results = [];
+
+    console.log(`[TestWebhook] Simulating incoming payload:`, JSON.stringify(payloads, null, 2));
+
+    for (const payload of payloads) {
+      const event = normalizeWebhookPayload(testPayload.platform, userId, payload);
+      results.push(await ingestEvent(event));
+    }
+
+    res.json({
+      success: true,
+      received: results.length,
+      conversation: toConversationDTO(results[0].conversation),
+      message: toMessageDTO(results[0].message, results[0].conversation),
+      ai: results[0].ai
+    });
+
+  } catch (error) {
+    console.error('Social inbox dev test error:', error);
+    res.status(500).json({ success: false, message: 'Failed to simulate webhook' });
   }
 };

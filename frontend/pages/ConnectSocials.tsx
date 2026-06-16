@@ -188,13 +188,15 @@ const ConnectSocials: React.FC = () => {
           return;
         }
         
-        // Not in a popup — normal flow for same-window redirects
         setNotification({
           type: 'success',
           message: `${displayName}${account ? ` (${decodeURIComponent(account)})` : ''} connected successfully!`
         });
         window.history.replaceState({}, '', window.location.pathname);
-        setTimeout(() => loadSocials(), 500);
+        setTimeout(() => {
+          loadSocials();
+          apiService.registerWebhook().catch(console.error);
+        }, 500);
         break;
       }
     }
@@ -253,6 +255,7 @@ const ConnectSocials: React.FC = () => {
         message: `${displayName}${accountName} connected successfully!`
       });
       loadSocials();
+      apiService.registerWebhook().catch(console.error);
     };
 
     window.addEventListener('message', handleMessage);

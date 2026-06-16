@@ -722,6 +722,31 @@ async function createAyrshareProfile(title, options = {}) {
 }
 
 /**
+ * Register Webhook URL with Ayrshare
+ * @param {string} profileKey - The user's Ayrshare Profile Key
+ * @param {string} webhookUrl - The webhook URL to receive events
+ */
+async function setAyrshareWebhook(profileKey, webhookUrl) {
+  if (!AYRSHARE_API_KEY) return { success: false, error: 'API not configured' };
+  try {
+    const response = await makeRequest('https://api.ayrshare.com/api/hook/set', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${AYRSHARE_API_KEY}`,
+        'Profile-Key': profileKey,
+        'Content-Type': 'application/json'
+      },
+      body: { action: 'social', url: webhookUrl }
+    });
+    console.log('Ayrshare set webhook response:', response.status, response.data);
+    return { success: response.status === 200, data: response.data };
+  } catch (error) {
+    console.error('Ayrshare set webhook error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
  * Generate JWT for Ayrshare Single Sign-On
  * This creates a secure URL that redirects users to Ayrshare's social linking page
  * @param {string} profileKey - The user's Ayrshare Profile Key
@@ -2455,6 +2480,7 @@ module.exports = {
   generateAyrshareJWT,
   getAyrshareUserProfile,
   deleteAyrshareProfile,
+  setAyrshareWebhook,
   // Ayrshare Analytics (detailed)
   getPostAnalytics,
   getSocialAnalyticsDetailed,

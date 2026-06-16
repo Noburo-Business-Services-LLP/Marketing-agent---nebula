@@ -103,6 +103,7 @@ const notificationScheduler = require('./services/notificationScheduler');
 // Analytics snapshot scheduler
 const snapshotScheduler = require('./services/snapshotScheduler');
 const { initializeSocketHub } = require('./services/socketHub');
+const { startInboxPolling } = require('./services/socialInboxService');
 
 const app = express();
 
@@ -586,15 +587,26 @@ const startServer = async () => {
   let mongoConnected = false;
   try {
     console.log('Connecting to MongoDB...');
-    await mongoose.connect(process.env.MONGODB_URI, {
-      // Atlas/network hiccups can cause fast failures right in the middle
-      // of scheduling/publishing. Give Mongoose more time to pick a server.
-      serverSelectionTimeoutMS: 30000,
-      socketTimeoutMS: 45000,
-      connectTimeoutMS: 30000,
-    });
-    console.log('✅ MongoDB connected successfully');
-    mongoConnected = true;
+    let retries = 5;
+    while (retries > 0) {
+      try {
+        await mongoose.connect(process.env.MONGODB_URI, {
+          // Atlas/network hiccups can cause fast failures right in the middle
+          // of scheduling/publishing. Give Mongoose more time to pick a server.
+          serverSelectionTimeoutMS: 30000,
+          socketTimeoutMS: 45000,
+          connectTimeoutMS: 30000,
+        });
+        console.log('✅ MongoDB connected successfully');
+        mongoConnected = true;
+        break;
+      } catch (err) {
+        retries -= 1;
+        console.warn(`⚠️  MongoDB connection failed. Retries left: ${retries}. Waiting 5 seconds...`);
+        if (retries === 0) throw err;
+        await new Promise(res => setTimeout(res, 5000));
+      }
+    }
 
     // Start persistent video generation queue worker
     try {
@@ -624,6 +636,13 @@ const startServer = async () => {
       otpService.initialize();
     } catch (otpError) {
       console.warn('⚠️  OTP service failed to initialize:', otpError.message);
+    }
+    
+    // Start Social Inbox Polling Fallback
+    try {
+      startInboxPolling();
+    } catch (pollingError) {
+      console.warn('⚠️  Social Inbox polling failed to start:', pollingError.message);
     }
   } catch (error) {
     console.warn('⚠️  MongoDB not available:', error.message);

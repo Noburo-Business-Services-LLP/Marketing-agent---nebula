@@ -105,6 +105,8 @@ function extractBody(payload = {}) {
 function normalizeWebhookPayload(platform, userId, payload = {}) {
   const normalizedPlatform = normalizePlatform(platform || payload.platform);
   const now = new Date();
+  
+  // Handle Instagram specific structure or fallbacks
   const rawMessageId =
     payload.id ||
     payload.message_id ||
@@ -114,32 +116,45 @@ function normalizeWebhookPayload(platform, userId, payload = {}) {
     payload.entry?.[0]?.messaging?.[0]?.message?.mid ||
     payload.entry?.[0]?.changes?.[0]?.value?.id ||
     `${normalizedPlatform}-${now.getTime()}`;
+    
   const providerMessageId = String(rawMessageId);
   const body = extractBody(payload);
   const messageType = normalizeMessageType(payload.type || payload.message_type || payload.field || payload.object || 'message');
-  const threadId = String(payload.thread_id || payload.conversation_id || payload.parent_id || payload.post_id || payload.video_id || providerMessageId);
-  const from = payload.from || payload.author || payload.user || {};
+  
+  // Correctly map thread ID
+  const threadId = String(payload.thread_id || payload.conversation_id || payload.parent_id || payload.post_id || payload.video_id || payload.entry?.[0]?.messaging?.[0]?.sender?.id || providerMessageId);
+  
+  // Correctly map sender and recipient
+  const senderId = payload.sender?.id || payload.author_id || payload.from?.id || payload.user?.id || 'unknown';
+  const recipientId = payload.recipient?.id || payload.to?.id || 'unknown';
+  
+  const from = payload.from || payload.author || payload.user || payload.sender || {};
+
+  // Extract created_time properly
+  const timestampRaw = payload.created_time || payload.createdAt || payload.timestamp || payload.entry?.[0]?.time || payload.entry?.[0]?.messaging?.[0]?.timestamp;
+  const occurredAt = timestampRaw ? (typeof timestampRaw === 'number' && timestampRaw < 9999999999 ? new Date(timestampRaw * 1000) : new Date(timestampRaw)) : now;
 
   return {
     userId,
     platform: normalizedPlatform,
     workspaceId: String(payload.workspaceId || payload.workspace_id || 'default'),
-    socialAccountId: String(payload.social_account_id || payload.account_id || payload.page_id || ''),
+    socialAccountId: String(payload.social_account_id || payload.account_id || payload.page_id || recipientId || ''),
     providerThreadId: threadId,
     providerMessageId,
     providerParentId: String(payload.parent_id || payload.in_reply_to_id || ''),
     messageType,
-    participantId: String(payload.author_id || from.id || payload.sender?.id || 'unknown'),
-    participantName: String(payload.author_name || from.name || payload.sender?.name || 'Social user'),
+    participantId: String(senderId),
+    participantName: String(payload.author_name || from.name || from.username || 'Social user'),
     participantUsername: String(payload.author_username || payload.username || from.username || ''),
-    avatarUrl: String(payload.avatar_url || from.picture || ''),
-    authorId: String(payload.author_id || from.id || payload.sender?.id || 'unknown'),
-    authorName: String(payload.author_name || from.name || payload.sender?.name || 'Social user'),
+    avatarUrl: String(payload.avatar_url || from.picture || from.profile_pic || ''),
+    authorId: String(senderId),
+    authorName: String(payload.author_name || from.name || from.username || 'Social user'),
+    recipientId: String(recipientId),
     body,
     mediaUrls: Array.isArray(payload.media_urls) ? payload.media_urls : [],
     permalink: String(payload.permalink || payload.url || ''),
     rawPayload: payload,
-    occurredAt: payload.created_time || payload.createdAt || payload.timestamp ? new Date(payload.created_time || payload.createdAt || payload.timestamp) : now
+    occurredAt
   };
 }
 
@@ -448,6 +463,13 @@ async function ingestEvent(eventInput) {
     ai: aiResult,
     autoReply
   });
+  
+  // Specific real-time events required by UI
+  emitToUser(event.userId, `${event.messageType}:new`, {
+    conversation: conversationDto,
+    message: messageDto
+  });
+  
   emitToUser(event.userId, 'inbox.notification', {
     type: `new_${event.messageType}`,
     title: `New ${event.messageType} on ${event.platform}`,
@@ -502,6 +524,10 @@ async function createOutboundReply(conversation, body, options = {}) {
 
   const dto = toMessageDTO(message, conversation);
   emitToUser(conversation.userId, 'inbox.message.replied', dto);
+  emitToUser(conversation.userId, 'reply:new', {
+    conversation: toConversationDTO(conversation),
+    message: dto
+  });
   return { message, dispatch };
 }
 
@@ -674,6 +700,33 @@ function toMessageDTO(message, conversation) {
   };
 }
 
+let pollingInterval = null;
+
+function startInboxPolling() {
+  if (pollingInterval) return;
+  console.log('✅ Started Social Inbox fallback polling (every 30s)');
+  
+  pollingInterval = setInterval(async () => {
+    try {
+      // In a real production setup, this would query Ayrshare's history or Meta Graph API directly.
+      // Here we stub the execution to simulate polling fetch logic.
+      // We look for active users with social connections
+      const activeUsers = await User.find({ isActive: true }).select('_id ayrshare connectedSocials');
+      
+      for (const user of activeUsers) {
+        // Pseudo-code for actual implementation:
+        // const missedEvents = await fetchMissedEventsFromAyrshare(user);
+        // for (const event of missedEvents) {
+        //   const normalized = normalizeWebhookPayload(event.platform, user._id, event);
+        //   await ingestEvent(normalized);
+        // }
+      }
+    } catch (error) {
+      console.error('Social Inbox polling error:', error.message);
+    }
+  }, 30000);
+}
+
 module.exports = {
   normalizePlatform,
   normalizeMessageType,
@@ -688,5 +741,6 @@ module.exports = {
   updateSettings,
   toConversationDTO,
   toMessageDTO,
-  getConnectedInboxPlatforms
+  getConnectedInboxPlatforms,
+  startInboxPolling
 };

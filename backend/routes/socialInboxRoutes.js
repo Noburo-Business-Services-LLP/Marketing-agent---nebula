@@ -41,5 +41,6 @@ router.patch('/conversations/:id/status', controller.updateStatus);
 router.patch('/conversations/:id/meta', controller.updateMeta);
 router.post('/sync/:platform', controller.syncPlatform);
 router.post('/dev/ingest', controller.devIngest);
+router.post('/dev/test', controller.testWebhook);
 
 module.exports = router;

@@ -880,6 +880,21 @@ export const apiService = {
     }
   },
 
+  // Register Ayrshare webhook automatically
+  registerWebhook: async (): Promise<{ success: boolean; message?: string; webhookUrl?: string }> => {
+    try {
+      const response = await apiCall<{ success: boolean; message?: string; webhookUrl?: string }>(
+        '/social/inbox/webhooks/register',
+        { method: 'POST' },
+        true
+      );
+      return response;
+    } catch (error: any) {
+      console.error('Failed to register webhook:', error);
+      return { success: false, message: error.message || 'Failed to register webhook' };
+    }
+  },
+
   // Disconnect any platform
   disconnectPlatform: async (platform: string): Promise<{ success: boolean }> => {
     try {
