@@ -167,10 +167,34 @@ function summarizeAyrshareErrors(errors = []) {
     .join(' | ');
 }
 
+const RATE_LIMIT_MAX = 24; // Keep it slightly under 25 to be safe
+const RATE_LIMIT_WINDOW_MS = 60000;
+let requestTimestamps = [];
+
+async function enforceRateLimit(url) {
+  if (!url.includes('api.ayrshare.com')) return;
+
+  while (true) {
+    const now = Date.now();
+    requestTimestamps = requestTimestamps.filter(t => t > now - RATE_LIMIT_WINDOW_MS);
+    
+    if (requestTimestamps.length < RATE_LIMIT_MAX) {
+      requestTimestamps.push(now);
+      return;
+    }
+    
+    const waitTime = RATE_LIMIT_WINDOW_MS - (now - requestTimestamps[0]) + 100;
+    console.log(`[Ayrshare Rate Limit] Delaying request by ${waitTime}ms to avoid suspension...`);
+    await sleep(waitTime);
+  }
+}
+
 /**
  * Generic HTTP request helper
  */
-function makeRequest(url, options = {}) {
+async function makeRequest(url, options = {}) {
+  await enforceRateLimit(url);
+
   return new Promise((resolve, reject) => {
     const parsedUrl = new URL(url);
     const protocol = parsedUrl.protocol === 'https:' ? https : http;
@@ -294,7 +318,7 @@ async function postToSocialMedia(platforms, content, options = {}) {
       'Content-Type': 'application/json'
     };
 
-    if (options.profileKey) {
+    if (options.profileKey && options.profileKey !== 'primary') {
       headers['Profile-Key'] = options.profileKey;
       console.log('Using Profile-Key for posting:', options.profileKey.substring(0, 20) + '...');
     }
@@ -376,7 +400,7 @@ async function retryPost(postId, options = {}) {
       'Authorization': `Bearer ${AYRSHARE_API_KEY}`
     };
 
-    if (options.profileKey) {
+    if (options.profileKey && options.profileKey !== 'primary') {
       headers['Profile-Key'] = options.profileKey;
       headers['X-Profile-Key'] = options.profileKey;
     }
@@ -450,7 +474,7 @@ async function getUserSocialAnalytics(profileKey, platforms = ['instagram', 'fac
         'Content-Type': 'application/json'
       };
 
-      if (profileKey) {
+      if (profileKey && profileKey !== 'primary') {
         headers['Profile-Key'] = profileKey;
       }
 
@@ -502,7 +526,7 @@ async function getPostHistory(options = {}) {
       'Authorization': `Bearer ${AYRSHARE_API_KEY}`,
       'Content-Type': 'application/json'
     };
-    if (options.profileKey) {
+    if (options.profileKey && options.profileKey !== 'primary') {
       headers['Profile-Key'] = options.profileKey;
       headers['X-Profile-Key'] = options.profileKey;
     }
@@ -536,7 +560,7 @@ async function getPostStatus(postId, options = {}) {
       'Authorization': `Bearer ${AYRSHARE_API_KEY}`,
       'Content-Type': 'application/json'
     };
-    if (options.profileKey) {
+    if (options.profileKey && options.profileKey !== 'primary') {
       headers['Profile-Key'] = options.profileKey;
       headers['X-Profile-Key'] = options.profileKey;
     }
@@ -570,7 +594,7 @@ async function deletePost(postId, options = {}) {
       'Authorization': `Bearer ${AYRSHARE_API_KEY}`,
       'Content-Type': 'application/json'
     };
-    if (options.profileKey) {
+    if (options.profileKey && options.profileKey !== 'primary') {
       headers['Profile-Key'] = options.profileKey;
       headers['X-Profile-Key'] = options.profileKey;
     }
@@ -792,12 +816,15 @@ async function getAyrshareUserProfile(profileKey) {
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
+      const headers = {
+        'Authorization': `Bearer ${AYRSHARE_API_KEY}`
+      };
+      if (profileKey && profileKey !== 'primary') {
+        headers['Profile-Key'] = profileKey;
+      }
       const response = await makeRequest('https://api.ayrshare.com/api/user', {
         method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${AYRSHARE_API_KEY}`,
-          'Profile-Key': profileKey
-        }
+        headers: headers
       });
 
       if (response.status === 200) {

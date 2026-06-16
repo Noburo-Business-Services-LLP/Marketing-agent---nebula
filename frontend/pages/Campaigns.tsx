@@ -4217,7 +4217,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
     const [platforms, setPlatforms] = useState<string[]>(connectedPlatforms.length > 0 ? [connectedPlatforms[0]] : []);
     const [contentTone, setContentTone] = useState<'professional' | 'casual' | 'humorous' | 'inspirational' | 'educational'>('professional');
     const [contentLanguage, setContentLanguage] = useState<string>('English');
-    const [contentType, setContentType] = useState<CampaignContentType>(initialContentType);
+    const [contentType] = useState<CampaignContentType>(reelsOnly ? initialContentType : 'image');
     const [selectedAspectRatio, setSelectedAspectRatio] = useState<string>('1:1');
     const [platformContents, setPlatformContents] = useState<Record<string, string>>({});
     const [selectedTemplateIds, setSelectedTemplateIds] = useState<Record<string, string>>({});
@@ -5511,40 +5511,6 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                                   <p className={`text-sm ${theme.textSecondary} mt-1`}>How should your content look and feel?</p>
                                 </div>
                                 
-                                <div>
-                                  <label className={labelClasses}>Content Type</label>
-                                  <div className="grid grid-cols-2 gap-2">
-                                    <button
-                                      type="button"
-                                      onClick={() => setContentType('image')}
-                                      className={`p-3 rounded-lg border text-left transition ${
-                                        !isReelFlow
-                                          ? 'border-[#ffcc29] bg-[#ffcc29]/15 text-[#ffcc29]'
-                                          : isDarkMode
-                                            ? 'border-slate-700 text-slate-300 hover:border-[#ffcc29]/40'
-                                            : 'border-slate-200 text-slate-700 hover:border-[#ffcc29]/40'
-                                      }`}
-                                    >
-                                      <p className="text-sm font-semibold">Post Campaign</p>
-                                      <p className="text-xs opacity-80">Image/video/carousel campaign flow</p>
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => setContentType('reel')}
-                                      className={`p-3 rounded-lg border text-left transition ${
-                                        isReelFlow
-                                          ? 'border-[#ffcc29] bg-[#ffcc29]/15 text-[#ffcc29]'
-                                          : isDarkMode
-                                            ? 'border-slate-700 text-slate-300 hover:border-[#ffcc29]/40'
-                                            : 'border-slate-200 text-slate-700 hover:border-[#ffcc29]/40'
-                                      }`}
-                                    >
-                                      <p className="text-sm font-semibold">Reels</p>
-                                      <p className="text-xs opacity-80">Video-first reels creation flow</p>
-                                    </button>
-                                  </div>
-                                </div>
-
                                 <div>
                                   <label className={labelClasses}>Platforms *</label>
                                   <div className="flex flex-wrap gap-2">

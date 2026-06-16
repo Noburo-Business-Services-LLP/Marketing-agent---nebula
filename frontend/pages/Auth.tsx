@@ -503,7 +503,7 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
                     <button
                       type="button"
                       onClick={() => setShowFpPassword(!showFpPassword)}
-                      className={`absolute right-3 top-1/2 -translate-y-1/2 ${theme === 'dark' ? 'text-[#ededed]/50 hover:text-[#ededed]' : 'text-gray-400 hover:text-gray-600'} transition-colors`}
+                      className={`absolute z-10 right-3 top-1/2 -translate-y-1/2 ${theme === 'dark' ? 'text-[#ededed]/50 hover:text-[#ededed]' : 'text-gray-400 hover:text-gray-600'} transition-colors`}
                     >
                       {showFpPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
@@ -792,7 +792,7 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className={`absolute right-3 top-1/2 -translate-y-1/2 ${theme === 'dark' ? 'text-[#ededed]/50 hover:text-[#ededed]' : 'text-gray-400 hover:text-gray-600'} transition-colors`}
+                  className={`absolute z-10 right-3 top-1/2 -translate-y-1/2 ${theme === 'dark' ? 'text-[#ededed]/50 hover:text-[#ededed]' : 'text-gray-400 hover:text-gray-600'} transition-colors`}
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>

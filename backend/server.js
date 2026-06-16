@@ -50,6 +50,7 @@ console.log('');
 // ============================================
 const authRoutes = require('./routes/auth');
 const socialRoutes = require('./routes/social');
+const socialInboxRoutes = require('./routes/socialInboxRoutes');
 const chatRoutes = require('./routes/chat');
 const supportRoutes = require('./routes/support');
 const dashboardRoutes = require('./routes/dashboard');
@@ -101,6 +102,7 @@ const influencerAnalyticsRoutes = require('./routes/analyticsRoutes');
 const notificationScheduler = require('./services/notificationScheduler');
 // Analytics snapshot scheduler
 const snapshotScheduler = require('./services/snapshotScheduler');
+const { initializeSocketHub } = require('./services/socketHub');
 
 const app = express();
 
@@ -315,6 +317,7 @@ app.use((req, res, next) => {
 
 // Routes - Core (with specific rate limiters on sensitive routes)
 app.use('/api/auth', authLimiter, authRoutes);
+app.use('/api/social/inbox', socialInboxRoutes);
 app.use('/api/social', socialLimiter, socialRoutes);
 app.use('/api/chat', aiLimiter, chatRoutes);
 app.use('/api/support', supportRoutes);
@@ -638,6 +641,8 @@ const startServer = async () => {
       console.log('   ⚠️  Running in DEMO MODE (MongoDB unavailable)');
     }
   });
+
+  initializeSocketHub(server, allowedOrigins);
 
   server.on('error', (err) => {
     if (err && err.code === 'EADDRINUSE') {

@@ -5,6 +5,7 @@ import { SocialConnection } from '../types';
 import { Loader2, RefreshCw, Check, X, Instagram, Facebook, Linkedin, Youtube, Video, AlertCircle, ShieldCheck, MessageCircle, Pin, ExternalLink, Inbox, Lock, Bell, Sparkles, Tag, Activity, KeyRound, RadioTower, ArrowRight, CheckCircle2, Clock3 } from 'lucide-react';
 import { useTheme, getThemeClasses } from '../context/ThemeContext';
 import UnifiedInbox from './UnifiedInbox';
+import AutoReplySettingsPage from './AutoReplySettingsPage';
 
 // X (Twitter) logo SVG component
 const XLogo = ({ className }: { className?: string }) => (
@@ -437,6 +438,7 @@ const ConnectSocials: React.FC = () => {
     { id: 'permissions', label: 'Permissions', icon: KeyRound, path: '/connect-socials?tab=permissions' },
     { id: 'sync', label: 'Sync Status', icon: Activity, path: '/connect-socials?tab=sync' },
     { id: 'inbox', label: 'Social Inbox', icon: Inbox, path: '/connect-socials/inbox' },
+    { id: 'auto-reply', label: 'AI Auto Reply', icon: Sparkles, path: '/connect-socials?tab=auto-reply' },
   ];
   const activeTab = isInboxRoute ? 'inbox' : new URLSearchParams(location.search).get('tab') || 'accounts';
 
@@ -810,7 +812,7 @@ const ConnectSocials: React.FC = () => {
             <div className={`rounded-2xl border p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3 ${theme.bgCard} ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'}`}>
               <div>
                 <h2 className={`text-lg font-bold ${theme.text}`}>Unified Social Inbox</h2>
-                <p className={`text-sm ${theme.textSecondary}`}>Connect Socials to OAuth Authentication to Webhook Registration to Social Inbox Access.</p>
+                <p className={`text-sm ${theme.textSecondary}`}>Real comments, DMs, mentions, and replies from connected social accounts.</p>
               </div>
               <div className="flex items-center gap-2 text-xs font-bold text-green-400">
                 <CheckCircle2 className="w-4 h-4" /> {connectedPlatformCount} connected
@@ -828,6 +830,10 @@ const ConnectSocials: React.FC = () => {
             </button>
           </div>
         )
+      )}
+
+      {activeTab === 'auto-reply' && (
+        <AutoReplySettingsPage />
       )}
 
       {/* Simulated OAuth Popup Modal */}
