@@ -167,10 +167,34 @@ function summarizeAyrshareErrors(errors = []) {
     .join(' | ');
 }
 
+const RATE_LIMIT_MAX = 24; // Keep it slightly under 25 to be safe
+const RATE_LIMIT_WINDOW_MS = 60000;
+let requestTimestamps = [];
+
+async function enforceRateLimit(url) {
+  if (!url.includes('api.ayrshare.com')) return;
+
+  while (true) {
+    const now = Date.now();
+    requestTimestamps = requestTimestamps.filter(t => t > now - RATE_LIMIT_WINDOW_MS);
+    
+    if (requestTimestamps.length < RATE_LIMIT_MAX) {
+      requestTimestamps.push(now);
+      return;
+    }
+    
+    const waitTime = RATE_LIMIT_WINDOW_MS - (now - requestTimestamps[0]) + 100;
+    console.log(`[Ayrshare Rate Limit] Delaying request by ${waitTime}ms to avoid suspension...`);
+    await sleep(waitTime);
+  }
+}
+
 /**
  * Generic HTTP request helper
  */
-function makeRequest(url, options = {}) {
+async function makeRequest(url, options = {}) {
+  await enforceRateLimit(url);
+
   return new Promise((resolve, reject) => {
     const parsedUrl = new URL(url);
     const protocol = parsedUrl.protocol === 'https:' ? https : http;

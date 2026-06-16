@@ -468,82 +468,18 @@ router.get('/:platform/auth', protect, async (req, res) => {
     }
 
     // Use Ayrshare JWT/SSO flow for ALL platforms (Business Plan approach)
-    // Step 1: Check if user has an Ayrshare profile, if not create one
-    let profileKey = user.ayrshare?.profileKey;
+    // Bypassing Multi-User Profile creation because the current API key is not on a Business Plan
+    // This forces all connections to use the primary Ayrshare account.
+    let profileKey = 'primary';
     
-    if (!profileKey) {
-      console.log(`Creating Ayrshare profile for user: ${user.email}`);
-      
-      // Create a unique title for this user's Ayrshare profile
-      const profileTitle = `Nebula-${user._id.toString().slice(-8)}-${user.email.split('@')[0]}`;
-      
-      // Configure which social networks to show (hide those not relevant)
-      const disableSocial = ['gmb', 'snapchat', 'telegram', 'threads']; // Hide less common ones
-      
-      const createResult = await createAyrshareProfile(profileTitle, {
-        hideTopHeader: false,
-        topHeader: `Connect Social Accounts for ${user.businessProfile?.name || user.firstName || 'Your Business'}`,
-        subHeader: 'Click an icon below to securely connect your social media account',
-        disableSocial: disableSocial
-      });
-      
-      if (!createResult.success) {
-        // Check if profile already exists (code 146)
-        if (createResult.code === 146) {
-          console.log('Ayrshare profile already exists, title conflict');
-          // Try with a more unique title
-          const uniqueTitle = `Nebula-${Date.now()}-${user._id.toString().slice(-6)}`;
-          const retryResult = await createAyrshareProfile(uniqueTitle, {
-            hideTopHeader: false,
-            disableSocial: disableSocial
-          });
-          
-          if (!retryResult.success) {
-            return res.status(500).json({
-              success: false,
-              message: 'Failed to create social linking profile. Please try again.',
-              error: retryResult.error
-            });
-          }
-          
-          profileKey = retryResult.profileKey;
-          user.ayrshare = user.ayrshare || {};
-          user.ayrshare.profileKey = retryResult.profileKey;
-          user.ayrshare.refId = retryResult.refId;
-          user.ayrshare.title = uniqueTitle;
-          user.ayrshare.createdAt = new Date();
-          user.ayrshare.activeSocialAccounts = Array.isArray(user.ayrshare.activeSocialAccounts) ? user.ayrshare.activeSocialAccounts : [];
-          user.ayrshare.displayNames = Array.isArray(user.ayrshare.displayNames) ? user.ayrshare.displayNames : [];
-          user.ayrshare.lastCheckedAt = user.ayrshare.lastCheckedAt || null;
-          user.ayrshare.lastError = typeof user.ayrshare.lastError === "string" ? user.ayrshare.lastError : "";
-        } else {
-          console.log('[Platform Auth] Profile creation failed. Falling back to primary.');
-          profileKey = 'primary';
-          user.ayrshare = user.ayrshare || {};
-          user.ayrshare.profileKey = 'primary';
-          user.ayrshare.refId = 'primary-ref';
-          user.ayrshare.title = 'Primary Profile';
-          user.ayrshare.createdAt = new Date();
-          user.ayrshare.activeSocialAccounts = Array.isArray(user.ayrshare.activeSocialAccounts) ? user.ayrshare.activeSocialAccounts : [];
-          user.ayrshare.displayNames = Array.isArray(user.ayrshare.displayNames) ? user.ayrshare.displayNames : [];
-          user.ayrshare.lastCheckedAt = user.ayrshare.lastCheckedAt || null;
-          user.ayrshare.lastError = "";
-        }
-      } else {
-        profileKey = createResult.profileKey;
-        user.ayrshare = user.ayrshare || {};
-        user.ayrshare.profileKey = createResult.profileKey;
-        user.ayrshare.refId = createResult.refId;
-        user.ayrshare.title = profileTitle;
-        user.ayrshare.createdAt = new Date();
-        user.ayrshare.activeSocialAccounts = Array.isArray(user.ayrshare.activeSocialAccounts) ? user.ayrshare.activeSocialAccounts : [];
-        user.ayrshare.displayNames = Array.isArray(user.ayrshare.displayNames) ? user.ayrshare.displayNames : [];
-        user.ayrshare.lastCheckedAt = user.ayrshare.lastCheckedAt || null;
-        user.ayrshare.lastError = typeof user.ayrshare.lastError === "string" ? user.ayrshare.lastError : "";
-      }
-      
+    // Make sure we update the user document so they don't get stuck later
+    if (!user.ayrshare || user.ayrshare.profileKey !== 'primary') {
+      user.ayrshare = user.ayrshare || {};
+      user.ayrshare.profileKey = 'primary';
+      user.ayrshare.refId = 'primary-ref';
+      user.ayrshare.title = 'Primary Profile';
+      user.ayrshare.createdAt = new Date();
       await user.save();
-      console.log(`Ayrshare profile created for user: ${user.email}, profileKey: ${profileKey?.slice(0, 8)}...`);
     }
     
     // Step 2: Generate JWT URL for SSO to social linking page
