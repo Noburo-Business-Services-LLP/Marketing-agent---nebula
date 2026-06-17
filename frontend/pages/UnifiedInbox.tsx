@@ -230,7 +230,7 @@ const UnifiedInbox: React.FC = () => {
   const panel = isDarkMode ? 'bg-[#0d1117] border-slate-800' : 'bg-white border-slate-200';
 
   return (
-    <div className={`h-[calc(100vh-16rem)] min-h-[400px] rounded-lg border overflow-hidden flex flex-col ${shell}`}>
+    <div className={`min-h-[650px] h-[calc(100vh-8rem)] rounded-lg border overflow-hidden flex flex-col ${shell}`}>
       <div className={`flex-1 flex flex-col lg:flex-row min-h-0 ${isDarkMode ? 'divide-slate-800' : 'divide-slate-200'} lg:divide-x`}>
         <aside className="w-full lg:w-[360px] flex flex-col min-h-0">
           <div className={`shrink-0 p-4 border-b ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
@@ -429,12 +429,12 @@ const UnifiedInbox: React.FC = () => {
                   </div>
                 </div>
 
-                <aside className={`hidden xl:flex flex-col border-l ${isDarkMode ? 'border-slate-800 bg-[#0d1117]' : 'border-slate-200 bg-white'}`}>
+                <aside className={`hidden xl:flex flex-col min-h-0 border-l ${isDarkMode ? 'border-slate-800 bg-[#0d1117]' : 'border-slate-200 bg-white'}`}>
                   <div className="shrink-0 p-4 border-b border-inherit">
                     <h4 className="font-semibold flex items-center gap-2"><Sparkles className="w-4 h-4 text-[#ffcc29]" /> AI Assist</h4>
                     <p className={`text-xs mt-1 ${muted}`}>Reply suggestions, sentiment, spam risk, and priority tagging.</p>
                   </div>
-                  <div className="p-4 space-y-4 overflow-y-auto">
+                  <div className="flex-1 p-4 space-y-4 overflow-y-auto min-h-0">
                     <div className={`rounded-lg border p-3 ${panel}`}>
                       <div className="grid grid-cols-2 gap-3 text-xs">
                         <div><p className={muted}>Sentiment</p><p className="font-semibold capitalize">{selected.sentiment || 'neutral'}</p></div>

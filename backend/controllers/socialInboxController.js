@@ -20,10 +20,22 @@ function getUserId(req) {
 }
 
 function verifyWebhookRequest(req) {
-  const secret = process.env.SOCIAL_INBOX_WEBHOOK_SECRET || process.env.WEBHOOK_SECRET || '';
-  if (!secret) return true;
-  const provided = req.headers['x-nebulaa-webhook-secret'] || req.query.secret || req.body?.secret;
-  return String(provided || '') === secret;
+  const incomingSignature = req.headers['x-ayrshare-signature'] || req.headers['ayrshare-signature'] || req.headers['x-nebulaa-webhook-secret'] || req.query.secret || req.body?.secret;
+  
+  if (!incomingSignature) return false;
+
+  try {
+    const decoded = require('jsonwebtoken').verify(
+      incomingSignature,
+      process.env.AYRSHARE_PRIVATE_KEY,
+      { algorithms: ["RS256"] }
+    );
+    console.log("Webhook signature verified");
+    return true;
+  } catch (err) {
+    console.error('Webhook signature verification failed:', err.message);
+    return false;
+  }
 }
 
 exports.getSummary = async (req, res) => {
@@ -211,6 +223,7 @@ exports.verifyWebhook = (req, res) => {
 };
 
 exports.receiveWebhook = async (req, res) => {
+  console.log("RAW WEBHOOK:", JSON.stringify(req.body, null, 2));
   try {
     console.log(`[Webhook] Received incoming webhook payload on platform: ${req.params.platform}`);
     console.log(`[Webhook] Raw Payload:`, JSON.stringify(req.body, null, 2));

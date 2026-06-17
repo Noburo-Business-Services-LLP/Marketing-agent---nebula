@@ -5,8 +5,8 @@ services:
     restart: unless-stopped
     ports:
       - "4040:4040"
-    environment:
-      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
+    env_file:
+      - ./backend/.env
     command:
       - "http"
       - "app:5000"

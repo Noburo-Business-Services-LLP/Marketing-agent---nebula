@@ -272,7 +272,19 @@ const ConnectSocials: React.FC = () => {
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return;
+      const isSelf = event.origin === window.location.origin;
+      const isAyrshare = event.origin.includes('ayrshare.com');
+
+      if (!isSelf && !isAyrshare) return;
+
+      // If Ayrshare sends any message (like success or close), try to force close the popup
+      if (isAyrshare) {
+        if (authPopupRef.current && !authPopupRef.current.closed) {
+          authPopupRef.current.close();
+        }
+        return; // Let the monitor handle the success toast by polling
+      }
+
       if (event.data?.type !== 'nebula-social-connected') return;
 
       const platform = String(event.data.platform || '');
@@ -372,6 +384,7 @@ const ConnectSocials: React.FC = () => {
       const response = await apiService.getPlatformAuthUrl(platform);
 
       if (response.success && response.authUrl) {
+        console.log("Received connect URL from backend:", response.authUrl);
         const opened = openAuthPopup(response.authUrl, platform, pendingPopup);
         if (opened) {
           setLoadingPlatform(null);

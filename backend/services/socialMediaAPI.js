@@ -3,6 +3,7 @@
  * Integrates Ayrshare and Apify for real-time social media data
  */
 
+const jwt = require('jsonwebtoken');
 const https = require('https');
 const http = require('http');
 
@@ -660,11 +661,19 @@ async function getAyrshareProfile() {
  * Generate Ayrshare connect URL for a specific platform
  * This opens Ayrshare's OAuth flow for the platform
  */
-function getAyrshareConnectUrl(platform, redirectUrl) {
+function getAyrshareConnectUrl(platform, redirectUrl, user) {
   try {
-    // Ayrshare dashboard URL for connecting accounts
-    const baseUrl = 'https://api.ayrshare.com/social-accounts';
-    const connectUrl = `${baseUrl}?platform=${platform.toLowerCase()}&redirect=${encodeURIComponent(redirectUrl || '')}`;
+    const jwtResult = generateAyrshareJWT(user, {
+      redirect: redirectUrl,
+      allowedSocial: [platform.toLowerCase()]
+    });
+
+    if (!jwtResult.success) {
+      return { success: false, error: jwtResult.error || 'Failed to generate JWT for connect URL' };
+    }
+
+    const connectUrl = jwtResult.url;
+    console.log("Generated Connect URL:", connectUrl);
     return { success: true, connectUrl };
   } catch (error) {
     return { success: false, error: error.message };
@@ -753,45 +762,33 @@ async function setAyrshareWebhook(profileKey, webhookUrl) {
  * @param {object} options - Optional settings (redirect URL, logout, allowedSocial)
  * @returns {Promise<{success: boolean, url?: string, error?: string}>}
  */
-async function generateAyrshareJWT(profileKey, options = {}) {
+async function generateAyrshareJWT(user, options = {}) {
   const domain = process.env.AYRSHARE_DOMAIN;
   const privateKey = process.env.AYRSHARE_PRIVATE_KEY;
-  
+  const profileKey = user?.ayrshare?.profileKey || user?.profileKey || '';
+
   if (!AYRSHARE_API_KEY) {
-    console.warn('Ayrshare API key not configured');
     return { success: false, error: 'API not configured' };
   }
-
   if (!domain || !privateKey) {
-    console.warn('Ayrshare domain or private key not configured');
     return { success: false, error: 'Ayrshare Business Plan credentials not configured (domain/privateKey)' };
   }
-
   if (!profileKey) {
     return { success: false, error: 'Profile key is required' };
   }
 
   try {
-    // Build request body for Business Plan JWT SSO
     const body = {
       domain: domain,
       privateKey: privateKey,
       profileKey: profileKey
     };
     
-    // Add optional parameters
-    if (options.redirect) {
-      body.redirect = options.redirect;
-    }
-    if (options.logout) {
-      body.logout = true;
-    }
-    // Filter to only show specific social platforms
+    if (options.redirect) body.redirect = options.redirect;
+    if (options.logout) body.logout = true;
     if (options.allowedSocial && Array.isArray(options.allowedSocial)) {
       body.allowedSocial = options.allowedSocial;
     }
-
-    console.log('Generating Ayrshare JWT for profileKey:', profileKey, 'domain:', domain);
 
     const response = await makeRequest('https://api.ayrshare.com/api/profiles/generateJWT', {
       method: 'POST',
@@ -802,21 +799,16 @@ async function generateAyrshareJWT(profileKey, options = {}) {
       body: body
     });
 
-    console.log('Ayrshare generate JWT response:', response.status, response.data);
-
     if (response.status === 200 && response.data?.url) {
-      return {
-        success: true,
-        url: response.data.url
-      };
+      console.log("Generated Ayrshare JWT URL from API:", response.data.url);
+      return { success: true, url: response.data.url };
     } else {
       return {
         success: false,
-        error: response.data?.message || response.data?.error || 'Failed to generate JWT URL'
+        error: response.data?.message || response.data?.error || 'Failed to generate JWT URL via API'
       };
     }
   } catch (error) {
-    console.error('Ayrshare generate JWT error:', error);
     return { success: false, error: error.message };
   }
 }

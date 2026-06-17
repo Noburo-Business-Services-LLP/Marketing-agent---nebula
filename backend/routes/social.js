@@ -571,7 +571,7 @@ router.get('/:platform/auth', protect, async (req, res) => {
     // Map platform to Ayrshare's expected format for allowedSocial
     const ayrshareplatform = AYRSHARE_PLATFORM_MAP[platformLower] || platformLower;
 
-    const jwtResult = await generateAyrshareJWT(profileKey, {
+    const jwtResult = await generateAyrshareJWT(user, {
       redirect: redirectUrl,
       logout: true, // Force clear any existing Ayrshare browser session — prevents connecting to the wrong profile
       // Only show the specific platform the user clicked on
@@ -1753,7 +1753,31 @@ router.get('/connect/:platform', protect, async (req, res) => {
     
     // For other platforms, we'll use Ayrshare's dashboard
     // Note: Ayrshare requires account linking through their dashboard
-    const result = await getAyrshareConnectUrl(platform, redirectUrl);
+    let user = await User.findById(req.user._id);
+    if (!user?.ayrshare?.profileKey) {
+      console.log(`[Social Connect] Creating new Ayrshare profile for user: ${user.email}`);
+      const profileTitle = `Nebula-${user._id.toString().slice(-8)}-${user.email.split('@')[0]}`;
+      const createResult = await createAyrshareProfile(profileTitle, { 
+        hideTopHeader: false, 
+        disableSocial: ['gmb', 'snapchat', 'telegram', 'threads'] 
+      });
+      if (createResult.success) {
+        user.ayrshare = {
+          profileKey: createResult.profileKey,
+          refId: createResult.refId,
+          title: createResult.title || profileTitle,
+          createdAt: new Date(),
+          activeSocialAccounts: [],
+          displayNames: [],
+          lastCheckedAt: null,
+          lastError: ''
+        };
+        await user.save();
+      } else {
+        return res.status(500).json({ success: false, message: 'Failed to create social profile for connection' });
+      }
+    }
+    const result = await getAyrshareConnectUrl(platform, redirectUrl, user);
     
     res.json({
       success: true,
@@ -1924,7 +1948,31 @@ router.get('/ayrshare/connect-url/:platform', protect, async (req, res) => {
     }
     
     // Get the Ayrshare connect URL
-    const result = await getAyrshareConnectUrl(platform, redirectUrl);
+    let user = await User.findById(req.user._id);
+    if (!user?.ayrshare?.profileKey) {
+      console.log(`[Social Connect] Creating new Ayrshare profile for user: ${user.email}`);
+      const profileTitle = `Nebula-${user._id.toString().slice(-8)}-${user.email.split('@')[0]}`;
+      const createResult = await createAyrshareProfile(profileTitle, { 
+        hideTopHeader: false, 
+        disableSocial: ['gmb', 'snapchat', 'telegram', 'threads'] 
+      });
+      if (createResult.success) {
+        user.ayrshare = {
+          profileKey: createResult.profileKey,
+          refId: createResult.refId,
+          title: createResult.title || profileTitle,
+          createdAt: new Date(),
+          activeSocialAccounts: [],
+          displayNames: [],
+          lastCheckedAt: null,
+          lastError: ''
+        };
+        await user.save();
+      } else {
+        return res.status(500).json({ success: false, message: 'Failed to create social profile for connection' });
+      }
+    }
+    const result = await getAyrshareConnectUrl(platform, redirectUrl, user);
     
     if (result.success) {
       res.json({
