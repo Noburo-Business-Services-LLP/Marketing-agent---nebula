@@ -1141,7 +1141,7 @@ Return ONLY the caption text with hashtags. No JSON, no explanations.`;
 
     // Call Gemini with vision
     const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-    const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+    const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
     
     const requestBody = {
       contents: [{
