@@ -259,6 +259,47 @@ exports.receiveWebhook = async (req, res) => {
   }
 };
 
+exports.receiveCommentWebhook = async (req, res) => {
+  console.log("RAW COMMENT WEBHOOK:", JSON.stringify(req.body, null, 2));
+  try {
+    console.log(`[Comment Webhook] Received incoming comment webhook payload on platform: ${req.params.platform}`);
+    
+    // We can use same verify logic if needed, or skip based on setup
+    if (!verifyWebhookRequest(req)) {
+      console.warn(`[Comment Webhook] Invalid webhook secret for platform: ${req.params.platform}`);
+      return res.status(401).json({ success: false, message: 'Invalid webhook secret' });
+    }
+
+    const userId = req.query.userId || req.body?.userId;
+    if (!userId) {
+      console.warn(`[Comment Webhook] Missing userId in payload for platform: ${req.params.platform}`);
+      return res.status(400).json({ success: false, message: 'Webhook userId is required' });
+    }
+
+    const payloads = Array.isArray(req.body?.events) ? req.body.events : [req.body || {}];
+    const results = [];
+
+    // Import ingestComment if needed from service, assuming it's exported
+    const { ingestComment } = require('../services/socialInboxService');
+
+    for (const payload of payloads) {
+      console.log(`[Comment Webhook] Processing comment event for user: ${userId}, platform: ${req.params.platform}`);
+      // Pass the userId into payload to keep it consistent
+      payload.userId = userId;
+      results.push(await ingestComment(req.params.platform, payload));
+    }
+
+    res.json({
+      success: true,
+      received: results.length,
+      duplicates: results.filter(item => item && item.duplicate).length
+    });
+  } catch (error) {
+    console.error('Social inbox comment webhook error:', error);
+    res.status(500).json({ success: false, message: 'Failed to process comment webhook' });
+  }
+};
+
 exports.devIngest = async (req, res) => {
   try {
 

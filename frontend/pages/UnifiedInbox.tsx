@@ -59,6 +59,7 @@ const UnifiedInbox: React.FC = () => {
   const [threadLoading, setThreadLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [live, setLive] = useState(false);
+  const [replyingToCommentId, setReplyingToCommentId] = useState('');
   const [error, setError] = useState('');
   const [threadError, setThreadError] = useState('');
   const threadEndRef = useRef<HTMLDivElement>(null);
@@ -179,9 +180,12 @@ const UnifiedInbox: React.FC = () => {
     const body = reply.trim();
     setReply('');
     try {
-      const result = await inboxAPI.reply(selected.id, body);
+      const result = replyingToCommentId
+        ? await inboxAPI.replyToComment(selected.id, body, replyingToCommentId)
+        : await inboxAPI.reply(selected.id, body);
       setMessages(current => [...current, result.message]);
       setConversations(current => current.map(item => item.id === selected.id ? { ...item, status: 'replied', last_message_preview: body } : item));
+      setReplyingToCommentId('');
     } catch (err: any) {
       setReply(body);
       setThreadError(err?.message || 'Reply could not be sent.');
@@ -388,13 +392,38 @@ const UnifiedInbox: React.FC = () => {
                     ) : messages.map(message => {
                       const outbound = message.direction === 'outbound';
                       return (
-                        <div key={message.id} className={`flex ${outbound ? 'justify-end' : 'justify-start'}`}>
+                        <div key={message.id} className={`flex ${outbound ? 'justify-end' : 'justify-start'} group`}>
                           <div className={`max-w-[78%] rounded-lg px-4 py-3 border ${outbound ? 'bg-[#ffcc29] text-[#070A12] border-[#ffcc29]' : panel}`}>
-                            <div className="flex items-center gap-2 mb-1">
+                            <div className="flex items-center flex-wrap gap-2 mb-1">
                               <span className="text-xs font-semibold">{outbound ? 'Nebulaa' : message.author_name}</span>
                               <span className="text-[11px] opacity-60">{timeAgo(message.created_at)}</span>
+                              {message.message_type && message.message_type !== 'message' && (
+                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${outbound ? 'bg-black/10 text-black/70' : 'bg-[#ffcc29]/20 text-[#d8ad20]'}`}>
+                                  {message.message_type}
+                                </span>
+                              )}
+                              {message.auto_replied && (
+                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 ${outbound ? 'bg-black/10 text-black/70' : 'bg-blue-500/10 text-blue-500'}`}>
+                                  <Bot className="w-3 h-3" /> Auto
+                                </span>
+                              )}
+                              {message.sentiment && !outbound && message.sentiment !== 'neutral' && (
+                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${message.sentiment === 'positive' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
+                                  {message.sentiment}
+                                </span>
+                              )}
                             </div>
                             <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.body}</p>
+                            {!outbound && ['comment', 'mention'].includes(message.message_type || '') && (
+                              <div className="mt-2 text-right opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button
+                                  onClick={() => setReplyingToCommentId(message.provider_message_id || message.id)}
+                                  className={`text-[11px] font-semibold flex items-center gap-1 ml-auto ${muted} hover:text-[#ffcc29]`}
+                                >
+                                  <MessageCircle className="w-3 h-3" /> Reply
+                                </button>
+                              </div>
+                            )}
                           </div>
                         </div>
                       );
@@ -408,13 +437,18 @@ const UnifiedInbox: React.FC = () => {
                         value={reply}
                         onChange={event => setReply(event.target.value)}
                         rows={3}
-                        placeholder="Reply across the original social platform"
+                        placeholder={replyingToCommentId ? "Replying to a specific comment..." : "Reply across the original social platform"}
                         className="w-full bg-transparent outline-none resize-none text-sm"
                       />
                       <div className="flex items-center justify-between pt-2">
                         <div className={`flex items-center gap-2 text-xs ${muted}`}>
                           <ShieldAlert className="w-4 h-4" />
                           Sends through the connected platform API
+                          {replyingToCommentId && (
+                            <button onClick={() => setReplyingToCommentId('')} className="ml-2 px-2 py-0.5 rounded bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors font-semibold">
+                              Cancel Comment Reply
+                            </button>
+                          )}
                         </div>
                         <button
                           onClick={sendReply}

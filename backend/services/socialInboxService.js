@@ -160,9 +160,22 @@ function normalizeWebhookPayload(platform, userId, payload = {}) {
     body: messageText,
     mediaUrls: Array.isArray(payload.media_urls) ? payload.media_urls : [],
     permalink: String(payload.permalink || payload.url || ''),
+    postId: String(payload.post_id || payload.media_id || ''),
+    commentId: String(payload.comment_id || payload.id || ''),
+    parentCommentId: String(payload.parent_id || payload.parent_comment_id || ''),
+    platformPostType: String(payload.media_type || payload.post_type || '').toLowerCase(),
     rawPayload: payload,
     occurredAt
   };
+}
+
+async function ingestComment(platform, payload) {
+  const event = normalizeWebhookPayload(platform, payload.userId, payload);
+  // Enforce comment types if not set
+  if (event.messageType === 'message' || !event.messageType) {
+    event.messageType = 'comment';
+  }
+  return await ingestEvent(event);
 }
 
 async function getSettings(userId) {
@@ -400,6 +413,10 @@ async function ingestEvent(eventInput) {
     leadScore: insights.leadScore,
     engagementScore: insights.engagementScore,
     priority: insights.priority,
+    postId: event.postId || '',
+    commentId: event.commentId || '',
+    parentCommentId: event.parentCommentId || '',
+    platformPostType: ['post', 'reel', 'story'].includes(event.platformPostType) ? event.platformPostType : '',
     rawPayload: event.rawPayload,
     createdAt: event.occurredAt
   };
@@ -455,9 +472,11 @@ async function ingestEvent(eventInput) {
       autoReply = await createOutboundReply(conversation, aiResult.recommendedReply, {
         user,
         aiAuto: true,
-        dispatch: true
+        dispatch: true,
+        commentId: event.commentId || event.providerMessageId
       });
       message.ai.autoReplyStatus = autoReply.dispatch?.success ? 'sent' : 'failed';
+      message.autoReplied = autoReply.dispatch?.success ? true : false;
       await message.save();
     }
   }
@@ -489,7 +508,12 @@ async function ingestEvent(eventInput) {
 
 async function createOutboundReply(conversation, body, options = {}) {
   const user = options.user || await User.findById(conversation.userId);
-  const dispatch = options.dispatch ? await dispatchReply({ user, conversation, body }) : { success: true, provider: 'local' };
+  // If we have a specific commentId, we should pass it to dispatchReply
+  const dispatchPayload = { user, conversation, body };
+  if (options.commentId) {
+    dispatchPayload.commentId = options.commentId;
+  }
+  const dispatch = options.dispatch ? await dispatchReply(dispatchPayload) : { success: true, provider: 'local' };
   const providerMessageId = dispatch?.providerResponse?.id || dispatch?.providerResponse?.postIds?.[0] || `nebulaa-reply-${Date.now()}`;
 
   const message = await SocialInboxMessage.create({
@@ -703,6 +727,7 @@ function toMessageDTO(message, conversation) {
     engagement_score: message.engagementScore || 0,
     priority: message.priority || 'normal',
     ai: message.ai || {},
+    auto_replied: message.autoReplied || false,
     created_at: message.createdAt
   };
 }
@@ -740,6 +765,7 @@ module.exports = {
   analyzeEngagement,
   normalizeWebhookPayload,
   ingestEvent,
+  ingestComment,
   createOutboundReply,
   listConversations,
   getConversationThread,

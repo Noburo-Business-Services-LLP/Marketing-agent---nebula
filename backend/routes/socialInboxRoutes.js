@@ -27,6 +27,7 @@ const streamAuth = async (req, res, next) => {
 
 router.get('/webhooks/:platform', controller.verifyWebhook);
 router.post('/webhooks/:platform', controller.receiveWebhook);
+router.post('/webhooks/comments/:platform', controller.receiveCommentWebhook);
 router.get('/stream', streamAuth, controller.stream);
 
 router.use(protect);

@@ -3621,6 +3621,7 @@ export interface InboxMessage {
     autoReplyStatus?: string;
     autoReplyReason?: string;
   };
+  auto_replied?: boolean;
   created_at: string;
 }
 
@@ -3709,6 +3710,21 @@ export const inboxAPI = {
       method: 'POST',
       body: JSON.stringify({ body, dispatch }),
     });
+  },
+
+  replyToComment: async (conversationId: string, body: string, commentId?: string, dispatch = true): Promise<{ success: boolean; message: InboxMessage; dispatch?: any }> => {
+    return inboxCall(`/conversations/${encodeURIComponent(conversationId)}/reply`, {
+      method: 'POST',
+      body: JSON.stringify({ body, dispatch, commentId }),
+    });
+  },
+
+  getComments: async (filters: any = {}): Promise<{ success: boolean; conversations: InboxConversation[] }> => {
+    return inboxAPI.getConversations({ ...filters, type: 'comment' });
+  },
+
+  toggleCommentAutoReply: async (enabled: boolean): Promise<{ success: boolean; settings: AutoReplySettings }> => {
+    return inboxAPI.updateSettings({ enabled });
   },
 
   updateStatus: async (conversationId: string, status: string): Promise<{ success: boolean }> => {
