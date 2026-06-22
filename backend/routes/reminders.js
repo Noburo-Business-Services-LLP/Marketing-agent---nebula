@@ -80,10 +80,11 @@ router.get('/calendar/:year/:month', protect, async (req, res) => {
     // Also get scheduled campaigns for this period
     const campaigns = await Campaign.find({
       userId,
-      'scheduling.startDate': {
-        $gte: startDate,
-        $lte: endDate
-      }
+      $or: [
+        { scheduledFor: { $gte: startDate, $lte: endDate } },
+        { scheduledFor: null, 'scheduling.startDate': { $gte: startDate, $lte: endDate } },
+        { scheduledFor: { $exists: false }, 'scheduling.startDate': { $gte: startDate, $lte: endDate } }
+      ]
     });
     
     // Combine into calendar events
@@ -104,8 +105,32 @@ router.get('/calendar/:year/:month', protect, async (req, res) => {
         type: 'campaign',
         title: c.name,
         description: c.creative?.textContent,
-        scheduledFor: new Date(c.scheduling.startDate + 'T' + (c.scheduling.postTime || '09:00')),
-        time: c.scheduling.postTime,
+        scheduledFor: (() => {
+          if (c.scheduledFor) {
+            const d = c.scheduledFor instanceof Date ? c.scheduledFor : new Date(c.scheduledFor);
+            if (!isNaN(d.getTime())) return d;
+          }
+          const start = c.scheduling?.startDate;
+          if (!start) return null;
+          const datePart = typeof start === 'string'
+            ? start.split('T')[0]
+            : (start instanceof Date ? start.toISOString().split('T')[0] : new Date(start).toISOString().split('T')[0]);
+          const timePart = (c.scheduling?.postTime || '09:00');
+          const d = new Date(`${datePart}T${timePart}`);
+          return isNaN(d.getTime()) ? null : d;
+        })(),
+        time: (() => {
+          if (c.scheduling?.postTime) return c.scheduling.postTime;
+          if (c.scheduledFor) {
+            const d = c.scheduledFor instanceof Date ? c.scheduledFor : new Date(c.scheduledFor);
+            if (!isNaN(d.getTime())) {
+              const hh = String(d.getHours()).padStart(2, '0');
+              const mm = String(d.getMinutes()).padStart(2, '0');
+              return `${hh}:${mm}`;
+            }
+          }
+          return '09:00';
+        })(),
         color: c.status === 'posted' ? '#10b981' : c.status === 'scheduled' ? '#6366f1' : '#f59e0b',
         status: c.status,
         platforms: c.platforms
@@ -198,14 +223,30 @@ router.post('/from-campaign/:campaignId', protect, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Campaign not found' });
     }
     
-    if (!campaign.scheduling?.startDate) {
+    if (!campaign.scheduledFor && !campaign.scheduling?.startDate) {
       return res.status(400).json({ success: false, message: 'Campaign has no scheduled date' });
     }
     
-    // Create scheduled time from campaign
-    const scheduledFor = new Date(
-      campaign.scheduling.startDate + 'T' + (campaign.scheduling.postTime || '09:00')
-    );
+    // Create scheduled time from campaign (prefer canonical scheduledFor when available)
+    const scheduledFor = (() => {
+      if (campaign.scheduledFor) {
+        const d = campaign.scheduledFor instanceof Date ? campaign.scheduledFor : new Date(campaign.scheduledFor);
+        return isNaN(d.getTime()) ? null : d;
+      }
+
+      const start = campaign.scheduling?.startDate;
+      if (!start) return null;
+      const datePart = typeof start === 'string'
+        ? start.split('T')[0]
+        : (start instanceof Date ? start.toISOString().split('T')[0] : new Date(start).toISOString().split('T')[0]);
+      const timePart = campaign.scheduling?.postTime || '09:00';
+      const d = new Date(`${datePart}T${timePart}`);
+      return isNaN(d.getTime()) ? null : d;
+    })();
+
+    if (!scheduledFor) {
+      return res.status(400).json({ success: false, message: 'Campaign schedule is invalid' });
+    }
     
     const reminderTime = new Date(scheduledFor.getTime() - (reminderOffset * 60 * 1000));
     

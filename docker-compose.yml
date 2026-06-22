@@ -1,0 +1,52 @@
+services:
+  ngrok:
+    image: ngrok/ngrok:latest
+    container_name: nebulaa-ngrok
+    restart: unless-stopped
+    ports:
+      - "4040:4040"
+    env_file:
+      - ./backend/.env
+    command:
+      - "http"
+      - "app:5000"
+    depends_on:
+      - app
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nebulaa-app
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+    ports:
+      - "5000:5000"
+    volumes:
+      - nebulaa_storage:/app/backend/storage
+      - nebulaa_temp:/app/backend/temp
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+  mongo:
+    image: mongo:7
+    container_name: nebulaa-mongo
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    volumes:
+      - mongo_data:/data/db
+
+volumes:
+  mongo_data:
+  nebulaa_storage:
+  nebulaa_temp:

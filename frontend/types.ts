@@ -105,6 +105,7 @@ export interface Campaign {
   name: string;
   objective: 'awareness' | 'traffic' | 'sales' | 'engagement' | 'conversion' | 'conversions' | 'leads';
   platforms: string[];
+  tone?: string | null;
   status: 'draft' | 'scheduled' | 'active' | 'paused' | 'completed' | 'archived' | 'posted';
   priority?: 'low' | 'medium' | 'high';
   notes?: string;
@@ -117,7 +118,13 @@ export interface Campaign {
     type: 'text' | 'image' | 'video' | 'carousel' | 'story' | 'reel';
     textContent: string;
     imageUrls: string[];
+    videoUrl?: string;
     captions?: string;
+    instagramAudio?: {
+      url: string;
+      publicId?: string | null;
+      originalName?: string | null;
+    } | null;
     hashtags?: string[];
     callToAction?: string;
     aiGenerated?: boolean;
@@ -150,12 +157,77 @@ export interface Campaign {
   publishedAt?: string;
   scheduledFor?: string;
   socialPostId?: string;
+  socialPostIds?: Record<string, string> | null;
+  facebookPostId?: string | null;
+  instagramPostId?: string | null;
   ayrshareStatus?: string;
+  lastPublishError?: string | null;
   createdAt: string;
+}
+
+export interface AdCampaignPlatformStatus {
+  status: 'pending' | 'success' | 'failed' | 'skipped';
+  message: string;
+  externalAdId?: string;
+  errorCode?: string;
+  currency?: string;
+}
+
+export interface AdCampaign {
+  _id: string;
+  userId: string;
+  campaignId:
+    | string
+    | {
+        _id: string;
+        name?: string;
+        status?: string;
+      };
+  adTitle: string;
+  adDescription: string;
+  adCreativeUrl: string;
+  platformSelection: 'meta' | 'google' | 'both';
+  budget: {
+    amount: number;
+    currency: string;
+  };
+  schedule: {
+    startDate: string;
+    endDate: string;
+  };
+  status: 'active' | 'paused' | 'failed' | 'partial' | 'scheduled';
+  platformStatus: {
+    meta: AdCampaignPlatformStatus;
+    google: AdCampaignPlatformStatus;
+  };
+  sourcePostIds?: {
+    facebook?: string;
+    instagram?: string;
+  };
+  cta?: {
+    type?: string;
+    link?: string;
+    sourcePlatform?: 'facebook' | 'instagram' | '';
+  };
+  sourceProfileUrls?: {
+    facebook?: string;
+    instagram?: string;
+  };
+  performance?: {
+    clicks: number;
+    impressions: number;
+    ctr: number;
+    spend: number;
+  };
+  createdAt: string;
+  updatedAt?: string;
 }
 
 export interface CompetitorPost {
   id: string;
+  _id?: string;
+  competitorId?: string;
+  competitorType?: string;
   competitorName: string;
   competitorLogo?: string;
   content: string;
@@ -333,4 +405,19 @@ export interface DashboardData {
   };
   generatedAt?: string;
   dataSource?: 'real' | 'mock';
+}
+
+export interface Product {
+  _id: string;
+  name: string;
+  price: number;
+  currency: string;
+  imageUrl?: string;
+  description?: string;
+  stockStatus: 'in-stock' | 'out-of-stock' | 'low-stock';
+  stockQuantity: number;
+  category: string;
+  tags?: string[];
+  createdAt: string;
+  updatedAt: string;
 }

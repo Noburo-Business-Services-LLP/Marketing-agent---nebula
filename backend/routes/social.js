@@ -5,7 +5,6 @@ const { protect } = require('../middleware/auth');
 
 // Import Ayrshare for social media management
 const { 
-  postToSocialMedia, 
   getAyrshareAnalytics,
   getUserSocialAnalytics,
   getAPIStatus,
@@ -15,14 +14,32 @@ const {
   createAyrshareProfile,
   generateAyrshareJWT,
   getAyrshareUserProfile,
-  deleteAyrshareProfile
+  deleteAyrshareProfile,
+  setAyrshareWebhook
 } = require('../services/socialMediaAPI');
+const { publishSocialPostWithSafetyWrapper } = require('../services/instagram-fix');
+const SocialInboxConversation = require('../models/SocialInboxConversation');
+const {
+  normalizePlatform,
+  analyzeEngagement,
+  normalizeWebhookPayload,
+  ingestEvent,
+  createOutboundReply,
+  toConversationDTO,
+  toMessageDTO
+} = require('../services/socialInboxService');
+const {
+  normalizePlatforms,
+  normalizeScheduleDate,
+  pickPrimaryMediaUrl,
+  validateMediaUrl
+} = require('../utils/socialPostValidation');
 
 // ============================================
 // OAuth Configuration for All Platforms
 // ============================================
 
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5000';
 
 const SOCIAL_CONNECT_REWARD = 5; // credits awarded for first-time social connection
 
@@ -121,7 +138,7 @@ const PINTEREST_SCOPES = [
   'user_accounts:read'
 ].join(',');
 
-// Store state tokens temporarily (in production, use Redis or similar)
+// Store state tokens temporarily. For durable production state, use a MongoDB TTL collection.
 const pendingOAuthStates = new Map();
 
 // Helper to clean old states
@@ -184,9 +201,281 @@ const AYRSHARE_PLATFORM_MAP = {
   'youtube': 'youtube'
 };
 
+const INBOX_SUPPORTED_PLATFORMS = ['Instagram', 'Facebook', 'LinkedIn', 'X', 'YouTube'];
+
+function normalizeDisplayPlatform(platform = '') {
+  const value = String(platform).toLowerCase();
+  if (value === 'twitter') return 'X';
+  if (value === 'x') return 'X';
+  if (value === 'youtube') return 'YouTube';
+  if (value === 'linkedin') return 'LinkedIn';
+  if (value === 'facebook') return 'Facebook';
+  if (value === 'instagram') return 'Instagram';
+  return platform;
+}
+
+function getConnectedInboxPlatforms(user) {
+  const directPlatforms = (user.connectedSocials || [])
+    .map(social => normalizeDisplayPlatform(social.platform))
+    .filter(platform => INBOX_SUPPORTED_PLATFORMS.includes(platform));
+
+  const ayrsharePlatforms = (user.ayrshare?.activeSocialAccounts || [])
+    .map(platform => normalizeDisplayPlatform(platform))
+    .filter(platform => INBOX_SUPPORTED_PLATFORMS.includes(platform));
+
+  return Array.from(new Set([...directPlatforms, ...ayrsharePlatforms]));
+}
+
 // ============================================
 // Universal Platform Auth Endpoint
 // ============================================
+
+/**
+ * GET /api/social/inbox/summary
+ * Returns social inbox readiness, connected platform count, unread count,
+ * sync health, webhook registration state, and AI engagement capabilities.
+ */
+router.get('/inbox/summary', protect, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const connectedPlatforms = getConnectedInboxPlatforms(user);
+    const connectedPlatformCount = connectedPlatforms.length;
+    const missingPlatforms = INBOX_SUPPORTED_PLATFORMS.filter(platform => !connectedPlatforms.includes(platform));
+    const webhookRegistered = connectedPlatformCount > 0 && Boolean(user.ayrshare?.profileKey || user.connectedSocials?.some(s => s.accessToken));
+    const lastSyncAt = user.ayrshare?.lastCheckedAt || user.updatedAt || null;
+    const unreadMessageCount = await SocialInboxConversation.countDocuments({
+      userId: user._id,
+      status: 'unread'
+    });
+    const latestConversation = await SocialInboxConversation.findOne({ userId: user._id })
+      .sort({ lastSyncedAt: -1, updatedAt: -1 })
+      .select('lastSyncedAt webhookRegistered')
+      .lean();
+
+    res.json({
+      success: true,
+      connectedPlatforms,
+      connectedPlatformCount,
+      unreadMessageCount,
+      inboxEnabled: connectedPlatformCount > 0,
+      inboxStatus: connectedPlatformCount > 0 ? (webhookRegistered ? 'active' : 'needs_setup') : 'disabled',
+      syncStatus: {
+        status: connectedPlatformCount > 0 ? (latestConversation?.lastSyncedAt ? 'synced' : 'pending') : 'not_started',
+        lastSyncAt: latestConversation?.lastSyncedAt || lastSyncAt,
+        nextSyncAt: connectedPlatformCount > 0 ? new Date(Date.now() + 15 * 60 * 1000) : null
+      },
+      webhookStatus: {
+        registered: webhookRegistered,
+        activePlatforms: webhookRegistered ? connectedPlatforms : [],
+        missingPlatforms
+      },
+      aiEngagement: {
+        replySuggestions: connectedPlatformCount > 0,
+        priorityTagging: connectedPlatformCount > 0,
+        unreadAlerts: connectedPlatformCount > 0
+      }
+    });
+  } catch (error) {
+    console.error('Social inbox summary error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get social inbox summary'
+    });
+  }
+});
+
+router.get('/inbox/conversations', protect, async (req, res) => {
+  try {
+    const {
+      status = '',
+      platform = '',
+      priority = '',
+      search = '',
+      limit = 50,
+      offset = 0
+    } = req.query;
+
+    const query = { userId: req.user._id };
+    if (status) query.status = status;
+    if (platform) query.platform = normalizePlatform(platform);
+    if (priority) query.priority = priority;
+    if (search) {
+      query.$or = [
+        { participantName: { $regex: search, $options: 'i' } },
+        { participantUsername: { $regex: search, $options: 'i' } },
+        { lastMessagePreview: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    const conversations = await SocialInboxConversation.find(query)
+      .sort({ lastMessageAt: -1 })
+      .skip(Math.max(0, Number(offset) || 0))
+      .limit(Math.min(100, Math.max(1, Number(limit) || 50)));
+
+    res.json({
+      success: true,
+      conversations: conversations.map(toConversationDTO)
+    });
+  } catch (error) {
+    console.error('List social inbox conversations error:', error);
+    res.status(500).json({ success: false, message: 'Failed to load inbox conversations' });
+  }
+});
+
+router.get('/inbox/conversations/:id/messages', protect, async (req, res) => {
+  try {
+    const conversation = await SocialInboxConversation.findOne({
+      _id: req.params.id,
+      userId: req.user._id
+    });
+    if (!conversation) {
+      return res.status(404).json({ success: false, message: 'Conversation not found' });
+    }
+
+    const insights = analyzeEngagement(conversation.lastMessagePreview);
+    res.json({
+      success: true,
+      conversation: toConversationDTO(conversation),
+      messages: conversation.messages
+        .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+        .map(message => toMessageDTO(message, conversation)),
+      ai: insights
+    });
+  } catch (error) {
+    console.error('Get social inbox thread error:', error);
+    res.status(500).json({ success: false, message: 'Failed to load inbox thread' });
+  }
+});
+
+router.post('/inbox/conversations/:id/reply', protect, async (req, res) => {
+  try {
+    const body = String(req.body?.body || '').trim();
+    if (!body) {
+      return res.status(400).json({ success: false, message: 'Reply body is required' });
+    }
+
+    const conversation = await SocialInboxConversation.findOne({
+      _id: req.params.id,
+      userId: req.user._id
+    });
+    if (!conversation) {
+      return res.status(404).json({ success: false, message: 'Conversation not found' });
+    }
+
+    // Provider API dispatch belongs here:
+    // Meta Graph, LinkedIn, X, and YouTube reply calls should use the stored connected account token.
+    const message = await createOutboundReply(conversation, body);
+    res.json({
+      success: true,
+      message: toMessageDTO(message, conversation)
+    });
+  } catch (error) {
+    console.error('Reply social inbox error:', error);
+    res.status(500).json({ success: false, message: 'Failed to send reply' });
+  }
+});
+
+router.patch('/inbox/conversations/:id/status', protect, async (req, res) => {
+  try {
+    const status = String(req.body?.status || '');
+    if (!['unread', 'read', 'replied', 'closed'].includes(status)) {
+      return res.status(400).json({ success: false, message: 'Invalid status' });
+    }
+
+    await SocialInboxConversation.updateOne(
+      { _id: req.params.id, userId: req.user._id },
+      { $set: { status } }
+    );
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Update social inbox status error:', error);
+    res.status(500).json({ success: false, message: 'Failed to update status' });
+  }
+});
+
+router.patch('/inbox/conversations/:id/meta', protect, async (req, res) => {
+  try {
+    const tags = Array.isArray(req.body?.tags) ? req.body.tags.map(tag => String(tag).trim()).filter(Boolean).slice(0, 12) : [];
+    const priority = ['low', 'normal', 'high', 'urgent'].includes(req.body?.priority)
+      ? req.body.priority
+      : 'normal';
+
+    await SocialInboxConversation.updateOne(
+      { _id: req.params.id, userId: req.user._id },
+      { $set: { tags, priority } }
+    );
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Update social inbox meta error:', error);
+    res.status(500).json({ success: false, message: 'Failed to update conversation' });
+  }
+});
+
+router.post('/inbox/sync/:platform', protect, async (req, res) => {
+  try {
+    const platform = normalizePlatform(req.params.platform);
+    await SocialInboxConversation.updateMany(
+      { userId: req.user._id, platform },
+      { $set: { lastSyncedAt: new Date() } }
+    );
+    res.json({ success: true, queued: true, platform });
+  } catch (error) {
+    console.error('Social inbox sync error:', error);
+    res.status(500).json({ success: false, message: 'Failed to queue inbox sync' });
+  }
+});
+
+router.get('/inbox/webhooks/:platform', (req, res) => {
+  if (req.query['hub.challenge']) {
+    return res.send(req.query['hub.challenge']);
+  }
+  res.json({ success: true, platform: normalizePlatform(req.params.platform), status: 'ready' });
+});
+
+router.post('/inbox/webhooks/:platform', async (req, res) => {
+  try {
+    const userId = req.query.userId || req.body?.userId;
+    if (!userId) {
+      return res.status(400).json({ success: false, message: 'Webhook userId is required' });
+    }
+
+    const event = normalizeWebhookPayload(req.params.platform, userId, req.body || {});
+    await ingestEvent(event);
+    res.json({ success: true, received: 1 });
+  } catch (error) {
+    console.error('Social inbox webhook error:', error);
+    res.status(500).json({ success: false, message: 'Failed to process webhook' });
+  }
+});
+
+router.post('/inbox/webhooks/register', protect, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user || !user.ayrshare?.profileKey) {
+      return res.status(400).json({ success: false, message: 'No Ayrshare profile key found' });
+    }
+
+    const baseUrl = process.env.WEBHOOK_BASE_URL || process.env.FRONTEND_URL || 'http://localhost:5000';
+    // Use a generic webhook or specific platform one? Ayrshare handles all platforms in one webhook.
+    // However, our code has `/:platform` in the URL. For Ayrshare, we can just pass 'ayrshare' as platform,
+    // or rely on Ayrshare's platform field. Our normalizeWebhookPayload supports 'ayrshare' as platform.
+    const webhookUrl = `${baseUrl}/api/social/inbox/webhooks/ayrshare?userId=${user._id}`;
+
+    const result = await setAyrshareWebhook(user.ayrshare.profileKey, webhookUrl);
+    if (!result.success) {
+      return res.status(500).json({ success: false, message: 'Failed to register webhook with Ayrshare', error: result.error });
+    }
+
+    res.json({ success: true, message: 'Webhook registered successfully', webhookUrl });
+  } catch (error) {
+    console.error('Webhook registration error:', error);
+    res.status(500).json({ success: false, message: 'Internal server error during webhook registration' });
+  }
+});
 
 /**
  * GET /api/social/:platform/auth
@@ -208,14 +497,15 @@ router.get('/:platform/auth', protect, async (req, res) => {
     // Step 1: Check if user has an Ayrshare profile, if not create one
     let profileKey = user.ayrshare?.profileKey;
     
-    if (!profileKey) {
+    // If it's forced to 'primary' from the previous rollback, we should generate a new one
+    if (!profileKey || profileKey === 'primary') {
       console.log(`Creating Ayrshare profile for user: ${user.email}`);
       
       // Create a unique title for this user's Ayrshare profile
       const profileTitle = `Nebula-${user._id.toString().slice(-8)}-${user.email.split('@')[0]}`;
       
-      // Configure which social networks to show (hide those not relevant)
-      const disableSocial = ['gmb', 'snapchat', 'telegram', 'threads']; // Hide less common ones
+      // Configure which social networks to show
+      const disableSocial = ['gmb', 'snapchat', 'telegram', 'threads'];
       
       const createResult = await createAyrshareProfile(profileTitle, {
         hideTopHeader: false,
@@ -227,8 +517,7 @@ router.get('/:platform/auth', protect, async (req, res) => {
       if (!createResult.success) {
         // Check if profile already exists (code 146)
         if (createResult.code === 146) {
-          console.log('Ayrshare profile already exists, title conflict');
-          // Try with a more unique title
+          console.log('Ayrshare profile already exists, title conflict. Retrying with timestamp...');
           const uniqueTitle = `Nebula-${Date.now()}-${user._id.toString().slice(-6)}`;
           const retryResult = await createAyrshareProfile(uniqueTitle, {
             hideTopHeader: false,
@@ -239,31 +528,36 @@ router.get('/:platform/auth', protect, async (req, res) => {
             return res.status(500).json({
               success: false,
               message: 'Failed to create social linking profile. Please try again.',
-              error: retryResult.error
+              error: retryResult.error || retryResult.message
             });
           }
           
           profileKey = retryResult.profileKey;
           user.ayrshare = {
+            ...(user.ayrshare || {}),
             profileKey: retryResult.profileKey,
             refId: retryResult.refId,
             title: uniqueTitle,
-            createdAt: new Date()
+            createdAt: new Date(),
+            lastError: ""
           };
         } else {
+          console.error('[Platform Auth] Profile creation failed:', createResult);
           return res.status(500).json({
             success: false,
-            message: 'Failed to create social linking profile',
-            error: createResult.error
+            message: 'Failed to create social linking profile.',
+            error: createResult.error || createResult.message
           });
         }
       } else {
         profileKey = createResult.profileKey;
         user.ayrshare = {
+          ...(user.ayrshare || {}),
           profileKey: createResult.profileKey,
           refId: createResult.refId,
           title: profileTitle,
-          createdAt: new Date()
+          createdAt: new Date(),
+          lastError: ""
         };
       }
       
@@ -276,10 +570,10 @@ router.get('/:platform/auth', protect, async (req, res) => {
     
     // Map platform to Ayrshare's expected format for allowedSocial
     const ayrshareplatform = AYRSHARE_PLATFORM_MAP[platformLower] || platformLower;
-    
-    const jwtResult = await generateAyrshareJWT(profileKey, {
+
+    const jwtResult = await generateAyrshareJWT(user, {
       redirect: redirectUrl,
-      logout: false, // Don't force logout for faster UX
+      logout: true, // Force clear any existing Ayrshare browser session — prevents connecting to the wrong profile
       // Only show the specific platform the user clicked on
       allowedSocial: [ayrshareplatform]
     });
@@ -956,6 +1250,20 @@ router.post('/:platform/disconnect', protect, async (req, res) => {
     user.connectedSocials = user.connectedSocials.filter(s =>
       !platformsToRemove.includes(s.platform)
     );
+
+    // Update cached Ayrshare connection state (best-effort)
+    try {
+      const ayrshareKey = AYRSHARE_PLATFORM_MAP[platform.toLowerCase()] || platform.toLowerCase();
+      if (Array.isArray(user.ayrshare?.activeSocialAccounts)) {
+        user.ayrshare.activeSocialAccounts = user.ayrshare.activeSocialAccounts.filter((p) => String(p || '').toLowerCase() !== ayrshareKey);
+      }
+      if (Array.isArray(user.ayrshare?.displayNames)) {
+        user.ayrshare.displayNames = user.ayrshare.displayNames.filter((d) => {
+          const dp = d?.platform ? String(d.platform).toLowerCase() : '';
+          return dp !== ayrshareKey;
+        });
+      }
+    } catch (_) {}
     await user.save();
 
     res.json({
@@ -977,48 +1285,127 @@ router.get('/status', protect, async (req, res) => {
     const user = await User.findById(req.user._id);
     
     // Build status for all platforms (removed TikTok and Snapchat, renamed Twitter to X)
-    const platforms = ['Instagram', 'Facebook', 'X', 'LinkedIn'];
+    const platforms = ['Instagram', 'Facebook', 'X', 'LinkedIn', 'YouTube'];
     
-    // Get user's Ayrshare connected accounts using their profile key
     let ayrshareAccounts = [];
     let ayrshareDisplayNames = [];
     let socialAnalytics = {};
+    let ayrshareProfileOk = false;
+    let ayrshareError = null;
+    let usedCachedAyrshareAccounts = false;
+
+    const profileKey = String(user?.ayrshare?.profileKey || '').trim();
+    const hasProfileKey = profileKey.length > 0;
     
-    if (user.ayrshare?.profileKey) {
+    if (hasProfileKey) {
       try {
+        console.log(`[Social Status] Checking Ayrshare status using profile key: ${profileKey.substring(0, 8)}...`);
         // Use user's specific profile key to get their connected accounts
-        const userProfile = await getAyrshareUserProfile(user.ayrshare.profileKey);
+        const userProfile = await getAyrshareUserProfile(profileKey);
+        
         if (userProfile.success) {
+          ayrshareProfileOk = true;
           ayrshareAccounts = userProfile.data?.activeSocialAccounts || [];
           ayrshareDisplayNames = userProfile.data?.displayNames || [];
-          console.log(`User ${user.email} Ayrshare accounts:`, ayrshareAccounts);
+          console.log(`[Social Status] Success. Ayrshare accounts for ${user.email}:`, ayrshareAccounts);
+
+          // Cache last-known account state so transient Ayrshare errors don't drop connections in the UI
+          try {
+            user.ayrshare.activeSocialAccounts = Array.isArray(ayrshareAccounts) ? ayrshareAccounts : [];
+            user.ayrshare.displayNames = Array.isArray(ayrshareDisplayNames) ? ayrshareDisplayNames : [];
+            user.ayrshare.lastCheckedAt = new Date();
+            user.ayrshare.lastError = '';
+            await user.save();
+          } catch (cacheErr) {
+            console.log('[Social Status] Could not persist Ayrshare cache:', cacheErr?.message || cacheErr);
+          }
           
           // Fetch social analytics for connected platforms
           if (ayrshareAccounts.length > 0) {
             try {
-              const analyticsResult = await getUserSocialAnalytics(user.ayrshare.profileKey, ayrshareAccounts);
+              const analyticsResult = await getUserSocialAnalytics(profileKey, ayrshareAccounts);
               if (analyticsResult.success && analyticsResult.data) {
                 socialAnalytics = analyticsResult.data;
-                console.log('Social analytics fetched:', Object.keys(socialAnalytics));
               }
             } catch (analyticsError) {
-              console.log('Could not fetch social analytics:', analyticsError.message);
+              console.log('[Social Status] Could not fetch social analytics:', analyticsError.message);
             }
           }
+        } else {
+          console.log('[Social Status] Ayrshare user profile check failed:', userProfile.error);
+          ayrshareError = userProfile.error || 'Failed to check Ayrshare profile';
+          usedCachedAyrshareAccounts = true;
+          ayrshareAccounts = Array.isArray(user?.ayrshare?.activeSocialAccounts) ? user.ayrshare.activeSocialAccounts : [];
+          ayrshareDisplayNames = Array.isArray(user?.ayrshare?.displayNames) ? user.ayrshare.displayNames : [];
+          try {
+            user.ayrshare.lastError = ayrshareError;
+            await user.save();
+          } catch (_) {}
         }
       } catch (e) {
-        console.log('Ayrshare user profile check failed:', e.message);
+        console.log('[Social Status] Ayrshare user profile check exception:', e.message);
+        ayrshareError = e.message || 'Failed to check Ayrshare profile';
+        usedCachedAyrshareAccounts = true;
+        ayrshareAccounts = Array.isArray(user?.ayrshare?.activeSocialAccounts) ? user.ayrshare.activeSocialAccounts : [];
+        ayrshareDisplayNames = Array.isArray(user?.ayrshare?.displayNames) ? user.ayrshare.displayNames : [];
+        try {
+          user.ayrshare.lastError = ayrshareError;
+          await user.save();
+        } catch (_) {}
       }
     } else {
-      // Fallback to primary profile check for backwards compatibility
-      try {
-        const ayrshareProfile = await getAyrshareProfile();
-        if (ayrshareProfile.success) {
-          ayrshareAccounts = ayrshareProfile.data?.activeSocialAccounts || [];
-          ayrshareDisplayNames = ayrshareProfile.data?.displayNames || [];
+      console.log(`[Social Status] No Ayrshare profile key found for user ${user.email}.`);
+    }
+    
+    // Auto-create missing profile only (do NOT overwrite existing profileKey on transient Ayrshare errors)
+    if (!hasProfileKey) {
+      console.log(`[Social Status] Creating new Ayrshare profile for user: ${user.email}`);
+      const profileTitle = `Nebula-${user._id.toString().slice(-8)}-${user.email.split('@')[0]}`;
+      const disableSocial = ['gmb', 'snapchat', 'telegram', 'threads'];
+      
+      const createResult = await createAyrshareProfile(profileTitle, {
+         hideTopHeader: false,
+         disableSocial
+      });
+
+      if (createResult.success) {
+        user.ayrshare = {
+          profileKey: createResult.profileKey,
+          refId: createResult.refId,
+          title: createResult.title || profileTitle,
+          createdAt: new Date(),
+          activeSocialAccounts: [],
+          displayNames: [],
+          lastCheckedAt: null,
+          lastError: ''
+        };
+        await user.save();
+        console.log(`[Social Status] New Ayrshare profile key generated and saved: ${createResult.profileKey.substring(0, 8)}...`);
+      } else if (createResult.code === 146) {
+        const uniqueTitle = `Nebula-${Date.now()}-${user._id.toString().slice(-6)}`;
+        const retryResult = await createAyrshareProfile(uniqueTitle, {
+          hideTopHeader: false,
+          disableSocial
+        });
+        
+        if (retryResult.success) {
+          user.ayrshare = {
+            profileKey: retryResult.profileKey,
+            refId: retryResult.refId,
+            title: uniqueTitle,
+            createdAt: new Date(),
+            activeSocialAccounts: [],
+            displayNames: [],
+            lastCheckedAt: null,
+            lastError: ''
+          };
+          await user.save();
+          console.log(`[Social Status] New Ayrshare profile key (retry) generated and saved: ${retryResult.profileKey.substring(0, 8)}...`);
+        } else {
+          console.log('[Social Status] Failed to create fallback profile.');
         }
-      } catch (e) {
-        console.log('Ayrshare profile check failed:', e.message);
+      } else {
+        console.log('[Social Status] Failed to create new profile error:', createResult.error);
       }
     }
     
@@ -1121,7 +1508,10 @@ router.get('/status', protect, async (req, res) => {
     res.json({
       success: true,
       connections,
-      ayrshareConnected: ayrshareAccounts
+      ayrshareConnected: ayrshareAccounts,
+      ayrshareProfileOk,
+      ayrshareUsedCache: usedCachedAyrshareAccounts,
+      ayrshareError
     });
   } catch (error) {
     console.error('Get socials status error:', error);
@@ -1151,21 +1541,78 @@ router.post('/post', protect, async (req, res) => {
       });
     }
 
+    const normalizedPlatforms = normalizePlatforms(platforms);
     const options = {};
-    if (mediaUrls) options.mediaUrls = mediaUrls;
-    if (scheduledDate) options.scheduleDate = new Date(scheduledDate).toISOString();
+    const scheduleNormalization = normalizeScheduleDate(scheduledDate);
+    const primaryMediaUrl = pickPrimaryMediaUrl(mediaUrls);
+
+    if (scheduleNormalization.scheduleDate) {
+      options.scheduleDate = scheduleNormalization.scheduleDate;
+    }
+
+    if (primaryMediaUrl) {
+      const mediaValidation = await validateMediaUrl(primaryMediaUrl);
+      if (!mediaValidation.valid) {
+        return res.status(400).json({
+          success: false,
+          message: `Invalid media URL: ${mediaValidation.reason}`
+        });
+      }
+
+      options.mediaUrls = [primaryMediaUrl];
+    }
 
     // Pass user's Ayrshare profile key so it posts to their sub-profile
     if (req.user?.ayrshare?.profileKey) {
       options.profileKey = req.user.ayrshare.profileKey;
     }
 
-    const result = await postToSocialMedia(platforms, content, options);
+    const result = await publishSocialPostWithSafetyWrapper({
+      user: req.user,
+      platforms: normalizedPlatforms,
+      content,
+      options,
+      context: 'social_route_post'
+    });
     
-    res.json({
+    const ayrshareStatus = result?.data?.status || null;
+    const firstPost = Array.isArray(result?.data?.posts) ? result.data.posts[0] : null;
+    const firstPostStatus = firstPost?.status || null;
+    const hasError =
+      !result?.success ||
+      ayrshareStatus === 'error' ||
+      firstPostStatus === 'error' ||
+      (Array.isArray(firstPost?.errors) && firstPost.errors.length > 0) ||
+      (Array.isArray(result?.data?.errors) && result.data.errors.length > 0);
+
+    if (hasError) {
+      const msg =
+        result?.error ||
+        result?.rawError ||
+        result?.data?.message ||
+        firstPost?.message ||
+        firstPost?.errors?.[0]?.message ||
+        'Failed to post to social media';
+      return res.status(400).json({
+        success: false,
+        message: msg,
+        requiresReconnect: Boolean(result?.requiresReconnect),
+        rateLimited: Boolean(result?.rateLimited),
+        code: result?.code || null,
+        result
+      });
+    }
+
+    return res.json({
       success: true,
-      message: scheduledDate ? 'Post scheduled successfully' : 'Posted successfully',
-      result
+      message: options.scheduleDate ? 'Post scheduled successfully' : 'Posted successfully',
+      result,
+      normalized: {
+        platforms: normalizedPlatforms,
+        scheduleDate: result?.instagramFix?.adjustedScheduleDate || options.scheduleDate || null,
+        mediaUrl: primaryMediaUrl || null,
+        scheduleAdjusted: scheduleNormalization.adjusted || Boolean(result?.instagramFix?.adjustedScheduleDate && result.instagramFix.adjustedScheduleDate !== options.scheduleDate)
+      }
     });
   } catch (error) {
     console.error('Social post error:', error);
@@ -1245,12 +1692,16 @@ router.get('/api-status', protect, async (req, res) => {
  */
 router.get('/ayrshare/profiles', protect, async (req, res) => {
   try {
-    const result = await getAyrshareProfile();
+    const user = await User.findById(req.user._id);
+    if (!user || !user.ayrshare?.profileKey) {
+      return res.json({ success: false, message: 'No Ayrshare profile key found', profiles: [] });
+    }
+    const result = await getAyrshareUserProfile(user.ayrshare.profileKey);
     
     if (result.success) {
-      // Map Ayrshare profiles to our format
-      const profiles = result.profiles || [];
-      const connections = profiles.map(profile => ({
+      // Map Ayrshare displayNames to our format
+      const displayNames = result.data?.displayNames || [];
+      const connections = displayNames.map(profile => ({
         platform: profile.platform === 'twitter' ? 'X' : 
                   profile.platform.charAt(0).toUpperCase() + profile.platform.slice(1),
         connected: true,
@@ -1302,7 +1753,31 @@ router.get('/connect/:platform', protect, async (req, res) => {
     
     // For other platforms, we'll use Ayrshare's dashboard
     // Note: Ayrshare requires account linking through their dashboard
-    const result = await getAyrshareConnectUrl(platform, redirectUrl);
+    let user = await User.findById(req.user._id);
+    if (!user?.ayrshare?.profileKey) {
+      console.log(`[Social Connect] Creating new Ayrshare profile for user: ${user.email}`);
+      const profileTitle = `Nebula-${user._id.toString().slice(-8)}-${user.email.split('@')[0]}`;
+      const createResult = await createAyrshareProfile(profileTitle, { 
+        hideTopHeader: false, 
+        disableSocial: ['gmb', 'snapchat', 'telegram', 'threads'] 
+      });
+      if (createResult.success) {
+        user.ayrshare = {
+          profileKey: createResult.profileKey,
+          refId: createResult.refId,
+          title: createResult.title || profileTitle,
+          createdAt: new Date(),
+          activeSocialAccounts: [],
+          displayNames: [],
+          lastCheckedAt: null,
+          lastError: ''
+        };
+        await user.save();
+      } else {
+        return res.status(500).json({ success: false, message: 'Failed to create social profile for connection' });
+      }
+    }
+    const result = await getAyrshareConnectUrl(platform, redirectUrl, user);
     
     res.json({
       success: true,
@@ -1383,6 +1858,20 @@ router.delete('/disconnect/:platform', protect, async (req, res) => {
     user.connectedSocials = user.connectedSocials.filter(s => 
       !platformsToRemove.includes(s.platform.toLowerCase())
     );
+
+    // Update cached Ayrshare connection state (best-effort)
+    try {
+      const ayrshareKey = AYRSHARE_PLATFORM_MAP[platform.toLowerCase()] || platform.toLowerCase();
+      if (Array.isArray(user.ayrshare?.activeSocialAccounts)) {
+        user.ayrshare.activeSocialAccounts = user.ayrshare.activeSocialAccounts.filter((p) => String(p || '').toLowerCase() !== ayrshareKey);
+      }
+      if (Array.isArray(user.ayrshare?.displayNames)) {
+        user.ayrshare.displayNames = user.ayrshare.displayNames.filter((d) => {
+          const dp = d?.platform ? String(d.platform).toLowerCase() : '';
+          return dp !== ayrshareKey;
+        });
+      }
+    } catch (_) {}
     
     await user.save();
     
@@ -1405,11 +1894,15 @@ router.delete('/disconnect/:platform', protect, async (req, res) => {
  */
 router.get('/ayrshare/profile', protect, async (req, res) => {
   try {
-    const result = await getAyrshareProfile();
+    const user = await User.findById(req.user._id);
+    if (!user || !user.ayrshare?.profileKey) {
+      return res.json({ success: false, message: 'No Ayrshare profile key found', profiles: [] });
+    }
+    const result = await getAyrshareUserProfile(user.ayrshare.profileKey);
     
     if (result.success) {
-      const profiles = result.profiles || [];
-      const connections = profiles.map(profile => ({
+      const displayNames = result.data?.displayNames || [];
+      const connections = displayNames.map(profile => ({
         platform: profile.platform === 'twitter' ? 'X' : 
                   profile.platform.charAt(0).toUpperCase() + profile.platform.slice(1),
         connected: true,
@@ -1455,7 +1948,31 @@ router.get('/ayrshare/connect-url/:platform', protect, async (req, res) => {
     }
     
     // Get the Ayrshare connect URL
-    const result = await getAyrshareConnectUrl(platform, redirectUrl);
+    let user = await User.findById(req.user._id);
+    if (!user?.ayrshare?.profileKey) {
+      console.log(`[Social Connect] Creating new Ayrshare profile for user: ${user.email}`);
+      const profileTitle = `Nebula-${user._id.toString().slice(-8)}-${user.email.split('@')[0]}`;
+      const createResult = await createAyrshareProfile(profileTitle, { 
+        hideTopHeader: false, 
+        disableSocial: ['gmb', 'snapchat', 'telegram', 'threads'] 
+      });
+      if (createResult.success) {
+        user.ayrshare = {
+          profileKey: createResult.profileKey,
+          refId: createResult.refId,
+          title: createResult.title || profileTitle,
+          createdAt: new Date(),
+          activeSocialAccounts: [],
+          displayNames: [],
+          lastCheckedAt: null,
+          lastError: ''
+        };
+        await user.save();
+      } else {
+        return res.status(500).json({ success: false, message: 'Failed to create social profile for connection' });
+      }
+    }
+    const result = await getAyrshareConnectUrl(platform, redirectUrl, user);
     
     if (result.success) {
       res.json({

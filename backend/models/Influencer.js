@@ -11,6 +11,11 @@ const influencerSchema = new mongoose.Schema({
     required: true,
     trim: true
   },
+  email: {
+    type: String,
+    trim: true,
+    lowercase: true
+  },
   handle: {
     type: String,
     required: true
@@ -50,6 +55,15 @@ const influencerSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  platforms: [{
+    platform: {
+      type: String,
+      enum: ['instagram', 'youtube', 'linkedin', 'facebook', 'twitter', 'x']
+    },
+    username: String,
+    followers: { type: Number, default: 0 },
+    engagementRate: { type: Number, default: 0 }
+  }],
   avgLikes: {
     type: Number,
     default: 0
@@ -94,7 +108,7 @@ const influencerSchema = new mongoose.Schema({
   }],
   status: {
     type: String,
-    enum: ['discovered', 'contacted', 'negotiating', 'confirmed', 'completed', 'rejected'],
+    enum: ['discovered', 'invited', 'contacted', 'negotiating', 'confirmed', 'active', 'completed', 'rejected'],
     default: 'discovered'
   },
   notes: String,

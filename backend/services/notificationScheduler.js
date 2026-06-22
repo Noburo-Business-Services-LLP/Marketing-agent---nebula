@@ -86,10 +86,10 @@ class NotificationScheduler {
       let campaigns = [];
       try {
         // Simple query without populate - just get status=scheduled
-        campaigns = await Campaign.find({ status: 'scheduled' })
-          .select('_id name userId scheduling platforms')
-          .lean()
-          .maxTimeMS(8000);
+	        campaigns = await Campaign.find({ status: 'scheduled' })
+	          .select('_id name userId scheduling scheduledFor platforms')
+	          .lean()
+	          .maxTimeMS(8000);
       } catch (dbError) {
         // Try a simpler query
         try {
@@ -156,8 +156,13 @@ class NotificationScheduler {
    * Get the scheduled datetime for a campaign
    * IMPORTANT: Returns time in the local timezone that the user set
    */
-  getCampaignScheduledTime(campaign) {
-    if (!campaign.scheduling?.startDate) return null;
+	  getCampaignScheduledTime(campaign) {
+	    if (campaign?.scheduledFor) {
+	      const scheduled = campaign.scheduledFor instanceof Date ? campaign.scheduledFor : new Date(campaign.scheduledFor);
+	      if (!isNaN(scheduled.getTime())) return scheduled;
+	    }
+
+	    if (!campaign.scheduling?.startDate) return null;
 
     try {
       // Parse the date - handle various formats

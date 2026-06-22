@@ -74,7 +74,8 @@ const Competitors: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Ignore a competitor
-  const handleIgnoreCompetitor = async (competitorId: string, competitorName: string) => {
+  const handleIgnoreCompetitor = async (competitorId: string | undefined, competitorName: string) => {
+    if (!competitorId) return;
     try {
       const res = await apiService.ignoreCompetitor(competitorId);
       if (res.success) {

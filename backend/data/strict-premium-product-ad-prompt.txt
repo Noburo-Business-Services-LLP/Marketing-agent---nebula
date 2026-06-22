@@ -1,0 +1,38 @@
+Generate a premium advertisement image for "{{brand_name}}".
+
+STRICT LANGUAGE RULE:
+- ALL text in the image MUST be in: {{target_language}}
+- Do NOT use English text (unless {{target_language}} is English)
+- Do NOT mix languages
+- Text must match the selected language exactly
+
+---
+
+CONTENT:
+
+Primary Message:
+"{{image_text}}"
+
+---
+
+DESIGN RULES:
+
+- Use brand color: {{primary_color}}
+- Keep background clean and premium
+- Place text clearly readable
+- Use modern, bold typography
+- Keep text short (2-5 words)
+
+---
+
+IMPORTANT:
+
+- If language = Tamil -> text must be Tamil
+- If language = Telugu -> text must be Telugu
+- If language = Malayalam -> text must be Malayalam
+- If language = Kannada -> text must be Kannada
+- If language = Hindi -> text must be Hindi
+- NEVER default to English
+
+OUTPUT:
+- Final creative must be publication-ready, premium, and strictly follow all language rules.

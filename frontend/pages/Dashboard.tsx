@@ -1,10 +1,45 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
-import { apiService, brandAssetsAPI } from '../services/api';
+import { useNavigate } from 'react-router-dom';
+import { adCampaignsAPI, apiService, brandAssetsAPI } from '../services/api';
 import { DashboardData, Campaign, CompetitorPost } from '../types';
 import { TrendingUp, ArrowUpRight, ChevronRight, ChevronLeft, Calendar as CalendarIcon, Calendar, CalendarSync, Info, Activity, Clock, MoreHorizontal, Plus, X, ExternalLink, Edit3, Share2, MessageSquare, FileText, Loader2, Bell, BellRing, Check, AlertCircle, Trash2, Eye, Users, BarChart3, Swords, Sparkles, Download, Copy, Send, Save, Lightbulb, Flame, Target, Zap, Music, Image as ImageIcon, RefreshCw, PenTool, Wand2, Upload, Filter, Unlink } from 'lucide-react';
 import { useTheme, getThemeClasses } from '../context/ThemeContext';
 import PlatformPreview from '../components/PlatformPreview';
 import LogoSelector from '../components/LogoSelector';
+
+type CampaignObjective = Campaign['objective'];
+
+type ScheduleFormState = {
+  title: string;
+  type: 'reminder' | 'campaign';
+  description: string;
+  reminderOffset: number;
+  platform: string;
+  hashtags: string;
+  budget: string;
+  targetAudience: string;
+  contentType: string;
+  callToAction: string;
+  objective: CampaignObjective;
+  priority: string;
+  notes: string;
+};
+
+const defaultScheduleForm: ScheduleFormState = {
+  title: '',
+  type: 'reminder',
+  description: '',
+  reminderOffset: 30,
+  platform: 'instagram',
+  hashtags: '',
+  budget: '',
+  targetAudience: '',
+  contentType: 'image',
+  callToAction: '',
+  objective: 'awareness',
+  priority: 'medium',
+  notes: ''
+};
 
 // Section info descriptions
 const sectionInfo: Record<string, { title: string; description: string }> = {
@@ -220,7 +255,17 @@ const SectionButtons: React.FC<{
 const Dashboard: React.FC = () => {
   const { isDarkMode } = useTheme();
   const theme = getThemeClasses(isDarkMode);
+  const navigate = useNavigate();
   const [data, setData] = useState<DashboardData | null>(null);
+  const [adSummary, setAdSummary] = useState<{
+    totalAdCampaigns: number;
+    activeAdCampaigns: number;
+    metrics: { clicks: number; impressions: number; ctr: number; spend: number };
+  }>({
+    totalAdCampaigns: 0,
+    activeAdCampaigns: 0,
+    metrics: { clicks: 0, impressions: 0, ctr: 0, spend: 0 }
+  });
   const [loading, setLoading] = useState(true);
   const [showBrandScoreInfo, setShowBrandScoreInfo] = useState(false);
   const [competitorIndex, setCompetitorIndex] = useState(0);
@@ -382,8 +427,14 @@ const Dashboard: React.FC = () => {
     }
 
     try {
-      const dashboardData = await apiService.getDashboardOverview(refresh);
+      const [dashboardData, adSummaryRes] = await Promise.all([
+        apiService.getDashboardOverview(refresh),
+        adCampaignsAPI.getSummary().catch(() => null)
+      ]);
       setData(dashboardData);
+      if (adSummaryRes?.success && adSummaryRes?.summary) {
+        setAdSummary(adSummaryRes.summary);
+      }
       hasFetchedDashboard.current = true;
       // Dashboard loaded/refreshed
     } catch (error) {
@@ -491,8 +542,8 @@ const Dashboard: React.FC = () => {
   };
   
   // Map strategic advisor categories to valid campaign objectives
-  const mapCategoryToObjective = (category?: string): string => {
-    const mapping: Record<string, string> = {
+  const mapCategoryToObjective = (category?: string): CampaignObjective => {
+    const mapping: Record<string, CampaignObjective> = {
       'trending': 'awareness',
       'event': 'awareness',
       'competitor': 'engagement',
@@ -541,9 +592,10 @@ const Dashboard: React.FC = () => {
       });
 
       // Actually publish to social media via Ayrshare
+      let publishResponse: any = null;
       if (result.campaign?._id) {
         try {
-          await apiService.publishCampaign(
+          publishResponse = await apiService.publishCampaign(
             result.campaign._id,
             selectedPlatform,
             scheduledFor
@@ -559,7 +611,12 @@ const Dashboard: React.FC = () => {
         }
       }
       
-      alert(scheduleDate ? 'Post scheduled successfully!' : 'Post saved as draft!');
+      const actuallyScheduled = !!publishResponse?.scheduled || !!scheduleDate;
+      alert(
+        actuallyScheduled
+          ? 'Post queued/scheduled successfully!'
+          : 'Post published successfully!'
+      );
       setShowPostCreator(false);
       setSelectedSuggestion(null);
       setGeneratedPost(null);
@@ -736,7 +793,13 @@ const Dashboard: React.FC = () => {
       });
       if (result.campaign?._id) {
         try {
-          await apiService.publishCampaign(result.campaign._id, rivalSelectedPlatform);
+          const publishRes = await apiService.publishCampaign(result.campaign._id, rivalSelectedPlatform);
+          if (publishRes?.scheduled) {
+            alert('Post queued for publishing (pending) — check again in a few minutes.');
+            setShowRivalPostModal(false);
+            setRivalPost(null);
+            return;
+          }
         } catch (publishErr) {
           console.error('Ayrshare publish failed:', publishErr);
           alert('Post saved but failed to publish to social media. You can retry from the Campaigns page.');
@@ -826,7 +889,14 @@ const Dashboard: React.FC = () => {
       });
       if (result.campaign?._id) {
         try {
-          await apiService.publishCampaign(result.campaign._id, selectedPlatform);
+          const publishRes = await apiService.publishCampaign(result.campaign._id, selectedPlatform);
+          if (publishRes?.scheduled) {
+            alert('Post queued for publishing (pending) — check again in a few minutes.');
+            setShowPostCreator(false);
+            setSelectedSuggestion(null);
+            setGeneratedPost(null);
+            return;
+          }
         } catch (publishErr) {
           console.error('Ayrshare publish failed:', publishErr);
           alert('Post saved but failed to publish to social media. You can retry from the Campaigns page.');
@@ -1223,6 +1293,16 @@ const Dashboard: React.FC = () => {
   const currentCompetitor = data?.competitorActivity?.[competitorIndex];
   const prevCompetitor = data?.competitorActivity?.[(competitorIndex === 0 ? (data.competitorActivity.length - 1) : competitorIndex - 1)];
   const nextCompetitor = data?.competitorActivity?.[(competitorIndex === (data?.competitorActivity?.length || 1) - 1 ? 0 : competitorIndex + 1)];
+  const campaignClicks = (data?.recentCampaigns || []).reduce(
+    (sum, campaign) => sum + Number(campaign?.performance?.clicks || 0),
+    0
+  );
+  const campaignImpressions = (data?.recentCampaigns || []).reduce(
+    (sum, campaign) => sum + Number(campaign?.performance?.impressions || 0),
+    0
+  );
+  const totalClicks = campaignClicks + Number(adSummary.metrics.clicks || 0);
+  const totalImpressions = campaignImpressions + Number(adSummary.metrics.impressions || 0);
 
   return (
     <div className="max-w-7xl mx-auto space-y-8 p-1">
@@ -1250,6 +1330,38 @@ const Dashboard: React.FC = () => {
         >
           <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
           {refreshing ? 'Refreshing...' : 'Refresh'}
+        </button>
+      </div>
+
+      {/* Executive Summary + Quick Actions */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        {[
+          { label: 'Total Campaigns', value: Number(data?.overview?.totalCampaigns || 0).toLocaleString() },
+          { label: 'Active Ad Campaigns', value: Number(adSummary.activeAdCampaigns || 0).toLocaleString() },
+          { label: 'Clicks', value: totalClicks.toLocaleString() },
+          { label: 'Impressions', value: totalImpressions.toLocaleString() }
+        ].map((item) => (
+          <div key={item.label} className={`${theme.bgCard} rounded-xl border p-4 ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'}`}>
+            <p className={`text-xs uppercase tracking-wide ${theme.textMuted}`}>{item.label}</p>
+            <p className={`text-2xl font-bold mt-1 ${theme.text}`}>{item.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap gap-3">
+        <button
+          onClick={() => navigate('/campaigns')}
+          className="px-4 py-2 rounded-lg bg-[#ffcc29] text-[#070A12] font-semibold hover:bg-[#ffcc29]/90"
+        >
+          Create Campaign
+        </button>
+        <button
+          onClick={() => navigate('/ad-campaigns')}
+          className={`px-4 py-2 rounded-lg border font-semibold ${
+            isDarkMode ? 'border-slate-600 text-slate-200 hover:border-[#ffcc29] hover:text-[#ffcc29]' : 'border-slate-300 text-slate-700 hover:border-[#ffcc29]'
+          }`}
+        >
+          Create Ad Campaign
         </button>
       </div>
 
@@ -2550,14 +2662,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
     }, [campaigns]);
     
     // Schedule form state — streamlined for quick posting
-    const [scheduleForm, setScheduleForm] = useState({
-      title: '',
-      type: 'reminder' as 'reminder' | 'campaign',
-      description: '',
-      reminderOffset: 30,
-      platform: 'instagram',
-      hashtags: '',
-    });
+    const [scheduleForm, setScheduleForm] = useState<ScheduleFormState>(defaultScheduleForm);
     const [quickScheduleDate, setQuickScheduleDate] = useState('');
     const [quickScheduleTime, setQuickScheduleTime] = useState('');
     
@@ -3020,12 +3125,8 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
       slotDate.setHours(hour, 0, 0, 0);
       setSelectedSlot({ date: slotDate, hour, minute: 0 });
       setScheduleForm({
-        title: '',
-        type: 'campaign',
-        description: '',
-        reminderOffset: 30,
-        platform: 'instagram',
-        hashtags: '',
+        ...defaultScheduleForm,
+        type: 'campaign'
       });
       setScheduleImage(null);
       setScheduleImageFile(null);
@@ -3289,12 +3390,15 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
       setEditingCampaign(campaign);
       setIsEditMode(true);
       setScheduleForm({
+        ...defaultScheduleForm,
         title: campaign.name || '',
         type: 'campaign',
         description: campaign.creative?.textContent || '',
-        reminderOffset: 30,
         platform: campaign.platforms?.[0] || 'instagram',
         hashtags: campaign.creative?.hashtags?.join(' ') || '',
+        objective: campaign.objective || defaultScheduleForm.objective,
+        priority: campaign.priority || defaultScheduleForm.priority,
+        notes: campaign.notes || defaultScheduleForm.notes
       });
       
       // Restore image if available
@@ -4751,7 +4855,8 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                           scheduledFor
                                         );
                                         if (publishResult.success) {
-                                          alert(isSchedule ? 'Post scheduled successfully!' : 'Post published successfully!');
+                                          const actuallyScheduled = !!publishResult?.scheduled || isSchedule;
+                                          alert(actuallyScheduled ? 'Post queued/scheduled successfully!' : 'Post published successfully!');
                                         } else {
                                           alert(publishResult.message || 'Failed to publish');
                                         }
@@ -5556,7 +5661,8 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                                             connectedSelected
                                                         );
                                                         if (publishResult.success) {
-                                                            alert('Post published successfully!');
+                                                            const actuallyScheduled = !!publishResult?.scheduled;
+                                                            alert(actuallyScheduled ? 'Post queued for publishing (pending) — check again in a few minutes.' : 'Post published successfully!');
                                                         } else {
                                                             alert(publishResult.message || 'Failed to publish');
                                                         }

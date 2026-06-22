@@ -1,5 +1,7 @@
 import { AuthResponse, BusinessProfile, Campaign, DashboardData, SocialConnection, User } from '../types';
 
+type CampaignInput = Partial<Campaign> & { tone?: string | null };
+
 // Use relative URL in production (when served from same origin), localhost in development
 declare const __PROD__: boolean;
 const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
@@ -45,7 +47,7 @@ export const getWebsiteAnalysisContext = (): {
 export const getBusinessContextForAI = (): string => {
   const context = getWebsiteAnalysisContext();
   if (!context) return '';
-  
+
   return `
 Business Context:
 - Company: ${context.companyName || 'Unknown'}
@@ -60,9 +62,27 @@ Business Context:
 `.trim();
 };
 
+async function safeReadJson(response: Response): Promise<any> {
+  const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+  const rawText = await response.text();
+
+  if (response.status === 204) return {};
+
+  try {
+    return rawText ? JSON.parse(rawText) : {};
+  } catch (_) {
+    const preview = rawText ? rawText.slice(0, 500) : '';
+    const parseErr: any = new Error(`Non-JSON response from server (HTTP ${response.status}).`);
+    parseErr.status = response.status;
+    parseErr.contentType = contentType;
+    parseErr.preview = preview;
+    throw parseErr;
+  }
+}
+
 // Generic API call function with real backend integration
 async function apiCall<T>(
-  endpoint: string, 
+  endpoint: string,
   options: RequestInit = {},
   requiresAuth: boolean = false
 ): Promise<T> {
@@ -85,40 +105,145 @@ async function apiCall<T>(
       headers,
     });
 
-    const data = await response.json();
+    const data = await safeReadJson(response);
     // Handle trial/credit expiry responses
     if (response.status === 403 && (data.trialExpired || data.creditsExhausted)) {
       // Dispatch custom event so App.tsx can catch it
-      window.dispatchEvent(new CustomEvent('trial-expired', { 
-        detail: { 
+      window.dispatchEvent(new CustomEvent('trial-expired', {
+        detail: {
           reason: data.trialExpired ? 'time' : 'credits',
           message: data.message,
           creditsRemaining: data.creditsRemaining
-        } 
+        }
       }));
       throw new Error(data.message || 'Trial expired or credits exhausted');
     }
 
     if (!response.ok) {
-      throw new Error(data.error || data.message || 'Something went wrong');
+      const apiError: any = new Error(data.error || data.message || 'Something went wrong');
+      apiError.status = response.status;
+      apiError.reason = data?.reason || '';
+      apiError.errorCode = data?.errorCode || '';
+      apiError.data = data;
+      throw apiError;
     }
 
     // Dispatch credit update if response contains credit balance info
     if (data.creditsRemaining !== undefined) {
-      window.dispatchEvent(new CustomEvent('credits-updated', { 
-        detail: { creditsRemaining: data.creditsRemaining } 
+      window.dispatchEvent(new CustomEvent('credits-updated', {
+        detail: { creditsRemaining: data.creditsRemaining }
       }));
     }
 
     return data as T;
   } catch (error: any) {
     console.error('[API] Error for', endpoint, ':', error.message);
+    if (error?.preview) {
+      console.error('[API] Non-JSON response preview:', error.preview);
+    }
     // Handle network errors
     if (error.message === 'Failed to fetch') {
       throw new Error('Unable to connect to server. Please check your connection.');
     }
     throw error;
   }
+}
+
+async function downloadBlobFromApi(
+  endpoint: string,
+  fileName: string,
+  requiresAuth: boolean = false
+): Promise<{ success: boolean; fileName: string; bytes: number }> {
+  const headers: HeadersInit = {};
+
+  if (requiresAuth) {
+    const token = getToken();
+    if (token) {
+      (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
+    }
+  }
+
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    method: 'GET',
+    headers
+  });
+
+  if (!response.ok) {
+    const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+    let message = 'Failed to download video';
+
+    try {
+      if (contentType.includes('application/json')) {
+        const data = await response.json();
+        message = data?.error || data?.message || message;
+      } else {
+        const text = await response.text();
+        if (text) message = text;
+      }
+    } catch (_) { }
+
+    throw new Error(message);
+  }
+
+  const blob = await response.blob();
+  if (!blob.size) {
+    throw new Error('Downloaded video file is empty');
+  }
+
+  const objectUrl = window.URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = objectUrl;
+  anchor.download = fileName;
+  anchor.style.display = 'none';
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+
+  window.setTimeout(() => window.URL.revokeObjectURL(objectUrl), 1000);
+
+  return {
+    success: true,
+    fileName,
+    bytes: blob.size
+  };
+}
+
+function extractGeneratedInstagramVideoUrl(payload: any): string | null {
+  return payload?.generatedInstagramVideoUrl ||
+    payload?.result?.instagram?.instagramFix?.videoDebug?.preparedUrl ||
+    payload?.result?.instagram?.instagramFix?.mediaUrl ||
+    payload?.result?.instagramFix?.videoDebug?.preparedUrl ||
+    payload?.result?.instagramFix?.mediaUrl ||
+    null;
+}
+
+async function autoDownloadGeneratedInstagramVideo(
+  videoUrl: string,
+  fileName: string = 'instagram-video.mp4'
+): Promise<{ success: boolean; fileName: string; bytes: number }> {
+  if (!videoUrl || typeof videoUrl !== 'string') {
+    throw new Error('Generated video URL is missing');
+  }
+
+  console.log('[Video Download] Starting Instagram video download:', videoUrl);
+
+  const result = await downloadBlobFromApi(
+    `/content/download-video?url=${encodeURIComponent(videoUrl)}&fileName=${encodeURIComponent(fileName)}`,
+    fileName,
+    true
+  );
+
+  console.log('[Video Download] Video downloaded successfully');
+  window.dispatchEvent(new CustomEvent('video-download-success', {
+    detail: {
+      videoUrl,
+      fileName,
+      bytes: result.bytes,
+      message: 'Video downloaded successfully'
+    }
+  }));
+
+  return result;
 }
 
 // ============================================
@@ -161,18 +286,18 @@ export const apiService = {
   // ============================================
   // REAL AUTHENTICATION ENDPOINTS
   // ============================================
-  
-  register: async (data: { email: string; password: string; firstName: string; companyName?: string }): Promise<AuthResponse & { requiresVerification?: boolean }> => {
+
+  register: async (data: { email: string; password: string; firstName: string; companyName?: string; website?: string }): Promise<AuthResponse & { requiresVerification?: boolean }> => {
     const response = await apiCall<{ success: boolean; message: string; token: string; user: User; requiresVerification?: boolean }>(
       '/auth/signup',
       { method: 'POST', body: JSON.stringify(data) }
     );
-    
+
     // SECURITY: Do NOT save token until OTP is verified
     if (response.token && !response.requiresVerification) {
       setToken(response.token);
     }
-    
+
     return {
       success: response.success,
       token: response.token,
@@ -186,12 +311,12 @@ export const apiService = {
       '/auth/login',
       { method: 'POST', body: JSON.stringify(data) }
     );
-    
+
     // SECURITY: Do NOT save token until OTP is verified
     if (response.token && !response.requiresVerification) {
       setToken(response.token);
     }
-    
+
     return {
       success: response.success,
       token: response.token,
@@ -213,11 +338,11 @@ export const apiService = {
       '/auth/verify-otp',
       { method: 'POST', body: JSON.stringify({ email, otp }) }
     );
-    
+
     if (response.token) {
       setToken(response.token);
     }
-    
+
     return {
       success: response.success,
       token: response.token,
@@ -253,13 +378,13 @@ export const apiService = {
       if (!token) {
         return { user: null };
       }
-      
+
       const response = await apiCall<{ success: boolean; user: User }>(
         '/auth/me',
         { method: 'GET' },
         true
       );
-      
+
       return { user: response.user };
     } catch (error) {
       removeToken();
@@ -337,7 +462,7 @@ export const apiService = {
         { method: 'GET' },
         true
       );
-      
+
       return {
         success: true,
         businessLocation: response.context?.geography?.businessLocation || '',
@@ -371,7 +496,7 @@ export const apiService = {
     return apiCall('/auth/check-duplicate', { method: 'POST', body: JSON.stringify({ businessName, website, gstNumber }) }, true);
   },
 
-  completeOnboarding: async (data: BusinessProfile, connectedSocials?: {platform: string; username?: string}[], mobileNumber?: string): Promise<{ success: boolean; user: User }> => {
+  completeOnboarding: async (data: BusinessProfile, connectedSocials?: { platform: string; username?: string }[]): Promise<{ success: boolean; user: User }> => {
     const response = await apiCall<{ success: boolean; user: User }>(
       '/auth/complete-onboarding',
       { method: 'PUT', body: JSON.stringify({ businessProfile: data, connectedSocials, mobileNumber }) },
@@ -395,11 +520,11 @@ export const apiService = {
       { method: 'PUT', body: JSON.stringify({ currentPassword, newPassword }) },
       true
     );
-    
+
     if (response.token) {
       setToken(response.token);
     }
-    
+
     return response;
   },
 
@@ -414,7 +539,7 @@ export const apiService = {
         { method: 'GET' },
         true
       );
-      
+
       if (response.success && response.data) {
         return {
           overview: response.data.overview || {
@@ -438,13 +563,13 @@ export const apiService = {
           generatedAt: response.data.generatedAt
         } as DashboardData;
       }
-      
+
       throw new Error('Invalid response');
     } catch (error) {
       // Using fallback dashboard data
       // Fallback to mock data if API fails or user not logged in
       const activeCount = campaigns.filter(c => c.status === 'active' || c.status === 'posted').length;
-      
+
       return {
         overview: {
           totalCampaigns: campaigns.length,
@@ -532,15 +657,15 @@ export const apiService = {
     if (platforms && platforms.length > 0) {
       url += `&platforms=${encodeURIComponent(platforms.join(','))}`;
     }
-    
+
     const eventSource = new EventSource(url + `&token=${token}`);
-    
+
     // Fallback: If EventSource doesn't support headers, use fetch with SSE parsing
     // Actually EventSource doesn't support custom headers, so we need fetch
     eventSource.close();
-    
+
     const controller = new AbortController();
-    
+
     fetch(url, {
       method: 'GET',
       headers: {
@@ -549,61 +674,61 @@ export const apiService = {
       },
       signal: controller.signal
     })
-    .then(response => {
-      if (!response.ok) throw new Error('Stream request failed');
-      
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      
-      if (!reader) throw new Error('No response body');
-      
-      function pump(): Promise<void> {
-        return reader!.read().then(({ done, value }) => {
-          if (done) return;
-          
-          const text = decoder.decode(value, { stream: true });
-          const lines = text.split('\n');
-          
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              try {
-                const data = JSON.parse(line.slice(6));
-                
-                if (data.type === 'campaign') {
-                  onCampaign(data.campaign, data.index, data.total, data.cached || false);
-                } else if (data.type === 'complete') {
-                  onComplete(data.total);
-                } else if (data.type === 'credits_update') {
-                  // Real-time credit balance update from server
-                  window.dispatchEvent(new CustomEvent('credits-updated', { 
-                    detail: { creditsRemaining: data.creditsRemaining } 
-                  }));
-                } else if (data.type === 'error') {
-                  if (data.trialExpired || data.creditsExhausted) {
-                    window.dispatchEvent(new CustomEvent('trial-expired', { 
-                      detail: { reason: data.trialExpired ? 'time' : 'credits', message: data.message } 
+      .then(response => {
+        if (!response.ok) throw new Error('Stream request failed');
+
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder();
+
+        if (!reader) throw new Error('No response body');
+
+        function pump(): Promise<void> {
+          return reader!.read().then(({ done, value }) => {
+            if (done) return;
+
+            const text = decoder.decode(value, { stream: true });
+            const lines = text.split('\n');
+
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                try {
+                  const data = JSON.parse(line.slice(6));
+
+                  if (data.type === 'campaign') {
+                    onCampaign(data.campaign, data.index, data.total, data.cached || false);
+                  } else if (data.type === 'complete') {
+                    onComplete(data.total);
+                  } else if (data.type === 'credits_update') {
+                    // Real-time credit balance update from server
+                    window.dispatchEvent(new CustomEvent('credits-updated', {
+                      detail: { creditsRemaining: data.creditsRemaining }
                     }));
+                  } else if (data.type === 'error') {
+                    if (data.trialExpired || data.creditsExhausted) {
+                      window.dispatchEvent(new CustomEvent('trial-expired', {
+                        detail: { reason: data.trialExpired ? 'time' : 'credits', message: data.message }
+                      }));
+                    }
+                    onError(data.message);
                   }
-                  onError(data.message);
+                } catch (e) {
+                  // SSE parse error
                 }
-              } catch (e) {
-                // SSE parse error
               }
             }
-          }
-          
-          return pump();
-        });
-      }
-      
-      return pump();
-    })
-    .catch(error => {
-      if (error.name !== 'AbortError') {
-        onError(error.message);
-      }
-    });
-    
+
+            return pump();
+          });
+        }
+
+        return pump();
+      })
+      .catch(error => {
+        if (error.name !== 'AbortError') {
+          onError(error.message);
+        }
+      });
+
     // Return cleanup function
     return () => controller.abort();
   },
@@ -651,10 +776,10 @@ export const apiService = {
       };
     } catch (error) {
       // Synopsis error
-      return { 
-        synopsis: 'Unable to generate synopsis at this time. Please try again.', 
-        insights: [], 
-        trend: 'stable' 
+      return {
+        synopsis: 'Unable to generate synopsis at this time. Please try again.',
+        insights: [],
+        trend: 'stable'
       };
     }
   },
@@ -671,12 +796,12 @@ export const apiService = {
     aspectRatio?: string;
   }): Promise<{ caption: string; hashtags: string[]; imageUrl: string; imagePrompt?: string }> => {
     try {
-      const response = await apiCall<{ 
-        success: boolean; 
-        caption: string; 
-        hashtags: string[]; 
+      const response = await apiCall<{
+        success: boolean;
+        caption: string;
+        hashtags: string[];
         imageUrl: string;
-        imagePrompt?: string 
+        imagePrompt?: string
       }>(
         '/dashboard/generate-rival-post',
         { method: 'POST', body: JSON.stringify(data) },
@@ -718,9 +843,13 @@ export const apiService = {
       );
       return { connections: response.connections };
     } catch (error) {
-      // Fallback to mock data if not logged in or API fails
-      // Using mock social connections
-      return { connections: socialConnections };
+      // Only fall back to mock data when not authenticated.
+      // If the user is logged in, surface the error so the UI can keep last-known state.
+      const hasToken = typeof window !== "undefined" && !!localStorage.getItem("authToken");
+      if (!hasToken) {
+        return { connections: socialConnections };
+      }
+      throw error;
     }
   },
 
@@ -735,19 +864,19 @@ export const apiService = {
   },
 
   // Universal OAuth - Get auth URL for any platform
-  getPlatformAuthUrl: async (platform: string): Promise<{ 
-    success: boolean; 
-    configured: boolean; 
-    authUrl?: string; 
+  getPlatformAuthUrl: async (platform: string): Promise<{
+    success: boolean;
+    configured: boolean;
+    authUrl?: string;
     message?: string;
     method?: 'direct_oauth' | 'ayrshare_jwt' | 'ayrshare';
     setupInstructions?: { url: string; steps: string[] };
   }> => {
     try {
-      const response = await apiCall<{ 
-        success: boolean; 
-        configured: boolean; 
-        authUrl?: string; 
+      const response = await apiCall<{
+        success: boolean;
+        configured: boolean;
+        authUrl?: string;
         message?: string;
         method?: 'direct_oauth' | 'ayrshare_jwt' | 'ayrshare';
         setupInstructions?: { url: string; steps: string[] };
@@ -759,11 +888,26 @@ export const apiService = {
       return response;
     } catch (error: any) {
       console.error(`Failed to get ${platform} auth URL:`, error);
-      return { 
-        success: false, 
-        configured: false, 
-        message: error.message || `Failed to initiate ${platform} connection` 
+      return {
+        success: false,
+        configured: false,
+        message: error.message || `Failed to initiate ${platform} connection`
       };
+    }
+  },
+
+  // Register Ayrshare webhook automatically
+  registerWebhook: async (): Promise<{ success: boolean; message?: string; webhookUrl?: string }> => {
+    try {
+      const response = await apiCall<{ success: boolean; message?: string; webhookUrl?: string }>(
+        '/social/inbox/webhooks/register',
+        { method: 'POST' },
+        true
+      );
+      return response;
+    } catch (error: any) {
+      console.error('Failed to register webhook:', error);
+      return { success: false, message: error.message || 'Failed to register webhook' };
     }
   },
 
@@ -822,21 +966,21 @@ export const apiService = {
     if (!connected) {
       return await apiService.disconnectPlatform(platform);
     }
-    
+
     // For other platforms, use mock
     await new Promise(resolve => setTimeout(resolve, 300));
-    
+
     socialConnections = socialConnections.map(s =>
       s.platform === platform
         ? {
-            ...s,
-            connected,
-            username: connected ? username : undefined,
-            status: connected ? 'active' : 'disconnected'
-          }
+          ...s,
+          connected,
+          username: connected ? username : undefined,
+          status: connected ? 'active' : 'disconnected'
+        }
         : s
     );
-    
+
     return { success: true };
   },
 
@@ -968,10 +1112,10 @@ export const apiService = {
       return response;
     } catch (error: any) {
       console.error('Influencer discovery failed:', error);
-      return { 
-        success: false, 
-        influencers: [], 
-        message: error.message || 'Discovery failed' 
+      return {
+        success: false,
+        influencers: [],
+        message: error.message || 'Discovery failed'
       };
     }
   },
@@ -992,6 +1136,53 @@ export const apiService = {
       true
     );
     return response;
+  },
+
+  // ============================================
+  // INFLUENCER COLLABORATION PORTAL (MVP)
+  // ============================================
+  getInfluencerPortalInfluencers: async (): Promise<any> => {
+    return apiCall('/influencers', { method: 'GET' }, true);
+  },
+
+  createInfluencerPortalInfluencer: async (data: any): Promise<any> => {
+    return apiCall('/influencers', { method: 'POST', body: JSON.stringify(data) }, true);
+  },
+
+  updateInfluencerPortalInfluencer: async (id: string, data: any): Promise<any> => {
+    return apiCall(`/influencers/${id}`, { method: 'PUT', body: JSON.stringify(data) }, true);
+  },
+
+  deleteInfluencerPortalInfluencer: async (id: string): Promise<any> => {
+    return apiCall(`/influencers/${id}`, { method: 'DELETE' }, true);
+  },
+
+  getCollaborations: async (): Promise<any> => {
+    return apiCall('/collaborations', { method: 'GET' }, true);
+  },
+
+  inviteCollaboration: async (data: any): Promise<any> => {
+    return apiCall('/collaborations/invite', { method: 'POST', body: JSON.stringify(data) }, true);
+  },
+
+  deleteCollaboration: async (id: string): Promise<any> => {
+    return apiCall(`/collaborations/${id}`, { method: 'DELETE' }, true);
+  },
+
+  getSubmissions: async (): Promise<any> => {
+    return apiCall('/submissions', { method: 'GET' }, true);
+  },
+
+  createSubmission: async (data: any): Promise<any> => {
+    return apiCall('/submissions', { method: 'POST', body: JSON.stringify(data) }, true);
+  },
+
+  updateSubmissionStatus: async (id: string, action: 'approve' | 'reject' | 'request-changes', feedback = ''): Promise<any> => {
+    return apiCall(`/submissions/${id}/${action}`, { method: 'PUT', body: JSON.stringify({ feedback }) }, true);
+  },
+
+  getInfluencerPortalAnalytics: async (): Promise<any> => {
+    return apiCall('/analytics/influencer', { method: 'GET' }, true);
   },
 
   seedInfluencerSamples: async (): Promise<any> => {
@@ -1031,7 +1222,7 @@ export const apiService = {
     return { campaign: response.campaign };
   },
 
-  createCampaign: async (data: Partial<Campaign>): Promise<{ campaign: Campaign }> => {
+  createCampaign: async (data: CampaignInput): Promise<{ campaign: Campaign }> => {
     const response = await apiCall<{ success: boolean; campaign: Campaign }>(
       '/campaigns',
       { method: 'POST', body: JSON.stringify(data) },
@@ -1040,13 +1231,75 @@ export const apiService = {
     return { campaign: response.campaign };
   },
 
-  updateCampaign: async (id: string, data: Partial<Campaign>): Promise<{ campaign: Campaign }> => {
+  updateCampaign: async (id: string, data: CampaignInput): Promise<{ campaign: Campaign }> => {
     const response = await apiCall<{ success: boolean; campaign: Campaign }>(
       `/campaigns/${id}`,
       { method: 'PUT', body: JSON.stringify(data) },
       true
     );
     return { campaign: response.campaign };
+  },
+
+  getSocialInboxSummary: async (): Promise<{
+    success: boolean;
+    connectedPlatforms: string[];
+    connectedPlatformCount: number;
+    unreadMessageCount: number;
+    inboxEnabled: boolean;
+    inboxStatus: 'active' | 'disabled' | 'needs_setup' | string;
+    syncStatus: {
+      status: 'synced' | 'pending' | 'not_started' | string;
+      lastSyncAt?: string | null;
+      nextSyncAt?: string | null;
+    };
+    webhookStatus: {
+      registered: boolean;
+      activePlatforms: string[];
+      missingPlatforms: string[];
+    };
+    aiEngagement: {
+      replySuggestions: boolean;
+      priorityTagging: boolean;
+      unreadAlerts: boolean;
+    };
+  }> => {
+    return apiCall('/social/inbox/summary', { method: 'GET' }, true);
+  },
+
+  updateCampaignPostIds: async (
+    id: string,
+    data: { facebookPostId?: string; instagramPostId?: string }
+  ): Promise<{ success: boolean; message?: string; campaign: Campaign }> => {
+    const response = await apiCall<{ success: boolean; message?: string; campaign: Campaign }>(
+      `/campaigns/${id}/post-ids`,
+      { method: 'PATCH', body: JSON.stringify(data) },
+      true
+    );
+    return {
+      success: Boolean(response?.success),
+      message: response?.message,
+      campaign: response.campaign
+    };
+  },
+
+  // Upload audio for Instagram campaign posts (stored on Cloudinary)
+  uploadCampaignAudio: async (audioData: string, originalName?: string): Promise<{
+    success: boolean;
+    url?: string;
+    publicId?: string | null;
+    originalName?: string | null;
+    bytes?: number | null;
+    format?: string | null;
+    duration?: number | null;
+    message?: string;
+    error?: string;
+  }> => {
+    const response = await apiCall<any>(
+      '/campaigns/upload-audio',
+      { method: 'POST', body: JSON.stringify({ audioData, originalName }) },
+      true
+    );
+    return response;
   },
 
   deleteCampaign: async (id: string): Promise<{ success: boolean }> => {
@@ -1085,6 +1338,66 @@ export const apiService = {
     return { campaign: response.campaign };
   },
 
+  getReelGenerationOptions: async (): Promise<{
+    success: boolean;
+    promptTypes: Array<{ key: string; label: string; description: string }>;
+    languages: Array<{ code: string; label: string; nativeLabel?: string }>;
+    durations: number[];
+  }> => {
+    const response = await apiCall<any>(
+      '/campaigns/reel/options',
+      { method: 'GET' },
+      true
+    );
+    return response;
+  },
+
+  generateImageReel: async (payload: {
+    imageData?: string;
+    imageUrl?: string;
+    promptType: string;
+    language: string;
+    durationSeconds: number;
+    customPrompt?: string;
+  }): Promise<{
+    success: boolean;
+    message?: string;
+    campaign?: Campaign;
+    reel?: {
+      promptType: string;
+      promptLabel: string;
+      promptTemplate: string;
+      language: { code: string; label: string; nativeLabel?: string };
+      durationSeconds: number;
+      sourceImageUrl: string;
+      videoUrl: string;
+      audioUrl: string;
+      audioMode?: string;
+      caption: string;
+      cta: string;
+      hashtags: string[];
+      voiceoverScript: string;
+      scenePlan: Array<{
+        sceneTitle: string;
+        startSec: number;
+        endSec: number;
+        visualDirection: string;
+        caption: string;
+      }>;
+      videoMetadata?: any;
+      videoValidation?: any;
+    };
+    creditsRemaining?: number;
+    error?: string;
+  }> => {
+    const response = await apiCall<any>(
+      '/campaigns/reel/generate',
+      { method: 'POST', body: JSON.stringify(payload) },
+      true
+    );
+    return response;
+  },
+
   // ============================================
   // TEMPLATE POSTER GENERATION (Nano Banana Pro)
   // ============================================
@@ -1093,11 +1406,11 @@ export const apiService = {
    * Generate a poster from a template image and content
    */
   generateTemplatePoster: async (
-    templateImage: string, 
-    content: string, 
-    options?: { 
-      platform?: string; 
-      style?: string; 
+    templateImage: string,
+    content: string,
+    options?: {
+      platform?: string;
+      style?: string;
       useAI?: boolean;
       aspectRatio?: string;
       logoOverlay?: {
@@ -1109,28 +1422,28 @@ export const apiService = {
         padding?: number;
       };
     }
-  ): Promise<{ 
-    success: boolean; 
-    imageBase64?: string; 
-    imageUrl?: string; 
-    model?: string; 
+  ): Promise<{
+    success: boolean;
+    imageBase64?: string;
+    imageUrl?: string;
+    model?: string;
     logoApplied?: boolean;
     message?: string;
     error?: string;
   }> => {
     const response = await apiCall<any>(
       '/campaigns/template-poster',
-      { 
-        method: 'POST', 
-        body: JSON.stringify({ 
-          templateImage, 
-          content, 
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          templateImage,
+          content,
           platform: options?.platform || 'instagram',
           style: options?.style,
           useAI: options?.useAI || false,
           aspectRatio: options?.aspectRatio,
           logoOverlay: options?.logoOverlay
-        }) 
+        })
       },
       true
     );
@@ -1200,25 +1513,25 @@ export const apiService = {
     editInstructions: string,
     templateImage?: string,
     useAI?: boolean
-  ): Promise<{ 
-    success: boolean; 
-    imageBase64?: string; 
-    imageUrl?: string; 
-    model?: string; 
+  ): Promise<{
+    success: boolean;
+    imageBase64?: string;
+    imageUrl?: string;
+    model?: string;
     message?: string;
     error?: string;
   }> => {
     const response = await apiCall<any>(
       '/campaigns/template-poster/edit',
-      { 
-        method: 'POST', 
-        body: JSON.stringify({ 
-          currentImage, 
-          originalContent, 
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          currentImage,
+          originalContent,
           editInstructions,
           templateImage,
           useAI: useAI || false
-        }) 
+        })
       },
       true
     );
@@ -1248,9 +1561,9 @@ export const apiService = {
   }> => {
     const response = await apiCall<any>(
       '/campaigns/template-poster/batch',
-      { 
-        method: 'POST', 
-        body: JSON.stringify({ posters, platform }) 
+      {
+        method: 'POST',
+        body: JSON.stringify({ posters, platform })
       },
       true
     );
@@ -1302,7 +1615,7 @@ export const apiService = {
         if (endDate) params.append('endDate', endDate);
         queryString = `?${params.toString()}`;
       }
-      
+
       const response = await apiCall<{ success: boolean; analytics: any }>(
         `/campaigns/analytics/overview${queryString}`,
         { method: 'GET' },
@@ -1333,7 +1646,7 @@ export const apiService = {
         if (endDate) params.append('endDate', endDate);
         queryString = `?${params.toString()}`;
       }
-      
+
       const response = await apiCall<{ success: boolean; reminders: any[] }>(
         `/reminders${queryString}`,
         { method: 'GET' },
@@ -1440,7 +1753,7 @@ export const apiService = {
   // ============================================
   // STRATEGIC ADVISOR API
   // ============================================
-  
+
   getStrategicSuggestions: async (refresh = false): Promise<{
     success: boolean;
     suggestions: any[];
@@ -1496,8 +1809,8 @@ export const apiService = {
     try {
       const response = await apiCall<any>(
         '/dashboard/strategic-advisor/generate-post',
-        { 
-          method: 'POST', 
+        {
+          method: 'POST',
           body: JSON.stringify({ suggestion, logoUrl: logoUrl || null, aspectRatio: aspectRatio || '1:1' })
         },
         true
@@ -1535,9 +1848,9 @@ export const apiService = {
     try {
       const response = await apiCall<any>(
         '/dashboard/strategic-advisor/refine-image',
-        { 
-          method: 'POST', 
-          body: JSON.stringify({ originalPrompt, refinementPrompt, style, currentImageUrl }) 
+        {
+          method: 'POST',
+          body: JSON.stringify({ originalPrompt, refinementPrompt, style, currentImageUrl })
         },
         true
       );
@@ -1571,8 +1884,8 @@ export const apiService = {
     try {
       const response = await apiCall<any>(
         '/dashboard/generate-event-post',
-        { 
-          method: 'POST', 
+        {
+          method: 'POST',
           body: JSON.stringify({ event, logoUrl: logoUrl || null, aspectRatio: aspectRatio || '1:1' })
         },
         true
@@ -1611,7 +1924,7 @@ export const apiService = {
       const params = new URLSearchParams();
       if (options?.unreadOnly) params.append('unreadOnly', 'true');
       if (options?.limit) params.append('limit', options.limit.toString());
-      
+
       const response = await apiCall<{ success: boolean; notifications: any[]; unreadCount: number }>(
         `/notifications${params.toString() ? '?' + params.toString() : ''}`,
         { method: 'GET' },
@@ -1754,6 +2067,43 @@ export const apiService = {
   }): Promise<any> => {
     const response = await apiCall<any>(
       '/content/generate',
+      { method: 'POST', body: JSON.stringify(params) },
+      true
+    );
+    return response;
+  },
+
+  localizeCampaignContent: async (params: {
+    brandName?: string;
+    brand_name?: string;
+    brandDescription?: string;
+    brand_description?: string;
+    industry?: string;
+    tone?: string;
+    brandTone?: string;
+    brand_tone?: string;
+    writingStyle?: string;
+    writing_style?: string;
+    ctaStyle?: string;
+    cta_style?: string;
+    visualStyle?: string;
+    visual_style?: string;
+    audience?: string;
+    targetAudience?: string;
+    target_audience?: string;
+    keyMessage?: string;
+    key_message?: string;
+    platform: 'Instagram' | 'Facebook' | 'LinkedIn' | 'instagram' | 'facebook' | 'linkedin';
+    region?: string;
+    language?: string;
+    regions?: string[];
+    languages?: Array<string | null> | null;
+    localizations?: Array<{ region: string; language: string }> | string;
+    baseCaption?: string;
+    base_caption?: string;
+  }): Promise<any> => {
+    const response = await apiCall<any>(
+      '/content/localize-campaign',
       { method: 'POST', body: JSON.stringify(params) },
       true
     );
@@ -2034,7 +2384,12 @@ export const apiService = {
       { method: 'POST', body: JSON.stringify({ platforms, scheduledFor }) },
       true
     );
+
     return response;
+  },
+
+  downloadGeneratedVideo: async (videoUrl: string, fileName: string = 'instagram-video.mp4'): Promise<{ success: boolean; fileName: string; bytes: number }> => {
+    return autoDownloadGeneratedInstagramVideo(videoUrl, fileName);
   },
 
   // Get real analytics for a campaign
@@ -2255,8 +2610,8 @@ export const apiService = {
         }
       });
     }
-    const queryString = Object.keys(cleanParams).length > 0 
-      ? '?' + new URLSearchParams(cleanParams).toString() 
+    const queryString = Object.keys(cleanParams).length > 0
+      ? '?' + new URLSearchParams(cleanParams).toString()
       : '';
     const response = await apiCall<any>(
       `/reachouts/leads${queryString}`,
@@ -2388,7 +2743,7 @@ export const apiService = {
   uploadLeadsFile: async (file: File): Promise<any> => {
     const formData = new FormData();
     formData.append('file', file);
-    
+
     const token = localStorage.getItem('authToken');
     const response = await fetch(`${API_BASE_URL}/reachouts/leads/upload`, {
       method: 'POST',
@@ -2397,18 +2752,31 @@ export const apiService = {
       },
       body: formData
     });
-    
-    const data = await response.json();
+
+    const data = await safeReadJson(response);
     if (!response.ok) {
       throw new Error(data.error || 'Failed to upload file');
     }
     return data;
   },
 
+  getSignupBrandColors: async (website: string): Promise<{
+    success: boolean;
+    primaryColor: string;
+    secondaryColor: string;
+    source: string;
+    confidence: number;
+  }> => {
+    return apiCall('/auth/signup-brand-colors', {
+      method: 'POST',
+      body: JSON.stringify({ website })
+    });
+  },
+
   previewLeadsFile: async (file: File): Promise<any> => {
     const formData = new FormData();
     formData.append('file', file);
-    
+
     const token = localStorage.getItem('authToken');
     const response = await fetch(`${API_BASE_URL}/reachouts/leads/upload/preview`, {
       method: 'POST',
@@ -2417,8 +2785,8 @@ export const apiService = {
       },
       body: formData
     });
-    
-    const data = await response.json();
+
+    const data = await safeReadJson(response);
     if (!response.ok) {
       throw new Error(data.error || 'Failed to preview file');
     }
@@ -2481,9 +2849,9 @@ export const apiService = {
   },
 
   // Email Campaigns
-  generateEmailSequence: async (data: { 
-    leadIds: string[]; 
-    campaignType?: string; 
+  generateEmailSequence: async (data: {
+    leadIds: string[];
+    campaignType?: string;
     numFollowUps?: number;
     customInstructions?: string;
   }): Promise<any> => {
@@ -2655,6 +3023,411 @@ export const brandAssetsAPI = {
       true
     );
   },
+
+  // Get the computed brand intelligence profile
+  getIntelligenceProfile: async (): Promise<any> => {
+    return await apiCall<any>('/brand-assets/intelligence-profile', {}, true);
+  },
+
+  // Update custom brand profile fields
+  updateIntelligenceProfile: async (data: {
+    brandName?: string;
+    brandDescription?: string;
+    primaryColor?: string;
+    secondaryColor?: string;
+    fontType?: string;
+    enforcementMode?: 'strict' | 'adaptive' | 'off';
+    customProfile?: {
+      tone?: string;
+      writingStyle?: string;
+      ctaStyle?: string;
+      visualStyle?: string;
+    };
+  }): Promise<any> => {
+    return await apiCall<any>(
+      '/brand-assets/intelligence-profile',
+      { method: 'PUT', body: JSON.stringify(data) },
+      true
+    );
+  },
+
+  // Run analysis to detect tone/style/cta/visual profile with confidence scores
+  analyzeIntelligenceProfile: async (data: {
+    brandName?: string;
+    brandDescription?: string;
+    primaryColor?: string;
+    secondaryColor?: string;
+    fontType?: string;
+    pastPosts?: Array<{ caption?: string; imageUrl?: string; platform?: string }>;
+  } = {}): Promise<any> => {
+    return await apiCall<any>(
+      '/brand-assets/intelligence-profile/analyze',
+      { method: 'POST', body: JSON.stringify(data) },
+      true
+    );
+  },
+
+  // Resolve brand colors from website (preferred) or manual input
+  detectBrandColors: async (data: {
+    websiteUrl?: string;
+    primaryColor?: string;
+    secondaryColor?: string;
+  }): Promise<{
+    primary_color: string;
+    secondary_color: string;
+    source: 'website' | 'manual';
+    confidence: number;
+    reason: string;
+  }> => {
+    return await apiCall<any>(
+      '/brand-assets/intelligence-profile/colors',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          website_url: data.websiteUrl || '',
+          primary_color: data.primaryColor || '',
+          secondary_color: data.secondaryColor || ''
+        })
+      },
+      true
+    );
+  },
+
+  // Add one past-post sample (caption/image) to improve mimic quality
+  addPastPostSample: async (data: {
+    caption?: string;
+    imageData?: string;
+    platform?: string;
+  }): Promise<any> => {
+    return await apiCall<any>(
+      '/brand-assets/intelligence-profile/past-posts',
+      { method: 'POST', body: JSON.stringify(data) },
+      true
+    );
+  },
+
+  // Remove one past-post sample
+  deletePastPostSample: async (postId: string): Promise<any> => {
+    return await apiCall<any>(
+      `/brand-assets/intelligence-profile/past-posts/${postId}`,
+      { method: 'DELETE' },
+      true
+    );
+  },
+};
+
+export const adCampaignsAPI = {
+  getAll: async (): Promise<any> => {
+    return await apiCall<any>('/ad-campaigns', { method: 'GET' }, true);
+  },
+
+  getSummary: async (): Promise<any> => {
+    return await apiCall<any>('/ad-campaigns/summary', { method: 'GET' }, true);
+  },
+
+  getCtaPreview: async (): Promise<any> => {
+    return await apiCall<any>('/ad-campaigns/cta-preview', { method: 'GET' }, true);
+  },
+
+  getMetaReadiness: async (campaignId?: string): Promise<any> => {
+    const query = campaignId ? `?campaignId=${encodeURIComponent(campaignId)}` : '';
+    return await apiCall<any>(`/ad-campaigns/meta-readiness${query}`, { method: 'GET' }, true);
+  },
+
+  create: async (data: {
+    campaignId: string;
+    platformSelection: 'meta' | 'google' | 'both';
+    selectedPosts?: {
+      facebook?: boolean;
+      instagram?: boolean;
+    };
+    budget: number;
+    currency: string;
+    startDate: string;
+    endDate: string;
+  }): Promise<any> => {
+    return await apiCall<any>(
+      '/ad-campaigns',
+      { method: 'POST', body: JSON.stringify(data) },
+      true
+    );
+  },
+
+  updateStatus: async (id: string, status: 'active' | 'paused'): Promise<any> => {
+    return await apiCall<any>(
+      `/ad-campaigns/${id}/status`,
+      { method: 'PUT', body: JSON.stringify({ status }) },
+      true
+    );
+  },
+
+  retry: async (id: string): Promise<any> => {
+    return await apiCall<any>(
+      `/ad-campaigns/${id}/retry`,
+      { method: 'POST' },
+      true
+    );
+  },
+
+  remove: async (id: string): Promise<any> => {
+    return await apiCall<any>(
+      `/ad-campaigns/${id}`,
+      { method: 'DELETE' },
+      true
+    );
+  }
+};
+
+// ================================
+// Inventory API
+// ================================
+export const inventoryAPI = {
+  // Get all products
+  getProducts: async (filters?: { search?: string; category?: string; status?: string }): Promise<any> => {
+    let url = '/products';
+    if (filters) {
+      const params = new URLSearchParams();
+      if (filters.search) params.append('search', filters.search);
+      if (filters.category) params.append('category', filters.category);
+      if (filters.status) params.append('status', filters.status);
+      const queryString = params.toString();
+      if (queryString) url += `?${queryString}`;
+    }
+    return apiCall(url, { method: 'GET' }, true);
+  },
+
+  // Get a single product
+  getProduct: async (id: string): Promise<any> => {
+    return apiCall(`/products/${id}`, { method: 'GET' }, true);
+  },
+
+  // Create a new product
+  createProduct: async (data: any): Promise<any> => {
+    return apiCall('/products', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }, true);
+  },
+
+  // Update a product
+  updateProduct: async (id: string, data: any): Promise<any> => {
+    return apiCall(`/products/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    }, true);
+  },
+
+  // Delete a product
+  deleteProduct: async (id: string): Promise<any> => {
+    return apiCall(`/products/${id}`, { method: 'DELETE' }, true);
+  },
+
+  // Bulk import products from a CSV or Excel file
+  bulkImportProducts: async (file: File): Promise<{
+    success: boolean;
+    summary: { total: number; imported: number; failed: number; truncated: boolean; truncatedAt?: number };
+    successes: { row: number; productId: string; name: string }[];
+    failures: { row: number; reason: string; data: any }[];
+    message?: string;
+  }> => {
+    const token = getToken();
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch(`${API_BASE_URL}/products/bulk-import`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    });
+
+    const data = await safeReadJson(response);
+    if (!response.ok && !data.success) {
+      throw new Error(data.message || 'Bulk import failed');
+    }
+    return data;
+  },
+
+  // Generate a premium social-media ad image for a product using AI
+  generateProductAdImage: async (
+    productId: string,
+    options: { platform?: string; tone?: string; aspectRatio?: string; language?: string; imageText?: string } = {}
+  ): Promise<{ success: boolean; imageUrl?: string; model?: string; message?: string }> => {
+    return apiCall(`/products/${productId}/generate-ad-image`, {
+      method: 'POST',
+      body: JSON.stringify({
+        platform: options.platform || 'instagram',
+        tone: options.tone || 'professional',
+        aspectRatio: options.aspectRatio || '1:1',
+        language: options.language || 'English',
+        imageText: options.imageText || '',
+      }),
+    }, true);
+  },
+};
+
+// ================================
+// AI Video Generation API
+// ================================
+export const videoGenerationAPI = {
+  createVideo: async (payload: {
+    description: string;
+    durationSeconds: number;
+    sceneCount?: number;
+    imageData?: string;
+    imageUrl?: string;
+    productId?: string;
+    product?: any;
+    styleHint?: string;
+    voiceHint?: string;
+    subtitles?: { enabled?: boolean };
+    audio?: {
+      enabled?: boolean;
+      mode?: 'off' | 'auto' | 'upload';
+      languageCode?: string;
+      tone?: string;
+      manualAudioData?: string;
+      manualAudioUrl?: string;
+      soundEffectUrls?: string[];
+    };
+  }): Promise<{
+    success: boolean;
+    message?: string;
+    jobId?: string;
+    status?: string;
+    progress?: number;
+    currentStep?: string;
+  }> => {
+    return apiCall('/video-generation/createVideo', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }, true);
+  },
+
+  getJobStatus: async (jobId: string): Promise<any> => {
+    return apiCall(`/video-generation/jobs/${encodeURIComponent(jobId)}`, { method: 'GET' }, true);
+  },
+
+  createDraft: async (payload: {
+    description: string;
+    durationSeconds?: number;
+    sceneCount?: number;
+    imageData?: string;
+    imageUrl?: string;
+    productId?: string;
+    product?: any;
+  }): Promise<any> => {
+    return apiCall('/video-generation/createDraft', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }, true);
+  },
+
+  getDraft: async (jobId: string): Promise<any> => {
+    return apiCall(`/video-generation/draft/${encodeURIComponent(jobId)}`, { method: 'GET' }, true);
+  },
+
+  getDrafts: async (): Promise<any> => {
+    return apiCall('/video-generation/drafts', { method: 'GET' }, true);
+  },
+
+  deleteDraft: async (jobId: string): Promise<any> => {
+    return apiCall(`/video-generation/draft/${encodeURIComponent(jobId)}`, { method: 'DELETE' }, true);
+  },
+
+  generatePrompt: async (payload: {
+    jobId: string;
+    promptText?: string;
+    saveOnly?: boolean;
+  }): Promise<any> => {
+    return apiCall('/video-generation/generatePrompt', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }, true);
+  },
+
+  generateScenes: async (payload: any): Promise<any> => {
+    return apiCall('/video-generation/generateScenes', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }, true);
+  },
+
+  generateImages: async (payload: any): Promise<any> => {
+    return apiCall('/video-generation/generateImages', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }, true);
+  },
+
+  generateClips: async (payload: any): Promise<any> => {
+    return apiCall('/video-generation/generateClips', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }, true);
+  },
+
+  generateVideoClips: async (payload: any): Promise<any> => {
+    return apiCall('/video-generation/generateVideoClips', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }, true);
+  },
+
+  generateAudio: async (payload: any): Promise<any> => {
+    return apiCall('/video-generation/generateAudio', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }, true);
+  },
+
+  getMusicTracks: async (durationSeconds: number): Promise<any> => {
+    return apiCall(`/video-generation/music-tracks?durationSeconds=${encodeURIComponent(String(durationSeconds || 60))}`, {
+      method: 'GET'
+    }, true);
+  },
+
+  mergeAudio: async (payload: any): Promise<any> => {
+    return apiCall('/video-generation/mergeAudio', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }, true);
+  },
+
+  mixAudio: async (payload: any): Promise<any> => {
+    return apiCall('/video-generation/mixAudio', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }, true);
+  },
+
+  mergeVideo: async (payload: any): Promise<any> => {
+    return apiCall('/video-generation/mergeVideo', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }, true);
+  },
+
+  generateContent: async (payload: {
+    jobId: string;
+    selectedPlatforms?: string[];
+  }): Promise<any> => {
+    return apiCall('/video-generation/generateContent', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }, true);
+  },
+
+  schedulePost: async (payload: {
+    jobId: string;
+    selectedPlatforms: string[];
+    scheduledAt?: string;
+    publishNow?: boolean;
+  }): Promise<any> => {
+    return apiCall('/video-generation/schedulePost', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }, true);
+  }
 };
 
 // ============================================
@@ -2716,4 +3489,337 @@ export const paymentService = {
   billing: async (): Promise<any> => {
     return apiCall<any>('/payment/billing', { method: 'GET' }, true);
   }
+};
+
+// ================================
+// AI Memory API
+// ================================
+export const aiMemoryAPI = {
+  getSummary: async (platform?: string): Promise<any> => {
+    const query = platform ? `?platform=${encodeURIComponent(platform)}` : '';
+    return apiCall<any>(`/ai-memory/summary${query}`, { method: 'GET' }, true);
+  },
+
+  getCampaignHistory: async (filters: { platform?: string; action?: string; limit?: number } = {}): Promise<any> => {
+    const params = new URLSearchParams();
+    if (filters.platform) params.set('platform', filters.platform);
+    if (filters.action) params.set('action', filters.action);
+    if (filters.limit) params.set('limit', String(filters.limit));
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return apiCall<any>(`/ai-memory/campaign-history${query}`, { method: 'GET' }, true);
+  },
+
+  getVideoHistory: async (filters: { action?: string; limit?: number } = {}): Promise<any> => {
+    const params = new URLSearchParams();
+    if (filters.action) params.set('action', filters.action);
+    if (filters.limit) params.set('limit', String(filters.limit));
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return apiCall<any>(`/ai-memory/video-history${query}`, { method: 'GET' }, true);
+  },
+
+  getPerformance: async (filters: { platform?: string; limit?: number } = {}): Promise<any> => {
+    const params = new URLSearchParams();
+    if (filters.platform) params.set('platform', filters.platform);
+    if (filters.limit) params.set('limit', String(filters.limit));
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return apiCall<any>(`/ai-memory/performance${query}`, { method: 'GET' }, true);
+  },
+
+  reuseMemory: async (type: 'campaign' | 'video', id: string): Promise<any> => {
+    return apiCall<any>(`/ai-memory/reuse/${type}/${encodeURIComponent(id)}`, { method: 'POST' }, true);
+  }
+};
+
+// ================================
+// AI SEO Assistant API
+// ================================
+export const seoAPI = {
+  getDashboard: async (): Promise<any> => {
+    return apiCall<any>('/seo/dashboard', { method: 'GET' }, true);
+  },
+
+  getReports: async (type?: string): Promise<any> => {
+    const query = type ? `?type=${encodeURIComponent(type)}` : '';
+    return apiCall<any>(`/seo/reports${query}`, { method: 'GET' }, true);
+  },
+
+  keywordResearch: async (data: { topic: string; businessContext?: any }): Promise<any> => {
+    return apiCall<any>('/seo/keywords', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }, true);
+  },
+
+  generateMetadata: async (data: {
+    topic: string;
+    businessName?: string;
+    pageType?: string;
+    focusKeyword?: string;
+    businessContext?: any;
+  }): Promise<any> => {
+    return apiCall<any>('/seo/metadata', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }, true);
+  },
+
+  generateHashtags: async (data: {
+    content: string;
+    topic?: string;
+    platforms?: string[];
+    businessContext?: any;
+  }): Promise<any> => {
+    return apiCall<any>('/seo/hashtags', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }, true);
+  },
+
+  analyzeCompetitor: async (data: { competitorUrl: string; businessContext?: any }): Promise<any> => {
+    return apiCall<any>('/seo/competitor-analysis', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }, true);
+  }
+};
+
+// ================================
+// Unified Social Inbox API
+// ================================
+export interface InboxConversation {
+  id: string;
+  user_id?: string;
+  workspace_id?: string;
+  assigned_user_id?: string;
+  social_account_id: string;
+  platform: 'instagram' | 'facebook' | 'linkedin' | 'x' | 'youtube';
+  provider_thread_id?: string;
+  participant_id?: string;
+  participant_name: string;
+  participant_username?: string;
+  avatar_url?: string;
+  subject?: string;
+  last_message_preview: string;
+  last_message_at: string;
+  status: 'unread' | 'read' | 'replied' | 'closed' | string;
+  priority: 'low' | 'normal' | 'high' | 'urgent' | string;
+  tags: string[];
+  sentiment: string;
+  spam_score: number;
+  lead_score?: number;
+  engagement_score?: number;
+  unread_count?: number;
+  message_types?: string[];
+}
+
+export interface InboxMessage {
+  id: string;
+  conversation_id: string;
+  social_account_id?: string;
+  platform: 'instagram' | 'facebook' | 'linkedin' | 'x' | 'youtube';
+  provider_message_id?: string;
+  provider_parent_id?: string;
+  direction: 'inbound' | 'outbound';
+  message_type: string;
+  author_id?: string;
+  author_name: string;
+  body: string;
+  media_urls?: string[];
+  permalink?: string;
+  sentiment: string;
+  spam_score: number;
+  lead_score?: number;
+  engagement_score?: number;
+  priority?: string;
+  ai?: {
+    suggestedReplies?: string[];
+    autoReplyCandidate?: string;
+    autoReplyStatus?: string;
+    autoReplyReason?: string;
+  };
+  auto_replied?: boolean;
+  auto_sent?: boolean;
+  sender_type?: 'customer' | 'agent' | 'ai' | 'system';
+  created_at: string;
+}
+
+export interface AutoReplySettings {
+  enabled: boolean;
+  automationMode: 'suggested' | 'approval_required' | 'fully_automatic';
+  channels: { messages: boolean; comments: boolean; mentions: boolean; replies: boolean };
+  platforms: { instagram: boolean; facebook: boolean; linkedin: boolean; x: boolean; youtube: boolean };
+  channelOverrides?: Array<{
+    platform: 'instagram' | 'facebook' | 'linkedin' | 'x' | 'youtube';
+    channelType: 'message' | 'comment';
+    enabled: boolean;
+  }>;
+  businessTone: string;
+  replyStyle: 'concise' | 'friendly' | 'detailed' | 'sales' | 'support';
+  responseRules: Array<{
+    _id?: string;
+    name: string;
+    enabled: boolean;
+    matchType: 'contains' | 'regex' | 'sentiment' | 'messageType' | 'platform';
+    value: string;
+    action: 'auto_reply' | 'suggest_only' | 'skip' | 'needs_approval';
+    priority: number;
+  }>;
+  guardrails: {
+    requireApprovalForNegative: boolean;
+    requireApprovalForHighPriority: boolean;
+    skipSpam: boolean;
+    maxAutoRepliesPerConversationPerDay: number;
+    signature?: string;
+  };
+}
+
+const INBOX_API_BASE_URL = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+  ? '/api/social/inbox'
+  : 'http://localhost:5000/api/social/inbox';
+
+async function inboxCall<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+    ...options.headers,
+  };
+  const token = getToken();
+  if (token) {
+    (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
+  }
+  const response = await fetch(`${INBOX_API_BASE_URL}${endpoint}`, {
+    ...options,
+    headers,
+  });
+  const data = await safeReadJson(response);
+  if (!response.ok) {
+    throw new Error(data.message || data.error || 'Inbox request failed');
+  }
+  return data as T;
+}
+
+export const inboxAPI = {
+  getAccounts: async (): Promise<any> => inboxCall('/accounts'),
+
+  getOAuthUrl: async (platform: string): Promise<{ success: boolean; auth_url: string }> => {
+    return inboxCall(`/oauth/${encodeURIComponent(platform)}`);
+  },
+
+  getConversations: async (filters: {
+    status?: string;
+    platform?: string;
+    priority?: string;
+    assignedUserId?: string;
+    search?: string;
+  } = {}): Promise<{ success: boolean; conversations: InboxConversation[] }> => {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value) params.set(key, value);
+    });
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return inboxCall(`/conversations${query}`);
+  },
+
+  getMessages: async (conversationId: string): Promise<{
+    success: boolean;
+    conversation: InboxConversation;
+    messages: InboxMessage[];
+    ai?: { suggestions?: string[]; sentiment?: string; spam_score?: number; priority?: string };
+  }> => {
+    return inboxCall(`/conversations/${encodeURIComponent(conversationId)}/messages`);
+  },
+
+  reply: async (conversationId: string, body: string, dispatch = true): Promise<{ success: boolean; message: InboxMessage; dispatch?: any }> => {
+    return inboxCall(`/conversations/${encodeURIComponent(conversationId)}/reply`, {
+      method: 'POST',
+      body: JSON.stringify({ body, dispatch }),
+    });
+  },
+
+  replyToComment: async (conversationId: string, body: string, commentId?: string, dispatch = true): Promise<{ success: boolean; message: InboxMessage; dispatch?: any }> => {
+    return inboxCall(`/conversations/${encodeURIComponent(conversationId)}/reply`, {
+      method: 'POST',
+      body: JSON.stringify({ body, dispatch, commentId }),
+    });
+  },
+
+  getComments: async (filters: any = {}): Promise<{ success: boolean; conversations: InboxConversation[] }> => {
+    return inboxAPI.getConversations({ ...filters, type: 'comment' });
+  },
+
+  toggleCommentAutoReply: async (enabled: boolean): Promise<{ success: boolean; settings: AutoReplySettings }> => {
+    return inboxAPI.updateSettings({ enabled });
+  },
+
+  updateStatus: async (conversationId: string, status: string): Promise<{ success: boolean }> => {
+    return inboxCall(`/conversations/${encodeURIComponent(conversationId)}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    });
+  },
+
+  updateMeta: async (conversationId: string, data: { tags: string[]; priority: string; assignedUserId?: string }): Promise<{ success: boolean }> => {
+    return inboxCall(`/conversations/${encodeURIComponent(conversationId)}/meta`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
+  syncAccount: async (accountId: string): Promise<{ success: boolean; queued: boolean }> => {
+    return inboxCall(`/sync/${encodeURIComponent(accountId)}`, { method: 'POST' });
+  },
+
+  getSettings: async (): Promise<{ success: boolean; settings: AutoReplySettings }> => {
+    return inboxCall('/settings');
+  },
+
+  updateSettings: async (settings: Partial<AutoReplySettings>): Promise<{ success: boolean; settings: AutoReplySettings }> => {
+    return inboxCall('/settings', {
+      method: 'PUT',
+      body: JSON.stringify(settings),
+    });
+  },
+
+  toggleAutoReply: async (payload: {
+    platform: string;
+    channelType: 'message' | 'comment';
+    enabled: boolean;
+  }): Promise<{ success: boolean; settings: AutoReplySettings }> => {
+    return inboxCall('/auto-reply/toggle', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  createTestEvent: async (payload: any): Promise<any> => {
+    return inboxCall('/dev/ingest', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  openSocket: (_userId = 'current'): any | null => {
+    const token = getToken();
+    if (!token || typeof EventSource === 'undefined') return null;
+    const source = new EventSource(`${INBOX_API_BASE_URL}/stream?token=${encodeURIComponent(token)}`);
+    const adapter: any = {
+      onopen: null,
+      onclose: null,
+      onerror: null,
+      onmessage: null,
+      close: () => source.close()
+    };
+    source.onopen = (event) => adapter.onopen?.(event);
+    source.onerror = (event) => adapter.onerror?.(event);
+    ['inbox.message.created', 'inbox.message.replied', 'inbox.notification', 'inbox.connected', 'message:new', 'comment:new', 'reply:new'].forEach(eventName => {
+      source.addEventListener(eventName, (event: MessageEvent) => {
+        adapter.onmessage?.({
+          data: JSON.stringify({
+            type: eventName,
+            data: JSON.parse(event.data || '{}')
+          })
+        });
+      });
+    });
+    return adapter;
+  },
 };

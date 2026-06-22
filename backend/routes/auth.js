@@ -8,6 +8,8 @@ const { lookupInstagramHandle } = require('../services/serperLookup');
 const { callClaude, parseClaudeJSON } = require('../services/claudeAI');
 const axios = require('axios');
 const otpService = require('../services/otpService');
+const { determineBrandColors } = require('../services/brandIntelligenceService');
+const { scrapeWebsite } = require('../services/scraper');
 
 // ScrapingDog API for LinkedIn fallback
 const SCRAPINGDOG_API_KEY = process.env.SCRAPINGDOG_API_KEY || '';
@@ -459,6 +461,55 @@ const handleValidationErrors = (req, res, next) => {
   next();
 };
 
+async function detectWebsiteBrandColors(websiteInput) {
+  const result = await determineBrandColors({
+    websiteUrl: websiteInput,
+    scrapeWebsite: async (url) => scrapeWebsite(url, {
+      ignoreRobots: true,
+      includeRaw: true,
+      forceRefresh: true
+    })
+  });
+
+  return {
+    primary: result?.primary_color || '#111111',
+    secondary: result?.secondary_color || '#FFCC29',
+    source: result?.source || 'manual',
+    confidence: result?.confidence || 0,
+    reason: result?.reason || ''
+  };
+}
+
+// @route   POST /api/auth/signup-brand-colors
+// @desc    Detect brand colors from company website during signup
+// @access  Public
+router.post('/signup-brand-colors', [
+  body('website')
+    .trim()
+    .notEmpty()
+    .withMessage('Website is required'),
+  handleValidationErrors
+], async (req, res) => {
+  try {
+    const { website } = req.body;
+    const colors = await detectWebsiteBrandColors(website);
+
+    res.status(200).json({
+      success: true,
+      primaryColor: colors.primary,
+      secondaryColor: colors.secondary,
+      source: colors.source,
+      confidence: colors.confidence
+    });
+  } catch (error) {
+    console.error('Signup brand color detection error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Unable to detect brand colors right now.'
+    });
+  }
+});
+
 // @route   POST /api/auth/signup
 // @desc    Register a new user
 // @access  Public
@@ -485,10 +536,15 @@ router.post('/signup', [
     .trim()
     .isLength({ max: 100 })
     .withMessage('Company name cannot exceed 100 characters'),
+  body('website')
+    .optional()
+    .trim()
+    .isLength({ max: 300 })
+    .withMessage('Website URL cannot exceed 300 characters'),
   handleValidationErrors
 ], async (req, res) => {
   try {
-    const { email, password, firstName, lastName, companyName } = req.body;
+    const { email, password, firstName, lastName, companyName, website } = req.body;
 
     // Check if user already exists
     const existingUser = await User.findOne({ email: email.toLowerCase() });
@@ -499,6 +555,23 @@ router.post('/signup', [
       });
     }
 
+    let brandAssets = undefined;
+    let normalizedWebsite = '';
+    if (website && String(website).trim()) {
+      normalizedWebsite = String(website).trim();
+      if (!/^https?:\/\//i.test(normalizedWebsite)) {
+        normalizedWebsite = `https://${normalizedWebsite}`;
+      }
+      try {
+        const colors = await detectWebsiteBrandColors(normalizedWebsite);
+        brandAssets = {
+          brandColors: [colors.primary, colors.secondary]
+        };
+      } catch (colorError) {
+        console.error('Website color detection failed during signup:', colorError.message);
+      }
+    }
+
     // Create new user (unverified)
     const user = await User.create({
       email: email.toLowerCase(),
@@ -506,6 +579,12 @@ router.post('/signup', [
       firstName,
       lastName: lastName || '',
       companyName: companyName || '',
+      businessProfile: {
+        website: normalizedWebsite,
+        brandAssets: brandAssets || {
+          brandColors: []
+        }
+      },
       isVerified: false
     });
 

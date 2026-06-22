@@ -1,0 +1,64 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1080" viewBox="0 0 1080 1080" role="img" aria-label="Premium social media campaign poster for New org">
+  <defs>
+    <linearGradient id="bgGradient" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#8965EC"/>
+      <stop offset="100%" stop-color="#6D49D5"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="45%" r="45%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.32"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="shoeShine" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0.72"/>
+    </linearGradient>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="18" stdDeviation="14" flood-color="#000000" flood-opacity="0.18"/>
+    </filter>
+  </defs>
+
+  <rect width="1080" height="1080" fill="url(#bgGradient)"/>
+  <circle cx="540" cy="540" r="390" fill="url(#glow)"/>
+
+  <g opacity="0.2" stroke="#FFFFFF" fill="none">
+    <circle cx="540" cy="540" r="310" stroke-width="1.2"/>
+    <circle cx="540" cy="540" r="360" stroke-width="0.8"/>
+  </g>
+
+  <g filter="url(#softShadow)">
+    <rect x="464" y="64" width="152" height="152" rx="32" fill="#FFFFFF" fill-opacity="0.12"/>
+    <image href="new-org-logo.png" x="478" y="78" width="124" height="124" preserveAspectRatio="xMidYMid meet"/>
+  </g>
+
+  <g transform="translate(175 335)" filter="url(#softShadow)">
+    <ellipse cx="365" cy="350" rx="270" ry="44" fill="#FFFFFF" opacity="0.15"/>
+
+    <path d="M95 270 C122 228, 193 198, 294 191 C382 185, 471 204, 579 252 C616 267, 666 273, 724 273 C743 273, 756 288, 756 304 C756 321, 742 334, 724 335 L598 341 C562 343, 535 333, 505 319 C444 289, 379 281, 306 288 L235 295 C166 301, 122 297, 83 286 C67 281, 66 262, 95 270 Z"
+          fill="url(#shoeShine)"/>
+
+    <path d="M130 262 C158 225, 222 199, 305 194 C394 188, 488 209, 603 258 C634 271, 681 279, 724 279"
+          fill="none" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round" opacity="0.92"/>
+
+    <path d="M250 285 C330 270, 402 271, 471 297" fill="none" stroke="#8965EC" stroke-width="6" opacity="0.48"/>
+    <path d="M517 315 C552 330, 585 333, 622 328" fill="none" stroke="#8965EC" stroke-width="5" opacity="0.45"/>
+
+    <path d="M214 302 L244 302 M273 298 L303 299 M332 296 L362 297 M391 298 L421 301"
+          stroke="#FFFFFF" stroke-width="4" stroke-linecap="round" opacity="0.72"/>
+
+    <path d="M632 272 C668 275, 699 286, 724 305" fill="none" stroke="#FFFFFF" stroke-width="6" opacity="0.86" stroke-linecap="round"/>
+  </g>
+
+  <text x="540" y="830" text-anchor="middle" fill="#FFFFFF" font-family="'Playfair Display', Georgia, serif" font-size="88" letter-spacing="1.6" font-weight="600">
+    ELEVATE EVERY STEP
+  </text>
+
+  <text x="540" y="888" text-anchor="middle" fill="#FFFFFF" font-family="'Playfair Display', Georgia, serif" font-size="30" letter-spacing="8" opacity="0.92">
+    LUXURY FOOTWEAR DROP
+  </text>
+
+  <rect x="372" y="930" width="336" height="1.5" fill="#FFFFFF" opacity="0.7"/>
+
+  <text x="540" y="972" text-anchor="middle" fill="#FFFFFF" font-family="'Playfair Display', Georgia, serif" font-size="24" letter-spacing="3.4" opacity="0.88">
+    INSTAGRAM CAMPAIGN POST
+  </text>
+</svg>

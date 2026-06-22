@@ -103,3 +103,46 @@ export function getUserTimeZone(): string {
     return 'UTC';
   }
 }
+
+export function formatLocalTimeHHMM(date: Date): string {
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${hours}:${minutes}`;
+}
+
+export function buildScheduledForISOString(
+  dateStr: string,
+  timeStr: string,
+  opts: {
+    now?: Date;
+    minLeadMinutes?: number;
+    safetySeconds?: number;
+    staggerMinutes?: number;
+  } = {}
+): { iso: string; date: Date; adjusted: boolean } | null {
+  const base = buildLocalDateTime(dateStr, timeStr);
+  if (!base) return null;
+
+  const now = opts.now || new Date();
+  const minLeadMinutes = Number.isFinite(opts.minLeadMinutes) ? Math.max(0, Number(opts.minLeadMinutes)) : 5;
+  const safetySeconds = Number.isFinite(opts.safetySeconds) ? Math.max(0, Number(opts.safetySeconds)) : 30;
+  const staggerMinutes = Number.isFinite(opts.staggerMinutes) ? Math.max(0, Number(opts.staggerMinutes)) : 0;
+
+  const minMs = minLeadMinutes * 60 * 1000 + safetySeconds * 1000;
+  const minTime = new Date(now.getTime() + minMs);
+
+  let adjusted = false;
+  let scheduled = base;
+
+  if (scheduled.getTime() < minTime.getTime()) {
+    scheduled = new Date(minTime.getTime());
+    adjusted = true;
+  }
+
+  if (staggerMinutes > 0) {
+    scheduled = new Date(scheduled.getTime() + staggerMinutes * 60 * 1000);
+    adjusted = true;
+  }
+
+  return { iso: scheduled.toISOString(), date: scheduled, adjusted };
+}

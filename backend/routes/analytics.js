@@ -11,6 +11,8 @@ const SocialSnapshot = require('../models/SocialSnapshot');
 const User = require('../models/User');
 const { analyzeMetrics, generateWithLLM } = require('../services/llmRouter');
 const { getPostAnalytics, getSocialAnalyticsDetailed, getAyrshareUserProfile, getUserSocialAnalytics } = require('../services/socialMediaAPI');
+const { trackCampaignPerformanceFromAnalytics } = require('../services/aiPerformanceTracker');
+const { resolveOrganizationId } = require('../services/aiMemoryService');
 
 /**
  * Helper: Get user's Ayrshare profile key
@@ -54,6 +56,14 @@ router.post('/post-analytics', protect, async (req, res) => {
     }
 
     console.log('Post analytics result keys:', JSON.stringify(result.data).substring(0, 500));
+    const userId = req.user.userId || req.user.id;
+    await trackCampaignPerformanceFromAnalytics({
+      userId,
+      organizationId: resolveOrganizationId({ user: req.user, userId }),
+      postId,
+      platform: Array.isArray(platformList) ? platformList[0] : (platformList || platforms?.[0] || 'instagram'),
+      analytics: result.data
+    });
     res.json({ success: true, analytics: result.data });
   } catch (error) {
     console.error('Post analytics error:', error);

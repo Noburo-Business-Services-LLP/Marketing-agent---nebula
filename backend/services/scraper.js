@@ -7,7 +7,7 @@ const https = require('https');
 const http = require('http');
 const { URL } = require('url');
 
-// In-memory cache (in production, use Redis)
+// In-memory cache. For durable production cache, use a MongoDB-backed TTL collection.
 const cache = new Map();
 const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 

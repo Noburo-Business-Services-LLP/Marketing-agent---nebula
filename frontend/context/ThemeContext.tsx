@@ -20,22 +20,53 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const isDarkMode = false;
-  const theme: 'dark' | 'light' = 'light';
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    const savedTheme = localStorage.getItem('nebulaa-theme');
+    if (savedTheme === 'dark') return true;
+    if (savedTheme === 'light') return false;
 
-  const toggleTheme = () => {};
+    // Check if class 'dark' exists on html or system preference
+    return document.documentElement.classList.contains('dark') || 
+           window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
 
-  const colors = {
-        bg: '#f5f5f5',
-        bgSecondary: '#ffffff',
-        bgCard: '#ffffff',
-        text: '#070A12',
-        textSecondary: 'rgba(7, 10, 18, 0.7)',
-        accent: '#ffcc29',
-        accentHover: '#e6b825',
-        border: 'rgba(7, 10, 18, 0.1)',
-        borderAccent: '#070A12',
-      };
+  const theme: 'dark' | 'light' = isDarkMode ? 'dark' : 'light';
+
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('nebulaa-theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('nebulaa-theme', 'light');
+    }
+  }, [isDarkMode]);
+
+  const toggleTheme = () => {
+    setIsDarkMode(prev => !prev);
+  };
+
+  const colors = isDarkMode ? {
+    bg: '#070A12',
+    bgSecondary: '#0d1117',
+    bgCard: '#0f1419',
+    text: '#ededed',
+    textSecondary: 'rgba(237, 237, 237, 0.7)',
+    accent: '#ffcc29',
+    accentHover: '#e6b825',
+    border: 'rgba(237, 237, 237, 0.1)',
+    borderAccent: '#ffcc29',
+  } : {
+    bg: '#f5f5f5',
+    bgSecondary: '#ffffff',
+    bgCard: '#ffffff',
+    text: '#070A12',
+    textSecondary: 'rgba(7, 10, 18, 0.7)',
+    accent: '#ffcc29',
+    accentHover: '#e6b825',
+    border: 'rgba(7, 10, 18, 0.1)',
+    borderAccent: '#070A12',
+  };
 
   return (
     <ThemeContext.Provider value={{ isDarkMode, theme, toggleTheme, colors }}>

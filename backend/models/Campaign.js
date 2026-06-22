@@ -34,6 +34,11 @@ const campaignSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  // Tone used to pick predefined Instagram audio automatically (optional)
+  tone: {
+    type: String,
+    default: null
+  },
   creative: {
     type: {
       type: String,
@@ -43,6 +48,13 @@ const campaignSchema = new mongoose.Schema({
     textContent: String,
     imageUrls: [String],
     videoUrl: String,
+    // Platform-specific enhancements (do not affect other platforms)
+    instagramAudio: {
+      url: { type: String, default: null },
+      publicId: { type: String, default: null },
+      originalName: { type: String, default: null },
+      durationSeconds: { type: Number, default: null }
+    },
     captions: String,
     hashtags: [String],
     callToAction: {
@@ -109,8 +121,26 @@ const campaignSchema = new mongoose.Schema({
     estimatedReach: String
   },
   // Ayrshare integration fields
+  facebookPostId: {
+    type: String,
+    default: null
+  },
+  instagramPostId: {
+    type: String,
+    default: null
+  },
   socialPostId: {
     type: String,
+    default: null
+  },
+  instagramAccountKey: {
+    type: String,
+    default: null,
+    index: true
+  },
+  // Optional per-platform Ayrshare post IDs (when we post platforms separately)
+  socialPostIds: {
+    type: mongoose.Schema.Types.Mixed,
     default: null
   },
   scheduledFor: {
@@ -129,6 +159,17 @@ const campaignSchema = new mongoose.Schema({
   publishResult: {
     type: mongoose.Schema.Types.Mixed,
     default: null
+  },
+  lastPublishError: {
+    type: String,
+    default: null
+  },
+  // Used to prevent duplicate/near-duplicate posts that social networks may reject.
+  // This is computed at publish time from caption + primary media URL.
+  publishHash: {
+    type: String,
+    default: null,
+    index: true
   }
 }, {
   timestamps: true
@@ -137,5 +178,7 @@ const campaignSchema = new mongoose.Schema({
 // Index for efficient queries
 campaignSchema.index({ userId: 1, status: 1 });
 campaignSchema.index({ userId: 1, createdAt: -1 });
+campaignSchema.index({ userId: 1, publishHash: 1, createdAt: -1 });
+campaignSchema.index({ instagramAccountKey: 1, status: 1, scheduledFor: 1 });
 
 module.exports = mongoose.model('Campaign', campaignSchema);

@@ -9,11 +9,24 @@ import Onboarding from './pages/Onboarding';
 import TrialExpired from './pages/TrialExpired';
 import Dashboard from './pages/Dashboard';
 import Campaigns from './pages/Campaigns';
+import ReelGenerator from './pages/ReelGenerator';
+import AdCampaigns from './pages/AdCampaigns';
 import Competitors from './pages/Competitors';
 import ConnectSocials from './pages/ConnectSocials';
 import BrandAssets from './pages/BrandAssets';
+import Inventory from './pages/Inventory';
 import Settings from './pages/Settings';
 import Analytics from './pages/Analytics';
+import SEOAssistant from './pages/SEOAssistant';
+import AIMemory from './pages/AIMemory';
+import AIHistory from './pages/AIHistory';
+import AIPerformance from './pages/AIPerformance';
+import InfluencerPortal from './pages/InfluencerPortal';
+import InfluencerList from './pages/InfluencerList';
+import Collaborations from './pages/Collaborations';
+import SubmissionReview from './pages/SubmissionReview';
+import InfluencerAnalytics from './pages/InfluencerAnalytics';
+import InfluencerProfile from './pages/InfluencerProfile';
 import TermsAndConditions from './pages/TermsAndConditions';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import AdminLogin from './pages/AdminLogin';
@@ -163,10 +176,28 @@ const App: React.FC = () => {
                     <Routes>
                     <Route path="/dashboard" element={<Dashboard />} />
                     <Route path="/campaigns" element={<Campaigns />} />
+                    <Route path="/reels" element={<ReelGenerator />} />
+                    <Route path="/ad-campaigns" element={<AdCampaigns />} />
                     <Route path="/competitors" element={<Competitors />} />
-                    <Route path="/brand-assets" element={<BrandAssets />} />
                     <Route path="/connect-socials" element={<ConnectSocials />} />
+                    <Route path="/connect-socials/inbox" element={<ConnectSocials />} />
+                    <Route path="/brand-assets" element={<BrandAssets />} />
+                    <Route path="/inventory" element={<Inventory />} />
                     <Route path="/analytics" element={<Analytics />} />
+                    <Route path="/seo" element={<SEOAssistant />} />
+                    <Route path="/seo/keywords" element={<SEOAssistant />} />
+                    <Route path="/seo/metadata" element={<SEOAssistant />} />
+                    <Route path="/seo/hashtags" element={<SEOAssistant />} />
+                    <Route path="/seo/competitor" element={<SEOAssistant />} />
+                    <Route path="/influencer-portal" element={<InfluencerPortal />} />
+                    <Route path="/influencer-portal/list" element={<InfluencerList />} />
+                    <Route path="/influencer-portal/collaborations" element={<Collaborations />} />
+                    <Route path="/influencer-portal/submissions" element={<SubmissionReview />} />
+                    <Route path="/influencer-portal/analytics" element={<InfluencerAnalytics />} />
+                    <Route path="/influencer-portal/profile" element={<InfluencerProfile />} />
+                    <Route path="/ai-memory" element={<AIMemory />} />
+                    <Route path="/ai-history" element={<AIHistory />} />
+                    <Route path="/ai-performance" element={<AIPerformance />} />
                     <Route path="/settings" element={<Settings user={user} onUserUpdate={setUser} />} />
                     <Route path="*" element={<Navigate to="/dashboard" replace />} />
                     </Routes>
@@ -182,7 +213,7 @@ const App: React.FC = () => {
       </Routes>
       
       {/* Floating ChatBot - appears on all pages */}
-      <ChatBot />
+      {/* <ChatBot /> */}
       
       {/* Campaign Reminder Pop-ups - only for logged in users */}
       {user && user.onboardingCompleted && <CampaignReminderPopup />}
