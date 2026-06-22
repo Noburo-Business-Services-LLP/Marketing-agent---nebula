@@ -4430,7 +4430,7 @@ If no logo is detected, return:
   "confidence": 0.0
 }`;
 
-    const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+    const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
 
     const requestBody = {
       contents: [{

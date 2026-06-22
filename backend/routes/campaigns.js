@@ -4542,7 +4542,7 @@ Return ONLY the caption text with hashtags. No JSON, no explanations.`;
       caption: caption.trim(),
       hashtags: hashtags.slice(0, 4),
       aiSettings: {
-        model: 'gemini-2.0-flash',
+        model: 'gemini-2.5-flash',
         memoryInjected: Boolean(aiMemoryContext.reusablePromptText)
       }
     });
