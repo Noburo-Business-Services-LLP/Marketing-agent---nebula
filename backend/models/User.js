@@ -38,6 +38,14 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  mobileNumber: {
+    type: String,
+    default: ''
+  },
+  isHidden: {
+    type: Boolean,
+    default: false
+  },
   onboardingCompleted: {
     type: Boolean,
     default: false
@@ -59,6 +67,24 @@ const userSchema = new mongoose.Schema({
     marketingGoals: [{ type: String }],
     description: { type: String, default: '' },
     competitors: [{ type: String }],
+
+    // Customer-filled during onboarding
+    yearsInBusiness: { type: Number, min: 0, default: null },
+    brandMaturity: { type: String, enum: ['established', 'growing', ''], default: '' },
+
+    // CSM-filled during Brand DNA session (admin dashboard only)
+    targetCustomerProfile: { type: String, default: '' },
+    targetGender: { type: String, enum: ['mostly_men', 'mostly_women', 'both_equally', 'families', ''], default: '' },
+    geographicReach: { type: String, enum: ['hyperlocal', 'local_city', 'regional', ''], default: '' },
+    customerType: { type: String, enum: ['mostly_new', 'mix_new_repeat', 'mostly_loyal', ''], default: '' },
+    pricePositioning: { type: String, enum: ['budget', 'affordable', 'mid_range', 'premium', 'luxury', ''], default: '' },
+    keyDifferentiator: { type: String, default: '' },
+    brandStory: { type: String, default: '' },
+    heroProduct: { type: String, default: '' },
+    contentLanguage: { type: String, enum: ['tamil', 'english', 'tamil_english_mix', ''], default: '' },
+    contentRestrictions: { type: String, default: '' },
+    firstMonthContentAngles: { type: String, default: '' },
+
     // Brand assets extracted from website
     brandAssets: {
       logoUrl: { type: String, default: '' },
@@ -91,8 +117,12 @@ const userSchema = new mongoose.Schema({
   }],
   subscription: {
     plan: { type: String, enum: ['free', 'pro', 'enterprise'], default: 'free' },
-    status: { type: String, enum: ['active', 'cancelled', 'expired'], default: 'active' },
-    expiresAt: { type: Date }
+    status: { type: String, enum: ['active', 'cancelled', 'expired', 'halted'], default: 'active' },
+    expiresAt: { type: Date },
+    razorpaySubscriptionId: { type: String, default: '' },
+    razorpayPlanId: { type: String, default: '' },
+    currentPeriodEnd: { type: Date },
+    nextBillingAt: { type: Date }
   },
   // Google Calendar integration
   googleCalendar: {
@@ -233,6 +263,7 @@ userSchema.methods.toPublicJSON = function () {
     lastName: this.lastName,
     companyName: this.companyName,
     avatar: this.avatar,
+    mobileNumber: this.mobileNumber,
     isVerified: this.isVerified,
     onboardingCompleted: this.onboardingCompleted,
     businessProfile: this.businessProfile,

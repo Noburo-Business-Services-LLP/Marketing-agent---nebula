@@ -410,6 +410,22 @@ export const apiService = {
     return apiCall('/payment/verify', { method: 'POST', body: JSON.stringify(data) }, true);
   },
 
+  createSubscription: async (planId: string, couponCode?: string): Promise<any> => {
+    return apiCall('/payment/create-subscription', { method: 'POST', body: JSON.stringify({ planId, couponCode: couponCode || '' }) }, true);
+  },
+
+  getPlans: async (): Promise<any> => {
+    return apiCall('/payment/plans', { method: 'GET' }, false);
+  },
+
+  validateCoupon: async (code: string): Promise<any> => {
+    return apiCall('/payment/validate-coupon', { method: 'POST', body: JSON.stringify({ code }) }, true);
+  },
+
+  verifySubscription: async (data: { razorpay_payment_id: string; razorpay_subscription_id: string; razorpay_signature: string }): Promise<any> => {
+    return apiCall('/payment/verify-subscription', { method: 'POST', body: JSON.stringify(data) }, true);
+  },
+
   getPaymentStatus: async (): Promise<any> => {
     return apiCall('/payment/status', { method: 'GET' }, true);
   },
@@ -483,7 +499,7 @@ export const apiService = {
   completeOnboarding: async (data: BusinessProfile, connectedSocials?: { platform: string; username?: string }[]): Promise<{ success: boolean; user: User }> => {
     const response = await apiCall<{ success: boolean; user: User }>(
       '/auth/complete-onboarding',
-      { method: 'PUT', body: JSON.stringify({ businessProfile: data, connectedSocials }) },
+      { method: 'PUT', body: JSON.stringify({ businessProfile: data, connectedSocials, mobileNumber }) },
       true
     );
     return response;

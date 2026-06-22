@@ -12,8 +12,10 @@ const crypto = require('crypto');
 const Razorpay = require('razorpay');
 const { protect } = require('../middleware/auth');
 const User = require('../models/User');
+const Coupon = require('../models/Coupon');
 const { migrateUserData } = require('../services/migrationService');
 const { createInvoice } = require('../services/zohoBooks');
+const { PLANS, findPlan } = require('../config/plans');
 
 // Initialize Razorpay
 const razorpay = new Razorpay({
@@ -24,6 +26,353 @@ const razorpay = new Razorpay({
 const PLAN_CURRENCY = 'INR';
 const MIN_AMOUNT = 1000;
 const MAX_AMOUNT = 20000;
+const MONTHLY_AMOUNT = 7500;   // ₹7,500/month
+const MONTHLY_CREDITS = 1000;  // credits per billing cycle
+
+// Cache plan IDs so we don't create duplicates
+let cachedPlanId = process.env.RAZORPAY_PLAN_ID || null;
+let cachedDiscountedPlanId = process.env.RAZORPAY_DISCOUNTED_PLAN_ID || null;
+
+async function getOrCreatePlan(amount = MONTHLY_AMOUNT) {
+  if (amount === MONTHLY_AMOUNT && cachedPlanId) return cachedPlanId;
+  if (amount !== MONTHLY_AMOUNT && cachedDiscountedPlanId) return cachedDiscountedPlanId;
+
+  const plan = await razorpay.plans.create({
+    period: 'monthly',
+    interval: 1,
+    item: {
+      name: amount === MONTHLY_AMOUNT ? 'Nebulaa Gravity — Starter Pack' : 'Nebulaa Gravity — Discounted Pack',
+      amount: amount * 100,
+      currency: PLAN_CURRENCY,
+      description: '1,000 credits per month'
+    },
+    notes: { product: 'nebulaa_gravity' }
+  });
+
+  if (amount === MONTHLY_AMOUNT) cachedPlanId = plan.id;
+  else cachedDiscountedPlanId = plan.id;
+
+  console.log(`✅ Razorpay Plan created/cached (₹${amount}): ${plan.id}`);
+  return plan.id;
+}
+
+/**
+ * POST /api/payment/validate-coupon
+ * Validate a coupon code without redeeming it
+ */
+router.post('/validate-coupon', protect, async (req, res) => {
+  try {
+    const { code } = req.body;
+    if (!code) return res.status(400).json({ success: false, message: 'Coupon code required' });
+
+    const coupon = await Coupon.findOne({ code: code.toUpperCase().trim() });
+
+    if (!coupon || !coupon.isActive) {
+      return res.status(404).json({ success: false, message: 'Invalid or expired coupon code' });
+    }
+    if (coupon.usedCount >= coupon.maxUses) {
+      return res.status(400).json({ success: false, message: 'This coupon has already been used' });
+    }
+
+    // Check if this user already used it
+    const userId = req.user?.userId || req.user?.id || req.user?._id;
+    const alreadyUsed = coupon.usedBy.some(u => u.userId?.toString() === userId?.toString());
+    if (alreadyUsed) {
+      return res.status(400).json({ success: false, message: 'You have already used this coupon' });
+    }
+
+    res.json({
+      success: true,
+      discountedAmount: coupon.discountedAmount,
+      originalAmount: coupon.originalAmount,
+      savings: coupon.originalAmount - coupon.discountedAmount
+    });
+  } catch (error) {
+    console.error('Validate coupon error:', error);
+    res.status(500).json({ success: false, message: 'Failed to validate coupon' });
+  }
+});
+
+/**
+ * GET /api/payment/plans
+ * Public — returns the 9-tier plan catalogue (Pro/Growth/Scale × Monthly/Quarterly/Annual)
+ */
+router.get('/plans', (_req, res) => {
+  res.json({ success: true, plans: PLANS });
+});
+
+/**
+ * POST /api/payment/create-subscription
+ * Creates a Razorpay subscription for the chosen plan (tier + cycle)
+ */
+router.post('/create-subscription', protect, async (req, res) => {
+  try {
+    const userId = req.user?.userId || req.user?.id || req.user?._id;
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    if (user.subscription?.razorpaySubscriptionId && user.subscription?.status === 'active') {
+      return res.status(400).json({ success: false, message: 'You already have an active subscription' });
+    }
+
+    const { planId, couponCode } = req.body;
+    if (!planId) {
+      return res.status(400).json({ success: false, message: 'planId is required' });
+    }
+
+    const plan = findPlan(planId);
+    if (!plan) {
+      return res.status(400).json({ success: false, message: 'Invalid plan selected' });
+    }
+
+    // Validate coupon if provided — coupons just record discount metadata, plan price is unchanged
+    let appliedCoupon = null;
+    if (couponCode) {
+      const coupon = await Coupon.findOne({ code: couponCode.toUpperCase().trim() });
+      if (!coupon || !coupon.isActive || coupon.usedCount >= coupon.maxUses) {
+        return res.status(400).json({ success: false, message: 'Invalid or expired coupon code' });
+      }
+      const alreadyUsed = coupon.usedBy.some(u => u.userId?.toString() === userId?.toString());
+      if (alreadyUsed) {
+        return res.status(400).json({ success: false, message: 'You have already used this coupon' });
+      }
+      appliedCoupon = coupon;
+    }
+
+    const totalCount = plan.cycle === 'monthly' ? 120 : plan.cycle === 'quarterly' ? 40 : 10;
+
+    const subscription = await razorpay.subscriptions.create({
+      plan_id: planId,
+      customer_notify: 1,
+      total_count: totalCount,
+      notes: {
+        userId: userId.toString(),
+        email: user.email,
+        tier: plan.tier,
+        cycle: plan.cycle,
+        couponCode: appliedCoupon?.code || ''
+      }
+    });
+
+    res.json({
+      success: true,
+      subscription_id: subscription.id,
+      key: process.env.RAZORPAY_KEY_ID,
+      amount: plan.amount,
+      plan: { tier: plan.tier, cycle: plan.cycle, tierName: plan.tierName, per: plan.per },
+      prefill: {
+        name: `${user.firstName} ${user.lastName || ''}`.trim(),
+        email: user.email,
+        contact: user.mobileNumber || ''
+      }
+    });
+  } catch (error) {
+    console.error('Create subscription error:', error);
+    res.status(500).json({ success: false, message: 'Failed to create subscription' });
+  }
+});
+
+/**
+ * POST /api/payment/verify-subscription
+ * Verifies first payment of a subscription, then triggers demo→prod migration
+ */
+router.post('/verify-subscription', protect, async (req, res) => {
+  try {
+    const { razorpay_payment_id, razorpay_subscription_id, razorpay_signature } = req.body;
+
+    if (!razorpay_payment_id || !razorpay_subscription_id || !razorpay_signature) {
+      return res.status(400).json({ success: false, message: 'Missing payment details' });
+    }
+
+    // Verify signature (subscription variant)
+    const expectedSignature = crypto
+      .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+      .update(`${razorpay_payment_id}|${razorpay_subscription_id}`)
+      .digest('hex');
+
+    if (expectedSignature !== razorpay_signature) {
+      return res.status(400).json({ success: false, message: 'Payment verification failed — invalid signature' });
+    }
+
+    console.log(`✅ Subscription payment verified: ${razorpay_payment_id}`);
+
+    const userId = req.user?.userId || req.user?.id || req.user?._id;
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    // Fetch subscription details from Razorpay
+    const rzpSub = await razorpay.subscriptions.fetch(razorpay_subscription_id);
+    const planInfo = findPlan(rzpSub.plan_id);
+    const tier = planInfo?.tier || rzpSub.notes?.tier || 'pro';
+    const cycle = planInfo?.cycle || rzpSub.notes?.cycle || 'monthly';
+    const paidAmount = planInfo?.amount || MONTHLY_AMOUNT;
+
+    // Mark coupon as used if one was applied
+    const couponCode = rzpSub.notes?.couponCode;
+    if (couponCode) {
+      await Coupon.findOneAndUpdate(
+        { code: couponCode },
+        { $inc: { usedCount: 1 }, $push: { usedBy: { userId, email: user.email, usedAt: new Date() } } }
+      );
+    }
+
+    // Update subscription on user
+    user.subscription = {
+      plan: tier,
+      cycle,
+      status: 'active',
+      razorpaySubscriptionId: razorpay_subscription_id,
+      razorpayPlanId: rzpSub.plan_id,
+      currentPeriodEnd: rzpSub.current_end ? new Date(rzpSub.current_end * 1000) : null,
+      nextBillingAt: rzpSub.charge_at ? new Date(rzpSub.charge_at * 1000) : null
+    };
+
+    // Record payment
+    user.payments.push({
+      razorpayOrderId: razorpay_subscription_id,
+      razorpayPaymentId: razorpay_payment_id,
+      amount: paidAmount,
+      currency: PLAN_CURRENCY,
+      credits: MONTHLY_CREDITS,
+      status: 'paid',
+      paidAt: new Date()
+    });
+    await user.save();
+
+    // Create Zoho invoice (non-blocking)
+    try {
+      const invoiceResult = await createInvoice({
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName || '',
+        companyName: user.companyName || user.businessProfile?.name || '',
+        amount: paidAmount,
+        credits: MONTHLY_CREDITS,
+        razorpayPaymentId: razorpay_payment_id
+      });
+      const lastPayment = user.payments[user.payments.length - 1];
+      if (lastPayment && invoiceResult.invoiceUrl) {
+        lastPayment.invoiceUrl = invoiceResult.invoiceUrl;
+        await user.save();
+      }
+      console.log(`📄 Zoho invoice created: ${invoiceResult.invoiceNumber}`);
+    } catch (zohoErr) {
+      console.warn('Zoho invoice creation failed (non-blocking):', zohoErr.message);
+    }
+
+    // Migrate demo → prod
+    console.log(`🚀 Starting migration for user: ${userId}`);
+    const migrationResult = await migrateUserData(userId.toString(), MONTHLY_CREDITS);
+    if (!migrationResult.success) {
+      return res.status(500).json({
+        success: false,
+        message: `Payment successful but migration failed: ${migrationResult.error}. Contact support.`,
+        paymentId: razorpay_payment_id
+      });
+    }
+
+    // Send welcome email (non-blocking)
+    try { await sendWelcomeEmail(user.email, user.firstName); } catch (_) {}
+
+    // Mark as migrated
+    user.trial = { ...user.trial?.toObject?.() || {}, isExpired: true, migratedToProd: true };
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'Subscription activated and account migrated to production!',
+      migration: migrationResult.summary,
+      prodUrl: 'https://gravity.nebulaa.ai',
+      email: user.email
+    });
+  } catch (error) {
+    console.error('Verify subscription error:', error);
+    res.status(500).json({ success: false, message: 'Subscription verification failed' });
+  }
+});
+
+/**
+ * POST /api/payment/webhook
+ * Razorpay webhook — handles recurring monthly charges & subscription state changes
+ * NOTE: Requires raw body (express.raw middleware registered in server.js BEFORE express.json)
+ */
+router.post('/webhook', async (req, res) => {
+  try {
+    const signature = req.headers['x-razorpay-signature'];
+    const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
+
+    if (webhookSecret) {
+      const expectedSignature = crypto
+        .createHmac('sha256', webhookSecret)
+        .update(req.body)
+        .digest('hex');
+      if (expectedSignature !== signature) {
+        console.warn('⚠️ Razorpay webhook signature mismatch');
+        return res.status(400).json({ success: false, message: 'Invalid webhook signature' });
+      }
+    } else {
+      console.warn('⚠️ RAZORPAY_WEBHOOK_SECRET not set — skipping signature check');
+    }
+
+    const event = JSON.parse(req.body.toString());
+    const { event: eventName, payload } = event;
+    console.log(`🔔 Razorpay webhook: ${eventName}`);
+
+    const subscription = payload?.subscription?.entity;
+    const payment = payload?.payment?.entity;
+
+    if (!subscription?.id) return res.json({ success: true });
+
+    // Look up by subscription ID — works after migration when userId in notes is stale
+    const user = await User.findOne({ 'subscription.razorpaySubscriptionId': subscription.id });
+    if (!user) return res.json({ success: true });
+
+    if (eventName === 'subscription.charged') {
+      // Monthly renewal — add credits
+      user.credits = user.credits || {};
+      user.credits.balance = (user.credits.balance || 0) + MONTHLY_CREDITS;
+
+      user.subscription.status = 'active';
+      if (subscription.current_end) user.subscription.currentPeriodEnd = new Date(subscription.current_end * 1000);
+      if (subscription.charge_at) user.subscription.nextBillingAt = new Date(subscription.charge_at * 1000);
+
+      if (payment) {
+        user.payments.push({
+          razorpayOrderId: subscription.id,
+          razorpayPaymentId: payment.id,
+          amount: payment.amount / 100,
+          currency: PLAN_CURRENCY,
+          credits: MONTHLY_CREDITS,
+          status: 'paid',
+          paidAt: new Date()
+        });
+      }
+      await user.save();
+      console.log(`✅ Monthly credits added for user: ${userId} (${MONTHLY_CREDITS} credits)`);
+    }
+
+    if (eventName === 'subscription.halted') {
+      await User.findOneAndUpdate(
+        { 'subscription.razorpaySubscriptionId': subscription.id },
+        { 'subscription.status': 'halted' }
+      );
+      console.log(`⚠️ Subscription halted: ${subscription.id}`);
+    }
+
+    if (eventName === 'subscription.cancelled') {
+      await User.findOneAndUpdate(
+        { 'subscription.razorpaySubscriptionId': subscription.id },
+        { 'subscription.status': 'cancelled' }
+      );
+      console.log(`❌ Subscription cancelled: ${subscription.id}`);
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Webhook error:', error);
+    res.status(500).json({ success: false });
+  }
+});
 
 /**
  * POST /api/payment/create-order
@@ -33,8 +382,8 @@ router.post('/create-order', protect, async (req, res) => {
   try {
     const { amount } = req.body;
     const numAmount = Number(amount);
-    if (!numAmount || numAmount < MIN_AMOUNT || numAmount > MAX_AMOUNT || numAmount % 1000 !== 0) {
-      return res.status(400).json({ success: false, message: `Choose an amount between ₹${MIN_AMOUNT.toLocaleString()} and ₹${MAX_AMOUNT.toLocaleString()} (in multiples of ₹1,000).` });
+    if (!numAmount || numAmount < MIN_AMOUNT || numAmount > MAX_AMOUNT) {
+      return res.status(400).json({ success: false, message: `Choose an amount between ₹${MIN_AMOUNT.toLocaleString()} and ₹${MAX_AMOUNT.toLocaleString()}.` });
     }
     const credits = 1000; // Fixed 1000 credits for ₹7,500 starter pack
 

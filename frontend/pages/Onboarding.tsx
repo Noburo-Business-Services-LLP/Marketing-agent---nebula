@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { apiService } from '../services/api';
 import { User, BusinessProfile, SocialConnection } from '../types';
-import { ChevronRight, Check, Users, Megaphone, Sparkles, Loader2, Building, AlertCircle, Share2, Instagram, Facebook, Linkedin, Youtube, Pin, MessageCircle, SkipForward, Sun, Moon, Globe, CheckCircle, XCircle, ExternalLink } from 'lucide-react';
+import { ChevronRight, Check, Users, Megaphone, Sparkles, Loader2, Building, AlertCircle, Share2, Instagram, Facebook, Linkedin, Youtube, Pin, MessageCircle, SkipForward, Sun, Moon, Globe, CheckCircle, XCircle, ExternalLink, ArrowLeft } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 
 // X (Twitter) logo SVG component
@@ -70,8 +70,23 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
         brandVoice: [] as string[],
         marketingGoals: [],
         description: '',
-        competitors: []
+        competitors: [],
+        yearsInBusiness: undefined,
+        brandMaturity: '',
+        // Moved from CSM Brand DNA — customer fills these during onboarding now
+        heroProduct: '',
+        targetCustomerProfile: '',
+        targetGender: '',
+        geographicReach: '',
+        customerType: '',
+        pricePositioning: '',
+        keyDifferentiator: '',
+        brandStory: '',
+        contentLanguage: '',
+        contentRestrictions: '',
+        firstMonthContentAngles: '',
     });
+    const [mobileNumber, setMobileNumber] = useState(savedState?.mobileNumber || '');
 
     // Competitor input state
     const [competitorInput, setCompetitorInput] = useState('');
@@ -306,16 +321,29 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
             if (!formData.name || !formData.niche) return "Company Name and Niche are required.";
             if (!formData.businessType) return "Please select your business type (B2B, B2C, or Both).";
             if (!formData.businessLocation) return "Please enter your business location.";
+            if (formData.yearsInBusiness === undefined || formData.yearsInBusiness === null || Number.isNaN(Number(formData.yearsInBusiness)) || Number(formData.yearsInBusiness) < 0) {
+                return "Please enter your years in business (0 or more).";
+            }
+            if (!formData.brandMaturity) return "Please select your brand maturity.";
             if (formData.gstNumber && formData.gstNumber.trim().length > 0) {
                 if (formData.gstNumber.trim().length !== 15) return "GST number must be exactly 15 characters.";
                 if (gstStatus === 'invalid') return "GST number is invalid. Please enter a valid GST number.";
             }
         }
         if (currentStep === 2) {
-            // Brand voice is optional, no required fields
+            if (!formData.heroProduct || !formData.heroProduct.trim()) return "Please describe your hero product or service.";
+            if (!formData.targetCustomerProfile || !formData.targetCustomerProfile.trim()) return "Please describe your typical customer.";
+            if (!formData.targetGender) return "Please select your typical customer gender.";
+            if (!formData.geographicReach) return "Please select your geographic reach.";
+            if (!formData.customerType) return "Please select your customer type.";
         }
         if (currentStep === 3) {
             if (formData.marketingGoals.length === 0) return "Please select at least one marketing goal.";
+            if (!formData.pricePositioning) return "Please select your price positioning.";
+            if (!formData.keyDifferentiator || !formData.keyDifferentiator.trim()) return "Please describe your key differentiator.";
+            if (!formData.contentLanguage) return "Please select your content language preference.";
+            if (!formData.firstMonthContentAngles || !formData.firstMonthContentAngles.trim()) return "Please list content angles for the first month.";
+            // Brand Story + Content Restrictions are optional
             // Competitors are optional - AI will auto-discover them
         }
         // Step 4 (socials) is optional - no validation needed
@@ -428,7 +456,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
 
     const finishOnboarding = async (connectedSocials?: {platform: string; username?: string}[]) => {
         try {
-            const response = await apiService.completeOnboarding(formData, connectedSocials);
+            const response = await apiService.completeOnboarding(formData, connectedSocials, mobileNumber);
             if (response.success && response.user) {
                 sessionStorage.removeItem(ONBOARDING_STATE_KEY);
                 onComplete(response.user);
@@ -467,8 +495,30 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
         { num: 4, title: "Connect", icon: Share2 }
     ];
 
+    const handleBackToLanding = () => {
+        // Clear auth so App routes us to the public landing page
+        try { localStorage.removeItem('authToken'); } catch {}
+        try { sessionStorage.removeItem('onboardingState'); } catch {}
+        window.location.assign('/#/');
+        // Hash routes don't reload on hash change — force a full reload so App re-checks auth
+        window.location.reload();
+    };
+
     return (
         <div className={`min-h-screen flex items-center justify-center p-4 ${theme === 'dark' ? 'bg-[#070A12]' : 'bg-gray-100'}`}>
+            {/* Back to landing */}
+            <button
+                onClick={handleBackToLanding}
+                className={`fixed top-4 left-4 z-50 flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all backdrop-blur ${
+                    theme === 'dark'
+                        ? 'bg-[#ededed]/5 hover:bg-[#ededed]/10 text-[#ededed]/70 hover:text-[#ededed] border border-[#ededed]/10'
+                        : 'bg-white/80 hover:bg-white text-gray-700 border border-gray-200 shadow-sm'
+                }`}
+            >
+                <ArrowLeft className="w-4 h-4" />
+                Back
+            </button>
+
             {/* Duplicate Account Modal */}
             {duplicateCheck.show && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
@@ -581,6 +631,20 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                         placeholder="e.g. Gravity Corp"
                                         value={formData.name}
                                         onChange={e => handleChange('name', e.target.value)}
+                                    />
+                                </div>
+                                <div>
+                                    <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Mobile Number <span className="text-red-500">*</span></label>
+                                    <input
+                                        type="tel"
+                                        className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#ffcc29] ${
+                                            theme === 'dark'
+                                                ? 'bg-[#070A12] border-[#ffcc29]/30 text-[#ededed] placeholder-[#ededed]/40'
+                                                : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
+                                        }`}
+                                        placeholder="e.g. +91 98765 43210"
+                                        value={mobileNumber}
+                                        onChange={e => setMobileNumber(e.target.value)}
                                     />
                                 </div>
                                 <div>
@@ -702,6 +766,55 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                     </p>
                                 </div>
                                 <div>
+                                    <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Years in Business <span className="text-red-500">*</span></label>
+                                    <input
+                                        type="number"
+                                        min={0}
+                                        step={1}
+                                        className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#ffcc29] ${
+                                            theme === 'dark'
+                                                ? 'bg-[#070A12] border-[#ffcc29]/30 text-[#ededed] placeholder-[#ededed]/40'
+                                                : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
+                                        }`}
+                                        placeholder="e.g. 12"
+                                        value={formData.yearsInBusiness ?? ''}
+                                        onChange={e => {
+                                            const v = e.target.value;
+                                            if (v === '') {
+                                                handleChange('yearsInBusiness', undefined as any);
+                                            } else {
+                                                const n = Math.max(0, Math.floor(Number(v)));
+                                                handleChange('yearsInBusiness', n as any);
+                                            }
+                                        }}
+                                    />
+                                </div>
+                                <div>
+                                    <label className={`block text-sm font-bold mb-2 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Brand Maturity <span className="text-red-500">*</span></label>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        {[
+                                            { value: 'established', label: 'Established', desc: 'Well known locally' },
+                                            { value: 'growing', label: 'Growing', desc: 'Building our name' },
+                                        ].map(option => (
+                                            <button
+                                                key={option.value}
+                                                type="button"
+                                                onClick={() => handleChange('brandMaturity', option.value as any)}
+                                                className={`p-3 rounded-lg border text-left transition-all ${
+                                                    formData.brandMaturity === option.value
+                                                        ? 'border-[#ffcc29] bg-[#ffcc29]/10 text-[#ffcc29]'
+                                                        : theme === 'dark'
+                                                            ? 'border-[#ededed]/20 hover:border-[#ffcc29]/50 text-[#ededed]/70'
+                                                            : 'border-gray-200 hover:border-[#ffcc29]/50 text-gray-600'
+                                                }`}
+                                            >
+                                                <div className="font-bold text-sm">{option.label}</div>
+                                                <div className="text-xs opacity-70">{option.desc}</div>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div>
                                     <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>GST Number <span className={`text-xs font-normal ${theme === 'dark' ? 'text-[#ededed]/40' : 'text-gray-400'}`}>(optional)</span></label>
                                     <div className="flex gap-2">
                                         <div className="flex-1 relative">
@@ -770,20 +883,21 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
 
                         {step === 2 && (
                             <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-500">
-                                <h3 className={`text-xl font-bold ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>Brand Voice</h3>
+                                <h3 className={`text-xl font-bold ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>Brand &amp; Audience</h3>
+
                                 <div>
                                     <label className={`block text-sm font-bold mb-2 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Brand Voice <span className="text-xs font-normal opacity-60">(select multiple)</span></label>
                                     <div className="grid grid-cols-2 gap-3">
                                         {['Professional', 'Friendly', 'Witty', 'Empathetic', 'Bold', 'Educational'].map(voice => {
-                                            const isSelected = Array.isArray(formData.brandVoice) 
+                                            const isSelected = Array.isArray(formData.brandVoice)
                                                 ? formData.brandVoice.includes(voice)
                                                 : formData.brandVoice === voice;
                                             return (
                                                 <button
                                                     key={voice}
                                                     onClick={() => {
-                                                        const currentVoices = Array.isArray(formData.brandVoice) 
-                                                            ? formData.brandVoice 
+                                                        const currentVoices = Array.isArray(formData.brandVoice)
+                                                            ? formData.brandVoice
                                                             : formData.brandVoice ? [formData.brandVoice] : [];
                                                         const newVoices = isSelected
                                                             ? currentVoices.filter(v => v !== voice)
@@ -791,9 +905,9 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                                         handleChange('brandVoice', newVoices);
                                                     }}
                                                     className={`p-3 rounded-lg border text-sm font-medium transition-all ${
-                                                        isSelected 
-                                                        ? 'border-[#ffcc29] bg-[#ffcc29]/10 text-[#ffcc29]' 
-                                                        : theme === 'dark' 
+                                                        isSelected
+                                                        ? 'border-[#ffcc29] bg-[#ffcc29]/10 text-[#ffcc29]'
+                                                        : theme === 'dark'
                                                             ? 'border-[#ededed]/20 hover:border-[#ffcc29]/50 text-[#ededed]/70'
                                                             : 'border-gray-200 hover:border-[#ffcc29]/50 text-gray-600'
                                                     }`}
@@ -802,6 +916,124 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                                 </button>
                                             );
                                         })}
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>
+                                        Hero Product / Service <span className="text-red-500">*</span>
+                                        <span className={`text-xs font-normal ml-2 ${theme === 'dark' ? 'text-[#ededed]/40' : 'text-gray-400'}`}>({(formData.heroProduct || '').length}/100)</span>
+                                    </label>
+                                    <input
+                                        type="text"
+                                        maxLength={100}
+                                        className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#ffcc29] ${
+                                            theme === 'dark'
+                                                ? 'bg-[#070A12] border-[#ffcc29]/30 text-[#ededed] placeholder-[#ededed]/40'
+                                                : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
+                                        }`}
+                                        placeholder="e.g. Bridal gold sets, Custom sofas, Sunday biryani special"
+                                        value={formData.heroProduct || ''}
+                                        onChange={e => handleChange('heroProduct', e.target.value as any)}
+                                    />
+                                    <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-[#ededed]/50' : 'text-gray-500'}`}>
+                                        The one thing your business is most known for.
+                                    </p>
+                                </div>
+
+                                <div>
+                                    <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Target Customer Profile <span className="text-red-500">*</span></label>
+                                    <textarea
+                                        rows={3}
+                                        className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#ffcc29] resize-none ${
+                                            theme === 'dark'
+                                                ? 'bg-[#070A12] border-[#ffcc29]/30 text-[#ededed] placeholder-[#ededed]/40'
+                                                : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
+                                        }`}
+                                        placeholder="Describe the typical customer — age, gender, occasion. e.g. Women aged 25-40, local area, buying for weddings and festivals."
+                                        value={formData.targetCustomerProfile || ''}
+                                        onChange={e => handleChange('targetCustomerProfile', e.target.value as any)}
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className={`block text-sm font-bold mb-2 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Target Gender <span className="text-red-500">*</span></label>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                        {[
+                                            { value: 'mostly_men', label: 'Mostly men' },
+                                            { value: 'mostly_women', label: 'Mostly women' },
+                                            { value: 'both_equally', label: 'Both equally' },
+                                            { value: 'families', label: 'Families' },
+                                        ].map(option => (
+                                            <button
+                                                key={option.value}
+                                                type="button"
+                                                onClick={() => handleChange('targetGender', option.value as any)}
+                                                className={`p-3 rounded-lg border text-center text-sm transition-all ${
+                                                    formData.targetGender === option.value
+                                                        ? 'border-[#ffcc29] bg-[#ffcc29]/10 text-[#ffcc29]'
+                                                        : theme === 'dark'
+                                                            ? 'border-[#ededed]/20 hover:border-[#ffcc29]/50 text-[#ededed]/70'
+                                                            : 'border-gray-200 hover:border-[#ffcc29]/50 text-gray-600'
+                                                }`}
+                                            >
+                                                {option.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className={`block text-sm font-bold mb-2 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Geographic Reach <span className="text-red-500">*</span></label>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                        {[
+                                            { value: 'hyperlocal', label: 'Hyperlocal', desc: 'Same street or area' },
+                                            { value: 'local_city', label: 'Local city', desc: 'City-wide reach' },
+                                            { value: 'regional', label: 'Regional', desc: 'Nearby towns too' },
+                                        ].map(option => (
+                                            <button
+                                                key={option.value}
+                                                type="button"
+                                                onClick={() => handleChange('geographicReach', option.value as any)}
+                                                className={`p-3 rounded-lg border text-left transition-all ${
+                                                    formData.geographicReach === option.value
+                                                        ? 'border-[#ffcc29] bg-[#ffcc29]/10 text-[#ffcc29]'
+                                                        : theme === 'dark'
+                                                            ? 'border-[#ededed]/20 hover:border-[#ffcc29]/50 text-[#ededed]/70'
+                                                            : 'border-gray-200 hover:border-[#ffcc29]/50 text-gray-600'
+                                                }`}
+                                            >
+                                                <div className="font-bold text-sm">{option.label}</div>
+                                                <div className="text-xs opacity-70">{option.desc}</div>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className={`block text-sm font-bold mb-2 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Customer Type <span className="text-red-500">*</span></label>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                        {[
+                                            { value: 'mostly_new', label: 'Mostly new', desc: 'New customers' },
+                                            { value: 'mix_new_repeat', label: 'Mixed', desc: 'New + repeat' },
+                                            { value: 'mostly_loyal', label: 'Mostly loyal', desc: 'Regulars' },
+                                        ].map(option => (
+                                            <button
+                                                key={option.value}
+                                                type="button"
+                                                onClick={() => handleChange('customerType', option.value as any)}
+                                                className={`p-3 rounded-lg border text-left transition-all ${
+                                                    formData.customerType === option.value
+                                                        ? 'border-[#ffcc29] bg-[#ffcc29]/10 text-[#ffcc29]'
+                                                        : theme === 'dark'
+                                                            ? 'border-[#ededed]/20 hover:border-[#ffcc29]/50 text-[#ededed]/70'
+                                                            : 'border-gray-200 hover:border-[#ffcc29]/50 text-gray-600'
+                                                }`}
+                                            >
+                                                <div className="font-bold text-sm">{option.label}</div>
+                                                <div className="text-xs opacity-70">{option.desc}</div>
+                                            </button>
+                                        ))}
                                     </div>
                                 </div>
                             </div>
@@ -916,6 +1148,134 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                             ))}
                                         </div>
                                     )}
+                                </div>
+
+                                <div className={`pt-4 border-t ${theme === 'dark' ? 'border-[#ededed]/10' : 'border-gray-200'}`}>
+                                    <label className={`block text-sm font-bold mb-2 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Price Positioning <span className="text-red-500">*</span></label>
+                                    <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                                        {[
+                                            { value: 'budget', label: 'Budget' },
+                                            { value: 'affordable', label: 'Affordable' },
+                                            { value: 'mid_range', label: 'Mid-range' },
+                                            { value: 'premium', label: 'Premium' },
+                                            { value: 'luxury', label: 'Luxury' },
+                                        ].map(option => (
+                                            <button
+                                                key={option.value}
+                                                type="button"
+                                                onClick={() => handleChange('pricePositioning', option.value as any)}
+                                                className={`p-2.5 rounded-lg border text-center text-sm font-medium transition-all ${
+                                                    formData.pricePositioning === option.value
+                                                        ? 'border-[#ffcc29] bg-[#ffcc29]/10 text-[#ffcc29]'
+                                                        : theme === 'dark'
+                                                            ? 'border-[#ededed]/20 hover:border-[#ffcc29]/50 text-[#ededed]/70'
+                                                            : 'border-gray-200 hover:border-[#ffcc29]/50 text-gray-600'
+                                                }`}
+                                            >
+                                                {option.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>
+                                        Key Differentiator <span className="text-red-500">*</span>
+                                        <span className={`text-xs font-normal ml-2 ${theme === 'dark' ? 'text-[#ededed]/40' : 'text-gray-400'}`}>({(formData.keyDifferentiator || '').length}/150)</span>
+                                    </label>
+                                    <input
+                                        type="text"
+                                        maxLength={150}
+                                        className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#ffcc29] ${
+                                            theme === 'dark'
+                                                ? 'bg-[#070A12] border-[#ffcc29]/30 text-[#ededed] placeholder-[#ededed]/40'
+                                                : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
+                                        }`}
+                                        placeholder="e.g. 25 years of family craftsmanship in gold jewellery."
+                                        value={formData.keyDifferentiator || ''}
+                                        onChange={e => handleChange('keyDifferentiator', e.target.value as any)}
+                                    />
+                                    <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-[#ededed]/50' : 'text-gray-500'}`}>
+                                        One sentence — why choose your business over a competitor.
+                                    </p>
+                                </div>
+
+                                <div>
+                                    <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>
+                                        Brand Story <span className={`text-xs font-normal ${theme === 'dark' ? 'text-[#ededed]/40' : 'text-gray-400'}`}>(optional)</span>
+                                    </label>
+                                    <textarea
+                                        rows={4}
+                                        className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#ffcc29] resize-none ${
+                                            theme === 'dark'
+                                                ? 'bg-[#070A12] border-[#ffcc29]/30 text-[#ededed] placeholder-[#ededed]/40'
+                                                : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
+                                        }`}
+                                        placeholder="Founding story, family legacy, awards, unique specialty."
+                                        value={formData.brandStory || ''}
+                                        onChange={e => handleChange('brandStory', e.target.value as any)}
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className={`block text-sm font-bold mb-2 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Content Language <span className="text-red-500">*</span></label>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                        {[
+                                            { value: 'tamil', label: 'Tamil only' },
+                                            { value: 'english', label: 'English only' },
+                                            { value: 'tamil_english_mix', label: 'Tamil + English mix' },
+                                        ].map(option => (
+                                            <button
+                                                key={option.value}
+                                                type="button"
+                                                onClick={() => handleChange('contentLanguage', option.value as any)}
+                                                className={`p-3 rounded-lg border text-center text-sm font-medium transition-all ${
+                                                    formData.contentLanguage === option.value
+                                                        ? 'border-[#ffcc29] bg-[#ffcc29]/10 text-[#ffcc29]'
+                                                        : theme === 'dark'
+                                                            ? 'border-[#ededed]/20 hover:border-[#ffcc29]/50 text-[#ededed]/70'
+                                                            : 'border-gray-200 hover:border-[#ffcc29]/50 text-gray-600'
+                                                }`}
+                                            >
+                                                {option.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>
+                                        Content Restrictions <span className={`text-xs font-normal ${theme === 'dark' ? 'text-[#ededed]/40' : 'text-gray-400'}`}>(optional)</span>
+                                    </label>
+                                    <textarea
+                                        rows={3}
+                                        className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#ffcc29] resize-none ${
+                                            theme === 'dark'
+                                                ? 'bg-[#070A12] border-[#ffcc29]/30 text-[#ededed] placeholder-[#ededed]/40'
+                                                : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
+                                        }`}
+                                        placeholder="Anything you do NOT want posted. e.g. No political content. No competitor mentions. No personal photos."
+                                        value={formData.contentRestrictions || ''}
+                                        onChange={e => handleChange('contentRestrictions', e.target.value as any)}
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>First Month Content Angles <span className="text-red-500">*</span></label>
+                                    <textarea
+                                        rows={3}
+                                        className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#ffcc29] resize-none ${
+                                            theme === 'dark'
+                                                ? 'bg-[#070A12] border-[#ffcc29]/30 text-[#ededed] placeholder-[#ededed]/40'
+                                                : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
+                                        }`}
+                                        placeholder="Festivals, offers, new products, or events in the next 30 days. e.g. Diwali sale, new collection launch, jewellery exhibition."
+                                        value={formData.firstMonthContentAngles || ''}
+                                        onChange={e => handleChange('firstMonthContentAngles', e.target.value as any)}
+                                    />
+                                    <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-[#ededed]/50' : 'text-gray-500'}`}>
+                                        Drives your first month content plan. Update monthly later.
+                                    </p>
                                 </div>
                             </div>
                         )}
