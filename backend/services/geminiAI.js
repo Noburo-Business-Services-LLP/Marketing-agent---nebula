@@ -99,26 +99,46 @@ function sleep(ms) {
 }
 
 /**
- * Fetch with timeout helper
+ * Fetch with timeout + transient-error retry.
+ * Retries on ERR_STREAM_PREMATURE_CLOSE (node-fetch gzip bug w/ Google's API),
+ * ECONNRESET, ETIMEDOUT. Forces identity encoding on Gemini calls to sidestep
+ * the gzip stream-close issue entirely.
  */
-async function fetchWithTimeout(url, options, timeout = API_TIMEOUT) {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeout);
-
-  try {
-    const response = await fetch(url, {
-      ...options,
-      signal: controller.signal
-    });
-    clearTimeout(timeoutId);
-    return response;
-  } catch (error) {
-    clearTimeout(timeoutId);
-    if (error.name === 'AbortError') {
-      throw new Error(`Request timed out after ${timeout}ms`);
-    }
-    throw error;
+async function fetchWithTimeout(url, options = {}, timeout = API_TIMEOUT) {
+  const isGeminiCall = typeof url === 'string' && url.includes('generativelanguage.googleapis.com');
+  const finalOptions = { ...options };
+  if (isGeminiCall) {
+    finalOptions.headers = {
+      ...(options.headers || {}),
+      'Accept-Encoding': 'identity'
+    };
   }
+
+  const maxAttempts = 3;
+  let lastError;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    try {
+      const response = await fetch(url, { ...finalOptions, signal: controller.signal });
+      clearTimeout(timeoutId);
+      return response;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      const isTransient = error.code === 'ERR_STREAM_PREMATURE_CLOSE'
+        || error.code === 'ECONNRESET'
+        || error.code === 'ETIMEDOUT'
+        || error.type === 'system';
+      const isTimeout = error.name === 'AbortError';
+      lastError = isTimeout ? new Error(`Request timed out after ${timeout}ms`) : error;
+      if (isTimeout || !isTransient || attempt === maxAttempts) {
+        throw lastError;
+      }
+      console.warn(`fetchWithTimeout attempt ${attempt}/${maxAttempts} failed (${error.code || error.message}), retrying...`);
+      await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt - 1)));
+    }
+  }
+  throw lastError;
 }
 
 /**
