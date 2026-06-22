@@ -1455,7 +1455,11 @@ export const apiService = {
    */
   generateCaptionFromImage: async (
     imageBase64: string,
-    platform?: string
+    platform?: string,
+    context?: {
+      selectedProducts?: any[];
+      prompt?: string;
+    }
   ): Promise<{
     success: boolean;
     caption?: string;
@@ -1469,7 +1473,9 @@ export const apiService = {
         method: 'POST',
         body: JSON.stringify({
           image: imageBase64,
-          platform: platform || 'instagram'
+          platform: platform || 'instagram',
+          selectedProducts: context?.selectedProducts || [],
+          prompt: context?.prompt || ''
         })
       },
       true

@@ -903,6 +903,139 @@ const Campaigns: React.FC = () => {
   const [createPostScheduleTime, setCreatePostScheduleTime] = useState('');
   const [createPostGeneratingCaption, setCreatePostGeneratingCaption] = useState(false);
   const [showCreatePostPreview, setShowCreatePostPreview] = useState(false);
+  const [createPostProducts, setCreatePostProducts] = useState<Product[]>([]);
+  const [createPostSelectedProductIds, setCreatePostSelectedProductIds] = useState<string[]>([]);
+  const [createPostLoadingProducts, setCreatePostLoadingProducts] = useState(false);
+  const [createPostProductsLoaded, setCreatePostProductsLoaded] = useState(false);
+  const [showCreatePostProductSelector, setShowCreatePostProductSelector] = useState(false);
+  const [createPostProductSearch, setCreatePostProductSearch] = useState('');
+  const createPostEditorOpenRef = useRef(false);
+  const createPostBackgroundDraftUrlsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    createPostEditorOpenRef.current = showCreatePostEditor;
+  }, [showCreatePostEditor]);
+
+  useEffect(() => {
+    if (!showCreatePostEditor || createPostProductsLoaded) return;
+
+    let cancelled = false;
+    const fetchCreatePostProducts = async () => {
+      setCreatePostLoadingProducts(true);
+      try {
+        const response = await inventoryAPI.getProducts();
+        const products = Array.isArray(response?.data) ? response.data : [];
+        if (!cancelled) setCreatePostProducts(products);
+      } catch (error) {
+        console.error('Failed to load inventory products for Create Post:', error);
+      } finally {
+        if (!cancelled) {
+          setCreatePostProductsLoaded(true);
+          setCreatePostLoadingProducts(false);
+        }
+      }
+    };
+
+    fetchCreatePostProducts();
+    return () => {
+      cancelled = true;
+    };
+  }, [showCreatePostEditor, createPostProductsLoaded]);
+
+  const createPostSelectedProducts = createPostProducts.filter(product =>
+    createPostSelectedProductIds.includes(product._id)
+  );
+  const createPostPrimaryProduct = createPostSelectedProducts[0] || null;
+  const createPostProductMediaUrl = createPostSelectedProducts.find(product => String(product.imageUrl || '').trim())?.imageUrl || '';
+  const createPostMediaUrl = createPostImageUrl || createPostProductMediaUrl || '';
+  const filteredCreatePostProducts = createPostProducts.filter(product => {
+    const query = createPostProductSearch.trim().toLowerCase();
+    if (!query) return true;
+    return [
+      product.name,
+      product.category,
+      product.description,
+      ...(product.tags || [])
+    ].some(value => String(value || '').toLowerCase().includes(query));
+  });
+
+  const toggleCreatePostProduct = (product: Product) => {
+    setCreatePostSelectedProductIds(prev =>
+      prev.includes(product._id)
+        ? prev.filter(id => id !== product._id)
+        : [...prev, product._id]
+    );
+  };
+
+  const buildCreatePostProductPrompt = () => {
+    if (createPostSelectedProducts.length === 0) return '';
+
+    const productLines = createPostSelectedProducts.map(product => {
+      const features = [
+        ...(product.tags || []),
+        product.stockStatus ? `Stock: ${product.stockStatus}` : ''
+      ].filter(Boolean).join(', ');
+      return [
+        `Product: ${product.name}`,
+        `Price: ${product.currency || ''} ${product.price ?? ''}`.trim(),
+        `Category: ${product.category || 'General'}`,
+        product.description ? `Description: ${product.description}` : '',
+        features ? `Features: ${features}` : ''
+      ].filter(Boolean).join('\n');
+    }).join('\n\n');
+
+    return `Use these inventory product details:\n${productLines}`;
+  };
+
+  const buildCreatePostGenerationPrompt = (prompt: string) => {
+    const productPrompt = buildCreatePostProductPrompt();
+    return [prompt.trim(), productPrompt].filter(Boolean).join('\n\n');
+  };
+
+  const closeCreatePostEditor = () => {
+    createPostEditorOpenRef.current = false;
+    setShowCreatePostProductSelector(false);
+    setShowCreatePostEditor(false);
+  };
+
+  const saveCreatePostGeneratedDraftInBackground = async (imageUrl: string, promptText: string) => {
+    const finalImageUrl = String(imageUrl || '').trim();
+    if (!finalImageUrl || createPostBackgroundDraftUrlsRef.current.has(finalImageUrl)) return;
+    createPostBackgroundDraftUrlsRef.current.add(finalImageUrl);
+
+    try {
+      const fallbackCaption =
+        createPostCaption.trim() ||
+        promptText.trim() ||
+        createPostSelectedProducts.map(product => product.name).join(', ') ||
+        'AI generated post draft';
+
+      const { campaign } = await apiService.createCampaign({
+        name: fallbackCaption.substring(0, 50) || 'AI Generated Post',
+        platforms: createPostPlatform.length ? createPostPlatform : ['instagram'],
+        scheduling: {
+          startDate: new Date().toISOString().split('T')[0],
+          postTime: '10:00',
+          frequency: 'once'
+        },
+        creative: {
+          type: 'image',
+          textContent: fallbackCaption,
+          hashtags: createPostHashtags,
+          imageUrls: [finalImageUrl]
+        },
+        selectedProducts: createPostSelectedProductIds,
+        status: 'draft'
+      } as any);
+
+      if (campaign) {
+        setCampaigns(prev => [campaign, ...prev]);
+      }
+    } catch (error) {
+      console.error('Failed to save generated Create Post draft in background:', error);
+      createPostBackgroundDraftUrlsRef.current.delete(finalImageUrl);
+    }
+  };
 
   // Track used suggestions: id -> status message
   const [usedSuggestions, setUsedSuggestions] = useState<Map<string, string>>(new Map());
@@ -3148,6 +3281,9 @@ Generated by Nebulaa Gravity Marketing Agent
                   setCreatePostCaption('');
                   setCreatePostHashtags([]);
                   setCreatePostRefinePrompt('');
+                  setCreatePostSelectedProductIds([]);
+                  setShowCreatePostProductSelector(false);
+                  setCreatePostProductSearch('');
                   setCreatePostPlatform(connectedPlatforms.length > 0 ? [connectedPlatforms[0]] : []);
                   setShowCreatePostEditor(true);
                 }}
@@ -3175,7 +3311,7 @@ Generated by Nebulaa Gravity Marketing Agent
                   <p className={`text-xs ${theme.textMuted}`}>Design and publish your content</p>
                 </div>
               </div>
-              <button onClick={() => setShowCreatePostEditor(false)} className={`p-2 rounded-lg ${theme.textMuted} hover:bg-slate-100 dark:hover:bg-slate-800`}>
+              <button onClick={closeCreatePostEditor} className={`p-2 rounded-lg ${theme.textMuted} hover:bg-slate-100 dark:hover:bg-slate-800`}>
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -3185,6 +3321,133 @@ Generated by Nebulaa Gravity Marketing Agent
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Left: Image Section */}
                 <div>
+                  <div className="mb-5">
+                    <label className={`block text-xs font-semibold uppercase tracking-wide mb-2 ${theme.textSecondary}`}>Select Inventory Product</label>
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setShowCreatePostProductSelector(prev => !prev)}
+                        className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl border text-left transition-colors ${
+                          isDarkMode
+                            ? 'bg-[#161b22] border-slate-700/50 hover:border-slate-600 text-white'
+                            : 'bg-white border-slate-200 hover:border-slate-300 text-slate-900'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          {createPostPrimaryProduct?.imageUrl ? (
+                            <img src={createPostPrimaryProduct.imageUrl} alt={createPostPrimaryProduct.name} className="w-9 h-9 rounded-lg object-cover" />
+                          ) : (
+                            <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${isDarkMode ? 'bg-slate-800' : 'bg-slate-100'}`}>
+                              <ImageIcon className={`w-4 h-4 ${theme.textMuted}`} />
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <p className={`text-sm font-semibold truncate ${theme.text}`}>
+                              {createPostSelectedProducts.length > 0
+                                ? createPostSelectedProducts.map(product => product.name).join(', ')
+                                : 'Select Inventory Product'}
+                            </p>
+                            <p className={`text-xs ${theme.textMuted}`}>
+                              {createPostSelectedProducts.length > 0
+                                ? `${createPostSelectedProducts.length} selected`
+                                : 'Search and link products to this post'}
+                            </p>
+                          </div>
+                        </div>
+                        <ChevronDown className={`w-4 h-4 shrink-0 transition-transform ${showCreatePostProductSelector ? 'rotate-180' : ''}`} />
+                      </button>
+
+                      {showCreatePostProductSelector && (
+                        <div className={`absolute z-30 mt-2 w-full rounded-xl border shadow-2xl overflow-hidden ${isDarkMode ? 'bg-[#0d1117] border-slate-700' : 'bg-white border-slate-200'}`}>
+                          <div className={`p-3 border-b ${isDarkMode ? 'border-slate-700' : 'border-slate-200'}`}>
+                            <div className="relative">
+                              <Filter className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${theme.textMuted}`} />
+                              <input
+                                type="text"
+                                value={createPostProductSearch}
+                                onChange={(e) => setCreatePostProductSearch(e.target.value)}
+                                placeholder="Search products..."
+                                className={`w-full pl-10 pr-3 py-2 text-sm rounded-lg border outline-none focus:ring-2 focus:ring-[#ffcc29] ${
+                                  isDarkMode ? 'bg-[#161b22] border-slate-700 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-900'
+                                }`}
+                              />
+                            </div>
+                          </div>
+
+                          <div className="max-h-72 overflow-y-auto p-2 custom-scrollbar">
+                            {createPostLoadingProducts ? (
+                              <div className="flex items-center justify-center gap-2 py-8">
+                                <Loader2 className="w-4 h-4 animate-spin text-[#ffcc29]" />
+                                <span className={`text-sm ${theme.textSecondary}`}>Loading inventory...</span>
+                              </div>
+                            ) : filteredCreatePostProducts.length === 0 ? (
+                              <div className="py-8 text-center">
+                                <p className={`text-sm font-semibold ${theme.text}`}>No products found</p>
+                                <p className={`text-xs ${theme.textMuted}`}>Add products in Inventory or try another search.</p>
+                              </div>
+                            ) : (
+                              <div className="space-y-2">
+                                {filteredCreatePostProducts.map(product => {
+                                  const isSelected = createPostSelectedProductIds.includes(product._id);
+                                  const isOutOfStock = product.stockStatus === 'out-of-stock';
+                                  return (
+                                    <button
+                                      key={product._id}
+                                      type="button"
+                                      onClick={() => !isOutOfStock && toggleCreatePostProduct(product)}
+                                      disabled={isOutOfStock}
+                                      className={`w-full flex items-center gap-3 p-2 rounded-lg border text-left transition-colors ${
+                                        isOutOfStock ? 'opacity-60 cursor-not-allowed' : ''
+                                      } ${
+                                        isSelected
+                                          ? 'bg-[#ffcc29]/10 border-[#ffcc29]'
+                                          : isDarkMode ? 'bg-[#161b22] border-slate-700 hover:border-[#ffcc29]/40' : 'bg-white border-slate-100 hover:border-[#ffcc29]/40'
+                                      }`}
+                                    >
+                                      {product.imageUrl ? (
+                                        <img src={product.imageUrl} alt={product.name} className="w-12 h-12 rounded-lg object-cover" />
+                                      ) : (
+                                        <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${isDarkMode ? 'bg-slate-800' : 'bg-slate-100'}`}>
+                                          <ImageIcon className={`w-5 h-5 ${theme.textMuted}`} />
+                                        </div>
+                                      )}
+                                      <div className="min-w-0 flex-1">
+                                        <p className={`text-sm font-semibold truncate ${theme.text}`}>{product.name}</p>
+                                        <div className="flex items-center gap-2 mt-1">
+                                          <span className="text-xs text-[#ffcc29] font-bold">{product.currency} {product.price}</span>
+                                          <span className={`text-[10px] px-1.5 py-0.5 rounded ${isDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-slate-100 text-slate-500'}`}>{product.category}</span>
+                                        </div>
+                                      </div>
+                                      {isSelected && <Check className="w-4 h-4 text-[#ffcc29] shrink-0" />}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {createPostSelectedProducts.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {createPostSelectedProducts.map(product => (
+                          <button
+                            key={product._id}
+                            type="button"
+                            onClick={() => toggleCreatePostProduct(product)}
+                            className={`flex items-center gap-2 max-w-full px-2 py-1.5 rounded-lg border text-xs ${isDarkMode ? 'border-slate-700 bg-[#161b22] text-slate-300' : 'border-slate-200 bg-slate-50 text-slate-700'}`}
+                            title="Remove product"
+                          >
+                            {product.imageUrl && <img src={product.imageUrl} alt="" className="w-5 h-5 rounded object-cover" />}
+                            <span className="truncate">{product.name}</span>
+                            <X className="w-3 h-3 shrink-0" />
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
                   <label className={`block text-xs font-semibold uppercase tracking-wide mb-3 ${theme.textSecondary}`}>Image</label>
 
                   {createPostImageUrl ? (
@@ -3235,7 +3498,11 @@ Generated by Nebulaa Gravity Marketing Agent
                                   createPostImageUrl, createPostPrompt, createPostRefinePrompt
                                 );
                                 if (result.success) {
-                                  setCreatePostImageUrl(result.imageUrl || result.imageBase64 || null);
+                                  const finalImageUrl = result.imageUrl || result.imageBase64 || null;
+                                  setCreatePostImageUrl(finalImageUrl);
+                                  if (finalImageUrl && !createPostEditorOpenRef.current) {
+                                    await saveCreatePostGeneratedDraftInBackground(finalImageUrl, createPostPrompt);
+                                  }
                                   setCreatePostRefinePrompt('');
                                 } else {
                                   alert(result.error || 'Failed to refine image');
@@ -3274,10 +3541,14 @@ Generated by Nebulaa Gravity Marketing Agent
                               setCreatePostImageUrl(null);
                               try {
                                 const result = await apiService.generatePosterFromReference(
-                                  '', createPostPrompt, createPostPlatform[0] || 'instagram', createPostLogo || undefined, createPostAspectRatio
+                                  '', buildCreatePostGenerationPrompt(createPostPrompt), createPostPlatform[0] || 'instagram', createPostLogo || undefined, createPostAspectRatio
                                 );
                                 if (result.success) {
-                                  setCreatePostImageUrl(result.imageUrl || result.imageBase64 || null);
+                                  const finalImageUrl = result.imageUrl || result.imageBase64 || null;
+                                  setCreatePostImageUrl(finalImageUrl);
+                                  if (finalImageUrl && !createPostEditorOpenRef.current) {
+                                    await saveCreatePostGeneratedDraftInBackground(finalImageUrl, createPostPrompt);
+                                  }
                                 } else {
                                   alert(result.error || result.message || 'Failed to generate image.');
                                 }
@@ -3329,7 +3600,7 @@ Generated by Nebulaa Gravity Marketing Agent
                         />
                         <div className="flex items-center justify-between mt-2">
                           <span className={`text-xs ${theme.textMuted}`}>
-                            {createPostLogo ? '? Logo selected' : 'No logo'} -¯-‚Â¿-‚Â½ {createPostAspectRatio}
+                            {createPostLogo ? 'Logo selected' : 'No logo'} - {createPostAspectRatio}
                           </span>
                           <button
                             onClick={async () => {
@@ -3337,7 +3608,7 @@ Generated by Nebulaa Gravity Marketing Agent
                               setCreatePostGenerating(true);
                               try {
                                 const result = await apiService.generatePosterFromReference(
-                                  '', createPostPrompt, createPostPlatform[0] || 'instagram', createPostLogo || undefined, createPostAspectRatio
+                                  '', buildCreatePostGenerationPrompt(createPostPrompt), createPostPlatform[0] || 'instagram', createPostLogo || undefined, createPostAspectRatio
                                 );
                                 if (result.success) {
                                   setCreatePostImageUrl(result.imageUrl || result.imageBase64 || null);
@@ -3401,10 +3672,13 @@ Generated by Nebulaa Gravity Marketing Agent
                     <label className={`block text-xs font-semibold uppercase tracking-wide ${theme.textSecondary}`}>Caption</label>
                     <button
                       onClick={async () => {
-                        if (!createPostImageUrl) { alert('Generate an image first'); return; }
+                        if (!createPostMediaUrl) { alert('Generate an image or select a product with an image first'); return; }
                         setCreatePostGeneratingCaption(true);
                         try {
-                          const result = await apiService.generateCaptionFromImage(createPostImageUrl, createPostPlatform[0] || 'instagram');
+                          const result = await apiService.generateCaptionFromImage(createPostMediaUrl, createPostPlatform[0] || 'instagram', {
+                            selectedProducts: createPostSelectedProducts,
+                            prompt: buildCreatePostGenerationPrompt(createPostPrompt)
+                          });
                           if (result.success) {
                             if (result.caption) setCreatePostCaption(result.caption);
                             if (result.hashtags) setCreatePostHashtags(result.hashtags);
@@ -3418,9 +3692,9 @@ Generated by Nebulaa Gravity Marketing Agent
                           setCreatePostGeneratingCaption(false);
                         }
                       }}
-                      disabled={createPostGeneratingCaption || !createPostImageUrl}
+                      disabled={createPostGeneratingCaption || !createPostMediaUrl}
                       className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium transition-colors ${
-                        createPostImageUrl && !createPostGeneratingCaption
+                        createPostMediaUrl && !createPostGeneratingCaption
                           ? 'bg-purple-500/20 text-purple-400 hover:bg-purple-500/30'
                           : 'bg-slate-700/50 text-slate-500 cursor-not-allowed'
                       }`}
@@ -3473,7 +3747,7 @@ Generated by Nebulaa Gravity Marketing Agent
             {/* Footer */}
             <div className={`flex items-center justify-between px-6 py-4 border-t ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'}`}>
               <button
-                onClick={() => setShowCreatePostEditor(false)}
+                onClick={closeCreatePostEditor}
                 className={`px-5 py-2.5 rounded-xl font-medium ${isDarkMode ? 'text-slate-400 hover:bg-[#161b22]' : 'text-slate-600 hover:bg-slate-50'}`}
               >
                 Cancel
@@ -3482,7 +3756,7 @@ Generated by Nebulaa Gravity Marketing Agent
                 {/* Preview */}
                 <button
                   onClick={() => setShowCreatePostPreview(true)}
-                  disabled={!createPostImageUrl}
+                  disabled={!createPostMediaUrl}
                   className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border font-medium disabled:opacity-50 ${isDarkMode ? 'border-slate-700 text-slate-300 hover:bg-[#161b22]' : 'border-slate-200 hover:bg-slate-50'}`}
                 >
                   <Eye className="w-4 h-4" />
@@ -3491,7 +3765,7 @@ Generated by Nebulaa Gravity Marketing Agent
                 {/* Save as Draft */}
                 <button
                   onClick={async () => {
-                    if (!createPostImageUrl) { alert('Please generate an image first'); return; }
+                    if (!createPostMediaUrl) { alert('Please generate an image or select a product with an image first'); return; }
                     if (!createPostCaption.trim()) { alert('Please add a caption'); return; }
                     try {
                       const campaignData = {
@@ -3505,8 +3779,9 @@ Generated by Nebulaa Gravity Marketing Agent
                         creative: {
                           textContent: createPostCaption,
                           hashtags: createPostHashtags,
-                          imageUrls: createPostImageUrl ? [createPostImageUrl] : []
+                          imageUrls: createPostMediaUrl ? [createPostMediaUrl] : []
                         },
+                        selectedProducts: createPostSelectedProductIds,
                         status: 'draft'
                       };
                       await apiService.createCampaign(campaignData as any);
@@ -3527,7 +3802,7 @@ Generated by Nebulaa Gravity Marketing Agent
                 {/* Schedule or Post Now */}
                 <button
                   onClick={async () => {
-                    if (!createPostImageUrl) { alert('Please generate an image first'); return; }
+                    if (!createPostMediaUrl) { alert('Please generate an image or select a product with an image first'); return; }
                     if (!createPostCaption.trim()) { alert('Please add a caption'); return; }
 
                     const fullCaption = createPostCaption + (createPostHashtags.length > 0 ? '\n\n' + createPostHashtags.join(' ') : '');
@@ -3551,7 +3826,7 @@ Generated by Nebulaa Gravity Marketing Agent
                         const result = await apiService.postToSocial(
                           createPostPlatform,
                           fullCaption,
-                          { mediaUrls: [createPostImageUrl], scheduledDate }
+                          { mediaUrls: [createPostMediaUrl], scheduledDate }
                         );
                         if (result.success) {
                           // Also save as campaign record with Ayrshare post ID
@@ -3567,8 +3842,9 @@ Generated by Nebulaa Gravity Marketing Agent
                             creative: {
                               textContent: createPostCaption,
                               hashtags: createPostHashtags,
-                              imageUrls: createPostImageUrl ? [createPostImageUrl] : []
+                              imageUrls: createPostMediaUrl ? [createPostMediaUrl] : []
                             },
+                            selectedProducts: createPostSelectedProductIds,
                             status: 'scheduled',
                             socialPostId: ayrsharePostId,
                             scheduledFor: scheduledDate
@@ -3584,7 +3860,7 @@ Generated by Nebulaa Gravity Marketing Agent
                         const result = await apiService.postToSocial(
                           createPostPlatform,
                           fullCaption,
-                          { mediaUrls: [createPostImageUrl] }
+                          { mediaUrls: [createPostMediaUrl] }
                         );
                         if (result.success) {
                           // Also save as campaign record with Ayrshare post ID
@@ -3600,8 +3876,9 @@ Generated by Nebulaa Gravity Marketing Agent
                             creative: {
                               textContent: createPostCaption,
                               hashtags: createPostHashtags,
-                              imageUrls: createPostImageUrl ? [createPostImageUrl] : []
+                              imageUrls: createPostMediaUrl ? [createPostMediaUrl] : []
                             },
+                            selectedProducts: createPostSelectedProductIds,
                             status: 'posted',
                             publishedAt: new Date().toISOString(),
                             socialPostId: ayrsharePostId
@@ -3633,9 +3910,10 @@ Generated by Nebulaa Gravity Marketing Agent
       {showCreatePostPreview && (
         <PlatformPreview
           platform={createPostPlatform[0] || 'instagram'}
-          imageUrl={createPostImageUrl || ''}
+          imageUrl={createPostMediaUrl}
           caption={createPostCaption}
           hashtags={createPostHashtags.join(' ')}
+          selectedProducts={createPostSelectedProducts}
           brandName={'Your Brand'}
           onClose={() => setShowCreatePostPreview(false)}
           isDarkMode={isDarkMode}
@@ -9415,6 +9693,7 @@ const UploadPublishModal: React.FC<UploadPublishModalProps> = ({ onClose, onSucc
 };
 
 export default Campaigns;
+
 
 
 

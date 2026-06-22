@@ -109,6 +109,7 @@ export interface Campaign {
   status: 'draft' | 'scheduled' | 'active' | 'paused' | 'completed' | 'archived' | 'posted';
   priority?: 'low' | 'medium' | 'high';
   notes?: string;
+  selectedProducts?: string[] | Product[];
   // Convenience top-level properties (aliases for nested values)
   description?: string;
   startDate?: string;
