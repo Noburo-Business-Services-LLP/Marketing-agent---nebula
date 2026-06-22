@@ -99,11 +99,15 @@ async function migrateUserData(demoUserId, paidCredits = 100) {
       }]
     };
 
-    // Set subscription to active paid
+    // Set subscription to active paid — carry over Razorpay subscription ID for webhook lookup
     prodUser.subscription = {
       plan: 'pro',
       status: 'active',
-      expiresAt: cycleEnd
+      expiresAt: cycleEnd,
+      razorpaySubscriptionId: demoUser.subscription?.razorpaySubscriptionId || '',
+      razorpayPlanId: demoUser.subscription?.razorpayPlanId || '',
+      currentPeriodEnd: demoUser.subscription?.currentPeriodEnd || null,
+      nextBillingAt: demoUser.subscription?.nextBillingAt || null,
     };
 
     // Remove trial fields (not needed in prod)

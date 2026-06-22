@@ -98,6 +98,12 @@ const collaborationRoutes = require('./routes/collaborationRoutes');
 const submissionRoutes = require('./routes/submissionRoutes');
 const influencerAnalyticsRoutes = require('./routes/analyticsRoutes');
 
+// Admin routes
+const adminRoutes = require('./routes/admin');
+
+// Event tracking utility
+const trackEvent = require('./utils/trackEvent');
+
 // Notification scheduler service
 const notificationScheduler = require('./services/notificationScheduler');
 // Analytics snapshot scheduler
@@ -110,9 +116,7 @@ const app = express();
 // ============================================
 // Security: Trust Proxy (for Render / Cloudflare)
 // ============================================
-if (process.env.NODE_ENV === 'production') {
-  app.set('trust proxy', 1);
-}
+app.set('trust proxy', 1);
 
 // ============================================
 // Security: Helmet — Secure HTTP Headers
@@ -163,7 +167,7 @@ app.use(cors({
 // ============================================
 // Security: Rate Limiting
 // ============================================
-// General API rate limit — 200 requests per 15 minutes per IP
+// General API rate limit — 500 requests per 15 minutes per IP
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 2000,
@@ -278,6 +282,9 @@ app.get('/api/health/details', (req, res) => {
 // Apply general limiter to all API routes
 app.use('/api', generalLimiter);
 
+// Raw body for Razorpay webhook signature verification (must come before express.json)
+app.use('/api/payment/webhook', express.raw({ type: 'application/json' }));
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
@@ -315,6 +322,47 @@ app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
   next();
 });
+
+// ============================================
+// Feature Event Tracking — fire-and-forget, non-breaking
+// ============================================
+const FEATURE_ROUTE_MAP = [
+  { method: 'GET',  pattern: /^\/api\/dashboard\/overview/,       feature: 'dashboard_viewed',        module: 'dashboard' },
+  { method: 'POST', pattern: /^\/api\/campaigns$/,                 feature: 'campaign_created',        module: 'campaigns' },
+  { method: 'POST', pattern: /^\/api\/campaigns\/.*\/posts/,       feature: 'post_generated',          module: 'campaigns' },
+  { method: 'POST', pattern: /^\/api\/social\/post/,               feature: 'post_published',          module: 'social' },
+  { method: 'GET',  pattern: /^\/api\/competitors/,                feature: 'competitor_viewed',       module: 'competitors' },
+  { method: 'POST', pattern: /^\/api\/competitors/,                feature: 'competitor_added',        module: 'competitors' },
+  { method: 'GET',  pattern: /^\/api\/brand-assets/,               feature: 'brand_assets_viewed',     module: 'brand' },
+  { method: 'POST', pattern: /^\/api\/brand-assets/,               feature: 'brand_assets_extracted',  module: 'brand' },
+  { method: 'GET',  pattern: /^\/api\/analytics/,                  feature: 'analytics_viewed',        module: 'analytics' },
+  { method: 'POST', pattern: /^\/api\/social\/connect/,            feature: 'social_connected',        module: 'social' },
+  { method: 'POST', pattern: /^\/api\/chat/,                       feature: 'chat_used',               module: 'chat' },
+  { method: 'PUT',  pattern: /^\/api\/brand/,                      feature: 'brand_profile_updated',   module: 'brand' },
+  { method: 'GET',  pattern: /^\/api\/campaigns/,                  feature: 'campaigns_viewed',        module: 'campaigns' },
+];
+
+app.use((req, res, next) => {
+  res.on('finish', () => {
+    try {
+      if (res.statusCode >= 200 && res.statusCode < 300 && req.user?._id) {
+        const match = FEATURE_ROUTE_MAP.find(
+          m => m.method === req.method && m.pattern.test(req.path)
+        );
+        if (match) {
+          trackEvent(req.user._id, match.feature, {
+            feature_module: match.module,
+            status: 'success',
+          });
+        }
+      }
+    } catch (_) {}
+  });
+  next();
+});
+
+// Routes - Admin (no trial/credit guard)
+app.use('/api/admin', adminRoutes);
 
 // Routes - Core (with specific rate limiters on sensitive routes)
 app.use('/api/auth', authLimiter, authRoutes);

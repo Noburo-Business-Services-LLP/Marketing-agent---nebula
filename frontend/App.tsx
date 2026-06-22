@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import ChatBot from './components/ChatBot';
@@ -29,6 +29,8 @@ import InfluencerAnalytics from './pages/InfluencerAnalytics';
 import InfluencerProfile from './pages/InfluencerProfile';
 import TermsAndConditions from './pages/TermsAndConditions';
 import PrivacyPolicy from './pages/PrivacyPolicy';
+import AdminLogin from './pages/AdminLogin';
+import AdminDashboard from './pages/AdminDashboard';
 import { ThemeProvider } from './context/ThemeContext';
 import { apiService } from './services/api';
 import { User } from './types';
@@ -48,19 +50,9 @@ const App: React.FC = () => {
           const res = await apiService.getCurrentUser();
           setUser(res.user || null);
           
-          // Check trial status
-          if (res.user) {
-            if (res.user.trial?.migratedToProd) {
-              setTrialExpired({ expired: true, reason: 'migrated' as any });
-            } else {
-              const trialEnd = res.user.trial?.expiresAt ? new Date(res.user.trial.expiresAt) : null;
-              const now = new Date();
-              if (res.user.trial?.isExpired || (trialEnd && now > trialEnd)) {
-                setTrialExpired({ expired: true, reason: 'time' });
-              } else if ((res.user.credits?.balance ?? 100) <= 0) {
-                setTrialExpired({ expired: true, reason: 'credits' });
-              }
-            }
+          // Credits check only (no time-based expiry)
+          if (res.user && (res.user.credits?.balance ?? 100) <= 0) {
+            setTrialExpired({ expired: true, reason: 'credits' });
           }
         } catch (error) {
           console.error("Auth check failed", error);
@@ -84,19 +76,11 @@ const App: React.FC = () => {
 
   const handleLoginSuccess = (userData: User) => {
     setUser(userData);
-    // Check trial on login
-    if (userData.trial?.migratedToProd) {
-      setTrialExpired({ expired: true, reason: 'migrated' as any });
+    // Credits check only (no time-based expiry)
+    if ((userData.credits?.balance ?? 100) <= 0) {
+      setTrialExpired({ expired: true, reason: 'credits' });
     } else {
-      const trialEnd = userData.trial?.expiresAt ? new Date(userData.trial.expiresAt) : null;
-      const now = new Date();
-      if (userData.trial?.isExpired || (trialEnd && now > trialEnd)) {
-        setTrialExpired({ expired: true, reason: 'time' });
-      } else if ((userData.credits?.balance ?? 100) <= 0) {
-        setTrialExpired({ expired: true, reason: 'credits' });
-      } else {
-        setTrialExpired({ expired: false, reason: 'time' });
-      }
+      setTrialExpired({ expired: false, reason: 'time' });
     }
   };
 
@@ -106,43 +90,6 @@ const App: React.FC = () => {
     setTrialExpired({ expired: false, reason: 'time' });
   }, []);
 
-  // Auto-logout after 30 minutes of inactivity
-  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastResetRef = useRef(0);
-  const logoutRef = useRef(handleLogout);
-  logoutRef.current = handleLogout;
-
-  const IDLE_TIMEOUT = 30 * 60 * 1000; // 30 minutes
-  const THROTTLE_MS = 2000;
-
-  // Stable resetIdleTimer that never changes reference
-  const resetIdleTimer = useCallback(() => {
-    const now = Date.now();
-    if (now - lastResetRef.current < THROTTLE_MS) return;
-    lastResetRef.current = now;
-    if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
-    idleTimerRef.current = setTimeout(() => {
-      logoutRef.current();
-    }, IDLE_TIMEOUT);
-  }, []);
-
-  useEffect(() => {
-    if (!user) return;
-
-    const events = ['mousedown', 'mouseup', 'click', 'keydown', 'keyup', 'scroll', 'touchstart', 'touchmove', 'mousemove', 'focus', 'wheel', 'resize', 'input', 'change'];
-    events.forEach(e => window.addEventListener(e, resetIdleTimer, { passive: true }));
-
-    const handleVisibility = () => { if (!document.hidden) resetIdleTimer(); };
-    document.addEventListener('visibilitychange', handleVisibility);
-
-    resetIdleTimer(); // start timer on mount
-
-    return () => {
-      events.forEach(e => window.removeEventListener(e, resetIdleTimer));
-      document.removeEventListener('visibilitychange', handleVisibility);
-      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
-    };
-  }, [!!user, resetIdleTimer]);
 
   const handleOnboardingComplete = (updatedUser: User) => {
       setUser(updatedUser);
@@ -174,6 +121,10 @@ const App: React.FC = () => {
         {/* Public legal pages */}
         <Route path="/terms" element={<TermsAndConditions />} />
         <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+
+        {/* Admin routes — completely separate from user auth */}
+        <Route path="/admin/login" element={<AdminLogin />} />
+        <Route path="/admin" element={<AdminDashboard />} />
 
         {/* Onboarding Route - Protected but outside main Layout if needed, or redirect check */}
         <Route 
