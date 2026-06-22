@@ -9,7 +9,8 @@ export interface BusinessProfile {
   name: string;
   website: string;
   gstNumber: string;
-  industry: string;
+  industry: string; // Business vertical (e.g. Healthcare, E-commerce, Food & Beverage)
+  problemSolved?: string; // The pain point / problem this business solves
   niche: string;
   businessType: 'B2B' | 'B2C' | 'Both' | '';
   businessLocation: string; // City, State/Region where business operates

@@ -58,7 +58,8 @@ const userSchema = new mongoose.Schema({
     name: { type: String, default: '' },
     website: { type: String, default: '' },
     gstNumber: { type: String, default: '' },
-    industry: { type: String, default: '' },
+    industry: { type: String, default: '' }, // Business vertical
+    problemSolved: { type: String, default: '' }, // What problem the business solves
     niche: { type: String, default: '' },
     businessType: { type: String, enum: ['B2B', 'B2C', 'Both', ''], default: '' },
     businessLocation: { type: String, default: '' },
