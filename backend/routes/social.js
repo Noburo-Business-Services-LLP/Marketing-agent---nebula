@@ -14,7 +14,8 @@ const {
   createAyrshareProfile,
   generateAyrshareJWT,
   getAyrshareUserProfile,
-  deleteAyrshareProfile
+  deleteAyrshareProfile,
+  setAyrshareWebhook
 } = require('../services/socialMediaAPI');
 const { publishSocialPostWithSafetyWrapper } = require('../services/instagram-fix');
 const SocialInboxConversation = require('../models/SocialInboxConversation');
@@ -451,6 +452,31 @@ router.post('/inbox/webhooks/:platform', async (req, res) => {
   }
 });
 
+router.post('/inbox/webhooks/register', protect, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user || !user.ayrshare?.profileKey) {
+      return res.status(400).json({ success: false, message: 'No Ayrshare profile key found' });
+    }
+
+    const baseUrl = process.env.WEBHOOK_BASE_URL || process.env.FRONTEND_URL || 'http://localhost:5000';
+    // Use a generic webhook or specific platform one? Ayrshare handles all platforms in one webhook.
+    // However, our code has `/:platform` in the URL. For Ayrshare, we can just pass 'ayrshare' as platform,
+    // or rely on Ayrshare's platform field. Our normalizeWebhookPayload supports 'ayrshare' as platform.
+    const webhookUrl = `${baseUrl}/api/social/inbox/webhooks/ayrshare?userId=${user._id}`;
+
+    const result = await setAyrshareWebhook(user.ayrshare.profileKey, webhookUrl);
+    if (!result.success) {
+      return res.status(500).json({ success: false, message: 'Failed to register webhook with Ayrshare', error: result.error });
+    }
+
+    res.json({ success: true, message: 'Webhook registered successfully', webhookUrl });
+  } catch (error) {
+    console.error('Webhook registration error:', error);
+    res.status(500).json({ success: false, message: 'Internal server error during webhook registration' });
+  }
+});
+
 /**
  * GET /api/social/:platform/auth
  * Universal OAuth initiation for any platform
@@ -468,18 +494,75 @@ router.get('/:platform/auth', protect, async (req, res) => {
     }
 
     // Use Ayrshare JWT/SSO flow for ALL platforms (Business Plan approach)
-    // Bypassing Multi-User Profile creation because the current API key is not on a Business Plan
-    // This forces all connections to use the primary Ayrshare account.
-    let profileKey = 'primary';
+    // Step 1: Check if user has an Ayrshare profile, if not create one
+    let profileKey = user.ayrshare?.profileKey;
     
-    // Make sure we update the user document so they don't get stuck later
-    if (!user.ayrshare || user.ayrshare.profileKey !== 'primary') {
-      user.ayrshare = user.ayrshare || {};
-      user.ayrshare.profileKey = 'primary';
-      user.ayrshare.refId = 'primary-ref';
-      user.ayrshare.title = 'Primary Profile';
-      user.ayrshare.createdAt = new Date();
+    // If it's forced to 'primary' from the previous rollback, we should generate a new one
+    if (!profileKey || profileKey === 'primary') {
+      console.log(`Creating Ayrshare profile for user: ${user.email}`);
+      
+      // Create a unique title for this user's Ayrshare profile
+      const profileTitle = `Nebula-${user._id.toString().slice(-8)}-${user.email.split('@')[0]}`;
+      
+      // Configure which social networks to show
+      const disableSocial = ['gmb', 'snapchat', 'telegram', 'threads'];
+      
+      const createResult = await createAyrshareProfile(profileTitle, {
+        hideTopHeader: false,
+        topHeader: `Connect Social Accounts for ${user.businessProfile?.name || user.firstName || 'Your Business'}`,
+        subHeader: 'Click an icon below to securely connect your social media account',
+        disableSocial: disableSocial
+      });
+      
+      if (!createResult.success) {
+        // Check if profile already exists (code 146)
+        if (createResult.code === 146) {
+          console.log('Ayrshare profile already exists, title conflict. Retrying with timestamp...');
+          const uniqueTitle = `Nebula-${Date.now()}-${user._id.toString().slice(-6)}`;
+          const retryResult = await createAyrshareProfile(uniqueTitle, {
+            hideTopHeader: false,
+            disableSocial: disableSocial
+          });
+          
+          if (!retryResult.success) {
+            return res.status(500).json({
+              success: false,
+              message: 'Failed to create social linking profile. Please try again.',
+              error: retryResult.error || retryResult.message
+            });
+          }
+          
+          profileKey = retryResult.profileKey;
+          user.ayrshare = {
+            ...(user.ayrshare || {}),
+            profileKey: retryResult.profileKey,
+            refId: retryResult.refId,
+            title: uniqueTitle,
+            createdAt: new Date(),
+            lastError: ""
+          };
+        } else {
+          console.error('[Platform Auth] Profile creation failed:', createResult);
+          return res.status(500).json({
+            success: false,
+            message: 'Failed to create social linking profile.',
+            error: createResult.error || createResult.message
+          });
+        }
+      } else {
+        profileKey = createResult.profileKey;
+        user.ayrshare = {
+          ...(user.ayrshare || {}),
+          profileKey: createResult.profileKey,
+          refId: createResult.refId,
+          title: profileTitle,
+          createdAt: new Date(),
+          lastError: ""
+        };
+      }
+      
       await user.save();
+      console.log(`Ayrshare profile created for user: ${user.email}, profileKey: ${profileKey?.slice(0, 8)}...`);
     }
     
     // Step 2: Generate JWT URL for SSO to social linking page
@@ -487,26 +570,8 @@ router.get('/:platform/auth', protect, async (req, res) => {
     
     // Map platform to Ayrshare's expected format for allowedSocial
     const ayrshareplatform = AYRSHARE_PLATFORM_MAP[platformLower] || platformLower;
-    
-    if (profileKey === 'primary') {
-      const connectUrlResult = getAyrshareConnectUrl(platformLower, redirectUrl);
-      if (!connectUrlResult.success) {
-        return res.status(500).json({
-          success: false,
-          message: 'Failed to generate social linking URL',
-          error: connectUrlResult.error
-        });
-      }
-      return res.json({
-        success: true,
-        configured: true,
-        authUrl: connectUrlResult.connectUrl,
-        method: 'ayrshare_direct',
-        message: `Connect your ${platform} account securely`
-      });
-    }
 
-    const jwtResult = await generateAyrshareJWT(profileKey, {
+    const jwtResult = await generateAyrshareJWT(user, {
       redirect: redirectUrl,
       logout: true, // Force clear any existing Ayrshare browser session — prevents connecting to the wrong profile
       // Only show the specific platform the user clicked on
@@ -1688,7 +1753,31 @@ router.get('/connect/:platform', protect, async (req, res) => {
     
     // For other platforms, we'll use Ayrshare's dashboard
     // Note: Ayrshare requires account linking through their dashboard
-    const result = await getAyrshareConnectUrl(platform, redirectUrl);
+    let user = await User.findById(req.user._id);
+    if (!user?.ayrshare?.profileKey) {
+      console.log(`[Social Connect] Creating new Ayrshare profile for user: ${user.email}`);
+      const profileTitle = `Nebula-${user._id.toString().slice(-8)}-${user.email.split('@')[0]}`;
+      const createResult = await createAyrshareProfile(profileTitle, { 
+        hideTopHeader: false, 
+        disableSocial: ['gmb', 'snapchat', 'telegram', 'threads'] 
+      });
+      if (createResult.success) {
+        user.ayrshare = {
+          profileKey: createResult.profileKey,
+          refId: createResult.refId,
+          title: createResult.title || profileTitle,
+          createdAt: new Date(),
+          activeSocialAccounts: [],
+          displayNames: [],
+          lastCheckedAt: null,
+          lastError: ''
+        };
+        await user.save();
+      } else {
+        return res.status(500).json({ success: false, message: 'Failed to create social profile for connection' });
+      }
+    }
+    const result = await getAyrshareConnectUrl(platform, redirectUrl, user);
     
     res.json({
       success: true,
@@ -1859,7 +1948,31 @@ router.get('/ayrshare/connect-url/:platform', protect, async (req, res) => {
     }
     
     // Get the Ayrshare connect URL
-    const result = await getAyrshareConnectUrl(platform, redirectUrl);
+    let user = await User.findById(req.user._id);
+    if (!user?.ayrshare?.profileKey) {
+      console.log(`[Social Connect] Creating new Ayrshare profile for user: ${user.email}`);
+      const profileTitle = `Nebula-${user._id.toString().slice(-8)}-${user.email.split('@')[0]}`;
+      const createResult = await createAyrshareProfile(profileTitle, { 
+        hideTopHeader: false, 
+        disableSocial: ['gmb', 'snapchat', 'telegram', 'threads'] 
+      });
+      if (createResult.success) {
+        user.ayrshare = {
+          profileKey: createResult.profileKey,
+          refId: createResult.refId,
+          title: createResult.title || profileTitle,
+          createdAt: new Date(),
+          activeSocialAccounts: [],
+          displayNames: [],
+          lastCheckedAt: null,
+          lastError: ''
+        };
+        await user.save();
+      } else {
+        return res.status(500).json({ success: false, message: 'Failed to create social profile for connection' });
+      }
+    }
+    const result = await getAyrshareConnectUrl(platform, redirectUrl, user);
     
     if (result.success) {
       res.json({

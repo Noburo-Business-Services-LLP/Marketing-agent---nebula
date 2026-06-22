@@ -10,6 +10,7 @@ const {
   getSummary,
   getSettings,
   updateSettings,
+  setAutoReplyToggle,
   toConversationDTO,
   toMessageDTO
 } = require('../services/socialInboxService');
@@ -20,10 +21,22 @@ function getUserId(req) {
 }
 
 function verifyWebhookRequest(req) {
-  const secret = process.env.SOCIAL_INBOX_WEBHOOK_SECRET || process.env.WEBHOOK_SECRET || '';
-  if (!secret) return true;
-  const provided = req.headers['x-nebulaa-webhook-secret'] || req.query.secret || req.body?.secret;
-  return String(provided || '') === secret;
+  const incomingSignature = req.headers['x-ayrshare-signature'] || req.headers['ayrshare-signature'] || req.headers['x-nebulaa-webhook-secret'] || req.query.secret || req.body?.secret;
+  
+  if (!incomingSignature) return false;
+
+  try {
+    const decoded = require('jsonwebtoken').verify(
+      incomingSignature,
+      process.env.AYRSHARE_PRIVATE_KEY,
+      { algorithms: ["RS256"] }
+    );
+    console.log("Webhook signature verified");
+    return true;
+  } catch (err) {
+    console.error('Webhook signature verification failed:', err.message);
+    return false;
+  }
 }
 
 exports.getSummary = async (req, res) => {
@@ -88,7 +101,8 @@ exports.reply = async (req, res) => {
     const user = await User.findById(getUserId(req));
     const result = await createOutboundReply(conversation, body, {
       user,
-      dispatch: req.body?.dispatch !== false
+      dispatch: req.body?.dispatch !== false,
+      commentId: req.body?.commentId || ''
     });
 
     res.json({
@@ -173,6 +187,19 @@ exports.updateSettings = async (req, res) => {
   }
 };
 
+exports.toggleAutoReply = async (req, res) => {
+  try {
+    const settings = await setAutoReplyToggle(getUserId(req), req.body || {}, getUserId(req));
+    res.json({ success: true, settings });
+  } catch (error) {
+    console.error('Toggle auto reply error:', error);
+    res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.message || 'Failed to update auto reply toggle'
+    });
+  }
+};
+
 exports.stream = async (req, res) => {
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
@@ -211,13 +238,19 @@ exports.verifyWebhook = (req, res) => {
 };
 
 exports.receiveWebhook = async (req, res) => {
+  console.log("RAW WEBHOOK:", JSON.stringify(req.body, null, 2));
   try {
+    console.log(`[Webhook] Received incoming webhook payload on platform: ${req.params.platform}`);
+    console.log(`[Webhook] Raw Payload:`, JSON.stringify(req.body, null, 2));
+
     if (!verifyWebhookRequest(req)) {
+      console.warn(`[Webhook] Invalid webhook secret for platform: ${req.params.platform}`);
       return res.status(401).json({ success: false, message: 'Invalid webhook secret' });
     }
 
     const userId = req.query.userId || req.body?.userId;
     if (!userId) {
+      console.warn(`[Webhook] Missing userId in payload for platform: ${req.params.platform}`);
       return res.status(400).json({ success: false, message: 'Webhook userId is required' });
     }
 
@@ -226,6 +259,7 @@ exports.receiveWebhook = async (req, res) => {
 
     for (const payload of payloads) {
       const event = normalizeWebhookPayload(req.params.platform, userId, payload);
+      console.log(`[Webhook] Processing event for user: ${userId}, platform: ${event.platform}, threadId: ${event.providerThreadId}, messageId: ${event.providerMessageId}`);
       results.push(await ingestEvent(event));
     }
 
@@ -240,11 +274,50 @@ exports.receiveWebhook = async (req, res) => {
   }
 };
 
+exports.receiveCommentWebhook = async (req, res) => {
+  console.log("RAW COMMENT WEBHOOK:", JSON.stringify(req.body, null, 2));
+  try {
+    console.log(`[Comment Webhook] Received incoming comment webhook payload on platform: ${req.params.platform}`);
+    
+    // We can use same verify logic if needed, or skip based on setup
+    if (!verifyWebhookRequest(req)) {
+      console.warn(`[Comment Webhook] Invalid webhook secret for platform: ${req.params.platform}`);
+      return res.status(401).json({ success: false, message: 'Invalid webhook secret' });
+    }
+
+    const userId = req.query.userId || req.body?.userId;
+    if (!userId) {
+      console.warn(`[Comment Webhook] Missing userId in payload for platform: ${req.params.platform}`);
+      return res.status(400).json({ success: false, message: 'Webhook userId is required' });
+    }
+
+    const payloads = Array.isArray(req.body?.events) ? req.body.events : [req.body || {}];
+    const results = [];
+
+    // Import ingestComment if needed from service, assuming it's exported
+    const { ingestComment } = require('../services/socialInboxService');
+
+    for (const payload of payloads) {
+      console.log(`[Comment Webhook] Processing comment event for user: ${userId}, platform: ${req.params.platform}`);
+      // Pass the userId into payload to keep it consistent
+      payload.userId = userId;
+      results.push(await ingestComment(req.params.platform, payload));
+    }
+
+    res.json({
+      success: true,
+      received: results.length,
+      duplicates: results.filter(item => item && item.duplicate).length
+    });
+  } catch (error) {
+    console.error('Social inbox comment webhook error:', error);
+    res.status(500).json({ success: false, message: 'Failed to process comment webhook' });
+  }
+};
+
 exports.devIngest = async (req, res) => {
   try {
-    if (process.env.NODE_ENV === 'production') {
-      return res.status(404).json({ success: false, message: 'Not found' });
-    }
+
     const event = normalizeWebhookPayload(req.body?.platform || 'instagram', getUserId(req), req.body || {});
     const result = await ingestEvent(event);
     res.json({
@@ -256,5 +329,58 @@ exports.devIngest = async (req, res) => {
   } catch (error) {
     console.error('Dev social inbox ingest error:', error);
     res.status(500).json({ success: false, message: 'Failed to create test inbox event' });
+  }
+};
+
+exports.testWebhook = async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+
+    const testPayload = {
+      platform: req.body?.platform || 'instagram',
+      userId: userId,
+      events: [
+        {
+          id: `test-msg-${Date.now()}`,
+          message_id: `test-msg-${Date.now()}`,
+          message_type: req.body?.type || 'message',
+          text: req.body?.message || 'Hello, this is a test message from Instagram.',
+          thread_id: req.body?.thread_id || `test-thread-${Date.now()}`,
+          author_id: req.body?.author_id || 'testuser123',
+          author_name: req.body?.author_name || 'Test User',
+          author_username: req.body?.author_username || 'test.user',
+          created_time: new Date().toISOString()
+        }
+      ]
+    };
+
+    req.body = testPayload;
+    req.params.platform = testPayload.platform;
+    req.query.userId = userId;
+
+    // Call the receiveWebhook handler directly to simulate an inbound webhook
+    // Bypassing verifyWebhookRequest explicitly for this dev endpoint
+    const payloads = testPayload.events;
+    const results = [];
+
+    console.log(`[TestWebhook] Simulating incoming payload:`, JSON.stringify(payloads, null, 2));
+
+    for (const payload of payloads) {
+      const event = normalizeWebhookPayload(testPayload.platform, userId, payload);
+      results.push(await ingestEvent(event));
+    }
+
+    res.json({
+      success: true,
+      received: results.length,
+      conversation: toConversationDTO(results[0].conversation),
+      message: toMessageDTO(results[0].message, results[0].conversation),
+      ai: results[0].ai
+    });
+
+  } catch (error) {
+    console.error('Social inbox dev test error:', error);
+    res.status(500).json({ success: false, message: 'Failed to simulate webhook' });
   }
 };

@@ -17,6 +17,20 @@ const autoReplyRuleSchema = new mongoose.Schema({
   priority: { type: Number, default: 0 }
 }, { _id: true });
 
+const autoReplyToggleSchema = new mongoose.Schema({
+  platform: {
+    type: String,
+    enum: ['instagram', 'facebook', 'linkedin', 'x', 'youtube'],
+    required: true
+  },
+  channelType: {
+    type: String,
+    enum: ['message', 'comment'],
+    required: true
+  },
+  enabled: { type: Boolean, default: false }
+}, { _id: false });
+
 const autoReplySettingsSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -51,6 +65,7 @@ const autoReplySettingsSchema = new mongoose.Schema({
     default: 'friendly'
   },
   responseRules: { type: [autoReplyRuleSchema], default: [] },
+  channelOverrides: { type: [autoReplyToggleSchema], default: [] },
   guardrails: {
     requireApprovalForNegative: { type: Boolean, default: true },
     requireApprovalForHighPriority: { type: Boolean, default: true },
@@ -68,6 +83,7 @@ const autoReplySettingsSchema = new mongoose.Schema({
 });
 
 autoReplySettingsSchema.index({ userId: 1, workspaceId: 1 });
+autoReplySettingsSchema.index({ userId: 1, 'channelOverrides.platform': 1, 'channelOverrides.channelType': 1 });
 
 module.exports = mongoose.models.AutoReplySettings ||
   mongoose.model('AutoReplySettings', autoReplySettingsSchema);

@@ -16,7 +16,7 @@ import {
   Twitter,
   Youtube,
 } from 'lucide-react';
-import { inboxAPI, InboxConversation, InboxMessage } from '../services/api';
+import { AutoReplySettings, inboxAPI, InboxConversation, InboxMessage } from '../services/api';
 import { useTheme } from '../context/ThemeContext';
 
 type Platform = 'instagram' | 'facebook' | 'linkedin' | 'x' | 'youtube';
@@ -31,6 +31,7 @@ const platformMeta: Record<Platform, { label: string; icon: React.ElementType; c
 
 const priorities = ['all', 'low', 'normal', 'high', 'urgent'];
 const platforms = ['all', 'instagram', 'facebook', 'linkedin', 'x', 'youtube'];
+const commentMessageTypes = ['comment', 'mention', 'reply'];
 
 function timeAgo(value?: string) {
   if (!value) return '';
@@ -59,11 +60,30 @@ const UnifiedInbox: React.FC = () => {
   const [threadLoading, setThreadLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [live, setLive] = useState(false);
+  const [replyingToCommentId, setReplyingToCommentId] = useState('');
+  const [autoReplySettings, setAutoReplySettings] = useState<AutoReplySettings | null>(null);
+  const [autoReplySaving, setAutoReplySaving] = useState(false);
   const [error, setError] = useState('');
   const [threadError, setThreadError] = useState('');
   const threadEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
 
   const selected = conversations.find(item => item.id === selectedId) || null;
+  const selectedChannelType: 'message' | 'comment' = selected?.message_types?.some(type => commentMessageTypes.includes(type))
+    ? 'comment'
+    : 'message';
+  const selectedAutoReplyEnabled = Boolean(selected && (() => {
+    const override = autoReplySettings?.channelOverrides?.find(toggle =>
+      toggle.platform === selected.platform && toggle.channelType === selectedChannelType
+    );
+    if (override) return override.enabled;
+    const channelKey = selectedChannelType === 'comment' ? 'comments' : 'messages';
+    return Boolean(
+      autoReplySettings?.enabled &&
+      autoReplySettings.platforms?.[selected.platform] &&
+      autoReplySettings.channels?.[channelKey]
+    );
+  })());
 
   const loadConversations = async () => {
     setLoading(true);
@@ -94,6 +114,18 @@ const UnifiedInbox: React.FC = () => {
   }, [status, platform, priority, assignedUserId]);
 
   useEffect(() => {
+    const loadAutoReplySettings = async () => {
+      try {
+        const result = await inboxAPI.getSettings();
+        setAutoReplySettings(result.settings);
+      } catch {
+        setAutoReplySettings(null);
+      }
+    };
+    loadAutoReplySettings();
+  }, []);
+
+  useEffect(() => {
     const handle = window.setTimeout(loadConversations, 250);
     return () => window.clearTimeout(handle);
   }, [search]);
@@ -119,7 +151,12 @@ const UnifiedInbox: React.FC = () => {
   }, [selected?.id]);
 
   useEffect(() => {
-    threadEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTo({
+        top: messagesContainerRef.current.scrollHeight,
+        behavior: 'smooth'
+      });
+    }
   }, [messages]);
 
   useEffect(() => {
@@ -131,11 +168,19 @@ const UnifiedInbox: React.FC = () => {
     ws.onmessage = event => {
       try {
         const payload = JSON.parse(event.data);
-        if (payload.type === 'inbox.message.created') {
+        if (payload.type === 'inbox.message.created' || ['message:new', 'comment:new', 'reply:new'].includes(payload.type)) {
           const conversation = payload.data?.conversation as InboxConversation;
           const message = payload.data?.message as InboxMessage;
-          setConversations(current => [conversation, ...current.filter(item => item.id !== conversation.id)]);
-          if (conversation.id === selectedId) setMessages(current => [...current, message]);
+          
+          if (conversation && message) {
+            setConversations(current => [conversation, ...current.filter(item => item.id !== conversation.id)]);
+            if (conversation.id === selectedId) {
+              setMessages(current => {
+                if (current.some(m => m.id === message.id)) return current;
+                return [...current, message];
+              });
+            }
+          }
         }
         if (payload.type === 'inbox.notification') {
           setNotifications(current => [{
@@ -148,7 +193,9 @@ const UnifiedInbox: React.FC = () => {
         }
         if (payload.type === 'inbox.message.replied') {
           const message = payload.data as InboxMessage;
-          if (message.conversation_id === selectedId) setMessages(current => [...current, message]);
+          if (message.conversation_id === selectedId) {
+            setMessages(current => current.some(m => m.id === message.id) ? current : [...current, message]);
+          }
         }
       } catch {
         setLive(false);
@@ -165,9 +212,12 @@ const UnifiedInbox: React.FC = () => {
     const body = reply.trim();
     setReply('');
     try {
-      const result = await inboxAPI.reply(selected.id, body);
-      setMessages(current => [...current, result.message]);
+      const result = replyingToCommentId
+        ? await inboxAPI.replyToComment(selected.id, body, replyingToCommentId)
+        : await inboxAPI.reply(selected.id, body);
+      setMessages(current => current.some(message => message.id === result.message.id) ? current : [...current, result.message]);
       setConversations(current => current.map(item => item.id === selected.id ? { ...item, status: 'replied', last_message_preview: body } : item));
+      setReplyingToCommentId('');
     } catch (err: any) {
       setReply(body);
       setThreadError(err?.message || 'Reply could not be sent.');
@@ -211,15 +261,50 @@ const UnifiedInbox: React.FC = () => {
     }
   };
 
+  const toggleAutoReply = async () => {
+    if (!selected) return;
+    const enabled = !selectedAutoReplyEnabled;
+    setAutoReplySaving(true);
+    setAutoReplySettings(current => {
+      if (!current) return current;
+      const channelOverrides = (current.channelOverrides || []).filter(toggle =>
+        !(toggle.platform === selected.platform && toggle.channelType === selectedChannelType)
+      );
+      return {
+        ...current,
+        enabled: enabled || channelOverrides.some(toggle => toggle.enabled),
+        automationMode: enabled ? 'fully_automatic' : current.automationMode,
+        channelOverrides: [...channelOverrides, { platform: selected.platform, channelType: selectedChannelType, enabled }]
+      };
+    });
+    try {
+      const result = await inboxAPI.toggleAutoReply({
+        platform: selected.platform,
+        channelType: selectedChannelType,
+        enabled
+      });
+      setAutoReplySettings(result.settings);
+      if (enabled) setSuggestions([]);
+    } catch (err: any) {
+      setThreadError(err?.message || 'Could not update auto reply.');
+      try {
+        const result = await inboxAPI.getSettings();
+        setAutoReplySettings(result.settings);
+      } catch { }
+    } finally {
+      setAutoReplySaving(false);
+    }
+  };
+
   const shell = isDarkMode ? 'bg-[#0b0f18] border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-900';
   const muted = isDarkMode ? 'text-slate-400' : 'text-slate-500';
   const panel = isDarkMode ? 'bg-[#0d1117] border-slate-800' : 'bg-white border-slate-200';
 
   return (
-    <div className={`min-h-[calc(100vh-7rem)] rounded-lg border overflow-hidden ${shell}`}>
-      <div className={`flex flex-col lg:flex-row h-[calc(100vh-8rem)] min-h-[720px] ${isDarkMode ? 'divide-slate-800' : 'divide-slate-200'} lg:divide-x`}>
+    <div className={`min-h-[650px] h-[calc(100vh-8rem)] rounded-lg border overflow-hidden flex flex-col ${shell}`}>
+      <div className={`flex-1 flex flex-col lg:flex-row min-h-0 ${isDarkMode ? 'divide-slate-800' : 'divide-slate-200'} lg:divide-x`}>
         <aside className="w-full lg:w-[360px] flex flex-col min-h-0">
-          <div className={`p-4 border-b ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
+          <div className={`shrink-0 p-4 border-b ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
             <div className="flex items-center justify-between gap-3 mb-4">
               <div>
                 <h2 className="text-lg font-semibold">Unified Inbox</h2>
@@ -332,7 +417,7 @@ const UnifiedInbox: React.FC = () => {
         <section className="flex-1 flex flex-col min-w-0 min-h-0">
           {selected ? (
             <>
-              <header className={`p-4 border-b flex flex-wrap items-center justify-between gap-3 ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
+              <header className={`shrink-0 p-4 border-b flex flex-wrap items-center justify-between gap-3 ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
                 <div className="flex items-center gap-3 min-w-0">
                   {(() => {
                     const meta = platformMeta[selected.platform as Platform];
@@ -345,6 +430,18 @@ const UnifiedInbox: React.FC = () => {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  <button
+                    onClick={toggleAutoReply}
+                    disabled={autoReplySaving}
+                    className={`h-9 px-3 rounded-lg border text-xs font-semibold flex items-center gap-2 transition-colors ${selectedAutoReplyEnabled ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : panel}`}
+                    title={`Auto reply for ${platformMeta[selected.platform as Platform]?.label} ${selectedChannelType === 'comment' ? 'comments' : 'messages'}`}
+                  >
+                    {autoReplySaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bot className="w-4 h-4" />}
+                    <span>Auto Reply {selectedAutoReplyEnabled ? 'ON' : 'OFF'}</span>
+                    <span className={`w-8 h-4 rounded-full p-0.5 flex ${selectedAutoReplyEnabled ? 'justify-end bg-emerald-400' : 'justify-start bg-slate-500/40'}`}>
+                      <span className="h-3 w-3 rounded-full bg-white" />
+                    </span>
+                  </button>
                   <button onClick={() => markStatus('read')} className={`p-2 rounded-lg border ${panel}`} title="Mark read"><CheckCheck className="w-4 h-4" /></button>
                   <button onClick={loadConversations} className={`p-2 rounded-lg border ${panel}`} title="Refresh"><RefreshCw className="w-4 h-4" /></button>
                 </div>
@@ -352,7 +449,7 @@ const UnifiedInbox: React.FC = () => {
 
               <div className="flex-1 grid xl:grid-cols-[1fr_320px] min-h-0">
                 <div className="flex flex-col min-h-0">
-                  <div className={`flex-1 overflow-y-auto p-4 space-y-4 ${isDarkMode ? 'bg-[#080b12]' : 'bg-slate-50'}`}>
+                  <div ref={messagesContainerRef} className={`flex-1 overflow-y-auto p-4 space-y-4 ${isDarkMode ? 'bg-[#080b12]' : 'bg-slate-50'}`}>
                     {threadLoading ? (
                       <div className="h-full flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-[#ffcc29]" /></div>
                     ) : threadError ? (
@@ -374,13 +471,38 @@ const UnifiedInbox: React.FC = () => {
                     ) : messages.map(message => {
                       const outbound = message.direction === 'outbound';
                       return (
-                        <div key={message.id} className={`flex ${outbound ? 'justify-end' : 'justify-start'}`}>
+                        <div key={message.id} className={`flex ${outbound ? 'justify-end' : 'justify-start'} group`}>
                           <div className={`max-w-[78%] rounded-lg px-4 py-3 border ${outbound ? 'bg-[#ffcc29] text-[#070A12] border-[#ffcc29]' : panel}`}>
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="text-xs font-semibold">{outbound ? 'Nebulaa' : message.author_name}</span>
+                            <div className="flex items-center flex-wrap gap-2 mb-1">
+                              <span className="text-xs font-semibold">{message.sender_type === 'ai' ? 'AI' : outbound ? 'Nebulaa' : message.author_name}</span>
                               <span className="text-[11px] opacity-60">{timeAgo(message.created_at)}</span>
+                              {message.message_type && message.message_type !== 'message' && (
+                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${outbound ? 'bg-black/10 text-black/70' : 'bg-[#ffcc29]/20 text-[#d8ad20]'}`}>
+                                  {message.message_type}
+                                </span>
+                              )}
+                              {(message.auto_sent || message.auto_replied || message.sender_type === 'ai') && (
+                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 ${outbound ? 'bg-black/10 text-black/70' : 'bg-blue-500/10 text-blue-500'}`}>
+                                  <Bot className="w-3 h-3" /> AI Replied
+                                </span>
+                              )}
+                              {message.sentiment && !outbound && message.sentiment !== 'neutral' && (
+                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${message.sentiment === 'positive' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
+                                  {message.sentiment}
+                                </span>
+                              )}
                             </div>
                             <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.body}</p>
+                            {!outbound && ['comment', 'mention'].includes(message.message_type || '') && (
+                              <div className="mt-2 text-right opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button
+                                  onClick={() => setReplyingToCommentId(message.provider_message_id || message.id)}
+                                  className={`text-[11px] font-semibold flex items-center gap-1 ml-auto ${muted} hover:text-[#ffcc29]`}
+                                >
+                                  <MessageCircle className="w-3 h-3" /> Reply
+                                </button>
+                              </div>
+                            )}
                           </div>
                         </div>
                       );
@@ -388,19 +510,24 @@ const UnifiedInbox: React.FC = () => {
                     <div ref={threadEndRef} />
                   </div>
 
-                  <div className={`p-4 border-t ${isDarkMode ? 'border-slate-800 bg-[#0d1117]' : 'border-slate-200 bg-white'}`}>
+                  <div className={`shrink-0 p-4 border-t ${isDarkMode ? 'border-slate-800 bg-[#0d1117]' : 'border-slate-200 bg-white'}`}>
                     <div className={`rounded-lg border ${panel} p-3`}>
                       <textarea
                         value={reply}
                         onChange={event => setReply(event.target.value)}
                         rows={3}
-                        placeholder="Reply across the original social platform"
+                        placeholder={replyingToCommentId ? "Replying to a specific comment..." : "Reply across the original social platform"}
                         className="w-full bg-transparent outline-none resize-none text-sm"
                       />
                       <div className="flex items-center justify-between pt-2">
                         <div className={`flex items-center gap-2 text-xs ${muted}`}>
                           <ShieldAlert className="w-4 h-4" />
                           Sends through the connected platform API
+                          {replyingToCommentId && (
+                            <button onClick={() => setReplyingToCommentId('')} className="ml-2 px-2 py-0.5 rounded bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors font-semibold">
+                              Cancel Comment Reply
+                            </button>
+                          )}
                         </div>
                         <button
                           onClick={sendReply}
@@ -415,12 +542,12 @@ const UnifiedInbox: React.FC = () => {
                   </div>
                 </div>
 
-                <aside className={`hidden xl:flex flex-col border-l ${isDarkMode ? 'border-slate-800 bg-[#0d1117]' : 'border-slate-200 bg-white'}`}>
-                  <div className="p-4 border-b border-inherit">
+                <aside className={`hidden xl:flex flex-col min-h-0 border-l ${isDarkMode ? 'border-slate-800 bg-[#0d1117]' : 'border-slate-200 bg-white'}`}>
+                  <div className="shrink-0 p-4 border-b border-inherit">
                     <h4 className="font-semibold flex items-center gap-2"><Sparkles className="w-4 h-4 text-[#ffcc29]" /> AI Assist</h4>
                     <p className={`text-xs mt-1 ${muted}`}>Reply suggestions, sentiment, spam risk, and priority tagging.</p>
                   </div>
-                  <div className="p-4 space-y-4 overflow-y-auto">
+                  <div className="flex-1 p-4 space-y-4 overflow-y-auto min-h-0">
                     <div className={`rounded-lg border p-3 ${panel}`}>
                       <div className="grid grid-cols-2 gap-3 text-xs">
                         <div><p className={muted}>Sentiment</p><p className="font-semibold capitalize">{selected.sentiment || 'neutral'}</p></div>
@@ -445,8 +572,10 @@ const UnifiedInbox: React.FC = () => {
                     </div>
 
                     <div className="space-y-2">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Suggestions</p>
-                      {suggestions.length ? suggestions.map(suggestion => (
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{selectedAutoReplyEnabled ? 'Automatic Replies' : 'Suggestions'}</p>
+                      {selectedAutoReplyEnabled ? (
+                        <div className={`rounded-lg border p-3 text-sm ${panel} ${muted}`}>Auto Reply is on for this {selectedChannelType === 'comment' ? 'comment channel' : 'message channel'}. AI replies are sent and saved in the thread.</div>
+                      ) : suggestions.length ? suggestions.map(suggestion => (
                         <button key={suggestion} onClick={() => setReply(suggestion)} className={`w-full text-left rounded-lg border p-3 text-sm leading-relaxed ${panel} hover:border-[#ffcc29]/60`}>
                           <Bot className="w-4 h-4 text-[#ffcc29] mb-2" />
                           {suggestion}

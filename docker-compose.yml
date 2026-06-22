@@ -1,4 +1,18 @@
 services:
+  ngrok:
+    image: ngrok/ngrok:latest
+    container_name: nebulaa-ngrok
+    restart: unless-stopped
+    ports:
+      - "4040:4040"
+    env_file:
+      - ./backend/.env
+    command:
+      - "http"
+      - "app:5000"
+    depends_on:
+      - app
+
   app:
     build:
       context: .

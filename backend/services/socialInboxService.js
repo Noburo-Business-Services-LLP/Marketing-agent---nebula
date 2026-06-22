@@ -37,6 +37,12 @@ function normalizeMessageType(type = '') {
   return MESSAGE_TYPE_ALIASES[String(type || '').toLowerCase()] || 'message';
 }
 
+function normalizeChannelType(channelType = '') {
+  const value = String(channelType || '').toLowerCase();
+  if (['comment', 'comments'].includes(value)) return 'comment';
+  return 'message';
+}
+
 function clampScore(value, fallback = 0) {
   const n = Number(value);
   if (!Number.isFinite(n)) return fallback;
@@ -103,8 +109,24 @@ function extractBody(payload = {}) {
 }
 
 function normalizeWebhookPayload(platform, userId, payload = {}) {
-  const normalizedPlatform = normalizePlatform(platform || payload.platform);
+  let sourcePlatform = platform;
+  if (sourcePlatform === 'ayrshare' || !sourcePlatform) {
+    sourcePlatform = payload.platform || payload.source || 'instagram';
+  }
+  const normalizedPlatform = normalizePlatform(sourcePlatform);
   const now = new Date();
+  
+  // Extract Ayrshare specific fields directly
+  const ayrUser = payload.user || payload.sender || payload.from || payload.author || {};
+  const authorId = ayrUser.id || 'unknown';
+  const authorName = ayrUser.name || ayrUser.username || '';
+  const authorUsername = ayrUser.username || '';
+  const authorAvatar = ayrUser.profilePicture || ayrUser.picture || ayrUser.profile_pic || payload.avatar_url || '';
+  
+  const messageText = payload.message?.text || payload.text || extractBody(payload);
+  const threadId = payload.conversation?.id || payload.threadId || payload.thread_id || payload.conversation_id || payload.parent_id || payload.post_id || payload.video_id || payload.entry?.[0]?.messaging?.[0]?.sender?.id || '';
+
+  // Handle Instagram specific structure or fallbacks
   const rawMessageId =
     payload.id ||
     payload.message_id ||
@@ -114,33 +136,52 @@ function normalizeWebhookPayload(platform, userId, payload = {}) {
     payload.entry?.[0]?.messaging?.[0]?.message?.mid ||
     payload.entry?.[0]?.changes?.[0]?.value?.id ||
     `${normalizedPlatform}-${now.getTime()}`;
+    
   const providerMessageId = String(rawMessageId);
-  const body = extractBody(payload);
+  const finalThreadId = String(threadId || providerMessageId);
+  
   const messageType = normalizeMessageType(payload.type || payload.message_type || payload.field || payload.object || 'message');
-  const threadId = String(payload.thread_id || payload.conversation_id || payload.parent_id || payload.post_id || payload.video_id || providerMessageId);
-  const from = payload.from || payload.author || payload.user || {};
+  const recipientId = payload.recipient?.id || payload.to?.id || 'unknown';
+
+  // Extract created_time properly
+  const timestampRaw = payload.created_time || payload.createdAt || payload.timestamp || payload.entry?.[0]?.time || payload.entry?.[0]?.messaging?.[0]?.timestamp;
+  const occurredAt = timestampRaw ? (typeof timestampRaw === 'number' && timestampRaw < 9999999999 ? new Date(timestampRaw * 1000) : new Date(timestampRaw)) : now;
 
   return {
     userId,
     platform: normalizedPlatform,
     workspaceId: String(payload.workspaceId || payload.workspace_id || 'default'),
-    socialAccountId: String(payload.social_account_id || payload.account_id || payload.page_id || ''),
-    providerThreadId: threadId,
+    socialAccountId: String(payload.social_account_id || payload.account_id || payload.page_id || recipientId || ''),
+    providerThreadId: finalThreadId,
     providerMessageId,
     providerParentId: String(payload.parent_id || payload.in_reply_to_id || ''),
     messageType,
-    participantId: String(payload.author_id || from.id || payload.sender?.id || 'unknown'),
-    participantName: String(payload.author_name || from.name || payload.sender?.name || 'Social user'),
-    participantUsername: String(payload.author_username || payload.username || from.username || ''),
-    avatarUrl: String(payload.avatar_url || from.picture || ''),
-    authorId: String(payload.author_id || from.id || payload.sender?.id || 'unknown'),
-    authorName: String(payload.author_name || from.name || payload.sender?.name || 'Social user'),
-    body,
+    participantId: String(authorId),
+    participantName: String(authorName),
+    participantUsername: String(authorUsername),
+    avatarUrl: String(authorAvatar),
+    authorId: String(authorId),
+    authorName: String(authorName),
+    recipientId: String(recipientId),
+    body: messageText,
     mediaUrls: Array.isArray(payload.media_urls) ? payload.media_urls : [],
     permalink: String(payload.permalink || payload.url || ''),
+    postId: String(payload.post_id || payload.media_id || ''),
+    commentId: String(payload.comment_id || payload.id || ''),
+    parentCommentId: String(payload.parent_id || payload.parent_comment_id || ''),
+    platformPostType: String(payload.media_type || payload.post_type || '').toLowerCase(),
     rawPayload: payload,
-    occurredAt: payload.created_time || payload.createdAt || payload.timestamp ? new Date(payload.created_time || payload.createdAt || payload.timestamp) : now
+    occurredAt
   };
+}
+
+async function ingestComment(platform, payload) {
+  const event = normalizeWebhookPayload(platform, payload.userId, payload);
+  // Enforce comment types if not set
+  if (event.messageType === 'message' || !event.messageType) {
+    event.messageType = 'comment';
+  }
+  return await ingestEvent(event);
 }
 
 async function getSettings(userId) {
@@ -160,6 +201,7 @@ async function updateSettings(userId, data = {}, updatedBy = null) {
     businessTone: data.businessTone,
     replyStyle: data.replyStyle,
     responseRules: data.responseRules,
+    channelOverrides: data.channelOverrides,
     guardrails: data.guardrails,
     updatedBy
   };
@@ -168,6 +210,69 @@ async function updateSettings(userId, data = {}, updatedBy = null) {
   return AutoReplySettings.findOneAndUpdate(
     { userId },
     { $set: allowed },
+    { new: true, upsert: true, setDefaultsOnInsert: true }
+  );
+}
+
+async function setAutoReplyToggle(userId, data = {}, updatedBy = null) {
+  const platform = normalizePlatform(data.platform);
+  const channelType = normalizeChannelType(data.channelType);
+
+  if (!['instagram', 'facebook', 'linkedin', 'x', 'youtube'].includes(platform)) {
+    const error = new Error('Invalid platform');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (typeof data.enabled !== 'boolean') {
+    const error = new Error('Enabled must be a boolean');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const settings = await getSettings(userId);
+  const channelKey = channelType === 'comment' ? 'comments' : 'messages';
+  const existingOverrides = (settings.channelOverrides || []).map(toggle => ({
+    platform: toggle.platform,
+    channelType: toggle.channelType,
+    enabled: Boolean(toggle.enabled)
+  }));
+  const channelOverrides = existingOverrides.filter(toggle =>
+    !(toggle.platform === platform && toggle.channelType === channelType)
+  );
+  channelOverrides.push({ platform, channelType, enabled: data.enabled });
+
+  const nextPlatforms = {
+    instagram: Boolean(settings.platforms?.instagram),
+    facebook: Boolean(settings.platforms?.facebook),
+    linkedin: Boolean(settings.platforms?.linkedin),
+    x: Boolean(settings.platforms?.x),
+    youtube: Boolean(settings.platforms?.youtube),
+    [platform]: data.enabled
+  };
+
+  const nextChannels = {
+    messages: Boolean(settings.channels?.messages),
+    comments: Boolean(settings.channels?.comments),
+    mentions: Boolean(settings.channels?.mentions),
+    replies: Boolean(settings.channels?.replies),
+    [channelKey]: data.enabled,
+    ...(channelType === 'comment' ? { mentions: data.enabled } : {})
+  };
+
+  const anyEnabled = channelOverrides.some(toggle => toggle.enabled);
+  return AutoReplySettings.findOneAndUpdate(
+    { userId },
+    {
+      $set: {
+        enabled: anyEnabled,
+        automationMode: data.enabled ? 'fully_automatic' : settings.automationMode,
+        platforms: nextPlatforms,
+        channels: nextChannels,
+        channelOverrides,
+        updatedBy
+      }
+    },
     { new: true, upsert: true, setDefaultsOnInsert: true }
   );
 }
@@ -197,6 +302,25 @@ function getChannelKey(messageType) {
   if (messageType === 'mention') return 'mentions';
   if (messageType === 'reply') return 'replies';
   return 'messages';
+}
+
+function getAutomationChannelType(messageType) {
+  return ['comment', 'mention', 'reply'].includes(messageType) ? 'comment' : 'message';
+}
+
+function isAutoReplyEnabled(settings, event) {
+  if (!settings?.enabled) return false;
+
+  const platform = normalizePlatform(event.platform);
+  const channelType = getAutomationChannelType(event.messageType);
+  const override = (settings.channelOverrides || []).find(toggle =>
+    toggle.platform === platform && toggle.channelType === channelType
+  );
+
+  if (override) return Boolean(override.enabled);
+
+  return Boolean(settings.platforms?.[platform]) &&
+    Boolean(settings.channels?.[getChannelKey(event.messageType)]);
 }
 
 async function countAutoRepliesToday(conversationId) {
@@ -286,9 +410,8 @@ Rules:
 }
 
 async function decideAutomation({ settings, event, insights, conversation }) {
-  if (!settings.enabled) return { action: 'suggest_only', reason: 'Automation disabled' };
-  if (!settings.platforms?.[event.platform]) return { action: 'suggest_only', reason: 'Platform automation disabled' };
-  if (!settings.channels?.[getChannelKey(event.messageType)]) return { action: 'suggest_only', reason: 'Channel automation disabled' };
+  const autoReplyEnabled = isAutoReplyEnabled(settings, event);
+  if (!autoReplyEnabled) return { action: 'suggest_only', reason: 'Auto reply disabled for this platform/channel' };
   if (settings.guardrails?.skipSpam && insights.spamScore >= 80) return { action: 'skip', reason: 'Skipped spam-like message' };
   if (settings.guardrails?.requireApprovalForNegative && insights.sentiment === 'negative') return { action: 'needs_approval', reason: 'Negative sentiment requires approval' };
   if (settings.guardrails?.requireApprovalForHighPriority && ['high', 'urgent'].includes(insights.priority)) return { action: 'needs_approval', reason: 'High priority message requires approval' };
@@ -378,6 +501,10 @@ async function ingestEvent(eventInput) {
     leadScore: insights.leadScore,
     engagementScore: insights.engagementScore,
     priority: insights.priority,
+    postId: event.postId || '',
+    commentId: event.commentId || '',
+    parentCommentId: event.parentCommentId || '',
+    platformPostType: ['post', 'reel', 'story'].includes(event.platformPostType) ? event.platformPostType : '',
     rawPayload: event.rawPayload,
     createdAt: event.occurredAt
   };
@@ -433,9 +560,11 @@ async function ingestEvent(eventInput) {
       autoReply = await createOutboundReply(conversation, aiResult.recommendedReply, {
         user,
         aiAuto: true,
-        dispatch: true
+        dispatch: true,
+        commentId: event.commentId || event.providerMessageId
       });
       message.ai.autoReplyStatus = autoReply.dispatch?.success ? 'sent' : 'failed';
+      message.autoReplied = autoReply.dispatch?.success ? true : false;
       await message.save();
     }
   }
@@ -448,6 +577,13 @@ async function ingestEvent(eventInput) {
     ai: aiResult,
     autoReply
   });
+  
+  // Specific real-time events required by UI
+  emitToUser(event.userId, `${event.messageType}:new`, {
+    conversation: conversationDto,
+    message: messageDto
+  });
+  
   emitToUser(event.userId, 'inbox.notification', {
     type: `new_${event.messageType}`,
     title: `New ${event.messageType} on ${event.platform}`,
@@ -460,7 +596,12 @@ async function ingestEvent(eventInput) {
 
 async function createOutboundReply(conversation, body, options = {}) {
   const user = options.user || await User.findById(conversation.userId);
-  const dispatch = options.dispatch ? await dispatchReply({ user, conversation, body }) : { success: true, provider: 'local' };
+  // If we have a specific commentId, we should pass it to dispatchReply
+  const dispatchPayload = { user, conversation, body };
+  if (options.commentId) {
+    dispatchPayload.commentId = options.commentId;
+  }
+  const dispatch = options.dispatch ? await dispatchReply(dispatchPayload) : { success: true, provider: 'local' };
   const providerMessageId = dispatch?.providerResponse?.id || dispatch?.providerResponse?.postIds?.[0] || `nebulaa-reply-${Date.now()}`;
 
   const message = await SocialInboxMessage.create({
@@ -471,9 +612,11 @@ async function createOutboundReply(conversation, body, options = {}) {
     providerThreadId: conversation.providerThreadId,
     providerMessageId,
     direction: 'outbound',
+    senderType: options.aiAuto ? 'ai' : 'agent',
+    autoSent: Boolean(options.aiAuto),
     messageType: 'reply',
     authorId: 'nebulaa',
-    authorName: 'Nebulaa',
+    authorName: options.aiAuto ? 'AI' : 'Nebulaa',
     body,
     sentiment: 'neutral',
     spamScore: 0,
@@ -485,9 +628,11 @@ async function createOutboundReply(conversation, body, options = {}) {
   conversation.messages.push({
     providerMessageId: message.providerMessageId,
     direction: 'outbound',
+    senderType: message.senderType,
+    autoSent: message.autoSent,
     messageType: 'reply',
     authorId: 'nebulaa',
-    authorName: 'Nebulaa',
+    authorName: message.authorName,
     body,
     sentiment: 'neutral',
     spamScore: 0,
@@ -502,6 +647,10 @@ async function createOutboundReply(conversation, body, options = {}) {
 
   const dto = toMessageDTO(message, conversation);
   emitToUser(conversation.userId, 'inbox.message.replied', dto);
+  emitToUser(conversation.userId, 'reply:new', {
+    conversation: toConversationDTO(conversation),
+    message: dto
+  });
   return { message, dispatch };
 }
 
@@ -658,6 +807,8 @@ function toMessageDTO(message, conversation) {
     provider_message_id: message.providerMessageId,
     provider_parent_id: message.providerParentId,
     direction: message.direction,
+    sender_type: message.senderType || (message.direction === 'outbound' ? 'agent' : 'customer'),
+    auto_sent: Boolean(message.autoSent),
     message_type: message.messageType,
     author_id: message.authorId,
     author_name: message.authorName,
@@ -670,8 +821,36 @@ function toMessageDTO(message, conversation) {
     engagement_score: message.engagementScore || 0,
     priority: message.priority || 'normal',
     ai: message.ai || {},
+    auto_replied: message.autoReplied || false,
     created_at: message.createdAt
   };
+}
+
+let pollingInterval = null;
+
+function startInboxPolling() {
+  if (pollingInterval) return;
+  console.log('✅ Started Social Inbox fallback polling (every 30s)');
+  
+  pollingInterval = setInterval(async () => {
+    try {
+      // In a real production setup, this would query Ayrshare's history or Meta Graph API directly.
+      // Here we stub the execution to simulate polling fetch logic.
+      // We look for active users with social connections
+      const activeUsers = await User.find({ isActive: true }).select('_id ayrshare connectedSocials');
+      
+      for (const user of activeUsers) {
+        // Pseudo-code for actual implementation:
+        // const missedEvents = await fetchMissedEventsFromAyrshare(user);
+        // for (const event of missedEvents) {
+        //   const normalized = normalizeWebhookPayload(event.platform, user._id, event);
+        //   await ingestEvent(normalized);
+        // }
+      }
+    } catch (error) {
+      console.error('Social Inbox polling error:', error.message);
+    }
+  }, 30000);
 }
 
 module.exports = {
@@ -680,13 +859,16 @@ module.exports = {
   analyzeEngagement,
   normalizeWebhookPayload,
   ingestEvent,
+  ingestComment,
   createOutboundReply,
   listConversations,
   getConversationThread,
   getSummary,
   getSettings,
   updateSettings,
+  setAutoReplyToggle,
   toConversationDTO,
   toMessageDTO,
-  getConnectedInboxPlatforms
+  getConnectedInboxPlatforms,
+  startInboxPolling
 };

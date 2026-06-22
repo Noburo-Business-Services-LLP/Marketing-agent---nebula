@@ -23,7 +23,13 @@ const socialInboxMessageSchema = new mongoose.Schema({
   providerThreadId: { type: String, default: '', index: true },
   providerMessageId: { type: String, required: true },
   providerParentId: { type: String, default: '' },
+  postId: { type: String, default: '' },
+  commentId: { type: String, default: '' },
+  parentCommentId: { type: String, default: '' },
+  platformPostType: { type: String, enum: ['post', 'reel', 'story', ''], default: '' },
   direction: { type: String, enum: ['inbound', 'outbound'], default: 'inbound', index: true },
+  senderType: { type: String, enum: ['customer', 'agent', 'ai', 'system'], default: 'customer', index: true },
+  autoSent: { type: Boolean, default: false, index: true },
   messageType: {
     type: String,
     enum: ['message', 'comment', 'mention', 'reply', 'dm', 'system'],
@@ -51,6 +57,7 @@ const socialInboxMessageSchema = new mongoose.Schema({
     autoReplyReason: { type: String, default: '' },
     generatedAt: { type: Date, default: null }
   },
+  autoReplied: { type: Boolean, default: false },
   rawPayload: { type: mongoose.Schema.Types.Mixed, default: {} },
   createdAt: { type: Date, default: Date.now, index: true }
 }, {

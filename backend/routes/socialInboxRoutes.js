@@ -27,6 +27,7 @@ const streamAuth = async (req, res, next) => {
 
 router.get('/webhooks/:platform', controller.verifyWebhook);
 router.post('/webhooks/:platform', controller.receiveWebhook);
+router.post('/webhooks/comments/:platform', controller.receiveCommentWebhook);
 router.get('/stream', streamAuth, controller.stream);
 
 router.use(protect);
@@ -34,6 +35,7 @@ router.use(protect);
 router.get('/summary', controller.getSummary);
 router.get('/settings', controller.getSettings);
 router.put('/settings', controller.updateSettings);
+router.post('/auto-reply/toggle', controller.toggleAutoReply);
 router.get('/conversations', controller.listConversations);
 router.get('/conversations/:id/messages', controller.getMessages);
 router.post('/conversations/:id/reply', controller.reply);
@@ -41,5 +43,6 @@ router.patch('/conversations/:id/status', controller.updateStatus);
 router.patch('/conversations/:id/meta', controller.updateMeta);
 router.post('/sync/:platform', controller.syncPlatform);
 router.post('/dev/ingest', controller.devIngest);
+router.post('/dev/test', controller.testWebhook);
 
 module.exports = router;

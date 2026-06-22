@@ -4,6 +4,8 @@ const socialInboxMessageSchema = new mongoose.Schema({
   providerMessageId: { type: String, default: '' },
   providerParentId: { type: String, default: '' },
   direction: { type: String, enum: ['inbound', 'outbound'], default: 'inbound' },
+  senderType: { type: String, enum: ['customer', 'agent', 'ai', 'system'], default: 'customer' },
+  autoSent: { type: Boolean, default: false },
   messageType: { type: String, default: 'message' },
   authorId: { type: String, default: '' },
   authorName: { type: String, default: '' },

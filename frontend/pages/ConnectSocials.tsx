@@ -80,6 +80,7 @@ const ConnectSocials: React.FC = () => {
     authPopupRef.current = popup;
 
     authPopupMonitorRef.current = window.setInterval(async () => {
+      // Check if popup was closed by user
       if (!popup || popup.closed) {
         clearAuthPopupMonitor();
         authPopupRef.current = null;
@@ -91,8 +92,41 @@ const ConnectSocials: React.FC = () => {
         } catch (error) {
           console.error(`Failed to refresh ${platform} status after auth window closed:`, error);
         }
+        return;
       }
-    }, 800);
+
+      // Ayrshare sometimes gets stuck on "Almost done gathering social networks..."
+      // To fix this, we actively poll our backend. If it's connected, we force close the popup!
+      try {
+        const res = await apiService.getSocials();
+        const connections = res.connections || [];
+        const targetPlatform = connections.find(s => 
+          s.platform.toLowerCase() === platform.toLowerCase() || 
+          (s.platform === 'X' && platform.toLowerCase() === 'twitter') || 
+          (s.platform === 'Twitter' && platform.toLowerCase() === 'x')
+        );
+
+        if (targetPlatform && targetPlatform.connected) {
+          console.log(`[Auth Monitor] Detected ${platform} is connected in backend! Forcing popup close.`);
+          popup.close();
+          clearAuthPopupMonitor();
+          authPopupRef.current = null;
+          setLoadingPlatform(null);
+          setConnectingPlatform(null);
+          setManualAuthUrl(null);
+          
+          setNotification({
+            type: 'success',
+            message: `${platform} connected successfully!`
+          });
+          
+          setSocials(connections);
+          apiService.registerWebhook().catch(console.error);
+        }
+      } catch (error) {
+        // Ignore polling errors
+      }
+    }, 2000);
   };
 
   const writePopupLoadingState = (popup: Window, platform: string) => {
@@ -188,13 +222,15 @@ const ConnectSocials: React.FC = () => {
           return;
         }
         
-        // Not in a popup — normal flow for same-window redirects
         setNotification({
           type: 'success',
           message: `${displayName}${account ? ` (${decodeURIComponent(account)})` : ''} connected successfully!`
         });
         window.history.replaceState({}, '', window.location.pathname);
-        setTimeout(() => loadSocials(), 500);
+        setTimeout(() => {
+          loadSocials();
+          apiService.registerWebhook().catch(console.error);
+        }, 500);
         break;
       }
     }
@@ -236,7 +272,19 @@ const ConnectSocials: React.FC = () => {
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return;
+      const isSelf = event.origin === window.location.origin;
+      const isAyrshare = event.origin.includes('ayrshare.com');
+
+      if (!isSelf && !isAyrshare) return;
+
+      // If Ayrshare sends any message (like success or close), try to force close the popup
+      if (isAyrshare) {
+        if (authPopupRef.current && !authPopupRef.current.closed) {
+          authPopupRef.current.close();
+        }
+        return; // Let the monitor handle the success toast by polling
+      }
+
       if (event.data?.type !== 'nebula-social-connected') return;
 
       const platform = String(event.data.platform || '');
@@ -252,7 +300,21 @@ const ConnectSocials: React.FC = () => {
         type: 'success',
         message: `${displayName}${accountName} connected successfully!`
       });
-      loadSocials();
+      
+      // Optimistic update
+      setSocials(prev => prev.map(s => 
+        s.platform.toLowerCase() === platform.toLowerCase() || 
+        (s.platform === 'X' && platform.toLowerCase() === 'twitter') || 
+        (s.platform === 'Twitter' && platform.toLowerCase() === 'x')
+          ? { ...s, connected: true, status: 'active', username: event.data.account || displayName } 
+          : s
+      ));
+      
+      setTimeout(() => {
+        loadSocials();
+      }, 2000);
+      
+      apiService.registerWebhook().catch(console.error);
     };
 
     window.addEventListener('message', handleMessage);
@@ -322,6 +384,7 @@ const ConnectSocials: React.FC = () => {
       const response = await apiService.getPlatformAuthUrl(platform);
 
       if (response.success && response.authUrl) {
+        console.log("Received connect URL from backend:", response.authUrl);
         const opened = openAuthPopup(response.authUrl, platform, pendingPopup);
         if (opened) {
           setLoadingPlatform(null);
@@ -384,7 +447,20 @@ const ConnectSocials: React.FC = () => {
       const result = await apiService.disconnectPlatform(platform);
       if (result.success) {
         setNotification({ type: 'success', message: `${platform} disconnected successfully.` });
-        loadSocials();
+        
+        // Optimistic UI update
+        setSocials(prev => prev.map(s => 
+          s.platform.toLowerCase() === platform.toLowerCase() || 
+          (s.platform === 'X' && platform.toLowerCase() === 'twitter') || 
+          (s.platform === 'Twitter' && platform.toLowerCase() === 'x')
+            ? { ...s, connected: false, status: 'inactive', username: undefined, channelData: undefined, analytics: undefined } 
+            : s
+        ));
+        
+        // Refresh from backend after a delay to allow Ayrshare to process the disconnect
+        setTimeout(() => {
+          loadSocials();
+        }, 2000);
       } else {
         throw new Error('Disconnect failed');
       }
