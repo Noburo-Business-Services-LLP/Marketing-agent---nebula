@@ -4475,7 +4475,7 @@ Return ONLY the caption text with hashtags. No JSON, no explanations.`;
 
     // Call Gemini with vision
     const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-    const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+    const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent';
     
     const requestBody = {
       contents: [{
@@ -4542,7 +4542,7 @@ Return ONLY the caption text with hashtags. No JSON, no explanations.`;
       caption: caption.trim(),
       hashtags: hashtags.slice(0, 4),
       aiSettings: {
-        model: 'gemini-2.5-flash',
+        model: 'gemini-2.5-flash-lite',
         memoryInjected: Boolean(aiMemoryContext.reusablePromptText)
       }
     });

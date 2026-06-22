@@ -9,9 +9,9 @@ const fs = require('fs/promises');
 const path = require('path');
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
-// Using Gemini 2.5 Pro for all text generation (150 RPM, 1K RPD)
+// Cheap + reliable: Flash Lite primary, Flash as fallback
 const GEMINI_MODELS = [
-  'gemini-2.5-pro',        // Gemini 2.5 Pro - Primary (150 RPM)
+  'gemini-2.5-flash-lite', // Gemini 2.5 Flash Lite - Primary (cheapest, fast, reliable)
   'gemini-2.5-flash',      // Gemini 2.5 Flash - Fallback (1K RPM)
 ];
 
@@ -4430,7 +4430,7 @@ If no logo is detected, return:
   "confidence": 0.0
 }`;
 
-    const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+    const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent';
 
     const requestBody = {
       contents: [{
