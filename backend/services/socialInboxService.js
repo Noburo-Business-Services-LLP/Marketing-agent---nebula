@@ -37,6 +37,12 @@ function normalizeMessageType(type = '') {
   return MESSAGE_TYPE_ALIASES[String(type || '').toLowerCase()] || 'message';
 }
 
+function normalizeChannelType(channelType = '') {
+  const value = String(channelType || '').toLowerCase();
+  if (['comment', 'comments'].includes(value)) return 'comment';
+  return 'message';
+}
+
 function clampScore(value, fallback = 0) {
   const n = Number(value);
   if (!Number.isFinite(n)) return fallback;
@@ -195,6 +201,7 @@ async function updateSettings(userId, data = {}, updatedBy = null) {
     businessTone: data.businessTone,
     replyStyle: data.replyStyle,
     responseRules: data.responseRules,
+    channelOverrides: data.channelOverrides,
     guardrails: data.guardrails,
     updatedBy
   };
@@ -203,6 +210,69 @@ async function updateSettings(userId, data = {}, updatedBy = null) {
   return AutoReplySettings.findOneAndUpdate(
     { userId },
     { $set: allowed },
+    { new: true, upsert: true, setDefaultsOnInsert: true }
+  );
+}
+
+async function setAutoReplyToggle(userId, data = {}, updatedBy = null) {
+  const platform = normalizePlatform(data.platform);
+  const channelType = normalizeChannelType(data.channelType);
+
+  if (!['instagram', 'facebook', 'linkedin', 'x', 'youtube'].includes(platform)) {
+    const error = new Error('Invalid platform');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (typeof data.enabled !== 'boolean') {
+    const error = new Error('Enabled must be a boolean');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const settings = await getSettings(userId);
+  const channelKey = channelType === 'comment' ? 'comments' : 'messages';
+  const existingOverrides = (settings.channelOverrides || []).map(toggle => ({
+    platform: toggle.platform,
+    channelType: toggle.channelType,
+    enabled: Boolean(toggle.enabled)
+  }));
+  const channelOverrides = existingOverrides.filter(toggle =>
+    !(toggle.platform === platform && toggle.channelType === channelType)
+  );
+  channelOverrides.push({ platform, channelType, enabled: data.enabled });
+
+  const nextPlatforms = {
+    instagram: Boolean(settings.platforms?.instagram),
+    facebook: Boolean(settings.platforms?.facebook),
+    linkedin: Boolean(settings.platforms?.linkedin),
+    x: Boolean(settings.platforms?.x),
+    youtube: Boolean(settings.platforms?.youtube),
+    [platform]: data.enabled
+  };
+
+  const nextChannels = {
+    messages: Boolean(settings.channels?.messages),
+    comments: Boolean(settings.channels?.comments),
+    mentions: Boolean(settings.channels?.mentions),
+    replies: Boolean(settings.channels?.replies),
+    [channelKey]: data.enabled,
+    ...(channelType === 'comment' ? { mentions: data.enabled } : {})
+  };
+
+  const anyEnabled = channelOverrides.some(toggle => toggle.enabled);
+  return AutoReplySettings.findOneAndUpdate(
+    { userId },
+    {
+      $set: {
+        enabled: anyEnabled,
+        automationMode: data.enabled ? 'fully_automatic' : settings.automationMode,
+        platforms: nextPlatforms,
+        channels: nextChannels,
+        channelOverrides,
+        updatedBy
+      }
+    },
     { new: true, upsert: true, setDefaultsOnInsert: true }
   );
 }
@@ -232,6 +302,25 @@ function getChannelKey(messageType) {
   if (messageType === 'mention') return 'mentions';
   if (messageType === 'reply') return 'replies';
   return 'messages';
+}
+
+function getAutomationChannelType(messageType) {
+  return ['comment', 'mention', 'reply'].includes(messageType) ? 'comment' : 'message';
+}
+
+function isAutoReplyEnabled(settings, event) {
+  if (!settings?.enabled) return false;
+
+  const platform = normalizePlatform(event.platform);
+  const channelType = getAutomationChannelType(event.messageType);
+  const override = (settings.channelOverrides || []).find(toggle =>
+    toggle.platform === platform && toggle.channelType === channelType
+  );
+
+  if (override) return Boolean(override.enabled);
+
+  return Boolean(settings.platforms?.[platform]) &&
+    Boolean(settings.channels?.[getChannelKey(event.messageType)]);
 }
 
 async function countAutoRepliesToday(conversationId) {
@@ -321,9 +410,8 @@ Rules:
 }
 
 async function decideAutomation({ settings, event, insights, conversation }) {
-  if (!settings.enabled) return { action: 'suggest_only', reason: 'Automation disabled' };
-  if (!settings.platforms?.[event.platform]) return { action: 'suggest_only', reason: 'Platform automation disabled' };
-  if (!settings.channels?.[getChannelKey(event.messageType)]) return { action: 'suggest_only', reason: 'Channel automation disabled' };
+  const autoReplyEnabled = isAutoReplyEnabled(settings, event);
+  if (!autoReplyEnabled) return { action: 'suggest_only', reason: 'Auto reply disabled for this platform/channel' };
   if (settings.guardrails?.skipSpam && insights.spamScore >= 80) return { action: 'skip', reason: 'Skipped spam-like message' };
   if (settings.guardrails?.requireApprovalForNegative && insights.sentiment === 'negative') return { action: 'needs_approval', reason: 'Negative sentiment requires approval' };
   if (settings.guardrails?.requireApprovalForHighPriority && ['high', 'urgent'].includes(insights.priority)) return { action: 'needs_approval', reason: 'High priority message requires approval' };
@@ -524,9 +612,11 @@ async function createOutboundReply(conversation, body, options = {}) {
     providerThreadId: conversation.providerThreadId,
     providerMessageId,
     direction: 'outbound',
+    senderType: options.aiAuto ? 'ai' : 'agent',
+    autoSent: Boolean(options.aiAuto),
     messageType: 'reply',
     authorId: 'nebulaa',
-    authorName: 'Nebulaa',
+    authorName: options.aiAuto ? 'AI' : 'Nebulaa',
     body,
     sentiment: 'neutral',
     spamScore: 0,
@@ -538,9 +628,11 @@ async function createOutboundReply(conversation, body, options = {}) {
   conversation.messages.push({
     providerMessageId: message.providerMessageId,
     direction: 'outbound',
+    senderType: message.senderType,
+    autoSent: message.autoSent,
     messageType: 'reply',
     authorId: 'nebulaa',
-    authorName: 'Nebulaa',
+    authorName: message.authorName,
     body,
     sentiment: 'neutral',
     spamScore: 0,
@@ -715,6 +807,8 @@ function toMessageDTO(message, conversation) {
     provider_message_id: message.providerMessageId,
     provider_parent_id: message.providerParentId,
     direction: message.direction,
+    sender_type: message.senderType || (message.direction === 'outbound' ? 'agent' : 'customer'),
+    auto_sent: Boolean(message.autoSent),
     message_type: message.messageType,
     author_id: message.authorId,
     author_name: message.authorName,
@@ -772,6 +866,7 @@ module.exports = {
   getSummary,
   getSettings,
   updateSettings,
+  setAutoReplyToggle,
   toConversationDTO,
   toMessageDTO,
   getConnectedInboxPlatforms,

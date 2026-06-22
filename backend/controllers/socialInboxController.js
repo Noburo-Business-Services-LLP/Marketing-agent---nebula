@@ -10,6 +10,7 @@ const {
   getSummary,
   getSettings,
   updateSettings,
+  setAutoReplyToggle,
   toConversationDTO,
   toMessageDTO
 } = require('../services/socialInboxService');
@@ -100,7 +101,8 @@ exports.reply = async (req, res) => {
     const user = await User.findById(getUserId(req));
     const result = await createOutboundReply(conversation, body, {
       user,
-      dispatch: req.body?.dispatch !== false
+      dispatch: req.body?.dispatch !== false,
+      commentId: req.body?.commentId || ''
     });
 
     res.json({
@@ -182,6 +184,19 @@ exports.updateSettings = async (req, res) => {
   } catch (error) {
     console.error('Update auto reply settings error:', error);
     res.status(500).json({ success: false, message: 'Failed to update auto reply settings' });
+  }
+};
+
+exports.toggleAutoReply = async (req, res) => {
+  try {
+    const settings = await setAutoReplyToggle(getUserId(req), req.body || {}, getUserId(req));
+    res.json({ success: true, settings });
+  } catch (error) {
+    console.error('Toggle auto reply error:', error);
+    res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.message || 'Failed to update auto reply toggle'
+    });
   }
 };
 

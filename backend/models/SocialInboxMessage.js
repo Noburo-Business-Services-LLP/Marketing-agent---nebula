@@ -28,6 +28,8 @@ const socialInboxMessageSchema = new mongoose.Schema({
   parentCommentId: { type: String, default: '' },
   platformPostType: { type: String, enum: ['post', 'reel', 'story', ''], default: '' },
   direction: { type: String, enum: ['inbound', 'outbound'], default: 'inbound', index: true },
+  senderType: { type: String, enum: ['customer', 'agent', 'ai', 'system'], default: 'customer', index: true },
+  autoSent: { type: Boolean, default: false, index: true },
   messageType: {
     type: String,
     enum: ['message', 'comment', 'mention', 'reply', 'dm', 'system'],

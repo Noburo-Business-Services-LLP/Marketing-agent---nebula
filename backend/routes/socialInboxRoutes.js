@@ -35,6 +35,7 @@ router.use(protect);
 router.get('/summary', controller.getSummary);
 router.get('/settings', controller.getSettings);
 router.put('/settings', controller.updateSettings);
+router.post('/auto-reply/toggle', controller.toggleAutoReply);
 router.get('/conversations', controller.listConversations);
 router.get('/conversations/:id/messages', controller.getMessages);
 router.post('/conversations/:id/reply', controller.reply);

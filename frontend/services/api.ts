@@ -3622,6 +3622,8 @@ export interface InboxMessage {
     autoReplyReason?: string;
   };
   auto_replied?: boolean;
+  auto_sent?: boolean;
+  sender_type?: 'customer' | 'agent' | 'ai' | 'system';
   created_at: string;
 }
 
@@ -3630,6 +3632,11 @@ export interface AutoReplySettings {
   automationMode: 'suggested' | 'approval_required' | 'fully_automatic';
   channels: { messages: boolean; comments: boolean; mentions: boolean; replies: boolean };
   platforms: { instagram: boolean; facebook: boolean; linkedin: boolean; x: boolean; youtube: boolean };
+  channelOverrides?: Array<{
+    platform: 'instagram' | 'facebook' | 'linkedin' | 'x' | 'youtube';
+    channelType: 'message' | 'comment';
+    enabled: boolean;
+  }>;
   businessTone: string;
   replyStyle: 'concise' | 'friendly' | 'detailed' | 'sales' | 'support';
   responseRules: Array<{
@@ -3756,6 +3763,17 @@ export const inboxAPI = {
     });
   },
 
+  toggleAutoReply: async (payload: {
+    platform: string;
+    channelType: 'message' | 'comment';
+    enabled: boolean;
+  }): Promise<{ success: boolean; settings: AutoReplySettings }> => {
+    return inboxCall('/auto-reply/toggle', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
   createTestEvent: async (payload: any): Promise<any> => {
     return inboxCall('/dev/ingest', {
       method: 'POST',
@@ -3776,7 +3794,7 @@ export const inboxAPI = {
     };
     source.onopen = (event) => adapter.onopen?.(event);
     source.onerror = (event) => adapter.onerror?.(event);
-    ['inbox.message.created', 'inbox.message.replied', 'inbox.notification', 'inbox.connected'].forEach(eventName => {
+    ['inbox.message.created', 'inbox.message.replied', 'inbox.notification', 'inbox.connected', 'message:new', 'comment:new', 'reply:new'].forEach(eventName => {
       source.addEventListener(eventName, (event: MessageEvent) => {
         adapter.onmessage?.({
           data: JSON.stringify({
