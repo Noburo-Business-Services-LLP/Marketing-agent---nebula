@@ -166,6 +166,46 @@ export interface Campaign {
   createdAt: string;
 }
 
+export interface ContentCalendarItem {
+  _id: string;
+  day: number;
+  format: string;
+  contentPillar: string;
+  headline: string;
+  creativeConcept: string;
+  productNeeded: string;
+  shootType: string;
+  cta: string;
+  objective: string;
+  status: 'draft' | 'approved' | 'rejected' | 'scheduled' | 'published' | 'generated';
+  generatedDraftId?: string | null;
+  generatedCampaignId?: string | null;
+  scheduledFor?: string | null;
+}
+
+export interface ContentCalendarWeek {
+  _id: string;
+  weekNumber: number;
+  items: ContentCalendarItem[];
+}
+
+export interface ContentCalendar {
+  _id: string;
+  userId: string;
+  businessName: string;
+  niche: string;
+  businessVertical: string;
+  language: string;
+  month: string;
+  autoGenerate: boolean;
+  approved: boolean;
+  weeks: ContentCalendarWeek[];
+  generatedAt?: string;
+  lastAutoRunAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface AdCampaignPlatformStatus {
   status: 'pending' | 'success' | 'failed' | 'skipped';
   message: string;

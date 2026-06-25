@@ -1,4 +1,4 @@
-import { AuthResponse, BusinessProfile, Campaign, DashboardData, SocialConnection, User } from '../types';
+import { AuthResponse, BusinessProfile, Campaign, ContentCalendar, ContentCalendarItem, DashboardData, SocialConnection, User } from '../types';
 
 type CampaignInput = Partial<Campaign> & { tone?: string | null };
 
@@ -3472,6 +3472,48 @@ export const icpStrategyService = {
       console.error('ICP save error:', error);
       return { success: false };
     }
+  }
+};
+
+// ============================================
+// GRAVITY SMART CONTENT CALENDAR API
+// ============================================
+export const contentCalendarAPI = {
+  get: async (): Promise<{ success: boolean; calendar: ContentCalendar }> => {
+    return apiCall('/content-calendar', { method: 'GET' }, true);
+  },
+
+  regenerate: async (): Promise<{ success: boolean; calendar: ContentCalendar }> => {
+    return apiCall('/content-calendar/regenerate', { method: 'POST' }, true);
+  },
+
+  today: async (): Promise<{ success: boolean; suggestion: ContentCalendarItem | null; calendarId?: string | null }> => {
+    return apiCall('/content-calendar/today', { method: 'GET' }, true);
+  },
+
+  updateSettings: async (data: { autoGenerate?: boolean; approved?: boolean }): Promise<{ success: boolean; calendar: ContentCalendar }> => {
+    return apiCall('/content-calendar/settings', { method: 'PATCH', body: JSON.stringify(data) }, true);
+  },
+
+  updateItem: async (itemId: string, data: Partial<ContentCalendarItem>): Promise<{ success: boolean; calendar: ContentCalendar; item: ContentCalendarItem }> => {
+    return apiCall(`/content-calendar/items/${encodeURIComponent(itemId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data)
+    }, true);
+  },
+
+  createDraft: async (itemId: string, publish = false): Promise<any> => {
+    return apiCall(`/content-calendar/items/${encodeURIComponent(itemId)}/create-draft`, {
+      method: 'POST',
+      body: JSON.stringify({ publish })
+    }, true);
+  },
+
+  reorder: async (orderedIds: string[]): Promise<{ success: boolean; calendar: ContentCalendar }> => {
+    return apiCall('/content-calendar/reorder', {
+      method: 'POST',
+      body: JSON.stringify({ orderedIds })
+    }, true);
   }
 };
 
