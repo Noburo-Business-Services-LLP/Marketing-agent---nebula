@@ -45,6 +45,24 @@ function publicStepMessage(step = '') {
   return 'Optimizing video quality...';
 }
 
+function sanitizeLogLine(line = '') {
+  return String(line || '')
+    .replace(/(FAL_KEY=|fal[_-]?key["'\s:=]+)[^\s"',]+/gi, '$1[redacted]')
+    .replace(/(Bearer\s+)[A-Za-z0-9._~+/-]+/gi, '$1[redacted]')
+    .trim();
+}
+
+function publicErrorMessage(job = {}) {
+  const message = String(job?.error?.message || '').trim();
+  if (message && message !== 'Retrying video generation...') return message;
+
+  const logs = Array.isArray(job?.logs) ? job.logs : [];
+  const failedLog = [...logs].reverse().find((line) => /failed|error|denied|unauthorized|forbidden/i.test(String(line || '')));
+  if (failedLog) return sanitizeLogLine(failedLog).replace(/^\[[^\]]+\]\s*/, '');
+
+  return publicStepMessage(job.currentStep);
+}
+
 function estimateRemainingSeconds(job = {}) {
   const progress = Math.max(0, Math.min(99, Number(job.progress) || 0));
   const startedAt = job.startedAt ? new Date(job.startedAt).getTime() : 0;
@@ -305,6 +323,61 @@ class PersistentVideoGenerationQueue {
     }
   }
 
+  async cancelJob(jobId, userId = null) {
+    try {
+      const query = { jobId: String(jobId || '') };
+      if (userId) {
+        query.userId = userId;
+      }
+      const job = await VideoJob.findOne(query);
+
+      if (!job) {
+        throw new Error('Job not found');
+      }
+
+      if (['completed', 'failed', 'cancelled'].includes(job.status)) {
+        return this._publicView(job.toObject());
+      }
+
+      const wasProcessing = job.status === 'processing';
+
+      job.status = 'cancelled';
+      job.completedAt = new Date();
+      job.error = { message: 'Job cancelled by user.' };
+      await job.save();
+
+      await this._pushLog(jobId, `Job cancelled by user.`);
+
+      if (job.userId) {
+        try {
+          const { refundCredits } = require('../middleware/trialGuard');
+          const refundResult = await refundCredits(
+            job.userId,
+            'campaign_full',
+            1,
+            `Refund: AI video generation job ${jobId} was cancelled`
+          );
+          if (refundResult.success) {
+            await this._pushLog(jobId, `Credits automatically refunded due to cancellation.`);
+          }
+        } catch (refundError) {
+          console.error(`⚠️ Failed to refund credits for cancelled job ${jobId}:`, refundError.message);
+        }
+      }
+
+      if (wasProcessing) {
+        // The job will continue to run, but the client will see it as cancelled.
+        // This is a "best-effort" cancellation.
+        await this._pushLog(jobId, `Cancellation requested while job was processing. The current step will finish, but the job will not be retried.`);
+      }
+
+      return this._publicView(job.toObject());
+    } catch (err) {
+      console.error(`⚠️ Failed to cancel job ${jobId}:`, err.message);
+      throw err;
+    }
+  }
+
   async _updateJob(jobId, patch = {}) {
     try {
       const job = await VideoJob.findOneAndUpdate(
@@ -500,9 +573,9 @@ class PersistentVideoGenerationQueue {
       completedAt: job.completedAt,
       result: job.result,
       error: job.status === 'failed'
-        ? { message: publicStepMessage(job.currentStep), stack: null }
+        ? { message: publicErrorMessage(job), stack: null }
         : null,
-      logs: [],
+      logs: Array.isArray(job.logs) ? job.logs.slice(-80).map(sanitizeLogLine).filter(Boolean) : [],
       metadata: {
         ...(job.metadata || {}),
         publicStep: publicStepMessage(job.currentStep),
