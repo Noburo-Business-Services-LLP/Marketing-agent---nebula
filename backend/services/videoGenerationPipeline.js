@@ -1062,7 +1062,7 @@ async function generateSceneClips({
         if (logger) {
           logger(`❌ Fal.ai clip generation failed for scene ${scene.sceneId} and fallback is disabled: ${error.message}`);
         }
-        throw new Error('Retrying video generation...');
+        throw error;
       }
 
       if (logger) {

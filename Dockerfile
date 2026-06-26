@@ -32,6 +32,7 @@ WORKDIR /app/backend
 
 ENV NODE_ENV=production
 ENV PORT=5000
+ENV VIDEO_FALLBACK_ALLOWED=true
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
