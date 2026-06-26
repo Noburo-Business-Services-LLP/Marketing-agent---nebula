@@ -5078,68 +5078,6 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
       setPlatforms(prev => prev.includes(platform) ? prev.filter(p => p !== platform) : [...prev, platform]);
     };
 
-    const resetReelImageSource = useCallback(() => {
-      if (reelImagePreview && reelImagePreview.startsWith('blob:')) {
-        URL.revokeObjectURL(reelImagePreview);
-      }
-      setReelImageFile(null);
-      setReelImagePreview('');
-    }, [reelImagePreview]);
-
-    const setReelImageFromUrl = useCallback((url: string) => {
-      const nextUrl = String(url || '').trim();
-      if (!nextUrl) return;
-
-      if (reelImagePreview && reelImagePreview.startsWith('blob:')) {
-        URL.revokeObjectURL(reelImagePreview);
-      }
-
-      setReelImageFile(null);
-      setReelImagePreview(nextUrl);
-    }, [reelImagePreview]);
-
-    const handleUseLinkedProductImageForReel = () => {
-      const linkedImage = String(selectedProduct?.imageUrl || '').trim();
-      if (!linkedImage) {
-        alert('Please select a product with an image from inventory.');
-        return;
-      }
-      setReelImageFromUrl(linkedImage);
-    };
-    const mapContentLanguageToReelCode = (language: string): string => {
-      const normalized = String(language || '').trim().toLowerCase();
-      const map: Record<string, string> = {
-        english: 'en',
-        en: 'en',
-        hindi: 'hi',
-        hi: 'hi',
-        tamil: 'ta',
-        ta: 'ta',
-        telugu: 'te',
-        te: 'te',
-        malayalam: 'ml',
-        ml: 'ml',
-        kannada: 'kn',
-        kn: 'kn'
-      };
-      return map[normalized] || 'en';
-    };
-
-    const onReelImageSelected = (file: File | null) => {
-      if (!file) return;
-      if (!file.type.startsWith('image/')) {
-        alert('Please select an image file for reel generation.');
-        return;
-      }
-
-      if (reelImagePreview && reelImagePreview.startsWith('blob:')) {
-        URL.revokeObjectURL(reelImagePreview);
-      }
-
-      setReelImageFile(file);
-      setReelImagePreview(URL.createObjectURL(file));
-    };
-
     // Generate AI posts based on campaign details
     const [activeWeekTab, setActiveWeekTab] = useState(1);
     const [generationStatus, setGenerationStatus] = useState('');
