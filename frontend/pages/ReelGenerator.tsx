@@ -54,6 +54,14 @@ const ReelGenerator: React.FC = () => {
 
   const [step, setStep] = useState(1);
   const [busy, setBusy] = useState(false);
+  const [regeneratingSceneIds, setRegeneratingSceneIds] = useState<Set<string>>(new Set());
+  const markSceneRegenerating = (sceneId: string, isOn: boolean) => {
+    setRegeneratingSceneIds((prev) => {
+      const next = new Set(prev);
+      if (isOn) next.add(sceneId); else next.delete(sceneId);
+      return next;
+    });
+  };
   const [error, setError] = useState('');
   const [jobId, setJobId] = useState('');
   const [draft, setDraft] = useState<any>(null);
@@ -548,31 +556,49 @@ const ReelGenerator: React.FC = () => {
     setDraft(response.draft || draft);
   });
 
-  const regenerateSceneImage = async (scene: any) => withBusy(async () => {
-    if (!jobId) throw new Error('Draft missing');
-    const response = await videoGenerationAPI.generateImages({
-      jobId,
-      action: 'regenerate',
-      sceneId: scene.sceneId,
-      imagePrompt: scene.imagePrompt
-    });
-    if (!response?.success) throw new Error(response?.message || 'Image regeneration failed');
-    setScenes(response.sceneData || []);
-    setDraft(response.draft || draft);
-  });
+  const regenerateSceneImage = async (scene: any) => {
+    if (!jobId) { setError('Draft missing'); return; }
+    const sid = String(scene.sceneId || '');
+    markSceneRegenerating(sid, true);
+    setError('');
+    try {
+      const response = await videoGenerationAPI.generateImages({
+        jobId,
+        action: 'regenerate',
+        sceneId: scene.sceneId,
+        imagePrompt: scene.imagePrompt
+      });
+      if (!response?.success) throw new Error(response?.message || 'Image regeneration failed');
+      setScenes(response.sceneData || []);
+      setDraft(response.draft || draft);
+    } catch (e: any) {
+      setError(e?.message || 'Image regeneration failed');
+    } finally {
+      markSceneRegenerating(sid, false);
+    }
+  };
 
-  const regenerateScene = async (scene: any) => withBusy(async () => {
-    if (!jobId) throw new Error('Draft missing');
-    const response = await videoGenerationAPI.generateScenes({
-      jobId,
-      sceneData: scenes,
-      regenerateSceneId: scene.sceneId,
-      promptText
-    });
-    if (!response?.success) throw new Error(response?.message || 'Scene regeneration failed');
-    setScenes(response.sceneData || []);
-    setDraft(response.draft || draft);
-  });
+  const regenerateScene = async (scene: any) => {
+    if (!jobId) { setError('Draft missing'); return; }
+    const sid = String(scene.sceneId || '');
+    markSceneRegenerating(sid, true);
+    setError('');
+    try {
+      const response = await videoGenerationAPI.generateScenes({
+        jobId,
+        sceneData: scenes,
+        regenerateSceneId: scene.sceneId,
+        promptText
+      });
+      if (!response?.success) throw new Error(response?.message || 'Scene regeneration failed');
+      setScenes(response.sceneData || []);
+      setDraft(response.draft || draft);
+    } catch (e: any) {
+      setError(e?.message || 'Scene regeneration failed');
+    } finally {
+      markSceneRegenerating(sid, false);
+    }
+  };
 
   const generateClips = async () => withBusy(async () => {
     if (!jobId) throw new Error('Draft missing');
@@ -1119,41 +1145,54 @@ const ReelGenerator: React.FC = () => {
 
                 <div className="space-y-3">
                   <p className={`text-sm font-semibold ${theme.text}`}>Scene Breakdown (Editable)</p>
-                  {(scenes || []).map((scene, idx) => (
-                    <div key={scene.sceneId || idx} className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3 space-y-3`}>
+                  {(scenes || []).map((scene, idx) => {
+                    const isRegen = regeneratingSceneIds.has(String(scene.sceneId || ''));
+                    return (
+                    <div key={scene.sceneId || idx} className={`relative ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3 space-y-3 overflow-hidden`}>
                       <div className="flex items-center justify-between gap-2">
                         <p className={`text-sm font-bold ${theme.text}`}>Scene {idx + 1}</p>
                         <button
                           onClick={() => regenerateScene(scene)}
-                          disabled={busy}
+                          disabled={isRegen}
                           className="px-3 py-1.5 text-xs rounded-lg border border-[#ffcc29] text-[#ffcc29] hover:bg-[#ffcc29]/10 disabled:opacity-50 flex items-center gap-1.5"
                         >
-                          {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCcw className="w-3 h-3" />}
-                          Regenerate Scene
+                          {isRegen ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCcw className="w-3 h-3" />}
+                          {isRegen ? 'Regenerating' : 'Regenerate Scene'}
                         </button>
                       </div>
 
                       <div>
                         <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Title</label>
-                        <input value={scene.title || ''} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, title: e.target.value } : item))} className={`${inputClass} mt-1`} />
+                        <input value={scene.title || ''} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, title: e.target.value } : item))} className={`${inputClass} mt-1`} disabled={isRegen} />
                       </div>
 
                       <div>
                         <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Duration (seconds)</label>
-                        <input type="number" min={1} value={scene.durationSeconds || 1} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, durationSeconds: Number(e.target.value) || 1 } : item))} className={`${inputClass} mt-1`} />
+                        <input type="number" min={1} value={scene.durationSeconds || 1} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, durationSeconds: Number(e.target.value) || 1 } : item))} className={`${inputClass} mt-1`} disabled={isRegen} />
                       </div>
 
                       <div>
                         <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Image Prompt</label>
-                        <textarea value={scene.imagePrompt || ''} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, imagePrompt: e.target.value } : item))} className={`${inputClass} mt-1 min-h-[70px]`} placeholder="Describe the visual for the still image" />
+                        <textarea value={scene.imagePrompt || ''} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, imagePrompt: e.target.value } : item))} className={`${inputClass} mt-1 min-h-[70px]`} placeholder="Describe the visual for the still image" disabled={isRegen} />
                       </div>
 
                       <div>
                         <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Video Prompt</label>
-                        <textarea value={scene.videoPrompt || ''} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, videoPrompt: e.target.value } : item))} className={`${inputClass} mt-1 min-h-[70px]`} placeholder="Describe the motion / animation for the clip" />
+                        <textarea value={scene.videoPrompt || ''} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, videoPrompt: e.target.value } : item))} className={`${inputClass} mt-1 min-h-[70px]`} placeholder="Describe the motion / animation for the clip" disabled={isRegen} />
                       </div>
+
+                      {isRegen && (
+                        <div className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none">
+                          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[#ffcc29]/15 to-transparent skeleton-shimmer" />
+                          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/40 backdrop-blur-[2px]">
+                            <Sparkles className="w-7 h-7 text-[#ffcc29] animate-pulse" />
+                            <p className="text-sm font-semibold text-[#ffcc29] tracking-wide">Regenerating scene...</p>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 <button onClick={saveStep2EditsAndNext} disabled={!canStep2Next} className={primaryButtonClass(!canStep2Next)}>
@@ -1169,26 +1208,47 @@ const ReelGenerator: React.FC = () => {
                   {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Generate / Refresh All Scene Images'}
                 </button>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                  {scenes.map((scene, idx) => (
+                  {scenes.map((scene, idx) => {
+                    const isRegen = regeneratingSceneIds.has(String(scene.sceneId || ''));
+                    return (
                     <div key={scene.sceneId || idx} className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3`}>
                       <p className={`font-semibold ${theme.text}`}>{scene.title || `Scene ${idx + 1}`}</p>
-                      <textarea value={scene.imagePrompt || ''} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, imagePrompt: e.target.value } : item))} className={`${inputClass} mt-2 min-h-[70px]`} />
-                      {scene.imageUrl ? (
-                        <img src={scene.imageUrl} alt={scene.title} className="w-full h-52 object-cover rounded-lg mt-3 border border-slate-700" />
-                      ) : (
-                        <div className="h-52 rounded-lg mt-3 border border-dashed border-slate-600 flex items-center justify-center">
-                          <ImageIcon className="w-7 h-7 text-slate-500" />
-                        </div>
-                      )}
+                      <textarea value={scene.imagePrompt || ''} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, imagePrompt: e.target.value } : item))} className={`${inputClass} mt-2 min-h-[70px]`} disabled={isRegen} />
+                      <div className="relative mt-3">
+                        {scene.imageUrl ? (
+                          <img src={scene.imageUrl} alt={scene.title} className={`w-full h-52 object-cover rounded-lg border border-slate-700 transition-all duration-300 ${isRegen ? 'opacity-30 blur-sm' : ''}`} />
+                        ) : (
+                          <div className="h-52 rounded-lg border border-dashed border-slate-600 flex items-center justify-center">
+                            <ImageIcon className="w-7 h-7 text-slate-500" />
+                          </div>
+                        )}
+                        {isRegen && (
+                          <div className="absolute inset-0 rounded-lg overflow-hidden pointer-events-none">
+                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[#ffcc29]/15 to-transparent skeleton-shimmer" />
+                            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/30 backdrop-blur-[2px]">
+                              <Sparkles className="w-6 h-6 text-[#ffcc29] animate-pulse" />
+                              <p className="text-xs font-semibold text-[#ffcc29] tracking-wide">Regenerating...</p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                       <div className="flex gap-2 mt-3">
-                        <button onClick={() => regenerateSceneImage(scene)} className="px-3 py-2 text-xs rounded-lg border border-[#ffcc29] text-[#ffcc29]">Regenerate</button>
-                        <label className="px-3 py-2 text-xs rounded-lg border border-slate-500 text-slate-300 cursor-pointer">
+                        <button
+                          onClick={() => regenerateSceneImage(scene)}
+                          disabled={isRegen}
+                          className="px-3 py-2 text-xs rounded-lg border border-[#ffcc29] text-[#ffcc29] hover:bg-[#ffcc29]/10 disabled:opacity-50 flex items-center gap-1.5"
+                        >
+                          {isRegen ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCcw className="w-3 h-3" />}
+                          {isRegen ? 'Regenerating' : 'Regenerate'}
+                        </button>
+                        <label className={`px-3 py-2 text-xs rounded-lg border border-slate-500 text-slate-300 ${isRegen ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
                           Replace
-                          <input type="file" accept="image/*" className="hidden" onChange={(e) => onSceneImageReplace(scene.sceneId, e.target.files?.[0])} />
+                          <input type="file" accept="image/*" className="hidden" disabled={isRegen} onChange={(e) => onSceneImageReplace(scene.sceneId, e.target.files?.[0])} />
                         </label>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
                 <button onClick={() => setStep(4)} disabled={!canStep3Next} className={primaryButtonClass(!canStep3Next)}>Next</button>
               </div>
