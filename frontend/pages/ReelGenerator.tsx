@@ -14,7 +14,7 @@ import {
   Trash2
 } from 'lucide-react';
 import { getThemeClasses, useTheme } from '../context/ThemeContext';
-import { inventoryAPI, videoGenerationAPI } from '../services/api';
+import { contentCalendarAPI, inventoryAPI, videoGenerationAPI } from '../services/api';
 import { Product } from '../types';
 
 type AudioMode = 'off' | 'auto' | 'upload';
@@ -115,6 +115,34 @@ const ReelGenerator: React.FC = () => {
     () => products.find((p) => p._id === selectedProductId) || null,
     [products, selectedProductId]
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadCalendarSuggestion = async () => {
+      try {
+        const response = await contentCalendarAPI.today();
+        const suggestion = response.suggestion;
+        if (cancelled || !suggestion) return;
+
+        const suggestionText = [
+          suggestion.headline,
+          suggestion.creativeConcept,
+          suggestion.productNeeded ? `Product: ${suggestion.productNeeded}` : '',
+          suggestion.cta ? `CTA: ${suggestion.cta}` : ''
+        ].filter(Boolean).join('\n');
+
+        setDescription((current) => current || suggestionText);
+        setPromptText((current) => current || suggestion.creativeConcept || suggestion.headline || '');
+      } catch (_) {
+        // Suggestion mode is non-blocking.
+      }
+    };
+
+    loadCalendarSuggestion();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const hasCompleteScenes = scenes.length > 0 && scenes.every((scene) => !!(
     String(scene.title || '').trim()

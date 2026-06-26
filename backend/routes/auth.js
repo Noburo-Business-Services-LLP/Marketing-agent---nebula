@@ -1257,12 +1257,14 @@ router.post('/check-duplicate', protect, async (req, res) => {
 // @access  Private
 router.put('/complete-onboarding', protect, async (req, res) => {
   try {
-    const { businessProfile, connectedSocials } = req.body;
+    const { businessProfile, connectedSocials, mobileNumber } = req.body;
 
     const updateData = {
       onboardingCompleted: true,
       businessProfile: businessProfile || {}
     };
+
+    if (mobileNumber) updateData.mobileNumber = mobileNumber;
 
     // If connected socials are provided during onboarding, save them
     if (connectedSocials && Array.isArray(connectedSocials) && connectedSocials.length > 0) {
@@ -1347,6 +1349,15 @@ router.put('/complete-onboarding', protect, async (req, res) => {
 
     console.log('Onboarding completed for user:', user.email);
     console.log('Business Profile saved:', JSON.stringify(user.businessProfile, null, 2));
+
+    try {
+      const { generateMonthlyCalendar } = require('../services/contentCalendarService');
+      generateMonthlyCalendar(user).catch((calendarError) => {
+        console.error('Failed to generate Gravity Smart Calendar:', calendarError);
+      });
+    } catch (calendarError) {
+      console.error('Failed to start Gravity Smart Calendar generation:', calendarError);
+    }
 
     res.status(200).json({
       success: true,

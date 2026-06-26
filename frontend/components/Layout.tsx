@@ -23,7 +23,8 @@ import {
   PenTool,
   Layers,
   PlayCircle,
-  Brain
+  Brain,
+  CalendarDays
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { User } from '../types';
@@ -124,6 +125,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
 
   const navItems = [
     { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { path: '/content-calendar', label: 'Smart Calendar', icon: CalendarDays },
     { path: '/campaigns', label: 'Campaigns', icon: Megaphone },
     { path: '/influencer-portal', label: 'Influencer Portal', icon: PenTool },
     { path: '/reels', label: 'AI Reels', icon: PlayCircle },
@@ -144,6 +146,16 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
         actions: [
           { label: 'Generate Reel', path: '/reels' },
           { label: 'Create Ad Campaign', path: '/ad-campaigns' }
+        ]
+      };
+    }
+    if (pathname.startsWith('/content-calendar')) {
+      return {
+        title: 'Smart Calendar',
+        subtitle: 'Review, approve, and automate the next 30 days of content.',
+        actions: [
+          { label: 'Create Campaign', path: '/campaigns' },
+          { label: 'Generate Reel', path: '/reels' }
         ]
       };
     }

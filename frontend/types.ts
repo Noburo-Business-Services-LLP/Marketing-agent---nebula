@@ -1,8 +1,16 @@
+export type BrandMaturity = 'established' | 'growing' | '';
+export type TargetGender = 'mostly_men' | 'mostly_women' | 'both_equally' | 'families' | '';
+export type GeographicReach = 'hyperlocal' | 'local_city' | 'regional' | '';
+export type CustomerType = 'mostly_new' | 'mix_new_repeat' | 'mostly_loyal' | '';
+export type PricePositioning = 'budget' | 'affordable' | 'mid_range' | 'premium' | 'luxury' | '';
+export type ContentLanguage = 'tamil' | 'english' | 'tamil_english_mix' | '';
+
 export interface BusinessProfile {
   name: string;
   website: string;
   gstNumber: string;
-  industry: string;
+  industry: string; // Business vertical (e.g. Healthcare, E-commerce, Food & Beverage)
+  problemSolved?: string; // The pain point / problem this business solves
   niche: string;
   businessType: 'B2B' | 'B2C' | 'Both' | '';
   businessLocation: string; // City, State/Region where business operates
@@ -11,6 +19,23 @@ export interface BusinessProfile {
   marketingGoals: string[]; // e.g., Brand Awareness, Sales, Leads
   description: string;
   competitors?: string[]; // Competitor names/brands to track
+
+  // Customer-filled during onboarding
+  yearsInBusiness?: number;
+  brandMaturity?: BrandMaturity;
+
+  // CSM-filled during Brand DNA session (admin dashboard only)
+  targetCustomerProfile?: string;
+  targetGender?: TargetGender;
+  geographicReach?: GeographicReach;
+  customerType?: CustomerType;
+  pricePositioning?: PricePositioning;
+  keyDifferentiator?: string;
+  brandStory?: string;
+  heroProduct?: string;
+  contentLanguage?: ContentLanguage;
+  contentRestrictions?: string;
+  firstMonthContentAngles?: string;
 }
 
 export interface User {
@@ -85,6 +110,7 @@ export interface Campaign {
   status: 'draft' | 'scheduled' | 'active' | 'paused' | 'completed' | 'archived' | 'posted';
   priority?: 'low' | 'medium' | 'high';
   notes?: string;
+  selectedProducts?: string[] | Product[];
   // Convenience top-level properties (aliases for nested values)
   description?: string;
   startDate?: string;
@@ -139,6 +165,46 @@ export interface Campaign {
   ayrshareStatus?: string;
   lastPublishError?: string | null;
   createdAt: string;
+}
+
+export interface ContentCalendarItem {
+  _id: string;
+  day: number;
+  format: string;
+  contentPillar: string;
+  headline: string;
+  creativeConcept: string;
+  productNeeded: string;
+  shootType: string;
+  cta: string;
+  objective: string;
+  status: 'draft' | 'approved' | 'rejected' | 'scheduled' | 'published' | 'generated';
+  generatedDraftId?: string | null;
+  generatedCampaignId?: string | null;
+  scheduledFor?: string | null;
+}
+
+export interface ContentCalendarWeek {
+  _id: string;
+  weekNumber: number;
+  items: ContentCalendarItem[];
+}
+
+export interface ContentCalendar {
+  _id: string;
+  userId: string;
+  businessName: string;
+  niche: string;
+  businessVertical: string;
+  language: string;
+  month: string;
+  autoGenerate: boolean;
+  approved: boolean;
+  weeks: ContentCalendarWeek[];
+  generatedAt?: string;
+  lastAutoRunAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface AdCampaignPlatformStatus {

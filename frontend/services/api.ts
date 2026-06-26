@@ -1,4 +1,6 @@
-import { AuthResponse, BusinessProfile, Campaign, DashboardData, SocialConnection, User } from '../types';
+import { AuthResponse, BusinessProfile, Campaign, ContentCalendar, ContentCalendarItem, DashboardData, SocialConnection, User } from '../types';
+
+type CampaignInput = Partial<Campaign> & { tone?: string | null };
 
 type CampaignInput = Partial<Campaign> & { tone?: string | null };
 
@@ -410,6 +412,22 @@ export const apiService = {
     return apiCall('/payment/verify', { method: 'POST', body: JSON.stringify(data) }, true);
   },
 
+  createSubscription: async (planId: string, couponCode?: string): Promise<any> => {
+    return apiCall('/payment/create-subscription', { method: 'POST', body: JSON.stringify({ planId, couponCode: couponCode || '' }) }, true);
+  },
+
+  getPlans: async (): Promise<any> => {
+    return apiCall('/payment/plans', { method: 'GET' }, false);
+  },
+
+  validateCoupon: async (code: string): Promise<any> => {
+    return apiCall('/payment/validate-coupon', { method: 'POST', body: JSON.stringify({ code }) }, true);
+  },
+
+  verifySubscription: async (data: { razorpay_payment_id: string; razorpay_subscription_id: string; razorpay_signature: string }): Promise<any> => {
+    return apiCall('/payment/verify-subscription', { method: 'POST', body: JSON.stringify(data) }, true);
+  },
+
   getPaymentStatus: async (): Promise<any> => {
     return apiCall('/payment/status', { method: 'GET' }, true);
   },
@@ -483,7 +501,7 @@ export const apiService = {
   completeOnboarding: async (data: BusinessProfile, connectedSocials?: { platform: string; username?: string }[]): Promise<{ success: boolean; user: User }> => {
     const response = await apiCall<{ success: boolean; user: User }>(
       '/auth/complete-onboarding',
-      { method: 'PUT', body: JSON.stringify({ businessProfile: data, connectedSocials }) },
+      { method: 'PUT', body: JSON.stringify({ businessProfile: data, connectedSocials, mobileNumber }) },
       true
     );
     return response;
@@ -1439,7 +1457,11 @@ export const apiService = {
    */
   generateCaptionFromImage: async (
     imageBase64: string,
-    platform?: string
+    platform?: string,
+    context?: {
+      selectedProducts?: any[];
+      prompt?: string;
+    }
   ): Promise<{
     success: boolean;
     caption?: string;
@@ -1453,7 +1475,9 @@ export const apiService = {
         method: 'POST',
         body: JSON.stringify({
           image: imageBase64,
-          platform: platform || 'instagram'
+          platform: platform || 'instagram',
+          selectedProducts: context?.selectedProducts || [],
+          prompt: context?.prompt || ''
         })
       },
       true
@@ -3450,6 +3474,48 @@ export const icpStrategyService = {
       console.error('ICP save error:', error);
       return { success: false };
     }
+  }
+};
+
+// ============================================
+// GRAVITY SMART CONTENT CALENDAR API
+// ============================================
+export const contentCalendarAPI = {
+  get: async (): Promise<{ success: boolean; calendar: ContentCalendar }> => {
+    return apiCall('/content-calendar', { method: 'GET' }, true);
+  },
+
+  regenerate: async (): Promise<{ success: boolean; calendar: ContentCalendar }> => {
+    return apiCall('/content-calendar/regenerate', { method: 'POST' }, true);
+  },
+
+  today: async (): Promise<{ success: boolean; suggestion: ContentCalendarItem | null; calendarId?: string | null }> => {
+    return apiCall('/content-calendar/today', { method: 'GET' }, true);
+  },
+
+  updateSettings: async (data: { autoGenerate?: boolean; approved?: boolean }): Promise<{ success: boolean; calendar: ContentCalendar }> => {
+    return apiCall('/content-calendar/settings', { method: 'PATCH', body: JSON.stringify(data) }, true);
+  },
+
+  updateItem: async (itemId: string, data: Partial<ContentCalendarItem>): Promise<{ success: boolean; calendar: ContentCalendar; item: ContentCalendarItem }> => {
+    return apiCall(`/content-calendar/items/${encodeURIComponent(itemId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data)
+    }, true);
+  },
+
+  createDraft: async (itemId: string, publish = false): Promise<any> => {
+    return apiCall(`/content-calendar/items/${encodeURIComponent(itemId)}/create-draft`, {
+      method: 'POST',
+      body: JSON.stringify({ publish })
+    }, true);
+  },
+
+  reorder: async (orderedIds: string[]): Promise<{ success: boolean; calendar: ContentCalendar }> => {
+    return apiCall('/content-calendar/reorder', {
+      method: 'POST',
+      body: JSON.stringify({ orderedIds })
+    }, true);
   }
 };
 
