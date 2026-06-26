@@ -11,7 +11,8 @@ import {
   RefreshCcw,
   Mic,
   ArrowLeft,
-  Trash2
+  Trash2,
+  XCircle,
 } from 'lucide-react';
 import { getThemeClasses, useTheme } from '../context/ThemeContext';
 import { contentCalendarAPI, inventoryAPI, videoGenerationAPI } from '../services/api';
@@ -64,6 +65,7 @@ const ReelGenerator: React.FC = () => {
   const [successMessage, setSuccessMessage] = useState('');
 
   // Persistent Queue background worker progress states
+  const [activeQueueJobId, setActiveQueueJobId] = useState<string>('');
   const [activeJobStatus, setActiveJobStatus] = useState<string>('');
   const [activeJobProgress, setActiveJobProgress] = useState<number>(0);
   const [activeJobStep, setActiveJobStep] = useState<string>('');
@@ -110,6 +112,7 @@ const ReelGenerator: React.FC = () => {
   const recorderRef = useRef<MediaRecorder | null>(null);
   const recordingChunksRef = useRef<Blob[]>([]);
   const [isRecording, setIsRecording] = useState(false);
+  const pollAbortControllerRef = useRef<AbortController | null>(null);
 
   const selectedProduct = useMemo(
     () => products.find((p) => p._id === selectedProductId) || null,
@@ -234,13 +237,55 @@ const ReelGenerator: React.FC = () => {
     return 1;
   };
 
+  const resetActiveJobState = () => {
+    setBusy(false);
+    setActiveQueueJobId('');
+    setActiveJobStatus('');
+    setActiveJobProgress(0);
+    setActiveJobStep('');
+    setActiveJobLogs([]);
+    setError('');
+  };
+
+  const handleCancelJob = async () => {
+    if (pollAbortControllerRef.current) {
+      pollAbortControllerRef.current.abort();
+      pollAbortControllerRef.current = null;
+    }
+
+    if (!activeQueueJobId) {
+      resetActiveJobState();
+      return;
+    }
+
+    const jobIdToCancel = activeQueueJobId;
+    setActiveJobStatus('cancelling');
+    try {
+      await videoGenerationAPI.cancelJob(jobIdToCancel);
+    } catch (e: any) {
+      console.error("Failed to cancel job on backend:", e.message);
+    } finally {
+      setTimeout(() => {
+        resetActiveJobState();
+      }, 1500);
+    }
+  };
+
   const pollJob = async (queueJobId: string, successCallback: (result: any) => void) => {
     setBusy(true);
     setError('');
+    setActiveQueueJobId(queueJobId);
     setActiveJobStatus('queued');
     setActiveJobProgress(0);
     setActiveJobStep('queued');
     setActiveJobLogs(['[SYSTEM] Connected to background persistent queue.']);
+
+    if (pollAbortControllerRef.current) {
+      pollAbortControllerRef.current.abort();
+    }
+    const abortController = new AbortController();
+    pollAbortControllerRef.current = abortController;
+    const signal = abortController.signal;
 
     const startedAt = Date.now();
     const timeoutMs = 20 * 60 * 1000;
@@ -248,63 +293,77 @@ const ReelGenerator: React.FC = () => {
     let lastUpdatedAt = '';
     let unchangedTicks = 0;
 
-    while (true) {
-      if (Date.now() - startedAt > timeoutMs) {
-        setActiveJobStatus('failed');
-        throw new Error('Background task took too long. Please try again.');
-      }
-
-      let job: any;
-      try {
-        job = await videoGenerationAPI.getJobStatus(queueJobId);
-        pollDelayMs = 2000;
-      } catch (err: any) {
-        const status = Number(err?.status || 0);
-        if (status === 429) {
-          pollDelayMs = Math.min(15000, Math.round(pollDelayMs * 1.8));
-          await new Promise((r) => setTimeout(r, pollDelayMs));
-          continue;
+    try {
+      while (!signal.aborted) {
+        if (Date.now() - startedAt > timeoutMs) {
+          setActiveJobStatus('failed');
+          throw new Error('Background task took too long. Please try again.');
         }
-        setActiveJobStatus('failed');
-        throw err;
+
+        let job: any;
+        try {
+          job = await videoGenerationAPI.getJobStatus(queueJobId);
+          pollDelayMs = 2000;
+        } catch (err: any) {
+          const status = Number(err?.status || 0);
+          if (status === 429) {
+            pollDelayMs = Math.min(15000, Math.round(pollDelayMs * 1.8));
+            await new Promise((r) => setTimeout(r, pollDelayMs));
+            continue;
+          }
+          setActiveJobStatus('failed');
+          throw err;
+        }
+
+        if (signal.aborted) break;
+
+        const status = String(job?.status || '').toLowerCase();
+        const progress = Number(job?.progress) || 0;
+        const currentStep = String(job?.currentStep || '');
+        const logs = Array.isArray(job?.logs) ? job.logs : [];
+        const updatedAt = String(job?.updatedAt || '');
+
+        setActiveJobStatus(status);
+        setActiveJobProgress(progress);
+        setActiveJobStep(currentStep);
+        setActiveJobLogs(logs);
+
+        if (updatedAt && updatedAt === lastUpdatedAt) {
+          unchangedTicks += 1;
+        } else {
+          unchangedTicks = 0;
+          lastUpdatedAt = updatedAt;
+        }
+
+        if (status === 'completed') {
+          const result = job?.result;
+          if (!result?.success) throw new Error(result?.message || 'Execution failed');
+          await successCallback(result);
+          resetActiveJobState();
+          break;
+        }
+
+        if (status === 'cancelled') {
+          setError('Job cancelled by user.');
+          setTimeout(() => resetActiveJobState(), 2000);
+          break;
+        }
+
+        if (status === 'failed') {
+          setActiveJobStatus('failed');
+          throw new Error(job?.error?.message || 'Execution failed');
+        }
+
+        if (unchangedTicks >= 5) {
+          pollDelayMs = Math.min(15000, Math.round(pollDelayMs * 1.5));
+        }
+
+        await new Promise((r) => setTimeout(r, pollDelayMs));
       }
-
-      const status = String(job?.status || '').toLowerCase();
-      const progress = Number(job?.progress) || 0;
-      const currentStep = String(job?.currentStep || '');
-      const logs = Array.isArray(job?.logs) ? job.logs : [];
-      const updatedAt = String(job?.updatedAt || '');
-
-      setActiveJobStatus(status);
-      setActiveJobProgress(progress);
-      setActiveJobStep(currentStep);
-      setActiveJobLogs(logs);
-
-      if (updatedAt && updatedAt === lastUpdatedAt) {
-        unchangedTicks += 1;
-      } else {
-        unchangedTicks = 0;
-        lastUpdatedAt = updatedAt;
+    } finally {
+      if (pollAbortControllerRef.current === abortController) {
+        pollAbortControllerRef.current = null;
       }
-
-      if (status === 'completed') {
-        const result = job?.result;
-        if (!result?.success) throw new Error(result?.message || 'Execution failed');
-        await successCallback(result);
-        setActiveJobStatus('');
-        break;
-      }
-
-      if (status === 'failed') {
-        setActiveJobStatus('failed');
-        throw new Error(job?.error?.message || 'Execution failed');
-      }
-
-      if (unchangedTicks >= 5) {
-        pollDelayMs = Math.min(15000, Math.round(pollDelayMs * 1.5));
-      }
-
-      await new Promise((r) => setTimeout(r, pollDelayMs));
     }
   };
 
@@ -366,6 +425,7 @@ const ReelGenerator: React.FC = () => {
         setDraft(result.draft || nextDraft);
       }).catch((e: any) => {
         setError(e?.message || 'Clip generation task failed.');
+        setActiveJobStatus('failed');
       });
     } else if (mergeJob && ['queued', 'processing'].includes(String(mergeJob.status).toLowerCase())) {
       console.log(`Reconnecting to active merge job: ${mergeJob.queueJobId}`);
@@ -376,6 +436,7 @@ const ReelGenerator: React.FC = () => {
         await loadVideoDrafts();
       }).catch((e: any) => {
         setError(e?.message || 'Video merge task failed.');
+        setActiveJobStatus('failed');
       });
     }
   };
@@ -387,6 +448,7 @@ const ReelGenerator: React.FC = () => {
       await fn();
     } catch (e: any) {
       setError(e?.message || 'Something went wrong');
+      setActiveJobStatus('failed');
     } finally {
       setBusy(false);
     }
@@ -695,30 +757,31 @@ const ReelGenerator: React.FC = () => {
     ));
   };
 
-  const resetWizard = () => {
-    setShowWizard(true);
+  const resetWizard = (startNew = true) => {
+    if (startNew) {
+      setShowWizard(true);
+      setJobId('');
+      setDraft(null);
+      setDescription('');
+      setSelectedProductId('');
+      setInputImageData('');
+      setInputImageName('');
+      setPromptText('');
+      setScenes([]);
+      setGeneratedTracks(null);
+      setFinalAudioUrl('');
+      setFinalVideoUrl('');
+      setFinalOutputUrl('');
+      setThumbnailUrl('');
+      setCaption('');
+      setHashtagsText('');
+      setSelectedPlatforms([]);
+      setScheduleDate('');
+      setScheduleTime('');
+      setSuccessMessage('');
+    }
     setStep(1);
-    setJobId('');
-    setDraft(null);
-    setDescription('');
-    setSceneCount('');
-    setSelectedProductId('');
-    setInputImageData('');
-    setInputImageName('');
-    setPromptText('');
-    setScenes([]);
-    setGeneratedTracks(null);
-    setFinalAudioUrl('');
-    setFinalVideoUrl('');
-    setFinalOutputUrl('');
-    setThumbnailUrl('');
-    setCaption('');
-    setHashtagsText('');
-    setSelectedPlatforms([]);
-    setScheduleDate('');
-    setScheduleTime('');
-    setError('');
-    setSuccessMessage('');
+    resetActiveJobState();
   };
 
   const openVideoDraft = async (id: string) => {
@@ -976,7 +1039,7 @@ const ReelGenerator: React.FC = () => {
               </div>
             )}
 
-            {activeJobStatus && (
+            {activeQueueJobId && (
               <div className={`mt-6 p-6 rounded-2xl border shadow-xl flex flex-col gap-4 ${isDarkMode ? 'bg-[#0f141c]/90 border-slate-700/80' : 'bg-white/95 border-slate-200'
                 }`}>
                 <div className="flex items-center justify-between">
@@ -985,7 +1048,7 @@ const ReelGenerator: React.FC = () => {
                     <div>
                       <h3 className={`font-bold ${theme.text}`}>Background Worker Processing...</h3>
                       <p className={`text-xs ${theme.textSecondary}`}>
-                        Job: <span className="font-mono text-[#ffcc29]">{jobId}</span> | Status: <span className="capitalize">{activeJobStatus}</span>
+                        Job: <span className="font-mono text-[#ffcc29]">{activeQueueJobId}</span> | Status: <span className="capitalize">{activeJobStatus}</span>
                       </p>
                     </div>
                   </div>
@@ -1000,11 +1063,42 @@ const ReelGenerator: React.FC = () => {
                   />
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center justify-between gap-2">
                   <span className={`text-xs font-bold px-2 py-0.5 rounded ${isDarkMode ? 'bg-slate-800 text-slate-200' : 'bg-slate-100 text-slate-700'
                     }`}>
                     Step: {activeJobStep || 'Initializing'}
                   </span>
+                  <div>
+                    {activeJobStatus === 'failed' ? (
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => resetWizard(false)}
+                          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm bg-blue-500/20 text-blue-300 border border-blue-500/40 hover:bg-blue-500/30"
+                        >
+                          <RefreshCcw className="w-3.5 h-3.5" />
+                          Retry
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleCancelJob}
+                          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm bg-red-500/20 text-red-300 border border-red-500/40 hover:bg-red-500/30"
+                        >
+                          <XCircle className="w-3.5 h-3.5" />
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleCancelJob}
+                        className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm bg-red-500/20 text-red-300 border border-red-500/40 hover:bg-red-500/30"
+                      >
+                        <XCircle className="w-3.5 h-3.5" />
+                        Cancel Generation
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Terminal Logs Viewer */}
@@ -1540,7 +1634,7 @@ const ReelGenerator: React.FC = () => {
                     Publish
                   </button>
                   <button
-                    onClick={resetWizard}
+                    onClick={() => resetWizard()}
                     className="px-6 py-3 rounded-xl border border-slate-500 text-slate-200 font-semibold"
                   >
                     Start New Wizard

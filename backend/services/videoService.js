@@ -3,7 +3,7 @@ const path = require('path');
 const { Blob: BufferBlob } = require('buffer');
 
 const DEFAULT_MODEL = 'fal-ai/ltx-2.3-22b/text-to-video';
-const IMAGE_TO_VIDEO_MODEL = process.env.FAL_IMAGE_TO_VIDEO_MODEL || 'fal-ai/bytedance/seedance/v1/pro/image-to-video';
+const IMAGE_TO_VIDEO_MODEL = process.env.FAL_IMAGE_TO_VIDEO_MODEL || 'fal-ai/kling-video/v1';
 const DEFAULT_SEED = Number.parseInt(String(process.env.FAL_VIDEO_SEED || '-1'), 10);
 const DEFAULT_NUM_FRAMES = 33;
 const VIDEO_SIZE = {
@@ -72,6 +72,7 @@ function isLocalhostUrl(url = '') {
 }
 
 async function getFalClient() {
+  console.log("Fal key exists:", !!process.env.FAL_KEY);
   const apiKey = String(process.env.FAL_KEY || '').trim();
   if (!apiKey) {
     throw new Error('FAL_KEY environment variable is required for Fal.ai video clip generation');
@@ -172,6 +173,11 @@ async function generateVideoClip(scene = {}) {
     scene,
     imageUrl: getSceneImageUrl(scene)
   });
+
+  if (imageUrl && !imageUrl.startsWith("https://")) {
+    throw new Error(`Invalid public image URL for Fal.ai: ${imageUrl}. Must be a public HTTPS URL.`);
+  }
+
   const model = imageUrl ? IMAGE_TO_VIDEO_MODEL : DEFAULT_MODEL;
   const numFrames = clamp(scene.num_frames || scene.numFrames || DEFAULT_NUM_FRAMES, 25, 33);
   const seed = getSeed(scene);
@@ -245,9 +251,13 @@ async function generateVideoClip(scene = {}) {
     };
   } catch (error) {
     const durationMs = Date.now() - startTime;
-    console.error("Fal render failed after duration:", durationMs, "ms. Error:", error);
+    console.error("Fal.ai Full Error:", JSON.stringify(error, null, 2));
     console.log(`Scene ${scene.sceneId || scene.id || 'unknown'} render duration: ${durationMs}ms`);
-    throw mapFalError(error, model);
+    throw new Error(
+        error.response?.data?.message ||
+        error.message ||
+        "Fal.ai generation failed"
+    );
   }
 }
 

@@ -4719,68 +4719,6 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
       });
     };
 
-    const resetReelImageSource = useCallback(() => {
-      if (reelImagePreview && reelImagePreview.startsWith('blob:')) {
-        URL.revokeObjectURL(reelImagePreview);
-      }
-      setReelImageFile(null);
-      setReelImagePreview('');
-    }, [reelImagePreview]);
-
-    const setReelImageFromUrl = useCallback((url: string) => {
-      const nextUrl = String(url || '').trim();
-      if (!nextUrl) return;
-
-      if (reelImagePreview && reelImagePreview.startsWith('blob:')) {
-        URL.revokeObjectURL(reelImagePreview);
-      }
-
-      setReelImageFile(null);
-      setReelImagePreview(nextUrl);
-    }, [reelImagePreview]);
-
-    const handleUseLinkedProductImageForReel = () => {
-      const linkedImage = String(selectedProduct?.imageUrl || '').trim();
-      if (!linkedImage) {
-        alert('Please select a product with an image from inventory.');
-        return;
-      }
-      setReelImageFromUrl(linkedImage);
-    };
-    const mapContentLanguageToReelCode = (language: string): string => {
-      const normalized = String(language || '').trim().toLowerCase();
-      const map: Record<string, string> = {
-        english: 'en',
-        en: 'en',
-        hindi: 'hi',
-        hi: 'hi',
-        tamil: 'ta',
-        ta: 'ta',
-        telugu: 'te',
-        te: 'te',
-        malayalam: 'ml',
-        ml: 'ml',
-        kannada: 'kn',
-        kn: 'kn'
-      };
-      return map[normalized] || 'en';
-    };
-
-    const onReelImageSelected = (file: File | null) => {
-      if (!file) return;
-      if (!file.type.startsWith('image/')) {
-        alert('Please select an image file for reel generation.');
-        return;
-      }
-
-      if (reelImagePreview && reelImagePreview.startsWith('blob:')) {
-        URL.revokeObjectURL(reelImagePreview);
-      }
-
-      setReelImageFile(file);
-      setReelImagePreview(URL.createObjectURL(file));
-    };
-
     useEffect(() => {
       if (!isReelFlow) return;
       if (reelImageFile || reelImagePreview) return;
@@ -5380,8 +5318,12 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
           generationRequestInFlightRef.current = false;
           return;
         }
-      };
-    }, [reelImagePreview]);
+      } catch (error) {
+        console.error('Credit check failed:', error);
+        alert('Failed to check credits. Please try again.');
+        generationRequestInFlightRef.current = false;
+        return;
+      }
 
       setIsGenerating(true);
       setGeneratedPosts([]);

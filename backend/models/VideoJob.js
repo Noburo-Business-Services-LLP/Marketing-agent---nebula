@@ -6,7 +6,7 @@ const videoJobSchema = new mongoose.Schema(
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
     status: {
       type: String,
-      enum: ['queued', 'processing', 'completed', 'failed'],
+      enum: ['queued', 'processing', 'completed', 'failed', 'cancelled'],
       default: 'queued',
       index: true
     },

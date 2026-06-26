@@ -862,6 +862,26 @@ router.get('/jobs/:jobId', protect, videoJobReadLimiter, async (req, res) => {
   }
 });
 
+router.post('/jobs/:jobId/cancel', protect, videoAiWriteLimiter, async (req, res) => {
+  try {
+    const userId = toUserId(req.user);
+    const job = await videoGenerationQueue.cancelJob(req.params.jobId, userId);
+    if (!job) {
+      return res.status(404).json({
+        success: false,
+        message: 'Job not found or you do not have permission to cancel it.'
+      });
+    }
+    return res.json({
+      success: true,
+      message: 'Job cancelled successfully.',
+      job
+    });
+  } catch (error) {
+    return responseError(res, error, 'Failed to cancel job');
+  }
+});
+
 // -----------------------------------------------------------------------------
 // Wizard endpoints (step-by-step with draft state)
 // -----------------------------------------------------------------------------
