@@ -561,6 +561,19 @@ const ReelGenerator: React.FC = () => {
     setDraft(response.draft || draft);
   });
 
+  const regenerateScene = async (scene: any) => withBusy(async () => {
+    if (!jobId) throw new Error('Draft missing');
+    const response = await videoGenerationAPI.generateScenes({
+      jobId,
+      sceneData: scenes,
+      regenerateSceneId: scene.sceneId,
+      promptText
+    });
+    if (!response?.success) throw new Error(response?.message || 'Scene regeneration failed');
+    setScenes(response.sceneData || []);
+    setDraft(response.draft || draft);
+  });
+
   const generateClips = async () => withBusy(async () => {
     if (!jobId) throw new Error('Draft missing');
 
@@ -1107,11 +1120,38 @@ const ReelGenerator: React.FC = () => {
                 <div className="space-y-3">
                   <p className={`text-sm font-semibold ${theme.text}`}>Scene Breakdown (Editable)</p>
                   {(scenes || []).map((scene, idx) => (
-                    <div key={scene.sceneId || idx} className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3 space-y-2`}>
-                      <input value={scene.title || ''} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, title: e.target.value } : item))} className={inputClass} />
-                      <input type="number" min={1} value={scene.durationSeconds || 1} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, durationSeconds: Number(e.target.value) || 1 } : item))} className={inputClass} />
-                      <textarea value={scene.imagePrompt || ''} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, imagePrompt: e.target.value } : item))} className={`${inputClass} min-h-[70px]`} placeholder="Image prompt" />
-                      <textarea value={scene.videoPrompt || ''} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, videoPrompt: e.target.value } : item))} className={`${inputClass} min-h-[70px]`} placeholder="Video prompt" />
+                    <div key={scene.sceneId || idx} className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3 space-y-3`}>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className={`text-sm font-bold ${theme.text}`}>Scene {idx + 1}</p>
+                        <button
+                          onClick={() => regenerateScene(scene)}
+                          disabled={busy}
+                          className="px-3 py-1.5 text-xs rounded-lg border border-[#ffcc29] text-[#ffcc29] hover:bg-[#ffcc29]/10 disabled:opacity-50 flex items-center gap-1.5"
+                        >
+                          {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCcw className="w-3 h-3" />}
+                          Regenerate Scene
+                        </button>
+                      </div>
+
+                      <div>
+                        <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Title</label>
+                        <input value={scene.title || ''} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, title: e.target.value } : item))} className={`${inputClass} mt-1`} />
+                      </div>
+
+                      <div>
+                        <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Duration (seconds)</label>
+                        <input type="number" min={1} value={scene.durationSeconds || 1} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, durationSeconds: Number(e.target.value) || 1 } : item))} className={`${inputClass} mt-1`} />
+                      </div>
+
+                      <div>
+                        <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Image Prompt</label>
+                        <textarea value={scene.imagePrompt || ''} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, imagePrompt: e.target.value } : item))} className={`${inputClass} mt-1 min-h-[70px]`} placeholder="Describe the visual for the still image" />
+                      </div>
+
+                      <div>
+                        <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Video Prompt</label>
+                        <textarea value={scene.videoPrompt || ''} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, videoPrompt: e.target.value } : item))} className={`${inputClass} mt-1 min-h-[70px]`} placeholder="Describe the motion / animation for the clip" />
+                      </div>
                     </div>
                   ))}
                 </div>
