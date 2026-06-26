@@ -1109,10 +1109,7 @@ const ReelGenerator: React.FC = () => {
                   {(scenes || []).map((scene, idx) => (
                     <div key={scene.sceneId || idx} className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3 space-y-2`}>
                       <input value={scene.title || ''} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, title: e.target.value } : item))} className={inputClass} />
-                      <div className="grid grid-cols-2 gap-2">
-                        <input type="number" min={1} value={scene.durationSeconds || 1} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, durationSeconds: Number(e.target.value) || 1 } : item))} className={inputClass} />
-                        <input value={scene.sceneId || `scene_${idx + 1}`} disabled className={inputClass} />
-                      </div>
+                      <input type="number" min={1} value={scene.durationSeconds || 1} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, durationSeconds: Number(e.target.value) || 1 } : item))} className={inputClass} />
                       <textarea value={scene.imagePrompt || ''} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, imagePrompt: e.target.value } : item))} className={`${inputClass} min-h-[70px]`} placeholder="Image prompt" />
                       <textarea value={scene.videoPrompt || ''} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, videoPrompt: e.target.value } : item))} className={`${inputClass} min-h-[70px]`} placeholder="Video prompt" />
                     </div>
