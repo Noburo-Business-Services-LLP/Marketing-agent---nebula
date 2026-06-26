@@ -7,6 +7,14 @@ interface PlatformPreviewProps {
   caption?: string;
   hashtags?: string[] | string;
   brandName?: string;
+  selectedProducts?: Array<{
+    _id?: string;
+    id?: string;
+    name: string;
+    price?: number;
+    currency?: string;
+    imageUrl?: string;
+  }>;
   onClose: () => void;
   isDarkMode?: boolean;
   inline?: boolean;
@@ -18,6 +26,7 @@ const PlatformPreview: React.FC<PlatformPreviewProps> = ({
   caption = '',
   hashtags = [],
   brandName = 'Your Brand',
+  selectedProducts = [],
   onClose,
   isDarkMode = false,
   inline = false,
@@ -39,6 +48,30 @@ const PlatformPreview: React.FC<PlatformPreviewProps> = ({
     { id: 'twitter', label: 'Twitter / X', color: 'from-sky-400 to-sky-600' },
     { id: 'linkedin', label: 'LinkedIn', color: 'from-blue-600 to-blue-800' },
   ];
+
+  const renderProductCallout = () => {
+    if (!selectedProducts.length) return null;
+
+    return (
+      <div className="mx-3 my-2 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
+        {selectedProducts.slice(0, 3).map((product) => (
+          <div key={product._id || product.id || product.name} className="flex items-center gap-2 py-1">
+            {product.imageUrl ? (
+              <img src={product.imageUrl} alt={product.name} className="w-9 h-9 rounded-md object-cover" />
+            ) : (
+              <div className="w-9 h-9 rounded-md bg-gray-200" />
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-semibold text-gray-900 truncate">{product.name}</p>
+              {product.price !== undefined && (
+                <p className="text-[11px] font-semibold text-gray-600">{product.currency || ''} {product.price}</p>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
 
   const renderInstagram = () => (
     <div className="bg-white rounded-lg overflow-hidden max-w-[380px] mx-auto shadow-lg">
@@ -68,6 +101,7 @@ const PlatformPreview: React.FC<PlatformPreviewProps> = ({
           <p className="text-gray-400 text-sm">No image</p>
         </div>
       )}
+      {renderProductCallout()}
 
       {/* Action buttons */}
       <div className="px-3 py-2">
@@ -128,6 +162,7 @@ const PlatformPreview: React.FC<PlatformPreviewProps> = ({
           <p className="text-gray-400 text-sm">No image</p>
         </div>
       )}
+      {renderProductCallout()}
 
       {/* Reactions bar */}
       <div className="px-4 py-2 border-t border-gray-100">
@@ -186,6 +221,7 @@ const PlatformPreview: React.FC<PlatformPreviewProps> = ({
                 <img src={imageUrl} alt="Post" className="w-full object-cover max-h-[300px]" />
               </div>
             )}
+            {renderProductCallout()}
 
             {/* Time */}
             <p className="text-xs text-gray-500 mt-3">{new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })} · {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
@@ -247,6 +283,7 @@ const PlatformPreview: React.FC<PlatformPreviewProps> = ({
           <p className="text-gray-400 text-sm">No image</p>
         </div>
       )}
+      {renderProductCallout()}
 
       {/* Reactions */}
       <div className="px-4 py-2">

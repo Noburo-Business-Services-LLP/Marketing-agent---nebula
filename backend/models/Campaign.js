@@ -34,6 +34,10 @@ const campaignSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  selectedProducts: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Product'
+  }],
   // Tone used to pick predefined Instagram audio automatically (optional)
   tone: {
     type: String,

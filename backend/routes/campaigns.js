@@ -4377,7 +4377,7 @@ const { generatePosterFromTemplate, editPosterFromTemplate } = require('../servi
  */
 router.post('/generate-caption', protect, checkTrial, requireCredits('campaign_text'), async (req, res) => {
   try {
-    const { image, platform, language: languageInput } = req.body;
+    const { image, platform, language: languageInput, selectedProducts = [], prompt: userPrompt = '' } = req.body;
 
     const normalizeCaptionLanguage = (value = '') => {
       const normalized = String(value || '').trim().toLowerCase();
@@ -4418,10 +4418,45 @@ router.post('/generate-caption', protect, checkTrial, requireCredits('campaign_t
       ? brandCtx.effectiveTone
       : String(brandCtx?.effectiveTone || bp?.brandVoice || 'professional').toLowerCase();
     const strictBrandText = strictBrandMode ? buildStrictBrandLockText(brandCtx) : '';
+    const normalizedSelectedProducts = Array.isArray(selectedProducts)
+      ? selectedProducts
+          .filter((product) => product && typeof product === 'object')
+          .slice(0, 5)
+          .map((product) => ({
+            id: product._id || product.id || null,
+            name: String(product.name || '').trim(),
+            description: String(product.description || '').trim(),
+            price: product.price,
+            currency: product.currency || '',
+            category: String(product.category || '').trim(),
+            features: Array.isArray(product.features)
+              ? product.features
+              : Array.isArray(product.tags)
+                ? product.tags
+                : []
+          }))
+          .filter((product) => product.name)
+      : [];
+    const primarySelectedProduct = normalizedSelectedProducts[0] || null;
+    const selectedProductText = normalizedSelectedProducts.length > 0
+      ? normalizedSelectedProducts.map((product, index) => {
+          const featureText = (product.features || []).filter(Boolean).join(', ');
+          return [
+            `${index + 1}. ${product.name}`,
+            product.description ? `Description: ${product.description}` : '',
+            product.price !== undefined && product.price !== null ? `Price: ${product.currency || ''} ${product.price}`.trim() : '',
+            product.category ? `Category: ${product.category}` : '',
+            featureText ? `Features: ${featureText}` : ''
+          ].filter(Boolean).join('\n');
+        }).join('\n\n')
+      : '';
+
     const aiMemoryContext = await buildAIContext({
       userId,
       user,
-      platform: platform || 'instagram'
+      platform: platform || 'instagram',
+      product: primarySelectedProduct,
+      category: primarySelectedProduct?.category || ''
     });
     const brandContext = `
 Business: ${brandCtx?.profile?.brandName || bp?.companyName || user?.companyName || 'Unknown'}
@@ -4458,6 +4493,8 @@ ${aiMemoryContext.reusablePromptText}`;
     
     const prompt = `You are a social media marketing expert. Analyze this image and create an engaging ${platform || 'Instagram'} caption for it.
 ${brandContext}
+${selectedProductText ? `\nSelected inventory product context:\n${selectedProductText}` : ''}
+${String(userPrompt || '').trim() ? `\nUser generation prompt:\n${String(userPrompt).trim()}` : ''}
 
 Requirements:
 1. Write a catchy, engaging caption that matches the image content
@@ -4470,6 +4507,7 @@ Requirements:
 8. ${strictBrandMode ? 'If there is conflict between platform defaults and brand profile, prioritize brand profile.' : 'Balance platform-native style with brand voice.'}
 9. Caption and CTA must be strictly in ${selectedLanguage}. Do not mix languages.
 10. ${selectedLanguage === 'English' ? 'English is allowed.' : 'Do NOT use English words unless they are brand names or hashtags.'}
+11. ${selectedProductText ? 'Naturally feature the selected product name, description, price, category, and features when relevant. Do not invent product facts.' : 'Do not invent product details.'}
 
 Return ONLY the caption text with hashtags. No JSON, no explanations.`;
 
@@ -4565,7 +4603,7 @@ Return ONLY the caption text with hashtags. No JSON, no explanations.`;
       caption: caption.trim(),
       hashtags: hashtags.slice(0, 4),
       aiSettings: {
-        model: 'gemini-2.5-flash-lite',
+        model: 'gemini-2.0-flash',
         memoryInjected: Boolean(aiMemoryContext.reusablePromptText)
       }
     });

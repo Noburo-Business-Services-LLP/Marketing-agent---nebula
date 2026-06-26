@@ -87,6 +87,7 @@ const { checkTrial } = require('./middleware/trialGuard');
 
 // Content routes
 const contentRoutes = require('./routes/content');
+const contentCalendarRoutes = require('./routes/contentCalendar');
 
 // Google Calendar routes
 const googleCalendarRoutes = require('./routes/googleCalendar');
@@ -108,6 +109,8 @@ const trackEvent = require('./utils/trackEvent');
 const notificationScheduler = require('./services/notificationScheduler');
 // Analytics snapshot scheduler
 const snapshotScheduler = require('./services/snapshotScheduler');
+const { startCampaignScheduler } = require('./services/campaignScheduler');
+const { startContentCalendarScheduler } = require('./services/contentCalendarService');
 const { initializeSocketHub } = require('./services/socketHub');
 const { startInboxPolling } = require('./services/socialInboxService');
 
@@ -402,6 +405,7 @@ app.use('/api/payment', paymentRoutes);
 
 // Routes - Content
 app.use('/api/content', contentRoutes);
+app.use('/api/content-calendar', contentCalendarRoutes);
 app.use('/api/google-calendar', googleCalendarRoutes);
 app.use('/api/products', productRoutes);
 // Video generation has its own per-route limiters (job polling must not trip AI limiter).
@@ -676,6 +680,20 @@ const startServer = async () => {
       snapshotScheduler.start();
     } catch (schedulerError) {
       console.warn('⚠️  Snapshot scheduler failed to start:', schedulerError.message);
+    }
+
+    // Start campaign scheduler for due scheduled posts
+    try {
+      startCampaignScheduler();
+    } catch (schedulerError) {
+      console.warn('Campaign scheduler failed to start:', schedulerError.message);
+    }
+
+    // Start Gravity Smart Calendar scheduler for approved auto mode
+    try {
+      startContentCalendarScheduler();
+    } catch (schedulerError) {
+      console.warn('Content calendar scheduler failed to start:', schedulerError.message);
     }
 
     // Initialize OTP email service

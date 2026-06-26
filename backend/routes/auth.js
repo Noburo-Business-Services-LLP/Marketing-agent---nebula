@@ -1350,6 +1350,15 @@ router.put('/complete-onboarding', protect, async (req, res) => {
     console.log('Onboarding completed for user:', user.email);
     console.log('Business Profile saved:', JSON.stringify(user.businessProfile, null, 2));
 
+    try {
+      const { generateMonthlyCalendar } = require('../services/contentCalendarService');
+      generateMonthlyCalendar(user).catch((calendarError) => {
+        console.error('Failed to generate Gravity Smart Calendar:', calendarError);
+      });
+    } catch (calendarError) {
+      console.error('Failed to start Gravity Smart Calendar generation:', calendarError);
+    }
+
     res.status(200).json({
       success: true,
       message: 'Onboarding completed successfully',
