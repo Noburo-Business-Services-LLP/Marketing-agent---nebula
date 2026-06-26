@@ -1006,7 +1006,7 @@ router.post('/generatePrompt', protect, checkTrial, videoAiWriteLimiter, async (
 
 router.post('/generateScenes', protect, checkTrial, videoAiWriteLimiter, async (req, res) => {
   try {
-    const { jobId, sceneData, saveOnly = false, promptText } = req.body || {};
+    const { jobId, sceneData, saveOnly = false, promptText, regenerateSceneId } = req.body || {};
     if (!jobId) {
       return res.status(400).json({ success: false, message: 'jobId is required' });
     }
@@ -1014,6 +1014,46 @@ router.post('/generateScenes', protect, checkTrial, videoAiWriteLimiter, async (
     const userId = toUserId(req.user);
     const draft = await loadDraftForUser(jobId, userId);
     const durationSeconds = normalizedDurationSeconds(draft?.input?.durationSeconds || 60, 60);
+
+    // Per-scene regenerate: run AI for a fresh plan, splice in just the matching scene
+    if (regenerateSceneId && Array.isArray(sceneData) && sceneData.length) {
+      const targetIdx = sceneData.findIndex((s) => String(s.sceneId) === String(regenerateSceneId));
+      if (targetIdx === -1) {
+        return res.status(404).json({ success: false, message: 'Scene not found' });
+      }
+      const promptForRegen = String(
+        promptText || draft?.prompt?.promptText || promptFallbackFromDraft(draft)
+      ).trim();
+      const memCtx = await buildAIContext({
+        userId,
+        product: draft?.input?.product || null,
+        category: draft?.input?.product?.category || ''
+      });
+      const fresh = await runGenerateScenes({
+        payload: {
+          description: [promptForRegen, memCtx.reusablePromptText].filter(Boolean).join('\n\n'),
+          durationSeconds,
+          sceneCount: draft?.input?.sceneCount || sceneData.length,
+          productId: draft?.input?.productId || undefined,
+          product: draft?.input?.product || undefined
+        },
+        user: req.user
+      });
+      const freshScene = fresh?.sceneData?.[targetIdx];
+      if (!freshScene) {
+        return res.status(500).json({ success: false, message: 'AI did not return a scene at this index' });
+      }
+      const merged = sceneData.map((s, i) => (
+        i === targetIdx ? { ...freshScene, sceneId: s.sceneId } : s
+      ));
+      const normalized = sanitizeSceneData(merged, durationSeconds);
+      const saved = await updateDraft(jobId, userId, (current) => ({
+        ...current,
+        currentStep: Math.max(Number(current.currentStep || 1), 2),
+        scenes: normalized
+      }));
+      return res.json({ success: true, jobId, sceneData: saved.scenes || [], draft: saved });
+    }
 
     if (saveOnly && Array.isArray(sceneData)) {
       const normalizedScenes = sanitizeSceneData(sceneData, durationSeconds);
