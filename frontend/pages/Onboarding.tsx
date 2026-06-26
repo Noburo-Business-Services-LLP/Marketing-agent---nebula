@@ -63,6 +63,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
         website: '',
         gstNumber: '',
         industry: '',
+        problemSolved: '',
         niche: '',
         businessType: '',
         businessLocation: '',
@@ -319,6 +320,8 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
     const validateStep = (currentStep: number) => {
         if (currentStep === 1) {
             if (!formData.name || !formData.niche) return "Company Name and Niche are required.";
+            if (!formData.industry) return "Please select your business vertical.";
+            if (!formData.problemSolved || !formData.problemSolved.trim()) return "Please describe the problem your business solves.";
             if (!formData.businessType) return "Please select your business type (B2B, B2C, or Both).";
             if (!formData.businessLocation) return "Please enter your business location.";
             if (formData.yearsInBusiness === undefined || formData.yearsInBusiness === null || Number.isNaN(Number(formData.yearsInBusiness)) || Number(formData.yearsInBusiness) < 0) {
@@ -720,6 +723,55 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                         placeholder="e.g. Sustainable Fashion, AI SaaS, Organic Skincare"
                                         value={formData.niche}
                                         onChange={e => handleChange('niche', e.target.value)}
+                                    />
+                                </div>
+                                <div>
+                                    <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Business Vertical <span className="text-red-500">*</span></label>
+                                    <select
+                                        className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#ffcc29] ${
+                                            theme === 'dark'
+                                                ? 'bg-[#070A12] border-[#ffcc29]/30 text-[#ededed]'
+                                                : 'bg-white border-gray-300 text-gray-900'
+                                        }`}
+                                        value={formData.industry || ''}
+                                        onChange={e => handleChange('industry', e.target.value)}
+                                    >
+                                        <option value="">— Select your vertical —</option>
+                                        <option value="Technology / SaaS">Technology / SaaS</option>
+                                        <option value="E-commerce / Retail">E-commerce / Retail</option>
+                                        <option value="Food & Beverage">Food &amp; Beverage</option>
+                                        <option value="Fashion & Apparel">Fashion &amp; Apparel</option>
+                                        <option value="Beauty & Wellness">Beauty &amp; Wellness</option>
+                                        <option value="Healthcare">Healthcare</option>
+                                        <option value="Education">Education</option>
+                                        <option value="Finance / Fintech">Finance / Fintech</option>
+                                        <option value="Real Estate">Real Estate</option>
+                                        <option value="Travel & Hospitality">Travel &amp; Hospitality</option>
+                                        <option value="Media & Entertainment">Media &amp; Entertainment</option>
+                                        <option value="Professional Services">Professional Services</option>
+                                        <option value="Manufacturing">Manufacturing</option>
+                                        <option value="Automotive">Automotive</option>
+                                        <option value="Jewellery">Jewellery</option>
+                                        <option value="Home & Furniture">Home &amp; Furniture</option>
+                                        <option value="Non-profit">Non-profit</option>
+                                        <option value="Other">Other</option>
+                                    </select>
+                                    <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-[#ededed]/50' : 'text-gray-500'}`}>
+                                        The broader industry your business operates in.
+                                    </p>
+                                </div>
+                                <div>
+                                    <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Problem You Solve <span className="text-red-500">*</span></label>
+                                    <textarea
+                                        rows={3}
+                                        className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#ffcc29] resize-none ${
+                                            theme === 'dark'
+                                                ? 'bg-[#070A12] border-[#ffcc29]/30 text-[#ededed] placeholder-[#ededed]/40'
+                                                : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
+                                        }`}
+                                        placeholder="What pain point does your business solve for customers? e.g. Busy parents struggle to find healthy school lunches — we deliver fresh, dietitian-approved tiffins every morning."
+                                        value={formData.problemSolved || ''}
+                                        onChange={e => handleChange('problemSolved', e.target.value as any)}
                                     />
                                 </div>
                                 <div>

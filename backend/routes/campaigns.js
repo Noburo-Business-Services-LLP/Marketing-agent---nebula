@@ -4513,7 +4513,7 @@ Return ONLY the caption text with hashtags. No JSON, no explanations.`;
 
     // Call Gemini with vision
     const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-    const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+    const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent';
     
     const requestBody = {
       contents: [{
@@ -4534,14 +4534,37 @@ Return ONLY the caption text with hashtags. No JSON, no explanations.`;
     };
     
     const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
-    const response = await fetch(`${apiUrl}?key=${GEMINI_API_KEY}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(requestBody)
-    });
-    
-    const data = await response.json();
-    
+
+    // Retry wrapper — Google's API occasionally cuts gzip streams mid-response (ERR_STREAM_PREMATURE_CLOSE).
+    // Identity encoding sidesteps the node-fetch gzip bug; retry handles genuine network blips.
+    let response, data, lastErr;
+    const maxAttempts = 3;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        response = await fetch(`${apiUrl}?key=${GEMINI_API_KEY}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept-Encoding': 'identity'
+          },
+          body: JSON.stringify(requestBody),
+          timeout: 60000
+        });
+        data = await response.json();
+        lastErr = null;
+        break;
+      } catch (err) {
+        lastErr = err;
+        const isTransient = err.code === 'ERR_STREAM_PREMATURE_CLOSE'
+          || err.type === 'system'
+          || err.code === 'ETIMEDOUT'
+          || err.code === 'ECONNRESET';
+        console.warn(`Gemini caption fetch attempt ${attempt}/${maxAttempts} failed:`, err.code || err.message);
+        if (!isTransient || attempt === maxAttempts) throw err;
+        await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt - 1)));
+      }
+    }
+
     if (!response.ok) {
       console.error('Gemini caption error:', data);
       return res.status(500).json({

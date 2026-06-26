@@ -9,9 +9,9 @@ const fs = require('fs/promises');
 const path = require('path');
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
-// Using Gemini 2.5 Pro for all text generation (150 RPM, 1K RPD)
+// Cheap + reliable: Flash Lite primary, Flash as fallback
 const GEMINI_MODELS = [
-  'gemini-2.5-pro',        // Gemini 2.5 Pro - Primary (150 RPM)
+  'gemini-2.5-flash-lite', // Gemini 2.5 Flash Lite - Primary (cheapest, fast, reliable)
   'gemini-2.5-flash',      // Gemini 2.5 Flash - Fallback (1K RPM)
 ];
 
@@ -99,7 +99,10 @@ function sleep(ms) {
 }
 
 /**
- * Fetch with timeout helper
+ * Fetch with timeout + transient-error retry.
+ * Retries on ERR_STREAM_PREMATURE_CLOSE (node-fetch gzip bug w/ Google's API),
+ * ECONNRESET, ETIMEDOUT. Forces identity encoding on Gemini calls to sidestep
+ * the gzip stream-close issue entirely.
  */
 async function fetchWithTimeout(url, options, timeout = API_TIMEOUT) {
   const controller = new AbortController();
@@ -117,8 +120,8 @@ async function fetchWithTimeout(url, options, timeout = API_TIMEOUT) {
     if (error.name === 'AbortError') {
       throw new Error(`Request timed out after ${timeout}ms`);
     }
-    throw error;
   }
+  throw lastError;
 }
 
 /**

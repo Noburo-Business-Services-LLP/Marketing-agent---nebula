@@ -5140,12 +5140,66 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
       setPlatforms(prev => prev.includes(platform) ? prev.filter(p => p !== platform) : [...prev, platform]);
     };
 
-    const toggleDay = (day: string) => {
-      setPreferredDays(prev => prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]);
+    const resetReelImageSource = useCallback(() => {
+      if (reelImagePreview && reelImagePreview.startsWith('blob:')) {
+        URL.revokeObjectURL(reelImagePreview);
+      }
+      setReelImageFile(null);
+      setReelImagePreview('');
+    }, [reelImagePreview]);
+
+    const setReelImageFromUrl = useCallback((url: string) => {
+      const nextUrl = String(url || '').trim();
+      if (!nextUrl) return;
+
+      if (reelImagePreview && reelImagePreview.startsWith('blob:')) {
+        URL.revokeObjectURL(reelImagePreview);
+      }
+
+      setReelImageFile(null);
+      setReelImagePreview(nextUrl);
+    }, [reelImagePreview]);
+
+    const handleUseLinkedProductImageForReel = () => {
+      const linkedImage = String(selectedProduct?.imageUrl || '').trim();
+      if (!linkedImage) {
+        alert('Please select a product with an image from inventory.');
+        return;
+      }
+      setReelImageFromUrl(linkedImage);
+    };
+    const mapContentLanguageToReelCode = (language: string): string => {
+      const normalized = String(language || '').trim().toLowerCase();
+      const map: Record<string, string> = {
+        english: 'en',
+        en: 'en',
+        hindi: 'hi',
+        hi: 'hi',
+        tamil: 'ta',
+        ta: 'ta',
+        telugu: 'te',
+        te: 'te',
+        malayalam: 'ml',
+        ml: 'ml',
+        kannada: 'kn',
+        kn: 'kn'
+      };
+      return map[normalized] || 'en';
     };
 
-    const toggleKpi = (kpi: string) => {
-      setKpis(prev => prev.includes(kpi) ? prev.filter(k => k !== kpi) : [...prev, kpi]);
+    const onReelImageSelected = (file: File | null) => {
+      if (!file) return;
+      if (!file.type.startsWith('image/')) {
+        alert('Please select an image file for reel generation.');
+        return;
+      }
+
+      if (reelImagePreview && reelImagePreview.startsWith('blob:')) {
+        URL.revokeObjectURL(reelImagePreview);
+      }
+
+      setReelImageFile(file);
+      setReelImagePreview(URL.createObjectURL(file));
     };
 
     // Generate AI posts based on campaign details
@@ -5326,9 +5380,8 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
           generationRequestInFlightRef.current = false;
           return;
         }
-      } catch (err) {
-        console.error('Credit check failed:', err);
-      }
+      };
+    }, [reelImagePreview]);
 
       setIsGenerating(true);
       setGeneratedPosts([]);
@@ -5338,8 +5391,9 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
       setGenerationStatus('Starting campaign generation...');
       setStep(5);
 
-      const apiBaseUrl = window.location.hostname !== 'localhost' ? '' : 'http://localhost:5000';
-      const token = localStorage.getItem('authToken');
+      const connectedReelPlatforms = connectedPlatforms
+        .map((p) => String(p || '').toLowerCase().trim())
+        .filter((p) => reelOnlyPlatforms.includes(p));
 
       const requestBody = {
         campaignName: campaignName || '',

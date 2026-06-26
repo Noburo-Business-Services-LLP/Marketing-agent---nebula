@@ -2,6 +2,8 @@ import { AuthResponse, BusinessProfile, Campaign, ContentCalendar, ContentCalend
 
 type CampaignInput = Partial<Campaign> & { tone?: string | null };
 
+type CampaignInput = Partial<Campaign> & { tone?: string | null };
+
 // Use relative URL in production (when served from same origin), localhost in development
 declare const __PROD__: boolean;
 const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
