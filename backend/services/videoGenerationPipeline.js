@@ -12,6 +12,7 @@ const VideoDraft = require('../models/VideoDraft');
 const { callGemini, parseGeminiJSON, generateCampaignImageNanoBanana } = require('./geminiAI');
 const { getPublicBaseUrl, normalizeTone, audioFilePathForTone } = require('../utils/toneAudio');
 const { generateVideoClip } = require('./videoService');
+const { uploadVideoFile } = require('./imageUploader');
 
 const STORAGE_ROOT = path.resolve(__dirname, '../storage/ai-videos');
 const VIDEO_TARGET = { width: 1080, height: 1920, fps: 30 };
@@ -1009,25 +1010,93 @@ async function generateSceneClips({
   logger = null,
   onSceneDone = null
 }) {
+  // Upload a local clip to Cloudinary. Never throws — returns null on failure.
+  const uploadClipToCloud = async (sceneId, localPath) => {
+    try {
+      if (logger) logger(`Uploading ${sceneId} to Cloudinary...`);
+      const result = await uploadVideoFile(localPath, 'nebula-scene-clips');
+      if (result?.success && result?.url) {
+        if (logger) logger(`✓ ${sceneId} backed up to Cloudinary`);
+        return result.url;
+      }
+    } catch (err) {
+      if (logger) logger(`Cloudinary upload failed for ${sceneId}: ${err.message}. Using local URL fallback.`);
+      console.error(`[Cloudinary clip upload failed: ${sceneId}]`, err.message);
+    }
+    return null;
+  };
+
   return runWithConcurrency(scenes, SCENE_CLIP_CONCURRENCY, async (scene, index) => {
     const clipName = `scene_${scene.index}.mp4`;
     const clipPath = path.join(context.dirs.clips, clipName);
     const rawClipPath = path.join(context.dirs.temp, `fal_${sanitizeSegment(scene.sceneId || scene.index, 'scene')}.mp4`);
     const clipUrl = buildMediaUrl(context.baseUrl, context.jobId, ['clips', clipName]);
 
-    // Cache guard: Check if the scene clip is ALREADY generated and exists!
-    if (scene.clipUrl && scene.clipUrl.startsWith('http') && fs.existsSync(clipPath)) {
-      if (logger) logger(`Reusing existing generated video clip for scene ${scene.sceneId}`);
+    // Cache guard 0 (BEST): Cloudinary URL already saved from prior run → reuse for free, no download needed
+    const savedCloudUrl = String(scene.clipCloudUrl || '').trim();
+    if (savedCloudUrl && savedCloudUrl.startsWith('http')) {
+      if (logger) logger(`Reusing Cloudinary-backed clip for ${scene.sceneId} (no regen, no download)`);
       const enriched = {
         ...scene,
-        clipPath,
-        clipUrl,
+        clipUrl: savedCloudUrl,
+        clipCloudUrl: savedCloudUrl,
         falVideoUrl: scene.falVideoUrl || scene.video_url || scene.videoUrl || ''
       };
       if (typeof onSceneDone === 'function') {
         onSceneDone(index, scenes.length, enriched);
       }
       return enriched;
+    }
+
+    // Cache guard 1: clip already on disk → reuse free
+    if (scene.clipUrl && scene.clipUrl.startsWith('http') && fs.existsSync(clipPath)) {
+      if (logger) logger(`Reusing existing generated video clip for scene ${scene.sceneId}`);
+      // Opportunistically back up to Cloudinary if not already
+      const cloudUrl = await uploadClipToCloud(scene.sceneId, clipPath);
+      const enriched = {
+        ...scene,
+        clipPath,
+        clipUrl: cloudUrl || clipUrl,
+        clipCloudUrl: cloudUrl || null,
+        falVideoUrl: scene.falVideoUrl || scene.video_url || scene.videoUrl || ''
+      };
+      if (typeof onSceneDone === 'function') {
+        onSceneDone(index, scenes.length, enriched);
+      }
+      return enriched;
+    }
+
+    // Cache guard 2 (CRITICAL on ephemeral filesystems like Render):
+    // Local file gone (dyno restart) but we have the fal CDN URL from a prior run.
+    // Re-download from fal's CDN instead of re-paying fal to regenerate the clip.
+    const savedFalUrl = String(scene.falVideoUrl || scene.video_url || scene.videoUrl || '').trim();
+    if (savedFalUrl && savedFalUrl.startsWith('http') && !fs.existsSync(clipPath)) {
+      try {
+        if (logger) logger(`Local clip missing for ${scene.sceneId} — re-downloading from fal CDN (free, no re-generation)`);
+        await materializeSourceToFile({ source: savedFalUrl, destinationPath: rawClipPath });
+        await normalizeSceneVideoClip({
+          inputPath: rawClipPath,
+          outputPath: clipPath,
+          durationSeconds: scene.durationSeconds
+        });
+        const stat = await fs.promises.stat(clipPath);
+        if (stat.size) {
+          const cloudUrl = await uploadClipToCloud(scene.sceneId, clipPath);
+          const enriched = {
+            ...scene,
+            clipPath,
+            clipUrl: cloudUrl || clipUrl,
+            clipCloudUrl: cloudUrl || null,
+            falVideoUrl: savedFalUrl
+          };
+          if (typeof onSceneDone === 'function') {
+            onSceneDone(index, scenes.length, enriched);
+          }
+          return enriched;
+        }
+      } catch (rehydrateErr) {
+        if (logger) logger(`Re-download from fal CDN failed for ${scene.sceneId}: ${rehydrateErr.message}. Will regenerate.`);
+      }
     }
 
     if (logger) logger(`Generating Fal.ai clip for ${scene.sceneId}`);
@@ -1047,10 +1116,12 @@ async function generateSceneClips({
       const stat = await fs.promises.stat(clipPath);
       if (!stat.size) throw new Error(`Generated clip is empty for ${scene.sceneId}`);
 
+      const cloudUrl = await uploadClipToCloud(scene.sceneId, clipPath);
       enriched = {
         ...falScene,
         clipPath,
-        clipUrl,
+        clipUrl: cloudUrl || clipUrl,
+        clipCloudUrl: cloudUrl || null,
         falVideoUrl: falScene.video_url
       };
     } catch (error) {
@@ -1080,14 +1151,15 @@ async function generateSceneClips({
       const stat = await fs.promises.stat(clipPath);
       if (!stat.size) throw new Error(`Fallback generated clip is empty for ${scene.sceneId}`);
 
+      const cloudUrl = await uploadClipToCloud(scene.sceneId, clipPath);
       enriched = {
         ...scene,
         clipPath,
-        clipUrl,
+        clipUrl: cloudUrl || clipUrl,
+        clipCloudUrl: cloudUrl || null,
         falVideoUrl: scene.imageUrl || '',
         video_url: scene.imageUrl || '',
         videoUrl: scene.imageUrl || '',
-        clipUrl: scene.imageUrl || '',
         fallbackUsed: true
       };
     }
@@ -2684,6 +2756,19 @@ async function runCreateVideoPipeline({
   
   const mergedVideo = await measureStep('mergeVideo', () => mergeSceneVideos({ scenes: scenesWithClips, context }), log);
 
+  // Upload merged video (step 7 output) to Cloudinary so it survives restarts
+  try {
+    log('Uploading merged video to Cloudinary for permanent storage...');
+    const mergedUpload = await uploadVideoFile(mergedVideo.path, 'nebula-merged-videos');
+    if (mergedUpload?.success && mergedUpload?.url) {
+      mergedVideo.url = mergedUpload.url;
+      log(`Merged video uploaded to Cloudinary: ${mergedUpload.url}`);
+    }
+  } catch (uploadErr) {
+    log(`Cloudinary upload (merged video) failed: ${uploadErr.message}`);
+    console.error('[Cloudinary merged video upload failed]', uploadErr);
+  }
+
   update(74, 'generateAudio');
   log('Preparing audio tracks');
   const audioTracks = await audioTracksPromise;
@@ -2727,6 +2812,21 @@ async function runCreateVideoPipeline({
   console.log(`[${new Date().toISOString()}] [Job ID: ${context.jobId}] STEP 8: FFmpeg merge completed`);
   log(`STEP 8: FFmpeg merge completed`);
 
+  // Upload final video to Cloudinary so it survives Render restarts.
+  // Falls back to local URL if upload fails — never blocks the pipeline.
+  let cloudFinalUrl = null;
+  try {
+    log('Uploading final video to Cloudinary for permanent storage...');
+    const cloudUpload = await uploadVideoFile(finalOutput.path, 'nebula-final-videos');
+    if (cloudUpload?.success && cloudUpload?.url) {
+      cloudFinalUrl = cloudUpload.url;
+      log(`Final video uploaded to Cloudinary: ${cloudUpload.url}`);
+    }
+  } catch (uploadErr) {
+    log(`Cloudinary upload failed (using local URL as fallback): ${uploadErr.message}`);
+    console.error('[Cloudinary final video upload failed]', uploadErr);
+  }
+
   update(96, 'thumbnail');
   log('Generating thumbnail');
   const thumbnail = await measureStep('thumbnail', () => generateThumbnail({
@@ -2744,7 +2844,9 @@ async function runCreateVideoPipeline({
     inputMode: input.imageData || input.imageUrl
       ? 'description+image'
       : (product ? 'description+product' : 'description'),
-    finalVideoUrl: finalOutput.url,
+    finalVideoUrl: cloudFinalUrl || finalOutput.url,
+    finalOutputUrl: cloudFinalUrl || finalOutput.url,
+    finalOutputCloudUrl: cloudFinalUrl || null,
     thumbnailUrl: thumbnail?.url || null,
     finalAudioUrl: mergedAudio?.url || null,
     sceneData: scenesWithClips.map((scene) => ({
@@ -3057,6 +3159,21 @@ async function runMergeVideo({
 
   const mergedVideo = await mergeSceneVideos({ scenes, context });
 
+  // Upload merged video (step 7 output) to Cloudinary so it survives restarts
+  let mergedVideoCloudUrl = null;
+  try {
+    logLine('Uploading merged video to Cloudinary for permanent storage...');
+    const mergedUpload = await uploadVideoFile(mergedVideo.path, 'nebula-merged-videos');
+    if (mergedUpload?.success && mergedUpload?.url) {
+      mergedVideoCloudUrl = mergedUpload.url;
+      mergedVideo.url = mergedUpload.url;
+      logLine(`Merged video uploaded to Cloudinary: ${mergedUpload.url}`);
+    }
+  } catch (uploadErr) {
+    logLine(`Cloudinary upload (merged video) failed: ${uploadErr.message}`);
+    console.error('[Cloudinary merged video upload failed]', uploadErr);
+  }
+
   let mergedAudio = null;
   const audioSource = String(payload?.finalAudioUrl || '').trim();
   if (audioSource) {
@@ -3092,12 +3209,29 @@ async function runMergeVideo({
     }
   });
 
+  await reportProgress(95, 'uploading_to_cloud');
+  // Upload final video to Cloudinary so it survives Render's ephemeral filesystem.
+  // Falls back to local URL if upload fails — never blocks the pipeline.
+  let cloudFinalUrl = null;
+  try {
+    logLine('Uploading final video to Cloudinary for permanent storage...');
+    const upload = await uploadVideoFile(finalOutput.path, 'nebula-final-videos');
+    if (upload?.success && upload?.url) {
+      cloudFinalUrl = upload.url;
+      logLine(`Final video uploaded to Cloudinary: ${upload.url}`);
+    }
+  } catch (uploadErr) {
+    logLine(`Cloudinary upload failed (using local URL as fallback): ${uploadErr.message}`);
+    console.error('[Cloudinary final video upload failed]', uploadErr);
+  }
+
   await reportProgress(98, 'finalizing');
   return {
     success: true,
     jobId: context.jobId,
     finalVideoUrl: mergedVideo.url,
-    finalOutputUrl: finalOutput.url,
+    finalOutputUrl: cloudFinalUrl || finalOutput.url,
+    finalOutputCloudUrl: cloudFinalUrl || null,
     subtitlesUrl: subtitles?.url || null
   };
 }

@@ -2,8 +2,10 @@ const fs = require('fs');
 const path = require('path');
 const { Blob: BufferBlob } = require('buffer');
 
-const DEFAULT_MODEL = 'fal-ai/ltx-2.3-22b/text-to-video';
-const IMAGE_TO_VIDEO_MODEL = process.env.FAL_IMAGE_TO_VIDEO_MODEL || 'fal-ai/kling-video/v1';
+// Both default to Kling v1 standard — widely available on most fal.ai keys.
+// Override per environment via FAL_IMAGE_TO_VIDEO_MODEL / FAL_TEXT_TO_VIDEO_MODEL.
+const IMAGE_TO_VIDEO_MODEL = process.env.FAL_IMAGE_TO_VIDEO_MODEL || 'fal-ai/kling-video/v1/standard/image-to-video';
+const DEFAULT_MODEL = process.env.FAL_TEXT_TO_VIDEO_MODEL || 'fal-ai/kling-video/v1/standard/text-to-video';
 const DEFAULT_SEED = Number.parseInt(String(process.env.FAL_VIDEO_SEED || '-1'), 10);
 const DEFAULT_NUM_FRAMES = 33;
 const VIDEO_SIZE = {
@@ -138,7 +140,9 @@ async function retry(label, fn, maxRetries = 2) {
       return await fn(attempt);
     } catch (error) {
       lastError = error;
-      if (Number(error?.status) === 403) {
+      // Don't retry on errors where retrying can't possibly succeed
+      const status = Number(error?.status);
+      if (status === 403 || status === 404 || status === 401) {
         break;
       }
       if (attempt < maxRetries) {
