@@ -12,6 +12,7 @@ const VideoDraft = require('../models/VideoDraft');
 const { callGemini, parseGeminiJSON, generateCampaignImageNanoBanana } = require('./geminiAI');
 const { getPublicBaseUrl, normalizeTone, audioFilePathForTone } = require('../utils/toneAudio');
 const { generateVideoClip } = require('./videoService');
+const { uploadVideoFile } = require('./imageUploader');
 
 const STORAGE_ROOT = path.resolve(__dirname, '../storage/ai-videos');
 const VIDEO_TARGET = { width: 1080, height: 1920, fps: 30 };
@@ -3123,12 +3124,29 @@ async function runMergeVideo({
     }
   });
 
+  await reportProgress(95, 'uploading_to_cloud');
+  // Upload final video to Cloudinary so it survives Render's ephemeral filesystem.
+  // Falls back to local URL if upload fails — never blocks the pipeline.
+  let cloudFinalUrl = null;
+  try {
+    logLine('Uploading final video to Cloudinary for permanent storage...');
+    const upload = await uploadVideoFile(finalOutput.path, 'nebula-final-videos');
+    if (upload?.success && upload?.url) {
+      cloudFinalUrl = upload.url;
+      logLine(`Final video uploaded to Cloudinary: ${upload.url}`);
+    }
+  } catch (uploadErr) {
+    logLine(`Cloudinary upload failed (using local URL as fallback): ${uploadErr.message}`);
+    console.error('[Cloudinary final video upload failed]', uploadErr);
+  }
+
   await reportProgress(98, 'finalizing');
   return {
     success: true,
     jobId: context.jobId,
     finalVideoUrl: mergedVideo.url,
-    finalOutputUrl: finalOutput.url,
+    finalOutputUrl: cloudFinalUrl || finalOutput.url,
+    finalOutputCloudUrl: cloudFinalUrl || null,
     subtitlesUrl: subtitles?.url || null
   };
 }
