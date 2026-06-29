@@ -186,9 +186,7 @@ async function generateVideoClip(scene = {}) {
   const input = seedance
     ? {
         prompt,
-        image_url: imageUrl,
-        aspect_ratio: FAL_VIDEO_ASPECT_RATIO,
-        resolution: FAL_VIDEO_RESOLUTION,
+        ...(imageUrl ? { image_url: imageUrl } : { aspect_ratio: FAL_VIDEO_ASPECT_RATIO, resolution: FAL_VIDEO_RESOLUTION }),
         duration: String(getSeedanceDuration(scene)),
         camera_fixed: false,
         seed,
