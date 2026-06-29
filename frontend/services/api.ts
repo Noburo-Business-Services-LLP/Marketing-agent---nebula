@@ -516,6 +516,14 @@ export const apiService = {
     return response;
   },
 
+  getContentStrategy: async (): Promise<{ success: boolean; html?: string; error?: string }> => {
+    return await apiCall<{ success: boolean; html?: string; error?: string }>(
+      '/dashboard/content-strategy',
+      { method: 'GET' },
+      true
+    );
+  },
+
   changePassword: async (currentPassword: string, newPassword: string): Promise<{ success: boolean; token?: string }> => {
     const response = await apiCall<{ success: boolean; token: string }>(
       '/auth/change-password',

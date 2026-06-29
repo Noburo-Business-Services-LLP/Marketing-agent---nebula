@@ -1708,4 +1708,77 @@ router.post('/generate-event-post', protect, async (req, res) => {
   }
 });
 
+router.get('/content-strategy', protect, async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const user = await User.findById(userId).lean();
+    
+    // Get all context
+    const businessProfile = user?.businessProfile || {};
+    
+    const prompt = `
+You are Nebulaa's Senior Content Strategy Engine.
+
+Your task is to generate a structured monthly content planning document for the business based only on its Business Vertical.
+
+INPUT:
+Business Name: ${businessProfile.name || 'The Business'}
+Business Vertical: ${businessProfile.industry || 'General Business'}
+Business Type: ${businessProfile.businessType || 'Both'}
+Location: ${businessProfile.businessLocation || 'Global'}
+Target Audience: ${businessProfile.targetAudience || 'General Audience'}
+Language: ${businessProfile.contentLanguage || 'English'}
+Brand Voice: ${Array.isArray(businessProfile.brandVoice) ? businessProfile.brandVoice.join(', ') : (businessProfile.brandVoice || 'Professional')}
+Marketing Goals: ${(businessProfile.marketingGoals || []).join(', ') || 'Growth'}
+
+RULES:
+1. First identify the Business Vertical.
+2. Based on the vertical, create Content Pillars like Nebulaa Planning System.
+3. Show exact monthly distribution:
+   - Total Posts
+   - Total Reels
+   - Percentage split
+4. Each pillar must contain:
+   - Pillar Name
+   - Number of Posts
+   - What to create
+   - Example content ideas
+
+OUTPUT FORMAT:
+Generate ONLY cleanly formatted, professional HTML. DO NOT use markdown code blocks (like \`\`\`html).
+Output a clean, semantic HTML structure using <div>, <h1>, <h2>, <p>, <ul>, <li>, and HTML <table> elements. Do not include <html> or <body> tags, just the inner content.
+Use inline CSS styles or standard semantic tags so that when rendered and converted to a PDF, it looks like a premium business planning document.
+
+Include these sections formatted beautifully in HTML:
+- SECTION 1: BUSINESS CONTENT FRAMEWORK
+- SECTION 2: MONTHLY CONTENT PLANNING SYSTEM
+- SECTION 3: CONTENT PILLARS BY VERTICAL (Use an HTML <table> with headers: Pillar, Posts, Percentage, What to create, Examples)
+- SECTION 4: REELS PLAN
+- SECTION 5: WEEKLY BREAKDOWN
+- SECTION 6: FESTIVAL / LOCAL OPPORTUNITIES
+- SECTION 7: AI CONTENT GENERATION BRIEFS
+
+IMPORTANT: 
+Keep the content based only on the selected Business Vertical. 
+Do not generate random ideas outside the business vertical.
+Ensure the table is an actual HTML <table> tag with borders.
+    `;
+
+    const htmlContent = await generateWithLLM({
+      provider: 'gemini',
+      taskType: 'content_strategy',
+      prompt: prompt,
+      temperature: 0.7
+    });
+
+    res.json({
+      success: true,
+      html: htmlContent.replace(/```html|```/g, '').trim() // Strip any markdown fences if AI ignores instruction
+    });
+  } catch (error) {
+    console.error('Content strategy generation error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 module.exports = router;
