@@ -1015,7 +1015,7 @@ async function generateSceneClips({
     const rawClipPath = path.join(context.dirs.temp, `fal_${sanitizeSegment(scene.sceneId || scene.index, 'scene')}.mp4`);
     const clipUrl = buildMediaUrl(context.baseUrl, context.jobId, ['clips', clipName]);
 
-    // Cache guard: Check if the scene clip is ALREADY generated and exists!
+    // Cache guard 1: clip already on disk → reuse free
     if (scene.clipUrl && scene.clipUrl.startsWith('http') && fs.existsSync(clipPath)) {
       if (logger) logger(`Reusing existing generated video clip for scene ${scene.sceneId}`);
       const enriched = {
@@ -1028,6 +1028,37 @@ async function generateSceneClips({
         onSceneDone(index, scenes.length, enriched);
       }
       return enriched;
+    }
+
+    // Cache guard 2 (CRITICAL on ephemeral filesystems like Render):
+    // Local file gone (dyno restart) but we have the fal CDN URL from a prior run.
+    // Re-download from fal's CDN instead of re-paying fal to regenerate the clip.
+    const savedFalUrl = String(scene.falVideoUrl || scene.video_url || scene.videoUrl || '').trim();
+    if (savedFalUrl && savedFalUrl.startsWith('http') && !fs.existsSync(clipPath)) {
+      try {
+        if (logger) logger(`Local clip missing for ${scene.sceneId} — re-downloading from fal CDN (free, no re-generation)`);
+        await materializeSourceToFile({ source: savedFalUrl, destinationPath: rawClipPath });
+        await normalizeSceneVideoClip({
+          inputPath: rawClipPath,
+          outputPath: clipPath,
+          durationSeconds: scene.durationSeconds
+        });
+        const stat = await fs.promises.stat(clipPath);
+        if (stat.size) {
+          const enriched = {
+            ...scene,
+            clipPath,
+            clipUrl,
+            falVideoUrl: savedFalUrl
+          };
+          if (typeof onSceneDone === 'function') {
+            onSceneDone(index, scenes.length, enriched);
+          }
+          return enriched;
+        }
+      } catch (rehydrateErr) {
+        if (logger) logger(`Re-download from fal CDN failed for ${scene.sceneId}: ${rehydrateErr.message}. Will regenerate.`);
+      }
     }
 
     if (logger) logger(`Generating Fal.ai clip for ${scene.sceneId}`);
