@@ -2756,6 +2756,19 @@ async function runCreateVideoPipeline({
   
   const mergedVideo = await measureStep('mergeVideo', () => mergeSceneVideos({ scenes: scenesWithClips, context }), log);
 
+  // Upload merged video (step 7 output) to Cloudinary so it survives restarts
+  try {
+    log('Uploading merged video to Cloudinary for permanent storage...');
+    const mergedUpload = await uploadVideoFile(mergedVideo.path, 'nebula-merged-videos');
+    if (mergedUpload?.success && mergedUpload?.url) {
+      mergedVideo.url = mergedUpload.url;
+      log(`Merged video uploaded to Cloudinary: ${mergedUpload.url}`);
+    }
+  } catch (uploadErr) {
+    log(`Cloudinary upload (merged video) failed: ${uploadErr.message}`);
+    console.error('[Cloudinary merged video upload failed]', uploadErr);
+  }
+
   update(74, 'generateAudio');
   log('Preparing audio tracks');
   const audioTracks = await audioTracksPromise;
@@ -3145,6 +3158,21 @@ async function runMergeVideo({
   }));
 
   const mergedVideo = await mergeSceneVideos({ scenes, context });
+
+  // Upload merged video (step 7 output) to Cloudinary so it survives restarts
+  let mergedVideoCloudUrl = null;
+  try {
+    logLine('Uploading merged video to Cloudinary for permanent storage...');
+    const mergedUpload = await uploadVideoFile(mergedVideo.path, 'nebula-merged-videos');
+    if (mergedUpload?.success && mergedUpload?.url) {
+      mergedVideoCloudUrl = mergedUpload.url;
+      mergedVideo.url = mergedUpload.url;
+      logLine(`Merged video uploaded to Cloudinary: ${mergedUpload.url}`);
+    }
+  } catch (uploadErr) {
+    logLine(`Cloudinary upload (merged video) failed: ${uploadErr.message}`);
+    console.error('[Cloudinary merged video upload failed]', uploadErr);
+  }
 
   let mergedAudio = null;
   const audioSource = String(payload?.finalAudioUrl || '').trim();
