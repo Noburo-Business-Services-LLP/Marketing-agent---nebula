@@ -1469,6 +1469,7 @@ export const apiService = {
     context?: {
       selectedProducts?: any[];
       prompt?: string;
+      language?: string;
     }
   ): Promise<{
     success: boolean;
@@ -1485,7 +1486,8 @@ export const apiService = {
           image: imageBase64,
           platform: platform || 'instagram',
           selectedProducts: context?.selectedProducts || [],
-          prompt: context?.prompt || ''
+          prompt: context?.prompt || '',
+          language: context?.language || 'English'
         })
       },
       true

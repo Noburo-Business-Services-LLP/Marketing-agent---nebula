@@ -4719,6 +4719,69 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
       });
     };
 
+    // --- Missing utility functions ---
+    const apiBaseUrl = window.location.hostname !== 'localhost' ? '' : 'http://localhost:5000';
+    const token = localStorage.getItem('authToken');
+
+    const mapContentLanguageToReelCode = (lang: string): string => {
+      if (!lang) return 'en';
+      const lower = lang.toLowerCase();
+      if (lower.includes('tamil')) return 'ta';
+      if (lower.includes('hindi')) return 'hi';
+      if (lower.includes('telugu')) return 'te';
+      if (lower.includes('kannada')) return 'kn';
+      if (lower.includes('malayalam')) return 'ml';
+      if (lower.includes('bengali') || lower.includes('bangla')) return 'bn';
+      if (lower.includes('marathi')) return 'mr';
+      if (lower.includes('gujarati')) return 'gu';
+      if (lower.includes('punjabi')) return 'pa';
+      if (lower.includes('spanish')) return 'es';
+      if (lower.includes('french')) return 'fr';
+      if (lower.includes('german')) return 'de';
+      if (lower.includes('arabic')) return 'ar';
+      if (lower.includes('japanese')) return 'ja';
+      if (lower.includes('chinese')) return 'zh';
+      if (lower.includes('korean')) return 'ko';
+      return 'en';
+    };
+
+    const setReelImageFromUrl = useCallback(async (url: string) => {
+      try {
+        setReelImagePreview(url);
+      } catch (err) {
+        console.error('Failed to set reel image from URL:', err);
+      }
+    }, []);
+
+    const onReelImageSelected = useCallback((file: File | null) => {
+      if (!file) return;
+      setReelImageFile(file);
+      const previewUrl = URL.createObjectURL(file);
+      setReelImagePreview(previewUrl);
+    }, []);
+
+    const handleUseLinkedProductImageForReel = useCallback(() => {
+      const imageUrl = selectedProduct?.imageUrl;
+      if (!imageUrl) return;
+      setReelImageFile(null);
+      setReelImagePreview(imageUrl);
+    }, [selectedProduct]);
+
+    const resetReelImageSource = useCallback(() => {
+      if (reelImagePreview && reelImagePreview.startsWith('blob:')) {
+        URL.revokeObjectURL(reelImagePreview);
+      }
+      setReelImageFile(null);
+      setReelImagePreview('');
+    }, [reelImagePreview]);
+
+    const toggleDay = useCallback((day: string) => {
+      setPreferredDays(prev =>
+        prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]
+      );
+    }, []);
+    // --- End missing utility functions ---
+
     useEffect(() => {
       if (!isReelFlow) return;
       if (reelImageFile || reelImagePreview) return;

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Campaign Routes
  * Full CRUD for marketing campaigns with social media posting
  */
@@ -1698,9 +1698,9 @@ INSTRUCTIONS:
 14. ${strictBrandMode && primaryLockedColor && secondaryLockedColor
       ? `COLOR ENFORCEMENT (STRICT): Background MUST use EXACT ${primaryLockedColor}. Gradient is allowed only within shades of ${primaryLockedColor}. Text MUST use EXACT ${secondaryLockedColor}. Ensure strong contrast and readability. Do NOT introduce unrelated colors. Do NOT use gray or desaturated tones.`
       : 'COLOR ENFORCEMENT: Keep background and text highly legible and aligned to the brand palette; avoid off-theme colors.'}
-15. LANGUAGE ENFORCEMENT: Write caption and CTA strictly in ${selectedLanguage}. Do not mix languages.
-16. ${selectedLanguage === 'English' ? 'English is allowed.' : 'Do NOT use English words unless they are brand names, product names, or hashtags.'}
-17. IMAGE TEXT ENFORCEMENT: Also provide "imageText" for each post (2-5 words max). imageText MUST be strictly in ${selectedLanguage}. Do NOT use English for imageText unless selectedLanguage is English.
+15. LANGUAGE ENFORCEMENT: Write caption and CTA strictly in ${selectedLanguage}.
+16. ${selectedLanguage.includes('Mix') ? 'You may mix English and the native language fluidly.' : selectedLanguage === 'English' ? 'English is allowed.' : 'Do NOT use English words except for strict brand names. Hashtags MUST be entirely in ' + selectedLanguage + ' (or transliterated if native characters aren\'t supported).'}
+17. IMAGE TEXT ENFORCEMENT: Also provide "imageText" for each post (2-5 words max). imageText MUST be strictly in ${selectedLanguage}. Do NOT use English for imageText unless selectedLanguage is English or Mix.
 18. imageText must be short, punchy, and suitable for text overlay on the image.
 
 Return ONLY valid JSON (no markdown, no backticks):
@@ -4505,8 +4505,8 @@ Requirements:
 6. Match the tone appropriate for ${platform || 'Instagram'}
 7. ${strictBrandMode ? `STRICT BRAND LOCK: The caption MUST follow "${enforcedTone}" tone exactly and must not drift.` : 'Keep tone aligned to the brand context above.'}
 8. ${strictBrandMode ? 'If there is conflict between platform defaults and brand profile, prioritize brand profile.' : 'Balance platform-native style with brand voice.'}
-9. Caption and CTA must be strictly in ${selectedLanguage}. Do not mix languages.
-10. ${selectedLanguage === 'English' ? 'English is allowed.' : 'Do NOT use English words unless they are brand names or hashtags.'}
+9. LANGUAGE ENFORCEMENT: Write caption and CTA strictly in ${selectedLanguage}.
+10. ${selectedLanguage.includes('Mix') ? 'You may mix English and the native language fluidly.' : selectedLanguage === 'English' ? 'English is allowed.' : 'Do NOT use English words except for strict brand names. Hashtags MUST be entirely in ' + selectedLanguage + ' (or transliterated if native characters aren\'t supported).'}
 11. ${selectedProductText ? 'Naturally feature the selected product name, description, price, category, and features when relevant. Do not invent product facts.' : 'Do not invent product details.'}
 
 Return ONLY the caption text with hashtags. No JSON, no explanations.`;
