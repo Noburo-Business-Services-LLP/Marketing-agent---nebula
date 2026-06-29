@@ -253,11 +253,18 @@ async function generateVideoClip(scene = {}) {
     const durationMs = Date.now() - startTime;
     console.error("Fal.ai Full Error:", JSON.stringify(error, null, 2));
     console.log(`Scene ${scene.sceneId || scene.id || 'unknown'} render duration: ${durationMs}ms`);
-    throw new Error(
-        error.response?.data?.message ||
-        error.message ||
-        "Fal.ai generation failed"
-    );
+    // Surface as much detail as possible so the UI logger shows the real reason
+    const detail =
+      error.response?.data?.detail ||
+      error.response?.data?.message ||
+      (error.response?.data && JSON.stringify(error.response.data).slice(0, 400)) ||
+      error.body?.detail ||
+      error.body?.message ||
+      (error.body && JSON.stringify(error.body).slice(0, 400)) ||
+      error.message ||
+      (typeof error === 'object' ? JSON.stringify(error).slice(0, 400) : String(error));
+    const status = error.response?.status || error.status || error.statusCode || '?';
+    throw new Error(`Fal.ai [${status}] model=${model}: ${detail}`);
   }
 }
 
