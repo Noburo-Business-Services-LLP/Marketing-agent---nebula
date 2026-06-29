@@ -1010,19 +1010,54 @@ async function generateSceneClips({
   logger = null,
   onSceneDone = null
 }) {
+  // Upload a local clip to Cloudinary. Never throws — returns null on failure.
+  const uploadClipToCloud = async (sceneId, localPath) => {
+    try {
+      if (logger) logger(`Uploading ${sceneId} to Cloudinary...`);
+      const result = await uploadVideoFile(localPath, 'nebula-scene-clips');
+      if (result?.success && result?.url) {
+        if (logger) logger(`✓ ${sceneId} backed up to Cloudinary`);
+        return result.url;
+      }
+    } catch (err) {
+      if (logger) logger(`Cloudinary upload failed for ${sceneId}: ${err.message}. Using local URL fallback.`);
+      console.error(`[Cloudinary clip upload failed: ${sceneId}]`, err.message);
+    }
+    return null;
+  };
+
   return runWithConcurrency(scenes, SCENE_CLIP_CONCURRENCY, async (scene, index) => {
     const clipName = `scene_${scene.index}.mp4`;
     const clipPath = path.join(context.dirs.clips, clipName);
     const rawClipPath = path.join(context.dirs.temp, `fal_${sanitizeSegment(scene.sceneId || scene.index, 'scene')}.mp4`);
     const clipUrl = buildMediaUrl(context.baseUrl, context.jobId, ['clips', clipName]);
 
+    // Cache guard 0 (BEST): Cloudinary URL already saved from prior run → reuse for free, no download needed
+    const savedCloudUrl = String(scene.clipCloudUrl || '').trim();
+    if (savedCloudUrl && savedCloudUrl.startsWith('http')) {
+      if (logger) logger(`Reusing Cloudinary-backed clip for ${scene.sceneId} (no regen, no download)`);
+      const enriched = {
+        ...scene,
+        clipUrl: savedCloudUrl,
+        clipCloudUrl: savedCloudUrl,
+        falVideoUrl: scene.falVideoUrl || scene.video_url || scene.videoUrl || ''
+      };
+      if (typeof onSceneDone === 'function') {
+        onSceneDone(index, scenes.length, enriched);
+      }
+      return enriched;
+    }
+
     // Cache guard 1: clip already on disk → reuse free
     if (scene.clipUrl && scene.clipUrl.startsWith('http') && fs.existsSync(clipPath)) {
       if (logger) logger(`Reusing existing generated video clip for scene ${scene.sceneId}`);
+      // Opportunistically back up to Cloudinary if not already
+      const cloudUrl = await uploadClipToCloud(scene.sceneId, clipPath);
       const enriched = {
         ...scene,
         clipPath,
-        clipUrl,
+        clipUrl: cloudUrl || clipUrl,
+        clipCloudUrl: cloudUrl || null,
         falVideoUrl: scene.falVideoUrl || scene.video_url || scene.videoUrl || ''
       };
       if (typeof onSceneDone === 'function') {
@@ -1046,10 +1081,12 @@ async function generateSceneClips({
         });
         const stat = await fs.promises.stat(clipPath);
         if (stat.size) {
+          const cloudUrl = await uploadClipToCloud(scene.sceneId, clipPath);
           const enriched = {
             ...scene,
             clipPath,
-            clipUrl,
+            clipUrl: cloudUrl || clipUrl,
+            clipCloudUrl: cloudUrl || null,
             falVideoUrl: savedFalUrl
           };
           if (typeof onSceneDone === 'function') {
@@ -1079,10 +1116,12 @@ async function generateSceneClips({
       const stat = await fs.promises.stat(clipPath);
       if (!stat.size) throw new Error(`Generated clip is empty for ${scene.sceneId}`);
 
+      const cloudUrl = await uploadClipToCloud(scene.sceneId, clipPath);
       enriched = {
         ...falScene,
         clipPath,
-        clipUrl,
+        clipUrl: cloudUrl || clipUrl,
+        clipCloudUrl: cloudUrl || null,
         falVideoUrl: falScene.video_url
       };
     } catch (error) {
@@ -1112,14 +1151,15 @@ async function generateSceneClips({
       const stat = await fs.promises.stat(clipPath);
       if (!stat.size) throw new Error(`Fallback generated clip is empty for ${scene.sceneId}`);
 
+      const cloudUrl = await uploadClipToCloud(scene.sceneId, clipPath);
       enriched = {
         ...scene,
         clipPath,
-        clipUrl,
+        clipUrl: cloudUrl || clipUrl,
+        clipCloudUrl: cloudUrl || null,
         falVideoUrl: scene.imageUrl || '',
         video_url: scene.imageUrl || '',
         videoUrl: scene.imageUrl || '',
-        clipUrl: scene.imageUrl || '',
         fallbackUsed: true
       };
     }
