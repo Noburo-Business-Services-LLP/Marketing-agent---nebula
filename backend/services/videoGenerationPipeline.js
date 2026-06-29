@@ -2799,6 +2799,21 @@ async function runCreateVideoPipeline({
   console.log(`[${new Date().toISOString()}] [Job ID: ${context.jobId}] STEP 8: FFmpeg merge completed`);
   log(`STEP 8: FFmpeg merge completed`);
 
+  // Upload final video to Cloudinary so it survives Render restarts.
+  // Falls back to local URL if upload fails — never blocks the pipeline.
+  let cloudFinalUrl = null;
+  try {
+    log('Uploading final video to Cloudinary for permanent storage...');
+    const cloudUpload = await uploadVideoFile(finalOutput.path, 'nebula-final-videos');
+    if (cloudUpload?.success && cloudUpload?.url) {
+      cloudFinalUrl = cloudUpload.url;
+      log(`Final video uploaded to Cloudinary: ${cloudUpload.url}`);
+    }
+  } catch (uploadErr) {
+    log(`Cloudinary upload failed (using local URL as fallback): ${uploadErr.message}`);
+    console.error('[Cloudinary final video upload failed]', uploadErr);
+  }
+
   update(96, 'thumbnail');
   log('Generating thumbnail');
   const thumbnail = await measureStep('thumbnail', () => generateThumbnail({
@@ -2816,7 +2831,9 @@ async function runCreateVideoPipeline({
     inputMode: input.imageData || input.imageUrl
       ? 'description+image'
       : (product ? 'description+product' : 'description'),
-    finalVideoUrl: finalOutput.url,
+    finalVideoUrl: cloudFinalUrl || finalOutput.url,
+    finalOutputUrl: cloudFinalUrl || finalOutput.url,
+    finalOutputCloudUrl: cloudFinalUrl || null,
     thumbnailUrl: thumbnail?.url || null,
     finalAudioUrl: mergedAudio?.url || null,
     sceneData: scenesWithClips.map((scene) => ({
