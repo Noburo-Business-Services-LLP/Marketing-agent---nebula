@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Save, AlertCircle, Check, Loader2, Eye, EyeOff, Zap, RefreshCw, CreditCard, Download, ExternalLink } from 'lucide-react';
-import { User, BillingData } from '../types';
+import { User, BillingData, BusinessProfile } from '../types';
 import { apiService } from '../services/api';
 import { useTheme, getThemeClasses } from '../context/ThemeContext';
 
@@ -50,6 +50,21 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
   const [billingData, setBillingData] = useState<BillingData | null>(null);
   const [loadingBilling, setLoadingBilling] = useState(false);
 
+  // Business Profile Form State (full onboarding questionnaire)
+  const emptyBiz: BusinessProfile = {
+    name: '', website: '', gstNumber: '', industry: '', problemSolved: '',
+    niche: '', businessType: '', businessLocation: '', targetAudience: '',
+    brandVoice: '', marketingGoals: [], description: '',
+    yearsInBusiness: undefined, brandMaturity: '',
+    targetCustomerProfile: '', targetGender: '', geographicReach: '',
+    customerType: '', pricePositioning: '', keyDifferentiator: '',
+    brandStory: '', heroProduct: '', contentLanguage: '',
+    contentRestrictions: '', firstMonthContentAngles: ''
+  };
+  const [bizData, setBizData] = useState<BusinessProfile>(emptyBiz);
+  const [bizStatus, setBizStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [bizError, setBizError] = useState('');
+
   // Fetch billing data when Billing tab is active
   useEffect(() => {
     if (activeTab === 'Billing' && !billingData) {
@@ -71,8 +86,35 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
         firstName: user.firstName || '',
         lastName: user.lastName || ''
       });
+      if (user.businessProfile) {
+        setBizData({ ...emptyBiz, ...user.businessProfile });
+      }
     }
   }, [user]);
+
+  const handleBizChange = (field: keyof BusinessProfile, value: any) => {
+    setBizData(prev => ({ ...prev, [field]: value }));
+    setBizStatus('idle');
+    setBizError('');
+  };
+
+  const handleBizSave = async () => {
+    setBizStatus('saving');
+    setBizError('');
+    try {
+      const response = await apiService.updateProfile({
+        businessProfile: { ...user?.businessProfile, ...bizData }
+      });
+      if (response.success && response.user) {
+        onUserUpdate(response.user);
+        setBizStatus('saved');
+        setTimeout(() => setBizStatus('idle'), 2000);
+      }
+    } catch (error: any) {
+      setBizStatus('error');
+      setBizError(error.message || 'Failed to save business profile');
+    }
+  };
 
   const handleChange = (field: string, value: string) => {
       setFormData(prev => ({ ...prev, [field]: value }));
@@ -181,7 +223,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
              <div className={`rounded-xl shadow-sm border p-2 space-y-1 ${theme.bgCard} ${
                isDarkMode ? 'border-slate-700/50' : 'border-slate-200'
              }`}>
-                {['Profile', 'Notifications', 'Security', 'Billing'].map(tab => (
+                {['Profile', 'Business Profile', 'Notifications', 'Security', 'Billing'].map(tab => (
                     <button
                         key={tab}
                         onClick={() => setActiveTab(tab)}
@@ -337,6 +379,183 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                           </button>
                       </div>
                   )}
+
+                  {activeTab === 'Business Profile' && (() => {
+                    const inputCls = `w-full p-3 border rounded-lg outline-none focus:ring-2 transition-all ${
+                      isDarkMode
+                        ? 'bg-[#0d1117] border-slate-700/50 text-white focus:ring-[#ffcc29]/30'
+                        : 'bg-white border-slate-300 text-slate-900 focus:ring-[#ffcc29]'
+                    }`;
+                    const labelCls = `block text-xs font-bold ${theme.textSecondary} uppercase tracking-wide mb-2`;
+                    const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
+                      <div>
+                        <label className={labelCls}>{label}</label>
+                        {children}
+                      </div>
+                    );
+                    const industryOptions = ['Technology/SaaS', 'E-commerce/Retail', 'Food & Beverage', 'Fashion & Apparel', 'Beauty & Wellness', 'Healthcare', 'Education', 'Finance/Fintech', 'Real Estate', 'Travel & Hospitality', 'Media & Entertainment', 'Professional Services', 'Manufacturing', 'Automotive', 'Jewellery', 'Home & Furniture', 'Non-profit', 'Other'];
+                    return (
+                      <div className="animate-in fade-in duration-300">
+                        <h2 className={`text-lg font-bold mb-2 ${theme.text}`}>Business Profile</h2>
+                        <p className={`text-sm mb-6 ${theme.textSecondary}`}>All answers from your onboarding questionnaire. Edit any field and click Save.</p>
+
+                        <div className="space-y-5 mb-6">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                            <Field label="Business Name">
+                              <input className={inputCls} value={bizData.name || ''} onChange={e => handleBizChange('name', e.target.value)} />
+                            </Field>
+                            <Field label="Website">
+                              <input className={inputCls} value={bizData.website || ''} onChange={e => handleBizChange('website', e.target.value)} placeholder="https://..." />
+                            </Field>
+                            <Field label="GST Number">
+                              <input className={inputCls} value={bizData.gstNumber || ''} onChange={e => handleBizChange('gstNumber', e.target.value)} />
+                            </Field>
+                            <Field label="Business Vertical (Industry)">
+                              <select className={inputCls} value={bizData.industry || ''} onChange={e => handleBizChange('industry', e.target.value)}>
+                                <option value="">Select...</option>
+                                {industryOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                              </select>
+                            </Field>
+                            <Field label="Business Type">
+                              <select className={inputCls} value={bizData.businessType || ''} onChange={e => handleBizChange('businessType', e.target.value)}>
+                                <option value="">Select...</option>
+                                <option value="B2B">B2B</option>
+                                <option value="B2C">B2C</option>
+                                <option value="Both">Both</option>
+                              </select>
+                            </Field>
+                            <Field label="Business Location">
+                              <input className={inputCls} value={bizData.businessLocation || ''} onChange={e => handleBizChange('businessLocation', e.target.value)} placeholder="City, State / Country" />
+                            </Field>
+                            <Field label="Years in Business">
+                              <input type="number" min={0} className={inputCls} value={bizData.yearsInBusiness ?? ''} onChange={e => handleBizChange('yearsInBusiness', e.target.value === '' ? undefined : Number(e.target.value))} />
+                            </Field>
+                            <Field label="Brand Maturity">
+                              <select className={inputCls} value={bizData.brandMaturity || ''} onChange={e => handleBizChange('brandMaturity', e.target.value)}>
+                                <option value="">Select...</option>
+                                <option value="established">Established</option>
+                                <option value="growing">Growing</option>
+                              </select>
+                            </Field>
+                          </div>
+
+                          <Field label="Niche">
+                            <input className={inputCls} value={bizData.niche || ''} onChange={e => handleBizChange('niche', e.target.value)} />
+                          </Field>
+
+                          <Field label="Problem You Solve">
+                            <textarea className={`${inputCls} min-h-[80px]`} value={bizData.problemSolved || ''} onChange={e => handleBizChange('problemSolved', e.target.value)} />
+                          </Field>
+
+                          <Field label="Description">
+                            <textarea className={`${inputCls} min-h-[80px]`} value={bizData.description || ''} onChange={e => handleBizChange('description', e.target.value)} />
+                          </Field>
+
+                          <Field label="Target Audience">
+                            <textarea className={`${inputCls} min-h-[80px]`} value={bizData.targetAudience || ''} onChange={e => handleBizChange('targetAudience', e.target.value)} />
+                          </Field>
+
+                          <Field label="Target Customer Profile">
+                            <textarea className={`${inputCls} min-h-[80px]`} value={bizData.targetCustomerProfile || ''} onChange={e => handleBizChange('targetCustomerProfile', e.target.value)} />
+                          </Field>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                            <Field label="Target Gender">
+                              <select className={inputCls} value={bizData.targetGender || ''} onChange={e => handleBizChange('targetGender', e.target.value)}>
+                                <option value="">Select...</option>
+                                <option value="mostly_men">Mostly Men</option>
+                                <option value="mostly_women">Mostly Women</option>
+                                <option value="both_equally">Both Equally</option>
+                                <option value="families">Families</option>
+                              </select>
+                            </Field>
+                            <Field label="Geographic Reach">
+                              <select className={inputCls} value={bizData.geographicReach || ''} onChange={e => handleBizChange('geographicReach', e.target.value)}>
+                                <option value="">Select...</option>
+                                <option value="hyperlocal">Hyperlocal</option>
+                                <option value="local_city">Local City</option>
+                                <option value="regional">Regional</option>
+                              </select>
+                            </Field>
+                            <Field label="Customer Type">
+                              <select className={inputCls} value={bizData.customerType || ''} onChange={e => handleBizChange('customerType', e.target.value)}>
+                                <option value="">Select...</option>
+                                <option value="mostly_new">Mostly New</option>
+                                <option value="mix_new_repeat">Mix of New & Repeat</option>
+                                <option value="mostly_loyal">Mostly Loyal</option>
+                              </select>
+                            </Field>
+                            <Field label="Price Positioning">
+                              <select className={inputCls} value={bizData.pricePositioning || ''} onChange={e => handleBizChange('pricePositioning', e.target.value)}>
+                                <option value="">Select...</option>
+                                <option value="budget">Budget</option>
+                                <option value="affordable">Affordable</option>
+                                <option value="mid_range">Mid Range</option>
+                                <option value="premium">Premium</option>
+                                <option value="luxury">Luxury</option>
+                              </select>
+                            </Field>
+                            <Field label="Content Language">
+                              <select className={inputCls} value={bizData.contentLanguage || ''} onChange={e => handleBizChange('contentLanguage', e.target.value)}>
+                                <option value="">Select...</option>
+                                <option value="english">English</option>
+                                <option value="tamil">Tamil</option>
+                                <option value="tamil_english_mix">Tamil + English Mix</option>
+                              </select>
+                            </Field>
+                            <Field label="Brand Voice">
+                              <input className={inputCls} value={Array.isArray(bizData.brandVoice) ? bizData.brandVoice.join(', ') : (bizData.brandVoice || '')} onChange={e => handleBizChange('brandVoice', e.target.value)} placeholder="e.g. Professional, Witty" />
+                            </Field>
+                          </div>
+
+                          <Field label="Marketing Goals (comma separated)">
+                            <input className={inputCls} value={(bizData.marketingGoals || []).join(', ')} onChange={e => handleBizChange('marketingGoals', e.target.value.split(',').map(s => s.trim()).filter(Boolean))} placeholder="Brand Awareness, Sales, Leads" />
+                          </Field>
+
+                          <Field label="Hero Product / Service">
+                            <textarea className={`${inputCls} min-h-[70px]`} value={bizData.heroProduct || ''} onChange={e => handleBizChange('heroProduct', e.target.value)} />
+                          </Field>
+
+                          <Field label="Key Differentiator">
+                            <textarea className={`${inputCls} min-h-[70px]`} value={bizData.keyDifferentiator || ''} onChange={e => handleBizChange('keyDifferentiator', e.target.value)} />
+                          </Field>
+
+                          <Field label="Brand Story">
+                            <textarea className={`${inputCls} min-h-[100px]`} value={bizData.brandStory || ''} onChange={e => handleBizChange('brandStory', e.target.value)} />
+                          </Field>
+
+                          <Field label="Content Restrictions">
+                            <textarea className={`${inputCls} min-h-[70px]`} value={bizData.contentRestrictions || ''} onChange={e => handleBizChange('contentRestrictions', e.target.value)} placeholder="Anything we should avoid?" />
+                          </Field>
+
+                          <Field label="First Month Content Angles">
+                            <textarea className={`${inputCls} min-h-[80px]`} value={bizData.firstMonthContentAngles || ''} onChange={e => handleBizChange('firstMonthContentAngles', e.target.value)} />
+                          </Field>
+                        </div>
+
+                        {bizError && (
+                          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-600 text-sm">
+                            <AlertCircle className="w-4 h-4" /> {bizError}
+                          </div>
+                        )}
+
+                        <button
+                          onClick={handleBizSave}
+                          disabled={bizStatus === 'saving'}
+                          className={`px-8 py-2.5 rounded-lg font-bold flex items-center gap-2 transition-all shadow-sm ${
+                            bizStatus === 'saved' ? 'bg-green-600 text-white'
+                            : bizStatus === 'error' ? 'bg-red-600 text-white'
+                            : 'bg-[#ffcc29] text-black hover:bg-[#ffcc29]/80'
+                          }`}
+                        >
+                          {bizStatus === 'saving' ? (<><Loader2 className="w-4 h-4 animate-spin" /> Saving...</>)
+                          : bizStatus === 'saved' ? (<><Check className="w-4 h-4" /> Saved</>)
+                          : bizStatus === 'error' ? (<><AlertCircle className="w-4 h-4" /> Failed</>)
+                          : (<><Save className="w-4 h-4" /> Save Business Profile</>)}
+                        </button>
+                      </div>
+                    );
+                  })()}
 
                   {activeTab === 'Security' && (
                       <div className="animate-in fade-in duration-300">
