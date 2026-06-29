@@ -785,7 +785,7 @@ const ReelGenerator: React.FC = () => {
     setSuccessMessage(response?.message || (publishNow ? 'Post queued for immediate publish.' : 'Post scheduled successfully.'));
     setStatusFilter(publishNow ? 'posted' : 'scheduled');
     setShowWizard(false);
-    setStep(1);
+    setStep(11);
   });
 
   const togglePlatform = (platform: string) => {
