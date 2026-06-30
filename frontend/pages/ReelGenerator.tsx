@@ -784,7 +784,6 @@ const ReelGenerator: React.FC = () => {
     await loadVideoDrafts();
     setSuccessMessage(response?.message || (publishNow ? 'Post queued for immediate publish.' : 'Post scheduled successfully.'));
     setStatusFilter(publishNow ? 'posted' : 'scheduled');
-    // Keep wizard open and land on Final Output so user can see the rendered video
     setStep(11);
   });
 

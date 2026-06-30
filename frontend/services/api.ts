@@ -516,6 +516,14 @@ export const apiService = {
     return response;
   },
 
+  getContentStrategy: async (): Promise<{ success: boolean; html?: string; error?: string }> => {
+    return await apiCall<{ success: boolean; html?: string; error?: string }>(
+      '/dashboard/content-strategy',
+      { method: 'GET' },
+      true
+    );
+  },
+
   changePassword: async (currentPassword: string, newPassword: string): Promise<{ success: boolean; token?: string }> => {
     const response = await apiCall<{ success: boolean; token: string }>(
       '/auth/change-password',
@@ -1461,6 +1469,7 @@ export const apiService = {
     context?: {
       selectedProducts?: any[];
       prompt?: string;
+      language?: string;
     }
   ): Promise<{
     success: boolean;
@@ -1477,7 +1486,8 @@ export const apiService = {
           image: imageBase64,
           platform: platform || 'instagram',
           selectedProducts: context?.selectedProducts || [],
-          prompt: context?.prompt || ''
+          prompt: context?.prompt || '',
+          language: context?.language || 'English'
         })
       },
       true

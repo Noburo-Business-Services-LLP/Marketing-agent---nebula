@@ -1148,7 +1148,7 @@ router.put('/update-profile', protect, [
   handleValidationErrors
 ], async (req, res) => {
   try {
-    const allowedUpdates = ['firstName', 'lastName', 'companyName', 'avatar'];
+    const allowedUpdates = ['firstName', 'lastName', 'companyName', 'avatar', 'businessProfile', 'mobileNumber'];
     const updates = {};
     
     allowedUpdates.forEach(field => {

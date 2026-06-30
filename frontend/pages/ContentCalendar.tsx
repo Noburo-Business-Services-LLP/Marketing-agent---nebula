@@ -16,6 +16,7 @@ import {
 import { contentCalendarAPI } from '../services/api';
 import { ContentCalendar as ContentCalendarType, ContentCalendarItem } from '../types';
 import { getThemeClasses, useTheme } from '../context/ThemeContext';
+import StrategyDocumentView from '../components/StrategyDocumentView';
 
 const editableFields: Array<keyof ContentCalendarItem> = [
   'format',
@@ -37,6 +38,7 @@ const ContentCalendar: React.FC = () => {
   const [editingId, setEditingId] = useState('');
   const [draftItem, setDraftItem] = useState<Partial<ContentCalendarItem>>({});
   const [error, setError] = useState('');
+  const [showStrategyDoc, setShowStrategyDoc] = useState(false);
 
   const allItems = useMemo(
     () => (calendar?.weeks || []).flatMap((week) => week.items || []),
@@ -138,6 +140,10 @@ const ContentCalendar: React.FC = () => {
     );
   }
 
+  if (showStrategyDoc) {
+    return <StrategyDocumentView calendar={calendar} onBack={() => setShowStrategyDoc(false)} />;
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -152,6 +158,14 @@ const ContentCalendar: React.FC = () => {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowStrategyDoc(true)}
+            className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold border transition-colors ${isDarkMode ? 'border-slate-700 hover:bg-slate-800 text-white' : 'border-slate-300 hover:bg-slate-50 text-black'}`}
+          >
+            <Sparkles className="w-4 h-4" />
+            View Content Planning
+          </button>
           <button
             type="button"
             onClick={approveCalendar}
