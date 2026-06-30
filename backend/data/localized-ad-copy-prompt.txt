@@ -81,7 +81,7 @@ CTA:
 <Localized CTA in ${target_language}>
 
 Hashtags:
-<5-8 hashtags>
+<5-8 hashtags strictly translated into ${target_language}>
 
 Image Text:
 <Short text to display inside image in ${target_language}>

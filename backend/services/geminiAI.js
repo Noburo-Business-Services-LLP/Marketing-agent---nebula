@@ -2539,7 +2539,7 @@ function normalizeLocalizationHashtags(rawHashtags = [], fallbackText = '', regi
   const addIfMissing = (value) => {
     const token = String(value || '')
       .trim()
-      .replace(/[^A-Za-z0-9]/g, '');
+      .replace(/[^\p{L}\p{M}\p{N}]/gu, '');
     if (!token) return;
     const hashtag = `#${token}`;
     if (!deduped.some((item) => String(item).toLowerCase() === hashtag.toLowerCase())) {
@@ -2547,17 +2547,11 @@ function normalizeLocalizationHashtags(rawHashtags = [], fallbackText = '', regi
     }
   };
 
-  if (deduped.length < 2) {
+  if (deduped.length < 2 && region) {
     addIfMissing(region);
   }
-  if (deduped.length < 2) {
+  if (deduped.length < 2 && platform) {
     addIfMissing(platform);
-  }
-
-  const guaranteedFallbackTags = [region, platform, 'brand', 'campaign', 'premium', 'marketing', 'local'];
-  for (const tag of guaranteedFallbackTags) {
-    if (deduped.length >= 5) break;
-    addIfMissing(tag);
   }
 
   return deduped.slice(0, 5);
@@ -2834,7 +2828,8 @@ function buildLocalizationPrompt({
 
 🚨 LANGUAGE + REGION RULES (CRITICAL):
 - You MUST generate SEPARATE content for EACH region provided in the LOCALIZATION INPUT.
-- Each region's content (caption, CTA) MUST be strictly in its specified language.
+- Each region's content (caption, CTA, hashtags) MUST be strictly in its specified language.
+- ALL hashtags MUST be translated and localized into the specified language. Do not use English hashtags unless the language is English.
 - Do NOT mix languages between regions.
 - Do NOT default to English unless it is the specified language.
 
@@ -2895,7 +2890,7 @@ Example:
     "language": "<language>",
     "caption": "<MUST be in the specified language>",
     "cta": "<MUST be in the specified language>",
-    "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5"]
+    "hashtags": ["<MUST be localized tag 1>", "<MUST be localized tag 2>", "<MUST be localized tag 3>"]
   }
 ]
 

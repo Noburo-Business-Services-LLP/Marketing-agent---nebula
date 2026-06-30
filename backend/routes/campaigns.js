@@ -113,7 +113,7 @@ function sanitizeHashtags(rawHashtags = []) {
   if (!Array.isArray(rawHashtags)) return [];
   const sanitized = rawHashtags
     .map((tag) => (typeof tag === 'string' ? tag.trim().replace(/^#+/, '#') : ''))
-    .filter((tag) => /^#[A-Za-z0-9_]+$/.test(tag));
+    .filter((tag) => /^#[\p{L}\p{M}\p{N}_]+$/u.test(tag));
   return Array.from(new Set(sanitized)).slice(0, 25);
 }
 
@@ -1918,7 +1918,7 @@ Return ONLY valid JSON (no markdown, no backticks):
         .map((h) => String(h || '').trim())
         .filter(Boolean)
         .map((h) => (h.startsWith('#') ? h : `#${h}`))
-        .filter((h) => /^#[A-Za-z0-9_]{2,}$/.test(h));
+        .filter((h) => /^#[\p{L}\p{M}\p{N}_]{2,}$/u.test(h));
       return Array.from(new Set(tags)).slice(0, 8);
     };
 
@@ -2054,7 +2054,7 @@ Return ONLY valid JSON (no markdown, no backticks):
         ...post,
         platform,
         caption: cleanupCaption(post?.caption, markers, templateText),
-        hashtags: hashtags.length ? hashtags : ['#marketing'],
+        hashtags: hashtags,
         contentTheme: String(post?.contentTheme || 'promotional').trim(),
         imageDescription: String(post?.imageDescription || '').trim(),
         imageText: clampImageText(post?.imageText)
@@ -2144,7 +2144,7 @@ Return ONLY valid JSON (no markdown, no backticks):
         caption: post.caption,
         hashtags: Array.isArray(post.hashtags)
           ? post.hashtags.map(h => h.startsWith('#') ? h : `#${h}`)
-          : ['#marketing'],
+          : hashtags,
         imageUrl: imageResult.success ? imageResult.imageUrl : '',
         imageDescription: post.imageDescription || '',
         imageText: String(post.imageText || '').trim() || defaultImageText,
@@ -4145,7 +4145,7 @@ Return ONLY valid JSON (no markdown, no code blocks):
     const fallbackPost = {
       platform: platforms[0] || 'instagram',
       caption: `${campaignName}\n\n${campaignDescription || `A focused ${objective || 'awareness'} campaign update for your audience.`}`,
-      hashtags: [`#${String((bp.companyName || campaignName || 'Campaign')).replace(/[^A-Za-z0-9]/g, '') || 'Campaign'}`],
+      hashtags: [`#${String((bp.companyName || campaignName || 'Campaign')).replace(/[^\p{L}\p{M}\p{N}]/gu, '') || 'Campaign'}`],
       contentTheme: 'promotional',
       imageDescription: `${bp.industry || 'Business'} campaign creative for ${campaignName}`,
       callToAction: content?.callToAction || 'Learn more'
