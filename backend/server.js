@@ -729,6 +729,12 @@ const startServer = async () => {
 
   initializeSocketHub(server, allowedOrigins);
 
+  // Memory leak hunting — logs heap + handles every 5 min as [MEM] in stdout.
+  // Temporary diagnostic, remove once the leak is identified and fixed.
+  try { require('./utils/memoryWatchdog').start(); } catch (e) {
+    console.warn('memoryWatchdog failed to start:', e.message);
+  }
+
   server.on('error', (err) => {
     if (err && err.code === 'EADDRINUSE') {
       console.error(`❌ Port ${PORT} is already in use. Stop the other process or set PORT to a different value.`);

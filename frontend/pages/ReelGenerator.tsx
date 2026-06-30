@@ -1032,12 +1032,15 @@ const ReelGenerator: React.FC = () => {
                   const stepNo = idx + 1;
                   const active = stepNo === step;
                   const done = stepNo < step;
+                  // Step 11 (Final Output) is also reachable any time the final video has been rendered
+                  const finalReady = stepNo === 11 && !!(finalOutputUrl || finalVideoUrl);
+                  const clickable = done || finalReady;
                   return (
                     <button
                       key={label}
                       type="button"
-                      onClick={() => done && setStep(stepNo)}
-                      disabled={!done && !active}
+                      onClick={() => clickable && setStep(stepNo)}
+                      disabled={!clickable && !active}
                       className={`text-xs px-2 py-2 rounded-lg border transition ${active
                         ? 'bg-[#ffcc29] text-black border-[#ffcc29] font-bold'
                         : done
