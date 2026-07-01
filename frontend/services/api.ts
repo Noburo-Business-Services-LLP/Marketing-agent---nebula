@@ -74,6 +74,20 @@ async function safeReadJson(response: Response): Promise<any> {
     return rawText ? JSON.parse(rawText) : {};
   } catch (_) {
     const preview = rawText ? rawText.slice(0, 500) : '';
+    // Special handling for gateway timeout status codes (Cloudflare 524, 502/503/504).
+    // The backend may have completed the request even though the connection was cut.
+    // Return a soft object instead of throwing so callers can handle it gracefully
+    // (e.g., publish flow marks the post as "pending confirmation" rather than "failed").
+    const gatewayTimeouts = new Set([502, 503, 504, 524]);
+    if (gatewayTimeouts.has(response.status)) {
+      return {
+        success: false,
+        gatewayTimeout: true,
+        message: response.status === 524
+          ? 'The server took too long to respond, but your request may have gone through. Please check before retrying.'
+          : `Upstream timeout (HTTP ${response.status}). The request may still be processing on the server.`
+      };
+    }
     const parseErr: any = new Error(`Non-JSON response from server (HTTP ${response.status}).`);
     parseErr.status = response.status;
     parseErr.contentType = contentType;
@@ -1461,6 +1475,7 @@ export const apiService = {
     context?: {
       selectedProducts?: any[];
       prompt?: string;
+      language?: string;
     }
   ): Promise<{
     success: boolean;
@@ -1476,6 +1491,7 @@ export const apiService = {
         body: JSON.stringify({
           image: imageBase64,
           platform: platform || 'instagram',
+          language: context?.language || 'English',
           selectedProducts: context?.selectedProducts || [],
           prompt: context?.prompt || ''
         })

@@ -8936,6 +8936,7 @@ interface UploadPostItem {
     id: string;
     image: string;
     caption: string;
+    captionLanguage: 'English' | 'Tamil';
     isGeneratingCaption: boolean;
     isScheduled: boolean;
     scheduleDate: string;
@@ -9003,6 +9004,7 @@ const UploadPublishModal: React.FC<UploadPublishModalProps> = ({ onClose, onSucc
                         id: `upload-${Date.now()}-${i}`,
                         image: reader.result as string,
                         caption: '',
+                        captionLanguage: 'English',
                         isGeneratingCaption: false,
                         isScheduled: false,
                         scheduleDate: '',
@@ -9069,7 +9071,12 @@ const UploadPublishModal: React.FC<UploadPublishModalProps> = ({ onClose, onSucc
         setPosts(prev => prev.map(p => p.id === id ? { ...p, [field]: value } : p));
     };
 
-    // Generate caption with AI for a specific post
+    // Toggle language per post
+    const setPostLanguage = (id: string, lang: 'English' | 'Tamil') => {
+        setPosts(prev => prev.map(p => p.id === id ? { ...p, captionLanguage: lang } : p));
+    };
+
+    // Generate caption with AI for a specific post, using its selected language
     const handleGenerateCaption = async (id: string) => {
         const post = posts.find(p => p.id === id);
         if (!post) return;
@@ -9077,7 +9084,11 @@ const UploadPublishModal: React.FC<UploadPublishModalProps> = ({ onClose, onSucc
         setPosts(prev => prev.map(p => p.id === id ? { ...p, isGeneratingCaption: true } : p));
 
         try {
-            const response = await apiService.generateCaptionFromImage(post.image, selectedPlatforms[0] || 'instagram');
+            const response = await apiService.generateCaptionFromImage(
+                post.image,
+                selectedPlatforms[0] || 'instagram',
+                { language: post.captionLanguage }
+            );
             if (response.success && response.caption) {
                 setPosts(prev => prev.map(p => p.id === id ? { ...p, caption: response.caption!, isGeneratingCaption: false } : p));
             } else {
@@ -9273,13 +9284,35 @@ const UploadPublishModal: React.FC<UploadPublishModalProps> = ({ onClose, onSucc
                     setPosts(prev => prev.map(p => p.id === post.id ? { ...p, status: 'success', resultMessage: msg } : p));
                     onSuccess(campaign);
                     successCount++;
+                } else if ((publishRes as any)?.gatewayTimeout) {
+                    // Cloudflare 524 / 502-503-504 — the request likely completed
+                    // on Ayrshare's side but our connection was cut. Show as success
+                    // with a soft warning so the user isn't misled by a fake "failed".
+                    setPosts(prev => prev.map(p => p.id === post.id ? {
+                        ...p,
+                        status: 'success',
+                        resultMessage: `Sent to ${selectedPlatforms.join(', ')} - please verify on the platform`
+                    } : p));
+                    onSuccess(campaign);
+                    successCount++;
                 } else {
                     setPosts(prev => prev.map(p => p.id === post.id ? { ...p, status: 'error', resultMessage: publishRes.message || 'Failed' } : p));
                     failCount++;
                 }
             } catch (error: any) {
-                setPosts(prev => prev.map(p => p.id === post.id ? { ...p, status: 'error', resultMessage: error.message || 'Failed' } : p));
-                failCount++;
+                // Same treatment for network-level gateway timeouts
+                const isGatewayTimeout = [502, 503, 504, 524].includes(error?.status);
+                if (isGatewayTimeout) {
+                    setPosts(prev => prev.map(p => p.id === post.id ? {
+                        ...p,
+                        status: 'success',
+                        resultMessage: `Sent to ${selectedPlatforms.join(', ')} - please verify on the platform`
+                    } : p));
+                    successCount++;
+                } else {
+                    setPosts(prev => prev.map(p => p.id === post.id ? { ...p, status: 'error', resultMessage: error.message || 'Failed' } : p));
+                    failCount++;
+                }
             }
         }
 
@@ -9553,23 +9586,43 @@ const UploadPublishModal: React.FC<UploadPublishModalProps> = ({ onClose, onSucc
                                             </span>
                                             <div className="flex items-center gap-1">
                                                 {post.status === 'pending' && (
-                                                    <button
-                                                        onClick={() => handleGenerateCaption(post.id)}
-                                                        disabled={post.isGeneratingCaption || isPublishing}
-                                                        className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
-                                                            post.isGeneratingCaption
-                                                                ? 'bg-purple-500/10 text-purple-400'
-                                                                : 'bg-purple-500/20 text-purple-400 hover:bg-purple-500/30'
-                                                        }`}
-                                                        title="Generate caption"
-                                                    >
-                                                        {post.isGeneratingCaption ? (
-                                                            <Loader2 className="w-3 h-3 animate-spin" />
-                                                        ) : (
-                                                            <Sparkles className="w-3 h-3" />
-                                                        )}
-                                                        {post.isGeneratingCaption ? 'Generating...' : 'Caption'}
-                                                    </button>
+                                                    <>
+                                                        {/* Language toggle (English / Tamil) */}
+                                                        <div className={`inline-flex rounded overflow-hidden border ${isDarkMode ? 'border-slate-700' : 'border-slate-300'}`}>
+                                                            {(['English', 'Tamil'] as const).map((lang) => (
+                                                                <button
+                                                                    key={lang}
+                                                                    onClick={() => setPostLanguage(post.id, lang)}
+                                                                    disabled={post.isGeneratingCaption || isPublishing}
+                                                                    className={`px-2 py-1 text-[10px] font-semibold transition-colors ${
+                                                                        post.captionLanguage === lang
+                                                                            ? 'bg-[#ffcc29] text-black'
+                                                                            : isDarkMode ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-white text-slate-500 hover:bg-slate-100'
+                                                                    }`}
+                                                                    title={`Caption language: ${lang}`}
+                                                                >
+                                                                    {lang === 'English' ? 'EN' : 'TA'}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                        <button
+                                                            onClick={() => handleGenerateCaption(post.id)}
+                                                            disabled={post.isGeneratingCaption || isPublishing}
+                                                            className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
+                                                                post.isGeneratingCaption
+                                                                    ? 'bg-purple-500/10 text-purple-400'
+                                                                    : 'bg-purple-500/20 text-purple-400 hover:bg-purple-500/30'
+                                                            }`}
+                                                            title={`Generate caption in ${post.captionLanguage}`}
+                                                        >
+                                                            {post.isGeneratingCaption ? (
+                                                                <Loader2 className="w-3 h-3 animate-spin" />
+                                                            ) : (
+                                                                <Sparkles className="w-3 h-3" />
+                                                            )}
+                                                            {post.isGeneratingCaption ? 'Generating...' : 'Caption'}
+                                                        </button>
+                                                    </>
                                                 )}
                                                 {post.status === 'pending' && (
                                                     <button
