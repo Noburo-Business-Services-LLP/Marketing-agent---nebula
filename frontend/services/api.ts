@@ -3524,6 +3524,20 @@ export const contentCalendarAPI = {
       method: 'POST',
       body: JSON.stringify({ orderedIds })
     }, true);
+  },
+
+  autoGenerateWeek: async (calendarId: string, weekNumber: number): Promise<{ success: boolean; message: string }> => {
+    return apiCall(`/content-calendar/${encodeURIComponent(calendarId)}/auto-generate-week`, {
+      method: 'POST',
+      body: JSON.stringify({ weekNumber })
+    }, true);
+  },
+
+  getWeeklyDrafts: async (calendarId: string, weekNumber?: number): Promise<{ success: boolean; drafts: Draft[] }> => {
+    const query = weekNumber ? `?week=${weekNumber}` : '';
+    return apiCall(`/content-calendar/${encodeURIComponent(calendarId)}/weekly-drafts${query}`, {
+      method: 'GET'
+    }, true);
   }
 };
 
@@ -3927,6 +3941,18 @@ export const draftsAPI = {
   deleteDraft: async (id: string): Promise<{ success: boolean }> => {
     return apiCall(`/drafts/${encodeURIComponent(id)}`, {
       method: 'DELETE'
+    }, true);
+  },
+
+  rejectDraft: async (id: string): Promise<{ success: boolean; message: string }> => {
+    return apiCall(`/drafts/${encodeURIComponent(id)}/reject`, {
+      method: 'POST'
+    }, true);
+  },
+
+  regenerateDraft: async (id: string): Promise<{ success: boolean; message: string }> => {
+    return apiCall(`/drafts/${encodeURIComponent(id)}/regenerate`, {
+      method: 'POST'
     }, true);
   }
 };

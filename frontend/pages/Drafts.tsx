@@ -352,6 +352,11 @@ export const Drafts: React.FC = () => {
                           {item.sourceType}
                         </span>
                       </div>
+                      {item.calendarWeek && (
+                        <div className="text-[10px] text-indigo-400 bg-indigo-950/40 border border-indigo-900/50 px-1.5 py-0.5 rounded mt-1.5 inline-block font-medium">
+                          Calendar: Week {item.calendarWeek}, Day {item.calendarDay}
+                        </div>
+                      )}
                       
                       <p className="text-xs text-slate-400 line-clamp-3 mt-2 font-light leading-relaxed">
                         {item.caption || <span className="italic text-slate-600">No caption defined</span>}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, Calendar, Send, Trash2, Loader2, Instagram, Facebook, Linkedin, Twitter, Check } from 'lucide-react';
+import { X, Save, Calendar, Send, Trash2, Loader2, Instagram, Facebook, Linkedin, Twitter, Check, RotateCcw } from 'lucide-react';
 import { Draft } from '../types';
 import { draftsAPI } from '../services/api';
 
@@ -80,6 +80,45 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
         callToAction: cta
       }
     };
+  };
+
+  const [isRegenerating, setIsRegenerating] = useState(false);
+  const [isRejecting, setIsRejecting] = useState(false);
+
+  const handleReject = async () => {
+    if (window.confirm('Are you sure you want to reject this draft? It will be archived.')) {
+      setIsRejecting(true);
+      setErrorMsg('');
+      try {
+        await draftsAPI.rejectDraft(draft._id);
+        setSuccessMsg('Draft rejected successfully!');
+        setTimeout(() => {
+          onSuccess();
+        }, 1000);
+      } catch (err: any) {
+        setErrorMsg(err.message || 'Failed to reject draft.');
+      } finally {
+        setIsRejecting(false);
+      }
+    }
+  };
+
+  const handleRegenerate = async () => {
+    if (window.confirm('Are you sure you want to reject and regenerate a new draft for this slot?')) {
+      setIsRegenerating(true);
+      setErrorMsg('');
+      try {
+        await draftsAPI.regenerateDraft(draft._id);
+        setSuccessMsg('Regeneration queued in background!');
+        setTimeout(() => {
+          onSuccess();
+        }, 1500);
+      } catch (err: any) {
+        setErrorMsg(err.message || 'Failed to regenerate draft.');
+      } finally {
+        setIsRegenerating(false);
+      }
+    }
   };
 
   const handleSave = async () => {
@@ -434,14 +473,35 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
               </button>
             </div>
 
-            <button
-              onClick={handleDelete}
-              disabled={isDeleting}
-              className="flex items-center gap-2 px-4 py-3 rounded-xl bg-red-950/20 border border-red-900/30 text-red-400 hover:bg-red-950/40 hover:text-red-300 font-semibold text-sm transition-all"
-            >
-              {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-              Archive Draft
-            </button>
+            {draft.contentCalendarId && draft.calendarDay ? (
+              <div className="flex gap-2">
+                <button
+                  onClick={handleReject}
+                  disabled={isRejecting || isRegenerating}
+                  className="flex items-center gap-2 px-4 py-3 rounded-xl bg-red-950/30 border border-red-900/40 text-red-400 hover:bg-red-950/50 hover:text-red-300 font-semibold text-sm transition-all"
+                >
+                  {isRejecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
+                  Reject
+                </button>
+                <button
+                  onClick={handleRegenerate}
+                  disabled={isRejecting || isRegenerating}
+                  className="flex items-center gap-2 px-4 py-3 rounded-xl bg-indigo-950/30 border border-indigo-900/40 text-indigo-400 hover:bg-indigo-900/50 hover:text-indigo-300 font-semibold text-sm transition-all"
+                >
+                  {isRegenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+                  Regenerate
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={handleDelete}
+                disabled={isDeleting}
+                className="flex items-center gap-2 px-4 py-3 rounded-xl bg-red-950/20 border border-red-900/30 text-red-400 hover:bg-red-950/40 hover:text-red-300 font-semibold text-sm transition-all"
+              >
+                {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                Archive Draft
+              </button>
+            )}
           </div>
         </div>
 

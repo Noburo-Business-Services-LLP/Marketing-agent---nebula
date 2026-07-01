@@ -142,4 +142,54 @@ router.post('/reorder', protect, async (req, res) => {
   }
 });
 
+const backgroundQueue = require('../services/backgroundQueue');
+const Draft = require('../models/Draft');
+
+// POST /api/content-calendar/:id/auto-generate-week
+router.post('/:id/auto-generate-week', protect, async (req, res) => {
+  try {
+    const calendar = await ContentCalendar.findOne({ _id: req.params.id, userId: req.user._id || req.user.id });
+    if (!calendar) return res.status(404).json({ success: false, message: 'Content calendar not found' });
+
+    let weekNumber = parseInt(req.body.weekNumber, 10);
+    if (isNaN(weekNumber)) {
+      // Default to week based on current day of month
+      const day = new Date().getDate();
+      if (day <= 7) weekNumber = 1;
+      else if (day <= 14) weekNumber = 2;
+      else if (day <= 21) weekNumber = 3;
+      else weekNumber = 4;
+    }
+
+    backgroundQueue.enqueue({
+      calendarId: calendar._id,
+      weekNumber
+    });
+
+    res.json({ success: true, message: `Weekly content generation queued for Week ${weekNumber}` });
+  } catch (error) {
+    console.error('Auto generate week error:', error);
+    res.status(500).json({ success: false, message: 'Failed to queue weekly generation', error: error.message });
+  }
+});
+
+// GET /api/content-calendar/:id/weekly-drafts
+router.get('/:id/weekly-drafts', protect, async (req, res) => {
+  try {
+    const calendar = await ContentCalendar.findOne({ _id: req.params.id, userId: req.user._id || req.user.id });
+    if (!calendar) return res.status(404).json({ success: false, message: 'Content calendar not found' });
+
+    const query = { contentCalendarId: calendar._id, userId: req.user._id || req.user.id };
+    if (req.query.week) {
+      query.calendarWeek = parseInt(req.query.week, 10);
+    }
+
+    const drafts = await Draft.find(query).sort({ calendarDay: 1 });
+    res.json({ success: true, drafts });
+  } catch (error) {
+    console.error('Fetch weekly drafts error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch weekly drafts', error: error.message });
+  }
+});
+
 module.exports = router;

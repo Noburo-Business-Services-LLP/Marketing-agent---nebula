@@ -280,4 +280,109 @@ router.delete('/:id', protect, async (req, res) => {
   }
 });
 
+const ContentCalendar = require('../models/ContentCalendar');
+const backgroundQueue = require('../services/backgroundQueue');
+
+// POST /api/drafts/:id/reject
+router.post('/:id/reject', protect, async (req, res) => {
+  try {
+    const userId = req.user.userId || req.user.id;
+    const draft = await Draft.findOne({ _id: req.params.id, userId });
+
+    if (!draft) {
+      return res.status(404).json({ success: false, message: 'Draft not found' });
+    }
+
+    draft.status = 'archived';
+    await draft.save();
+
+    // If it is linked to a ContentCalendar, update its status
+    if (draft.contentCalendarId && draft.calendarDay) {
+      const calendar = await ContentCalendar.findOne({ _id: draft.contentCalendarId, userId });
+      if (calendar) {
+        // Find the item matching the day or generatedDraftId
+        let item = null;
+        for (const week of calendar.weeks || []) {
+          item = (week.items || []).find(
+            (entry) => 
+              String(entry.generatedDraftId) === String(draft._id) || 
+              Number(entry.day) === Number(draft.calendarDay)
+          );
+          if (item) break;
+        }
+        if (item) {
+          item.status = 'rejected';
+          await calendar.save();
+        }
+      }
+    }
+
+    res.status(200).json({ success: true, message: 'Draft rejected successfully' });
+  } catch (error) {
+    console.error('Reject draft error:', error);
+    res.status(500).json({ success: false, message: 'Failed to reject draft', error: error.message });
+  }
+});
+
+// POST /api/drafts/:id/regenerate
+router.post('/:id/regenerate', protect, async (req, res) => {
+  try {
+    const userId = req.user.userId || req.user.id;
+    const draft = await Draft.findOne({ _id: req.params.id, userId });
+
+    if (!draft) {
+      return res.status(404).json({ success: false, message: 'Draft not found' });
+    }
+
+    if (!draft.contentCalendarId || !draft.calendarDay) {
+      return res.status(400).json({ success: false, message: 'Draft is not associated with a calendar item' });
+    }
+
+    const calendar = await ContentCalendar.findOne({ _id: draft.contentCalendarId, userId });
+    if (!calendar) {
+      return res.status(404).json({ success: false, message: 'Calendar not found' });
+    }
+
+    let item = null;
+    for (const week of calendar.weeks || []) {
+      item = (week.items || []).find(
+        (entry) => 
+          String(entry.generatedDraftId) === String(draft._id) || 
+          Number(entry.day) === Number(draft.calendarDay)
+      );
+      if (item) break;
+    }
+
+    if (!item) {
+      return res.status(404).json({ success: false, message: 'Calendar item not found' });
+    }
+
+    // Archive current draft
+    draft.status = 'archived';
+    await draft.save();
+
+    // Reset item status to draft so it can be regenerated
+    item.status = 'draft';
+    item.generatedDraftId = null;
+    item.generatedCampaignId = null;
+    await calendar.save();
+
+    // Trigger regeneration asynchronously in the background
+    (async () => {
+      try {
+        await backgroundQueue.generateSingleCalendarItem(calendar, item, draft.calendarWeek || 1);
+        await calendar.save();
+        console.log(`[Regenerate] Finished background regeneration for Calendar ${calendar._id}, Day ${item.day}`);
+      } catch (genErr) {
+        console.error('[Regenerate] Error in background regeneration process:', genErr.message);
+      }
+    })();
+
+    res.status(200).json({ success: true, message: 'Regeneration started in background' });
+  } catch (error) {
+    console.error('Regenerate draft error:', error);
+    res.status(500).json({ success: false, message: 'Failed to trigger draft regeneration', error: error.message });
+  }
+});
+
 module.exports = router;
