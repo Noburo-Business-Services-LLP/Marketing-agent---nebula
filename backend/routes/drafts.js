@@ -34,15 +34,22 @@ router.post('/save', protect, async (req, res) => {
   }
 });
 
-// 2. GET / - List all drafts for current user (with optional ?status= filter)
+// 2. GET / - List all drafts for current user (with optional ?status= and ?type= filter)
 router.get('/', protect, async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
-    const { status } = req.query;
+    const { status, type } = req.query;
 
     const query = { userId };
     if (status && status !== 'all') {
       query.status = status;
+    }
+    if (type) {
+      if (type.includes(',')) {
+        query.contentType = { $in: type.split(',') };
+      } else {
+        query.contentType = type;
+      }
     }
 
     const drafts = await Draft.find(query).sort({ createdAt: -1 });

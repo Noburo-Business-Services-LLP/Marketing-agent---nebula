@@ -61,6 +61,12 @@ const draftSchema = new mongoose.Schema({
     enum: ['campaign', 'post', 'reel', 'calendar'],
     required: true
   },
+  contentType: {
+    type: String,
+    enum: ['campaign', 'post', 'reel'],
+    default: 'campaign',
+    index: true
+  },
   contentCalendarId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'ContentCalendar',

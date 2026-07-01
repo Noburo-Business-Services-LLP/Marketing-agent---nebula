@@ -3904,8 +3904,11 @@ export const draftsAPI = {
     }, true);
   },
 
-  getDrafts: async (status?: string): Promise<{ drafts: Draft[] }> => {
-    const query = status ? `?status=${encodeURIComponent(status)}` : '';
+  getDrafts: async (status?: string, type?: string): Promise<{ drafts: Draft[] }> => {
+    const params = [];
+    if (status) params.push(`status=${encodeURIComponent(status)}`);
+    if (type) params.push(`type=${encodeURIComponent(type)}`);
+    const query = params.length > 0 ? `?${params.join('&')}` : '';
     return apiCall(`/drafts${query}`, {
       method: 'GET'
     }, true);

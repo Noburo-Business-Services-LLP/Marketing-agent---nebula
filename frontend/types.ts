@@ -182,6 +182,7 @@ export interface Draft {
   scheduledDate?: string;
   status: 'draft' | 'scheduled' | 'published' | 'archived';
   sourceType: 'campaign' | 'post' | 'reel' | 'calendar';
+  contentType?: 'campaign' | 'post' | 'reel';
   contentCalendarId?: string;
   calendarWeek?: number;
   calendarDay?: number;
