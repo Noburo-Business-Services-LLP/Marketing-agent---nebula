@@ -206,19 +206,35 @@ async function enforceRateLimit(url) {
 /**
  * Generic HTTP request helper
  */
+// Tracker: fire-and-forget upsert of daily Ayrshare API call counter.
+// Never throws, never blocks the request. Records go to ayrshare_api_calls collection.
+function _trackAyrshareCall(url, method, statusBucket) {
+  try {
+    if (typeof url !== 'string' || !url.includes('api.ayrshare.com')) return;
+    const AyrshareApiCall = require('../models/AyrshareApiCall');
+    const parsed = new URL(url);
+    const endpoint = parsed.pathname.replace(/\/[a-f0-9-]{16,}$/i, '/:id'); // normalize IDs
+    const date = new Date().toISOString().slice(0, 10); // UTC YYYY-MM-DD
+    AyrshareApiCall.updateOne(
+      { date, endpoint, method: String(method || 'GET').toUpperCase(), statusBucket },
+      { $inc: { count: 1 }, $set: { lastCalledAt: new Date() } },
+      { upsert: true }
+    ).catch(() => {});
+  } catch (_) {}
+}
+
 async function makeRequest(url, options = {}) {
   // GLOBAL AYRSHARE KILL SWITCH
   // Set AYRSHARE_KILL_SWITCH=true in env to block ALL Ayrshare API calls at the source.
   // Returns a fake 503 with a suspended-shaped payload so upstream code (including our
   // circuit breaker) handles it identically to a real suspension.
-  // Use during account-suspension recovery — proves to Ayrshare support that we're
-  // not calling them, so they can safely lift the suspension.
   if (
     String(process.env.AYRSHARE_KILL_SWITCH || 'false').toLowerCase() === 'true'
     && typeof url === 'string'
     && url.includes('api.ayrshare.com')
   ) {
     console.warn(`[AYRSHARE KILL SWITCH] Blocked outgoing call to ${url}`);
+    _trackAyrshareCall(url, options.method, 'blocked');
     return {
       status: 503,
       data: {
@@ -251,6 +267,11 @@ async function makeRequest(url, options = {}) {
       let data = '';
       res.on('data', chunk => data += chunk);
       res.on('end', () => {
+        const bucket = res.statusCode >= 500 ? '5xx'
+          : res.statusCode >= 400 ? '4xx'
+          : res.statusCode >= 200 ? '2xx'
+          : '1xx';
+        _trackAyrshareCall(url, reqOptions.method, bucket);
         try {
           const json = JSON.parse(data);
           resolve({ status: res.statusCode, data: json });
@@ -259,9 +280,13 @@ async function makeRequest(url, options = {}) {
         }
       });
     });
-    
-    req.on('error', reject);
+
+    req.on('error', (err) => {
+      _trackAyrshareCall(url, reqOptions.method, 'error');
+      reject(err);
+    });
     req.on('timeout', () => {
+      _trackAyrshareCall(url, reqOptions.method, 'error');
       req.destroy();
       reject(new Error('Request timeout'));
     });

@@ -304,6 +304,58 @@ router.put('/users/:id/toggle', adminAuth, async (req, res) => {
   }
 });
 
+// ─── Ayrshare API Usage Tracker ─────────────────────────────────────────────
+
+// GET /api/admin/ayrshare-usage
+// Returns today's total, breakdown by endpoint / status, and 7-day trend.
+router.get('/ayrshare-usage', adminAuth, async (req, res) => {
+  try {
+    const AyrshareApiCall = require('../models/AyrshareApiCall');
+    const today = new Date().toISOString().slice(0, 10);
+    const sevenDaysAgo = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000)
+      .toISOString().slice(0, 10);
+
+    const rows = await AyrshareApiCall.find({ date: { $gte: sevenDaysAgo } }).lean();
+
+    const totalToday = rows
+      .filter(r => r.date === today)
+      .reduce((sum, r) => sum + (r.count || 0), 0);
+
+    const byEndpointToday = {};
+    const byBucketToday = { '2xx': 0, '4xx': 0, '5xx': 0, blocked: 0, error: 0 };
+    rows.filter(r => r.date === today).forEach(r => {
+      byEndpointToday[r.endpoint] = (byEndpointToday[r.endpoint] || 0) + r.count;
+      if (byBucketToday[r.statusBucket] !== undefined) {
+        byBucketToday[r.statusBucket] += r.count;
+      }
+    });
+
+    const byDay = {};
+    rows.forEach(r => {
+      byDay[r.date] = (byDay[r.date] || 0) + r.count;
+    });
+    const trend = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      trend.push({ date: d, count: byDay[d] || 0 });
+    }
+
+    res.json({
+      success: true,
+      today: totalToday,
+      limit: 1000,
+      percentUsed: Math.round((totalToday / 1000) * 100),
+      killSwitchOn: String(process.env.AYRSHARE_KILL_SWITCH || 'false').toLowerCase() === 'true',
+      byEndpointToday,
+      byBucketToday,
+      trend
+    });
+  } catch (err) {
+    console.error('ayrshare-usage error:', err);
+    res.status(500).json({ error: 'Failed to fetch Ayrshare usage' });
+  }
+});
+
 // ─── Coupon Management ───────────────────────────────────────────────────────
 
 // GET /api/admin/coupons
