@@ -207,6 +207,28 @@ async function enforceRateLimit(url) {
  * Generic HTTP request helper
  */
 async function makeRequest(url, options = {}) {
+  // GLOBAL AYRSHARE KILL SWITCH
+  // Set AYRSHARE_KILL_SWITCH=true in env to block ALL Ayrshare API calls at the source.
+  // Returns a fake 503 with a suspended-shaped payload so upstream code (including our
+  // circuit breaker) handles it identically to a real suspension.
+  // Use during account-suspension recovery — proves to Ayrshare support that we're
+  // not calling them, so they can safely lift the suspension.
+  if (
+    String(process.env.AYRSHARE_KILL_SWITCH || 'false').toLowerCase() === 'true'
+    && typeof url === 'string'
+    && url.includes('api.ayrshare.com')
+  ) {
+    console.warn(`[AYRSHARE KILL SWITCH] Blocked outgoing call to ${url}`);
+    return {
+      status: 503,
+      data: {
+        status: 'error',
+        code: 999,
+        message: 'Ayrshare calls disabled by AYRSHARE_KILL_SWITCH env var'
+      }
+    };
+  }
+
   await enforceRateLimit(url);
 
   return new Promise((resolve, reject) => {
