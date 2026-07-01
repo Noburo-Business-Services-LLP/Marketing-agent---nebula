@@ -9,6 +9,7 @@ import Onboarding from './pages/Onboarding';
 import TrialExpired from './pages/TrialExpired';
 import Dashboard from './pages/Dashboard';
 import Campaigns from './pages/Campaigns';
+import { Drafts } from './pages/Drafts';
 import ContentCalendar from './pages/ContentCalendar';
 import ReelGenerator from './pages/ReelGenerator';
 import AdCampaigns from './pages/AdCampaigns';
@@ -178,6 +179,7 @@ const App: React.FC = () => {
                     <Route path="/dashboard" element={<Dashboard />} />
                     <Route path="/content-calendar" element={<ContentCalendar />} />
                     <Route path="/campaigns" element={<Campaigns />} />
+                    <Route path="/drafts" element={<Drafts />} />
                     <Route path="/reels" element={<ReelGenerator />} />
                     <Route path="/ad-campaigns" element={<AdCampaigns />} />
                     <Route path="/competitors" element={<Competitors />} />

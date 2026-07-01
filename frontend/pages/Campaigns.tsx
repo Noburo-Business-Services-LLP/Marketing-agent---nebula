@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Campaign, ContentCalendarItem, Product } from '../types';
-import { apiService, icpStrategyService, inventoryAPI, brandAssetsAPI, contentCalendarAPI } from '../services/api';
+import { apiService, icpStrategyService, inventoryAPI, brandAssetsAPI, contentCalendarAPI, draftsAPI } from '../services/api';
 import { Plus, Sparkles, Filter, Loader2, Calendar, BarChart3, Image as ImageIcon, Video, X, ChevronRight, Check, Eye, MousePointer, Archive, Send, Edit3, DollarSign, RefreshCw, Wand2, Instagram, Facebook, Twitter, Linkedin, Youtube, Clock, Heart, MessageCircle, Share2, Zap, Download, FileText, ImageDown, ChevronDown, ChevronUp, Trash2, Save, AlertCircle, Target, Users, PieChart, Pencil, PenLine, Music } from 'lucide-react';
 import { 
     LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, AreaChart, Area 
@@ -5525,6 +5525,48 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
       return { min: 18, max: 65 };
     };
 
+    const [isSavingDrafts, setIsSavingDrafts] = useState(false);
+
+    const handleSaveToDrafts = async () => {
+      if (generatedPosts.length === 0) return;
+      setIsSavingDrafts(true);
+      try {
+        await Promise.all(
+          generatedPosts.map(post => 
+            draftsAPI.saveDraft({
+              title: `${campaignName || 'Campaign'} - ${post.platform || 'Post'}`,
+              caption: post.caption || '',
+              hashtags: post.hashtags || [],
+              cta: callToAction || '',
+              imageUrl: post.imageUrl || '',
+              imagePrompt: (post as any).imageDescription || '',
+              platforms: [post.platform || 'instagram'],
+              language: contentLanguage,
+              tone: contentTone || '',
+              objective: objective || '',
+              scheduledDate: post.suggestedDate ? new Date(`${post.suggestedDate}T${post.suggestedTime || '10:00'}:00`) : null,
+              status: 'draft',
+              sourceType: 'campaign',
+              creative: {
+                type: contentType,
+                textContent: post.caption || '',
+                captions: post.caption || '',
+                imageUrls: post.imageUrl ? [post.imageUrl] : [],
+                hashtags: post.hashtags || [],
+                callToAction: callToAction || ''
+              }
+            })
+          )
+        );
+        alert('All posts successfully saved to drafts!');
+      } catch (err: any) {
+        console.error('Failed to save drafts:', err);
+        alert('Failed to save drafts: ' + (err.message || err));
+      } finally {
+        setIsSavingDrafts(false);
+      }
+    };
+
     // Save all accepted posts as scheduled campaigns and actually schedule them on Ayrshare
     const handleSaveAndSchedule = async () => {
       setSavingPosts(true);
@@ -7084,6 +7126,23 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                             }`}>
                               {generatedPosts.filter(p => p.status === 'accepted').length}/{generatedPosts.length} accepted
                             </span>
+                            <button 
+                              onClick={handleSaveToDrafts}
+                              disabled={isSavingDrafts || generatedPosts.length === 0}
+                              className="w-full px-6 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-100 rounded-lg font-semibold transition-all disabled:opacity-50 flex items-center justify-center gap-2 sm:w-auto"
+                            >
+                              {isSavingDrafts ? (
+                                <>
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                  Saving...
+                                </>
+                              ) : (
+                                <>
+                                  <Save className="w-4 h-4" />
+                                  Save to Drafts ({generatedPosts.length})
+                                </>
+                              )}
+                            </button>
                             <button 
                               onClick={handleSaveAndSchedule}
                               disabled={savingPosts || !generatedPosts.every(p => p.status === 'accepted') || generatedPosts.some(p => p.isRegenerating)}

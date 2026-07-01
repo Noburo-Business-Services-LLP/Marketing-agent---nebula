@@ -8,6 +8,7 @@ const router = express.Router();
 const { protect } = require('../middleware/auth');
 const { checkTrial, deductCredits, requireCredits } = require('../middleware/trialGuard');
 const Campaign = require('../models/Campaign');
+const Draft = require('../models/Draft');
 const User = require('../models/User');
 const crypto = require('crypto');
 const { callGemini, parseGeminiJSON, generateICPAndStrategy, generateCampaignImageNanoBanana } = require('../services/geminiAI');
@@ -2155,7 +2156,48 @@ Return ONLY valid JSON (no markdown, no backticks):
         model: imageResult.success ? imageResult.model : 'failed'
       };
 
-      sendEvent('post', postData);
+      // Auto-save a draft for this generated post checkpoint
+      let draftId = null;
+      try {
+        const draft = new Draft({
+          userId,
+          title: `${campaignName || 'Campaign'} - Post ${i + 1}`,
+          caption: postData.caption || '',
+          hashtags: postData.hashtags || [],
+          cta: '',
+          imageUrl: postData.imageUrl || '',
+          imagePrompt: postData.imageDescription || '',
+          platforms: [postData.platform],
+          language: selectedLanguage,
+          tone: enforcedTone || '',
+          objective: objective || '',
+          scheduledDate: postData.suggestedDate ? new Date(`${postData.suggestedDate}T${postData.suggestedTime || '10:00'}:00`) : null,
+          status: 'draft',
+          sourceType: 'campaign',
+          creative: {
+            type: 'image',
+            textContent: postData.caption || '',
+            captions: postData.caption || '',
+            imageUrls: postData.imageUrl ? [postData.imageUrl] : [],
+            hashtags: postData.hashtags || [],
+            imageText: postData.imageText || ''
+          },
+          generationProgress: {
+            index: i,
+            total: postsToProcess.length,
+            completed: i + 1 === postsToProcess.length
+          }
+        });
+        await draft.save();
+        draftId = draft._id;
+      } catch (err) {
+        console.error('Failed to save draft progress checkpoint:', err);
+      }
+
+      sendEvent('post', {
+        ...postData,
+        draftId
+      });
     }
 
     // Done
@@ -2456,6 +2498,29 @@ router.post('/', protect, async (req, res) => {
 
     const campaign = new Campaign(campaignData);
     await campaign.save();
+
+    // Auto-save a corresponding Draft record
+    try {
+      const draft = new Draft({
+        userId,
+        title: campaign.name || 'Untitled Campaign',
+        caption: campaign.creative?.captions || campaign.creative?.textContent || '',
+        hashtags: campaign.creative?.hashtags || [],
+        cta: campaign.creative?.callToAction || '',
+        imageUrl: campaign.creative?.imageUrls?.[0] || '',
+        platforms: campaign.platforms || [],
+        objective: campaign.objective || 'awareness',
+        tone: campaign.tone || '',
+        scheduledDate: campaign.scheduling?.startDate || null,
+        status: 'draft',
+        sourceType: 'campaign',
+        campaignId: campaign._id,
+        creative: campaign.creative || {}
+      });
+      await draft.save();
+    } catch (err) {
+      console.error('Failed to auto-save draft for campaign creation:', err);
+    }
     
     // Notifications are automatically scheduled by the background scheduler
     if (campaign.status === 'scheduled' && campaign.scheduling?.startDate) {
@@ -2646,6 +2711,26 @@ router.put('/:id', protect, async (req, res) => {
     
     if (!campaign) {
       return res.status(404).json({ success: false, message: 'Campaign not found' });
+    }
+
+    // Sync to corresponding Draft
+    try {
+      const draft = await Draft.findOne({ campaignId: campaign._id, userId });
+      if (draft) {
+        draft.title = campaign.name || draft.title;
+        draft.caption = campaign.creative?.captions || campaign.creative?.textContent || draft.caption;
+        draft.hashtags = campaign.creative?.hashtags || draft.hashtags;
+        draft.cta = campaign.creative?.callToAction || draft.cta;
+        draft.imageUrl = campaign.creative?.imageUrls?.[0] || draft.imageUrl;
+        draft.platforms = campaign.platforms || draft.platforms;
+        draft.objective = campaign.objective || draft.objective;
+        draft.tone = campaign.tone || draft.tone;
+        draft.scheduledDate = campaign.scheduling?.startDate || draft.scheduledDate;
+        draft.creative = campaign.creative || draft.creative;
+        await draft.save();
+      }
+    } catch (err) {
+      console.error('Failed to sync campaign update to draft:', err);
     }
     
     // Notifications are automatically scheduled by the background scheduler

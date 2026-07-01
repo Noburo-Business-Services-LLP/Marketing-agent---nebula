@@ -24,7 +24,8 @@ import {
   Layers,
   PlayCircle,
   Brain,
-  CalendarDays
+  CalendarDays,
+  FileText
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { User } from '../types';
@@ -127,6 +128,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
     { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/content-calendar', label: 'Smart Calendar', icon: CalendarDays },
     { path: '/campaigns', label: 'Campaigns', icon: Megaphone },
+    { path: '/drafts', label: 'Drafts', icon: FileText },
     { path: '/influencer-portal', label: 'Influencer Portal', icon: PenTool },
     { path: '/reels', label: 'AI Reels', icon: PlayCircle },
     { path: '/ad-campaigns', label: 'Ad Campaigns', icon: Layers },
@@ -146,6 +148,15 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
         actions: [
           { label: 'Generate Reel', path: '/reels' },
           { label: 'Create Ad Campaign', path: '/ad-campaigns' }
+        ]
+      };
+    }
+    if (pathname.startsWith('/drafts')) {
+      return {
+        title: 'Content Drafts',
+        subtitle: 'Review, edit, and post your auto-saved content drafts.',
+        actions: [
+          { label: 'Create Campaign', path: '/campaigns' }
         ]
       };
     }

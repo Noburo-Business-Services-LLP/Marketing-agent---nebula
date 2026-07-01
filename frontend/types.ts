@@ -167,6 +167,30 @@ export interface Campaign {
   createdAt: string;
 }
 
+export interface Draft {
+  _id: string;
+  title: string;
+  caption: string;
+  hashtags: string[];
+  cta: string;
+  imageUrl: string;
+  imagePrompt?: string;
+  platforms: string[];
+  language: string;
+  tone?: string;
+  objective?: string;
+  scheduledDate?: string;
+  status: 'draft' | 'scheduled' | 'published' | 'archived';
+  sourceType: 'campaign' | 'post' | 'reel' | 'calendar';
+  contentCalendarId?: string;
+  calendarWeek?: number;
+  calendarDay?: number;
+  campaignId?: string;
+  creative?: Campaign['creative'];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ContentCalendarItem {
   _id: string;
   day: number;
