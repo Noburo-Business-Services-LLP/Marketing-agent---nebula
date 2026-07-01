@@ -108,12 +108,16 @@ class PersistentVideoGenerationQueue {
     
     if (this.workerTimer) clearInterval(this.workerTimer);
     
-    // Poll the database for queued jobs every 2 seconds
+    // Poll the database for queued jobs — 2s polling was leaking ~6 MB/min via
+    // constant Mongoose query allocations. enqueue() triggers immediate drain
+    // anyway, so this interval is only a safety net for missed triggers.
+    // 15s = 8x fewer queries, no user-visible latency impact.
+    const drainIntervalMs = Number(process.env.VIDEO_QUEUE_DRAIN_INTERVAL_MS) || 15000;
     this.workerTimer = setInterval(() => {
       this._drainQueue().catch((err) => {
         console.error('⚠️ Persistent Queue drain error:', err.message);
       });
-    }, 2000);
+    }, drainIntervalMs);
     
     this.workerTimer.unref?.();
     console.log(`🚀 Persistent Queue: Background worker successfully started (concurrency = ${this.concurrency})`);
