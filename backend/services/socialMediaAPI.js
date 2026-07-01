@@ -267,16 +267,31 @@ async function makeRequest(url, options = {}) {
       let data = '';
       res.on('data', chunk => data += chunk);
       res.on('end', () => {
-        const bucket = res.statusCode >= 500 ? '5xx'
+        // 429 is its own bucket — that's the counter Ayrshare uses for
+        // auto-suspension (1000 x 429 in 24h → account suspended). Track
+        // it separately from generic 4xx so we can watch the real threshold.
+        const bucket = res.statusCode === 429 ? '429'
+          : res.statusCode >= 500 ? '5xx'
           : res.statusCode >= 400 ? '4xx'
           : res.statusCode >= 200 ? '2xx'
           : '1xx';
         _trackAyrshareCall(url, reqOptions.method, bucket);
+
+        // Log rate-limit headers so we can see how close we are to the 300/5min limit
+        const rlCount = res.headers['x-ratelimit-count'];
+        const rlMax = res.headers['x-ratelimit-max'];
+        if (rlCount && rlMax) {
+          const usedPct = Math.round((Number(rlCount) / Number(rlMax)) * 100);
+          if (usedPct >= 70) {
+            console.warn(`[Ayrshare rate-limit] ${rlCount}/${rlMax} used (${usedPct}%) on ${url}`);
+          }
+        }
+
         try {
           const json = JSON.parse(data);
-          resolve({ status: res.statusCode, data: json });
+          resolve({ status: res.statusCode, data: json, headers: res.headers });
         } catch (e) {
-          resolve({ status: res.statusCode, data: data });
+          resolve({ status: res.statusCode, data: data, headers: res.headers });
         }
       });
     });
@@ -932,10 +947,13 @@ async function getAyrshareUserProfile(profileKey, { bypassCache = false } = {}) 
 
       // Detect suspension / rate-limit: trip the circuit breaker + cache the error long
       const message = String(response.data?.message || '').toLowerCase();
-      const isSuspended = response.status === 403 && (message.includes('suspend') || message.includes('rate limit') || response.data?.code === 168 || response.data?.code === 156);
-      const isRateLimited = response.status === 429;
+      const code = response.data?.code;
+      const isSuspended = response.status === 403 && (message.includes('suspend') || message.includes('rate limit') || code === 168 || code === 156);
+      // 429 = profile rate-limit hit. EXCEPT code:444 which is a platform-side (Facebook/etc)
+      // analytics throttle — that's independent of our Ayrshare profile limits and safe to retry.
+      const isRateLimited = response.status === 429 && code !== 444;
       if (isSuspended || isRateLimited) {
-        markAyrshareSuspended(`status=${response.status} code=${response.data?.code} message=${message.slice(0,80)}`);
+        markAyrshareSuspended(`status=${response.status} code=${code} message=${message.slice(0,80)}`);
       }
 
       const errorResult = {

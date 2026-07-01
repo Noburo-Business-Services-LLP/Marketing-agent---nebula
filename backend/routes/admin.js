@@ -322,13 +322,16 @@ router.get('/ayrshare-usage', adminAuth, async (req, res) => {
       .reduce((sum, r) => sum + (r.count || 0), 0);
 
     const byEndpointToday = {};
-    const byBucketToday = { '2xx': 0, '4xx': 0, '5xx': 0, blocked: 0, error: 0 };
+    const byBucketToday = { '2xx': 0, '429': 0, '4xx': 0, '5xx': 0, blocked: 0, error: 0 };
     rows.filter(r => r.date === today).forEach(r => {
       byEndpointToday[r.endpoint] = (byEndpointToday[r.endpoint] || 0) + r.count;
       if (byBucketToday[r.statusBucket] !== undefined) {
         byBucketToday[r.statusBucket] += r.count;
       }
     });
+
+    // 429 count is what Ayrshare uses to auto-suspend (1000 x 429 in 24h)
+    const rateLimit429sToday = byBucketToday['429'];
 
     const byDay = {};
     rows.forEach(r => {
@@ -343,6 +346,12 @@ router.get('/ayrshare-usage', adminAuth, async (req, res) => {
     res.json({
       success: true,
       today: totalToday,
+      // The metric that actually causes suspension: 429s in 24h.
+      // 1000 x 429 = auto-suspension. This is the real threshold to watch.
+      rateLimit429sToday,
+      suspensionLimit: 1000,
+      percentToSuspension: Math.round((rateLimit429sToday / 1000) * 100),
+      // Kept for backwards-compat with anything checking "today"
       limit: 1000,
       percentUsed: Math.round((totalToday / 1000) * 100),
       killSwitchOn: String(process.env.AYRSHARE_KILL_SWITCH || 'false').toLowerCase() === 'true',

@@ -288,15 +288,18 @@ const AdminDashboard: React.FC = () => {
             {/* Ayrshare Usage Tracker */}
             {ayrshareUsage && (
               <div className="mb-6 bg-white/[0.03] border border-white/[0.06] rounded-2xl p-5">
-                <div className="flex items-start justify-between mb-4">
+                <div className="flex items-start justify-between mb-4 gap-4 flex-wrap">
                   <div>
-                    <p className="text-white/50 text-xs uppercase tracking-wider mb-1">Ayrshare API Calls Today</p>
+                    <p className="text-white/50 text-xs uppercase tracking-wider mb-1">Suspension Risk — 429 errors today</p>
                     <div className="flex items-baseline gap-3">
-                      <p className={`text-4xl font-black ${ayrshareUsage.percentUsed >= 80 ? 'text-red-300' : ayrshareUsage.percentUsed >= 50 ? 'text-yellow-300' : 'text-white'}`}>
-                        {ayrshareUsage.today.toLocaleString()}
+                      <p className={`text-4xl font-black ${ayrshareUsage.percentToSuspension >= 80 ? 'text-red-300' : ayrshareUsage.percentToSuspension >= 50 ? 'text-yellow-300' : 'text-emerald-300'}`}>
+                        {(ayrshareUsage.rateLimit429sToday ?? 0).toLocaleString()}
                       </p>
-                      <p className="text-white/40 text-sm">/ {ayrshareUsage.limit.toLocaleString()} limit ({ayrshareUsage.percentUsed}%)</p>
+                      <p className="text-white/40 text-sm">/ {(ayrshareUsage.suspensionLimit ?? 1000).toLocaleString()} → auto-suspension ({ayrshareUsage.percentToSuspension ?? 0}%)</p>
                     </div>
+                    <p className="text-white/30 text-xs mt-2">
+                      Total calls today: <span className="text-white/60 font-mono">{ayrshareUsage.today.toLocaleString()}</span>
+                    </p>
                   </div>
                   {ayrshareUsage.killSwitchOn && (
                     <span className="px-3 py-1 rounded-full bg-red-500/20 border border-red-500/40 text-red-300 text-xs font-bold uppercase">
@@ -305,11 +308,11 @@ const AdminDashboard: React.FC = () => {
                   )}
                 </div>
 
-                {/* Progress bar */}
+                {/* Progress bar — 429 count vs suspension threshold */}
                 <div className="w-full h-2 bg-white/[0.06] rounded-full overflow-hidden mb-4">
                   <div
-                    className={`h-full transition-all ${ayrshareUsage.percentUsed >= 80 ? 'bg-red-500' : ayrshareUsage.percentUsed >= 50 ? 'bg-yellow-500' : 'bg-emerald-500'}`}
-                    style={{ width: `${Math.min(100, ayrshareUsage.percentUsed)}%` }}
+                    className={`h-full transition-all ${ayrshareUsage.percentToSuspension >= 80 ? 'bg-red-500' : ayrshareUsage.percentToSuspension >= 50 ? 'bg-yellow-500' : 'bg-emerald-500'}`}
+                    style={{ width: `${Math.min(100, ayrshareUsage.percentToSuspension ?? 0)}%` }}
                   />
                 </div>
 
