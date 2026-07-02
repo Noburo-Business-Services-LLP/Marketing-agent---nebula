@@ -120,6 +120,7 @@ const AdminDashboard: React.FC = () => {
   const [coupons, setCoupons] = useState<any[]>([]);
   const [couponForm, setCouponForm] = useState({ code: '', discountedAmount: '5000', maxUses: '1', note: '' });
   const [couponCreating, setCouponCreating] = useState(false);
+  const [ayrshareUsage, setAyrshareUsage] = useState<any>(null);
   const [showHidden, setShowHidden] = useState(false);
   const [hidingUser, setHidingUser] = useState<string | null>(null);
   const [resettingTrial, setResettingTrial] = useState(false);
@@ -131,14 +132,15 @@ const AdminDashboard: React.FC = () => {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [ovRes, usersRes, contentRes, funnelRes, couponsRes] = await Promise.all([
-        adminFetch('/overview'), adminFetch('/users'), adminFetch('/content-stats'), adminFetch('/trial-funnel'), adminFetch('/coupons'),
+      const [ovRes, usersRes, contentRes, funnelRes, couponsRes, ayrRes] = await Promise.all([
+        adminFetch('/overview'), adminFetch('/users'), adminFetch('/content-stats'), adminFetch('/trial-funnel'), adminFetch('/coupons'), adminFetch('/ayrshare-usage'),
       ]);
       if (ovRes.success) setOverview(ovRes.data);
       if (usersRes.success) setUsers(usersRes.data);
       if (contentRes.success) setContentStats(contentRes.data);
       if (funnelRes.success) setTrialFunnel(funnelRes.data);
       if (couponsRes.success) setCoupons(couponsRes.data);
+      if (ayrRes?.success) setAyrshareUsage(ayrRes);
     } catch {}
     setLoading(false);
   }, []);
@@ -283,6 +285,94 @@ const AdminDashboard: React.FC = () => {
           </div>
         ) : (
           <>
+            {/* Ayrshare Usage Tracker */}
+            {ayrshareUsage && (
+              <div className="mb-6 bg-white/[0.03] border border-white/[0.06] rounded-2xl p-5">
+                <div className="flex items-start justify-between mb-4 gap-4 flex-wrap">
+                  <div>
+                    <p className="text-white/50 text-xs uppercase tracking-wider mb-1">Suspension Risk — 429 errors today</p>
+                    <div className="flex items-baseline gap-3">
+                      <p className={`text-4xl font-black ${ayrshareUsage.percentToSuspension >= 80 ? 'text-red-300' : ayrshareUsage.percentToSuspension >= 50 ? 'text-yellow-300' : 'text-emerald-300'}`}>
+                        {(ayrshareUsage.rateLimit429sToday ?? 0).toLocaleString()}
+                      </p>
+                      <p className="text-white/40 text-sm">/ {(ayrshareUsage.suspensionLimit ?? 1000).toLocaleString()} → auto-suspension ({ayrshareUsage.percentToSuspension ?? 0}%)</p>
+                    </div>
+                    <p className="text-white/30 text-xs mt-2">
+                      Total calls today: <span className="text-white/60 font-mono">{ayrshareUsage.today.toLocaleString()}</span>
+                    </p>
+                  </div>
+                  {ayrshareUsage.killSwitchOn && (
+                    <span className="px-3 py-1 rounded-full bg-red-500/20 border border-red-500/40 text-red-300 text-xs font-bold uppercase">
+                      Kill Switch ON
+                    </span>
+                  )}
+                </div>
+
+                {/* Progress bar — 429 count vs suspension threshold */}
+                <div className="w-full h-2 bg-white/[0.06] rounded-full overflow-hidden mb-4">
+                  <div
+                    className={`h-full transition-all ${ayrshareUsage.percentToSuspension >= 80 ? 'bg-red-500' : ayrshareUsage.percentToSuspension >= 50 ? 'bg-yellow-500' : 'bg-emerald-500'}`}
+                    style={{ width: `${Math.min(100, ayrshareUsage.percentToSuspension ?? 0)}%` }}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Status buckets */}
+                  <div>
+                    <p className="text-white/40 text-xs uppercase tracking-wider mb-2">By Result</p>
+                    <div className="flex flex-wrap gap-2">
+                      {Object.entries(ayrshareUsage.byBucketToday).map(([bucket, count]: any) => count > 0 && (
+                        <span key={bucket} className={`px-2 py-1 rounded-lg text-xs font-medium ${
+                          bucket === '2xx' ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20' :
+                          bucket === '4xx' ? 'bg-yellow-500/10 text-yellow-300 border border-yellow-500/20' :
+                          bucket === '5xx' ? 'bg-red-500/10 text-red-300 border border-red-500/20' :
+                          bucket === 'blocked' ? 'bg-orange-500/10 text-orange-300 border border-orange-500/20' :
+                          'bg-white/[0.03] text-white/50 border border-white/[0.06]'
+                        }`}>
+                          {bucket}: {count}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 7-day trend */}
+                  <div>
+                    <p className="text-white/40 text-xs uppercase tracking-wider mb-2">Last 7 days</p>
+                    <div className="flex items-end gap-1 h-12">
+                      {ayrshareUsage.trend.map((d: any) => {
+                        const maxCount = Math.max(1, ...ayrshareUsage.trend.map((x: any) => x.count));
+                        const heightPct = (d.count / maxCount) * 100;
+                        return (
+                          <div key={d.date} className="flex-1 flex flex-col items-center gap-1">
+                            <div className="w-full bg-[#ffcc29]/40 rounded-t" style={{ height: `${heightPct}%`, minHeight: d.count > 0 ? '2px' : '0' }} />
+                            <span className="text-[9px] text-white/30">{d.date.slice(-2)}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Endpoint breakdown */}
+                {Object.keys(ayrshareUsage.byEndpointToday).length > 0 && (
+                  <div className="mt-4 pt-4 border-t border-white/[0.06]">
+                    <p className="text-white/40 text-xs uppercase tracking-wider mb-2">Top Endpoints Today</p>
+                    <div className="space-y-1">
+                      {Object.entries(ayrshareUsage.byEndpointToday)
+                        .sort((a: any, b: any) => b[1] - a[1])
+                        .slice(0, 5)
+                        .map(([ep, count]: any) => (
+                          <div key={ep} className="flex justify-between text-xs">
+                            <span className="text-white/60 font-mono">{ep}</span>
+                            <span className="text-white/80 font-semibold">{count}</span>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Metrics Row */}
             {overview && (
               <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
