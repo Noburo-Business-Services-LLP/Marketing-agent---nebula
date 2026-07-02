@@ -84,6 +84,29 @@ const ContentCalendar: React.FC = () => {
     }
   };
 
+  const getActiveWeekNumber = (): number => {
+    const day = new Date().getDate();
+    if (day <= 7) return 1;
+    if (day <= 14) return 2;
+    if (day <= 21) return 3;
+    return 4;
+  };
+
+  const handleGenerateWeekContent = async () => {
+    if (!calendar) return;
+    const weekNum = getActiveWeekNumber();
+    setSaving(`week-${weekNum}`);
+    try {
+      const res = await contentCalendarAPI.autoGenerateWeek(calendar._id, weekNum);
+      alert(res.message || `Week ${weekNum} content generation queued in the background.`);
+      loadCalendar();
+    } catch (err: any) {
+      alert(err.message || 'Failed to trigger weekly content generation');
+    } finally {
+      setSaving('');
+    }
+  };
+
   const allItems = useMemo(
     () => (calendar?.weeks || []).flatMap((week) => week.items || []),
     [calendar]
