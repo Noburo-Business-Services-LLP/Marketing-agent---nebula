@@ -4598,8 +4598,7 @@ Return ONLY the caption text with hashtags. No JSON, no explanations.`;
 
     // Call Gemini with vision
     const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-    const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent';
-    
+
     const requestBody = {
       contents: [{
         parts: [
@@ -4617,46 +4616,74 @@ Return ONLY the caption text with hashtags. No JSON, no explanations.`;
         maxOutputTokens: 500
       }
     };
-    
+
     const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
 
-    // Retry wrapper — Google's API occasionally cuts gzip streams mid-response (ERR_STREAM_PREMATURE_CLOSE).
-    // Identity encoding sidesteps the node-fetch gzip bug; retry handles genuine network blips.
-    let response, data, lastErr;
-    const maxAttempts = 3;
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      try {
-        response = await fetch(`${apiUrl}?key=${GEMINI_API_KEY}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept-Encoding': 'identity'
-          },
-          body: JSON.stringify(requestBody),
-          timeout: 60000
-        });
-        data = await response.json();
-        lastErr = null;
-        break;
-      } catch (err) {
-        lastErr = err;
-        const isTransient = err.code === 'ERR_STREAM_PREMATURE_CLOSE'
-          || err.type === 'system'
-          || err.code === 'ETIMEDOUT'
-          || err.code === 'ECONNRESET';
-        console.warn(`Gemini caption fetch attempt ${attempt}/${maxAttempts} failed:`, err.code || err.message);
-        if (!isTransient || attempt === maxAttempts) throw err;
-        await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt - 1)));
+    // Model fallback chain — if the primary model returns 503 "high demand" or
+    // the response is missing a caption, we cycle to the next model instead of
+    // failing the whole request.
+    const modelChain = [
+      'gemini-2.5-flash-lite',
+      'gemini-2.5-flash',
+      'gemini-flash-latest'
+    ];
+    let response, data, usedModel = null;
+    for (const model of modelChain) {
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+      // Retry wrapper — Google's API occasionally cuts gzip streams mid-response
+      // (ERR_STREAM_PREMATURE_CLOSE). Identity encoding sidesteps the node-fetch
+      // gzip bug; retry handles genuine network blips.
+      const maxAttempts = 3;
+      let attemptErr = null;
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+          response = await fetch(`${apiUrl}?key=${GEMINI_API_KEY}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept-Encoding': 'identity'
+            },
+            body: JSON.stringify(requestBody),
+            timeout: 60000
+          });
+          data = await response.json();
+          attemptErr = null;
+          break;
+        } catch (err) {
+          attemptErr = err;
+          const isTransient = err.code === 'ERR_STREAM_PREMATURE_CLOSE'
+            || err.type === 'system'
+            || err.code === 'ETIMEDOUT'
+            || err.code === 'ECONNRESET';
+          console.warn(`Gemini caption fetch attempt ${attempt}/${maxAttempts} (${model}) failed:`, err.code || err.message);
+          if (!isTransient || attempt === maxAttempts) break;
+          await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt - 1)));
+        }
       }
+      if (attemptErr) continue; // network fail on all attempts, try next model
+      // 503 / 429 = model overloaded → try next model in chain
+      if (response.status === 503 || response.status === 429) {
+        console.warn(`Gemini ${model} returned ${response.status} — falling back to next model.`);
+        continue;
+      }
+      if (!response.ok) {
+        // Non-retryable error, break and report
+        break;
+      }
+      usedModel = model;
+      break;
     }
 
-    if (!response.ok) {
-      console.error('Gemini caption error:', data);
-      return res.status(500).json({
+    if (!response || !response.ok) {
+      const message = data?.error?.message || 'AI is experiencing high demand across all models. Please try again shortly.';
+      console.error('Gemini caption error after fallback:', message);
+      return res.status(503).json({
         success: false,
-        message: data.error?.message || 'Failed to generate caption'
+        message,
+        retryable: true
       });
     }
+    console.log(`Caption generated with model: ${usedModel}`);
     
     // Extract caption from response
     const caption = data.candidates?.[0]?.content?.parts?.[0]?.text || '';

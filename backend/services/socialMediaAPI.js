@@ -14,6 +14,19 @@ const APIFY_API_KEY = process.env.APIFY_API_KEY;
 // Cache for API responses
 const apiCache = new Map();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+// Longer TTL when Ayrshare returns 403/429/suspended — stops us hammering a broken account
+const ERROR_CACHE_TTL = Number(process.env.AYRSHARE_ERROR_CACHE_TTL_MS || 30 * 60 * 1000); // 30 minutes
+// Global circuit breaker: once Ayrshare reports "account suspended", refuse all outgoing calls
+// for this duration and serve cached data only. Prevents the runaway loop that caused suspension.
+const SUSPENSION_LOCKOUT_MS = Number(process.env.AYRSHARE_SUSPENSION_LOCKOUT_MS || 60 * 60 * 1000); // 1 hour
+let ayrshareSuspendedUntil = 0;
+function markAyrshareSuspended(reason = '') {
+  ayrshareSuspendedUntil = Date.now() + SUSPENSION_LOCKOUT_MS;
+  console.warn(`[Ayrshare CIRCUIT BREAKER] Suspension detected (${reason}). Blocking outgoing calls until ${new Date(ayrshareSuspendedUntil).toISOString()}`);
+}
+function isAyrshareSuspended() {
+  return Date.now() < ayrshareSuspendedUntil;
+}
 const VIDEO_EXTENSIONS = new Set(['mp4', 'mov', 'm4v', 'webm']);
 
 function isRetriableNetworkError(error) {
@@ -193,7 +206,45 @@ async function enforceRateLimit(url) {
 /**
  * Generic HTTP request helper
  */
+// Tracker: fire-and-forget upsert of daily Ayrshare API call counter.
+// Never throws, never blocks the request. Records go to ayrshare_api_calls collection.
+function _trackAyrshareCall(url, method, statusBucket) {
+  try {
+    if (typeof url !== 'string' || !url.includes('api.ayrshare.com')) return;
+    const AyrshareApiCall = require('../models/AyrshareApiCall');
+    const parsed = new URL(url);
+    const endpoint = parsed.pathname.replace(/\/[a-f0-9-]{16,}$/i, '/:id'); // normalize IDs
+    const date = new Date().toISOString().slice(0, 10); // UTC YYYY-MM-DD
+    AyrshareApiCall.updateOne(
+      { date, endpoint, method: String(method || 'GET').toUpperCase(), statusBucket },
+      { $inc: { count: 1 }, $set: { lastCalledAt: new Date() } },
+      { upsert: true }
+    ).catch(() => {});
+  } catch (_) {}
+}
+
 async function makeRequest(url, options = {}) {
+  // GLOBAL AYRSHARE KILL SWITCH
+  // Set AYRSHARE_KILL_SWITCH=true in env to block ALL Ayrshare API calls at the source.
+  // Returns a fake 503 with a suspended-shaped payload so upstream code (including our
+  // circuit breaker) handles it identically to a real suspension.
+  if (
+    String(process.env.AYRSHARE_KILL_SWITCH || 'false').toLowerCase() === 'true'
+    && typeof url === 'string'
+    && url.includes('api.ayrshare.com')
+  ) {
+    console.warn(`[AYRSHARE KILL SWITCH] Blocked outgoing call to ${url}`);
+    _trackAyrshareCall(url, options.method, 'blocked');
+    return {
+      status: 503,
+      data: {
+        status: 'error',
+        code: 999,
+        message: 'Ayrshare calls disabled by AYRSHARE_KILL_SWITCH env var'
+      }
+    };
+  }
+
   await enforceRateLimit(url);
 
   return new Promise((resolve, reject) => {
@@ -216,17 +267,41 @@ async function makeRequest(url, options = {}) {
       let data = '';
       res.on('data', chunk => data += chunk);
       res.on('end', () => {
+        // 429 is its own bucket — that's the counter Ayrshare uses for
+        // auto-suspension (1000 x 429 in 24h → account suspended). Track
+        // it separately from generic 4xx so we can watch the real threshold.
+        const bucket = res.statusCode === 429 ? '429'
+          : res.statusCode >= 500 ? '5xx'
+          : res.statusCode >= 400 ? '4xx'
+          : res.statusCode >= 200 ? '2xx'
+          : '1xx';
+        _trackAyrshareCall(url, reqOptions.method, bucket);
+
+        // Log rate-limit headers so we can see how close we are to the 300/5min limit
+        const rlCount = res.headers['x-ratelimit-count'];
+        const rlMax = res.headers['x-ratelimit-max'];
+        if (rlCount && rlMax) {
+          const usedPct = Math.round((Number(rlCount) / Number(rlMax)) * 100);
+          if (usedPct >= 70) {
+            console.warn(`[Ayrshare rate-limit] ${rlCount}/${rlMax} used (${usedPct}%) on ${url}`);
+          }
+        }
+
         try {
           const json = JSON.parse(data);
-          resolve({ status: res.statusCode, data: json });
+          resolve({ status: res.statusCode, data: json, headers: res.headers });
         } catch (e) {
-          resolve({ status: res.statusCode, data: data });
+          resolve({ status: res.statusCode, data: data, headers: res.headers });
         }
       });
     });
-    
-    req.on('error', reject);
+
+    req.on('error', (err) => {
+      _trackAyrshareCall(url, reqOptions.method, 'error');
+      reject(err);
+    });
     req.on('timeout', () => {
+      _trackAyrshareCall(url, reqOptions.method, 'error');
       req.destroy();
       reject(new Error('Request timeout'));
     });
@@ -818,14 +893,29 @@ async function generateAyrshareJWT(user, options = {}) {
  * @param {string} profileKey - The user's Ayrshare Profile Key
  * @returns {Promise<{success: boolean, data?: object, error?: string}>}
  */
-async function getAyrshareUserProfile(profileKey) {
+async function getAyrshareUserProfile(profileKey, { bypassCache = false } = {}) {
   if (!AYRSHARE_API_KEY) {
     return { success: false, error: 'API not configured' };
   }
 
   const cacheKey = `ayrshare_user_profile_${profileKey}`;
-  const cached = getCached(cacheKey);
-  if (cached) return cached;
+
+  // Cache hit path — return immediately, no Ayrshare call
+  if (!bypassCache) {
+    const cached = getCached(cacheKey);
+    if (cached) return cached;
+  }
+
+  // Circuit breaker: if we've detected suspension recently, don't call Ayrshare AT ALL.
+  // Serve whatever's in cache (even if expired) or a clean error.
+  if (isAyrshareSuspended()) {
+    const stale = apiCache.get(cacheKey);
+    if (stale) {
+      console.warn(`[Ayrshare CIRCUIT BREAKER] Using stale cache for ${profileKey.substring(0,8)}... (suspension lockout active)`);
+      return stale.data;
+    }
+    return { success: false, error: 'Ayrshare temporarily unavailable (suspension lockout active)' };
+  }
 
   const maxRetries = 2;
   const retryDelayBaseMs = 500;
@@ -850,15 +940,32 @@ async function getAyrshareUserProfile(profileKey) {
           data: response.data,
           activeSocialAccounts: response.data?.activeSocialAccounts || response.data?.grants || response.data?.profiles || []
         };
-        apiCache.set(cacheKey, { data: result, timestamp: Date.now() - CACHE_TTL + 5000 });
-        console.log(`[Ayrshare API] Raw /api/user response for Profile-Key ${profileKey.substring(0,8)}...:`, JSON.stringify(response.data, null, 2));
+        // FIX: cache with current timestamp so it actually lasts CACHE_TTL (was 5 sec due to a bug)
+        apiCache.set(cacheKey, { data: result, timestamp: Date.now() });
         return result;
       }
 
-      return {
+      // Detect suspension / rate-limit: trip the circuit breaker + cache the error long
+      const message = String(response.data?.message || '').toLowerCase();
+      const code = response.data?.code;
+      const isSuspended = response.status === 403 && (message.includes('suspend') || message.includes('rate limit') || code === 168 || code === 156);
+      // 429 = profile rate-limit hit. EXCEPT code:444 which is a platform-side (Facebook/etc)
+      // analytics throttle — that's independent of our Ayrshare profile limits and safe to retry.
+      const isRateLimited = response.status === 429 && code !== 444;
+      if (isSuspended || isRateLimited) {
+        markAyrshareSuspended(`status=${response.status} code=${code} message=${message.slice(0,80)}`);
+      }
+
+      const errorResult = {
         success: false,
-        error: response.data?.message || 'Failed to get user profile'
+        error: response.data?.message || 'Failed to get user profile',
+        status: response.status,
+        code: response.data?.code || null
       };
+      // Cache errors too so we don't retry a suspended profile every few seconds
+      const ttlMs = (isSuspended || isRateLimited) ? ERROR_CACHE_TTL : CACHE_TTL;
+      apiCache.set(cacheKey, { data: errorResult, timestamp: Date.now() - (CACHE_TTL - ttlMs) });
+      return errorResult;
     } catch (error) {
       lastError = error;
       if (attempt < maxRetries && isRetriableNetworkError(error)) {

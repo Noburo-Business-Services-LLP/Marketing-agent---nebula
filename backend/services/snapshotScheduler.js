@@ -21,6 +21,11 @@ class SnapshotScheduler {
       console.log('⚠️  Snapshot scheduler already running');
       return;
     }
+    // Kill switch — disable via env var to stop Ayrshare polling from this cron entirely
+    if (String(process.env.AYRSHARE_SNAPSHOT_ENABLED || 'true').toLowerCase() === 'false') {
+      console.log('🛑 Snapshot scheduler disabled via AYRSHARE_SNAPSHOT_ENABLED=false');
+      return;
+    }
     console.log('📊 Starting analytics snapshot scheduler...');
 
     // Run once on startup (after 60s delay to let other services initialize)
