@@ -24,7 +24,9 @@ import {
   Layers,
   PlayCircle,
   Brain,
-  CalendarDays
+  CalendarDays,
+  FileText,
+  PenLine
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { User } from '../types';
