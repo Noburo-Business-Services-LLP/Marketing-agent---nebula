@@ -27,6 +27,14 @@ function markAyrshareSuspended(reason = '') {
 function isAyrshareSuspended() {
   return Date.now() < ayrshareSuspendedUntil;
 }
+function getAyrshareCircuitBreakerState() {
+  const now = Date.now();
+  return {
+    tripped: now < ayrshareSuspendedUntil,
+    suspendedUntil: ayrshareSuspendedUntil > 0 ? new Date(ayrshareSuspendedUntil).toISOString() : null,
+    remainingSeconds: ayrshareSuspendedUntil > now ? Math.round((ayrshareSuspendedUntil - now) / 1000) : 0
+  };
+}
 const VIDEO_EXTENSIONS = new Set(['mp4', 'mov', 'm4v', 'webm']);
 
 function isRetriableNetworkError(error) {
@@ -2580,6 +2588,7 @@ async function updateAd(profileKey, adId, params = {}) {
 
 module.exports = {
   // Ayrshare functions
+  getAyrshareCircuitBreakerState,
   postToSocialMedia,
   getAyrshareAnalytics,
   getUserSocialAnalytics,

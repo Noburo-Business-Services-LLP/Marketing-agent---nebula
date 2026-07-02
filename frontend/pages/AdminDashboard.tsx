@@ -370,6 +370,87 @@ const AdminDashboard: React.FC = () => {
                     </div>
                   </div>
                 )}
+
+                {/* Safeguard telemetry */}
+                <div className="mt-4 pt-4 border-t border-white/[0.06] grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {/* Circuit breaker */}
+                  <div className={`rounded-lg p-3 border ${
+                    ayrshareUsage.circuitBreaker?.tripped
+                      ? 'bg-red-500/10 border-red-500/30'
+                      : 'bg-emerald-500/5 border-emerald-500/20'
+                  }`}>
+                    <p className="text-white/40 text-[10px] uppercase tracking-wider mb-1">Circuit Breaker</p>
+                    <p className={`text-lg font-bold ${
+                      ayrshareUsage.circuitBreaker?.tripped ? 'text-red-300' : 'text-emerald-300'
+                    }`}>
+                      {ayrshareUsage.circuitBreaker?.tripped ? 'TRIPPED' : 'CLOSED'}
+                    </p>
+                    {ayrshareUsage.circuitBreaker?.tripped && (
+                      <p className="text-white/50 text-[10px] mt-1">
+                        Unlocks in {Math.round(ayrshareUsage.circuitBreaker.remainingSeconds / 60)} min
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Auto-cancelled campaigns today */}
+                  <div className={`rounded-lg p-3 border ${
+                    (ayrshareUsage.campaignFailures?.autoCancelledToday ?? 0) > 0
+                      ? 'bg-yellow-500/10 border-yellow-500/30'
+                      : 'bg-white/[0.03] border-white/[0.06]'
+                  }`}>
+                    <p className="text-white/40 text-[10px] uppercase tracking-wider mb-1">Auto-Cancelled Today</p>
+                    <p className={`text-lg font-bold ${
+                      (ayrshareUsage.campaignFailures?.autoCancelledToday ?? 0) > 0 ? 'text-yellow-300' : 'text-white/80'
+                    }`}>
+                      {ayrshareUsage.campaignFailures?.autoCancelledToday ?? 0}
+                    </p>
+                    <p className="text-white/50 text-[10px] mt-1">
+                      {ayrshareUsage.campaignFailures?.autoCancelledTotal ?? 0} total ever
+                    </p>
+                  </div>
+
+                  {/* At-risk campaigns */}
+                  <div className={`rounded-lg p-3 border ${
+                    (ayrshareUsage.campaignFailures?.atRiskCampaigns ?? 0) > 0
+                      ? 'bg-orange-500/10 border-orange-500/30'
+                      : 'bg-white/[0.03] border-white/[0.06]'
+                  }`}>
+                    <p className="text-white/40 text-[10px] uppercase tracking-wider mb-1">At Risk</p>
+                    <p className={`text-lg font-bold ${
+                      (ayrshareUsage.campaignFailures?.atRiskCampaigns ?? 0) > 0 ? 'text-orange-300' : 'text-white/80'
+                    }`}>
+                      {ayrshareUsage.campaignFailures?.atRiskCampaigns ?? 0}
+                    </p>
+                    <p className="text-white/50 text-[10px] mt-1">1-2 fails, retrying</p>
+                  </div>
+                </div>
+
+                {/* Recent auto-cancels */}
+                {(ayrshareUsage.campaignFailures?.recentAutoCancels?.length ?? 0) > 0 && (
+                  <div className="mt-4 pt-4 border-t border-white/[0.06]">
+                    <p className="text-white/40 text-xs uppercase tracking-wider mb-2">Recent Auto-Cancelled Campaigns</p>
+                    <div className="space-y-2">
+                      {ayrshareUsage.campaignFailures.recentAutoCancels.map((c: any) => (
+                        <div key={c._id} className="flex items-start justify-between gap-3 text-xs">
+                          <div className="min-w-0 flex-1">
+                            <p className="text-white/80 font-medium truncate">{c.name || '(no name)'}</p>
+                            <p className="text-white/40 text-[10px] font-mono truncate mt-0.5">
+                              {(c.platforms || []).join(', ')} • {c.publishFailureCount} fails
+                            </p>
+                            {c.lastPublishError && (
+                              <p className="text-red-300/70 text-[10px] truncate mt-0.5">
+                                {String(c.lastPublishError).slice(0, 100)}
+                              </p>
+                            )}
+                          </div>
+                          <span className="text-white/40 text-[10px] shrink-0">
+                            {new Date(c.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

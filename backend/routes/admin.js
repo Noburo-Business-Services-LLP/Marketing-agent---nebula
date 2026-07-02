@@ -343,6 +343,32 @@ router.get('/ayrshare-usage', adminAuth, async (req, res) => {
       trend.push({ date: d, count: byDay[d] || 0 });
     }
 
+    // Circuit breaker state
+    let circuitBreaker = { tripped: false, suspendedUntil: null, remainingSeconds: 0 };
+    try {
+      const { getAyrshareCircuitBreakerState } = require('../services/socialMediaAPI');
+      circuitBreaker = getAyrshareCircuitBreakerState();
+    } catch (_) {}
+
+    // Campaign publish-failure health — the metric that caused today's post-error suspension
+    const Campaign = require('../models/Campaign');
+    const startOfToday = new Date();
+    startOfToday.setUTCHours(0, 0, 0, 0);
+    const [autoCancelledToday, autoCancelledTotal, atRiskCampaigns, recentAutoCancels] = await Promise.all([
+      Campaign.countDocuments({ publishAutoCancelled: true, updatedAt: { $gte: startOfToday } }),
+      Campaign.countDocuments({ publishAutoCancelled: true }),
+      Campaign.countDocuments({
+        publishFailureCount: { $gte: 1 },
+        status: 'scheduled',
+        publishAutoCancelled: { $ne: true }
+      }),
+      Campaign.find({ publishAutoCancelled: true })
+        .sort({ updatedAt: -1 })
+        .limit(5)
+        .select('_id name userId platforms lastPublishError publishFailureCount updatedAt')
+        .lean()
+    ]);
+
     res.json({
       success: true,
       today: totalToday,
@@ -357,7 +383,15 @@ router.get('/ayrshare-usage', adminAuth, async (req, res) => {
       killSwitchOn: String(process.env.AYRSHARE_KILL_SWITCH || 'false').toLowerCase() === 'true',
       byEndpointToday,
       byBucketToday,
-      trend
+      trend,
+      // New safeguard telemetry
+      circuitBreaker,
+      campaignFailures: {
+        autoCancelledToday,
+        autoCancelledTotal,
+        atRiskCampaigns, // campaigns with 1-2 failures still in the retry window
+        recentAutoCancels
+      }
     });
   } catch (err) {
     console.error('ayrshare-usage error:', err);
