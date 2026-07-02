@@ -180,7 +180,8 @@ export interface Draft {
   tone?: string;
   objective?: string;
   scheduledDate?: string;
-  status: 'draft' | 'scheduled' | 'published' | 'archived';
+  status: 'draft' | 'scheduled' | 'published' | 'archived' | 'processing' | 'completed' | 'failed';
+  errorMessage?: string;
   sourceType: 'campaign' | 'post' | 'reel' | 'calendar';
   contentType?: 'campaign' | 'post' | 'reel';
   contentCalendarId?: string;

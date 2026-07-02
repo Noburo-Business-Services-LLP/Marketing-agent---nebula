@@ -1,6 +1,7 @@
 const Draft = require('../models/Draft');
 const ContentCalendar = require('../models/ContentCalendar');
 const Campaign = require('../models/Campaign');
+const User = require('../models/User');
 const { callGemini, parseGeminiJSON, generateCampaignImageNanoBanana } = require('./geminiAI');
 
 const queue = [];
@@ -138,42 +139,46 @@ async function processQueue() {
 
   const job = queue.shift();
   try {
-    const { calendarId, weekNumber } = job;
-    console.log(`[BackgroundQueue] Starting weekly job for Calendar ${calendarId}, Week ${weekNumber}`);
+    if (job.type === 'generate_campaign_image' || job.type === 'generate_post_image') {
+      await processDraftImageGenerationJob(job);
+    } else {
+      const { calendarId, weekNumber } = job;
+      console.log(`[BackgroundQueue] Starting weekly job for Calendar ${calendarId}, Week ${weekNumber}`);
 
-    const calendar = await ContentCalendar.findById(calendarId);
-    if (!calendar) {
-      console.error(`[BackgroundQueue] Calendar not found: ${calendarId}`);
-      processing = false;
-      setTimeout(processQueue, 1000);
-      return;
-    }
-
-    const week = calendar.weeks.find(w => w.weekNumber === weekNumber);
-    if (!week || !week.items || week.items.length === 0) {
-      console.error(`[BackgroundQueue] Week ${weekNumber} items not found in calendar`);
-      processing = false;
-      setTimeout(processQueue, 1000);
-      return;
-    }
-
-    for (const item of week.items) {
-      // Skip if already generated, scheduled, or published
-      if (item.status === 'scheduled' || item.status === 'published' || item.status === 'generated') {
-        continue;
+      const calendar = await ContentCalendar.findById(calendarId);
+      if (!calendar) {
+        console.error(`[BackgroundQueue] Calendar not found: ${calendarId}`);
+        processing = false;
+        setTimeout(processQueue, 1000);
+        return;
       }
 
-      try {
-        await generateSingleCalendarItem(calendar, item, weekNumber);
-        await calendar.save();
-      } catch (err) {
-        console.error(`[BackgroundQueue] Failed to process calendar item:`, err.message);
+      const week = calendar.weeks.find(w => w.weekNumber === weekNumber);
+      if (!week || !week.items || week.items.length === 0) {
+        console.error(`[BackgroundQueue] Week ${weekNumber} items not found in calendar`);
+        processing = false;
+        setTimeout(processQueue, 1000);
+        return;
       }
-    }
 
-    calendar.lastAutoRunAt = new Date();
-    await calendar.save();
-    console.log(`[BackgroundQueue] Completed weekly job for Calendar ${calendarId}, Week ${weekNumber}`);
+      for (const item of week.items) {
+        // Skip if already generated, scheduled, or published
+        if (item.status === 'scheduled' || item.status === 'published' || item.status === 'generated') {
+          continue;
+        }
+
+        try {
+          await generateSingleCalendarItem(calendar, item, weekNumber);
+          await calendar.save();
+        } catch (err) {
+          console.error(`[BackgroundQueue] Failed to process calendar item:`, err.message);
+        }
+      }
+
+      calendar.lastAutoRunAt = new Date();
+      await calendar.save();
+      console.log(`[BackgroundQueue] Completed weekly job for Calendar ${calendarId}, Week ${weekNumber}`);
+    }
   } catch (error) {
     console.error('[BackgroundQueue] Job error:', error.message);
   } finally {
@@ -182,12 +187,68 @@ async function processQueue() {
   }
 }
 
+async function processDraftImageGenerationJob(job) {
+  const { draftId } = job;
+  console.log(`[BackgroundQueue] Processing image generation for Draft ${draftId}`);
+  
+  try {
+    const draft = await Draft.findById(draftId);
+    if (!draft) {
+      console.error(`[BackgroundQueue] Draft not found: ${draftId}`);
+      return;
+    }
+
+    const user = await User.findById(draft.userId);
+    const bp = user?.businessProfile || {};
+
+    const imageResult = await generateCampaignImageNanoBanana(draft.imagePrompt || draft.caption || 'A creative poster', {
+      aspectRatio: job.aspectRatio || '1:1',
+      brandName: user?.companyName || 'Brand',
+      industry: bp.industry || '',
+      tone: bp.tone || 'professional'
+    });
+
+    const finalImageUrl = typeof imageResult === 'string' ? imageResult : imageResult?.imageUrl;
+
+    if (finalImageUrl) {
+      draft.imageUrl = finalImageUrl;
+      draft.status = 'completed';
+      draft.errorMessage = '';
+      
+      // Update creative field if it exists
+      if (!draft.creative) draft.creative = {};
+      draft.creative = {
+        ...draft.creative,
+        imageUrls: [finalImageUrl]
+      };
+      draft.markModified('creative');
+      
+      await draft.save();
+      console.log(`[BackgroundQueue] Image generated successfully for Draft ${draftId}: ${finalImageUrl}`);
+    } else {
+      throw new Error(imageResult?.error || 'Failed to generate image URL');
+    }
+  } catch (error) {
+    console.error(`[BackgroundQueue] Error in background image generation for Draft ${draftId}:`, error);
+    try {
+      await Draft.findByIdAndUpdate(draftId, {
+        $set: {
+          status: 'failed',
+          errorMessage: error.message || 'Unknown error during image generation'
+        }
+      });
+    } catch (dbErr) {
+      console.error(`[BackgroundQueue] Failed to update draft status to failed:`, dbErr);
+    }
+  }
+}
+
 /**
  * Enqueue a new background weekly generation job
  */
 function enqueue(job) {
   queue.push(job);
-  console.log(`[BackgroundQueue] Enqueued job: Calendar ${job.calendarId}, Week ${job.weekNumber}. Queue length: ${queue.length}`);
+  console.log(`[BackgroundQueue] Enqueued job: Type=${job.type || 'weekly_calendar'}, DraftId=${job.draftId || 'N/A'}. Queue length: ${queue.length}`);
   processQueue();
 }
 
