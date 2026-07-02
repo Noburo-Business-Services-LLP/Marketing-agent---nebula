@@ -1499,8 +1499,7 @@ export const apiService = {
           platform: platform || 'instagram',
           language: context?.language || 'English',
           selectedProducts: context?.selectedProducts || [],
-          prompt: context?.prompt || '',
-          language: context?.language || 'English'
+          prompt: context?.prompt || ''
         })
       },
       true
@@ -3970,6 +3969,26 @@ export const draftsAPI = {
 
   regenerateDraft: async (id: string): Promise<{ success: boolean; message: string }> => {
     return apiCall(`/drafts/${encodeURIComponent(id)}/regenerate`, {
+      method: 'POST'
+    }, true);
+  },
+
+  generateImageBg: async (data: {
+    type: 'campaign' | 'post';
+    title: string;
+    caption: string;
+    hashtags: string[];
+    prompt: string;
+    aspectRatio?: string;
+  }): Promise<{ success: boolean; draftId: string; draft: Draft }> => {
+    return apiCall('/drafts/generate-image-bg', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }, true);
+  },
+
+  retryImageGeneration: async (id: string): Promise<{ success: boolean; draft: Draft }> => {
+    return apiCall(`/drafts/${encodeURIComponent(id)}/retry-image`, {
       method: 'POST'
     }, true);
   }

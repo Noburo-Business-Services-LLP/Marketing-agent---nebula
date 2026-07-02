@@ -84,6 +84,24 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
 
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [isRejecting, setIsRejecting] = useState(false);
+  const [isRetryingImage, setIsRetryingImage] = useState(false);
+
+  const handleRetryImage = async () => {
+    setIsRetryingImage(true);
+    setErrorMsg('');
+    setSuccessMsg('');
+    try {
+      await draftsAPI.retryImageGeneration(draft._id);
+      setSuccessMsg('Re-queued image generation in background!');
+      setTimeout(() => {
+        onSuccess();
+      }, 1500);
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Failed to retry image generation.');
+    } finally {
+      setIsRetryingImage(false);
+    }
+  };
 
   const handleReject = async () => {
     if (window.confirm('Are you sure you want to reject this draft? It will be archived.')) {
@@ -351,7 +369,29 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
             <div>
               <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Image Preview</label>
               <div className="relative aspect-square w-full rounded-2xl bg-[#070A12]/60 border border-slate-800 overflow-hidden flex items-center justify-center">
-                {imageUrl ? (
+                {draft.status === 'processing' ? (
+                  <div className="text-slate-400 text-sm flex flex-col items-center p-6 text-center">
+                    <Loader2 className="w-10 h-10 text-[#ffcc29] animate-spin mb-3" />
+                    <span>Generating image in background...</span>
+                  </div>
+                ) : draft.status === 'failed' ? (
+                  <div className="text-red-400 text-sm flex flex-col items-center p-6 text-center gap-3">
+                    <span className="text-3xl">⚠️</span>
+                    <div>
+                      <p className="font-semibold">Generation Failed</p>
+                      {draft.errorMessage && <p className="text-xs text-slate-500 mt-1 max-w-[200px] truncate">{draft.errorMessage}</p>}
+                    </div>
+                    <button
+                      type="button"
+                      disabled={isRetryingImage}
+                      onClick={handleRetryImage}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-[#ffcc29] text-[#070A12] text-xs font-semibold rounded-lg hover:bg-[#e6b825] disabled:opacity-50"
+                    >
+                      {isRetryingImage ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+                      Retry Generation
+                    </button>
+                  </div>
+                ) : imageUrl ? (
                   <img 
                     src={imageUrl} 
                     alt="Draft Creative" 

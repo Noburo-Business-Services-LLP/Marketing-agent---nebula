@@ -52,9 +52,13 @@ const draftSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['draft', 'scheduled', 'published', 'archived'],
+    enum: ['draft', 'scheduled', 'published', 'archived', 'processing', 'completed', 'failed'],
     default: 'draft',
     index: true
+  },
+  errorMessage: {
+    type: String,
+    default: ''
   },
   sourceType: {
     type: String,
