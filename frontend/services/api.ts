@@ -1,6 +1,4 @@
-import { AuthResponse, BusinessProfile, Campaign, ContentCalendar, ContentCalendarItem, DashboardData, SocialConnection, User } from '../types';
-
-type CampaignInput = Partial<Campaign> & { tone?: string | null };
+import { AuthResponse, BusinessProfile, Campaign, ContentCalendar, ContentCalendarItem, DashboardData, SocialConnection, User, Draft } from '../types';
 
 type CampaignInput = Partial<Campaign> & { tone?: string | null };
 
@@ -528,6 +526,14 @@ export const apiService = {
       true
     );
     return response;
+  },
+
+  getContentStrategy: async (): Promise<{ success: boolean; html?: string; error?: string }> => {
+    return await apiCall<{ success: boolean; html?: string; error?: string }>(
+      '/dashboard/content-strategy',
+      { method: 'GET' },
+      true
+    );
   },
 
   changePassword: async (currentPassword: string, newPassword: string): Promise<{ success: boolean; token?: string }> => {
@@ -1493,7 +1499,8 @@ export const apiService = {
           platform: platform || 'instagram',
           language: context?.language || 'English',
           selectedProducts: context?.selectedProducts || [],
-          prompt: context?.prompt || ''
+          prompt: context?.prompt || '',
+          language: context?.language || 'English'
         })
       },
       true
@@ -3532,6 +3539,20 @@ export const contentCalendarAPI = {
       method: 'POST',
       body: JSON.stringify({ orderedIds })
     }, true);
+  },
+
+  autoGenerateWeek: async (calendarId: string, weekNumber: number): Promise<{ success: boolean; message: string }> => {
+    return apiCall(`/content-calendar/${encodeURIComponent(calendarId)}/auto-generate-week`, {
+      method: 'POST',
+      body: JSON.stringify({ weekNumber })
+    }, true);
+  },
+
+  getWeeklyDrafts: async (calendarId: string, weekNumber?: number): Promise<{ success: boolean; drafts: Draft[] }> => {
+    const query = weekNumber ? `?week=${weekNumber}` : '';
+    return apiCall(`/content-calendar/${encodeURIComponent(calendarId)}/weekly-drafts${query}`, {
+      method: 'GET'
+    }, true);
   }
 };
 
@@ -3889,3 +3910,68 @@ export const inboxAPI = {
     return adapter;
   },
 };
+
+export const draftsAPI = {
+  saveDraft: async (data: any): Promise<{ draft: Draft }> => {
+    return apiCall('/drafts/save', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }, true);
+  },
+
+  getDrafts: async (status?: string, type?: string): Promise<{ drafts: Draft[] }> => {
+    const params = [];
+    if (status) params.push(`status=${encodeURIComponent(status)}`);
+    if (type) params.push(`type=${encodeURIComponent(type)}`);
+    const query = params.length > 0 ? `?${params.join('&')}` : '';
+    return apiCall(`/drafts${query}`, {
+      method: 'GET'
+    }, true);
+  },
+
+  getDraft: async (id: string): Promise<{ draft: Draft }> => {
+    return apiCall(`/drafts/${encodeURIComponent(id)}`, {
+      method: 'GET'
+    }, true);
+  },
+
+  updateDraft: async (id: string, data: any): Promise<{ draft: Draft }> => {
+    return apiCall(`/drafts/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    }, true);
+  },
+
+  scheduleDraft: async (id: string, scheduledDate: string): Promise<{ draft: Draft }> => {
+    return apiCall(`/drafts/${encodeURIComponent(id)}/schedule`, {
+      method: 'POST',
+      body: JSON.stringify({ scheduledDate })
+    }, true);
+  },
+
+  publishDraft: async (id: string, platforms?: string[]): Promise<{ success: boolean; draft: Draft; publishResult?: any }> => {
+    return apiCall(`/drafts/${encodeURIComponent(id)}/publish`, {
+      method: 'POST',
+      body: JSON.stringify({ platforms })
+    }, true);
+  },
+
+  deleteDraft: async (id: string): Promise<{ success: boolean }> => {
+    return apiCall(`/drafts/${encodeURIComponent(id)}`, {
+      method: 'DELETE'
+    }, true);
+  },
+
+  rejectDraft: async (id: string): Promise<{ success: boolean; message: string }> => {
+    return apiCall(`/drafts/${encodeURIComponent(id)}/reject`, {
+      method: 'POST'
+    }, true);
+  },
+
+  regenerateDraft: async (id: string): Promise<{ success: boolean; message: string }> => {
+    return apiCall(`/drafts/${encodeURIComponent(id)}/regenerate`, {
+      method: 'POST'
+    }, true);
+  }
+};
+

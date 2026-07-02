@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Campaign Routes
  * Full CRUD for marketing campaigns with social media posting
  */
@@ -8,6 +8,7 @@ const router = express.Router();
 const { protect } = require('../middleware/auth');
 const { checkTrial, deductCredits, requireCredits } = require('../middleware/trialGuard');
 const Campaign = require('../models/Campaign');
+const Draft = require('../models/Draft');
 const User = require('../models/User');
 const crypto = require('crypto');
 const { callGemini, parseGeminiJSON, generateICPAndStrategy, generateCampaignImageNanoBanana } = require('../services/geminiAI');
@@ -113,7 +114,7 @@ function sanitizeHashtags(rawHashtags = []) {
   if (!Array.isArray(rawHashtags)) return [];
   const sanitized = rawHashtags
     .map((tag) => (typeof tag === 'string' ? tag.trim().replace(/^#+/, '#') : ''))
-    .filter((tag) => /^#[A-Za-z0-9_]+$/.test(tag));
+    .filter((tag) => /^#[\p{L}\p{M}\p{N}_]+$/u.test(tag));
   return Array.from(new Set(sanitized)).slice(0, 25);
 }
 
@@ -1698,9 +1699,9 @@ INSTRUCTIONS:
 14. ${strictBrandMode && primaryLockedColor && secondaryLockedColor
       ? `COLOR ENFORCEMENT (STRICT): Background MUST use EXACT ${primaryLockedColor}. Gradient is allowed only within shades of ${primaryLockedColor}. Text MUST use EXACT ${secondaryLockedColor}. Ensure strong contrast and readability. Do NOT introduce unrelated colors. Do NOT use gray or desaturated tones.`
       : 'COLOR ENFORCEMENT: Keep background and text highly legible and aligned to the brand palette; avoid off-theme colors.'}
-15. LANGUAGE ENFORCEMENT: Write caption and CTA strictly in ${selectedLanguage}. Do not mix languages.
-16. ${selectedLanguage === 'English' ? 'English is allowed.' : 'Do NOT use English words unless they are brand names, product names, or hashtags.'}
-17. IMAGE TEXT ENFORCEMENT: Also provide "imageText" for each post (2-5 words max). imageText MUST be strictly in ${selectedLanguage}. Do NOT use English for imageText unless selectedLanguage is English.
+15. LANGUAGE ENFORCEMENT: Write caption and CTA strictly in ${selectedLanguage}.
+16. ${selectedLanguage.includes('Mix') ? 'You may mix English and the native language fluidly.' : selectedLanguage === 'English' ? 'English is allowed.' : 'Do NOT use English words except for strict brand names. Hashtags MUST be entirely in ' + selectedLanguage + ' (or transliterated if native characters aren\'t supported).'}
+17. IMAGE TEXT ENFORCEMENT: Also provide "imageText" for each post (2-5 words max). imageText MUST be strictly in ${selectedLanguage}. Do NOT use English for imageText unless selectedLanguage is English or Mix.
 18. imageText must be short, punchy, and suitable for text overlay on the image.
 
 Return ONLY valid JSON (no markdown, no backticks):
@@ -1918,7 +1919,7 @@ Return ONLY valid JSON (no markdown, no backticks):
         .map((h) => String(h || '').trim())
         .filter(Boolean)
         .map((h) => (h.startsWith('#') ? h : `#${h}`))
-        .filter((h) => /^#[A-Za-z0-9_]{2,}$/.test(h));
+        .filter((h) => /^#[\p{L}\p{M}\p{N}_]{2,}$/u.test(h));
       return Array.from(new Set(tags)).slice(0, 8);
     };
 
@@ -2054,7 +2055,7 @@ Return ONLY valid JSON (no markdown, no backticks):
         ...post,
         platform,
         caption: cleanupCaption(post?.caption, markers, templateText),
-        hashtags: hashtags.length ? hashtags : ['#marketing'],
+        hashtags: hashtags,
         contentTheme: String(post?.contentTheme || 'promotional').trim(),
         imageDescription: String(post?.imageDescription || '').trim(),
         imageText: clampImageText(post?.imageText)
@@ -2144,7 +2145,7 @@ Return ONLY valid JSON (no markdown, no backticks):
         caption: post.caption,
         hashtags: Array.isArray(post.hashtags)
           ? post.hashtags.map(h => h.startsWith('#') ? h : `#${h}`)
-          : ['#marketing'],
+          : hashtags,
         imageUrl: imageResult.success ? imageResult.imageUrl : '',
         imageDescription: post.imageDescription || '',
         imageText: String(post.imageText || '').trim() || defaultImageText,
@@ -2155,7 +2156,48 @@ Return ONLY valid JSON (no markdown, no backticks):
         model: imageResult.success ? imageResult.model : 'failed'
       };
 
-      sendEvent('post', postData);
+      // Auto-save a draft for this generated post checkpoint
+      let draftId = null;
+      try {
+        const draft = new Draft({
+          userId,
+          title: `${campaignName || 'Campaign'} - Post ${i + 1}`,
+          caption: postData.caption || '',
+          hashtags: postData.hashtags || [],
+          cta: '',
+          imageUrl: postData.imageUrl || '',
+          imagePrompt: postData.imageDescription || '',
+          platforms: [postData.platform],
+          language: selectedLanguage,
+          tone: enforcedTone || '',
+          objective: objective || '',
+          scheduledDate: postData.suggestedDate ? new Date(`${postData.suggestedDate}T${postData.suggestedTime || '10:00'}:00`) : null,
+          status: 'draft',
+          sourceType: 'campaign',
+          creative: {
+            type: 'image',
+            textContent: postData.caption || '',
+            captions: postData.caption || '',
+            imageUrls: postData.imageUrl ? [postData.imageUrl] : [],
+            hashtags: postData.hashtags || [],
+            imageText: postData.imageText || ''
+          },
+          generationProgress: {
+            index: i,
+            total: postsToProcess.length,
+            completed: i + 1 === postsToProcess.length
+          }
+        });
+        await draft.save();
+        draftId = draft._id;
+      } catch (err) {
+        console.error('Failed to save draft progress checkpoint:', err);
+      }
+
+      sendEvent('post', {
+        ...postData,
+        draftId
+      });
     }
 
     // Done
@@ -2456,6 +2498,29 @@ router.post('/', protect, async (req, res) => {
 
     const campaign = new Campaign(campaignData);
     await campaign.save();
+
+    // Auto-save a corresponding Draft record
+    try {
+      const draft = new Draft({
+        userId,
+        title: campaign.name || 'Untitled Campaign',
+        caption: campaign.creative?.captions || campaign.creative?.textContent || '',
+        hashtags: campaign.creative?.hashtags || [],
+        cta: campaign.creative?.callToAction || '',
+        imageUrl: campaign.creative?.imageUrls?.[0] || '',
+        platforms: campaign.platforms || [],
+        objective: campaign.objective || 'awareness',
+        tone: campaign.tone || '',
+        scheduledDate: campaign.scheduling?.startDate || null,
+        status: 'draft',
+        sourceType: 'campaign',
+        campaignId: campaign._id,
+        creative: campaign.creative || {}
+      });
+      await draft.save();
+    } catch (err) {
+      console.error('Failed to auto-save draft for campaign creation:', err);
+    }
     
     // Notifications are automatically scheduled by the background scheduler
     if (campaign.status === 'scheduled' && campaign.scheduling?.startDate) {
@@ -2646,6 +2711,26 @@ router.put('/:id', protect, async (req, res) => {
     
     if (!campaign) {
       return res.status(404).json({ success: false, message: 'Campaign not found' });
+    }
+
+    // Sync to corresponding Draft
+    try {
+      const draft = await Draft.findOne({ campaignId: campaign._id, userId });
+      if (draft) {
+        draft.title = campaign.name || draft.title;
+        draft.caption = campaign.creative?.captions || campaign.creative?.textContent || draft.caption;
+        draft.hashtags = campaign.creative?.hashtags || draft.hashtags;
+        draft.cta = campaign.creative?.callToAction || draft.cta;
+        draft.imageUrl = campaign.creative?.imageUrls?.[0] || draft.imageUrl;
+        draft.platforms = campaign.platforms || draft.platforms;
+        draft.objective = campaign.objective || draft.objective;
+        draft.tone = campaign.tone || draft.tone;
+        draft.scheduledDate = campaign.scheduling?.startDate || draft.scheduledDate;
+        draft.creative = campaign.creative || draft.creative;
+        await draft.save();
+      }
+    } catch (err) {
+      console.error('Failed to sync campaign update to draft:', err);
     }
     
     // Notifications are automatically scheduled by the background scheduler
@@ -4145,7 +4230,7 @@ Return ONLY valid JSON (no markdown, no code blocks):
     const fallbackPost = {
       platform: platforms[0] || 'instagram',
       caption: `${campaignName}\n\n${campaignDescription || `A focused ${objective || 'awareness'} campaign update for your audience.`}`,
-      hashtags: [`#${String((bp.companyName || campaignName || 'Campaign')).replace(/[^A-Za-z0-9]/g, '') || 'Campaign'}`],
+      hashtags: [`#${String((bp.companyName || campaignName || 'Campaign')).replace(/[^\p{L}\p{M}\p{N}]/gu, '') || 'Campaign'}`],
       contentTheme: 'promotional',
       imageDescription: `${bp.industry || 'Business'} campaign creative for ${campaignName}`,
       callToAction: content?.callToAction || 'Learn more'
@@ -4505,8 +4590,8 @@ Requirements:
 6. Match the tone appropriate for ${platform || 'Instagram'}
 7. ${strictBrandMode ? `STRICT BRAND LOCK: The caption MUST follow "${enforcedTone}" tone exactly and must not drift.` : 'Keep tone aligned to the brand context above.'}
 8. ${strictBrandMode ? 'If there is conflict between platform defaults and brand profile, prioritize brand profile.' : 'Balance platform-native style with brand voice.'}
-9. Caption and CTA must be strictly in ${selectedLanguage}. Do not mix languages.
-10. ${selectedLanguage === 'English' ? 'English is allowed.' : 'Do NOT use English words unless they are brand names or hashtags.'}
+9. LANGUAGE ENFORCEMENT: Write caption and CTA strictly in ${selectedLanguage}.
+10. ${selectedLanguage.includes('Mix') ? 'You may mix English and the native language fluidly.' : selectedLanguage === 'English' ? 'English is allowed.' : 'Do NOT use English words except for strict brand names. Hashtags MUST be entirely in ' + selectedLanguage + ' (or transliterated if native characters aren\'t supported).'}
 11. ${selectedProductText ? 'Naturally feature the selected product name, description, price, category, and features when relevant. Do not invent product facts.' : 'Do not invent product details.'}
 
 Return ONLY the caption text with hashtags. No JSON, no explanations.`;

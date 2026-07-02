@@ -15,8 +15,9 @@ import {
   XCircle,
 } from 'lucide-react';
 import { getThemeClasses, useTheme } from '../context/ThemeContext';
-import { contentCalendarAPI, inventoryAPI, videoGenerationAPI } from '../services/api';
-import { Product } from '../types';
+import { contentCalendarAPI, inventoryAPI, videoGenerationAPI, draftsAPI } from '../services/api';
+import { Product, Draft } from '../types';
+import { DraftPreviewModal } from '../components/DraftPreviewModal';
 
 type AudioMode = 'off' | 'auto' | 'upload';
 type VideoStatusFilter = 'all' | 'draft' | 'created' | 'scheduled' | 'posted';
@@ -67,6 +68,8 @@ const ReelGenerator: React.FC = () => {
   const [jobId, setJobId] = useState('');
   const [draft, setDraft] = useState<any>(null);
   const [videoDrafts, setVideoDrafts] = useState<any[]>([]);
+  const [reelDraftsList, setReelDraftsList] = useState<Draft[]>([]);
+  const [selectedDraft, setSelectedDraft] = useState<Draft | null>(null);
   const [statusFilter, setStatusFilter] = useState<VideoStatusFilter>('all');
   const [showWizard, setShowWizard] = useState(false);
   const [deletingDraftId, setDeletingDraftId] = useState('');
@@ -193,6 +196,12 @@ const ReelGenerator: React.FC = () => {
     } catch (_) {
       // Non-blocking library refresh.
     }
+    try {
+      const response = await draftsAPI.getDrafts('draft', 'reel');
+      if (response?.drafts) {
+        setReelDraftsList(response.drafts);
+      }
+    } catch (_) {}
   };
 
   useEffect(() => {
@@ -948,7 +957,41 @@ const ReelGenerator: React.FC = () => {
 
         {!showWizard && (
           <div className="space-y-4">
-            {filteredVideoDrafts.length ? (
+            {statusFilter === 'draft' ? (
+              reelDraftsList.length ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5">
+                  {reelDraftsList.map((item) => (
+                    <div
+                      key={item._id}
+                      onClick={() => setSelectedDraft(item)}
+                      className={`text-left rounded-2xl border overflow-hidden shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg cursor-pointer ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 hover:border-[#ffcc29]/50' : 'bg-white border-slate-200 hover:border-[#ffcc29]/60'}`}
+                    >
+                      <div className="relative">
+                        {item.imageUrl ? (
+                          <img src={item.imageUrl} alt={item.title} className="w-full h-44 object-cover" />
+                        ) : (
+                          <div className={`w-full h-44 flex items-center justify-center ${isDarkMode ? 'bg-slate-900' : 'bg-slate-100'}`}>
+                            <Film className="w-8 h-8 text-slate-500" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="p-4 space-y-3">
+                        <p className={`text-base font-semibold leading-snug ${theme.text} line-clamp-2`}>
+                          {item.title}
+                        </p>
+                        <p className={`text-xs ${theme.textSecondary} line-clamp-2`}>
+                          {item.caption || 'No caption'}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-20">
+                  <p className={`font-semibold ${theme.text}`}>No drafts found.</p>
+                </div>
+              )
+            ) : filteredVideoDrafts.length ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5">
                 {filteredVideoDrafts.map((item) => (
                   <div
@@ -1752,6 +1795,16 @@ const ReelGenerator: React.FC = () => {
             </div>
           </>
         )}
+      {selectedDraft && (
+        <DraftPreviewModal
+          draft={selectedDraft}
+          onClose={() => setSelectedDraft(null)}
+          onSuccess={() => {
+            setSelectedDraft(null);
+            loadVideoDrafts();
+          }}
+        />
+      )}
       </div>
     </div>
   );

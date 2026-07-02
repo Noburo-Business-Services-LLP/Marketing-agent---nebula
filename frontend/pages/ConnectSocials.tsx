@@ -453,7 +453,7 @@ const ConnectSocials: React.FC = () => {
           s.platform.toLowerCase() === platform.toLowerCase() || 
           (s.platform === 'X' && platform.toLowerCase() === 'twitter') || 
           (s.platform === 'Twitter' && platform.toLowerCase() === 'x')
-            ? { ...s, connected: false, status: 'inactive', username: undefined, channelData: undefined, analytics: undefined } 
+            ? { ...s, connected: false, status: 'disconnected', username: undefined, channelData: undefined, analytics: undefined } 
             : s
         ));
         

@@ -16,6 +16,7 @@ import {
 import { contentCalendarAPI } from '../services/api';
 import { ContentCalendar as ContentCalendarType, ContentCalendarItem } from '../types';
 import { getThemeClasses, useTheme } from '../context/ThemeContext';
+import StrategyDocumentView from '../components/StrategyDocumentView';
 
 const editableFields: Array<keyof ContentCalendarItem> = [
   'format',
@@ -37,6 +38,30 @@ const ContentCalendar: React.FC = () => {
   const [editingId, setEditingId] = useState('');
   const [draftItem, setDraftItem] = useState<Partial<ContentCalendarItem>>({});
   const [error, setError] = useState('');
+  const [showStrategyDoc, setShowStrategyDoc] = useState(false);
+
+  const getActiveWeekNumber = (): number => {
+    const day = new Date().getDate();
+    if (day <= 7) return 1;
+    if (day <= 14) return 2;
+    if (day <= 21) return 3;
+    return 4;
+  };
+
+  const handleGenerateWeekContent = async () => {
+    if (!calendar) return;
+    const weekNum = getActiveWeekNumber();
+    setSaving(`week-${weekNum}`);
+    try {
+      const res = await contentCalendarAPI.autoGenerateWeek(calendar._id, weekNum);
+      alert(res.message || `Week ${weekNum} content generation queued in the background.`);
+      loadCalendar();
+    } catch (err: any) {
+      alert(err.message || 'Failed to trigger weekly content generation');
+    } finally {
+      setSaving('');
+    }
+  };
 
   const allItems = useMemo(
     () => (calendar?.weeks || []).flatMap((week) => week.items || []),
@@ -138,6 +163,10 @@ const ContentCalendar: React.FC = () => {
     );
   }
 
+  if (showStrategyDoc) {
+    return <StrategyDocumentView calendar={calendar} onBack={() => setShowStrategyDoc(false)} />;
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -152,6 +181,14 @@ const ContentCalendar: React.FC = () => {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowStrategyDoc(true)}
+            className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold border transition-colors ${isDarkMode ? 'border-slate-700 hover:bg-slate-800 text-white' : 'border-slate-300 hover:bg-slate-50 text-black'}`}
+          >
+            <Sparkles className="w-4 h-4" />
+            View Content Planning
+          </button>
           <button
             type="button"
             onClick={approveCalendar}
@@ -179,6 +216,24 @@ const ContentCalendar: React.FC = () => {
             {saving === 'regenerate' ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
             Regenerate
           </button>
+          {calendar.approved && (
+            <button
+              type="button"
+              onClick={handleGenerateWeekContent}
+              disabled={!!saving}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold bg-gradient-to-r from-blue-600 to-indigo-650 hover:from-blue-500 hover:to-indigo-550 text-white shadow-md hover:shadow-lg transition-all disabled:opacity-50"
+            >
+              {saving.startsWith('week-') ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+              Generate Week {getActiveWeekNumber()} Content
+            </button>
+          )}
+          <a
+            href="/drafts"
+            className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold border transition-colors ${isDarkMode ? 'border-slate-750 hover:bg-slate-800 text-slate-200' : 'border-slate-250 hover:bg-slate-50 text-slate-800'}`}
+          >
+            <Sparkles className="w-4 h-4 text-[#ffcc29]" />
+            View Weekly Drafts
+          </a>
         </div>
       </div>
 
@@ -263,10 +318,17 @@ const ContentCalendar: React.FC = () => {
                         <X className="w-3.5 h-3.5" />
                         Reject
                       </button>
-                      <button type="button" onClick={() => createDraft(item)} disabled={busy || Boolean(item.generatedCampaignId)} className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold ${item.generatedCampaignId ? 'bg-slate-500/15 text-slate-400' : 'bg-[#ffcc29] text-black'}`}>
-                        {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                        {item.generatedCampaignId ? 'Draft Saved' : 'Save Draft'}
-                      </button>
+                      {item.generatedDraftId ? (
+                        <a href={`/drafts?draftId=${item.generatedDraftId}`} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-blue-500/15 text-blue-400 hover:bg-blue-500/25">
+                          <Sparkles className="w-3.5 h-3.5" />
+                          View Draft
+                        </a>
+                      ) : (
+                        <button type="button" onClick={() => createDraft(item)} disabled={busy || Boolean(item.generatedCampaignId)} className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold ${item.generatedCampaignId ? 'bg-slate-500/15 text-slate-400' : 'bg-[#ffcc29] text-black'}`}>
+                          {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                          {item.generatedCampaignId ? 'Draft Saved' : 'Save Draft'}
+                        </button>
+                      )}
                     </div>
                   </article>
                 );

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Save, AlertCircle, Check, Loader2, Eye, EyeOff, Zap, RefreshCw, CreditCard, Download, ExternalLink } from 'lucide-react';
 import { User, BillingData, BusinessProfile } from '../types';
+import { jsPDF } from 'jspdf';
 import { apiService } from '../services/api';
 import { useTheme, getThemeClasses } from '../context/ThemeContext';
 
@@ -64,6 +65,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
   const [bizData, setBizData] = useState<BusinessProfile>(emptyBiz);
   const [bizStatus, setBizStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [bizError, setBizError] = useState('');
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
   // Fetch billing data when Billing tab is active
   useEffect(() => {
@@ -113,6 +115,58 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
     } catch (error: any) {
       setBizStatus('error');
       setBizError(error.message || 'Failed to save business profile');
+    }
+  };
+
+  const handleDownloadStrategyPDF = async () => {
+    setIsGeneratingPDF(true);
+    try {
+      const res = await apiService.getContentStrategy();
+      if (!res.success || !res.html) throw new Error(res.error || 'Failed to generate content strategy');
+      
+      const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'pt',
+        format: 'a4'
+      });
+
+      const element = document.createElement('div');
+      element.innerHTML = res.html;
+      element.style.width = '550px';
+      element.style.padding = '20px';
+      element.style.fontFamily = 'Inter, sans-serif';
+      element.style.color = '#333';
+      element.style.position = 'absolute';
+      element.style.left = '-9999px';
+      
+      const styleTag = document.createElement('style');
+      styleTag.innerHTML = `
+        h1, h2 { color: #111; margin-bottom: 10px; font-family: 'Inter', sans-serif; }
+        p { margin-bottom: 15px; font-size: 14px; line-height: 1.5; font-family: 'Inter', sans-serif; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 13px; font-family: 'Inter', sans-serif; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f5f5f5; font-weight: bold; }
+        ul { margin-bottom: 15px; padding-left: 20px; font-size: 14px; font-family: 'Inter', sans-serif; }
+      `;
+      element.appendChild(styleTag);
+      document.body.appendChild(element);
+
+      await doc.html(element, {
+        callback: function (doc) {
+          doc.save('Nebulaa_Content_Strategy.pdf');
+          document.body.removeChild(element);
+        },
+        x: 20,
+        y: 20,
+        width: 550,
+        windowWidth: 600,
+        autoPaging: 'text'
+      });
+      
+    } catch (err: any) {
+      alert('Error generating PDF: ' + err.message);
+    } finally {
+      setIsGeneratingPDF(false);
     }
   };
 
@@ -539,20 +593,32 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                           </div>
                         )}
 
-                        <button
-                          onClick={handleBizSave}
-                          disabled={bizStatus === 'saving'}
-                          className={`px-8 py-2.5 rounded-lg font-bold flex items-center gap-2 transition-all shadow-sm ${
-                            bizStatus === 'saved' ? 'bg-green-600 text-white'
-                            : bizStatus === 'error' ? 'bg-red-600 text-white'
-                            : 'bg-[#ffcc29] text-black hover:bg-[#ffcc29]/80'
-                          }`}
-                        >
-                          {bizStatus === 'saving' ? (<><Loader2 className="w-4 h-4 animate-spin" /> Saving...</>)
-                          : bizStatus === 'saved' ? (<><Check className="w-4 h-4" /> Saved</>)
-                          : bizStatus === 'error' ? (<><AlertCircle className="w-4 h-4" /> Failed</>)
-                          : (<><Save className="w-4 h-4" /> Save Business Profile</>)}
-                        </button>
+                        <div className="flex flex-col sm:flex-row gap-4 items-center">
+                          <button
+                            onClick={handleBizSave}
+                            disabled={bizStatus === 'saving'}
+                            className={`px-8 py-2.5 rounded-lg font-bold flex items-center justify-center gap-2 transition-all shadow-sm ${
+                              bizStatus === 'saved' ? 'bg-green-600 text-white'
+                              : bizStatus === 'error' ? 'bg-red-600 text-white'
+                              : 'bg-[#ffcc29] text-black hover:bg-[#ffcc29]/80'
+                            }`}
+                          >
+                            {bizStatus === 'saving' ? (<><Loader2 className="w-4 h-4 animate-spin" /> Saving...</>)
+                            : bizStatus === 'saved' ? (<><Check className="w-4 h-4" /> Saved</>)
+                            : bizStatus === 'error' ? (<><AlertCircle className="w-4 h-4" /> Failed</>)
+                            : (<><Save className="w-4 h-4" /> Save Business Profile</>)}
+                          </button>
+                          
+                          <button
+                            onClick={handleDownloadStrategyPDF}
+                            disabled={isGeneratingPDF}
+                            className={`px-6 py-2.5 rounded-lg font-bold flex items-center justify-center gap-2 transition-all border ${
+                              isDarkMode ? 'border-slate-700 hover:bg-slate-800 text-white' : 'border-slate-300 hover:bg-slate-50 text-black'
+                            }`}
+                          >
+                            {isGeneratingPDF ? (<><Loader2 className="w-4 h-4 animate-spin" /> Generating PDF...</>) : (<><Download className="w-4 h-4" /> Content Strategy PDF</>)}
+                          </button>
+                        </div>
                       </div>
                     );
                   })()}
