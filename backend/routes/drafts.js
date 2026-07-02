@@ -56,7 +56,7 @@ router.get('/', protect, async (req, res) => {
       }
     }
 
-    const drafts = await Draft.find(query).sort({ createdAt: -1 });
+    const drafts = await Draft.find(query).populate('campaignId', 'campaignName').sort({ createdAt: -1 });
     res.status(200).json({ success: true, drafts });
   } catch (error) {
     console.error('Get drafts error:', error);
@@ -400,13 +400,14 @@ router.post('/:id/regenerate', protect, async (req, res) => {
 router.post('/generate-image-bg', protect, async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
-    const { type, title, caption, hashtags, prompt, aspectRatio } = req.body;
+    const { type, title, caption, hashtags, prompt, aspectRatio, platforms } = req.body;
 
     const draft = new Draft({
       userId,
       title: title || 'Untitled Draft',
       caption: caption || '',
       hashtags: hashtags || [],
+      platforms: platforms || [],
       imagePrompt: prompt || '',
       status: 'processing',
       sourceType: type === 'campaign' ? 'campaign' : 'post',

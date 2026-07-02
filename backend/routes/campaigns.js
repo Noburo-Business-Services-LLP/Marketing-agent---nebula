@@ -4462,7 +4462,7 @@ const { generatePosterFromTemplate, editPosterFromTemplate } = require('../servi
  */
 router.post('/generate-caption', protect, checkTrial, requireCredits('campaign_text'), async (req, res) => {
   try {
-    const { image, platform, language: languageInput, selectedProducts = [], prompt: userPrompt = '' } = req.body;
+    const { image, platform, language: languageInput, selectedProducts = [], prompt: userPrompt = '', generateOption = 'both', existingCaption = '', existingHashtags = '' } = req.body;
 
     const normalizeCaptionLanguage = (value = '') => {
       const normalized = String(value || '').trim().toLowerCase();
@@ -4484,10 +4484,156 @@ router.post('/generate-caption', protect, checkTrial, requireCredits('campaign_t
     };
     const selectedLanguage = normalizeCaptionLanguage(languageInput);
     
+    // If no image is provided, generate text-only caption/hashtags
     if (!image) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Image is required' 
+      console.log(' Generating caption using text-only for platform:', platform || 'instagram');
+      
+      const userId = req.user.userId || req.user.id;
+      const user = await User.findById(userId).select('businessProfile companyName');
+      const bp = user?.businessProfile || {};
+      const brandCtx = await resolveBrandIntelligenceContext(userId, bp);
+      const strictBrandMode = isStrictBrandLockEnabled(brandCtx);
+      const enforcedTone = strictBrandMode
+        ? brandCtx.effectiveTone
+        : String(brandCtx?.effectiveTone || bp?.brandVoice || 'professional').toLowerCase();
+      const strictBrandText = strictBrandMode ? buildStrictBrandLockText(brandCtx) : '';
+      const normalizedSelectedProducts = Array.isArray(selectedProducts)
+        ? selectedProducts
+            .filter((product) => product && typeof product === 'object')
+            .slice(0, 5)
+            .map((product) => ({
+              id: product._id || product.id || null,
+              name: String(product.name || '').trim(),
+              description: String(product.description || '').trim(),
+              price: product.price,
+              currency: product.currency || '',
+              category: String(product.category || '').trim(),
+              features: Array.isArray(product.features)
+                ? product.features
+                : Array.isArray(product.tags)
+                  ? product.tags
+                  : []
+            }))
+            .filter((product) => product.name)
+        : [];
+      const primarySelectedProduct = normalizedSelectedProducts[0] || null;
+      const selectedProductText = normalizedSelectedProducts.length > 0
+        ? normalizedSelectedProducts.map((product, index) => {
+            const featureText = (product.features || []).filter(Boolean).join(', ');
+            return [
+              `${index + 1}. ${product.name}`,
+              product.description ? `Description: ${product.description}` : '',
+              product.price !== undefined && product.price !== null ? `Price: ${product.currency || ''} ${product.price}`.trim() : '',
+              product.category ? `Category: ${product.category}` : '',
+              featureText ? `Features: ${featureText}` : ''
+            ].filter(Boolean).join('\n');
+          }).join('\n\n')
+        : '';
+
+      const aiMemoryContext = await buildAIContext({
+        userId,
+        user,
+        platform: platform || 'instagram',
+        product: primarySelectedProduct,
+        category: primarySelectedProduct?.category || ''
+      });
+      const brandContext = `
+Business: ${brandCtx?.profile?.brandName || bp?.companyName || user?.companyName || 'Unknown'}
+Industry: ${bp?.industry || 'General'}
+Tone: ${enforcedTone || 'professional'}
+Visual tokens: ${brandCtx?.visualHints || 'Not set'}
+${strictBrandText ? strictBrandText : ''}
+${aiMemoryContext.reusablePromptText}`;
+
+      let prompt = '';
+      if (generateOption === 'hashtags_only') {
+        prompt = `You are a social media marketing expert. Generate exactly 4 relevant hashtags for this social media caption: "${existingCaption}".
+${brandContext}
+Return ONLY the hashtags. No explanations, no caption text.`;
+      } else if (generateOption === 'caption_only') {
+        prompt = `You are a social media marketing expert. Create an engaging ${platform || 'Instagram'} caption based on these hashtags: "${existingHashtags}".
+${brandContext}
+${selectedProductText ? `\nSelected inventory product context:\n${selectedProductText}` : ''}
+${String(userPrompt || '').trim() ? `\nUser generation prompt:\n${String(userPrompt).trim()}` : ''}
+Requirements:
+1. Write a catchy, engaging caption
+2. Include relevant emojis
+3. Add a clear call-to-action
+4. Keep it concise but impactful (2-4 sentences)
+5. Match the tone appropriate for ${platform || 'Instagram'}
+6. Write caption and CTA strictly in ${selectedLanguage}.
+Return ONLY the caption text. No hashtags, no explanations.`;
+      } else {
+        prompt = `You are a social media marketing expert. Create an engaging ${platform || 'Instagram'} caption and hashtags for a post.
+${brandContext}
+${selectedProductText ? `\nSelected inventory product context:\n${selectedProductText}` : ''}
+${String(userPrompt || '').trim() ? `\nUser generation prompt:\n${String(userPrompt).trim()}` : ''}
+
+Requirements:
+1. Write a catchy, engaging caption matching the context/prompt.
+2. Include relevant emojis.
+3. Add a clear call-to-action.
+4. Include exactly 4 relevant hashtags at the end.
+5. Keep it concise but impactful (2-4 sentences + hashtags).
+6. Match the tone appropriate for ${platform || 'Instagram'}.
+7. ${strictBrandMode ? `STRICT BRAND LOCK: The caption MUST follow "${enforcedTone}" tone exactly and must not drift.` : 'Keep tone aligned to the brand context above.'}
+8. LANGUAGE ENFORCEMENT: Write caption and CTA strictly in ${selectedLanguage}.
+9. ${selectedLanguage.includes('Mix') ? 'You may mix English and the native language fluidly.' : selectedLanguage === 'English' ? 'English is allowed.' : 'Do NOT use English words except for strict brand names. Hashtags MUST be entirely in ' + selectedLanguage + ' (or transliterated if native characters aren\'t supported).'}
+
+Return ONLY the caption text with hashtags. No JSON, no explanations.`;
+      }
+
+      const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+      const requestBody = {
+        contents: [{
+          parts: [
+            { text: prompt }
+          ]
+        }],
+        generationConfig: {
+          temperature: 0.8,
+          maxOutputTokens: 500
+        }
+      };
+
+      const fetch = (...args) => import('node-fetch').then(({default: f}) => f(...args));
+      const modelChain = [
+        'gemini-2.5-flash-lite',
+        'gemini-2.5-flash',
+        'gemini-flash-latest'
+      ];
+      let response, data, usedModel = null;
+      for (const model of modelChain) {
+        try {
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
+          response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody)
+          });
+          data = await response.json();
+          if (data && data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts[0].text) {
+            usedModel = model;
+            break;
+          }
+        } catch (modelErr) {
+          console.error(`Model ${model} failed:`, modelErr.message);
+        }
+      }
+
+      if (!usedModel || !data?.candidates?.[0]?.content?.parts?.[0]?.text) {
+        throw new Error('Gemini failed to generate content across all fallback models.');
+      }
+
+      const rawText = data.candidates[0].content.parts[0].text;
+      const hashtags = rawText.match(/#\w+/g) || [];
+      const captionOnly = rawText.replace(/#\w+/g, '').trim();
+
+      return res.status(200).json({
+        success: true,
+        caption: generateOption === 'hashtags_only' ? '' : captionOnly,
+        hashtags: generateOption === 'caption_only' ? [] : hashtags,
+        modelUsed: usedModel
       });
     }
     

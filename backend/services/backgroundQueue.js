@@ -201,12 +201,19 @@ async function processDraftImageGenerationJob(job) {
     const user = await User.findById(draft.userId);
     const bp = user?.businessProfile || {};
 
-    const imageResult = await generateCampaignImageNanoBanana(draft.imagePrompt || draft.caption || 'A creative poster', {
-      aspectRatio: job.aspectRatio || '1:1',
-      brandName: user?.companyName || 'Brand',
-      industry: bp.industry || '',
-      tone: bp.tone || 'professional'
-    });
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Image generation timed out after 60s')), 60000)
+    );
+
+    const imageResult = await Promise.race([
+      generateCampaignImageNanoBanana(draft.imagePrompt || draft.caption || 'A creative poster', {
+        aspectRatio: job.aspectRatio || '1:1',
+        brandName: user?.companyName || 'Brand',
+        industry: bp.industry || '',
+        tone: bp.tone || 'professional'
+      }),
+      timeoutPromise
+    ]);
 
     const finalImageUrl = typeof imageResult === 'string' ? imageResult : imageResult?.imageUrl;
 
