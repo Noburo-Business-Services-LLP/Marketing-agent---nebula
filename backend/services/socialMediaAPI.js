@@ -442,6 +442,21 @@ async function postToSocialMedia(platforms, content, options = {}) {
         String(response.data?.message || response.data?.error || '').trim() ||
         'Ayrshare publish request failed';
       console.error('[Ayrshare] publish error:', returnedError);
+
+      // Post-error suspension guard: if we see code:156 (platform not linked)
+      // or code:168 (profile suspended), Ayrshare will refuse this post forever
+      // AND will count each retry against the 1000-post-error/24h suspension
+      // threshold. Trip the circuit breaker so no further Ayrshare calls go out
+      // for a while — the caller (campaign scheduler) will also auto-cancel
+      // the campaign after 3 attempts.
+      const hasFatalCode = errorDetails.some((entry) => {
+        const code = String(entry?.code || '');
+        return code === '156' || code === '168';
+      });
+      if (hasFatalCode) {
+        markAyrshareSuspended(`publish returned fatal code (156/168): ${returnedError.slice(0, 100)}`);
+      }
+
       return {
         success: false,
         error: returnedError,

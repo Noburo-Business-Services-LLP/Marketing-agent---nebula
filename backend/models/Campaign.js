@@ -168,6 +168,17 @@ const campaignSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+  // Consecutive publish failure counter — auto-cancels the campaign
+  // after MAX_PUBLISH_ATTEMPTS (default 3) to stop retry loops from
+  // hammering Ayrshare and racking up post-error suspension counters.
+  publishFailureCount: {
+    type: Number,
+    default: 0
+  },
+  publishAutoCancelled: {
+    type: Boolean,
+    default: false
+  },
   // Used to prevent duplicate/near-duplicate posts that social networks may reject.
   // This is computed at publish time from caption + primary media URL.
   publishHash: {
