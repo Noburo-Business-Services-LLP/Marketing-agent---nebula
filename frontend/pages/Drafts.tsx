@@ -3,9 +3,10 @@ import { FileText, Search, Trash2, Calendar, Loader2, Plus, ExternalLink, Refres
 import { Draft } from '../types';
 import { draftsAPI } from '../services/api';
 import { DraftPreviewModal } from '../components/DraftPreviewModal';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 export const Drafts: React.FC = () => {
+  const navigate = useNavigate();
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [filteredDrafts, setFilteredDrafts] = useState<Draft[]>([]);
   
@@ -385,7 +386,14 @@ export const Drafts: React.FC = () => {
                           </span>
                         )}
                         <button
-                          onClick={() => setSelectedDraft(item)}
+                          onClick={() => {
+                            if (String(item.sourceType).toLowerCase() === 'reel' || String(item.contentType).toLowerCase() === 'reel') {
+                              const jobId = item.generationProgress?.jobId || item._id;
+                              navigate(`/reels?jobId=${jobId}`);
+                            } else {
+                              setSelectedDraft(item);
+                            }
+                          }}
                           className="text-xs font-bold text-[#ffcc29] hover:underline flex items-center gap-1"
                         >
                           Edit & Post

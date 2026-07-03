@@ -17,7 +17,7 @@ import {
 import { getThemeClasses, useTheme } from '../context/ThemeContext';
 import { contentCalendarAPI, inventoryAPI, videoGenerationAPI, draftsAPI } from '../services/api';
 import { Product, Draft } from '../types';
-import { DraftPreviewModal } from '../components/DraftPreviewModal';
+import { useLocation, useSearchParams } from 'react-router-dom';
 
 type AudioMode = 'off' | 'auto' | 'upload';
 type VideoStatusFilter = 'all' | 'draft' | 'created' | 'scheduled' | 'posted';
@@ -46,6 +46,7 @@ function fileToDataUrl(file: Blob): Promise<string> {
 }
 
 const ReelGenerator: React.FC = () => {
+  const [searchParams] = useSearchParams();
   const { isDarkMode } = useTheme();
   const theme = getThemeClasses(isDarkMode);
   const panelClass = `${theme.bgCard} border ${isDarkMode ? 'border-slate-800' : 'border-slate-200'} rounded-2xl`;
@@ -69,7 +70,6 @@ const ReelGenerator: React.FC = () => {
   const [draft, setDraft] = useState<any>(null);
   const [videoDrafts, setVideoDrafts] = useState<any[]>([]);
   const [reelDraftsList, setReelDraftsList] = useState<Draft[]>([]);
-  const [selectedDraft, setSelectedDraft] = useState<Draft | null>(null);
   const [statusFilter, setStatusFilter] = useState<VideoStatusFilter>('all');
   const [showWizard, setShowWizard] = useState(false);
   const [deletingDraftId, setDeletingDraftId] = useState('');
@@ -201,7 +201,7 @@ const ReelGenerator: React.FC = () => {
       if (response?.drafts) {
         setReelDraftsList(response.drafts);
       }
-    } catch (_) {}
+    } catch (_) { }
   };
 
   useEffect(() => {
@@ -409,6 +409,8 @@ const ReelGenerator: React.FC = () => {
       setScenes(nextDraft.clips.sceneData);
     } else if (Array.isArray(nextDraft?.scenes?.sceneData) && nextDraft.scenes.sceneData.length) {
       setScenes(nextDraft.scenes.sceneData);
+    } else if (Array.isArray(nextDraft?.scenes) && nextDraft.scenes.length) {
+      setScenes(nextDraft.scenes);
     }
     if (nextDraft?.audio?.tracks) setGeneratedTracks(nextDraft.audio.tracks);
     if (nextDraft?.mix?.finalAudioUrl) setFinalAudioUrl(nextDraft.mix.finalAudioUrl);
@@ -431,32 +433,62 @@ const ReelGenerator: React.FC = () => {
     }
 
     // Sync / resume running queue jobs after page refresh or load
+    // Sync / resume running queue jobs after page refresh or load
     const draftJobs = (nextDraft && typeof nextDraft === 'object' ? nextDraft.jobs : null) || {};
-    const clipsJob = draftJobs.clips;
-    const mergeJob = draftJobs.merge;
 
-    if (clipsJob && ['queued', 'processing'].includes(String(clipsJob.status).toLowerCase())) {
-      console.log(`Reconnecting to active clips job: ${clipsJob.queueJobId}`);
-      pollJob(clipsJob.queueJobId, async (result) => {
-        setScenes(result.sceneData || []);
-        setDraft(result.draft || nextDraft);
-      }).catch((e: any) => {
-        setError(e?.message || 'Clip generation task failed.');
-        setActiveJobStatus('failed');
-      });
-    } else if (mergeJob && ['queued', 'processing'].includes(String(mergeJob.status).toLowerCase())) {
-      console.log(`Reconnecting to active merge job: ${mergeJob.queueJobId}`);
-      pollJob(mergeJob.queueJobId, async (result) => {
-        setFinalVideoUrl(result?.merge?.finalVideoUrl || result?.draft?.merge?.finalVideoUrl || '');
-        setFinalOutputUrl(result?.merge?.finalOutputUrl || result?.draft?.merge?.finalOutputUrl || '');
-        setDraft(result?.draft || nextDraft);
-        await loadVideoDrafts();
-      }).catch((e: any) => {
-        setError(e?.message || 'Video merge task failed.');
-        setActiveJobStatus('failed');
-      });
-    }
+    const resumeJob = (job: any, jobName: string, successCallback: (result: any) => void) => {
+      if (job && ['queued', 'processing'].includes(String(job.status).toLowerCase())) {
+        console.log(`Reconnecting to active ${jobName} job: ${job.queueJobId}`);
+        pollJob(job.queueJobId, successCallback).catch((e: any) => {
+          setError(e?.message || `${jobName} task failed.`);
+          setActiveJobStatus('failed');
+        });
+        return true;
+      }
+      return false;
+    };
+
+    if (resumeJob(draftJobs.scenes, 'scenes', (result) => {
+      setScenes(result.sceneData || []);
+      setDraft(result.draft || nextDraft);
+    })) return;
+
+    if (resumeJob(draftJobs.images, 'images', (result) => {
+      setScenes(result.sceneData || []);
+      setDraft(result.draft || nextDraft);
+    })) return;
+
+    if (resumeJob(draftJobs.clips, 'clips', (result) => {
+      setScenes(result.sceneData || []);
+      setDraft(result.draft || nextDraft);
+    })) return;
+
+    if (resumeJob(draftJobs.audio, 'audio', (result) => {
+      setGeneratedTracks(result?.audio?.tracks || null);
+      setDraft(result?.draft || nextDraft);
+    })) return;
+
+    if (resumeJob(draftJobs.mix, 'mix', (result) => {
+      setFinalAudioUrl(result.finalAudioUrl || '');
+      setDraft(result.draft || nextDraft);
+    })) return;
+
+    if (resumeJob(draftJobs.merge, 'merge', async (result) => {
+      setFinalVideoUrl(result?.merge?.finalVideoUrl || result?.draft?.merge?.finalVideoUrl || '');
+      setFinalOutputUrl(result?.merge?.finalOutputUrl || result?.draft?.merge?.finalOutputUrl || '');
+      setDraft(result?.draft || nextDraft);
+      await loadVideoDrafts();
+    })) return;
   };
+
+  useEffect(() => {
+    const qJobId = searchParams.get('jobId');
+    if (qJobId) {
+      setJobId(qJobId);
+      setShowWizard(true);
+      refreshDraft(qJobId, { syncStep: true });
+    }
+  }, [searchParams]);
 
   const withBusy = async (fn: () => Promise<void>) => {
     setBusy(true);
@@ -578,19 +610,53 @@ const ReelGenerator: React.FC = () => {
     setStep(2);
   });
 
+  const startAutoGenerate = async () => withBusy(async () => {
+    const effectiveDescription = description.trim();
+    if (!effectiveDescription) {
+      throw new Error('Description is required');
+    }
+
+    const payload = {
+      description: effectiveDescription,
+      durationSeconds,
+      sceneCount: sceneCount || undefined,
+      imageData: inputImageData || undefined,
+      productId: selectedProduct?._id || undefined,
+      product: selectedProduct || undefined,
+      videoType: 'reel',
+      audio: buildAudioPayload()
+    };
+
+    const response = await videoGenerationAPI.createVideo(payload);
+    if (!response?.success) {
+      throw new Error(response?.message || 'Failed to start auto generation');
+    }
+
+    setSuccessMessage('Saved to Drafts. Video is generating in background.');
+    resetWizard(true);
+    setStatusFilter('draft');
+  });
+
   const generatePromptAndScenes = async () => withBusy(async () => {
     if (!jobId) throw new Error('Draft missing. Complete step 1 first.');
-    const promptResponse = await videoGenerationAPI.generatePrompt({
-      jobId,
-      promptText: promptText || undefined
-    });
-    const effectivePrompt = promptResponse?.prompt?.promptText || promptText;
-    setPromptText(effectivePrompt);
-
     const sceneResponse = await videoGenerationAPI.generateScenes({
       jobId,
-      promptText: effectivePrompt
+      promptText: promptText || undefined,
+      async: true
     });
+
+    const queueJobId = sceneResponse?.queueJobId;
+    if (queueJobId) {
+      await pollJob(queueJobId, async (result) => {
+        setScenes(result.sceneData || []);
+        if (result.draft?.prompt?.promptText) {
+          setPromptText(result.draft.prompt.promptText);
+        }
+        setDraft(result.draft || draft);
+      });
+      return;
+    }
+
     if (!sceneResponse?.success) {
       throw new Error(sceneResponse?.message || 'Scene generation failed');
     }
@@ -620,8 +686,19 @@ const ReelGenerator: React.FC = () => {
     const response = await videoGenerationAPI.generateImages({
       jobId,
       action: 'generateAll',
-      sceneData: scenes
+      sceneData: scenes,
+      async: true
     });
+
+    const queueJobId = response?.queueJobId;
+    if (queueJobId) {
+      await pollJob(queueJobId, async (result) => {
+        setScenes(result.sceneData || []);
+        setDraft(result.draft || draft);
+      });
+      return;
+    }
+
     if (!response?.success) throw new Error(response?.message || 'Image generation failed');
     setScenes(response.sceneData || []);
     setDraft(response.draft || draft);
@@ -699,8 +776,20 @@ const ReelGenerator: React.FC = () => {
     const audioJobId = await ensureDraftForAudioTest(description);
     const response = await videoGenerationAPI.generateAudio({
       jobId: audioJobId,
-      audio: buildAudioPayload()
+      audio: buildAudioPayload(),
+      async: true
     });
+
+    const queueJobId = response?.queueJobId;
+    if (queueJobId) {
+      await pollJob(queueJobId, async (result) => {
+        setGeneratedTracks(result?.audio?.tracks || null);
+        setFinalAudioUrl('');
+        setDraft(result?.draft || draft);
+      });
+      return;
+    }
+
     if (!response?.success) throw new Error(response?.message || 'Audio generation failed');
     setGeneratedTracks(response?.audio?.tracks || null);
     setFinalAudioUrl('');
@@ -711,8 +800,20 @@ const ReelGenerator: React.FC = () => {
     if (!jobId) throw new Error('Draft missing');
     const response = await videoGenerationAPI.generateAudio({
       jobId,
-      audio: buildAudioPayload()
+      audio: buildAudioPayload(),
+      async: true
     });
+
+    const queueJobId = response?.queueJobId;
+    if (queueJobId) {
+      await pollJob(queueJobId, async (result) => {
+        setGeneratedTracks(result?.audio?.tracks || null);
+        setDraft(result?.draft || draft);
+        setStep(6);
+      });
+      return;
+    }
+
     if (!response?.success) throw new Error(response?.message || 'Audio generation failed');
     setGeneratedTracks(response?.audio?.tracks || null);
     setDraft(response?.draft || draft);
@@ -724,8 +825,19 @@ const ReelGenerator: React.FC = () => {
     const response = await videoGenerationAPI.mixAudio({
       jobId,
       tracks: generatedTracks || draft?.audio?.tracks || {},
-      durationSeconds
+      durationSeconds,
+      async: true
     });
+
+    const queueJobId = response?.queueJobId;
+    if (queueJobId) {
+      await pollJob(queueJobId, async (result) => {
+        setFinalAudioUrl(result.finalAudioUrl || '');
+        setDraft(result.draft || draft);
+      });
+      return;
+    }
+
     if (!response?.success) throw new Error(response?.message || 'Audio mix failed');
     setFinalAudioUrl(response.finalAudioUrl || '');
     setDraft(response.draft || draft);
@@ -862,6 +974,31 @@ const ReelGenerator: React.FC = () => {
     }
   };
 
+  const deleteGlobalDraft = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!id || deletingDraftId) return;
+    const ok = window.confirm(`Delete this draft? This will permanently remove the draft.`);
+    if (!ok) return;
+
+    setDeletingDraftId(id);
+    setError('');
+    try {
+      const response = await draftsAPI.deleteDraft(id);
+      if (!response?.success) {
+        throw new Error('Failed to delete draft');
+      }
+      setReelDraftsList((prev) => prev.filter((item) => item._id !== id));
+      if (jobId === id) {
+        resetWizard();
+        setShowWizard(false);
+      }
+    } catch (err: any) {
+      setError(err?.message || 'Failed to delete draft');
+    } finally {
+      setDeletingDraftId('');
+    }
+  };
+
   const statusLabel = (status: string) => {
     if (status === 'posted') return 'Posted';
     if (status === 'scheduled') return 'Scheduled';
@@ -963,7 +1100,15 @@ const ReelGenerator: React.FC = () => {
                   {reelDraftsList.map((item) => (
                     <div
                       key={item._id}
-                      onClick={() => setSelectedDraft(item)}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => openVideoDraft(item.generationProgress?.jobId || item._id)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          openVideoDraft(item.generationProgress?.jobId || item._id);
+                        }
+                      }}
                       className={`text-left rounded-2xl border overflow-hidden shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg cursor-pointer ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 hover:border-[#ffcc29]/50' : 'bg-white border-slate-200 hover:border-[#ffcc29]/60'}`}
                     >
                       <div className="relative">
@@ -974,6 +1119,19 @@ const ReelGenerator: React.FC = () => {
                             <Film className="w-8 h-8 text-slate-500" />
                           </div>
                         )}
+                        <button
+                          onClick={(e) => deleteGlobalDraft(item._id, e)}
+                          disabled={deletingDraftId === item._id}
+                          title="Delete draft"
+                          aria-label="Delete draft"
+                          className="absolute top-3 right-3 w-9 h-9 rounded-full bg-black/65 text-white flex items-center justify-center transition hover:bg-red-600 disabled:opacity-60 disabled:cursor-not-allowed"
+                        >
+                          {deletingDraftId === item._id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-4 h-4" />
+                          )}
+                        </button>
                       </div>
                       <div className="p-4 space-y-3">
                         <p className={`text-base font-semibold leading-snug ${theme.text} line-clamp-2`}>
@@ -1260,9 +1418,14 @@ const ReelGenerator: React.FC = () => {
                   </select>
                 </div>
 
-                <button onClick={step1Next} disabled={!canStep1Next} className={primaryButtonClass(!canStep1Next)}>
-                  {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Next'}
-                </button>
+                <div className="flex gap-3">
+                  <button onClick={step1Next} disabled={!canStep1Next} className={primaryButtonClass(!canStep1Next)}>
+                    {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Next'}
+                  </button>
+                  <button onClick={startAutoGenerate} disabled={!canStep1Next} className={`px-6 py-3 rounded-xl font-bold transition-colors ${!canStep1Next ? 'bg-blue-900/50 text-blue-500/50 cursor-not-allowed' : 'bg-blue-500 text-white hover:bg-blue-600'}`}>
+                    {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Auto-Generate Full Video'}
+                  </button>
+                </div>
               </div>
             )}
 
@@ -1288,49 +1451,49 @@ const ReelGenerator: React.FC = () => {
                   {(scenes || []).map((scene, idx) => {
                     const isRegen = regeneratingSceneIds.has(String(scene.sceneId || ''));
                     return (
-                    <div key={scene.sceneId || idx} className={`relative ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3 space-y-3 overflow-hidden`}>
-                      <div className="flex items-center justify-between gap-2">
-                        <p className={`text-sm font-bold ${theme.text}`}>Scene {idx + 1}</p>
-                        <button
-                          onClick={() => regenerateScene(scene)}
-                          disabled={isRegen}
-                          className="px-3 py-1.5 text-xs rounded-lg border border-[#ffcc29] text-[#ffcc29] hover:bg-[#ffcc29]/10 disabled:opacity-50 flex items-center gap-1.5"
-                        >
-                          {isRegen ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCcw className="w-3 h-3" />}
-                          {isRegen ? 'Regenerating' : 'Regenerate Scene'}
-                        </button>
-                      </div>
-
-                      <div>
-                        <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Title</label>
-                        <input value={scene.title || ''} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, title: e.target.value } : item))} className={`${inputClass} mt-1`} disabled={isRegen} />
-                      </div>
-
-                      <div>
-                        <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Duration (seconds)</label>
-                        <input type="number" min={1} value={scene.durationSeconds || 1} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, durationSeconds: Number(e.target.value) || 1 } : item))} className={`${inputClass} mt-1`} disabled={isRegen} />
-                      </div>
-
-                      <div>
-                        <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Image Prompt</label>
-                        <textarea value={scene.imagePrompt || ''} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, imagePrompt: e.target.value } : item))} className={`${inputClass} mt-1 min-h-[70px]`} placeholder="Describe the visual for the still image" disabled={isRegen} />
-                      </div>
-
-                      <div>
-                        <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Video Prompt</label>
-                        <textarea value={scene.videoPrompt || ''} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, videoPrompt: e.target.value } : item))} className={`${inputClass} mt-1 min-h-[70px]`} placeholder="Describe the motion / animation for the clip" disabled={isRegen} />
-                      </div>
-
-                      {isRegen && (
-                        <div className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none">
-                          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[#ffcc29]/15 to-transparent skeleton-shimmer" />
-                          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/40 backdrop-blur-[2px]">
-                            <Sparkles className="w-7 h-7 text-[#ffcc29] animate-pulse" />
-                            <p className="text-sm font-semibold text-[#ffcc29] tracking-wide">Regenerating scene...</p>
-                          </div>
+                      <div key={scene.sceneId || idx} className={`relative ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3 space-y-3 overflow-hidden`}>
+                        <div className="flex items-center justify-between gap-2">
+                          <p className={`text-sm font-bold ${theme.text}`}>Scene {idx + 1}</p>
+                          <button
+                            onClick={() => regenerateScene(scene)}
+                            disabled={isRegen}
+                            className="px-3 py-1.5 text-xs rounded-lg border border-[#ffcc29] text-[#ffcc29] hover:bg-[#ffcc29]/10 disabled:opacity-50 flex items-center gap-1.5"
+                          >
+                            {isRegen ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCcw className="w-3 h-3" />}
+                            {isRegen ? 'Regenerating' : 'Regenerate Scene'}
+                          </button>
                         </div>
-                      )}
-                    </div>
+
+                        <div>
+                          <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Title</label>
+                          <input value={scene.title || ''} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, title: e.target.value } : item))} className={`${inputClass} mt-1`} disabled={isRegen} />
+                        </div>
+
+                        <div>
+                          <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Duration (seconds)</label>
+                          <input type="number" min={1} value={scene.durationSeconds || 1} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, durationSeconds: Number(e.target.value) || 1 } : item))} className={`${inputClass} mt-1`} disabled={isRegen} />
+                        </div>
+
+                        <div>
+                          <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Image Prompt</label>
+                          <textarea value={scene.imagePrompt || ''} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, imagePrompt: e.target.value } : item))} className={`${inputClass} mt-1 min-h-[70px]`} placeholder="Describe the visual for the still image" disabled={isRegen} />
+                        </div>
+
+                        <div>
+                          <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Video Prompt</label>
+                          <textarea value={scene.videoPrompt || ''} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, videoPrompt: e.target.value } : item))} className={`${inputClass} mt-1 min-h-[70px]`} placeholder="Describe the motion / animation for the clip" disabled={isRegen} />
+                        </div>
+
+                        {isRegen && (
+                          <div className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none">
+                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[#ffcc29]/15 to-transparent skeleton-shimmer" />
+                            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/40 backdrop-blur-[2px]">
+                              <Sparkles className="w-7 h-7 text-[#ffcc29] animate-pulse" />
+                              <p className="text-sm font-semibold text-[#ffcc29] tracking-wide">Regenerating scene...</p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     );
                   })}
                 </div>
@@ -1351,42 +1514,42 @@ const ReelGenerator: React.FC = () => {
                   {scenes.map((scene, idx) => {
                     const isRegen = regeneratingSceneIds.has(String(scene.sceneId || ''));
                     return (
-                    <div key={scene.sceneId || idx} className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3`}>
-                      <p className={`font-semibold ${theme.text}`}>{scene.title || `Scene ${idx + 1}`}</p>
-                      <textarea value={scene.imagePrompt || ''} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, imagePrompt: e.target.value } : item))} className={`${inputClass} mt-2 min-h-[70px]`} disabled={isRegen} />
-                      <div className="relative mt-3">
-                        {scene.imageUrl ? (
-                          <img src={scene.imageUrl} alt={scene.title} className={`w-full h-52 object-cover rounded-lg border border-slate-700 transition-all duration-300 ${isRegen ? 'opacity-30 blur-sm' : ''}`} />
-                        ) : (
-                          <div className="h-52 rounded-lg border border-dashed border-slate-600 flex items-center justify-center">
-                            <ImageIcon className="w-7 h-7 text-slate-500" />
-                          </div>
-                        )}
-                        {isRegen && (
-                          <div className="absolute inset-0 rounded-lg overflow-hidden pointer-events-none">
-                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[#ffcc29]/15 to-transparent skeleton-shimmer" />
-                            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/30 backdrop-blur-[2px]">
-                              <Sparkles className="w-6 h-6 text-[#ffcc29] animate-pulse" />
-                              <p className="text-xs font-semibold text-[#ffcc29] tracking-wide">Regenerating...</p>
+                      <div key={scene.sceneId || idx} className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3`}>
+                        <p className={`font-semibold ${theme.text}`}>{scene.title || `Scene ${idx + 1}`}</p>
+                        <textarea value={scene.imagePrompt || ''} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, imagePrompt: e.target.value } : item))} className={`${inputClass} mt-2 min-h-[70px]`} disabled={isRegen} />
+                        <div className="relative mt-3">
+                          {scene.imageUrl ? (
+                            <img src={scene.imageUrl} alt={scene.title} className={`w-full h-52 object-cover rounded-lg border border-slate-700 transition-all duration-300 ${isRegen ? 'opacity-30 blur-sm' : ''}`} />
+                          ) : (
+                            <div className="h-52 rounded-lg border border-dashed border-slate-600 flex items-center justify-center">
+                              <ImageIcon className="w-7 h-7 text-slate-500" />
                             </div>
-                          </div>
-                        )}
+                          )}
+                          {isRegen && (
+                            <div className="absolute inset-0 rounded-lg overflow-hidden pointer-events-none">
+                              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[#ffcc29]/15 to-transparent skeleton-shimmer" />
+                              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/30 backdrop-blur-[2px]">
+                                <Sparkles className="w-6 h-6 text-[#ffcc29] animate-pulse" />
+                                <p className="text-xs font-semibold text-[#ffcc29] tracking-wide">Regenerating...</p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex gap-2 mt-3">
+                          <button
+                            onClick={() => regenerateSceneImage(scene)}
+                            disabled={isRegen}
+                            className="px-3 py-2 text-xs rounded-lg border border-[#ffcc29] text-[#ffcc29] hover:bg-[#ffcc29]/10 disabled:opacity-50 flex items-center gap-1.5"
+                          >
+                            {isRegen ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCcw className="w-3 h-3" />}
+                            {isRegen ? 'Regenerating' : 'Regenerate'}
+                          </button>
+                          <label className={`px-3 py-2 text-xs rounded-lg border border-slate-500 text-slate-300 ${isRegen ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
+                            Replace
+                            <input type="file" accept="image/*" className="hidden" disabled={isRegen} onChange={(e) => onSceneImageReplace(scene.sceneId, e.target.files?.[0])} />
+                          </label>
+                        </div>
                       </div>
-                      <div className="flex gap-2 mt-3">
-                        <button
-                          onClick={() => regenerateSceneImage(scene)}
-                          disabled={isRegen}
-                          className="px-3 py-2 text-xs rounded-lg border border-[#ffcc29] text-[#ffcc29] hover:bg-[#ffcc29]/10 disabled:opacity-50 flex items-center gap-1.5"
-                        >
-                          {isRegen ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCcw className="w-3 h-3" />}
-                          {isRegen ? 'Regenerating' : 'Regenerate'}
-                        </button>
-                        <label className={`px-3 py-2 text-xs rounded-lg border border-slate-500 text-slate-300 ${isRegen ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
-                          Replace
-                          <input type="file" accept="image/*" className="hidden" disabled={isRegen} onChange={(e) => onSceneImageReplace(scene.sceneId, e.target.files?.[0])} />
-                        </label>
-                      </div>
-                    </div>
                     );
                   })}
                 </div>
@@ -1795,16 +1958,6 @@ const ReelGenerator: React.FC = () => {
             </div>
           </>
         )}
-      {selectedDraft && (
-        <DraftPreviewModal
-          draft={selectedDraft}
-          onClose={() => setSelectedDraft(null)}
-          onSuccess={() => {
-            setSelectedDraft(null);
-            loadVideoDrafts();
-          }}
-        />
-      )}
       </div>
     </div>
   );

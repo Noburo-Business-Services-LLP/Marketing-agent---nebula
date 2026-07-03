@@ -4,6 +4,7 @@ const crypto = require('crypto');
 
 const { STORAGE_ROOT } = require('./videoGenerationPipeline');
 const VideoDraft = require('../models/VideoDraft');
+const Draft = require('../models/Draft');
 
 function sanitizeSegment(value, fallback = 'asset') {
   const raw = String(value || '').trim();
@@ -90,6 +91,48 @@ async function writeDraft(draft) {
     await fs.promises.writeFile(draftPath, JSON.stringify(payload, null, 2), 'utf8');
   } catch (fsError) {
     console.error('⚠️ Failed to save draft to disk:', fsError.message);
+  }
+
+  // 3. Sync to Global Draft
+  try {
+    const isProcessing = Object.values(payload.jobs || {}).some(
+      (j) => j && (j.status === 'processing' || j.status === 'queued')
+    );
+    let status = 'draft';
+    if (isProcessing) {
+      status = 'processing';
+    } else if (payload.merge?.finalOutputUrl || payload.merge?.finalVideoUrl) {
+      status = 'completed';
+    }
+
+    const updateFields = {
+      status,
+      creative: {
+        ...(payload.input || {}),
+        prompt: payload.prompt || null,
+        scenes: payload.scenes || null,
+        images: payload.images || null,
+        audio: payload.audio || null,
+        clips: payload.clips || null,
+        mix: payload.mix || null,
+        merge: payload.merge || null
+      },
+      generationProgress: {
+        ...(payload.jobs || {}),
+        jobId: payload.jobId,
+        currentStep: payload.currentStep
+      }
+    };
+
+    if (payload.userId) {
+      await Draft.findOneAndUpdate(
+        { 'generationProgress.jobId': payload.jobId, userId: payload.userId },
+        { $set: updateFields },
+        { upsert: false } // We don't upsert here to avoid creating drafts without title etc.
+      );
+    }
+  } catch (syncError) {
+    console.error('⚠️ Failed to sync draft to Global Draft:', syncError.message);
   }
 
   return payload;
