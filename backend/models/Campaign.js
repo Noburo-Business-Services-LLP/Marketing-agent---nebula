@@ -22,7 +22,7 @@ const campaignSchema = new mongoose.Schema({
   }],
   status: {
     type: String,
-    enum: ['draft', 'scheduled', 'active', 'posted', 'paused', 'archived'],
+    enum: ['draft', 'scheduled', 'active', 'posted', 'paused', 'archived', 'failed'],
     default: 'draft'
   },
   priority: {

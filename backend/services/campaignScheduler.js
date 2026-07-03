@@ -189,9 +189,18 @@ async function waitForFacebookPostId({ profileKey = '', ayrsharePostId = '', ini
 }
 
 async function processDueCampaigns({ now = new Date(), limit = 20 } = {}) {
+  const MAX_PUBLISH_ATTEMPTS = Number(process.env.CAMPAIGN_MAX_PUBLISH_ATTEMPTS || 3);
   const dueCampaigns = await Campaign.find({
     status: 'scheduled',
     'scheduling.startDate': { $lte: now },
+    // Defense-in-depth: skip campaigns already at the failure ceiling even if
+    // their status somehow got reset back to 'scheduled'. Prevents the Ayrshare
+    // post-error spam that caused suspension #3.
+    $or: [
+      { publishFailureCount: { $lt: MAX_PUBLISH_ATTEMPTS } },
+      { publishFailureCount: { $exists: false } }
+    ],
+    publishAutoCancelled: { $ne: true }
   })
     .sort({ 'scheduling.startDate': 1 })
     .limit(limit);
