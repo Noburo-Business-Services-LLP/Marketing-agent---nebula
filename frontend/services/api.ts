@@ -3440,10 +3440,11 @@ export const videoGenerationAPI = {
   generateContent: async (payload: {
     jobId: string;
     selectedPlatforms?: string[];
+    async?: boolean;
   }): Promise<any> => {
     return apiCall('/video-generation/generateContent', {
       method: 'POST',
-      body: JSON.stringify(payload)
+      body: JSON.stringify({ ...payload, async: true })
     }, true);
   },
 
