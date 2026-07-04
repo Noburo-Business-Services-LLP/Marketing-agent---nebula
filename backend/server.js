@@ -289,8 +289,8 @@ app.use('/api', generalLimiter);
 // Raw body for Razorpay webhook signature verification (must come before express.json)
 app.use('/api/payment/webhook', express.raw({ type: 'application/json' }));
 
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: '150mb' }));
+app.use(express.urlencoded({ extended: true, limit: '150mb' }));
 
 // ============================================
 // Security: NoSQL Injection Prevention
