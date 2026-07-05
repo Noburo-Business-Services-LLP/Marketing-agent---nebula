@@ -135,7 +135,8 @@ app.use(helmet({
 // ============================================
 // Security: CORS — Locked to Allowed Origins
 // ============================================
-const allowedOrigins = [
+// Baseline hardcoded whitelist — always allowed.
+const BASE_ALLOWED_ORIGINS = [
   'http://localhost:3000',
   'http://localhost:5000',
   'http://localhost:5173',
@@ -154,6 +155,20 @@ const allowedOrigins = [
   'http://stratschool-prod-alb-59606506.ap-south-1.elb.amazonaws.com',
   'https://stratschool-prod-alb-59606506.ap-south-1.elb.amazonaws.com'
 ];
+
+// Additional origins from env var. Comma-separated. Set
+// CORS_ALLOWED_ORIGINS in .env or Fargate task-def to whitelist
+// extra URLs at runtime without a code change or image rebuild.
+// Example: CORS_ALLOWED_ORIGINS=https://foo.example.com,https://bar.example.com
+const extraOrigins = String(process.env.CORS_ALLOWED_ORIGINS || '')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
+
+const allowedOrigins = Array.from(new Set([...BASE_ALLOWED_ORIGINS, ...extraOrigins]));
+if (extraOrigins.length > 0) {
+  console.log(`[CORS] Extra origins from CORS_ALLOWED_ORIGINS env: ${extraOrigins.join(', ')}`);
+}
 
 app.use(cors({
   origin: function(origin, callback) {
