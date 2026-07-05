@@ -149,7 +149,10 @@ const allowedOrigins = [
   'https://demo.nebulaa.ai',
   'https://www.demo.nebulaa.ai',
   'https://main.nebulaa.ai',
-  'https://www.main.nebulaa.ai'
+  'https://www.main.nebulaa.ai',
+  // AWS ALB (prod frontend) — HTTP + HTTPS for when TLS cert is added later
+  'http://stratschool-prod-alb-59606506.ap-south-1.elb.amazonaws.com',
+  'https://stratschool-prod-alb-59606506.ap-south-1.elb.amazonaws.com'
 ];
 
 app.use(cors({
