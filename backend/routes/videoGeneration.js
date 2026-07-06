@@ -882,6 +882,26 @@ router.post('/createVideo', protect, checkTrial, videoAiWriteLimiter, async (req
       }
     });
 
+    try {
+      const Draft = require('../models/Draft');
+      await Draft.findOneAndUpdate(
+        { 'generationProgress.jobId': queued.jobId, userId: String(userId) },
+        {
+          $set: {
+            title: String(payload.description || 'AI Video Draft').substring(0, 50),
+            status: 'processing',
+            sourceType: 'reel',
+            contentType: 'reel',
+            'generationProgress.step': 'Queued in background',
+            'generationProgress.progress': 0
+          }
+        },
+        { upsert: true, new: true }
+      );
+    } catch (e) {
+      console.error('Failed to create Draft on enqueue:', e);
+    }
+
     return res.status(202).json({
       success: true,
       message: 'Video generation queued',

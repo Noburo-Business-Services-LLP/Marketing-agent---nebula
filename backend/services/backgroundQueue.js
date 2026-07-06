@@ -14,6 +14,31 @@ async function generateSingleCalendarItem(calendar, item, weekNumber) {
   try {
     console.log(`[BackgroundQueue] Generating content for item Day ${item.day} (${item.headline || item._id})`);
 
+    // Determine sourceType early for processing draft
+    let sourceType = 'post';
+    const formatLower = String(item.format || '').toLowerCase();
+    if (formatLower.includes('reel') || formatLower.includes('video')) {
+      sourceType = 'reel';
+    } else if (formatLower.includes('campaign')) {
+      sourceType = 'campaign';
+    }
+
+    // Pre-create processing draft
+    const draft = new Draft({
+      userId: calendar.userId,
+      title: item.headline || `Weekly Generated Day ${item.day}`,
+      status: 'processing',
+      sourceType,
+      contentCalendarId: calendar._id,
+      calendarWeek: weekNumber,
+      calendarDay: item.day,
+      generationProgress: {
+        step: 'Generating content',
+        progress: 0
+      }
+    });
+    await draft.save();
+
     // 1. Generate text details using LLM (Gemini)
     const prompt = `You are an expert Social Media Copywriter and Brand Strategist.
 Based on the following content calendar item, generate a social media post:
@@ -41,6 +66,9 @@ Return ONLY a JSON object (no markdown, no backticks, no code blocks):
       console.error('[BackgroundQueue] Failed to parse JSON from Gemini response, using fallback text');
     }
 
+    draft.generationProgress = { step: 'Generating Image', progress: 50 };
+    await draft.save();
+
     // 2. Generate Image using Nano Banana Pro
     let imageUrl = '';
     try {
@@ -57,41 +85,25 @@ Return ONLY a JSON object (no markdown, no backticks, no code blocks):
       console.error('[BackgroundQueue] Image generation failed:', imgErr.message);
     }
 
-    // Determine sourceType
-    let sourceType = 'post';
-    const formatLower = String(item.format || '').toLowerCase();
-    if (formatLower.includes('reel') || formatLower.includes('video')) {
-      sourceType = 'reel';
-    } else if (formatLower.includes('campaign')) {
-      sourceType = 'campaign';
-    }
-
-    // 3. Create Draft record
-    const draft = new Draft({
-      userId: calendar.userId,
-      title: item.headline || `Weekly Generated Day ${item.day}`,
-      caption: parsed.caption || '',
+    // 3. Update Draft record
+    draft.caption = parsed.caption || '';
+    draft.hashtags = parsed.hashtags || [];
+    draft.cta = item.cta || '';
+    draft.imageUrl = imageUrl;
+    draft.imagePrompt = parsed.imagePrompt || item.creativeConcept || '';
+    draft.platforms = ['instagram'];
+    draft.language = calendar.language || 'English';
+    draft.objective = item.objective || 'awareness';
+    draft.status = 'completed';
+    draft.creative = {
+      type: sourceType === 'reel' ? 'reel' : 'image',
+      textContent: parsed.caption || '',
+      captions: parsed.caption || '',
+      imageUrls: imageUrl ? [imageUrl] : [],
       hashtags: parsed.hashtags || [],
-      cta: item.cta || '',
-      imageUrl,
-      imagePrompt: parsed.imagePrompt || item.creativeConcept || '',
-      platforms: ['instagram'],
-      language: calendar.language || 'English',
-      objective: item.objective || 'awareness',
-      status: 'draft',
-      sourceType,
-      contentCalendarId: calendar._id,
-      calendarWeek: weekNumber,
-      calendarDay: item.day,
-      creative: {
-        type: sourceType === 'reel' ? 'reel' : 'image',
-        textContent: parsed.caption || '',
-        captions: parsed.caption || '',
-        imageUrls: imageUrl ? [imageUrl] : [],
-        hashtags: parsed.hashtags || [],
-        callToAction: item.cta || ''
-      }
-    });
+      callToAction: item.cta || ''
+    };
+    draft.generationProgress = { step: 'Completed', progress: 100 };
     await draft.save();
 
     // 4. Create Campaign record for sync

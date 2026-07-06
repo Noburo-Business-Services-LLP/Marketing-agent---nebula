@@ -49,6 +49,29 @@ export const Drafts: React.FC = () => {
     fetchDrafts();
   }, [activeTab]);
 
+  // Polling for processing drafts
+  useEffect(() => {
+    const hasProcessing = drafts.some(d => d.status === 'processing');
+    let interval: any;
+    
+    if (hasProcessing) {
+      interval = setInterval(async () => {
+        try {
+          const response = await draftsAPI.getDrafts(activeTab);
+          if (response.drafts) {
+            setDrafts(response.drafts);
+          }
+        } catch (e) {
+          console.error("Polling error:", e);
+        }
+      }, 4000);
+    }
+    
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [drafts, activeTab]);
+
   // Apply search filtering locally
   useEffect(() => {
     let result = drafts;
@@ -128,7 +151,13 @@ export const Drafts: React.FC = () => {
       case 'published': 
         return <span className="px-2 py-0.5 rounded text-[10px] uppercase font-bold bg-green-950/40 text-green-400 border border-green-900/50">Published</span>;
       case 'archived': 
-        return <span className="px-2 py-0.5 rounded text-[10px] uppercase font-bold bg-red-950/40 text-red-400 border border-red-900/50">Archived</span>;
+        return <span className="px-2 py-0.5 rounded text-[10px] uppercase font-bold bg-slate-900 text-slate-500 border border-slate-800">Archived</span>;
+      case 'processing':
+        return <span className="px-2 py-0.5 rounded text-[10px] uppercase font-bold bg-indigo-950/40 text-indigo-400 border border-indigo-900/50 flex items-center gap-1"><Loader2 className="w-2.5 h-2.5 animate-spin" /> Processing</span>;
+      case 'completed':
+        return <span className="px-2 py-0.5 rounded text-[10px] uppercase font-bold bg-teal-950/40 text-teal-400 border border-teal-900/50">Completed</span>;
+      case 'failed':
+        return <span className="px-2 py-0.5 rounded text-[10px] uppercase font-bold bg-red-950/40 text-red-400 border border-red-900/50 flex items-center gap-1"><AlertCircle className="w-2.5 h-2.5" /> Failed</span>;
       default: 
         return null;
     }
@@ -326,7 +355,26 @@ export const Drafts: React.FC = () => {
 
                   {/* Thumbnail / Image Preview */}
                   <div className="relative aspect-video w-full bg-slate-900 overflow-hidden flex items-center justify-center">
-                    {item.imageUrl ? (
+                    {item.status === 'processing' ? (
+                      <div className="absolute inset-0 bg-slate-800 animate-pulse flex flex-col items-center justify-center space-y-3 p-4">
+                        <Loader2 className="w-8 h-8 text-[#ffcc29] animate-spin" />
+                        <span className="text-xs text-[#ffcc29] font-medium text-center line-clamp-2">
+                          {item.generationProgress?.step || 'Processing...'}
+                        </span>
+                        {typeof item.generationProgress?.progress === 'number' && item.generationProgress.progress > 0 && (
+                          <div className="w-2/3 bg-slate-700 rounded-full h-1.5 mt-2 overflow-hidden">
+                            <div className="bg-[#ffcc29] h-1.5 rounded-full transition-all duration-300" style={{ width: `${item.generationProgress.progress}%` }}></div>
+                          </div>
+                        )}
+                      </div>
+                    ) : item.status === 'failed' ? (
+                      <div className="absolute inset-0 bg-red-950/30 flex flex-col items-center justify-center text-red-500 p-4">
+                        <AlertCircle className="w-8 h-8 mb-2 opacity-80" />
+                        <span className="text-xs font-semibold text-center line-clamp-2">
+                          {item.errorMessage || 'Generation Failed'}
+                        </span>
+                      </div>
+                    ) : item.imageUrl ? (
                       <img 
                         src={item.imageUrl} 
                         alt={item.title} 
@@ -385,20 +433,26 @@ export const Drafts: React.FC = () => {
                             {item.hashtags.length} Tags
                           </span>
                         )}
-                        <button
-                          onClick={() => {
-                            if (String(item.sourceType).toLowerCase() === 'reel' || String(item.contentType).toLowerCase() === 'reel') {
-                              const jobId = item.generationProgress?.jobId || item._id;
-                              navigate(`/reels?jobId=${jobId}`);
-                            } else {
-                              setSelectedDraft(item);
-                            }
-                          }}
-                          className="text-xs font-bold text-[#ffcc29] hover:underline flex items-center gap-1"
-                        >
-                          Edit & Post
-                          <ExternalLink className="w-3 h-3" />
-                        </button>
+                        {item.status === 'processing' ? (
+                          <span className="text-xs font-bold text-slate-500 flex items-center gap-1">
+                            <Loader2 className="w-3 h-3 animate-spin" /> Generating
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              if (String(item.sourceType).toLowerCase() === 'reel' || String(item.contentType).toLowerCase() === 'reel') {
+                                const jobId = item.generationProgress?.jobId || item._id;
+                                navigate(`/reels?jobId=${jobId}`);
+                              } else {
+                                setSelectedDraft(item);
+                              }
+                            }}
+                            className="text-xs font-bold text-[#ffcc29] hover:underline flex items-center gap-1"
+                          >
+                            {item.status === 'failed' ? 'View/Retry' : 'Edit & Post'}
+                            <ExternalLink className="w-3 h-3" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>

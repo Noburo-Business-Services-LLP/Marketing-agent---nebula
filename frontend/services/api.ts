@@ -1482,6 +1482,9 @@ export const apiService = {
       selectedProducts?: any[];
       prompt?: string;
       language?: string;
+      generateOption?: string;
+      existingCaption?: string;
+      existingHashtags?: string;
     }
   ): Promise<{
     success: boolean;
@@ -3983,9 +3986,10 @@ export const draftsAPI = {
     title: string;
     caption: string;
     hashtags: string[];
+    platforms?: string[];
     prompt: string;
     aspectRatio?: string;
-  }): Promise<{ success: boolean; draftId: string; draft: Draft }> => {
+  }): Promise<{ success: boolean; draftId?: string; draft?: Draft; message?: string }> => {
     return apiCall('/drafts/generate-image-bg', {
       method: 'POST',
       body: JSON.stringify(data)
