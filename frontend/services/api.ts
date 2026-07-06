@@ -3337,6 +3337,10 @@ export const videoGenerationAPI = {
     return apiCall(`/video-generation/jobs/${encodeURIComponent(jobId)}`, { method: 'GET' }, true);
   },
 
+  cancelJob: async (jobId: string): Promise<any> => {
+    return apiCall(`/video-generation/jobs/${encodeURIComponent(jobId)}/cancel`, { method: 'POST' }, true);
+  },
+
   createDraft: async (payload: {
     description: string;
     durationSeconds?: number;

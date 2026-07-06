@@ -2,11 +2,12 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Campaign, ContentCalendarItem, Product, Draft } from '../types';
 import { apiService, icpStrategyService, inventoryAPI, brandAssetsAPI, contentCalendarAPI, draftsAPI } from '../services/api';
-import { Plus, Sparkles, Filter, Loader2, Calendar, BarChart3, Image as ImageIcon, Video, X, ChevronRight, Check, Eye, MousePointer, Archive, Send, Edit3, DollarSign, RefreshCw, RotateCcw, Wand2, Instagram, Facebook, Twitter, Linkedin, Youtube, Clock, Heart, MessageCircle, Share2, Zap, Download, FileText, ImageDown, ChevronDown, ChevronUp, Trash2, Save, AlertCircle, Target, Users, PieChart, Pencil, PenLine, Music } from 'lucide-react';
+import { Plus, Sparkles, Filter, Loader2, Calendar, BarChart3, Image as ImageIcon, Video, X, ChevronRight, Check, Eye, MousePointer, Archive, Send, Edit3, DollarSign, RefreshCw, RotateCcw, Wand2, Instagram, Facebook, Twitter, Linkedin, Youtube, Clock, Heart, MessageCircle, Share2, Zap, Download, FileText, ImageDown, ChevronDown, ChevronUp, Trash2, Save, AlertCircle, Target, Users, PieChart, Pencil, PenLine, Music, ToggleRight, ToggleLeft } from 'lucide-react';
 import { 
     LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, AreaChart, Area 
 } from 'recharts';
 import { useTheme, getThemeClasses } from '../context/ThemeContext';
+import { useSmartCalendarAutoFill } from '../hooks/useSmartCalendarAutoFill';
 import BoostPostModal from '../components/BoostPostModal';
 import { DraftPreviewModal } from '../components/DraftPreviewModal';
 import LogoSelector from '../components/LogoSelector';
@@ -4797,6 +4798,26 @@ type GeneratedReelState = {
 
 const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campaign) => void; isDarkMode: boolean; theme: ReturnType<typeof getThemeClasses>; connectedPlatforms: string[]; initialContentType?: CampaignContentType; reelsOnly?: boolean; postsOnly?: boolean; initialSuggestion?: ContentCalendarItem | null }> = ({ onClose, onSuccess, isDarkMode, theme, connectedPlatforms, initialContentType = 'image', reelsOnly = false, postsOnly = false, initialSuggestion = null }) => {
     const [step, setStep] = useState(1);
+    const {
+      isAutoFillEnabled,
+      setIsAutoFillEnabled,
+      availableItems,
+      selectedItemId,
+      setSelectedItemId,
+      selectedItem,
+      isLoading: isCalendarLoading,
+      getMappedData
+    } = useSmartCalendarAutoFill();
+
+    useEffect(() => {
+      if (isAutoFillEnabled && selectedItem) {
+        const data = getMappedData(selectedItem);
+        setCampaignName(data.title);
+        setCampaignDescription(data.caption);
+        setCallToAction(data.cta);
+      }
+    }, [isAutoFillEnabled, selectedItem]);
+
     const [isGenerating, setIsGenerating] = useState(false);
     const generationRequestInFlightRef = useRef(false);
     const [generatedPosts, setGeneratedPosts] = useState<GeneratedPost[]>([]);
@@ -6003,7 +6024,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                         </div>
                         <div className="min-w-0">
                           <h2 className={`text-lg font-bold ${theme.text}`}>{isReelOnlyFlow ? 'Create Reel' : 'Create Campaign'}</h2>
-                          <p className={`text-xs ${theme.textMuted}`}>Powered by Gravity</p>
+                          <p className={`text-xs ${theme.textMuted} truncate`}>Powered by Gravity</p>
                         </div>
                     </div>
                     
@@ -6059,9 +6080,42 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                         {/* Step 1: Campaign Details */}
                         {step === 1 && !isReelOnlyFlow && (
                             <div className="space-y-6 animate-in fade-in duration-300">
-                                <div>
-                                  <h3 className={`text-xl font-bold ${theme.text}`}>Campaign Details</h3>
-                                  <p className={`text-sm ${theme.textSecondary} mt-1`}>Tell us about your campaign</p>
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                  <div>
+                                    <h3 className={`text-xl font-bold ${theme.text}`}>Campaign Details</h3>
+                                    <p className={`text-sm ${theme.textSecondary} mt-1`}>Tell us about your campaign</p>
+                                  </div>
+                                  <div className="flex flex-col items-end gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => setIsAutoFillEnabled(!isAutoFillEnabled)}
+                                      className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-semibold border transition-colors ${
+                                        isDarkMode 
+                                          ? isAutoFillEnabled ? 'border-[#ffcc29] text-[#ffcc29] bg-[#ffcc29]/10' : 'border-slate-700 text-slate-300 hover:bg-slate-800'
+                                          : isAutoFillEnabled ? 'border-[#ffcc29] text-amber-600 bg-amber-50' : 'border-slate-300 text-slate-700 hover:bg-slate-50'
+                                      }`}
+                                    >
+                                      {isAutoFillEnabled ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}
+                                      Smart Calendar Auto-Fill
+                                    </button>
+                                    {isAutoFillEnabled && availableItems.length > 0 && (
+                                      <select
+                                        value={selectedItemId}
+                                        onChange={(e) => setSelectedItemId(e.target.value)}
+                                        className={`text-xs px-2 py-1 rounded outline-none border ${isDarkMode ? 'bg-slate-900 border-slate-700 text-slate-300' : 'bg-white border-slate-300 text-slate-700'}`}
+                                      >
+                                        {availableItems.map(item => (
+                                          <option key={item._id} value={item._id}>
+                                            {item.headline || item.contentPillar || `Item Day ${item.day}`}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    )}
+                                    {isAutoFillEnabled && availableItems.length === 0 && !isCalendarLoading && (
+                                      <span className="text-xs text-red-500">No Smart Calendar content available.</span>
+                                    )}
+                                    {isCalendarLoading && <Loader2 className="w-3 h-3 animate-spin text-[#ffcc29]" />}
+                                  </div>
                                 </div>
                                 
                                 <div>
