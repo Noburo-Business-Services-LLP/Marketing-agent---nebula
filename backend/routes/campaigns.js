@@ -26,6 +26,7 @@ const {
   getReelGenerationOptions,
   generateReelFromImage
 } = require('../services/reelGenerationService');
+const { handlePublishError } = require('../utils/publishErrorHandler');
 
 function isMongoTimeoutOrSelectionError(err) {
   const name = String(err?.name || '');
@@ -4019,8 +4020,7 @@ router.post('/:id/publish', protect, async (req, res) => {
       }
       
       res.status(400).json({
-        success: false,
-        message: finalErrorMessage,
+        ...handlePublishError(finalErrorMessage),
         error: finalErrorMessage,
         requiresReconnect,
         rateLimited,
@@ -4080,8 +4080,7 @@ router.post('/:id/publish', protect, async (req, res) => {
     }
 
     res.status(500).json({
-      success: false,
-      message: 'Failed to publish campaign',
+      ...handlePublishError(error),
       error: error.message
     });
   }
