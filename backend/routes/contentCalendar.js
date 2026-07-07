@@ -87,7 +87,13 @@ router.get('/today', protect, async (req, res) => {
 
 router.patch('/settings', protect, async (req, res) => {
   try {
-    const calendar = await getCurrentCalendar(req.user._id);
+    let calendar;
+    if (req.body.calendarId) {
+      calendar = await ContentCalendar.findOne({ _id: req.body.calendarId, userId: req.user._id });
+    } else {
+      calendar = await getCurrentCalendar(req.user._id);
+    }
+    
     if (!calendar) return res.status(404).json({ success: false, message: 'Content calendar not found' });
 
     if (typeof req.body.autoGenerate === 'boolean') calendar.autoGenerate = req.body.autoGenerate;

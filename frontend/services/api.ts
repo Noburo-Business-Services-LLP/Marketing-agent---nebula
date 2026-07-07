@@ -3534,7 +3534,7 @@ export const contentCalendarAPI = {
     return apiCall('/content-calendar/today', { method: 'GET' }, true);
   },
 
-  updateSettings: async (data: { autoGenerate?: boolean; approved?: boolean }): Promise<{ success: boolean; calendar: ContentCalendar }> => {
+  updateSettings: async (data: { calendarId?: string; autoGenerate?: boolean; approved?: boolean }): Promise<{ success: boolean; calendar: ContentCalendar }> => {
     return apiCall('/content-calendar/settings', { method: 'PATCH', body: JSON.stringify(data) }, true);
   },
 

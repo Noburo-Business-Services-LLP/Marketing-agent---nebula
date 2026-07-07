@@ -55,15 +55,13 @@ export const useSmartCalendarAutoFill = (type?: 'post' | 'reel' | 'campaign') =>
               (item: ContentCalendarItem) => !item.generatedCampaignId && !item.generatedDraftId && item.status !== 'rejected'
             );
 
-            // FALLBACK: If all items of this type have already been generated (unusedItems is empty),
-            // just use the first item of this type anyway so the autofill still works for testing.
-            let finalItems = unusedItems.length > 0 ? unusedItems : typeFilteredItems;
-
-            setAvailableItems(finalItems);
+            setAvailableItems(unusedItems);
             
             // FIFO: Automatically select the first available item
-            if (finalItems.length > 0) {
-              setSelectedItemId(finalItems[0]._id);
+            if (unusedItems.length > 0) {
+              setSelectedItemId(unusedItems[0]._id);
+            } else {
+              setError('No pending Smart Calendar items available.');
             }
           } else {
             setAvailableItems([]);

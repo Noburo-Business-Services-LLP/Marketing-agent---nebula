@@ -3,6 +3,7 @@ import { FileText, Search, Trash2, Calendar, Loader2, Plus, ExternalLink, Refres
 import { Draft } from '../types';
 import { draftsAPI } from '../services/api';
 import { DraftPreviewModal } from '../components/DraftPreviewModal';
+import { DraftProcessingAnimation } from '../components/DraftProcessingAnimation';
 import { Link, useNavigate } from 'react-router-dom';
 
 export const Drafts: React.FC = () => {
@@ -356,17 +357,11 @@ export const Drafts: React.FC = () => {
                   {/* Thumbnail / Image Preview */}
                   <div className="relative aspect-video w-full bg-slate-900 overflow-hidden flex items-center justify-center">
                     {item.status === 'processing' ? (
-                      <div className="absolute inset-0 bg-slate-800 animate-pulse flex flex-col items-center justify-center space-y-3 p-4">
-                        <Loader2 className="w-8 h-8 text-[#ffcc29] animate-spin" />
-                        <span className="text-xs text-[#ffcc29] font-medium text-center line-clamp-2">
-                          {item.generationProgress?.step || 'Processing...'}
-                        </span>
-                        {typeof item.generationProgress?.progress === 'number' && item.generationProgress.progress > 0 && (
-                          <div className="w-2/3 bg-slate-700 rounded-full h-1.5 mt-2 overflow-hidden">
-                            <div className="bg-[#ffcc29] h-1.5 rounded-full transition-all duration-300" style={{ width: `${item.generationProgress.progress}%` }}></div>
-                          </div>
-                        )}
-                      </div>
+                      <DraftProcessingAnimation 
+                        step={item.generationProgress?.step} 
+                        progress={item.generationProgress?.progress} 
+                        type={item.contentType?.includes('video') || item.contentType?.includes('reel') ? 'reel' : 'post'} 
+                      />
                     ) : item.status === 'failed' ? (
                       <div className="absolute inset-0 bg-red-950/30 flex flex-col items-center justify-center text-red-500 p-4">
                         <AlertCircle className="w-8 h-8 mb-2 opacity-80" />

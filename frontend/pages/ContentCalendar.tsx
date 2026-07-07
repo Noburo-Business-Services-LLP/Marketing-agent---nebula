@@ -169,13 +169,14 @@ const ContentCalendar: React.FC = () => {
   };
 
   const approveCalendar = () => {
-    updateCalendar(async () => contentCalendarAPI.updateSettings({ approved: true }), 'approve-calendar');
+    if (!calendar) return;
+    updateCalendar(async () => contentCalendarAPI.updateSettings({ calendarId: calendar._id, approved: true }), 'approve-calendar');
   };
 
   const toggleAutoGenerate = () => {
     if (!calendar) return;
     updateCalendar(
-      async () => contentCalendarAPI.updateSettings({ autoGenerate: !calendar.autoGenerate }),
+      async () => contentCalendarAPI.updateSettings({ calendarId: calendar._id, autoGenerate: !calendar.autoGenerate }),
       'auto-generate'
     );
   };
@@ -333,7 +334,7 @@ const ContentCalendar: React.FC = () => {
             disabled={!!saving}
             className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold border transition-all duration-300 ${calendar.autoGenerate ? 'bg-emerald-500/15 border-emerald-500/50 text-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.3)]' : isDarkMode ? 'border-slate-700 text-slate-200 hover:bg-slate-800' : 'border-slate-300 text-slate-800 hover:bg-slate-50'}`}
           >
-            {calendar.autoGenerate ? <ToggleRight className="w-5 h-5 text-emerald-400 drop-shadow-[0_0_5px_rgba(16,185,129,0.8)]" /> : <ToggleLeft className="w-5 h-5 opacity-70" />}
+            {calendar.autoGenerate ? <ToggleRight className="w-5 h-5 text-emerald-400 drop-shadow-[0_0_8px_rgba(16,185,129,0.8)] animate-pulse" /> : <ToggleLeft className="w-5 h-5 opacity-70" />}
             Auto Generation
           </button>
           <button
