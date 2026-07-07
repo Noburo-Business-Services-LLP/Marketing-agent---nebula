@@ -3515,8 +3515,19 @@ export const contentCalendarAPI = {
     return apiCall('/content-calendar', { method: 'GET' }, true);
   },
 
-  regenerate: async (): Promise<{ success: boolean; calendar: ContentCalendar }> => {
-    return apiCall('/content-calendar/regenerate', { method: 'POST' }, true);
+  getHistory: async (): Promise<{ success: boolean; calendars: ContentCalendar[] }> => {
+    return apiCall('/content-calendar/history', { method: 'GET' }, true);
+  },
+
+  regenerate: async (month?: string): Promise<{ success: boolean; calendar: ContentCalendar }> => {
+    return apiCall('/content-calendar/regenerate', { 
+      method: 'POST',
+      body: JSON.stringify(month ? { month } : {})
+    }, true);
+  },
+
+  generateNextMonth: async (): Promise<{ success: boolean; calendar: ContentCalendar }> => {
+    return apiCall('/content-calendar/generate-next', { method: 'POST' }, true);
   },
 
   today: async (): Promise<{ success: boolean; suggestion: ContentCalendarItem | null; calendarId?: string | null }> => {

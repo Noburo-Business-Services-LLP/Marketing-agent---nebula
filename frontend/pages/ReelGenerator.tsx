@@ -61,14 +61,13 @@ const ReelGenerator: React.FC = () => {
   const [step, setStep] = useState(1);
   const {
     isAutoFillEnabled,
-    setIsAutoFillEnabled,
     availableItems,
     selectedItemId,
     setSelectedItemId,
     selectedItem,
     isLoading: isCalendarLoading,
     getMappedData
-  } = useSmartCalendarAutoFill();
+  } = useSmartCalendarAutoFill('reel');
 
   useEffect(() => {
     if (isAutoFillEnabled && selectedItem) {
@@ -154,33 +153,7 @@ const ReelGenerator: React.FC = () => {
     [products, selectedProductId]
   );
 
-  useEffect(() => {
-    let cancelled = false;
-    const loadCalendarSuggestion = async () => {
-      try {
-        const response = await contentCalendarAPI.today();
-        const suggestion = response.suggestion;
-        if (cancelled || !suggestion) return;
-
-        const suggestionText = [
-          suggestion.headline,
-          suggestion.creativeConcept,
-          suggestion.productNeeded ? `Product: ${suggestion.productNeeded}` : '',
-          suggestion.cta ? `CTA: ${suggestion.cta}` : ''
-        ].filter(Boolean).join('\n');
-
-        setDescription((current) => current || suggestionText);
-        setPromptText((current) => current || suggestion.creativeConcept || suggestion.headline || '');
-      } catch (_) {
-        // Suggestion mode is non-blocking.
-      }
-    };
-
-    loadCalendarSuggestion();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  // Removed automatic fetching of today's calendar suggestion on page load to prevent unwanted form pre-filling.
 
   const hasCompleteScenes = scenes.length > 0 && scenes.every((scene) => !!(
     String(scene.title || '').trim()
@@ -1396,40 +1369,14 @@ const ReelGenerator: React.FC = () => {
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <h2 className={`font-bold text-lg ${theme.text}`}>Step 1: Input</h2>
                   
-                  <div className="flex flex-col items-end gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setIsAutoFillEnabled(!isAutoFillEnabled)}
-                      className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-semibold border transition-colors ${
-                        isDarkMode 
-                          ? isAutoFillEnabled ? 'border-[#ffcc29] text-[#ffcc29] bg-[#ffcc29]/10' : 'border-slate-700 text-slate-300 hover:bg-slate-800'
-                          : isAutoFillEnabled ? 'border-[#ffcc29] text-amber-600 bg-amber-50' : 'border-slate-300 text-slate-700 hover:bg-slate-50'
-                      }`}
-                    >
-                      {isAutoFillEnabled ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}
-                      Smart Calendar Auto-Fill
-                    </button>
-                    
-                    {isAutoFillEnabled && availableItems.length > 0 && (
-                      <select
-                        value={selectedItemId}
-                        onChange={(e) => setSelectedItemId(e.target.value)}
-                        className={`text-xs px-2 py-1 rounded outline-none border ${isDarkMode ? 'bg-slate-900 border-slate-700 text-slate-300' : 'bg-white border-slate-300 text-slate-700'}`}
-                      >
-                        {availableItems.map(item => (
-                          <option key={item._id} value={item._id}>
-                            {item.headline || item.contentPillar || `Item Day ${item.day}`}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                    {isAutoFillEnabled && availableItems.length === 0 && !isCalendarLoading && (
-                      <span className="text-xs text-red-500">No Smart Calendar content available.</span>
-                    )}
-                    {isCalendarLoading && <Loader2 className="w-3 h-3 animate-spin text-[#ffcc29]" />}
-                  </div>
+                <div className="flex flex-col items-end gap-2">
+                  {isAutoFillEnabled && availableItems.length === 0 && !isCalendarLoading && (
+                    <span className="text-xs text-red-500">No Smart Calendar content available.</span>
+                  )}
+                  {isCalendarLoading && <Loader2 className="w-3 h-3 animate-spin text-emerald-400" />}
                 </div>
-                <textarea
+              </div>
+              <textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   className={`${inputClass} min-h-[120px]`}

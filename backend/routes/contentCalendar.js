@@ -28,11 +28,45 @@ router.get('/', protect, async (req, res) => {
     res.status(500).json({ success: false, message: 'Failed to fetch content calendar' });
   }
 });
+router.get('/history', protect, async (req, res) => {
+  try {
+    const calendars = await ContentCalendar.find({ userId: req.user._id }).sort({ month: -1 });
+    res.json({ success: true, calendars });
+  } catch (error) {
+    console.error('Content calendar history error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch content calendar history' });
+  }
+});
+
+router.post('/generate-next', protect, async (req, res) => {
+  try {
+    const latestCalendar = await ContentCalendar.findOne({ userId: req.user._id }).sort({ month: -1 });
+    let nextMonthStr = calendarMonth();
+    if (latestCalendar && latestCalendar.month) {
+      const [yearStr, monthStr] = latestCalendar.month.split('-');
+      let year = parseInt(yearStr, 10);
+      let month = parseInt(monthStr, 10);
+      month += 1;
+      if (month > 12) {
+        month = 1;
+        year += 1;
+      }
+      nextMonthStr = `${year}-${String(month).padStart(2, '0')}`;
+    }
+    const user = await User.findById(req.user._id);
+    const calendar = await generateMonthlyCalendar(user, nextMonthStr);
+    res.json({ success: true, calendar });
+  } catch (error) {
+    console.error('Content calendar generate next error:', error);
+    res.status(500).json({ success: false, message: 'Failed to generate next content calendar' });
+  }
+});
 
 router.post('/regenerate', protect, async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
-    const calendar = await generateMonthlyCalendar(user);
+    const targetMonth = req.body.month || calendarMonth();
+    const calendar = await generateMonthlyCalendar(user, targetMonth);
     res.json({ success: true, calendar });
   } catch (error) {
     console.error('Content calendar regenerate error:', error);

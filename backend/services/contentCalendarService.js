@@ -238,7 +238,7 @@ function normalizeCalendarItems(rawCalendar, userProfile = {}) {
   }));
 }
 
-async function generateMonthlyCalendar(userProfile = {}) {
+async function generateMonthlyCalendar(userProfile = {}, targetMonth = null) {
   const profile = getBusinessProfile(userProfile);
   const userId = userProfile._id || userProfile.userId || profile.userId;
   if (!userId) throw new Error('userId is required to generate a content calendar');
@@ -253,7 +253,7 @@ async function generateMonthlyCalendar(userProfile = {}) {
   }
 
   const language = normalizeLanguage(profile.language || profile.contentLanguage);
-  const month = calendarMonth();
+  const month = targetMonth || calendarMonth();
   const calendarData = {
     userId,
     businessName: profile.businessName || profile.name || userProfile.companyName || '',

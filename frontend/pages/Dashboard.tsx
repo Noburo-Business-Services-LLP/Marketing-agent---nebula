@@ -612,11 +612,13 @@ const Dashboard: React.FC = () => {
       }
       
       const actuallyScheduled = !!publishResponse?.scheduled || !!scheduleDate;
-      alert(
-        actuallyScheduled
-          ? 'Post queued/scheduled successfully!'
-          : 'Post published successfully!'
-      );
+      let successMsg = actuallyScheduled
+        ? 'Post queued/scheduled successfully!'
+        : 'Post published successfully!';
+      if (publishResponse?.mentionConverted) {
+        successMsg += ' (Duplicate @mentions converted to hashtags to prevent restrictions)';
+      }
+      alert(successMsg);
       setShowPostCreator(false);
       setSelectedSuggestion(null);
       setGeneratedPost(null);

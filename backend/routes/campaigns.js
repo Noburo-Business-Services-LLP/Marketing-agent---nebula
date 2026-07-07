@@ -8,6 +8,9 @@ const router = express.Router();
 const { protect } = require('../middleware/auth');
 const { checkTrial, deductCredits, requireCredits } = require('../middleware/trialGuard');
 const Campaign = require('../models/Campaign');
+const Influencer = require('../models/Influencer');
+const Collaboration = require('../models/Collaboration');
+const MentionLog = require('../models/MentionLog');
 const Draft = require('../models/Draft');
 const User = require('../models/User');
 const crypto = require('crypto');
@@ -3087,9 +3090,47 @@ router.post('/:id/publish', protect, async (req, res) => {
     const baseCaption = platforms.includes('instagram')
       ? buildInstagramCaption(cleanContent, ctaText)
       : cleanContent;
-    const fullPost = limitedHashtags.length > 0
+    let fullPost = limitedHashtags.length > 0
       ? `${baseCaption}\n\n${limitedHashtags.join(' ')}`
       : baseCaption;
+
+    // -- DUPLICATE MENTION REPLACEMENT --
+    let mentionConverted = false;
+    try {
+      const mentionRegex = /@(\w+)/g;
+      const extractedMentions = fullPost.match(mentionRegex) || [];
+      
+      if (extractedMentions.length > 0) {
+        const todayMentions = await MentionLog.find({
+          userId,
+          mention: { $in: extractedMentions }
+        }).lean();
+        
+        const usedMentionsSet = new Set(todayMentions.map(m => m.mention));
+        const newMentions = [];
+        
+        fullPost = fullPost.replace(mentionRegex, (match) => {
+          if (usedMentionsSet.has(match)) {
+            mentionConverted = true;
+            return `#${match.substring(1)}`;
+          } else {
+            newMentions.push({
+              userId,
+              mention: match
+            });
+            usedMentionsSet.add(match);
+            return match;
+          }
+        });
+        
+        if (newMentions.length > 0) {
+          await MentionLog.insertMany(newMentions);
+        }
+      }
+    } catch (mentionErr) {
+      console.warn('Failed to process mention log:', mentionErr);
+    }
+    // -- END MENTION REPLACEMENT --
     
     console.log('Publishing to platforms:', platforms);
     console.log('Post content:', fullPost.substring(0, 100) + '...');

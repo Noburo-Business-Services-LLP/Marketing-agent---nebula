@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { contentCalendarAPI } from '../services/api';
 import { ContentCalendarItem } from '../types';
 
-export const useSmartCalendarAutoFill = () => {
+export const useSmartCalendarAutoFill = (type?: 'post' | 'reel' | 'campaign') => {
   const [isAutoFillEnabled, setIsAutoFillEnabled] = useState(false);
   const [availableItems, setAvailableItems] = useState<ContentCalendarItem[]>([]);
   const [selectedItemId, setSelectedItemId] = useState<string>('');
@@ -21,28 +21,53 @@ export const useSmartCalendarAutoFill = () => {
     let isMounted = true;
 
     const fetchCalendarItems = async () => {
-      if (!isAutoFillEnabled) return;
-      
       setIsLoading(true);
       setError(null);
       
       try {
         const response = await contentCalendarAPI.get();
         if (response.calendar && isMounted) {
+          // Use the calendar's autoGenerate setting as the source of truth
+          const isAutoEnabled = Boolean(response.calendar.autoGenerate);
+          setIsAutoFillEnabled(isAutoEnabled);
+          
+          if (!isAutoEnabled) {
+            setAvailableItems([]);
+            return;
+          }
+
           const currentWeekNumber = getActiveWeekNumber();
           const currentWeek = response.calendar.weeks.find(
             (w: any) => w.weekNumber === currentWeekNumber
           );
           
           if (currentWeek && currentWeek.items && currentWeek.items.length > 0) {
-            setAvailableItems(currentWeek.items);
-            if (!selectedItemId) {
-              setSelectedItemId(currentWeek.items[0]._id);
+            // First, filter based on the current page type
+            let typeFilteredItems = currentWeek.items;
+            if (type === 'post') {
+              typeFilteredItems = typeFilteredItems.filter((item: ContentCalendarItem) => ['post', 'carousel', 'poster', 'image', 'story'].includes(item.format?.toLowerCase() || ''));
+            } else if (type === 'reel') {
+              typeFilteredItems = typeFilteredItems.filter((item: ContentCalendarItem) => ['reel', 'video', 'short'].includes(item.format?.toLowerCase() || ''));
+            }
+
+            // Then, filter out items that have already been generated or rejected
+            let unusedItems = typeFilteredItems.filter(
+              (item: ContentCalendarItem) => !item.generatedCampaignId && !item.generatedDraftId && item.status !== 'rejected'
+            );
+
+            // FALLBACK: If all items of this type have already been generated (unusedItems is empty),
+            // just use the first item of this type anyway so the autofill still works for testing.
+            let finalItems = unusedItems.length > 0 ? unusedItems : typeFilteredItems;
+
+            setAvailableItems(finalItems);
+            
+            // FIFO: Automatically select the first available item
+            if (finalItems.length > 0) {
+              setSelectedItemId(finalItems[0]._id);
             }
           } else {
             setAvailableItems([]);
             setError('No Smart Calendar content available for this week.');
-            setIsAutoFillEnabled(false);
           }
         }
       } catch (err: any) {
@@ -64,7 +89,7 @@ export const useSmartCalendarAutoFill = () => {
     return () => {
       isMounted = false;
     };
-  }, [isAutoFillEnabled, selectedItemId]);
+  }, [type]); // Refetch if type changes
 
   const selectedItem = availableItems.find(item => item._id === selectedItemId);
 
