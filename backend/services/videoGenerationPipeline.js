@@ -602,11 +602,26 @@ function normalizeCreateInput(payload = {}, options = {}) {
     styleHint: String(payload.styleHint || '').trim(),
     voiceHint: String(payload.voiceHint || '').trim(),
     audio,
-    subtitles
+    subtitles,
+    characterEnabled: !!payload.characterEnabled,
+    characterImage: String(payload.characterImage || '').trim(),
+    characterName: String(payload.characterName || '').trim(),
+    characterAge: String(payload.characterAge || '').trim(),
+    characterGender: String(payload.characterGender || '').trim(),
+    characterRole: String(payload.characterRole || '').trim(),
+    characterPersonality: String(payload.characterPersonality || '').trim(),
+    characterAppearance: String(payload.characterAppearance || '').trim(),
+    characterHairStyle: String(payload.characterHairStyle || '').trim(),
+    characterHairColor: String(payload.characterHairColor || '').trim(),
+    characterClothing: String(payload.characterClothing || '').trim(),
+    videoStyle: String(payload.videoStyle || '').trim(),
+    preserveIdentity: payload.preserveIdentity !== false,
+    characterUsage: String(payload.characterUsage || 'Main Character in all scenes').trim(),
+    characterConsistencyStrength: String(payload.characterConsistencyStrength || 'Strict').trim()
   };
 }
 
-function createJobContext({ baseUrl, providedJobId = null }) {
+function createJobContext({ baseUrl, providedJobId = null, input = {} }) {
   const jobId = sanitizeSegment(providedJobId || crypto.randomUUID());
   const jobDir = ensureDir(path.join(STORAGE_ROOT, jobId));
   const dirs = {
@@ -716,7 +731,39 @@ async function generateScenesPlan({
     product
   });
 
-  const systemPrompt = `You are a storyboard planner for short vertical AI videos.
+  let characterContext = '';
+  if (input.characterEnabled) {
+    characterContext = `
+Main Character Details:
+- Name: ${input.characterName || 'N/A'}
+- Age: ${input.characterAge || 'N/A'}
+- Gender: ${input.characterGender || 'N/A'}
+- Role: ${input.characterRole || 'N/A'}
+- Personality: ${input.characterPersonality || 'N/A'}
+- Appearance: ${input.characterAppearance || 'N/A'}
+- Hair Style: ${input.characterHairStyle || 'N/A'}
+- Hair Color: ${input.characterHairColor || 'N/A'}
+- Clothing: ${input.characterClothing || 'N/A'}
+- Reference Image Provided: ${input.characterImage ? 'Yes' : 'No'}
+- Character Usage Strategy: ${input.characterUsage}
+${input.characterUsage === 'Character only in selected scenes' ? '\n  - IMPORTANT: Do not include the character in every scene. Mix character scenes with b-roll, establishing shots, and product closeups without people.' : ''}
+
+CRITICAL CHARACTER RULES:
+- Use the exact same character identity across all scenes.
+- Maintain identical face structure, eyes, nose, hairstyle, skin tone, and body type.
+- Do not generate different people in different scenes.
+- If a reference image is provided, preserve facial identity exactly.
+- Clothing and environment may change but the character identity must remain unchanged.`;
+  }
+  
+  let videoStyleContext = '';
+  if (input.videoStyle) {
+      videoStyleContext = `
+Video Style: ${input.videoStyle}
+`;
+  }
+
+  const systemPrompt = `You are a storyboard planner for short vertical AI videos.${videoStyleContext}${characterContext}
 Return strict JSON with this schema:
 {
   "globalVisualStyle": "string",
@@ -907,10 +954,21 @@ async function generateSceneImages({
         };
       }
 
+    let characterImageContext = '';
+    if (input.characterEnabled && input.preserveIdentity !== false) {
+      const isStrict = input.characterConsistencyStrength === 'Strict';
+      const strengthContext = isStrict 
+        ? 'Strict consistency: Never change face. Never change hairstyle. Never change age.' 
+        : `Consistency strength: ${input.characterConsistencyStrength}. Maintain general identity.`;
+      
+      characterImageContext = ` Maintain identical character identity across all scenes. ${strengthContext} ${input.characterImage ? 'Use the provided character reference image.' : ''}`;
+    }
+
     const promptWithConsistency = [
       scene.imagePrompt,
       `Consistency style: ${plan.globalVisualStyle}`,
-      'Keep same lead subject identity, lighting logic, and palette continuity with earlier scenes.'
+      input.preserveIdentity !== false ? 'Keep same lead subject identity, lighting logic, and palette continuity with earlier scenes.' : '',
+      characterImageContext
     ].join(' ');
 
       const imageResult = await runWithRetries(
@@ -921,7 +979,7 @@ async function generateSceneImages({
           brandName: String(profile.name || ''),
           industry: String(profile.industry || ''),
           tone: String(profile.brandVoice || 'professional'),
-          productReferenceImage: consistencyReference || undefined,
+          productReferenceImage: (input.characterEnabled && input.characterImage) ? input.characterImage : (consistencyReference || undefined),
           linkedProduct: product ? {
             name: product.name,
             description: product.description,
@@ -1102,6 +1160,10 @@ async function generateSceneClips({
     if (logger) logger(`Generating Fal.ai clip for ${scene.sceneId}`);
     let enriched;
     try {
+      if (context.input?.characterEnabled || context.input?.videoStyle) {
+          scene.videoPrompt = `${scene.videoPrompt}. ${context.input.videoStyle ? `Cinematic Style: ${context.input.videoStyle}.` : ''} ${context.input.characterEnabled ? 'Ensure the character identity remains exactly the same as the reference image without morphing or changing faces.' : ''}`;
+      }
+      
       console.log(`[${new Date().toISOString()}] [Job ID: ${context.jobId}] STEP 4: Fal.ai render started for scene ${scene.sceneId}`);
       const falScene = await generateVideoClip(scene);
       console.log(`[${new Date().toISOString()}] [Job ID: ${context.jobId}] STEP 5: Fal.ai render completed for scene ${scene.sceneId}`);
@@ -2690,7 +2752,7 @@ async function runCreateVideoPipeline({
   onLog = null
 }) {
   const input = normalizeCreateInput(payload);
-  const context = createJobContext({ baseUrl: baseUrl || getPublicBaseUrl(), providedJobId });
+  const context = createJobContext({ baseUrl: baseUrl || getPublicBaseUrl(), providedJobId, input });
   const product = await resolveProductContext({ user, payload: input });
 
   const update = (progress, currentStep, metadata = null) => {
