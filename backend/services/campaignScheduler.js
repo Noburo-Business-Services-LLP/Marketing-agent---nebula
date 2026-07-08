@@ -189,9 +189,18 @@ async function waitForFacebookPostId({ profileKey = '', ayrsharePostId = '', ini
 }
 
 async function processDueCampaigns({ now = new Date(), limit = 20 } = {}) {
+  const MAX_PUBLISH_ATTEMPTS = Number(process.env.CAMPAIGN_MAX_PUBLISH_ATTEMPTS || 3);
   const dueCampaigns = await Campaign.find({
     status: 'scheduled',
     'scheduling.startDate': { $lte: now },
+    // Defense-in-depth: skip campaigns already at the failure ceiling even if
+    // their status somehow got reset back to 'scheduled'. Prevents the Ayrshare
+    // post-error spam that caused suspension #3.
+    $or: [
+      { publishFailureCount: { $lt: MAX_PUBLISH_ATTEMPTS } },
+      { publishFailureCount: { $exists: false } }
+    ],
+    publishAutoCancelled: { $ne: true }
   })
     .sort({ 'scheduling.startDate': 1 })
     .limit(limit);
@@ -297,22 +306,39 @@ async function processDueCampaigns({ now = new Date(), limit = 20 } = {}) {
         continue;
       }
 
-      await Campaign.findByIdAndUpdate(campaign._id, {
-        $set: {
-          lastPublishError: result.error || result.message || 'Failed to publish',
-          publishResult: result.data || result,
-          ayrshareStatus: 'error'
-        },
-      });
+      await applyPublishFailure(campaign, result.error || result.message || 'Failed to publish', result);
     } catch (e) {
-      await Campaign.findByIdAndUpdate(campaign._id, {
-        $set: {
-          lastPublishError: e.message || 'Failed to publish',
-          ayrshareStatus: 'error'
-        },
-      });
+      await applyPublishFailure(campaign, e.message || 'Failed to publish', null);
     }
   }
+}
+
+// Increments the publish failure counter. If we've hit the max attempts OR the
+// error is a "platform not linked" error (Ayrshare code 156) — a permanent
+// per-post-error that will NEVER succeed on retry — mark the campaign as failed
+// so the scheduler stops picking it up. This prevents the retry loops that
+// caused our Ayrshare post-error suspension.
+async function applyPublishFailure(campaign, errorMessage, result) {
+  const MAX_PUBLISH_ATTEMPTS = Number(process.env.CAMPAIGN_MAX_PUBLISH_ATTEMPTS || 3);
+  const nextCount = (Number(campaign.publishFailureCount) || 0) + 1;
+  const isTerminalError = /\[156\]|not linked/i.test(String(errorMessage || ''));
+  const shouldAutoCancel = nextCount >= MAX_PUBLISH_ATTEMPTS || isTerminalError;
+
+  const update = {
+    lastPublishError: errorMessage,
+    publishResult: result?.data || result || null,
+    ayrshareStatus: 'error',
+    publishFailureCount: nextCount
+  };
+  if (shouldAutoCancel) {
+    update.status = 'failed';
+    update.publishAutoCancelled = true;
+    console.warn(
+      `[Campaign Scheduler] Auto-cancelling campaign ${campaign._id} after ` +
+      `${nextCount} failure(s)${isTerminalError ? ' (terminal error)' : ''}. Last error: ${String(errorMessage).slice(0, 200)}`
+    );
+  }
+  await Campaign.findByIdAndUpdate(campaign._id, { $set: update });
 }
 
 function startCampaignScheduler({ intervalMs = 30_000, logger = console } = {}) {

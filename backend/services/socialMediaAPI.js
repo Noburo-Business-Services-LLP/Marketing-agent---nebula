@@ -27,6 +27,14 @@ function markAyrshareSuspended(reason = '') {
 function isAyrshareSuspended() {
   return Date.now() < ayrshareSuspendedUntil;
 }
+function getAyrshareCircuitBreakerState() {
+  const now = Date.now();
+  return {
+    tripped: now < ayrshareSuspendedUntil,
+    suspendedUntil: ayrshareSuspendedUntil > 0 ? new Date(ayrshareSuspendedUntil).toISOString() : null,
+    remainingSeconds: ayrshareSuspendedUntil > now ? Math.round((ayrshareSuspendedUntil - now) / 1000) : 0
+  };
+}
 const VIDEO_EXTENSIONS = new Set(['mp4', 'mov', 'm4v', 'webm']);
 
 function isRetriableNetworkError(error) {
@@ -442,6 +450,21 @@ async function postToSocialMedia(platforms, content, options = {}) {
         String(response.data?.message || response.data?.error || '').trim() ||
         'Ayrshare publish request failed';
       console.error('[Ayrshare] publish error:', returnedError);
+
+      // Post-error suspension guard: if we see code:156 (platform not linked)
+      // or code:168 (profile suspended), Ayrshare will refuse this post forever
+      // AND will count each retry against the 1000-post-error/24h suspension
+      // threshold. Trip the circuit breaker so no further Ayrshare calls go out
+      // for a while — the caller (campaign scheduler) will also auto-cancel
+      // the campaign after 3 attempts.
+      const hasFatalCode = errorDetails.some((entry) => {
+        const code = String(entry?.code || '');
+        return code === '156' || code === '168';
+      });
+      if (hasFatalCode) {
+        markAyrshareSuspended(`publish returned fatal code (156/168): ${returnedError.slice(0, 100)}`);
+      }
+
       return {
         success: false,
         error: returnedError,
@@ -2565,6 +2588,7 @@ async function updateAd(profileKey, adId, params = {}) {
 
 module.exports = {
   // Ayrshare functions
+  getAyrshareCircuitBreakerState,
   postToSocialMedia,
   getAyrshareAnalytics,
   getUserSocialAnalytics,

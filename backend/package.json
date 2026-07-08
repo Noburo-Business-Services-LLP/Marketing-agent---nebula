@@ -9,6 +9,7 @@
     "create:male-voice": "node scripts/create-elevenlabs-male-voice.js"
   },
   "dependencies": {
+    "@aws-sdk/client-secrets-manager": "^3.1079.0",
     "@aws-sdk/client-ses": "^3.958.0",
     "@fal-ai/serverless-client": "^0.15.0",
     "@sendgrid/mail": "^8.1.6",
