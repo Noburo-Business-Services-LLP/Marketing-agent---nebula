@@ -7688,7 +7688,7 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
     }`;
 
     // Process files (shared by file input and drag-and-drop)
-    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+    const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
     const processFiles = async (files: FileList | File[]) => {
       const newPosters: PosterItem[] = [];
       const fileArray = Array.from(files).filter(f => f.type.startsWith('image/') || f.type.startsWith('video/'));
@@ -9359,7 +9359,7 @@ const UploadPublishModal: React.FC<UploadPublishModalProps> = ({ onClose, onSucc
     }, [selectedPlatforms]);
 
     // Process multiple image files (shared by input and drag-and-drop)
-    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+    const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
     const processFiles = async (files: FileList | File[]) => {
         const fileArray = Array.from(files).filter(f => f.type.startsWith('image/') || f.type.startsWith('video/'));
         const rejected = Array.from(files).filter(f => !f.type.startsWith('image/') && !f.type.startsWith('video/'));

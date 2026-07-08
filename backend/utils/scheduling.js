@@ -202,6 +202,36 @@ function getCampaignScheduledFor(campaign) {
   return scheduled;
 }
 
+// Compute the next occurrence for a recurring campaign.
+// Returns null for non-recurring campaigns (which is the common case),
+// meaning "no next occurrence — mark it as posted and done."
+// This was previously imported from here but never defined — every call
+// threw "not a function" which cascaded into the campaign scheduler's
+// catch block and marked EVERY publish (success or fail) as an error,
+// leading to Ayrshare post-error suspension.
+function computeNextRecurringStartDate(campaign, opts = {}) {
+  const scheduling = campaign?.scheduling || {};
+  const scheduleType = String(scheduling?.scheduleType || '').toLowerCase().trim();
+  const interval = Number(scheduling?.interval) || 0;
+  const isRecurring = ['daily', 'weekly', 'monthly'].includes(scheduleType) && interval > 0;
+  if (!isRecurring) return null;
+
+  const now = opts.now ? new Date(opts.now) : new Date();
+  const currentStart = scheduling?.startDate ? new Date(scheduling.startDate) : now;
+  const next = new Date(currentStart);
+  if (scheduleType === 'daily') next.setUTCDate(next.getUTCDate() + interval);
+  else if (scheduleType === 'weekly') next.setUTCDate(next.getUTCDate() + interval * 7);
+  else if (scheduleType === 'monthly') next.setUTCMonth(next.getUTCMonth() + interval);
+
+  return {
+    startDate: next,
+    postTime: scheduling?.postTime || '10:00',
+    scheduleType,
+    interval,
+    timezoneOffsetMinutes: scheduling?.timezoneOffsetMinutes ?? null
+  };
+}
+
 module.exports = {
   safeDate,
   isDateOnlyString,
@@ -211,5 +241,6 @@ module.exports = {
   buildUtcDateFromLocalDateTime,
   normalizeCampaignScheduling,
   getCampaignScheduledFor,
+  computeNextRecurringStartDate,
 };
 
