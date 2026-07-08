@@ -8,6 +8,9 @@ const router = express.Router();
 const { protect } = require('../middleware/auth');
 const { checkTrial, deductCredits, requireCredits } = require('../middleware/trialGuard');
 const Campaign = require('../models/Campaign');
+const Influencer = require('../models/Influencer');
+const Collaboration = require('../models/Collaboration');
+const MentionLog = require('../models/MentionLog');
 const Draft = require('../models/Draft');
 const User = require('../models/User');
 const crypto = require('crypto');
@@ -23,6 +26,7 @@ const {
   getReelGenerationOptions,
   generateReelFromImage
 } = require('../services/reelGenerationService');
+const { handlePublishError } = require('../utils/publishErrorHandler');
 
 function isMongoTimeoutOrSelectionError(err) {
   const name = String(err?.name || '');
@@ -1499,13 +1503,19 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
   });
 
   const sendEvent = (event, data) => {
-    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    if (aborted) return;
+    try {
+      res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    } catch(e) {}
   };
 
   let aborted = false;
   let generationLockSignature = null;
   let hasGenerationLock = false;
-  req.on('close', () => { aborted = true; });
+  req.on('close', () => { 
+    aborted = true; 
+    try { res.end(); } catch(e) {}
+  });
 
   try {
     const userId = req.user.userId || req.user.id;
@@ -1621,6 +1631,29 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
     }
 
     sendEvent('status', { message: 'Generating campaign content...', totalPosts });
+
+    const preCreatedDraftIds = [];
+    try {
+      const DraftModel = require('../models/Draft');
+      for (let i = 0; i < totalPosts; i++) {
+        const draft = await DraftModel.create({
+          userId,
+          title: `${campaignName || 'Campaign'} - Post ${i + 1}`,
+          status: 'processing',
+          sourceType: 'campaign',
+          contentType: 'campaign',
+          generationProgress: {
+            step: 'Generating content',
+            progress: 10,
+            index: i,
+            total: totalPosts
+          }
+        });
+        preCreatedDraftIds.push(draft._id);
+      }
+    } catch (e) {
+      console.error('Failed to pre-create processing drafts:', e);
+    }
 
     // Generate unique slot dates
     const slotDates = [];
@@ -1853,7 +1886,7 @@ Return ONLY valid JSON (no markdown, no backticks):
     const currentPrompt = captionPrompt;
 
     while (attempts < maxAttempts) {
-      if (aborted) return res.end();
+      // if (aborted) return res.end(); // Removed to allow background generation
       attempts++;
       
       console.log(` [CAMPAIGN_CONTENT] ${campaignContentGenerationId} Gemini call #${attempts}`, { userId, totalPosts });
@@ -2079,7 +2112,7 @@ Return ONLY valid JSON (no markdown, no backticks):
       console.log(`- [CAMPAIGN_CONTENT] ${campaignContentGenerationId} validation OK after local cleanup`);
     }
 
-    if (aborted) return res.end();
+    // if (aborted) return res.end(); // Removed to allow background generation
 
     sendEvent('status', { message: 'Content generated! Now creating images...', totalPosts });
 
@@ -2100,7 +2133,7 @@ Return ONLY valid JSON (no markdown, no backticks):
       fallbackImageTextByLanguage.english;
 
     for (let i = 0; i < postsToProcess.length; i++) {
-      if (aborted) break;
+      // if (aborted) break; // Removed to allow background generation
 
       const post = postsToProcess[i];
       const schedule = scheduleDates[i] || { date: startDate, time: '10:00', week: 1, platform: platforms[i % platforms.length] };
@@ -2159,8 +2192,8 @@ Return ONLY valid JSON (no markdown, no backticks):
       // Auto-save a draft for this generated post checkpoint
       let draftId = null;
       try {
-        const draft = new Draft({
-          userId,
+        const existingDraftId = preCreatedDraftIds[i];
+        const updateData = {
           title: `${campaignName || 'Campaign'} - Post ${i + 1}`,
           caption: postData.caption || '',
           hashtags: postData.hashtags || [],
@@ -2172,7 +2205,7 @@ Return ONLY valid JSON (no markdown, no backticks):
           tone: enforcedTone || '',
           objective: objective || '',
           scheduledDate: postData.suggestedDate ? new Date(`${postData.suggestedDate}T${postData.suggestedTime || '10:00'}:00`) : null,
-          status: 'draft',
+          status: 'completed',
           sourceType: 'campaign',
           creative: {
             type: 'image',
@@ -2187,9 +2220,17 @@ Return ONLY valid JSON (no markdown, no backticks):
             total: postsToProcess.length,
             completed: i + 1 === postsToProcess.length
           }
-        });
-        await draft.save();
-        draftId = draft._id;
+        };
+
+        const DraftModel = require('../models/Draft');
+        let draft;
+        if (existingDraftId) {
+          draft = await DraftModel.findByIdAndUpdate(existingDraftId, { $set: updateData }, { new: true });
+        } else {
+          draft = new DraftModel({ userId, ...updateData });
+          await draft.save();
+        }
+        draftId = draft ? draft._id : null;
       } catch (err) {
         console.error('Failed to save draft progress checkpoint:', err);
       }
@@ -3050,9 +3091,47 @@ router.post('/:id/publish', protect, async (req, res) => {
     const baseCaption = platforms.includes('instagram')
       ? buildInstagramCaption(cleanContent, ctaText)
       : cleanContent;
-    const fullPost = limitedHashtags.length > 0
+    let fullPost = limitedHashtags.length > 0
       ? `${baseCaption}\n\n${limitedHashtags.join(' ')}`
       : baseCaption;
+
+    // -- DUPLICATE MENTION REPLACEMENT --
+    let mentionConverted = false;
+    try {
+      const mentionRegex = /@(\w+)/g;
+      const extractedMentions = fullPost.match(mentionRegex) || [];
+      
+      if (extractedMentions.length > 0) {
+        const todayMentions = await MentionLog.find({
+          userId,
+          mention: { $in: extractedMentions }
+        }).lean();
+        
+        const usedMentionsSet = new Set(todayMentions.map(m => m.mention));
+        const newMentions = [];
+        
+        fullPost = fullPost.replace(mentionRegex, (match) => {
+          if (usedMentionsSet.has(match)) {
+            mentionConverted = true;
+            return `#${match.substring(1)}`;
+          } else {
+            newMentions.push({
+              userId,
+              mention: match
+            });
+            usedMentionsSet.add(match);
+            return match;
+          }
+        });
+        
+        if (newMentions.length > 0) {
+          await MentionLog.insertMany(newMentions);
+        }
+      }
+    } catch (mentionErr) {
+      console.warn('Failed to process mention log:', mentionErr);
+    }
+    // -- END MENTION REPLACEMENT --
     
     console.log('Publishing to platforms:', platforms);
     console.log('Post content:', fullPost.substring(0, 100) + '...');
@@ -3941,8 +4020,7 @@ router.post('/:id/publish', protect, async (req, res) => {
       }
       
       res.status(400).json({
-        success: false,
-        message: finalErrorMessage,
+        ...handlePublishError(finalErrorMessage),
         error: finalErrorMessage,
         requiresReconnect,
         rateLimited,
@@ -4002,8 +4080,7 @@ router.post('/:id/publish', protect, async (req, res) => {
     }
 
     res.status(500).json({
-      success: false,
-      message: 'Failed to publish campaign',
+      ...handlePublishError(error),
       error: error.message
     });
   }

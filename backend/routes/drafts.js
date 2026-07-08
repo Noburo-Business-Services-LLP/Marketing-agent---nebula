@@ -5,6 +5,7 @@ const Draft = require('../models/Draft');
 const Campaign = require('../models/Campaign');
 const User = require('../models/User');
 const { publishCampaignToSocial } = require('../services/campaignPublisher');
+const { handlePublishError } = require('../utils/publishErrorHandler');
 
 // 1. POST /save - Create or update a draft (upsert by _id if provided)
 router.post('/save', protect, async (req, res) => {
@@ -263,11 +264,11 @@ router.post('/:id/publish', protect, async (req, res) => {
       campaign.ayrshareStatus = 'error';
       await campaign.save();
 
-      res.status(400).json({ success: false, message: result.error || 'Failed to publish to social media', draft });
+      res.status(400).json({ ...handlePublishError(result.error), draft });
     }
   } catch (error) {
     console.error('Publish draft error:', error);
-    res.status(500).json({ success: false, message: 'Failed to publish draft', error: error.message });
+    res.status(500).json({ ...handlePublishError(error), draft: null });
   }
 });
 

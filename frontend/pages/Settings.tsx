@@ -81,13 +81,13 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
   // Load user data when component mounts or user changes
   useEffect(() => {
     if (user) {
-      setFormData({
-        companyName: user.companyName || user.businessProfile?.companyName || '',
-        industry: user.businessProfile?.industry || '',
-        email: user.email || '',
-        firstName: user.firstName || '',
-        lastName: user.lastName || ''
-      });
+        setFormData({
+          companyName: (user as any).companyName || user.businessProfile?.name || '',
+          industry: user.businessProfile?.industry || '',
+          email: user.email || '',
+          firstName: user.firstName || '',
+          lastName: user.lastName || ''
+        });
       if (user.businessProfile) {
         setBizData({ ...emptyBiz, ...user.businessProfile });
       }
@@ -225,10 +225,9 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
               firstName: formData.firstName,
               lastName: formData.lastName,
               email: formData.email,
-              companyName: formData.companyName,
               businessProfile: {
                   ...user?.businessProfile,
-                  companyName: formData.companyName,
+                  name: formData.companyName,
                   industry: formData.industry
               }
           });

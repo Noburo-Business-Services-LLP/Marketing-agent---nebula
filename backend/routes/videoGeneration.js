@@ -122,6 +122,64 @@ videoGenerationQueue.registerHandler('generate_clips', async (payload, { update,
   };
 });
 
+
+videoGenerationQueue.registerHandler('generate_content', async (payload, { update, log }) => {
+  const { jobId, userId, selectedPlatforms, baseUrl } = payload;
+  await update({ progress: 10, currentStep: 'generate_content' });
+  await log(`Generating content (thumbnail, caption, hashtags) for draft ${jobId}`);
+
+  const draft = await loadDraftForUser(jobId, userId);
+  const platforms = normalizePlatforms(selectedPlatforms?.length ? selectedPlatforms : (draft?.platform?.selectedPlatforms || []));
+  
+  const thumbnailUrl = await generateThumbnailFromDraft({ draft, baseUrl });
+  const socialContent = await generateCaptionAndHashtags({ draft, selectedPlatforms: platforms });
+
+  const updated = await updateDraft(jobId, userId, (current) => ({
+    ...current,
+    currentStep: Math.max(Number(current.currentStep || 1), 8),
+    thumbnailUrl,
+    content: {
+      thumbnailUrl,
+      caption: socialContent.caption,
+      hashtags: socialContent.hashtags,
+      generatedAt: new Date().toISOString()
+    },
+    thumbnails: thumbnailUrl ? { url: thumbnailUrl, generatedAt: new Date().toISOString() } : current.thumbnails,
+    jobs: {
+      ...(current.jobs || {}),
+      content: current.jobs?.content
+        ? { ...current.jobs.content, status: 'completed', completedAt: new Date().toISOString() }
+        : null
+    }
+  }));
+
+  try {
+    const VideoDraft = require('../models/VideoDraft');
+    const draftDoc = await VideoDraft.findOne({ jobId });
+    if (draftDoc) {
+      draftDoc.thumbnailUrl = thumbnailUrl;
+      await draftDoc.save();
+    }
+  } catch (saveErr) {}
+
+  await learnVideoStep({
+    userId,
+    jobId,
+    action: 'video_content',
+    prompt: draft?.prompt?.promptText || '',
+    userInput: draft.input || {},
+    captions: [socialContent.caption],
+    hashtags: socialContent.hashtags,
+    thumbnails: [thumbnailUrl].filter(Boolean),
+    generatedVideos: [draft?.merge?.finalOutputUrl || draft?.merge?.finalVideoUrl].filter(Boolean),
+    product: draft?.input?.product || null,
+    aiSettings: { selectedPlatforms: platforms }
+  });
+
+  await update({ progress: 100, currentStep: 'completed' });
+  return { success: true, jobId, content: updated.content, draft: updated };
+});
+
 videoGenerationQueue.registerHandler('merge_video', async (payload, { update, log }) => {
   const { jobId, userId, effectiveClipUrls, finalAudioUrl, subtitles, baseUrl } = payload;
   await update({ progress: 5, currentStep: 'merge_video' });
@@ -823,6 +881,26 @@ router.post('/createVideo', protect, checkTrial, videoAiWriteLimiter, async (req
         baseUrl
       }
     });
+
+    try {
+      const Draft = require('../models/Draft');
+      await Draft.findOneAndUpdate(
+        { 'generationProgress.jobId': queued.jobId, userId: String(userId) },
+        {
+          $set: {
+            title: String(payload.description || 'AI Video Draft').substring(0, 50),
+            status: 'processing',
+            sourceType: 'reel',
+            contentType: 'reel',
+            'generationProgress.step': 'Queued in background',
+            'generationProgress.progress': 0
+          }
+        },
+        { upsert: true, new: true }
+      );
+    } catch (e) {
+      console.error('Failed to create Draft on enqueue:', e);
+    }
 
     return res.status(202).json({
       success: true,

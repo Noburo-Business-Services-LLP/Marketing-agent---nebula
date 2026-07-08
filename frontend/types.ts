@@ -182,6 +182,12 @@ export interface Draft {
   scheduledDate?: string;
   status: 'draft' | 'scheduled' | 'published' | 'archived' | 'processing' | 'completed' | 'failed';
   errorMessage?: string;
+  generationProgress?: {
+    jobId?: string;
+    progress?: number;
+    step?: string;
+    [key: string]: any;
+  };
   sourceType: 'campaign' | 'post' | 'reel' | 'calendar';
   contentType?: 'campaign' | 'post' | 'reel';
   contentCalendarId?: string;

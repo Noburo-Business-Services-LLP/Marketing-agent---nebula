@@ -135,10 +135,7 @@ const StrategyDocumentView: React.FC<StrategyDocumentViewProps> = ({ calendar, o
 
   return (
     <div className="flex flex-col w-full pb-20 animate-in fade-in duration-300">
-      <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
-        <button onClick={onBack} className={`flex items-center gap-2 px-4 py-2 rounded-lg border hover:bg-opacity-80 transition-colors ${theme.border} ${theme.text}`}>
-          <ArrowLeft className="w-4 h-4" /> Back to Calendar
-        </button>
+      <div className="flex flex-col sm:flex-row justify-end items-center mb-6 gap-4">
         <div className="flex items-center gap-3">
           <button onClick={handleDownloadExcel} className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-sm transition-colors">
             <FileSpreadsheet className="w-4 h-4" /> Download Excel
