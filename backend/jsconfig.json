@@ -1,10 +1,9 @@
 {
   "compilerOptions": {
     "module": "CommonJS",
-    "target": "ES6",
+    "target": "ES2022",
     "checkJs": false,
-    "baseUrl": ".",
-    "moduleResolution": "node"
+    "moduleResolution": "node16"
   },
   "exclude": [
     "node_modules"
