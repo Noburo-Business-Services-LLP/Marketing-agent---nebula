@@ -5,6 +5,7 @@ const Draft = require('../models/Draft');
 const Campaign = require('../models/Campaign');
 const User = require('../models/User');
 const { publishCampaignToSocial } = require('../services/campaignPublisher');
+const { handlePublishError } = require('../utils/publishErrorHandler');
 
 // 1. POST /save - Create or update a draft (upsert by _id if provided)
 router.post('/save', protect, async (req, res) => {
@@ -42,7 +43,11 @@ router.get('/', protect, async (req, res) => {
 
     const query = { userId };
     if (status && status !== 'all') {
-      query.status = status;
+      if (status === 'draft') {
+        query.status = { $in: ['draft', 'processing', 'completed', 'failed'] };
+      } else {
+        query.status = status;
+      }
     }
     if (type) {
       if (type.includes(',')) {
@@ -52,7 +57,7 @@ router.get('/', protect, async (req, res) => {
       }
     }
 
-    const drafts = await Draft.find(query).sort({ createdAt: -1 });
+    const drafts = await Draft.find(query).populate('campaignId', 'campaignName').sort({ createdAt: -1 });
     res.status(200).json({ success: true, drafts });
   } catch (error) {
     console.error('Get drafts error:', error);
@@ -259,11 +264,11 @@ router.post('/:id/publish', protect, async (req, res) => {
       campaign.ayrshareStatus = 'error';
       await campaign.save();
 
-      res.status(400).json({ success: false, message: result.error || 'Failed to publish to social media', draft });
+      res.status(400).json({ ...handlePublishError(result.error), draft });
     }
   } catch (error) {
     console.error('Publish draft error:', error);
-    res.status(500).json({ success: false, message: 'Failed to publish draft', error: error.message });
+    res.status(500).json({ ...handlePublishError(error), draft: null });
   }
 });
 
@@ -389,6 +394,76 @@ router.post('/:id/regenerate', protect, async (req, res) => {
   } catch (error) {
     console.error('Regenerate draft error:', error);
     res.status(500).json({ success: false, message: 'Failed to trigger draft regeneration', error: error.message });
+  }
+});
+
+// 10. POST /generate-image-bg - Create a draft immediately with status 'processing' and enqueue background image generation
+router.post('/generate-image-bg', protect, async (req, res) => {
+  try {
+    const userId = req.user.userId || req.user.id;
+    const { type, title, caption, hashtags, prompt, aspectRatio, platforms } = req.body;
+
+    const draft = new Draft({
+      userId,
+      title: title || 'Untitled Draft',
+      caption: caption || '',
+      hashtags: hashtags || [],
+      platforms: platforms || [],
+      imagePrompt: prompt || '',
+      status: 'processing',
+      sourceType: type === 'campaign' ? 'campaign' : 'post',
+      contentType: type === 'campaign' ? 'campaign' : 'post',
+      creative: {
+        type: 'image',
+        textContent: caption || '',
+        captions: caption || '',
+        imageUrls: [],
+        hashtags: hashtags || []
+      }
+    });
+
+    await draft.save();
+
+    // Enqueue the background job
+    const backgroundQueue = require('../services/backgroundQueue');
+    backgroundQueue.enqueue({
+      type: type === 'campaign' ? 'generate_campaign_image' : 'generate_post_image',
+      draftId: draft._id,
+      aspectRatio: aspectRatio || '1:1'
+    });
+
+    res.status(201).json({ success: true, draftId: draft._id, draft });
+  } catch (error) {
+    console.error('Generate image bg error:', error);
+    res.status(500).json({ success: false, message: 'Failed to queue image generation', error: error.message });
+  }
+});
+
+// 11. POST /:id/retry-image - Reset status to 'processing' and re-enqueue failed draft for image generation
+router.post('/:id/retry-image', protect, async (req, res) => {
+  try {
+    const userId = req.user.userId || req.user.id;
+    const draft = await Draft.findOne({ _id: req.params.id, userId });
+
+    if (!draft) {
+      return res.status(404).json({ success: false, message: 'Draft not found' });
+    }
+
+    draft.status = 'processing';
+    draft.errorMessage = '';
+    await draft.save();
+
+    const backgroundQueue = require('../services/backgroundQueue');
+    backgroundQueue.enqueue({
+      type: draft.contentType === 'campaign' ? 'generate_campaign_image' : 'generate_post_image',
+      draftId: draft._id,
+      aspectRatio: '1:1'
+    });
+
+    res.status(200).json({ success: true, message: 'Requeued draft for image generation', draft });
+  } catch (error) {
+    console.error('Retry image generation error:', error);
+    res.status(500).json({ success: false, message: 'Failed to retry image generation', error: error.message });
   }
 });
 

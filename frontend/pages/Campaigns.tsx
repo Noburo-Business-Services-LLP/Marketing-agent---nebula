@@ -2,13 +2,15 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Campaign, ContentCalendarItem, Product, Draft } from '../types';
 import { apiService, icpStrategyService, inventoryAPI, brandAssetsAPI, contentCalendarAPI, draftsAPI } from '../services/api';
-import { Plus, Sparkles, Filter, Loader2, Calendar, BarChart3, Image as ImageIcon, Video, X, ChevronRight, Check, Eye, MousePointer, Archive, Send, Edit3, DollarSign, RefreshCw, Wand2, Instagram, Facebook, Twitter, Linkedin, Youtube, Clock, Heart, MessageCircle, Share2, Zap, Download, FileText, ImageDown, ChevronDown, ChevronUp, Trash2, Save, AlertCircle, Target, Users, PieChart, Pencil, PenLine, Music } from 'lucide-react';
+import { Plus, Sparkles, Filter, Loader2, Calendar, BarChart3, Image as ImageIcon, Video, X, ChevronRight, Check, Eye, MousePointer, Archive, Send, Edit3, DollarSign, RefreshCw, RotateCcw, Wand2, Instagram, Facebook, Twitter, Linkedin, Youtube, Clock, Heart, MessageCircle, Share2, Zap, Download, FileText, ImageDown, ChevronDown, ChevronUp, Trash2, Save, AlertCircle, Target, Users, PieChart, Pencil, PenLine, Music, ToggleRight, ToggleLeft } from 'lucide-react';
 import { 
     LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, AreaChart, Area 
 } from 'recharts';
 import { useTheme, getThemeClasses } from '../context/ThemeContext';
+import { useSmartCalendarAutoFill } from '../hooks/useSmartCalendarAutoFill';
 import BoostPostModal from '../components/BoostPostModal';
 import { DraftPreviewModal } from '../components/DraftPreviewModal';
+import { DraftProcessingAnimation } from '../components/DraftProcessingAnimation';
 import LogoSelector from '../components/LogoSelector';
 import PlatformPreview from '../components/PlatformPreview';
 import { ReelToneAudioPreview } from '../components/ReelToneAudioPreview';
@@ -826,6 +828,7 @@ const Campaigns: React.FC = () => {
   const isPostsMode = location.pathname.startsWith('/posts') || searchParams.get('mode') === 'posts';
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [draftsList, setDraftsList] = useState<Draft[]>([]);
+  const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [selectedDraft, setSelectedDraft] = useState<Draft | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabView>('suggestions');
@@ -840,7 +843,7 @@ const Campaigns: React.FC = () => {
   const [downloadingImage, setDownloadingImage] = useState<string | null>(null);
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
   const [selectedCampaignLoading, setSelectedCampaignLoading] = useState(false);
-  const [calendarSuggestion, setCalendarSuggestion] = useState<ContentCalendarItem | null>(null);
+  // calendarSuggestion removed
   
   // Post Modal State
 	  const [postModalOpen, setPostModalOpen] = useState(false);
@@ -907,6 +910,7 @@ const Campaigns: React.FC = () => {
   const [createPostScheduleDate, setCreatePostScheduleDate] = useState('');
   const [createPostScheduleTime, setCreatePostScheduleTime] = useState('');
   const [createPostGeneratingCaption, setCreatePostGeneratingCaption] = useState(false);
+  const [activeGeneratingDraftId, setActiveGeneratingDraftId] = useState<string | null>(null);
   const [showCreatePostPreview, setShowCreatePostPreview] = useState(false);
   const [createPostProducts, setCreatePostProducts] = useState<Product[]>([]);
   const [createPostSelectedProductIds, setCreatePostSelectedProductIds] = useState<string[]>([]);
@@ -920,6 +924,33 @@ const Campaigns: React.FC = () => {
   useEffect(() => {
     createPostEditorOpenRef.current = showCreatePostEditor;
   }, [showCreatePostEditor]);
+
+  // Poll background image generation for the currently open Post Creator modal
+  useEffect(() => {
+    if (!activeGeneratingDraftId) return;
+
+    let intervalId = setInterval(async () => {
+      try {
+        const response = await draftsAPI.getDraft(activeGeneratingDraftId);
+        const draft = response.draft;
+        if (draft) {
+          if (draft.status === 'completed' && draft.imageUrl) {
+            setCreatePostImageUrl(draft.imageUrl);
+            setActiveGeneratingDraftId(null);
+            clearInterval(intervalId);
+          } else if (draft.status === 'failed') {
+            alert(`Background image generation failed: ${draft.errorMessage || 'Unknown error'}`);
+            setActiveGeneratingDraftId(null);
+            clearInterval(intervalId);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to poll draft status:', err);
+      }
+    }, 4000);
+
+    return () => clearInterval(intervalId);
+  }, [activeGeneratingDraftId]);
 
   useEffect(() => {
     if (!showCreatePostEditor || createPostProductsLoaded) return;
@@ -1008,21 +1039,7 @@ const Campaigns: React.FC = () => {
     ].filter(Boolean).join('\n');
   };
 
-  useEffect(() => {
-    let cancelled = false;
-    const loadCalendarSuggestion = async () => {
-      try {
-        const response = await contentCalendarAPI.today();
-        if (!cancelled) setCalendarSuggestion(response.suggestion || null);
-      } catch (_) {
-        if (!cancelled) setCalendarSuggestion(null);
-      }
-    };
-    loadCalendarSuggestion();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  // Removed automatic fetching of today's calendar suggestion on page load to prevent unwanted form pre-filling.
 
   const closeCreatePostEditor = () => {
     createPostEditorOpenRef.current = false;
@@ -1156,6 +1173,13 @@ const Campaigns: React.FC = () => {
       return next;
     }, { replace: true });
   }, [activeTab, isReelsMode, parseCreateTypeFromSearch, searchParams, setSearchParams]);
+
+  useEffect(() => {
+    const tabParam = searchParams.get('tab');
+    if (tabParam === 'draft') {
+      setActiveTab('draft');
+    }
+  }, [searchParams]);
 
   // Toggle campaign selection
   const toggleCampaignSelection = (campaignId: string) => {
@@ -1515,9 +1539,13 @@ const Campaigns: React.FC = () => {
           const scheduledLabel = (actuallyScheduled && resolvedScheduledFor)
             ? new Date(resolvedScheduledFor).toLocaleString()
             : null;
-	        const successMessage = actuallyScheduled
+	        let successMessage = actuallyScheduled
 	          ? `Scheduled for ${scheduledLabel} on ${selectedPlatforms.join(', ')}!`
 	          : `Posted successfully to ${selectedPlatforms.join(', ')}!`;
+            
+          if (result.mentionConverted) {
+            successMessage += ' (Repeated @mention converted to hashtag to avoid publishing restrictions.)';
+          }
 	        
           console.log('\n? [PUBLISH SUCCESS]');
           if (selectedPlatforms.includes('instagram') && postInstagramAudio?.url) {
@@ -2009,7 +2037,16 @@ Generated by Nebulaa Gravity Marketing Agent
       if (activeTab === 'draft') {
         const typeFilter = isReelsMode ? 'reel' : 'campaign,post';
         const res = await draftsAPI.getDrafts('draft', typeFilter);
-        setDraftsList(res.drafts || []);
+        let list = res.drafts || [];
+        const calId = searchParams.get('calendarId');
+        const wkVal = searchParams.get('week');
+        if (calId) {
+          list = list.filter(d => String(d.contentCalendarId) === calId);
+        }
+        if (wkVal) {
+          list = list.filter(d => String(d.calendarWeek) === wkVal);
+        }
+        setDraftsList(list);
       } else {
         const queryStatus = activeTab === 'all' ? undefined : activeTab;
         const response = await apiService.getCampaigns(queryStatus);
@@ -2309,8 +2346,33 @@ Generated by Nebulaa Gravity Marketing Agent
                 isDarkMode ? 'border-[#161b22] border-slate-800' : 'border-slate-200'
               }`}
             >
+              <button
+                type="button"
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  if (confirm('Are you sure you want to delete this draft?')) {
+                    try {
+                      await draftsAPI.deleteDraft(item._id);
+                      await loadCampaigns();
+                    } catch (err: any) {
+                      alert(err.message || 'Failed to delete draft');
+                    }
+                  }
+                }}
+                className="absolute top-2 right-2 p-1.5 bg-black/60 hover:bg-red-650/80 hover:text-white rounded-lg text-slate-350 transition-colors z-10 opacity-0 group-hover:opacity-100"
+                title="Delete Draft"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
               <div className="relative aspect-video w-full bg-slate-950 overflow-hidden flex items-center justify-center">
-                {item.imageUrl ? (
+                {item.status === 'processing' ? (
+                  <DraftProcessingAnimation step="Synthesizing Campaign Asset..." type="campaign" />
+                ) : item.status === 'failed' ? (
+                  <div className="flex flex-col items-center gap-1.5 text-red-400 text-xs">
+                    <span className="text-xl">⚠️</span>
+                    <span>Generation Failed</span>
+                  </div>
+                ) : item.imageUrl ? (
                   <img src={item.imageUrl} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                 ) : (
                   <div className="text-3xl text-slate-700">🖼️</div>
@@ -2318,15 +2380,61 @@ Generated by Nebulaa Gravity Marketing Agent
               </div>
               <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
                 <div>
-                  <h3 className="font-bold text-slate-200 line-clamp-1 group-hover:text-slate-100 transition-colors">
-                    {item.title || 'Untitled Draft'}
-                  </h3>
+                  <div className="flex justify-between items-start gap-2">
+                    <h3 className="font-bold text-slate-200 line-clamp-1 group-hover:text-slate-100 transition-colors">
+                      {item.title || 'Untitled Draft'}
+                    </h3>
+                    {item.status === 'processing' && (
+                      <span className="px-1.5 py-0.5 text-[9px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded">
+                        Processing
+                      </span>
+                    )}
+                    {item.status === 'failed' && (
+                      <span className="px-1.5 py-0.5 text-[9px] font-semibold bg-red-500/10 text-red-400 border border-red-500/20 rounded">
+                        Failed
+                      </span>
+                    )}
+                  </div>
+                  {((item.campaignId as any)?.campaignName || (item as any).campaignName || item.contentCalendarId || item.calendarWeek !== null) && (
+                    <div className="flex flex-wrap gap-1.5 mt-1.5">
+                      {((item.campaignId as any)?.campaignName || (item as any).campaignName) && (
+                        <span className="px-1.5 py-0.5 text-[9px] font-medium bg-purple-500/10 text-purple-400 border border-purple-500/20 rounded truncate max-w-[200px]" title={(item.campaignId as any)?.campaignName || (item as any).campaignName}>
+                          📢 {(item.campaignId as any)?.campaignName || (item as any).campaignName}
+                        </span>
+                      )}
+                      {(item.contentCalendarId || item.calendarWeek !== null) && (
+                        <span className="px-1.5 py-0.5 text-[9px] font-medium bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 rounded">
+                          📅 Week {item.calendarWeek} Day {item.calendarDay}
+                        </span>
+                      )}
+                    </div>
+                  )}
                   <p className="text-xs text-slate-400 line-clamp-3 mt-2 font-light leading-relaxed">
                     {item.caption || <span className="italic text-slate-650">No caption defined</span>}
                   </p>
                 </div>
                 <div className="pt-3 border-t border-slate-800/60 flex items-center justify-between text-xs text-[#ffcc29]">
-                  <span>Edit & Post</span>
+                  {item.status === 'failed' ? (
+                    <button
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        try {
+                          await draftsAPI.retryImageGeneration(item._id);
+                          await loadCampaigns();
+                        } catch (err: any) {
+                          alert(err.message || 'Failed to retry generation.');
+                        }
+                      }}
+                      className="flex items-center gap-1 px-2 py-0.5 bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/30 transition-colors"
+                    >
+                      <RotateCcw className="w-3 h-3 animate-spin-reverse" />
+                      Retry
+                    </button>
+                  ) : item.status === 'processing' ? (
+                    <span className="text-slate-400">Processing...</span>
+                  ) : (
+                    <span>Edit & Post</span>
+                  )}
                   <span>➜</span>
                 </div>
               </div>
@@ -2935,7 +3043,6 @@ Generated by Nebulaa Gravity Marketing Agent
           initialContentType={createModalInitialType}
           reelsOnly={isReelsMode}
           postsOnly={isPostsMode}
-          initialSuggestion={calendarSuggestion}
         />
       )}
 
@@ -3381,9 +3488,9 @@ Generated by Nebulaa Gravity Marketing Agent
               <button
                 onClick={() => {
                   setShowCreatePostAspectModal(false);
-                  setCreatePostPrompt(formatCalendarSuggestion(calendarSuggestion));
+                  setCreatePostPrompt('');
                   setCreatePostImageUrl(null);
-                  setCreatePostCaption(calendarSuggestion?.headline || '');
+                  setCreatePostCaption('');
                   setCreatePostHashtags([]);
                   setCreatePostRefinePrompt('');
                   setCreatePostSelectedProductIds([]);
@@ -3645,17 +3752,25 @@ Generated by Nebulaa Gravity Marketing Agent
                               setCreatePostGenerating(true);
                               setCreatePostImageUrl(null);
                               try {
-                                const result = await apiService.generatePosterFromReference(
-                                  '', buildCreatePostGenerationPrompt(createPostPrompt), createPostPlatform[0] || 'instagram', createPostLogo || undefined, createPostAspectRatio
-                                );
+                                const result = await draftsAPI.generateImageBg({
+                                  type: 'post',
+                                  title: `Generated Post: ${createPostPrompt.substring(0, 25)}...`,
+                                  caption: createPostCaption || buildCreatePostGenerationPrompt(createPostPrompt),
+                                  hashtags: createPostHashtags,
+                                  platforms: createPostPlatform,
+                                  prompt: buildCreatePostGenerationPrompt(createPostPrompt),
+                                  aspectRatio: createPostAspectRatio || '1:1'
+                                });
                                 if (result.success) {
-                                  const finalImageUrl = result.imageUrl || result.imageBase64 || null;
-                                  setCreatePostImageUrl(finalImageUrl);
-                                  if (finalImageUrl && !createPostEditorOpenRef.current) {
-                                    await saveCreatePostGeneratedDraftInBackground(finalImageUrl, createPostPrompt);
-                                  }
+                                  setNotification({
+                                    type: 'success',
+                                    message: 'Saved to Drafts. Image generation is running in background.'
+                                  });
+                                  setTimeout(() => setNotification(null), 4000);
+                                  setActiveGeneratingDraftId(result.draftId);
+                                  await loadCampaigns();
                                 } else {
-                                  alert(result.error || result.message || 'Failed to generate image.');
+                                  alert(result.message || 'Failed to generate image. Please try again.');
                                 }
                               } catch (err: any) {
                                 console.error('Generate error:', err);
@@ -3664,11 +3779,11 @@ Generated by Nebulaa Gravity Marketing Agent
                                 setCreatePostGenerating(false);
                               }
                             }}
-                            disabled={createPostGenerating || !createPostPrompt.trim()}
+                            disabled={createPostGenerating || activeGeneratingDraftId !== null || !createPostPrompt.trim()}
                             className="flex items-center gap-1.5 px-3 py-2 bg-[#ffcc29] text-[#070A12] text-sm font-semibold rounded-lg hover:bg-[#e6b825] disabled:opacity-50"
                           >
-                            {createPostGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                            Regenerate
+                            {createPostGenerating || activeGeneratingDraftId ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                            {activeGeneratingDraftId ? 'Creating...' : 'Regenerate'}
                             <span className="flex items-center gap-0.5 text-[10px] bg-black/10 px-1 py-0.5 rounded">
                               <Zap className="w-2.5 h-2.5" />7
                             </span>
@@ -3679,7 +3794,13 @@ Generated by Nebulaa Gravity Marketing Agent
                   ) : (
                     <>
                       <div className={`rounded-xl border-2 border-dashed p-8 flex flex-col items-center justify-center min-h-[250px] mb-4 ${isDarkMode ? 'border-slate-700 bg-[#161b22]' : 'border-slate-300 bg-slate-50'}`}>
-                        {createPostGenerating ? (
+                        {activeGeneratingDraftId ? (
+                          <div className="flex flex-col items-center gap-3 text-center animate-pulse">
+                            <Loader2 className="w-10 h-10 text-[#ffcc29] animate-spin" />
+                            <p className={`text-sm font-medium ${theme.text}`}>Creating your image in background...</p>
+                            <p className={`text-xs ${theme.textMuted}`}>This will automatically display when ready.</p>
+                          </div>
+                        ) : createPostGenerating ? (
                           <div className="flex flex-col items-center gap-3">
                             <Loader2 className="w-10 h-10 text-[#ffcc29] animate-spin" />
                             <p className={`text-sm font-medium ${theme.text}`}>Generating your image...</p>
@@ -3710,28 +3831,39 @@ Generated by Nebulaa Gravity Marketing Agent
                           <button
                             onClick={async () => {
                               if (!createPostPrompt.trim()) return;
-                              setCreatePostGenerating(true);
                               try {
-                                const result = await apiService.generatePosterFromReference(
-                                  '', buildCreatePostGenerationPrompt(createPostPrompt), createPostPlatform[0] || 'instagram', createPostLogo || undefined, createPostAspectRatio
-                                );
+                                const result = await draftsAPI.generateImageBg({
+                                  type: 'post',
+                                  title: `Generated Post: ${createPostPrompt.substring(0, 25)}...`,
+                                  caption: createPostCaption || buildCreatePostGenerationPrompt(createPostPrompt),
+                                  hashtags: createPostHashtags,
+                                  platforms: createPostPlatform,
+                                  prompt: buildCreatePostGenerationPrompt(createPostPrompt),
+                                  aspectRatio: createPostAspectRatio || '1:1'
+                                });
                                 if (result.success) {
-                                  setCreatePostImageUrl(result.imageUrl || result.imageBase64 || null);
+                                  setNotification({
+                                    type: 'success',
+                                    message: 'Saved to Drafts. Image generation is running in background.'
+                                  });
+                                  setTimeout(() => setNotification(null), 4000);
+                                  
+                                  setActiveGeneratingDraftId(result.draftId);
+                                  setCreatePostImageUrl(null);
+                                  await loadCampaigns();
                                 } else {
-                                  alert(result.error || result.message || 'Failed to generate image. Please try again.');
+                                  alert(result.message || 'Failed to generate image. Please try again.');
                                 }
                               } catch (err: any) {
                                 console.error('Generate error:', err);
                                 alert(err.message || 'Failed to generate image.');
-                              } finally {
-                                setCreatePostGenerating(false);
                               }
                             }}
-                            disabled={createPostGenerating || !createPostPrompt.trim()}
+                            disabled={createPostGenerating || activeGeneratingDraftId !== null || !createPostPrompt.trim()}
                             className="flex items-center gap-2 px-4 py-2 bg-[#ffcc29] text-[#070A12] text-sm font-semibold rounded-lg hover:bg-[#e6b825] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                           >
-                            {createPostGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                            Generate
+                            {createPostGenerating || activeGeneratingDraftId ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                            {activeGeneratingDraftId ? 'Creating...' : 'Generate'}
                             <span className="flex items-center gap-0.5 text-[10px] bg-black/10 px-1.5 py-0.5 rounded">
                               <Zap className="w-2.5 h-2.5" />7
                             </span>
@@ -3776,19 +3908,38 @@ Generated by Nebulaa Gravity Marketing Agent
                   <div className="flex items-center justify-between mb-2">
                     <label className={`block text-xs font-semibold uppercase tracking-wide ${theme.textSecondary}`}>Caption</label>
                     <button
+                      type="button"
                       onClick={async () => {
-                        if (!createPostMediaUrl) { alert('Generate an image or select a product with an image first'); return; }
                         setCreatePostGeneratingCaption(true);
                         try {
-                          const result = await apiService.generateCaptionFromImage(createPostMediaUrl, createPostPlatform[0] || 'instagram', {
+                          let option: 'both' | 'caption_only' | 'hashtags_only' = 'both';
+                          const hasCaption = !!createPostCaption.trim();
+                          const hasHashtags = createPostHashtags.length > 0;
+
+                          if (hasCaption && !hasHashtags) {
+                            option = 'hashtags_only';
+                          } else if (!hasCaption && hasHashtags) {
+                            option = 'caption_only';
+                          }
+
+                          const result = await apiService.generateCaptionFromImage(createPostMediaUrl || '', createPostPlatform[0] || 'instagram', {
                             selectedProducts: createPostSelectedProducts,
-                            prompt: buildCreatePostGenerationPrompt(createPostPrompt)
+                            prompt: buildCreatePostGenerationPrompt(createPostPrompt),
+                            generateOption: option,
+                            existingCaption: createPostCaption,
+                            existingHashtags: createPostHashtags.join(' ')
                           });
                           if (result.success) {
-                            if (result.caption) setCreatePostCaption(result.caption);
-                            if (result.hashtags) setCreatePostHashtags(result.hashtags);
+                            if (option === 'both') {
+                              if (result.caption) setCreatePostCaption(result.caption);
+                              if (result.hashtags) setCreatePostHashtags(result.hashtags);
+                            } else if (option === 'hashtags_only') {
+                              if (result.hashtags) setCreatePostHashtags(result.hashtags);
+                            } else if (option === 'caption_only') {
+                              if (result.caption) setCreatePostCaption(result.caption);
+                            }
                           } else {
-                            alert(result.error || 'Failed to generate caption');
+                            alert(result.error || 'Failed to generate content');
                           }
                         } catch (err) {
                           console.error('Caption generation error:', err);
@@ -3797,9 +3948,9 @@ Generated by Nebulaa Gravity Marketing Agent
                           setCreatePostGeneratingCaption(false);
                         }
                       }}
-                      disabled={createPostGeneratingCaption || !createPostMediaUrl}
+                      disabled={createPostGeneratingCaption}
                       className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium transition-colors ${
-                        createPostMediaUrl && !createPostGeneratingCaption
+                        !createPostGeneratingCaption
                           ? 'bg-purple-500/20 text-purple-400 hover:bg-purple-500/30'
                           : 'bg-slate-700/50 text-slate-500 cursor-not-allowed'
                       }`}
@@ -4634,6 +4785,25 @@ type GeneratedReelState = {
 
 const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campaign) => void; isDarkMode: boolean; theme: ReturnType<typeof getThemeClasses>; connectedPlatforms: string[]; initialContentType?: CampaignContentType; reelsOnly?: boolean; postsOnly?: boolean; initialSuggestion?: ContentCalendarItem | null }> = ({ onClose, onSuccess, isDarkMode, theme, connectedPlatforms, initialContentType = 'image', reelsOnly = false, postsOnly = false, initialSuggestion = null }) => {
     const [step, setStep] = useState(1);
+    const {
+      isAutoFillEnabled,
+      availableItems,
+      selectedItemId,
+      setSelectedItemId,
+      selectedItem,
+      isLoading: isCalendarLoading,
+      getMappedData
+    } = useSmartCalendarAutoFill(postsOnly ? 'post' : 'campaign');
+
+    useEffect(() => {
+      if (isAutoFillEnabled && selectedItem) {
+        const data = getMappedData(selectedItem);
+        setCampaignName(data.title);
+        setCampaignDescription(data.caption);
+        setCallToAction(data.cta);
+      }
+    }, [isAutoFillEnabled, selectedItem]);
+
     const [isGenerating, setIsGenerating] = useState(false);
     const generationRequestInFlightRef = useRef(false);
     const [generatedPosts, setGeneratedPosts] = useState<GeneratedPost[]>([]);
@@ -5840,7 +6010,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                         </div>
                         <div className="min-w-0">
                           <h2 className={`text-lg font-bold ${theme.text}`}>{isReelOnlyFlow ? 'Create Reel' : 'Create Campaign'}</h2>
-                          <p className={`text-xs ${theme.textMuted}`}>Powered by Gravity</p>
+                          <p className={`text-xs ${theme.textMuted} truncate`}>Powered by Gravity</p>
                         </div>
                     </div>
                     
@@ -5896,9 +6066,17 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                         {/* Step 1: Campaign Details */}
                         {step === 1 && !isReelOnlyFlow && (
                             <div className="space-y-6 animate-in fade-in duration-300">
-                                <div>
-                                  <h3 className={`text-xl font-bold ${theme.text}`}>Campaign Details</h3>
-                                  <p className={`text-sm ${theme.textSecondary} mt-1`}>Tell us about your campaign</p>
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                  <div>
+                                    <h3 className={`text-xl font-bold ${theme.text}`}>Campaign Details</h3>
+                                    <p className={`text-sm ${theme.textSecondary} mt-1`}>Tell us about your campaign</p>
+                                  </div>
+                                  <div className="flex flex-col items-end gap-2">
+                                    {isAutoFillEnabled && availableItems.length === 0 && !isCalendarLoading && (
+                                      <span className="text-xs text-red-500">No Smart Calendar content available.</span>
+                                    )}
+                                    {isCalendarLoading && <Loader2 className="w-3 h-3 animate-spin text-[#ffcc29]" />}
+                                  </div>
                                 </div>
                                 
                                 <div>
@@ -8082,13 +8260,14 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
           onSuccess(campaign);
         }
 
-        const message = isScheduleMode
+        let message = isScheduleMode
           ? `Scheduled ${generatedPosters.length} poster(s) for ${new Date(`${scheduleDate}T${scheduleTime}`).toLocaleString()}`
           : anyBackendScheduled
             ? `Queued ${generatedPosters.length} poster(s) for publishing ${lastBackendScheduledFor ? `(${new Date(lastBackendScheduledFor).toLocaleString()})` : '(pending)'} -¯-‚Â¿-‚Â½ check again in a few minutes`
             : `Posted ${generatedPosters.length} poster(s) to ${selectedPlatforms.join(', ')}`;
         
-        setPublishResult({ success: true, message });
+        // Note: For batch publish, we just assume if any mention was converted, it's good to notify
+        setPublishResult({ success: true, message: message + ' (Duplicate @mentions converted to hashtags to prevent restrictions)' });
         
         setTimeout(() => {
           onClose();
@@ -9159,6 +9338,7 @@ const UploadPublishModal: React.FC<UploadPublishModalProps> = ({ onClose, onSucc
     const [isDragging, setIsDragging] = useState(false);
     const [publishSummary, setPublishSummary] = useState<{ total: number; success: number; failed: number } | null>(null);
     const [showUploadPreview, setShowUploadPreview] = useState(false);
+  const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
     // Instagram-only audio (optional) -¯-‚Â¿-‚Â½ only used when Instagram is selected
     const [instagramAudio, setInstagramAudio] = useState<{ url: string; publicId?: string | null; originalName?: string | null; durationSeconds?: number | null } | null>(null);
@@ -9978,6 +10158,26 @@ const UploadPublishModal: React.FC<UploadPublishModalProps> = ({ onClose, onSucc
                         onClose={() => setShowUploadPreview(false)}
                         isDarkMode={isDarkMode}
                     />
+                )}
+                {/* Floating Notification Toast */}
+                {notification && (
+                    <div className={`fixed top-4 right-4 z-[9999] max-w-md p-4 rounded-lg shadow-lg border animate-in slide-in-from-top-2 duration-300 flex items-start gap-3 ${
+                        notification.type === 'success' 
+                            ? 'bg-green-50 border-green-200 text-green-800' 
+                            : 'bg-red-50 border-red-200 text-red-800'
+                    }`}>
+                        {notification.type === 'success' ? (
+                            <Check className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+                        ) : (
+                            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                        )}
+                        <div className="flex-1">
+                            <p className="font-medium text-sm">{notification.message}</p>
+                        </div>
+                        <button onClick={() => setNotification(null)} className="text-current opacity-50 hover:opacity-100">
+                            <X className="w-4 h-4" />
+                        </button>
+                    </div>
                 )}
             </div>
         </div>

@@ -30,13 +30,16 @@ function getScenePrompt(scene = {}) {
       scene.prompt ||
       scene.imagePrompt ||
       scene.title ||
-      'Subtle cinematic motion for a short marketing video scene.'
+      'Cinematic camera pan and dynamic motion showcasing the scene.'
   ).trim();
 
+  // Motion-first prompt modifications
   return [
+    'Cinematic camera movement,',
     basePrompt,
-    'Vertical 9:16 professional marketing video, high-detail 1080p look, sharp product details, clean edges, realistic materials, stable camera motion, natural lighting.',
-    'Use smooth cinematic motion with minimal shake. Keep faces, hands, product packaging, logos, and object geometry consistent from frame to frame.',
+    'Dynamic motion, slow smooth pan, tracking shot, premium commercial style, natural light reflections, subtle depth movement.',
+    'Vertical 9:16 professional marketing video, high-detail 1080p look, sharp product details, clean edges, realistic materials.',
+    'Keep faces, hands, product packaging, logos, and object geometry consistent from frame to frame.',
     'Avoid pixelation, distortion, flicker, duplicated objects, warped text, noisy backgrounds, blur, compression artifacts, and low-resolution details.'
   ].filter(Boolean).join(' ');
 }
@@ -50,8 +53,8 @@ function isSeedanceModel(model = '') {
 }
 
 function getSeedanceDuration(scene = {}) {
-  const duration = Number.parseInt(String(scene.durationSeconds || scene.duration || 5), 10);
-  return clamp(Number.isFinite(duration) ? duration : 5, 4, 12);
+  const duration = Number.parseInt(String(scene.durationSeconds || scene.duration || 6), 10);
+  return clamp(Number.isFinite(duration) ? duration : 6, 6, 12);
 }
 
 function getSeed(scene = {}) {
@@ -194,7 +197,10 @@ async function generateVideoClip(scene = {}) {
         duration: String(getSeedanceDuration(scene)),
         camera_fixed: false,
         seed,
-        enable_safety_checker: true
+        enable_safety_checker: true,
+        motion_strength: 7,
+        dynamic_camera: true,
+        cinematic_movement: true
       }
     : {
         prompt,
@@ -203,7 +209,10 @@ async function generateVideoClip(scene = {}) {
         fps: 25,
         seed,
         generate_audio: false,
-        use_multiscale: true
+        use_multiscale: true,
+        motion_strength: 7,
+        dynamic_camera: true,
+        cinematic_movement: true
       };
 
   if (imageUrl && !seedance) {

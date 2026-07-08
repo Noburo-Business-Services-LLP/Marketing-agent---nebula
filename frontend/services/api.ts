@@ -1482,6 +1482,9 @@ export const apiService = {
       selectedProducts?: any[];
       prompt?: string;
       language?: string;
+      generateOption?: string;
+      existingCaption?: string;
+      existingHashtags?: string;
     }
   ): Promise<{
     success: boolean;
@@ -1499,8 +1502,7 @@ export const apiService = {
           platform: platform || 'instagram',
           language: context?.language || 'English',
           selectedProducts: context?.selectedProducts || [],
-          prompt: context?.prompt || '',
-          language: context?.language || 'English'
+          prompt: context?.prompt || ''
         })
       },
       true
@@ -3338,6 +3340,10 @@ export const videoGenerationAPI = {
     return apiCall(`/video-generation/jobs/${encodeURIComponent(jobId)}`, { method: 'GET' }, true);
   },
 
+  cancelJob: async (jobId: string): Promise<any> => {
+    return apiCall(`/video-generation/jobs/${encodeURIComponent(jobId)}/cancel`, { method: 'POST' }, true);
+  },
+
   createDraft: async (payload: {
     description: string;
     durationSeconds?: number;
@@ -3441,10 +3447,11 @@ export const videoGenerationAPI = {
   generateContent: async (payload: {
     jobId: string;
     selectedPlatforms?: string[];
+    async?: boolean;
   }): Promise<any> => {
     return apiCall('/video-generation/generateContent', {
       method: 'POST',
-      body: JSON.stringify(payload)
+      body: JSON.stringify({ ...payload, async: true })
     }, true);
   },
 
@@ -3508,15 +3515,26 @@ export const contentCalendarAPI = {
     return apiCall('/content-calendar', { method: 'GET' }, true);
   },
 
-  regenerate: async (): Promise<{ success: boolean; calendar: ContentCalendar }> => {
-    return apiCall('/content-calendar/regenerate', { method: 'POST' }, true);
+  getHistory: async (): Promise<{ success: boolean; calendars: ContentCalendar[] }> => {
+    return apiCall('/content-calendar/history', { method: 'GET' }, true);
+  },
+
+  regenerate: async (month?: string): Promise<{ success: boolean; calendar: ContentCalendar }> => {
+    return apiCall('/content-calendar/regenerate', { 
+      method: 'POST',
+      body: JSON.stringify(month ? { month } : {})
+    }, true);
+  },
+
+  generateNextMonth: async (): Promise<{ success: boolean; calendar: ContentCalendar }> => {
+    return apiCall('/content-calendar/generate-next', { method: 'POST' }, true);
   },
 
   today: async (): Promise<{ success: boolean; suggestion: ContentCalendarItem | null; calendarId?: string | null }> => {
     return apiCall('/content-calendar/today', { method: 'GET' }, true);
   },
 
-  updateSettings: async (data: { autoGenerate?: boolean; approved?: boolean }): Promise<{ success: boolean; calendar: ContentCalendar }> => {
+  updateSettings: async (data: { calendarId?: string; autoGenerate?: boolean; approved?: boolean }): Promise<{ success: boolean; calendar: ContentCalendar }> => {
     return apiCall('/content-calendar/settings', { method: 'PATCH', body: JSON.stringify(data) }, true);
   },
 
@@ -3970,6 +3988,27 @@ export const draftsAPI = {
 
   regenerateDraft: async (id: string): Promise<{ success: boolean; message: string }> => {
     return apiCall(`/drafts/${encodeURIComponent(id)}/regenerate`, {
+      method: 'POST'
+    }, true);
+  },
+
+  generateImageBg: async (data: {
+    type: 'campaign' | 'post';
+    title: string;
+    caption: string;
+    hashtags: string[];
+    platforms?: string[];
+    prompt: string;
+    aspectRatio?: string;
+  }): Promise<{ success: boolean; draftId?: string; draft?: Draft; message?: string }> => {
+    return apiCall('/drafts/generate-image-bg', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }, true);
+  },
+
+  retryImageGeneration: async (id: string): Promise<{ success: boolean; draft: Draft }> => {
+    return apiCall(`/drafts/${encodeURIComponent(id)}/retry-image`, {
       method: 'POST'
     }, true);
   }

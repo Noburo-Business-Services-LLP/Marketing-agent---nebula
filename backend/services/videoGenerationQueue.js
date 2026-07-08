@@ -481,6 +481,25 @@ class PersistentVideoGenerationQueue {
         error: null
       });
       await this._pushLog(jobId, `Successfully completed job execution [${jobType}]`);
+
+      if (jobType === 'create_video_pipeline' || jobType === 'merge_video') {
+        try {
+          const Draft = require('../models/Draft');
+          const finalUrl = result?.videoUrl || result?.url || result?.finalVideoUrl || result?.merge?.finalVideoUrl;
+          await Draft.updateMany(
+            { 'generationProgress.jobId': jobId },
+            { 
+              $set: { 
+                status: 'completed', 
+                imageUrl: finalUrl,
+                'creative.videoUrl': finalUrl
+              } 
+            }
+          );
+        } catch (err) {
+          console.error(`⚠️ Failed to update Draft status to completed for job ${jobId}:`, err.message);
+        }
+      }
     } catch (error) {
       console.error(`❌ Video job ${jobId} failed:`, error);
       const maxAttempts = Number(process.env.VIDEO_JOB_MAX_ATTEMPTS || '3');
@@ -507,6 +526,16 @@ class PersistentVideoGenerationQueue {
         }
       });
       await this._pushLog(jobId, `FAILED: ${error?.message || error}`);
+
+      try {
+        const Draft = require('../models/Draft');
+        await Draft.updateMany(
+          { 'generationProgress.jobId': jobId },
+          { $set: { status: 'failed', errorMessage: error?.message || 'Video generation failed' } }
+        );
+      } catch (err) {
+        console.error(`⚠️ Failed to update Draft status to failed for job ${jobId}:`, err.message);
+      }
 
       // Refund credits to user on job failure
       if (jobDoc.userId) {
