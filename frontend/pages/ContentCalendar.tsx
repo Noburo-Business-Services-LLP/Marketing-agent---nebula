@@ -255,6 +255,112 @@ const ContentCalendar: React.FC = () => {
 
   
 
+  if (showWeeklyDrafts) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between border-b pb-4 border-slate-800">
+          <div>
+            <h2 className={`text-xl font-bold ${theme.text}`}>Week {getActiveWeekNumber()} Drafts</h2>
+            <p className={`text-xs ${theme.textMuted} mt-1`}>Review the drafts generated from your weekly content calendar.</p>
+          </div>
+          <button
+            onClick={() => setShowWeeklyDrafts(false)}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm border font-semibold ${isDarkMode ? 'border-slate-750 hover:bg-slate-800 text-slate-350' : 'border-slate-250 hover:bg-slate-50 text-slate-650'}`}
+          >
+            ← Back to Calendar
+          </button>
+        </div>
+
+        {loadingWeeklyDrafts ? (
+          <div className="py-20 flex flex-col items-center justify-center gap-3">
+            <Loader2 className="w-8 h-8 animate-spin text-[#ffcc29]" />
+            <p className={`text-sm ${theme.textMuted}`}>Loading weekly drafts...</p>
+          </div>
+        ) : weeklyDrafts.length === 0 ? (
+          <div className={`text-center py-20 rounded-xl border border-dashed ${isDarkMode ? 'border-slate-805/50' : 'border-slate-300'} ${theme.bgCard}`}>
+            <h3 className={`text-lg font-bold ${theme.text}`}>No drafts found</h3>
+            <p className={`${theme.textSecondary} mb-6`}>There are no drafts generated for Week {getActiveWeekNumber()} of this calendar.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in duration-350">
+            {weeklyDrafts.map((item) => (
+              <div 
+                key={item._id}
+                className={`group relative bg-slate-900/40 border rounded-2xl overflow-hidden transition-all flex flex-col hover:border-slate-700/80 hover:shadow-xl ${
+                  isDarkMode ? 'border-slate-800' : 'border-slate-200'
+                }`}
+              >
+                <div className="relative aspect-video w-full bg-slate-950 overflow-hidden flex items-center justify-center">
+                  {item.status === 'processing' ? (
+                    <div className="flex flex-col items-center gap-1.5 text-slate-400 text-xs">
+                      <Loader2 className="w-6 h-6 text-[#ffcc29] animate-spin" />
+                      <span>Generating Image...</span>
+                    </div>
+                  ) : item.status === 'failed' ? (
+                    <div className="flex flex-col items-center gap-1.5 text-red-400 text-xs">
+                      <span className="text-xl">⚠️</span>
+                      <span>Generation Failed</span>
+                    </div>
+                  ) : item.imageUrl ? (
+                    <img src={item.imageUrl} alt={item.title} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="text-3xl text-slate-700">🖼️</div>
+                  )}
+                </div>
+                <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
+                  <div>
+                    <div className="flex justify-between items-start gap-2">
+                      <h3 className="font-bold text-slate-200 line-clamp-1">
+                        {item.title || 'Untitled Draft'}
+                      </h3>
+                      {item.status === 'processing' && (
+                        <span className="px-1.5 py-0.5 text-[9px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded">
+                          Processing
+                        </span>
+                      )}
+                      {item.status === 'failed' && (
+                        <span className="px-1.5 py-0.5 text-[9px] font-semibold bg-red-500/10 text-red-400 border border-red-500/20 rounded">
+                          Failed
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-400 line-clamp-3 mt-2 leading-relaxed">
+                      {item.caption || <span className="italic text-slate-650">No caption defined</span>}
+                    </p>
+                  </div>
+                  <div className="pt-3 border-t border-slate-800/60 flex items-center justify-between text-xs text-[#ffcc29]">
+                    {item.status === 'failed' ? (
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          try {
+                            await draftsAPI.retryImageGeneration(item._id);
+                            loadWeeklyDrafts();
+                          } catch (err: any) {
+                            alert(err.message || 'Failed to retry generation.');
+                          }
+                        }}
+                        className="flex items-center gap-1 px-2 py-0.5 bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/30 transition-colors"
+                      >
+                        <RotateCcw className="w-3 h-3" />
+                        Retry
+                      </button>
+                    ) : item.status === 'processing' ? (
+                      <span className="text-slate-400">Processing...</span>
+                    ) : (
+                      <span className="capitalize">{item.status}</span>
+                    )}
+                    <span>➜</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       <button onClick={() => setViewMode('list')} className="mb-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#ffcc29] text-black hover:bg-[#e6b825] transition-colors shadow-sm">
