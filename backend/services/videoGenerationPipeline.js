@@ -11,7 +11,7 @@ const Product = require('../models/Product');
 const VideoDraft = require('../models/VideoDraft');
 const { callGemini, parseGeminiJSON, generateCampaignImageNanoBanana } = require('./geminiAI');
 const { getPublicBaseUrl, normalizeTone, audioFilePathForTone } = require('../utils/toneAudio');
-const { generateVideoClip } = require('./videoService');
+const { generateVideoClip, generateCharacterImageFal, generateCharacterSheetFal, applyFaceSwapFal, extractFaceEmbedding } = require('./videoService');
 const { uploadVideoFile } = require('./imageUploader');
 
 const STORAGE_ROOT = path.resolve(__dirname, '../storage/ai-videos');
@@ -733,8 +733,38 @@ async function generateScenesPlan({
 
   let characterContext = '';
   if (input.characterEnabled) {
+    const isStrict = input.characterConsistencyStrength === 'Strict';
+    const mainInAll = input.characterUsage === 'Main Character In All Scenes';
+
+    let strictRules = '';
+    if (isStrict) {
+      strictRules = `
+STRICT CHARACTER RULES:
+- Never change face.
+- Never change hairstyle.
+- Never change beard.
+- Never change age.
+- Never change body type.
+- Never generate another person.
+- Never remove the character from the scene.
+- Maintain identical identity in every scene.
+- Maintain identical identity in every generated image.
+- Maintain identical identity in every generated video clip.`;
+    }
+
+    let usageRules = `\n- Character Usage Strategy: ${input.characterUsage}`;
+    if (mainInAll) {
+      usageRules += `
+- EVERY scene must contain the character.
+- Examples of INVALID scenes: Hands typing on laptop, Abstract software bugs, Floating UI screens, Silhouette of creator, Empty office, Product-only scene.
+- Examples of VALID scenes: Character coding on laptop, Character debugging application, Character discussing architecture, Character deploying application, Character using final product, Character presenting completed project.
+- The story must revolve around this character.`;
+    } else {
+      usageRules += '\n- IMPORTANT: Do not include the character in every scene. Mix character scenes with b-roll, establishing shots, and product closeups without people.';
+    }
+
     characterContext = `
-Main Character Details:
+MAIN CHARACTER DETAILS:
 - Name: ${input.characterName || 'N/A'}
 - Age: ${input.characterAge || 'N/A'}
 - Gender: ${input.characterGender || 'N/A'}
@@ -745,22 +775,32 @@ Main Character Details:
 - Hair Color: ${input.characterHairColor || 'N/A'}
 - Clothing: ${input.characterClothing || 'N/A'}
 - Reference Image Provided: ${input.characterImage ? 'Yes' : 'No'}
-- Character Usage Strategy: ${input.characterUsage}
-${input.characterUsage === 'Character only in selected scenes' ? '\n  - IMPORTANT: Do not include the character in every scene. Mix character scenes with b-roll, establishing shots, and product closeups without people.' : ''}
 
 CRITICAL CHARACTER RULES:
 - Use the exact same character identity across all scenes.
+- Preserve exact identity.
 - Maintain identical face structure, eyes, nose, hairstyle, skin tone, and body type.
 - Do not generate different people in different scenes.
 - If a reference image is provided, preserve facial identity exactly.
-- Clothing and environment may change but the character identity must remain unchanged.`;
+- Clothing and environment may change but the character identity must remain unchanged.
+${strictRules}
+${usageRules}`;
   }
   
   let videoStyleContext = '';
   if (input.videoStyle) {
-      videoStyleContext = `
-Video Style: ${input.videoStyle}
-`;
+    videoStyleContext = `\nVideo Style: ${input.videoStyle}`;
+    if (input.videoStyle === 'Storytelling') {
+      videoStyleContext += `
+- The storyboard must follow a story progression: Beginning, Challenge, Learning, Growth, Achievement, Success.
+- The same character must appear throughout the story.`;
+    } else if (input.videoStyle === 'Cinematic Commercial') {
+      videoStyleContext += `
+- Use: cinematic camera movement, premium lighting, shallow depth of field, commercial composition, smooth transitions.`;
+    } else if (input.videoStyle === 'Product Advertisement') {
+      videoStyleContext += `
+- Character becomes optional unless explicitly enabled.`;
+    }
   }
 
   const systemPrompt = `You are a storyboard planner for short vertical AI videos.${videoStyleContext}${characterContext}
@@ -781,6 +821,7 @@ Return strict JSON with this schema:
 }
 
 Rules:
+- Priority Order (Highest to Lowest): Character Identity Rules, Character Reference Image, Character Usage Rules, Video Style Rules, User Description, Product Information, AI Creativity. Never violate a higher priority rule to satisfy a lower priority rule.
 - Output between ${MIN_SCENES} and ${MAX_SCENES} scenes.
 - You MUST return exactly ${sceneCount} scenes.
 - Keep all scene prompts visually consistent.
@@ -806,15 +847,38 @@ Rules:
   ].filter(Boolean).join('\n');
 
   try {
+    let validationError = '';
     const raw = await runWithRetries(
       'scene generation',
-      async () => callGemini(`${systemPrompt}\n\n${userPrompt}`, {
-        skipCache: true,
-        temperature: 0.65,
-        maxTokens: 2500,
-        timeout: 120000
-      }),
-      2,
+      async () => {
+        const callPrompt = `${systemPrompt}\n\n${userPrompt}${validationError ? '\n\nIMPORTANT CORRECTION REQUIRED: ' + validationError : ''}`;
+        const result = await callGemini(callPrompt, {
+          skipCache: true,
+          temperature: 0.65,
+          maxTokens: 2500,
+          timeout: 120000
+        });
+        
+        // Validation Layer
+        if (input.characterEnabled && input.characterUsage === 'Main Character In All Scenes') {
+          const parsed = parseGeminiJSON(result);
+          const scenes = Array.isArray(parsed?.scenes) ? parsed.scenes : [];
+          const charRef = (input.characterName || '').toLowerCase();
+          for (let i = 0; i < scenes.length; i++) {
+            const content = `${scenes[i].title || ''} ${scenes[i].imagePrompt || ''} ${scenes[i].videoPrompt || ''}`.toLowerCase();
+            const hasChar = (charRef && content.includes(charRef)) || content.includes('character') || content.includes('person') || content.includes('man') || content.includes('woman') || content.includes('boy') || content.includes('girl');
+            
+            const isAbstract = content.includes('abstract') || content.includes('floating ui') || content.includes('tablet closeup') || content.includes('close-up of tablet') || content.includes('close-up of phone') || content.includes('product-only');
+
+            if (!hasChar || isAbstract) {
+              validationError = `Validation failed: Scene ${i + 1} does not clearly contain the main character, or is an abstract/product-only shot. If "Main Character In All Scenes" is true, EVERY scene must explicitly mention the character (e.g. use the character's name) and cannot be a floating UI or abstract shot. Regenerate the storyboard.`;
+              throw new Error(validationError);
+            }
+          }
+        }
+        return result;
+      },
+      3,
       logger
     );
 
@@ -922,10 +986,38 @@ async function generateSceneImages({
     input.imageData || input.imageUrl || product?.imageUrl || referenceImage?.source || ''
   ).trim();
 
-  const outputScenes = await runWithConcurrency(
-    sceneData,
-    SCENE_IMAGE_CONCURRENCY,
-    async (scene, index) => {
+  let characterSheet = input.characterSheet || null;
+  
+  if (input.characterEnabled && input.characterImage && input.characterConsistencyStrength === 'Strict') {
+    if (!characterSheet && context.jobId) {
+       const draft = await VideoDraft.findOne({ jobId: context.jobId });
+       if (draft && draft.characterSheet && (draft.characterSheet.frontPortrait || draft.characterSheet.sidePortrait)) {
+           characterSheet = draft.characterSheet;
+       } else {
+           if (logger) logger("Extracting canonical face angles (Master Character Sheet)...");
+           characterSheet = await generateCharacterSheetFal(input.characterImage);
+           if (draft) {
+               draft.characterSheet = characterSheet;
+               // Wait for save below
+           }
+       }
+       
+       if (draft && !draft.characterFaceEmbedding) {
+           if (logger) logger("Extracting formal Face Embedding vector for identity lock...");
+           draft.characterFaceEmbedding = await extractFaceEmbedding(input.characterImage);
+       }
+       
+       if (draft) {
+           await draft.save();
+           input.characterFaceEmbedding = draft.characterFaceEmbedding;
+       }
+    }
+  }
+
+  const outputScenes = [];
+  let previousSceneImageUrl = null;
+  for (let index = 0; index < sceneData.length; index++) {
+    const scene = sceneData[index];
       const fileName = `scene_${scene.index}.jpg`;
       const localPath = path.join(context.dirs.images, fileName);
       const mediaUrl = buildMediaUrl(context.baseUrl, context.jobId, ['images', fileName]);
@@ -933,12 +1025,15 @@ async function generateSceneImages({
       // Cache guard: Check if the scene image is ALREADY generated in a prior attempt and exists!
       if (scene.imageUrl && scene.imageUrl.startsWith('http') && fs.existsSync(localPath)) {
         if (logger) logger(`Reusing existing generated image for scene ${scene.sceneId}`);
-        return {
+        const reusedScene = {
           ...scene,
           imageUrl: scene.imageUrl,
           imagePath: localPath,
           imageSource: scene.imageSource || 'reused'
         };
+        outputScenes.push(reusedScene);
+        previousSceneImageUrl = scene.imageUrl;
+        continue;
       }
 
       // First scene can use uploaded image or product image directly.
@@ -946,12 +1041,14 @@ async function generateSceneImages({
 
       if (canUseReferenceDirectly) {
       await fs.promises.copyFile(referenceImage.localPath, localPath);
-        return {
+        const resolvedScene = {
         ...scene,
         imageUrl: mediaUrl,
         imagePath: localPath,
         imageSource: referenceImage.type
         };
+        outputScenes.push(resolvedScene);
+        continue;
       }
 
     let characterImageContext = '';
@@ -961,7 +1058,7 @@ async function generateSceneImages({
         ? 'Strict consistency: Never change face. Never change hairstyle. Never change age.' 
         : `Consistency strength: ${input.characterConsistencyStrength}. Maintain general identity.`;
       
-      characterImageContext = ` Maintain identical character identity across all scenes. ${strengthContext} ${input.characterImage ? 'Use the provided character reference image.' : ''}`;
+      characterImageContext = ` Maintain identical character identity across all scenes. ${strengthContext} Use uploaded reference image as identity source. Preserve exact face structure. Maintain same hairstyle. Maintain same beard. Maintain same age. Maintain same skin tone. Generate the same person in all scenes.`;
     }
 
     const promptWithConsistency = [
@@ -974,12 +1071,85 @@ async function generateSceneImages({
       const imageResult = await runWithRetries(
         `image generation for ${scene.sceneId}`,
         async () => {
+          if (input.characterEnabled && input.characterImage && input.characterConsistencyStrength === 'Strict') {
+             try {
+               const strictPrompt = `Generate a cinematic image for the following scene.
+
+SCENE:
+${scene.imagePrompt}
+
+CHARACTER CONTINUITY RULES
+This is the same person from previous scenes.
+
+Maintain:
+- identical face
+- identical beard
+- identical hairstyle
+- identical skin color
+- identical body type
+- identical facial proportions
+- identical age appearance
+
+If previous scene or reference image contains:
+- beard
+- specific clothing or accessories (like a chain, white shirt, etc.)
+
+preserve them exactly unless the SCENE explicitly changes clothing.
+
+Never generate:
+- clean-shaven version
+- different hairstyle
+- different skin tone
+- different ethnicity
+- different facial structure
+
+This character must look like the exact same person with the exact same appearance throughout the entire story.
+
+VIDEO STYLE:
+${plan.globalVisualStyle || 'Storytelling cinematic.'}
+
+Identity strength: 1.0`;
+
+               console.log({
+                 model: "fal-ai/flux-pulid",
+                 strictIdentity: input.preserveIdentity,
+                 identityStrength: 1.0,
+                 referenceImagePresent: !!input.characterImage,
+                 sceneNumber: index + 1,
+               });
+
+               const allReferenceUrls = characterSheet ? Object.values(characterSheet).filter(Boolean) : [input.characterImage];
+               if (previousSceneImageUrl) {
+                 allReferenceUrls.push(previousSceneImageUrl);
+               }
+               
+               const falUrl = await generateCharacterImageFal({
+                 prompt: strictPrompt,
+                 referenceImageUrls: allReferenceUrls,
+                 faceEmbedding: input.characterFaceEmbedding,
+                 aspectRatio: '9:16',
+                 preserveFace: true,
+                 preserveSkinTone: true,
+                 preserveBeard: true,
+                 preserveHair: true,
+                 preserveClothing: true,
+                 preserveAccessories: true,
+                 sceneIndex: index + 1
+               });
+               if (falUrl) return falUrl;
+             } catch (err) {
+               if (logger) logger(`Fal.ai PuLID image generation failed: ${err.message}. Strict mode prohibits fallback.`);
+               throw err;
+             }
+          }
+
           const result = await generateCampaignImageNanoBanana(promptWithConsistency, {
           aspectRatio: '9:16',
           brandName: String(profile.name || ''),
           industry: String(profile.industry || ''),
           tone: String(profile.brandVoice || 'professional'),
-          productReferenceImage: (input.characterEnabled && input.characterImage) ? input.characterImage : (consistencyReference || undefined),
+          characterReferenceImage: (input.characterEnabled && input.characterImage) ? input.characterImage : undefined,
+          productReferenceImage: (!(input.characterEnabled && input.characterImage) && consistencyReference) ? consistencyReference : undefined,
           linkedProduct: product ? {
             name: product.name,
             description: product.description,
@@ -995,19 +1165,28 @@ async function generateSceneImages({
         logger
       );
 
+      let finalImageUrl = imageResult;
+
+      if (input.characterEnabled && input.characterImage && input.characterConsistencyStrength === 'Strict') {
+        if (logger) logger(`Executing Face Swap post-processing for scene ${scene.sceneId}...`);
+        finalImageUrl = await applyFaceSwapFal(imageResult, input.characterImage);
+      }
+
       await materializeSourceToFile({
-        source: imageResult,
+        source: finalImageUrl,
         destinationPath: localPath
       });
 
-      return {
+      const finishedScene = {
         ...scene,
         imageUrl: mediaUrl,
         imagePath: localPath,
         imageSource: 'ai_generated'
       };
+      
+      outputScenes.push(finishedScene);
+      previousSceneImageUrl = finalImageUrl;
     }
-  );
 
   return outputScenes;
 }
@@ -1161,7 +1340,7 @@ async function generateSceneClips({
     let enriched;
     try {
       if (context.input?.characterEnabled || context.input?.videoStyle) {
-          scene.videoPrompt = `${scene.videoPrompt}. ${context.input.videoStyle ? `Cinematic Style: ${context.input.videoStyle}.` : ''} ${context.input.characterEnabled ? 'Ensure the character identity remains exactly the same as the reference image without morphing or changing faces.' : ''}`;
+        scene.videoPrompt = `${scene.videoPrompt}. ${context.input.videoStyle ? `Cinematic Style: ${context.input.videoStyle}.` : ''} ${context.input.characterEnabled ? 'Maintain exact facial identity. Preserve character appearance. Do not generate a different person. Animate naturally while preserving identity.' : ''}`;
       }
       
       console.log(`[${new Date().toISOString()}] [Job ID: ${context.jobId}] STEP 4: Fal.ai render started for scene ${scene.sceneId}`);

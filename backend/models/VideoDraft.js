@@ -24,6 +24,13 @@ const videoDraftSchema = new mongoose.Schema(
     thumbnailUrl: { type: String, default: null },
     characterEnabled: { type: Boolean, default: false },
     characterImage: { type: String, default: null },
+    characterFaceEmbedding: { type: String, default: null },
+    characterSheet: {
+      frontPortrait: { type: String, default: null },
+      sidePortrait: { type: String, default: null },
+      smilingPortrait: { type: String, default: null },
+      neutralPortrait: { type: String, default: null }
+    },
     characterName: { type: String, default: null },
     characterAge: { type: String, default: null },
     characterGender: { type: String, default: null },

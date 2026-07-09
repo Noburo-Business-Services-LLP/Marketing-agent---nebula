@@ -3363,6 +3363,13 @@ export const videoGenerationAPI = {
     return apiCall(`/video-generation/draft/${encodeURIComponent(jobId)}`, { method: 'GET' }, true);
   },
 
+  updateDraft: async (jobId: string, payload: any): Promise<any> => {
+    return apiCall(`/video-generation/draft/${encodeURIComponent(jobId)}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    }, true);
+  },
+
   getDrafts: async (): Promise<any> => {
     return apiCall('/video-generation/drafts', { method: 'GET' }, true);
   },

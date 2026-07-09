@@ -1010,6 +1010,23 @@ router.delete('/draft/:jobId', protect, videoAiWriteLimiter, async (req, res) =>
   }
 });
 
+router.put('/draft/:jobId', protect, videoAiWriteLimiter, async (req, res) => {
+  try {
+    const userId = toUserId(req.user);
+    const updated = await updateDraft(req.params.jobId, userId, (current) => ({
+      ...current,
+      ...req.body
+    }));
+    return res.json({
+      success: true,
+      draft: updated
+    });
+  } catch (error) {
+    return responseError(res, error, 'Failed to update draft');
+  }
+});
+
+
 router.post('/createDraft', protect, checkTrial, videoAiWriteLimiter, async (req, res) => {
   try {
     const payload = req.body || {};
@@ -1133,7 +1150,22 @@ router.post('/generateScenes', protect, checkTrial, videoAiWriteLimiter, async (
           durationSeconds,
           sceneCount: draft?.input?.sceneCount || sceneData.length,
           productId: draft?.input?.productId || undefined,
-          product: draft?.input?.product || undefined
+          product: draft?.input?.product || undefined,
+          characterEnabled: draft?.characterEnabled,
+          characterImage: draft?.characterImage,
+          characterName: draft?.characterName,
+          characterAge: draft?.characterAge,
+          characterGender: draft?.characterGender,
+          characterRole: draft?.characterRole,
+          characterPersonality: draft?.characterPersonality,
+          characterAppearance: draft?.characterAppearance,
+          characterHairStyle: draft?.characterHairStyle,
+          characterHairColor: draft?.characterHairColor,
+          characterClothing: draft?.characterClothing,
+          videoStyle: draft?.videoStyle,
+          preserveIdentity: draft?.preserveIdentity,
+          characterUsage: draft?.characterUsage,
+          characterConsistencyStrength: draft?.characterConsistencyStrength
         },
         user: req.user
       });
@@ -1187,7 +1219,22 @@ router.post('/generateScenes', protect, checkTrial, videoAiWriteLimiter, async (
         durationSeconds,
         sceneCount: draft?.input?.sceneCount || undefined,
         productId: draft?.input?.productId || undefined,
-        product: draft?.input?.product || undefined
+        product: draft?.input?.product || undefined,
+        characterEnabled: draft?.characterEnabled,
+        characterImage: draft?.characterImage,
+        characterName: draft?.characterName,
+        characterAge: draft?.characterAge,
+        characterGender: draft?.characterGender,
+        characterRole: draft?.characterRole,
+        characterPersonality: draft?.characterPersonality,
+        characterAppearance: draft?.characterAppearance,
+        characterHairStyle: draft?.characterHairStyle,
+        characterHairColor: draft?.characterHairColor,
+        characterClothing: draft?.characterClothing,
+        videoStyle: draft?.videoStyle,
+        preserveIdentity: draft?.preserveIdentity,
+        characterUsage: draft?.characterUsage,
+        characterConsistencyStrength: draft?.characterConsistencyStrength
       },
       user: req.user
     });

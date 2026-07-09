@@ -4635,6 +4635,7 @@ async function generateCampaignImageNanoBanana(imageDescription, options = {}) {
     aspectRatio = '1:1',
     brandName = '',
     brandLogo = null,
+    characterReferenceImage = null,
     productReferenceImage = null,
     industry = '',
     tone = 'professional',
@@ -4744,9 +4745,10 @@ ${totalPosts > 1 ? `15. SERIES CONSISTENCY: This is part of a ${totalPosts}-post
       return null;
     };
 
-    const [logoInline, productInline] = await Promise.all([
+    const [logoInline, productInline, characterInline] = await Promise.all([
       prepareInlineImage(brandLogo, 'brand logo'),
-      prepareInlineImage(productReferenceImage, 'product reference image')
+      prepareInlineImage(productReferenceImage, 'product reference image'),
+      prepareInlineImage(characterReferenceImage, 'character reference image')
     ]);
 
     const referenceNotes = [];
@@ -4758,7 +4760,17 @@ ${totalPosts > 1 ? `15. SERIES CONSISTENCY: This is part of a ${totalPosts}-post
           data: logoInline.data
         }
       });
-      referenceNotes.push('Image 1 is the exact uploaded brand logo. Use it exactly as-is. Do not recreate or recolor it.');
+      referenceNotes.push(`Image ${parts.length} is the exact uploaded brand logo. Use it exactly as-is. Do not recreate or recolor it.`);
+    }
+
+    if (characterInline?.data) {
+      parts.push({
+        inlineData: {
+          mimeType: characterInline.mimeType || 'image/png',
+          data: characterInline.data
+        }
+      });
+      referenceNotes.push(`Image ${parts.length} is the STRICT CHARACTER REFERENCE. You MUST preserve this exact face, identity, age, and features precisely. Treat this as a FaceID lock. Do not generate a random person. Use this exact identity in the generated image.`);
     }
 
     if (productInline?.data) {
@@ -4768,8 +4780,7 @@ ${totalPosts > 1 ? `15. SERIES CONSISTENCY: This is part of a ${totalPosts}-post
           data: productInline.data
         }
       });
-      const imageIndex = logoInline?.data ? 2 : 1;
-      referenceNotes.push(`Image ${imageIndex} is the exact product reference image. Preserve product form, materials, and key structure.`);
+      referenceNotes.push(`Image ${parts.length} is the exact product reference image. Preserve product form, materials, and key structure.`);
     }
 
     if (referenceNotes.length > 0) {

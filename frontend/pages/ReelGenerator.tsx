@@ -642,7 +642,7 @@ const ReelGenerator: React.FC = () => {
 
   const step2Next = async () => withBusy(async () => {
     if (!jobId) throw new Error('Draft missing');
-    await draftsAPI.updateDraft(jobId, {
+    await videoGenerationAPI.updateDraft(jobId, {
       characterEnabled,
       characterImage,
       characterName,
@@ -660,7 +660,7 @@ const ReelGenerator: React.FC = () => {
       characterConsistencyStrength,
       currentStep: 3
     });
-    setStep(4);
+    setStep(3);
   });
 
   const startAutoGenerate = async () => withBusy(async () => {
@@ -707,9 +707,21 @@ const ReelGenerator: React.FC = () => {
 
   const generatePromptAndScenes = async () => withBusy(async () => {
     if (!jobId) throw new Error('Draft missing. Complete step 1 first.');
+    let currentPrompt = promptText;
+
+    if (!currentPrompt) {
+      const promptResponse = await videoGenerationAPI.generatePrompt({ jobId });
+      if (!promptResponse?.success) {
+        throw new Error(promptResponse?.message || 'Prompt generation failed');
+      }
+      currentPrompt = promptResponse.draft?.prompt?.structuredPrompt || promptResponse.draft?.prompt?.promptText || '';
+      setPromptText(currentPrompt);
+      setDraft(promptResponse.draft || draft);
+    }
+
     const sceneResponse = await videoGenerationAPI.generateScenes({
       jobId,
-      promptText: promptText || undefined,
+      promptText: currentPrompt || undefined,
       async: true
     });
 
@@ -1546,7 +1558,12 @@ const ReelGenerator: React.FC = () => {
                     </div>
                     <div>
                       <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Gender</label>
-                      <input type="text" className={inputClass} value={characterGender} onChange={(e) => setCharacterGender(e.target.value)} placeholder="e.g. Female" />
+                      <select className={inputClass} value={characterGender} onChange={(e) => setCharacterGender(e.target.value)}>
+                        <option value="">Select Gender</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Other">Other</option>
+                      </select>
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
@@ -1556,7 +1573,17 @@ const ReelGenerator: React.FC = () => {
                     </div>
                     <div>
                       <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Personality</label>
-                      <input type="text" className={inputClass} value={characterPersonality} onChange={(e) => setCharacterPersonality(e.target.value)} placeholder="e.g. Confident and professional" />
+                      <select className={inputClass} value={characterPersonality} onChange={(e) => setCharacterPersonality(e.target.value)}>
+                        <option value="">Select Personality</option>
+                        <option value="Professional">Professional</option>
+                        <option value="Casual">Casual</option>
+                        <option value="Energetic">Energetic</option>
+                        <option value="Calm">Calm</option>
+                        <option value="Confident">Confident</option>
+                        <option value="Friendly">Friendly</option>
+                        <option value="Serious">Serious</option>
+                        <option value="Funny">Funny</option>
+                      </select>
                     </div>
                   </div>
                   <div>
