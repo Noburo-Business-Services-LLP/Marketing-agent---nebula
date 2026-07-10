@@ -4635,7 +4635,9 @@ async function generateCampaignImageNanoBanana(imageDescription, options = {}) {
     aspectRatio = '1:1',
     brandName = '',
     brandLogo = null,
+    originalCharacterImage = null,
     characterReferenceImage = null,
+    previousSceneImage = null,
     productReferenceImage = null,
     industry = '',
     tone = 'professional',
@@ -4664,8 +4666,28 @@ async function generateCampaignImageNanoBanana(imageDescription, options = {}) {
     !resolvedTargetLanguage.toLowerCase().includes('mix') && resolvedTargetLanguage.toLowerCase() !== 'english' && isEnglishLikeImageText
       ? ''
       : rawPreferredImageText;
-
-  const prompt = `ROLE: You are an elite creative director at a top-tier advertising agency. You create award-winning social media ad creatives that drive engagement and conversions for global brands.
+      
+  const isCinematic = Boolean(options.isCinematic);
+  
+  let prompt = '';
+  
+  if (isCinematic && characterReferenceImage) {
+    prompt = `ROLE: You are an elite cinematic video director and image editor.
+OBJECTIVE: Generate a single photorealistic, cinematic video frame exactly as described.
+SCENE DIRECTION: ${imageDescription}
+ASPECT RATIO: ${aspectRatio}
+INSTRUCTIONS:
+1. DESIGN QUALITY: Purely cinematic, photorealistic, no text overlays, no UI elements, no borders, no graphic design elements.
+2. IDENTITY PRIORITY: Take the exact person from the reference images and place them in the requested scene. Do NOT generate a new person. Preserve the exact face, beard, hairstyle, skin tone, and ethnicity of the reference person. Do not stylize or alter the person's facial geometry.`;
+  } else if (isCinematic) {
+    prompt = `ROLE: You are an elite cinematic video director.
+OBJECTIVE: Generate a single photorealistic, cinematic video frame exactly as described.
+SCENE DIRECTION: ${imageDescription}
+ASPECT RATIO: ${aspectRatio}
+INSTRUCTIONS:
+1. DESIGN QUALITY: Purely cinematic, photorealistic, no text overlays, no UI elements, no borders, no graphic design elements.`;
+  } else {
+    prompt = `ROLE: You are an elite creative director at a top-tier advertising agency. You create award-winning social media ad creatives that drive engagement and conversions for global brands.
 
 OBJECTIVE: Generate a single, publication-ready social media ad image that looks like it was produced by a professional design team. The image must be visually stunning, immediately attention-grabbing in a social feed, and communicate the brand message through design, not through literal text dumps.
 
@@ -4710,6 +4732,7 @@ ${linkedProduct ? `13. PRODUCT REALISM & COLOR CONTROL: ${strictBrandLock
         : 'No product reference image is available. Generate a realistic premium hero product with tasteful tones and subtle brand-inspired accents.')} Keep brand colors primarily in background, lighting, and supporting design elements.` : '13. PRODUCT REALISM & COLOR CONTROL: If a hero product appears, keep it realistic and premium with restrained tones; avoid unrealistic bright colors.'}
 ${fontType ? `14. TYPOGRAPHY: Any rendered text should align with a "${fontType}" style and remain minimal.` : '14. TYPOGRAPHY: Keep text overlays minimal and premium.'}
 ${totalPosts > 1 ? `15. SERIES CONSISTENCY: This is part of a ${totalPosts}-post campaign series. Maintain a consistent visual style and design language across posts.` : ''}`;
+  }
 
   try {
     console.log(`[NanoBanana2] Generating post ${postIndex + 1}/${totalPosts} in ${aspectRatio}...`);
@@ -4745,22 +4768,24 @@ ${totalPosts > 1 ? `15. SERIES CONSISTENCY: This is part of a ${totalPosts}-post
       return null;
     };
 
-    const [logoInline, productInline, characterInline] = await Promise.all([
+    const [logoInline, productInline, originalCharacterInline, characterInline, previousSceneInline] = await Promise.all([
       prepareInlineImage(brandLogo, 'brand logo'),
       prepareInlineImage(productReferenceImage, 'product reference image'),
-      prepareInlineImage(characterReferenceImage, 'character reference image')
+      prepareInlineImage(originalCharacterImage, 'original character image'),
+      prepareInlineImage(characterReferenceImage, 'canonical character image'),
+      prepareInlineImage(previousSceneImage, 'previous scene image')
     ]);
 
     const referenceNotes = [];
 
-    if (logoInline?.data) {
+    if (originalCharacterInline?.data) {
       parts.push({
         inlineData: {
-          mimeType: logoInline.mimeType || 'image/png',
-          data: logoInline.data
+          mimeType: originalCharacterInline.mimeType || 'image/png',
+          data: originalCharacterInline.data
         }
       });
-      referenceNotes.push(`Image ${parts.length} is the exact uploaded brand logo. Use it exactly as-is. Do not recreate or recolor it.`);
+      referenceNotes.push(`Image ${parts.length} is the ORIGINAL SELFIE REFERENCE. This is the absolute ground truth for the person's face structure, skin tone, and raw identity.`);
     }
 
     if (characterInline?.data) {
@@ -4770,7 +4795,25 @@ ${totalPosts > 1 ? `15. SERIES CONSISTENCY: This is part of a ${totalPosts}-post
           data: characterInline.data
         }
       });
-      referenceNotes.push(`Image ${parts.length} is the STRICT CHARACTER REFERENCE. You MUST preserve this exact face, identity, age, and features precisely. Treat this as a FaceID lock. Do not generate a random person. Use this exact identity in the generated image.`);
+      referenceNotes.push(`Image ${parts.length} is the CANONICAL STUDIO PORTRAIT. You MUST use this exact identity as the source.
+Rules:
+- Use this exact face.
+- Use this exact beard.
+- Use this exact hairstyle.
+- Use this exact skin tone.
+- Use this exact age.
+- Do not generate another person.
+- Preserve identity perfectly.`);
+    }
+
+    if (previousSceneInline?.data) {
+      parts.push({
+        inlineData: {
+          mimeType: previousSceneInline.mimeType || 'image/png',
+          data: previousSceneInline.data
+        }
+      });
+      referenceNotes.push(`Image ${parts.length} is the PREVIOUS SCENE IMAGE. Maintain visual continuity in style, lighting, and clothing from this frame.`);
     }
 
     if (productInline?.data) {
@@ -4783,11 +4826,29 @@ ${totalPosts > 1 ? `15. SERIES CONSISTENCY: This is part of a ${totalPosts}-post
       referenceNotes.push(`Image ${parts.length} is the exact product reference image. Preserve product form, materials, and key structure.`);
     }
 
+    if (logoInline?.data) {
+      parts.push({
+        inlineData: {
+          mimeType: logoInline.mimeType || 'image/png',
+          data: logoInline.data
+        }
+      });
+      referenceNotes.push(`Image ${parts.length} is the exact uploaded brand logo. Use it exactly as-is. Do not recreate or recolor it.`);
+    }
+
     if (referenceNotes.length > 0) {
-      parts.push({ text: `${referenceNotes.join('\n')}\n\n${prompt}` });
+      parts.push({ text: `${referenceNotes.join('\n\n')}\n\n${prompt}` });
     } else {
       parts.push({ text: prompt });
     }
+
+    console.log("Gemini input parts:");
+    console.log(JSON.stringify(parts.map((p, index) => ({
+      index,
+      type: p.inlineData ? "image" : "text",
+      mimeType: p.inlineData ? p.inlineData.mimeType : undefined,
+      textLength: p.text ? p.text.length : 0
+    })), null, 2));
 
     const requestBody = {
       contents: [{ parts }],
@@ -5185,7 +5246,68 @@ Image Text:
     };
   }
 }
+async function extractCharacterVisualTraits(imageBase64) {
+  const prompt = `You are an expert character analyst.
+Analyze the provided character image and extract the visual traits. 
+Return STRICT JSON with the following keys exactly:
+{
+  "hairStyle": "string describing the haircut and style in detail",
+  "facialHair": "string describing the beard/mustache exactly, or 'clean-shaven'",
+  "clothing": "string describing the exact clothing and colors",
+  "ethnicity": "string describing the apparent ethnicity",
+  "ageAppearance": "string describing the approximate age",
+  "accessories": "string describing glasses, chains, earrings, etc. or 'none'"
+}`;
+
+  let inlineData;
+  if (imageBase64.startsWith('data:')) {
+    const parts = imageBase64.split(',');
+    const mime = parts[0].match(/:(.*?);/)[1];
+    inlineData = { mimeType: mime, data: parts[1] };
+  } else {
+    // If it's just raw base64 (assume jpeg)
+    inlineData = { mimeType: 'image/jpeg', data: imageBase64 };
+  }
+
+  const requestBody = {
+    contents: [{
+      parts: [
+        { inlineData },
+        { text: prompt }
+      ]
+    }],
+    generationConfig: {
+      temperature: 0.1,
+      responseMimeType: "application/json"
+    }
+  };
+
+  const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
+  const response = await fetchWithTimeout(`${apiUrl}?key=${GEMINI_API_KEY}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(requestBody)
+  }, 30000);
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error?.message || 'Failed to extract traits');
+  }
+
+  const textResp = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!textResp) return null;
+
+  try {
+    const cleanJson = textResp.replace(/```json/g, '').replace(/```/g, '').trim();
+    return JSON.parse(cleanJson);
+  } catch (e) {
+    console.error("Failed to parse extracted traits JSON", e);
+    return null;
+  }
+}
+
 module.exports = {
+  extractCharacterVisualTraits,
   callGemini,
   parseGeminiJSON,
   generateCampaignSuggestions,

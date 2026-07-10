@@ -3389,6 +3389,13 @@ export const videoGenerationAPI = {
     }, true);
   },
 
+  generateCharacterPreview: async (payload: any): Promise<{ success: boolean; imageUrl?: string; error?: string }> => {
+    return apiCall('/video-generation/generateCharacterPreview', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }, true);
+  },
+
   generateScenes: async (payload: any): Promise<any> => {
     return apiCall('/video-generation/generateScenes', {
       method: 'POST',

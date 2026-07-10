@@ -1062,6 +1062,42 @@ router.post('/createDraft', protect, checkTrial, videoAiWriteLimiter, async (req
   }
 });
 
+router.post('/generateCharacterPreview', protect, checkTrial, videoAiWriteLimiter, async (req, res) => {
+  try {
+    const { name, age, gender, hair, beard, role, personality, videoStyle, brandName } = req.body;
+    
+    let description = `A clean, cinematic portrait of a person facing the camera directly. `;
+    if (gender) description += `Gender: ${gender}. `;
+    if (age) description += `Age: ${age}. `;
+    if (hair) description += `Hair: ${hair}. `;
+    if (beard) description += `Beard: ${beard}. `;
+    if (role) description += `Role: ${role}. `;
+    if (personality) description += `Personality: ${personality}. `;
+    
+    const prompt = `Generate a highly detailed, professional, front-facing portrait photograph. 
+    This will be used as a master character reference sheet for an AI video. 
+    Subject details: ${description}
+    Style: ${videoStyle || 'Cinematic, professional studio lighting, neutral solid color background, extremely high quality, realistic.'}
+    Ensure the subject's face is clearly visible, evenly lit, without heavy shadows, sunglasses, or obscuring items.
+    Focus strongly on facial features, neutral expression.`;
+
+    const imageUrl = await generateCampaignImageNanoBanana(prompt, {
+      aspectRatio: '1:1',
+      brandName: brandName || '',
+      tone: 'professional'
+    });
+
+    if (!imageUrl || (typeof imageUrl === 'object' && !imageUrl.imageUrl)) {
+      throw new Error('Failed to generate character preview');
+    }
+
+    res.json({ success: true, imageUrl: typeof imageUrl === 'string' ? imageUrl : imageUrl.imageUrl });
+  } catch (error) {
+    console.error('Error in /generateCharacterPreview:', error);
+    res.status(500).json({ success: false, error: error.message || 'Failed to generate character preview' });
+  }
+});
+
 router.post('/generatePrompt', protect, checkTrial, videoAiWriteLimiter, async (req, res) => {
   try {
     const { jobId, promptText, saveOnly = false } = req.body || {};

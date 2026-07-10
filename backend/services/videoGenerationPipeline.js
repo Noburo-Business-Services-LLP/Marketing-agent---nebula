@@ -9,7 +9,7 @@ const { GoogleAuth } = require('google-auth-library');
 
 const Product = require('../models/Product');
 const VideoDraft = require('../models/VideoDraft');
-const { callGemini, parseGeminiJSON, generateCampaignImageNanoBanana } = require('./geminiAI');
+const { callGemini, parseGeminiJSON, generateCampaignImageNanoBanana, extractCharacterVisualTraits } = require('./geminiAI');
 const { getPublicBaseUrl, normalizeTone, audioFilePathForTone } = require('../utils/toneAudio');
 const { generateVideoClip, generateCharacterImageFal, generateCharacterSheetFal, applyFaceSwapFal, extractFaceEmbedding } = require('./videoService');
 const { uploadVideoFile } = require('./imageUploader');
@@ -732,6 +732,19 @@ async function generateScenesPlan({
   });
 
   let characterContext = '';
+  let extractedTraitsStr = '';
+  if (input.characterEnabled && input.characterImage) {
+    if (logger) logger("Extracting visual traits from character image...");
+    try {
+      const traits = await extractCharacterVisualTraits(input.characterImage);
+      if (traits) {
+        extractedTraitsStr = `\nEXTRACTED VISUAL TRAITS (MUST BE PRESERVED IN EVERY SCENE):\n- Hair Style: ${traits.hairStyle || 'N/A'}\n- Facial Hair: ${traits.facialHair || 'N/A'}\n- Clothing: ${traits.clothing || 'N/A'}\n- Ethnicity: ${traits.ethnicity || 'N/A'}\n- Age Appearance: ${traits.ageAppearance || 'N/A'}\n- Accessories: ${traits.accessories || 'none'}\n`;
+        if (logger) logger("Traits successfully extracted and injected.");
+      }
+    } catch (err) {
+      if (logger) logger(`Warning: Failed to extract character traits: ${err.message}`);
+    }
+  }
   if (input.characterEnabled) {
     const isStrict = input.characterConsistencyStrength === 'Strict';
     const mainInAll = input.characterUsage === 'Main Character In All Scenes';
@@ -755,9 +768,8 @@ STRICT CHARACTER RULES:
     let usageRules = `\n- Character Usage Strategy: ${input.characterUsage}`;
     if (mainInAll) {
       usageRules += `
-- EVERY scene must contain the character.
-- Examples of INVALID scenes: Hands typing on laptop, Abstract software bugs, Floating UI screens, Silhouette of creator, Empty office, Product-only scene.
-- Examples of VALID scenes: Character coding on laptop, Character debugging application, Character discussing architecture, Character deploying application, Character using final product, Character presenting completed project.
+- The main character MUST appear visibly in every scene.
+- Do not create: product-only shots, abstract graphics, UI screens, empty environments.
 - The story must revolve around this character.`;
     } else {
       usageRules += '\n- IMPORTANT: Do not include the character in every scene. Mix character scenes with b-roll, establishing shots, and product closeups without people.';
@@ -775,7 +787,7 @@ MAIN CHARACTER DETAILS:
 - Hair Color: ${input.characterHairColor || 'N/A'}
 - Clothing: ${input.characterClothing || 'N/A'}
 - Reference Image Provided: ${input.characterImage ? 'Yes' : 'No'}
-
+${extractedTraitsStr}
 CRITICAL CHARACTER RULES:
 - Use the exact same character identity across all scenes.
 - Preserve exact identity.
@@ -1071,76 +1083,16 @@ async function generateSceneImages({
       const imageResult = await runWithRetries(
         `image generation for ${scene.sceneId}`,
         async () => {
-          if (input.characterEnabled && input.characterImage && input.characterConsistencyStrength === 'Strict') {
-             try {
-               const strictPrompt = `Generate a cinematic image for the following scene.
+          // NanoBanana handles sequential continuity via previousSceneImageUrl
+          // We bypass text-to-image FaceID here to preserve lighting/clothing continuity,
+          // and instead rely on post-generation Face Swapping for identity locking.
 
-SCENE:
-${scene.imagePrompt}
-
-CHARACTER CONTINUITY RULES
-This is the same person from previous scenes.
-
-Maintain:
-- identical face
-- identical beard
-- identical hairstyle
-- identical skin color
-- identical body type
-- identical facial proportions
-- identical age appearance
-
-If previous scene or reference image contains:
-- beard
-- specific clothing or accessories (like a chain, white shirt, etc.)
-
-preserve them exactly unless the SCENE explicitly changes clothing.
-
-Never generate:
-- clean-shaven version
-- different hairstyle
-- different skin tone
-- different ethnicity
-- different facial structure
-
-This character must look like the exact same person with the exact same appearance throughout the entire story.
-
-VIDEO STYLE:
-${plan.globalVisualStyle || 'Storytelling cinematic.'}
-
-Identity strength: 1.0`;
-
-               console.log({
-                 model: "fal-ai/flux-pulid",
-                 strictIdentity: input.preserveIdentity,
-                 identityStrength: 1.0,
-                 referenceImagePresent: !!input.characterImage,
-                 sceneNumber: index + 1,
-               });
-
-               const allReferenceUrls = characterSheet ? Object.values(characterSheet).filter(Boolean) : [input.characterImage];
-               if (previousSceneImageUrl) {
-                 allReferenceUrls.push(previousSceneImageUrl);
-               }
-               
-               const falUrl = await generateCharacterImageFal({
-                 prompt: strictPrompt,
-                 referenceImageUrls: allReferenceUrls,
-                 faceEmbedding: input.characterFaceEmbedding,
-                 aspectRatio: '9:16',
-                 preserveFace: true,
-                 preserveSkinTone: true,
-                 preserveBeard: true,
-                 preserveHair: true,
-                 preserveClothing: true,
-                 preserveAccessories: true,
-                 sceneIndex: index + 1
-               });
-               if (falUrl) return falUrl;
-             } catch (err) {
-               if (logger) logger(`Fal.ai PuLID image generation failed: ${err.message}. Strict mode prohibits fallback.`);
-               throw err;
-             }
+          if (logger) {
+            console.log("Scene:", index + 1);
+            console.log("Character Image Present:", !!input.originalCharacterImage);
+            console.log("Canonical Character Present:", !!input.characterImage);
+            console.log("Previous Scene Present:", !!previousSceneImageUrl);
+            console.log("Product Image Present:", !!consistencyReference);
           }
 
           const result = await generateCampaignImageNanoBanana(promptWithConsistency, {
@@ -1148,7 +1100,9 @@ Identity strength: 1.0`;
           brandName: String(profile.name || ''),
           industry: String(profile.industry || ''),
           tone: String(profile.brandVoice || 'professional'),
+          originalCharacterImage: input.characterEnabled ? input.originalCharacterImage : undefined,
           characterReferenceImage: (input.characterEnabled && input.characterImage) ? input.characterImage : undefined,
+          previousSceneImage: previousSceneImageUrl || undefined,
           productReferenceImage: (!(input.characterEnabled && input.characterImage) && consistencyReference) ? consistencyReference : undefined,
           linkedProduct: product ? {
             name: product.name,
@@ -1167,15 +1121,39 @@ Identity strength: 1.0`;
 
       let finalImageUrl = imageResult;
 
-      if (input.characterEnabled && input.characterImage && input.characterConsistencyStrength === 'Strict') {
-        if (logger) logger(`Executing Face Swap post-processing for scene ${scene.sceneId}...`);
-        finalImageUrl = await applyFaceSwapFal(imageResult, input.characterImage);
+      if (input.characterEnabled && input.characterImage && input.preserveIdentity !== false) {
+        if (logger) {
+          logger(`Executing Face Swap post-processing for scene ${scene.sceneId}...`);
+          console.log("Starting FaceSwap for Scene", index + 1);
+          console.log("Source Face:", input.originalCharacterImage ? "present" : "missing");
+          console.log("Target Scene:", imageResult);
+        }
+        const faceSwapTarget = input.originalCharacterImage || input.characterImage;
+        finalImageUrl = await applyFaceSwapFal(imageResult, faceSwapTarget);
+        
+        if (logger) {
+          console.log("FaceSwap Result:", finalImageUrl ? "success" : "failed");
+        }
       }
 
+      if (logger) {
+        console.log("Saving Final Scene Image:", finalImageUrl);
+      }
       await materializeSourceToFile({
         source: finalImageUrl,
         destinationPath: localPath
       });
+
+      if (logger) {
+        console.log("Final Pipeline Summary");
+        console.log(JSON.stringify({
+          geminiReferenceImageAttached: !!input.characterImage || !!input.originalCharacterImage,
+          pulidExecuted: false,
+          faceSwapExecuted: !!(input.characterEnabled && input.characterImage && input.preserveIdentity !== false),
+          faceSwapSucceeded: finalImageUrl !== imageResult,
+          finalOutputUrl: finalImageUrl
+        }, null, 2));
+      }
 
       const finishedScene = {
         ...scene,

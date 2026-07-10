@@ -116,7 +116,11 @@ const ReelGenerator: React.FC = () => {
   const [inputImageName, setInputImageName] = useState('');
 
   const [characterEnabled, setCharacterEnabled] = useState(false);
+  const [characterSource, setCharacterSource] = useState<'upload' | 'generate'>('upload');
+  const [generatingCharacter, setGeneratingCharacter] = useState(false);
+  const [characterApproved, setCharacterApproved] = useState(false);
   const [characterImage, setCharacterImage] = useState('');
+  const [originalCharacterImage, setOriginalCharacterImage] = useState('');
   const [characterName, setCharacterName] = useState('');
   const [characterAge, setCharacterAge] = useState('');
   const [characterGender, setCharacterGender] = useState('');
@@ -415,6 +419,7 @@ const ReelGenerator: React.FC = () => {
     setPromptText(nextDraft?.prompt?.promptText || '');
     setCharacterEnabled(!!nextDraft?.characterEnabled);
     setCharacterImage(nextDraft?.characterImage || '');
+    setOriginalCharacterImage(nextDraft?.originalCharacterImage || '');
     setCharacterName(nextDraft?.characterName || '');
     setCharacterAge(nextDraft?.characterAge || '');
     setCharacterGender(nextDraft?.characterGender || '');
@@ -645,6 +650,7 @@ const ReelGenerator: React.FC = () => {
     await videoGenerationAPI.updateDraft(jobId, {
       characterEnabled,
       characterImage,
+      originalCharacterImage,
       characterName,
       characterAge,
       characterGender,
@@ -680,6 +686,7 @@ const ReelGenerator: React.FC = () => {
       audio: buildAudioPayload(),
       characterEnabled,
       characterImage,
+      originalCharacterImage,
       characterName,
       characterAge,
       characterGender,
@@ -704,6 +711,37 @@ const ReelGenerator: React.FC = () => {
     resetWizard(true);
     setStatusFilter('draft');
   });
+
+  const handleGenerateCharacterPreview = async () => {
+    if (!characterName && !characterRole && !characterAppearance) {
+      setError('Please provide some character details to generate a preview.');
+      return;
+    }
+    setGeneratingCharacter(true);
+    setError('');
+    setCharacterApproved(false);
+    try {
+      const response = await videoGenerationAPI.generateCharacterPreview({
+        name: characterName,
+        age: characterAge,
+        gender: characterGender,
+        hair: characterHairStyle,
+        beard: characterAppearance,
+        role: characterRole,
+        personality: characterPersonality,
+        videoStyle: videoStyle
+      });
+      if (response?.success && response?.imageUrl) {
+        setCharacterImage(response.imageUrl);
+      } else {
+        throw new Error(response?.error || 'Failed to generate preview');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Error generating character preview');
+    } finally {
+      setGeneratingCharacter(false);
+    }
+  };
 
   const generatePromptAndScenes = async () => withBusy(async () => {
     if (!jobId) throw new Error('Draft missing. Complete step 1 first.');
@@ -1484,7 +1522,7 @@ const ReelGenerator: React.FC = () => {
                     />
                   </div>
                   <div>
-                    <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Upload Image (Optional)</label>
+                    <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Upload Product Image (Optional)</label>
                     <input type="file" accept="image/*" className="mt-2 text-sm" onChange={(e) => onInputImage(e.target.files?.[0])} />
                     {inputImageName && <p className={`text-xs mt-1 ${theme.textSecondary}`}>{inputImageName}</p>}
                   </div>
@@ -1551,67 +1589,119 @@ const ReelGenerator: React.FC = () => {
                     <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Character Name</label>
                     <input type="text" className={inputClass} value={characterName} onChange={(e) => setCharacterName(e.target.value)} placeholder="e.g. Sarah" />
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Age</label>
-                      <input type="text" className={inputClass} value={characterAge} onChange={(e) => setCharacterAge(e.target.value)} placeholder="e.g. 28" />
+
+                  <div className="mt-4 p-4 rounded-xl border border-slate-200 dark:border-slate-800 space-y-4">
+                    <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Character Source</label>
+                    <div className="flex items-center gap-4">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input type="radio" checked={characterSource === 'upload'} onChange={() => setCharacterSource('upload')} />
+                        <span className={theme.text}>Upload Image</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input type="radio" checked={characterSource === 'generate'} onChange={() => setCharacterSource('generate')} />
+                        <span className={theme.text}>Generate AI Character</span>
+                      </label>
                     </div>
-                    <div>
-                      <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Gender</label>
-                      <select className={inputClass} value={characterGender} onChange={(e) => setCharacterGender(e.target.value)}>
-                        <option value="">Select Gender</option>
-                        <option value="Male">Male</option>
-                        <option value="Female">Female</option>
-                        <option value="Other">Other</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Role</label>
-                      <input type="text" className={inputClass} value={characterRole} onChange={(e) => setCharacterRole(e.target.value)} placeholder="e.g. Startup Founder" />
-                    </div>
-                    <div>
-                      <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Personality</label>
-                      <select className={inputClass} value={characterPersonality} onChange={(e) => setCharacterPersonality(e.target.value)}>
-                        <option value="">Select Personality</option>
-                        <option value="Professional">Professional</option>
-                        <option value="Casual">Casual</option>
-                        <option value="Energetic">Energetic</option>
-                        <option value="Calm">Calm</option>
-                        <option value="Confident">Confident</option>
-                        <option value="Friendly">Friendly</option>
-                        <option value="Serious">Serious</option>
-                        <option value="Funny">Funny</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div>
-                    <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Appearance / Clothing</label>
-                    <input type="text" className={inputClass} value={characterAppearance} onChange={(e) => setCharacterAppearance(e.target.value)} placeholder="e.g. Modern business woman, Premium formal outfit" />
-                  </div>
-                  <div>
-                    <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Hair Style & Color</label>
-                    <input type="text" className={inputClass} value={characterHairStyle} onChange={(e) => setCharacterHairStyle(e.target.value)} placeholder="e.g. Long straight black hair" />
-                  </div>
-                  <div>
-                    <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Character Reference Image (Optional)</label>
-                    <input 
-                      type="file" 
-                      accept="image/*"
-                      onChange={async (e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          const base64 = await fileToDataUrl(file);
-                          setCharacterImage(base64);
-                        }
-                      }}
-                      className={inputClass}
-                    />
-                    {characterImage && (
-                      <div className="mt-2 relative inline-block">
-                        <img src={characterImage} alt="Character Reference" className="h-24 w-24 object-cover rounded-lg" />
-                        <button onClick={() => setCharacterImage('')} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1"><XCircle className="w-4 h-4" /></button>
+
+                    {characterSource === 'upload' ? (
+                      <div>
+                        <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Upload Character Image</label>
+                        <input 
+                          type="file" 
+                          accept="image/*"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              const base64 = await fileToDataUrl(file);
+                              if (base64) {
+                                setCharacterImage(base64);
+                                setOriginalCharacterImage(base64);
+                                setCharacterApproved(true);
+                              }
+                            }
+                          }}
+                          className={inputClass}
+                        />
+                        {characterImage && (
+                          <div className="mt-2 relative inline-block">
+                            <img src={characterImage} alt="Character Reference" className="h-24 w-24 object-cover rounded-lg" />
+                            <button onClick={() => { setCharacterImage(''); setCharacterApproved(false); }} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1"><XCircle className="w-4 h-4" /></button>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Age</label>
+                            <input type="text" className={inputClass} value={characterAge} onChange={(e) => setCharacterAge(e.target.value)} placeholder="e.g. 28" />
+                          </div>
+                          <div>
+                            <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Gender</label>
+                            <select className={inputClass} value={characterGender} onChange={(e) => setCharacterGender(e.target.value)}>
+                              <option value="">Select Gender</option>
+                              <option value="Male">Male</option>
+                              <option value="Female">Female</option>
+                              <option value="Other">Other</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Role</label>
+                            <input type="text" className={inputClass} value={characterRole} onChange={(e) => setCharacterRole(e.target.value)} placeholder="e.g. Startup Founder" />
+                          </div>
+                          <div>
+                            <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Personality</label>
+                            <select className={inputClass} value={characterPersonality} onChange={(e) => setCharacterPersonality(e.target.value)}>
+                              <option value="">Select Personality</option>
+                              <option value="Professional">Professional</option>
+                              <option value="Casual">Casual</option>
+                              <option value="Energetic">Energetic</option>
+                              <option value="Calm">Calm</option>
+                              <option value="Confident">Confident</option>
+                              <option value="Friendly">Friendly</option>
+                              <option value="Serious">Serious</option>
+                              <option value="Funny">Funny</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div>
+                          <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Appearance / Clothing</label>
+                          <input type="text" className={inputClass} value={characterAppearance} onChange={(e) => setCharacterAppearance(e.target.value)} placeholder="e.g. Modern business woman, Premium formal outfit" />
+                        </div>
+                        <div>
+                          <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Hair Style & Color</label>
+                          <input type="text" className={inputClass} value={characterHairStyle} onChange={(e) => setCharacterHairStyle(e.target.value)} placeholder="e.g. Long straight black hair" />
+                        </div>
+                        <button
+                          onClick={handleGenerateCharacterPreview}
+                          disabled={generatingCharacter}
+                          className="px-4 py-2 bg-indigo-500 text-white font-semibold rounded-xl hover:bg-indigo-600 transition disabled:opacity-50"
+                        >
+                          {generatingCharacter ? <Loader2 className="w-4 h-4 animate-spin inline mr-2" /> : <Sparkles className="w-4 h-4 inline mr-2" />}
+                          Generate Character Preview
+                        </button>
+                        
+                        {characterImage && (
+                          <div className="p-4 border rounded-xl border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/20 text-center space-y-3">
+                            <h3 className={`font-bold ${theme.text}`}>Generated Character</h3>
+                            <img src={characterImage} alt="Generated Character Preview" className="h-48 w-48 object-cover rounded-xl mx-auto shadow-md" />
+                            
+                            {!characterApproved ? (
+                              <div className="flex justify-center gap-3 mt-2">
+                                <button onClick={handleGenerateCharacterPreview} disabled={generatingCharacter} className="px-3 py-1.5 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+                                  Regenerate
+                                </button>
+                                <button onClick={() => setCharacterApproved(true)} className="px-3 py-1.5 bg-emerald-500 text-white rounded-lg text-sm font-medium hover:bg-emerald-600 transition">
+                                  Approve Character
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="text-emerald-500 font-bold text-sm">✓ Character Approved</div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1667,10 +1757,10 @@ const ReelGenerator: React.FC = () => {
               <div className="flex justify-end pt-4 border-t border-slate-200 dark:border-slate-800">
                 <button
                   onClick={step2Next}
-                  disabled={busy}
-                  className="px-6 py-2.5 bg-[#ffcc29] text-black font-semibold rounded-xl hover:bg-[#e6b825] transition"
+                  disabled={busy || (characterEnabled && !characterApproved && characterSource === 'generate')}
+                  className="px-6 py-2.5 bg-[#ffcc29] text-black font-semibold rounded-xl hover:bg-[#e6b825] transition disabled:opacity-50"
                 >
-                  Save & Next (Prompt + Scenes)
+                  {characterEnabled && !characterApproved && characterSource === 'generate' ? 'Approve Character to Continue' : 'Save & Next (Prompt + Scenes)'}
                 </button>
               </div>
             </div>

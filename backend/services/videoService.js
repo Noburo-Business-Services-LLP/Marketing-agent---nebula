@@ -395,6 +395,8 @@ async function applyFaceSwapFal(generatedImageUrl, originalSelfieUrl) {
   const startTime = Date.now();
   
   console.log("Applying Post-Generation Face Swap via Fal.ai...");
+  console.log("FaceSwap Source Image:", originalSelfieUrl);
+  console.log("FaceSwap Target Image:", generatedImageUrl);
 
   try {
     const result = await fal.subscribe("fal-ai/face-swap", {
@@ -405,11 +407,13 @@ async function applyFaceSwapFal(generatedImageUrl, originalSelfieUrl) {
     });
 
     if (result && result.data && result.data.image && result.data.image.url) {
+      console.log("FaceSwap Output Image:", result.data.image.url);
       return result.data.image.url;
     }
     
     // In case the API returns a different structure
     if (result && result.data && result.data.image_url) {
+       console.log("FaceSwap Output Image:", result.data.image_url);
        return result.data.image_url;
     }
 
