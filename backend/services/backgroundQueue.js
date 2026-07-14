@@ -3,6 +3,7 @@ const ContentCalendar = require('../models/ContentCalendar');
 const Campaign = require('../models/Campaign');
 const User = require('../models/User');
 const { callGemini, parseGeminiJSON, generateCampaignImageNanoBanana, generatePosterFromReference } = require('./geminiAI');
+const { uploadBase64Image } = require('./imageUploader');
 
 const queue = [];
 let processing = false;
@@ -221,22 +222,47 @@ async function processDraftImageGenerationJob(job) {
     // image-to-image path so the generated poster mirrors the reference's
     // style, composition, and layout. Otherwise, plain text-to-image.
     const hasReference = typeof job.referenceImage === 'string' && job.referenceImage.trim().length > 0;
-    const generationPromise = hasReference
-      ? generatePosterFromReference(job.referenceImage, {
-          caption: draft.caption || '',
-          prompt: draft.imagePrompt || draft.caption || 'A creative poster',
-          brandName: user?.companyName || 'Brand',
-          industry: bp.industry || '',
+    let imageResult;
+
+    if (hasReference) {
+      // generatePosterFromReference expects: (referenceBase64, contentString, options)
+      // and returns { success, imageBase64, error } — raw base64, NOT a URL.
+      // So we upload the returned base64 to Cloudinary and hand back a { imageUrl }
+      // shape the downstream code expects.
+      const contentString = [
+        draft.imagePrompt || draft.caption || 'A creative poster',
+        user?.companyName ? `Brand: ${user.companyName}` : '',
+        bp.industry ? `Industry: ${bp.industry}` : ''
+      ].filter(Boolean).join('\n');
+
+      const genRes = await Promise.race([
+        generatePosterFromReference(job.referenceImage, contentString, {
+          aspectRatio: job.aspectRatio || '1:1',
           tone: bp.tone || 'professional'
-        }, { aspectRatio: job.aspectRatio || '1:1' })
-      : generateCampaignImageNanoBanana(draft.imagePrompt || draft.caption || 'A creative poster', {
+        }),
+        timeoutPromise
+      ]);
+
+      if (!genRes?.success || !genRes?.imageBase64) {
+        throw new Error(genRes?.error || 'Nano Banana returned no image data for reference generation');
+      }
+
+      const upload = await uploadBase64Image(genRes.imageBase64, 'nebula-poster-from-reference');
+      if (!upload?.success || !upload?.url) {
+        throw new Error(upload?.error || 'Cloudinary upload failed after reference-image generation');
+      }
+      imageResult = { imageUrl: upload.url };
+    } else {
+      imageResult = await Promise.race([
+        generateCampaignImageNanoBanana(draft.imagePrompt || draft.caption || 'A creative poster', {
           aspectRatio: job.aspectRatio || '1:1',
           brandName: user?.companyName || 'Brand',
           industry: bp.industry || '',
           tone: bp.tone || 'professional'
-        });
-
-    const imageResult = await Promise.race([generationPromise, timeoutPromise]);
+        }),
+        timeoutPromise
+      ]);
+    }
 
     const finalImageUrl = typeof imageResult === 'string' ? imageResult : imageResult?.imageUrl;
 
