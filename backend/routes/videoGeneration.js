@@ -1064,13 +1064,18 @@ router.post('/createDraft', protect, checkTrial, videoAiWriteLimiter, async (req
 
 router.post('/generateCharacterPreview', protect, checkTrial, videoAiWriteLimiter, async (req, res) => {
   try {
-    const { name, age, gender, hair, beard, role, personality, videoStyle, brandName } = req.body;
+    const { name, age, gender, hair, beard, race, role, personality, videoStyle, brandName } = req.body;
     
     let description = `A clean, cinematic portrait of a person facing the camera directly. `;
     if (gender) description += `Gender: ${gender}. `;
     if (age) description += `Age: ${age}. `;
+    if (race) description += `Ethnicity/Race: ${race}. `;
     if (hair) description += `Hair: ${hair}. `;
-    if (beard) description += `Beard: ${beard}. `;
+    if (beard && beard !== 'Clean Shaven (No Beard)') {
+      description += `Facial Hair: ${beard}. `;
+    } else {
+      description += `Facial Hair: Completely clean shaven, absolutely no beard or mustache or stubble. `;
+    }
     if (role) description += `Role: ${role}. `;
     if (personality) description += `Personality: ${personality}. `;
     
@@ -1369,21 +1374,73 @@ router.post('/generateImages', protect, checkTrial, videoAiWriteLimiter, async (
         return res.status(404).json({ success: false, message: 'Scene not found' });
       }
       const targetScene = sourceScenes[idx];
-      const regenPrompt = String(imagePrompt || targetScene.imagePrompt || draft?.prompt?.promptText || '').trim();
-      const regen = await generateCampaignImageNanoBanana(regenPrompt, {
-        aspectRatio: '9:16',
-        linkedProduct: draft?.input?.product || null,
-        productReferenceImage: draft?.input?.sourceImage?.url || draft?.input?.product?.imageUrl || null,
-        tone: 'professional'
-      });
-      if (!regen?.success || !regen?.imageUrl) {
-        throw new Error(regen?.error || 'Image regeneration failed');
+      let regenPrompt = String(imagePrompt || targetScene.imagePrompt || draft?.prompt?.promptText || '').trim();
+      let finalRegenImageUrl = null;
+      if (req.body.characterImageBase64) {
+          const characterImageBase64 = req.body.characterImageBase64;
+          const characterName = req.body.characterName || '';
+          const videoStyle = req.body.videoStyle || draft?.videoStyle || 'Cinematic';
+
+          // Inject strict demographics from draft
+          const demographics = [
+            draft?.characterRace ? `${draft.characterRace} ethnicity` : '',
+            draft?.characterAge ? `${draft.characterAge} years old` : '',
+            draft?.characterGender ? draft.characterGender : '',
+            draft?.characterBeard && draft?.characterBeard !== 'Clean Shaven (No Beard)' ? `with ${draft.characterBeard}` : (draft?.characterBeard === 'Clean Shaven (No Beard)' ? 'completely clean shaven, absolutely no facial hair' : '')
+          ].filter(Boolean).join(', ');
+
+          const demographicString = demographics ? `The character is a ${demographics}.` : '';
+          const strictContext = `CRITICAL INSTRUCTION: You MUST exactly recreate the face and identity of the person in the reference image. ${demographicString} DO NOT change their facial structure, skin tone, or demographic. Match the reference image 100%.`;
+          
+          regenPrompt = `${strictContext}\n\nSCENE TO GENERATE:\n${regenPrompt}`;
+
+          let cleanBase64 = characterImageBase64;
+          if (cleanBase64.includes('data:image')) {
+            cleanBase64 = cleanBase64.split(',')[1];
+          }
+
+          console.log('\n🎭 ==================== CHARACTER CONSISTENCY (NANO BANANA) ====================');
+          console.log(`📸 Character: ${characterName || 'Unknown'}`);
+          console.log(`🎬 Scene: ${regenPrompt}`);
+          console.log(`🎨 Style: ${videoStyle}`);
+          console.log(`🔧 API: Gemini Nano Banana`);
+          console.log('=========================================================================\n');
+
+          const imageData = `data:image/jpeg;base64,${cleanBase64}`;
+          
+          try {
+            const nanoResult = await generateCampaignImageNanoBanana(regenPrompt, {
+              aspectRatio: '16:9', // default for video
+              characterReferenceImage: imageData,
+              isCinematic: true
+            });
+            
+            if (nanoResult && (nanoResult.imageUrl || typeof nanoResult === 'string')) {
+                finalRegenImageUrl = typeof nanoResult === 'string' ? nanoResult : nanoResult.imageUrl;
+            } else {
+                throw new Error('Nano Banana returned no image');
+            }
+          } catch (error) {
+            console.error('Nano Banana API Error:', error);
+            return res.status(500).json({ success: false, message: 'Nano Banana API Error: ' + error.message });
+          }
+      } else {
+        const regen = await generateCampaignImageNanoBanana(regenPrompt, {
+          aspectRatio: '9:16',
+          linkedProduct: draft?.input?.product || null,
+          productReferenceImage: draft?.input?.sourceImage?.url || draft?.input?.product?.imageUrl || null,
+          tone: 'professional'
+        });
+        if (!regen?.success || !regen?.imageUrl) {
+          throw new Error(regen?.error || 'Image regeneration failed');
+        }
+        finalRegenImageUrl = regen.imageUrl;
       }
       nextScenes = sourceScenes.map((scene, index) => (
         index === idx
           ? {
             ...scene,
-            imageUrl: regen.imageUrl,
+            imageUrl: finalRegenImageUrl,
             imagePrompt: regenPrompt
           }
           : scene
@@ -1401,7 +1458,17 @@ router.post('/generateImages', protect, checkTrial, videoAiWriteLimiter, async (
           sceneData: sourceScenes,
           globalVisualStyle: draft?.scenesMetadata?.globalVisualStyle || draft?.scenes?.globalVisualStyle || '',
           voiceScript: draft?.scenesMetadata?.voiceScript || draft?.scenes?.voiceScript || '',
-          thumbnailPrompt: draft?.scenesMetadata?.thumbnailPrompt || draft?.scenes?.thumbnailPrompt || ''
+          thumbnailPrompt: draft?.scenesMetadata?.thumbnailPrompt || draft?.scenes?.thumbnailPrompt || '',
+          characterImageBase64: req.body.characterImageBase64 || draft?.characterImageBase64 || undefined,
+          characterName: req.body.characterName || draft?.characterName || undefined,
+          videoStyle: req.body.videoStyle || draft?.videoStyle || undefined,
+          characterEnabled: draft?.characterEnabled,
+          preserveIdentity: draft?.preserveIdentity,
+          characterConsistencyStrength: draft?.characterConsistencyStrength,
+          characterRace: draft?.characterRace,
+          characterBeard: draft?.characterBeard,
+          characterAge: draft?.characterAge,
+          characterGender: draft?.characterGender
         },
         user: req.user,
         baseUrl

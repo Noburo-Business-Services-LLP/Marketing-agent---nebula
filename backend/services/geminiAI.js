@@ -3538,10 +3538,10 @@ Keep the overall composition and subject matter the same. Only apply the request
       }
     }
 
-    // If we have the image, use Nano Banana 2 for actual editing
+    // If we have the image, use Nano Banana Pro for actual editing
     if (imageBase64) {
-      console.log('🎨 Refining image with Nano Banana 2 (gemini-3.1-flash-image-preview)...');
-      const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image-preview:generateContent';
+      console.log('🎨 Refining image with Nano Banana Pro (nano-banana-pro-preview)...');
+      const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/nano-banana-pro-preview:generateContent';
 
       const requestBody = {
         contents: [{
@@ -4008,9 +4008,9 @@ Instructions:
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      console.log(`🎨 Editing poster with Nano Banana 2 (attempt ${attempt}/${maxRetries})...`);
+      console.log(`🎨 Editing poster with Nano Banana Pro (attempt ${attempt}/${maxRetries})...`);
 
-      const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image-preview:generateContent';
+      const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/nano-banana-pro-preview:generateContent';
 
       const response = await fetchWithTimeout(`${apiUrl}?key=${GEMINI_API_KEY}`, {
         method: 'POST',
@@ -4650,6 +4650,9 @@ async function generateCampaignImageNanoBanana(imageDescription, options = {}) {
     strictBrandLock = false,
     targetLanguage = 'English',
     imageText = '',
+    characterSource = 'system',
+    preserveCharacterIdentity = false,
+    consistencyStrength = 'normal',
   } = options;
 
   const linkedProduct = options.linkedProduct && typeof options.linkedProduct === 'object' ? options.linkedProduct : null;
@@ -4734,10 +4737,61 @@ ${fontType ? `14. TYPOGRAPHY: Any rendered text should align with a "${fontType}
 ${totalPosts > 1 ? `15. SERIES CONSISTENCY: This is part of a ${totalPosts}-post campaign series. Maintain a consistent visual style and design language across posts.` : ''}`;
   }
 
-  try {
-    console.log(`[NanoBanana2] Generating post ${postIndex + 1}/${totalPosts} in ${aspectRatio}...`);
+  if (
+    characterSource === "upload" &&
+    preserveCharacterIdentity &&
+    consistencyStrength === "strict"
+  ) {
+    prompt += `
 
-    const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image-preview:generateContent';
+STRICT IMAGE TRANSFORMATION TASK
+
+The uploaded image contains the exact person that must appear in the final image.
+
+This is NOT a character reference.
+This is NOT inspiration.
+This is NOT a style guide.
+
+This is the exact person that must remain unchanged.
+
+Your task is to edit the existing person into the requested environment while preserving identity completely.
+
+IDENTITY LOCK REQUIREMENTS:
+- Preserve the exact face.
+- Preserve the exact facial proportions.
+- Preserve the exact jawline.
+- Preserve the exact nose shape.
+- Preserve the exact eye shape and spacing.
+- Preserve the exact eyebrow shape.
+- Preserve the exact lips and smile geometry.
+- Preserve the exact beard style and density.
+- Preserve the exact hairstyle and hairline.
+- Preserve the exact skin tone.
+- Preserve the exact age appearance.
+- Preserve the exact ethnicity.
+
+ONLY ALLOWED TO CHANGE:
+- background
+- environment
+- camera position
+- body pose
+- clothing if explicitly requested
+
+FORBIDDEN:
+- creating a new person
+- changing facial structure
+- changing ethnicity
+- changing age
+- changing beard
+- changing hairstyle
+
+Treat this as an image editing task where the original person must remain identical.`;
+  }
+
+  try {
+    console.log(`[NanoBananaPro] Generating post ${postIndex + 1}/${totalPosts} in ${aspectRatio}...`);
+
+    const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/nano-banana-pro-preview:generateContent';
 
     const parts = [];
 
@@ -4785,7 +4839,10 @@ ${totalPosts > 1 ? `15. SERIES CONSISTENCY: This is part of a ${totalPosts}-post
           data: originalCharacterInline.data
         }
       });
-      referenceNotes.push(`Image ${parts.length} is the ORIGINAL SELFIE REFERENCE. This is the absolute ground truth for the person's face structure, skin tone, and raw identity.`);
+      referenceNotes.push(`Image ${parts.length} is the ORIGINAL SELFIE REFERENCE.
+Take the exact person in this uploaded image.
+Keep the identical face, beard, hairstyle, skin tone and facial structure.
+Do not create another person.`);
     }
 
     if (characterInline?.data) {
@@ -4795,15 +4852,11 @@ ${totalPosts > 1 ? `15. SERIES CONSISTENCY: This is part of a ${totalPosts}-post
           data: characterInline.data
         }
       });
-      referenceNotes.push(`Image ${parts.length} is the CANONICAL STUDIO PORTRAIT. You MUST use this exact identity as the source.
-Rules:
-- Use this exact face.
-- Use this exact beard.
-- Use this exact hairstyle.
-- Use this exact skin tone.
-- Use this exact age.
-- Do not generate another person.
-- Preserve identity perfectly.`);
+      referenceNotes.push(`Image ${parts.length} is the CANONICAL STUDIO PORTRAIT.
+Take the exact person in the uploaded image.
+Keep the identical face, beard, hairstyle, skin tone and facial structure.
+Only change the environment to the requested scene.
+Do not create another person. Preserve identity perfectly.`);
     }
 
     if (previousSceneInline?.data) {
@@ -4813,7 +4866,10 @@ Rules:
           data: previousSceneInline.data
         }
       });
-      referenceNotes.push(`Image ${parts.length} is the PREVIOUS SCENE IMAGE. Maintain visual continuity in style, lighting, and clothing from this frame.`);
+      referenceNotes.push(`Image ${parts.length} is the PREVIOUS SCENE IMAGE.
+Take the exact person and visual style from this uploaded image.
+Edit this exact image into the new requested scene.
+Keep the identical face, clothing, and character identity. Do not create a new person.`);
     }
 
     if (productInline?.data) {

@@ -1066,50 +1066,103 @@ async function generateSceneImages({
     let characterImageContext = '';
     if (input.characterEnabled && input.preserveIdentity !== false) {
       const isStrict = input.characterConsistencyStrength === 'Strict';
-      const strengthContext = isStrict 
-        ? 'Strict consistency: Never change face. Never change hairstyle. Never change age.' 
-        : `Consistency strength: ${input.characterConsistencyStrength}. Maintain general identity.`;
       
-      characterImageContext = ` Maintain identical character identity across all scenes. ${strengthContext} Use uploaded reference image as identity source. Preserve exact face structure. Maintain same hairstyle. Maintain same beard. Maintain same age. Maintain same skin tone. Generate the same person in all scenes.`;
+      const demographics = [
+        input.characterRace ? `${input.characterRace} ethnicity` : '',
+        input.characterAge ? `${input.characterAge} years old` : '',
+        input.characterGender ? input.characterGender : '',
+        input.characterBeard && input.characterBeard !== 'Clean Shaven (No Beard)' ? `with ${input.characterBeard}` : (input.characterBeard === 'Clean Shaven (No Beard)' ? 'completely clean shaven, absolutely no facial hair' : '')
+      ].filter(Boolean).join(', ');
+
+      const demographicString = demographics ? `The character is a ${demographics}.` : '';
+
+      if (isStrict) {
+        characterImageContext = `CRITICAL INSTRUCTION: You MUST exactly recreate the face and identity of the person in the reference image. ${demographicString} DO NOT change their facial structure, skin tone, or demographic. DO NOT hallucinate a different person. Match the reference image 100%. Keep same hairstyle. Maintain same age.`;
+      } else {
+        characterImageContext = `Maintain general character identity across scenes based on the reference image. ${demographicString}`;
+      }
     }
 
     const promptWithConsistency = [
+      characterImageContext,
       scene.imagePrompt,
       `Consistency style: ${plan.globalVisualStyle}`,
-      input.preserveIdentity !== false ? 'Keep same lead subject identity, lighting logic, and palette continuity with earlier scenes.' : '',
-      characterImageContext
-    ].join(' ');
+      input.preserveIdentity !== false ? 'Keep same lead subject identity, lighting logic, and palette continuity with earlier scenes.' : ''
+    ].filter(Boolean).join('\n\n');
 
       const imageResult = await runWithRetries(
         `image generation for ${scene.sceneId}`,
         async () => {
-          // NanoBanana handles sequential continuity via previousSceneImageUrl
-          // We bypass text-to-image FaceID here to preserve lighting/clothing continuity,
-          // and instead rely on post-generation Face Swapping for identity locking.
-
           if (logger) {
             console.log("Scene:", index + 1);
-            console.log("Character Image Present:", !!input.originalCharacterImage);
+            console.log("Character Image Present:", !!input.characterImageBase64);
             console.log("Canonical Character Present:", !!input.characterImage);
             console.log("Previous Scene Present:", !!previousSceneImageUrl);
             console.log("Product Image Present:", !!consistencyReference);
           }
 
+          if (input.characterImageBase64) {
+            if (logger) console.log("Using gemini-3.1-flash-image for character consistency...");
+            
+            // Extract base64 properly
+            let base64Data = input.characterImageBase64;
+            let mimeType = 'image/jpeg';
+            if (base64Data.startsWith('data:')) {
+              const matches = base64Data.match(/^data:(.+);base64,(.*)$/);
+              if (matches && matches.length === 3) {
+                mimeType = matches[1];
+                base64Data = matches[2];
+              }
+            }
+
+            const fixedSeed = context.jobId ? Math.abs(context.jobId.split('').reduce((hash, char) => ((hash << 5) - hash) + char.charCodeAt(0), 0)) % 100000 : 42;
+            
+            let cleanBase64 = input.characterImageBase64;
+            if (cleanBase64.includes('data:image')) {
+              cleanBase64 = cleanBase64.split(',')[1];
+            }
+
+            console.log('\n🎭 ==================== CHARACTER CONSISTENCY (NANO BANANA) ====================');
+            console.log(`📸 Character: ${input.characterName || 'Unknown'}`);
+            console.log(`🎬 Scene: ${promptWithConsistency}`);
+            console.log(`🎨 Style: ${input.videoStyle || 'Cinematic'}`);
+            console.log(`🔧 API: Gemini Nano Banana`);
+            console.log('=========================================================================\n');
+            
+            const imageData = `data:image/jpeg;base64,${cleanBase64}`;
+
+            const nanoResult = await generateCampaignImageNanoBanana(promptWithConsistency, {
+              aspectRatio: '16:9', // default for video
+              characterReferenceImage: imageData,
+              isCinematic: true
+            });
+            
+            if (nanoResult && (nanoResult.imageUrl || typeof nanoResult === 'string')) {
+                return typeof nanoResult === 'string' ? nanoResult : nanoResult.imageUrl;
+            } else {
+                throw new Error('Nano Banana returned no image');
+            }
+          }
+
+          // Fallback to NanoBanana if no character image is provided
           const result = await generateCampaignImageNanoBanana(promptWithConsistency, {
-          aspectRatio: '9:16',
-          brandName: String(profile.name || ''),
-          industry: String(profile.industry || ''),
-          tone: String(profile.brandVoice || 'professional'),
-          originalCharacterImage: input.characterEnabled ? input.originalCharacterImage : undefined,
-          characterReferenceImage: (input.characterEnabled && input.characterImage) ? input.characterImage : undefined,
-          previousSceneImage: previousSceneImageUrl || undefined,
-          productReferenceImage: (!(input.characterEnabled && input.characterImage) && consistencyReference) ? consistencyReference : undefined,
-          linkedProduct: product ? {
-            name: product.name,
-            description: product.description,
-            imageUrl: product.imageUrl
-          } : null
-        });
+            aspectRatio: '9:16',
+            brandName: String(profile.name || ''),
+            industry: String(profile.industry || ''),
+            tone: String(profile.brandVoice || 'professional'),
+            originalCharacterImage: input.characterEnabled ? input.originalCharacterImage : undefined,
+            characterReferenceImage: (input.characterEnabled && input.characterImage) ? input.characterImage : undefined,
+            previousSceneImage: previousSceneImageUrl || undefined,
+            productReferenceImage: (!(input.characterEnabled && input.characterImage) && consistencyReference) ? consistencyReference : undefined,
+            linkedProduct: product ? {
+              name: product.name,
+              description: product.description,
+              imageUrl: product.imageUrl
+            } : null,
+            preserveCharacterIdentity: input.preserveIdentity !== false,
+            characterSource: input.originalCharacterImage ? 'upload' : 'system',
+            consistencyStrength: 'strict'
+          });
           if (!result?.success || !result?.imageUrl) {
             throw new Error(result?.error || 'AI image generation failed');
           }

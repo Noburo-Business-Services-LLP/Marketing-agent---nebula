@@ -14,7 +14,9 @@ import {
   Trash2,
   XCircle,
   ToggleRight,
-  ToggleLeft
+  ToggleLeft,
+  Eye,
+  X
 } from 'lucide-react';
 import { useSmartCalendarAutoFill } from '../hooks/useSmartCalendarAutoFill';
 import { getThemeClasses, useTheme } from '../context/ThemeContext';
@@ -127,9 +129,9 @@ const ReelGenerator: React.FC = () => {
   const [characterRole, setCharacterRole] = useState('');
   const [characterPersonality, setCharacterPersonality] = useState('');
   const [characterAppearance, setCharacterAppearance] = useState('');
+  const [characterRace, setCharacterRace] = useState('');
+  const [characterBeard, setCharacterBeard] = useState('');
   const [characterHairStyle, setCharacterHairStyle] = useState('');
-  const [characterHairColor, setCharacterHairColor] = useState('');
-  const [characterClothing, setCharacterClothing] = useState('');
   const [videoStyle, setVideoStyle] = useState('Cinematic Commercial');
   const [preserveIdentity, setPreserveIdentity] = useState(true);
   const [characterUsage, setCharacterUsage] = useState('Main Character in all scenes');
@@ -159,6 +161,7 @@ const ReelGenerator: React.FC = () => {
   const [thumbnailUrl, setThumbnailUrl] = useState('');
   const [caption, setCaption] = useState('');
   const [hashtagsText, setHashtagsText] = useState('');
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
 
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([]);
   const [scheduleDate, setScheduleDate] = useState('');
@@ -427,8 +430,8 @@ const ReelGenerator: React.FC = () => {
     setCharacterPersonality(nextDraft?.characterPersonality || '');
     setCharacterAppearance(nextDraft?.characterAppearance || '');
     setCharacterHairStyle(nextDraft?.characterHairStyle || '');
-    setCharacterHairColor(nextDraft?.characterHairColor || '');
-    setCharacterClothing(nextDraft?.characterClothing || '');
+    setCharacterRace(nextDraft?.characterRace || '');
+    setCharacterBeard(nextDraft?.characterBeard || '');
     if (nextDraft?.videoStyle) setVideoStyle(nextDraft.videoStyle);
     if (nextDraft?.preserveIdentity !== undefined) setPreserveIdentity(!!nextDraft.preserveIdentity);
     if (nextDraft?.characterUsage) setCharacterUsage(nextDraft.characterUsage);
@@ -658,8 +661,8 @@ const ReelGenerator: React.FC = () => {
       characterPersonality,
       characterAppearance,
       characterHairStyle,
-      characterHairColor,
-      characterClothing,
+      characterRace,
+      characterBeard,
       videoStyle,
       preserveIdentity,
       characterUsage,
@@ -694,8 +697,8 @@ const ReelGenerator: React.FC = () => {
       characterPersonality,
       characterAppearance,
       characterHairStyle,
-      characterHairColor,
-      characterClothing,
+      characterRace,
+      characterBeard,
       videoStyle,
       preserveIdentity,
       characterUsage,
@@ -726,7 +729,8 @@ const ReelGenerator: React.FC = () => {
         age: characterAge,
         gender: characterGender,
         hair: characterHairStyle,
-        beard: characterAppearance,
+        beard: characterBeard,
+        race: characterRace,
         role: characterRole,
         personality: characterPersonality,
         videoStyle: videoStyle
@@ -801,13 +805,26 @@ const ReelGenerator: React.FC = () => {
 
   const generateSceneImages = async () => withBusy(async () => {
     if (!jobId) throw new Error('Draft missing');
-    const response = await videoGenerationAPI.generateImages({
+    
+    console.log('🎭 FRONTEND DEBUG: Image Generation Starting (ALL SCENES)');
+    console.log('   Character Image:', characterImage ? '✓ Present' : '❌ MISSING');
+    console.log('   Character Image Size:', characterImage?.length);
+    console.log('   Character Name:', characterName);
+    console.log('   Video ID:', jobId);
+
+    const payload = {
       jobId,
       action: 'generateAll',
       sceneData: scenes,
-      async: true
-    });
+      async: true,
+      characterImageBase64: characterImage,
+      characterName,
+      videoStyle
+    };
+    console.log('📤 Sending payload to backend:', payload);
 
+    const response = await videoGenerationAPI.generateImages(payload);
+    console.log('📥 Backend response:', response);
     const queueJobId = response?.queueJobId;
     if (queueJobId) {
       await pollJob(queueJobId, async (result) => {
@@ -828,12 +845,27 @@ const ReelGenerator: React.FC = () => {
     markSceneRegenerating(sid, true);
     setError('');
     try {
-      const response = await videoGenerationAPI.generateImages({
+      console.log('🎭 FRONTEND DEBUG: Image Regeneration Starting (SINGLE SCENE)');
+      console.log('   Character Image:', characterImage ? '✓ Present' : '❌ MISSING');
+      console.log('   Character Image Size:', characterImage?.length);
+      console.log('   Character Name:', characterName);
+      console.log('   Video ID:', jobId);
+      console.log('   Scene Prompt:', scene.imagePrompt);
+
+      const payload = {
         jobId,
         action: 'regenerate',
         sceneId: scene.sceneId,
-        imagePrompt: scene.imagePrompt
-      });
+        imagePrompt: scene.imagePrompt,
+        characterImageBase64: characterImage,
+        characterName,
+        videoStyle
+      };
+      console.log('📤 Sending payload to backend:', payload);
+
+      const response = await videoGenerationAPI.generateImages(payload);
+      console.log('📥 Backend response:', response);
+
       if (!response?.success) throw new Error(response?.message || 'Image regeneration failed');
       setScenes(response.sceneData || []);
       setDraft(response.draft || draft);
@@ -1648,6 +1680,36 @@ const ReelGenerator: React.FC = () => {
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                           <div>
+                            <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Ethnicity / Race</label>
+                            <select className={inputClass} value={characterRace} onChange={(e) => setCharacterRace(e.target.value)}>
+                              <option value="">Select Ethnicity (Optional)</option>
+                              <option value="Indian">Indian</option>
+                              <option value="South Indian">South Indian</option>
+                              <option value="Asian">Asian</option>
+                              <option value="American">American</option>
+                              <option value="European">European</option>
+                              <option value="Arab">Arab</option>
+                              <option value="Japanese">Japanese</option>
+                              <option value="Mexican">Mexican</option>
+                              <option value="African">African</option>
+                              <option value="Latino">Latino</option>
+                              <option value="Mixed">Mixed</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Facial Hair / Beard</label>
+                            <select className={inputClass} value={characterBeard} onChange={(e) => setCharacterBeard(e.target.value)}>
+                              <option value="">Clean Shaven (No Beard)</option>
+                              <option value="Stubble">Stubble</option>
+                              <option value="Short Beard">Short Beard</option>
+                              <option value="Full Beard">Full Beard</option>
+                              <option value="Goatee">Goatee</option>
+                              <option value="Mustache Only">Mustache Only</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
                             <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Role</label>
                             <input type="text" className={inputClass} value={characterRole} onChange={(e) => setCharacterRole(e.target.value)} placeholder="e.g. Startup Founder" />
                           </div>
@@ -1854,9 +1916,16 @@ const ReelGenerator: React.FC = () => {
                       <div key={scene.sceneId || idx} className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3`}>
                         <p className={`font-semibold ${theme.text}`}>{scene.title || `Scene ${idx + 1}`}</p>
                         <textarea value={scene.imagePrompt || ''} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, imagePrompt: e.target.value } : item))} className={`${inputClass} mt-2 min-h-[70px]`} disabled={isRegen} />
-                        <div className="relative mt-3">
+                        <div className="relative mt-3 group cursor-pointer" onClick={() => { if (scene.imageUrl) setPreviewImageUrl(scene.imageUrl); }}>
                           {scene.imageUrl ? (
-                            <img src={scene.imageUrl} alt={scene.title} className={`w-full h-52 object-cover rounded-lg border border-slate-700 transition-all duration-300 ${isRegen ? 'opacity-30 blur-sm' : ''}`} />
+                            <>
+                              <img src={scene.imageUrl} alt={scene.title} className={`w-full h-52 object-cover rounded-lg border border-slate-700 transition-all duration-300 ${isRegen ? 'opacity-30 blur-sm' : ''}`} />
+                              {!isRegen && (
+                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-lg">
+                                  <Eye className="w-8 h-8 text-white" />
+                                </div>
+                              )}
+                            </>
                           ) : (
                             <div className="h-52 rounded-lg border border-dashed border-slate-600 flex items-center justify-center">
                               <ImageIcon className="w-7 h-7 text-slate-500" />
@@ -2296,6 +2365,24 @@ const ReelGenerator: React.FC = () => {
           </>
         )}
       </div>
+
+      {/* Full Screen Image Preview Modal */}
+      {previewImageUrl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4" onClick={() => setPreviewImageUrl(null)}>
+          <button 
+            className="absolute top-6 right-6 text-white hover:text-gray-300 transition"
+            onClick={(e) => { e.stopPropagation(); setPreviewImageUrl(null); }}
+          >
+            <X className="w-8 h-8" />
+          </button>
+          <img 
+            src={previewImageUrl} 
+            alt="Preview" 
+            className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
     </div>
   );
 };
