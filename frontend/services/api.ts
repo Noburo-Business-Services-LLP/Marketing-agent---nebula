@@ -4000,6 +4000,7 @@ export const draftsAPI = {
     platforms?: string[];
     prompt: string;
     aspectRatio?: string;
+    referenceImage?: string;  // base64 data URL — optional visual reference
   }): Promise<{ success: boolean; draftId?: string; draft?: Draft; message?: string }> => {
     return apiCall('/drafts/generate-image-bg', {
       method: 'POST',

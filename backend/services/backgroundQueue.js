@@ -2,7 +2,7 @@ const Draft = require('../models/Draft');
 const ContentCalendar = require('../models/ContentCalendar');
 const Campaign = require('../models/Campaign');
 const User = require('../models/User');
-const { callGemini, parseGeminiJSON, generateCampaignImageNanoBanana } = require('./geminiAI');
+const { callGemini, parseGeminiJSON, generateCampaignImageNanoBanana, generatePosterFromReference } = require('./geminiAI');
 
 const queue = [];
 let processing = false;
@@ -217,15 +217,26 @@ async function processDraftImageGenerationJob(job) {
       setTimeout(() => reject(new Error('Image generation timed out after 60s')), 60000)
     );
 
-    const imageResult = await Promise.race([
-      generateCampaignImageNanoBanana(draft.imagePrompt || draft.caption || 'A creative poster', {
-        aspectRatio: job.aspectRatio || '1:1',
-        brandName: user?.companyName || 'Brand',
-        industry: bp.industry || '',
-        tone: bp.tone || 'professional'
-      }),
-      timeoutPromise
-    ]);
+    // If the user uploaded a reference/inspiration image, use Nano Banana's
+    // image-to-image path so the generated poster mirrors the reference's
+    // style, composition, and layout. Otherwise, plain text-to-image.
+    const hasReference = typeof job.referenceImage === 'string' && job.referenceImage.trim().length > 0;
+    const generationPromise = hasReference
+      ? generatePosterFromReference(job.referenceImage, {
+          caption: draft.caption || '',
+          prompt: draft.imagePrompt || draft.caption || 'A creative poster',
+          brandName: user?.companyName || 'Brand',
+          industry: bp.industry || '',
+          tone: bp.tone || 'professional'
+        }, { aspectRatio: job.aspectRatio || '1:1' })
+      : generateCampaignImageNanoBanana(draft.imagePrompt || draft.caption || 'A creative poster', {
+          aspectRatio: job.aspectRatio || '1:1',
+          brandName: user?.companyName || 'Brand',
+          industry: bp.industry || '',
+          tone: bp.tone || 'professional'
+        });
+
+    const imageResult = await Promise.race([generationPromise, timeoutPromise]);
 
     const finalImageUrl = typeof imageResult === 'string' ? imageResult : imageResult?.imageUrl;
 

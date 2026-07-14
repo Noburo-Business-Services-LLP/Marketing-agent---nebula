@@ -4639,6 +4639,8 @@ Requirements:
 4. Keep it concise but impactful (2-4 sentences)
 5. Match the tone appropriate for ${platform || 'Instagram'}
 6. Write caption and CTA strictly in ${selectedLanguage}.
+CRITICAL: NEVER include @mentions (e.g. @somebrand) of ANY account, including the user's own brand. Instagram limits mentions of the same handle to once per day per posting account and rejects subsequent posts with a "spam risk" error. If you must reference a brand, use plain text or #hashtag form — NEVER @handle. Failure to follow this rule breaks the entire publish flow.
+
 Return ONLY the caption text. No hashtags, no explanations.`;
       } else {
         prompt = `You are a social media marketing expert. Create an engaging ${platform || 'Instagram'} caption and hashtags for a post.
@@ -4656,6 +4658,8 @@ Requirements:
 7. ${strictBrandMode ? `STRICT BRAND LOCK: The caption MUST follow "${enforcedTone}" tone exactly and must not drift.` : 'Keep tone aligned to the brand context above.'}
 8. LANGUAGE ENFORCEMENT: Write caption and CTA strictly in ${selectedLanguage}.
 9. ${selectedLanguage.includes('Mix') ? 'You may mix English and the native language fluidly.' : selectedLanguage === 'English' ? 'English is allowed.' : 'Do NOT use English words except for strict brand names. Hashtags MUST be entirely in ' + selectedLanguage + ' (or transliterated if native characters aren\'t supported).'}
+
+CRITICAL: NEVER include @mentions (e.g. @somebrand) of ANY account, including the user's own brand. Instagram limits mentions of the same handle to once per day per posting account and rejects subsequent posts with a "spam risk" error. If you must reference a brand, use plain text or #hashtag form — NEVER @handle. Failure to follow this rule breaks the entire publish flow.
 
 Return ONLY the caption text with hashtags. No JSON, no explanations.`;
       }
@@ -4816,6 +4820,8 @@ Requirements:
 9. LANGUAGE ENFORCEMENT: Write caption and CTA strictly in ${selectedLanguage}.
 10. ${selectedLanguage.includes('Mix') ? 'You may mix English and the native language fluidly.' : selectedLanguage === 'English' ? 'English is allowed.' : 'Do NOT use English words except for strict brand names. Hashtags MUST be entirely in ' + selectedLanguage + ' (or transliterated if native characters aren\'t supported).'}
 11. ${selectedProductText ? 'Naturally feature the selected product name, description, price, category, and features when relevant. Do not invent product facts.' : 'Do not invent product details.'}
+
+CRITICAL: NEVER include @mentions (e.g. @somebrand) of ANY account, including the user's own brand. Instagram limits mentions of the same handle to once per day per posting account and rejects subsequent posts with a "spam risk" error. If you must reference a brand, use plain text or #hashtag form — NEVER @handle. Failure to follow this rule breaks the entire publish flow.
 
 Return ONLY the caption text with hashtags. No JSON, no explanations.`;
 

@@ -401,7 +401,7 @@ router.post('/:id/regenerate', protect, async (req, res) => {
 router.post('/generate-image-bg', protect, async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
-    const { type, title, caption, hashtags, prompt, aspectRatio, platforms } = req.body;
+    const { type, title, caption, hashtags, prompt, aspectRatio, platforms, referenceImage } = req.body;
 
     const draft = new Draft({
       userId,
@@ -424,12 +424,15 @@ router.post('/generate-image-bg', protect, async (req, res) => {
 
     await draft.save();
 
-    // Enqueue the background job
+    // Enqueue the background job. referenceImage (base64 data URL) is passed
+    // through so the worker can send it to Nano Banana as a style/composition
+    // guide when generating the poster.
     const backgroundQueue = require('../services/backgroundQueue');
     backgroundQueue.enqueue({
       type: type === 'campaign' ? 'generate_campaign_image' : 'generate_post_image',
       draftId: draft._id,
-      aspectRatio: aspectRatio || '1:1'
+      aspectRatio: aspectRatio || '1:1',
+      referenceImage: referenceImage || null
     });
 
     res.status(201).json({ success: true, draftId: draft._id, draft });
