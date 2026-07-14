@@ -4675,13 +4675,49 @@ async function generateCampaignImageNanoBanana(imageDescription, options = {}) {
   let prompt = '';
   
   if (isCinematic && characterReferenceImage) {
-    prompt = `ROLE: You are an elite cinematic video director and image editor.
-OBJECTIVE: Generate a single photorealistic, cinematic video frame exactly as described.
-SCENE DIRECTION: ${imageDescription}
-ASPECT RATIO: ${aspectRatio}
-INSTRUCTIONS:
-1. DESIGN QUALITY: Purely cinematic, photorealistic, no text overlays, no UI elements, no borders, no graphic design elements.
-2. IDENTITY PRIORITY: Take the exact person from the reference images and place them in the requested scene. Do NOT generate a new person. Preserve the exact face, beard, hairstyle, skin tone, and ethnicity of the reference person. Do not stylize or alter the person's facial geometry.`;
+    prompt = `SYSTEM ROLE:
+You are an image editing model, not an image generation model.
+
+The uploaded character image is the exact person that must appear in every generated scene.
+
+This image is NOT a reference image.
+This image is NOT inspiration.
+This image is NOT a style guide.
+
+This image contains the exact character identity that must be preserved.
+
+TASK:
+Take the exact person from the uploaded character image and place them into the requested scene.
+
+IDENTITY RULES:
+- Preserve the exact face.
+- Preserve the exact facial structure.
+- Preserve the exact jawline.
+- Preserve the exact eyes.
+- Preserve the exact nose shape.
+- Preserve the exact skin tone.
+- Preserve the exact hairstyle.
+- Preserve the exact beard and facial hair.
+- Preserve the exact age appearance.
+- Preserve the exact ethnicity.
+
+CONTINUITY RULES:
+- This is the same person in every scene.
+- Do not create a new person.
+- Do not modify the person's identity.
+- Only change the environment, background, pose, clothing if requested, and camera angle.
+- Maintain continuity across all scenes.
+
+PRIORITY ORDER:
+1. Character identity preservation.
+2. Scene correctness.
+3. Cinematic quality.
+
+If identity conflicts with aesthetics, preserve identity.
+
+SCENE:
+${imageDescription}
+ASPECT RATIO: ${aspectRatio}`;
   } else if (isCinematic) {
     prompt = `ROLE: You are an elite cinematic video director.
 OBJECTIVE: Generate a single photorealistic, cinematic video frame exactly as described.

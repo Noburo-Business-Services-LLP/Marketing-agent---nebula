@@ -1064,32 +1064,66 @@ router.post('/createDraft', protect, checkTrial, videoAiWriteLimiter, async (req
 
 router.post('/generateCharacterPreview', protect, checkTrial, videoAiWriteLimiter, async (req, res) => {
   try {
-    const { name, age, gender, hair, beard, race, role, personality, videoStyle, brandName } = req.body;
+    const { name, age, gender, hair, beard, race, role, personality, videoStyle, brandName, artStyle, appearance, characterImageBase64 } = req.body;
     
-    let description = `A clean, cinematic portrait of a person facing the camera directly. `;
+    let description = ``;
     if (gender) description += `Gender: ${gender}. `;
     if (age) description += `Age: ${age}. `;
     if (race) description += `Ethnicity/Race: ${race}. `;
     if (hair) description += `Hair: ${hair}. `;
+    if (appearance) description += `Clothing/Appearance: ${appearance}. `;
     if (beard && beard !== 'Clean Shaven (No Beard)') {
       description += `Facial Hair: ${beard}. `;
     } else {
       description += `Facial Hair: Completely clean shaven, absolutely no beard or mustache or stubble. `;
     }
-    if (role) description += `Role: ${role}. `;
-    if (personality) description += `Personality: ${personality}. `;
     
-    const prompt = `Generate a highly detailed, professional, front-facing portrait photograph. 
-    This will be used as a master character reference sheet for an AI video. 
-    Subject details: ${description}
-    Style: ${videoStyle || 'Cinematic, professional studio lighting, neutral solid color background, extremely high quality, realistic.'}
-    Ensure the subject's face is clearly visible, evenly lit, without heavy shadows, sunglasses, or obscuring items.
-    Focus strongly on facial features, neutral expression.`;
+    const resolvedArtStyle = artStyle || 'Realistic / Photography';
+    
+    let prompt = `Create a professional Master Character Reference Sheet.
+The sheet must show the exact same person in all views and preserve the identical face, hairstyle, beard, skin tone, body proportions, and age.
+
+Include the following sections:
+1. Face Views: Front view, Left profile, Right profile, 45-degree angle.
+2. Body Views: Full body front, Full body side, Full body back.
+3. Expression Sheet: Neutral, Happy, Serious, Thinking.
+4. Pose Sheet: Standing, Walking, Sitting, Pointing.
+
+Requirements:
+- Use the exact same person in every image.
+- Maintain identical facial geometry.
+- Maintain identical beard style.
+- Maintain identical hairstyle and hairline.
+- Maintain identical skin tone and ethnicity.
+- Maintain identical body proportions.
+- Use a clean studio background.
+- Arrange everything in a professional character reference sheet layout.
+- Art Style / Format: ${resolvedArtStyle}.
+- Video Theme Style: ${videoStyle || 'Cinematic, extremely high quality.'}
+`;
+
+    if (description) {
+        prompt += `\nSubject details to enforce: ${description}`;
+    }
+    
+    if (characterImageBase64) {
+        prompt += `\n\nCRITICAL: You MUST base this character sheet on the exact person in the provided reference image. Keep their face and identity perfectly identical!`;
+    }
+
+    let cleanBase64 = null;
+    if (characterImageBase64) {
+      cleanBase64 = characterImageBase64;
+      if (cleanBase64.includes('data:image')) {
+        cleanBase64 = cleanBase64.split(',')[1];
+      }
+    }
 
     const imageUrl = await generateCampaignImageNanoBanana(prompt, {
-      aspectRatio: '1:1',
+      aspectRatio: '16:9',
       brandName: brandName || '',
-      tone: 'professional'
+      tone: 'professional',
+      characterReferenceImage: cleanBase64 ? `data:image/jpeg;base64,${cleanBase64}` : null,
+      isCinematic: !!cleanBase64
     });
 
     if (!imageUrl || (typeof imageUrl === 'object' && !imageUrl.imageUrl)) {

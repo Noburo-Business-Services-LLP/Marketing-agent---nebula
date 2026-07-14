@@ -131,6 +131,7 @@ const ReelGenerator: React.FC = () => {
   const [characterAppearance, setCharacterAppearance] = useState('');
   const [characterRace, setCharacterRace] = useState('');
   const [characterBeard, setCharacterBeard] = useState('');
+  const [characterArtStyle, setCharacterArtStyle] = useState('Realistic / Photography');
   const [characterHairStyle, setCharacterHairStyle] = useState('');
   const [videoStyle, setVideoStyle] = useState('Cinematic Commercial');
   const [preserveIdentity, setPreserveIdentity] = useState(true);
@@ -424,7 +425,7 @@ const ReelGenerator: React.FC = () => {
     setCharacterImage(nextDraft?.characterImage || '');
     setOriginalCharacterImage(nextDraft?.originalCharacterImage || '');
     setCharacterName(nextDraft?.characterName || '');
-    setCharacterAge(nextDraft?.characterAge || '');
+setCharacterAge(nextDraft?.characterAge || '');
     setCharacterGender(nextDraft?.characterGender || '');
     setCharacterRole(nextDraft?.characterRole || '');
     setCharacterPersonality(nextDraft?.characterPersonality || '');
@@ -432,6 +433,7 @@ const ReelGenerator: React.FC = () => {
     setCharacterHairStyle(nextDraft?.characterHairStyle || '');
     setCharacterRace(nextDraft?.characterRace || '');
     setCharacterBeard(nextDraft?.characterBeard || '');
+    setCharacterArtStyle(nextDraft?.characterArtStyle || 'Realistic / Photography');
     if (nextDraft?.videoStyle) setVideoStyle(nextDraft.videoStyle);
     if (nextDraft?.preserveIdentity !== undefined) setPreserveIdentity(!!nextDraft.preserveIdentity);
     if (nextDraft?.characterUsage) setCharacterUsage(nextDraft.characterUsage);
@@ -663,6 +665,7 @@ const ReelGenerator: React.FC = () => {
       characterHairStyle,
       characterRace,
       characterBeard,
+      characterArtStyle,
       videoStyle,
       preserveIdentity,
       characterUsage,
@@ -699,6 +702,7 @@ const ReelGenerator: React.FC = () => {
       characterHairStyle,
       characterRace,
       characterBeard,
+      characterArtStyle,
       videoStyle,
       preserveIdentity,
       characterUsage,
@@ -716,8 +720,12 @@ const ReelGenerator: React.FC = () => {
   });
 
   const handleGenerateCharacterPreview = async () => {
-    if (!characterName && !characterRole && !characterAppearance) {
+    if (characterSource === 'generate' && !characterName && !characterRole && !characterAppearance) {
       setError('Please provide some character details to generate a preview.');
+      return;
+    }
+    if (characterSource === 'upload' && !originalCharacterImage) {
+      setError('Please upload a character image first.');
       return;
     }
     setGeneratingCharacter(true);
@@ -728,12 +736,15 @@ const ReelGenerator: React.FC = () => {
         name: characterName,
         age: characterAge,
         gender: characterGender,
-        hair: characterHairStyle,
+        hairStyle: characterHairStyle,
         beard: characterBeard,
         race: characterRace,
         role: characterRole,
         personality: characterPersonality,
-        videoStyle: videoStyle
+        artStyle: characterArtStyle,
+        videoStyle: videoStyle,
+        appearance: characterAppearance,
+        characterImageBase64: originalCharacterImage
       });
       if (response?.success && response?.imageUrl) {
         setCharacterImage(response.imageUrl);
@@ -1660,6 +1671,33 @@ const ReelGenerator: React.FC = () => {
                             <button onClick={() => { setCharacterImage(''); setCharacterApproved(false); }} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1"><XCircle className="w-4 h-4" /></button>
                           </div>
                         )}
+
+                        {originalCharacterImage && (
+                          <div className="mt-4 p-4 border rounded-xl border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/20 text-center space-y-3">
+                            <h3 className={`font-bold ${theme.text}`}>Master Character Sheet</h3>
+                            <p className={`text-sm ${theme.textMuted}`}>Generate a 360° character sheet to improve consistency across all scenes.</p>
+                            
+                            {characterImage !== originalCharacterImage && characterImage && (
+                                <img src={characterImage} alt="Master Sheet" className="h-48 w-full object-contain rounded-xl mx-auto shadow-md" />
+                            )}
+
+                            {!characterApproved || characterImage === originalCharacterImage ? (
+                              <div className="flex justify-center gap-3 mt-2">
+                                <button onClick={handleGenerateCharacterPreview} disabled={generatingCharacter} className="px-4 py-2 bg-indigo-500 text-white font-semibold rounded-xl hover:bg-indigo-600 transition disabled:opacity-50">
+                                  {generatingCharacter ? <Loader2 className="w-4 h-4 animate-spin inline mr-2" /> : <Sparkles className="w-4 h-4 inline mr-2" />}
+                                  Generate Master Sheet
+                                </button>
+                                {characterImage !== originalCharacterImage && characterImage && (
+                                    <button onClick={() => setCharacterApproved(true)} className="px-3 py-2 bg-emerald-500 text-white rounded-lg text-sm font-medium hover:bg-emerald-600 transition">
+                                      Approve
+                                    </button>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="text-emerald-500 font-bold text-sm">✓ Character Sheet Approved</div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <div className="space-y-4">
@@ -1732,9 +1770,20 @@ const ReelGenerator: React.FC = () => {
                           <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Appearance / Clothing</label>
                           <input type="text" className={inputClass} value={characterAppearance} onChange={(e) => setCharacterAppearance(e.target.value)} placeholder="e.g. Modern business woman, Premium formal outfit" />
                         </div>
-                        <div>
-                          <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Hair Style & Color</label>
-                          <input type="text" className={inputClass} value={characterHairStyle} onChange={(e) => setCharacterHairStyle(e.target.value)} placeholder="e.g. Long straight black hair" />
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Hair Style & Color</label>
+                            <input type="text" className={inputClass} value={characterHairStyle} onChange={(e) => setCharacterHairStyle(e.target.value)} placeholder="e.g. Long straight black hair" />
+                          </div>
+                          <div>
+                            <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Format / Art Style</label>
+                            <select className={inputClass} value={characterArtStyle} onChange={(e) => setCharacterArtStyle(e.target.value)}>
+                              <option value="Realistic / Photography">Real Person / Realistic</option>
+                              <option value="Anime / Manga">Anime</option>
+                              <option value="3D Animation / Cartoon">3D Animation / Cartoon Character</option>
+                              <option value="Vector Illustration">Vector Illustration</option>
+                            </select>
+                          </div>
                         </div>
                         <button
                           onClick={handleGenerateCharacterPreview}
