@@ -762,41 +762,31 @@ setCharacterAge(nextDraft?.characterAge || '');
 
   const generatePromptAndScenes = async () => withBusy(async () => {
     if (!jobId) throw new Error('Draft missing. Complete step 1 first.');
-    let currentPrompt = promptText;
 
-    if (!currentPrompt) {
-      const promptResponse = await videoGenerationAPI.generatePrompt({ jobId });
-      if (!promptResponse?.success) {
-        throw new Error(promptResponse?.message || 'Prompt generation failed');
-      }
-      currentPrompt = promptResponse.draft?.prompt?.structuredPrompt || promptResponse.draft?.prompt?.promptText || '';
-      setPromptText(currentPrompt);
-      setDraft(promptResponse.draft || draft);
-    }
-
-    const sceneResponse = await videoGenerationAPI.generateScenes({
-      jobId,
-      promptText: currentPrompt || undefined,
-      async: true
+    // Use the new Video Style-Aware Prompt Engineering system
+    const response = await videoGenerationAPI.generateVideoStylePrompts({
+      description: description,
+      videoStyle: videoStyle || 'Cinematic Commercial',
+      characterName: characterName || 'Character',
+      sceneCount: sceneCount || 5,
+      productName: selectedProduct?.name || undefined,
+      duration: durationSeconds || 30
     });
 
-    const queueJobId = sceneResponse?.queueJobId;
-    if (queueJobId) {
-      await pollJob(queueJobId, async (result) => {
-        setScenes(result.sceneData || []);
-        if (result.draft?.prompt?.promptText) {
-          setPromptText(result.draft.prompt.promptText);
-        }
-        setDraft(result.draft || draft);
-      });
-      return;
+    if (!response?.success) {
+      throw new Error(response?.message || 'Style-aware scene generation failed');
     }
 
-    if (!sceneResponse?.success) {
-      throw new Error(sceneResponse?.message || 'Scene generation failed');
-    }
-    setScenes(sceneResponse.sceneData || []);
-    setDraft(sceneResponse.draft || draft);
+    setScenes(response.scenes || []);
+    
+    // Save generated scenes to the draft immediately so they persist
+    const saveResponse = await videoGenerationAPI.generateScenes({
+      jobId,
+      sceneData: response.scenes,
+      saveOnly: true
+    });
+    
+    setDraft(saveResponse?.draft || draft);
   });
 
   const saveStep2EditsAndNext = async () => withBusy(async () => {
