@@ -16,7 +16,8 @@ import {
   ToggleRight,
   ToggleLeft,
   Eye,
-  X
+  X,
+  Search
 } from 'lucide-react';
 import { useSmartCalendarAutoFill } from '../hooks/useSmartCalendarAutoFill';
 import { getThemeClasses, useTheme } from '../context/ThemeContext';
@@ -118,7 +119,7 @@ const ReelGenerator: React.FC = () => {
   const [inputImageName, setInputImageName] = useState('');
 
   const [characterEnabled, setCharacterEnabled] = useState(false);
-  const [characterSource, setCharacterSource] = useState<'upload' | 'generate'>('upload');
+  const [characterSource, setCharacterSource] = useState<'upload' | 'generate'>('generate');
   const [generatingCharacter, setGeneratingCharacter] = useState(false);
   const [characterApproved, setCharacterApproved] = useState(false);
   const [characterImage, setCharacterImage] = useState('');
@@ -137,6 +138,7 @@ const ReelGenerator: React.FC = () => {
   const [preserveIdentity, setPreserveIdentity] = useState(true);
   const [characterUsage, setCharacterUsage] = useState('Main Character in all scenes');
   const [characterConsistencyStrength, setCharacterConsistencyStrength] = useState('Strict');
+  const [previewImageModal, setPreviewImageModal] = useState<string | null>(null);
 
   const [promptText, setPromptText] = useState('');
   const [scenes, setScenes] = useState<any[]>([]);
@@ -1637,12 +1639,12 @@ setCharacterAge(nextDraft?.characterAge || '');
                     <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Character Source</label>
                     <div className="flex items-center gap-4">
                       <label className="flex items-center gap-2 cursor-pointer">
-                        <input type="radio" checked={characterSource === 'upload'} onChange={() => setCharacterSource('upload')} />
-                        <span className={theme.text}>Upload Image</span>
-                      </label>
-                      <label className="flex items-center gap-2 cursor-pointer">
                         <input type="radio" checked={characterSource === 'generate'} onChange={() => setCharacterSource('generate')} />
                         <span className={theme.text}>Generate AI Character</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input type="radio" checked={characterSource === 'upload'} onChange={() => setCharacterSource('upload')} />
+                        <span className={theme.text}>Upload Image</span>
                       </label>
                     </div>
 
@@ -1678,7 +1680,12 @@ setCharacterAge(nextDraft?.characterAge || '');
                             <p className={`text-sm ${theme.textMuted}`}>Generate a 360° character sheet to improve consistency across all scenes.</p>
                             
                             {characterImage !== originalCharacterImage && characterImage && (
-                                <img src={characterImage} alt="Master Sheet" className="h-48 w-full object-contain rounded-xl mx-auto shadow-md" />
+                              <div className="relative group cursor-pointer" onClick={() => setPreviewImageModal(characterImage)}>
+                                <img src={characterImage} alt="Master Sheet" className="h-48 w-full object-contain rounded-xl mx-auto shadow-md transition-transform group-hover:scale-[1.02]" />
+                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl flex items-center justify-center">
+                                  <span className="text-white font-medium bg-black/50 px-3 py-1 rounded-lg flex items-center"><Search className="w-4 h-4 mr-2" /> Click to Preview</span>
+                                </div>
+                              </div>
                             )}
 
                             {!characterApproved || characterImage === originalCharacterImage ? (
@@ -1734,17 +1741,19 @@ setCharacterAge(nextDraft?.characterAge || '');
                               <option value="Mixed">Mixed</option>
                             </select>
                           </div>
-                          <div>
-                            <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Facial Hair / Beard</label>
-                            <select className={inputClass} value={characterBeard} onChange={(e) => setCharacterBeard(e.target.value)}>
-                              <option value="">Clean Shaven (No Beard)</option>
-                              <option value="Stubble">Stubble</option>
-                              <option value="Short Beard">Short Beard</option>
-                              <option value="Full Beard">Full Beard</option>
-                              <option value="Goatee">Goatee</option>
-                              <option value="Mustache Only">Mustache Only</option>
-                            </select>
-                          </div>
+                          {characterGender !== 'Female' && (
+                            <div>
+                              <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Facial Hair / Beard</label>
+                              <select className={inputClass} value={characterBeard} onChange={(e) => setCharacterBeard(e.target.value)}>
+                                <option value="">Clean Shaven (No Beard)</option>
+                                <option value="Stubble">Stubble</option>
+                                <option value="Short Beard">Short Beard</option>
+                                <option value="Full Beard">Full Beard</option>
+                                <option value="Goatee">Goatee</option>
+                                <option value="Mustache Only">Mustache Only</option>
+                              </select>
+                            </div>
+                          )}
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                           <div>
@@ -1797,7 +1806,13 @@ setCharacterAge(nextDraft?.characterAge || '');
                         {characterImage && (
                           <div className="p-4 border rounded-xl border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/20 text-center space-y-3">
                             <h3 className={`font-bold ${theme.text}`}>Generated Character</h3>
-                            <img src={characterImage} alt="Generated Character Preview" className="h-48 w-48 object-cover rounded-xl mx-auto shadow-md" />
+                            
+                            <div className="relative group cursor-pointer" onClick={() => setPreviewImageModal(characterImage)}>
+                              <img src={characterImage} alt="Generated Character Preview" className="h-48 w-full object-contain rounded-xl mx-auto shadow-md transition-transform group-hover:scale-[1.02]" />
+                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl flex items-center justify-center">
+                                <span className="text-white font-medium bg-black/50 px-3 py-1 rounded-lg flex items-center"><Search className="w-4 h-4 mr-2" /> Click to Preview</span>
+                              </div>
+                            </div>
                             
                             {!characterApproved ? (
                               <div className="flex justify-center gap-3 mt-2">
@@ -2430,6 +2445,16 @@ setCharacterAge(nextDraft?.characterAge || '');
             className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           />
+        </div>
+      )}
+      
+      {/* Full Screen Image Preview Modal */}
+      {previewImageModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4" onClick={() => setPreviewImageModal(null)}>
+          <button className="absolute top-4 right-4 text-white bg-white/10 hover:bg-white/20 p-2 rounded-full transition">
+            <XCircle className="w-6 h-6" />
+          </button>
+          <img src={previewImageModal} alt="Preview" className="max-w-full max-h-full object-contain rounded-lg" onClick={(e) => e.stopPropagation()} />
         </div>
       )}
     </div>

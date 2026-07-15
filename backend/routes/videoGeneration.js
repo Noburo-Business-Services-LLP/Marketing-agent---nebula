@@ -1064,13 +1064,13 @@ router.post('/createDraft', protect, checkTrial, videoAiWriteLimiter, async (req
 
 router.post('/generateCharacterPreview', protect, checkTrial, videoAiWriteLimiter, async (req, res) => {
   try {
-    const { name, age, gender, hair, beard, race, role, personality, videoStyle, brandName, artStyle, appearance, characterImageBase64 } = req.body;
+    const { name, age, gender, hairStyle, beard, race, role, personality, videoStyle, brandName, artStyle, appearance, characterImageBase64 } = req.body;
     
     let description = ``;
     if (gender) description += `Gender: ${gender}. `;
     if (age) description += `Age: ${age}. `;
     if (race) description += `Ethnicity/Race: ${race}. `;
-    if (hair) description += `Hair: ${hair}. `;
+    if (hairStyle) description += `Hair: ${hairStyle}. `;
     if (appearance) description += `Clothing/Appearance: ${appearance}. `;
     if (beard && beard !== 'Clean Shaven (No Beard)') {
       description += `Facial Hair: ${beard}. `;
@@ -1100,6 +1100,7 @@ Requirements:
 - Arrange everything in a professional character reference sheet layout.
 - Art Style / Format: ${resolvedArtStyle}.
 - Video Theme Style: ${videoStyle || 'Cinematic, extremely high quality.'}
+- CRITICAL: Do not add glasses, hats, or other face-obscuring accessories unless explicitly specified.
 `;
 
     if (description) {
