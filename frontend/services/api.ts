@@ -3363,6 +3363,13 @@ export const videoGenerationAPI = {
     return apiCall(`/video-generation/draft/${encodeURIComponent(jobId)}`, { method: 'GET' }, true);
   },
 
+  updateDraft: async (jobId: string, payload: any): Promise<any> => {
+    return apiCall(`/video-generation/draft/${encodeURIComponent(jobId)}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    }, true);
+  },
+
   getDrafts: async (): Promise<any> => {
     return apiCall('/video-generation/drafts', { method: 'GET' }, true);
   },
@@ -3377,6 +3384,13 @@ export const videoGenerationAPI = {
     saveOnly?: boolean;
   }): Promise<any> => {
     return apiCall('/video-generation/generatePrompt', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }, true);
+  },
+
+  generateCharacterPreview: async (payload: any): Promise<{ success: boolean; imageUrl?: string; error?: string }> => {
+    return apiCall('/video-generation/generateCharacterPreview', {
       method: 'POST',
       body: JSON.stringify(payload)
     }, true);

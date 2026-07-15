@@ -3538,10 +3538,10 @@ Keep the overall composition and subject matter the same. Only apply the request
       }
     }
 
-    // If we have the image, use Nano Banana 2 for actual editing
+    // If we have the image, use Nano Banana Pro for actual editing
     if (imageBase64) {
-      console.log('🎨 Refining image with Nano Banana 2 (gemini-3.1-flash-image-preview)...');
-      const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image-preview:generateContent';
+      console.log('🎨 Refining image with Nano Banana Pro (nano-banana-pro-preview)...');
+      const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/nano-banana-pro-preview:generateContent';
 
       const requestBody = {
         contents: [{
@@ -4008,9 +4008,9 @@ Instructions:
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      console.log(`🎨 Editing poster with Nano Banana 2 (attempt ${attempt}/${maxRetries})...`);
+      console.log(`🎨 Editing poster with Nano Banana Pro (attempt ${attempt}/${maxRetries})...`);
 
-      const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image-preview:generateContent';
+      const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/nano-banana-pro-preview:generateContent';
 
       const response = await fetchWithTimeout(`${apiUrl}?key=${GEMINI_API_KEY}`, {
         method: 'POST',
@@ -4635,6 +4635,9 @@ async function generateCampaignImageNanoBanana(imageDescription, options = {}) {
     aspectRatio = '1:1',
     brandName = '',
     brandLogo = null,
+    originalCharacterImage = null,
+    characterReferenceImage = null,
+    previousSceneImage = null,
     productReferenceImage = null,
     industry = '',
     tone = 'professional',
@@ -4647,6 +4650,9 @@ async function generateCampaignImageNanoBanana(imageDescription, options = {}) {
     strictBrandLock = false,
     targetLanguage = 'English',
     imageText = '',
+    characterSource = 'system',
+    preserveCharacterIdentity = false,
+    consistencyStrength = 'normal',
   } = options;
 
   const linkedProduct = options.linkedProduct && typeof options.linkedProduct === 'object' ? options.linkedProduct : null;
@@ -4663,8 +4669,64 @@ async function generateCampaignImageNanoBanana(imageDescription, options = {}) {
     !resolvedTargetLanguage.toLowerCase().includes('mix') && resolvedTargetLanguage.toLowerCase() !== 'english' && isEnglishLikeImageText
       ? ''
       : rawPreferredImageText;
+      
+  const isCinematic = Boolean(options.isCinematic);
+  
+  let prompt = '';
+  
+  if (isCinematic && characterReferenceImage) {
+    prompt = `SYSTEM ROLE:
+You are an image editing model, not an image generation model.
 
-  const prompt = `ROLE: You are an elite creative director at a top-tier advertising agency. You create award-winning social media ad creatives that drive engagement and conversions for global brands.
+The uploaded character image is the exact person that must appear in every generated scene.
+
+This image is NOT a reference image.
+This image is NOT inspiration.
+This image is NOT a style guide.
+
+This image contains the exact character identity that must be preserved.
+
+TASK:
+Take the exact person from the uploaded character image and place them into the requested scene.
+
+IDENTITY RULES:
+- Preserve the exact face.
+- Preserve the exact facial structure.
+- Preserve the exact jawline.
+- Preserve the exact eyes.
+- Preserve the exact nose shape.
+- Preserve the exact skin tone.
+- Preserve the exact hairstyle.
+- Preserve the exact beard and facial hair.
+- Preserve the exact age appearance.
+- Preserve the exact ethnicity.
+
+CONTINUITY RULES:
+- This is the same person in every scene.
+- Do not create a new person.
+- Do not modify the person's identity.
+- Only change the environment, background, pose, clothing if requested, and camera angle.
+- Maintain continuity across all scenes.
+
+PRIORITY ORDER:
+1. Character identity preservation.
+2. Scene correctness.
+3. Cinematic quality.
+
+If identity conflicts with aesthetics, preserve identity.
+
+SCENE:
+${imageDescription}
+ASPECT RATIO: ${aspectRatio}`;
+  } else if (isCinematic) {
+    prompt = `ROLE: You are an elite cinematic video director.
+OBJECTIVE: Generate a single photorealistic, cinematic video frame exactly as described.
+SCENE DIRECTION: ${imageDescription}
+ASPECT RATIO: ${aspectRatio}
+INSTRUCTIONS:
+1. DESIGN QUALITY: Purely cinematic, photorealistic, no text overlays, no UI elements, no borders, no graphic design elements.`;
+  } else {
+    prompt = `ROLE: You are an elite creative director at a top-tier advertising agency. You create award-winning social media ad creatives that drive engagement and conversions for global brands.
 
 OBJECTIVE: Generate a single, publication-ready social media ad image that looks like it was produced by a professional design team. The image must be visually stunning, immediately attention-grabbing in a social feed, and communicate the brand message through design, not through literal text dumps.
 
@@ -4709,11 +4771,63 @@ ${linkedProduct ? `13. PRODUCT REALISM & COLOR CONTROL: ${strictBrandLock
         : 'No product reference image is available. Generate a realistic premium hero product with tasteful tones and subtle brand-inspired accents.')} Keep brand colors primarily in background, lighting, and supporting design elements.` : '13. PRODUCT REALISM & COLOR CONTROL: If a hero product appears, keep it realistic and premium with restrained tones; avoid unrealistic bright colors.'}
 ${fontType ? `14. TYPOGRAPHY: Any rendered text should align with a "${fontType}" style and remain minimal.` : '14. TYPOGRAPHY: Keep text overlays minimal and premium.'}
 ${totalPosts > 1 ? `15. SERIES CONSISTENCY: This is part of a ${totalPosts}-post campaign series. Maintain a consistent visual style and design language across posts.` : ''}`;
+  }
+
+  if (
+    characterSource === "upload" &&
+    preserveCharacterIdentity &&
+    consistencyStrength === "strict"
+  ) {
+    prompt += `
+
+STRICT IMAGE TRANSFORMATION TASK
+
+The uploaded image contains the exact person that must appear in the final image.
+
+This is NOT a character reference.
+This is NOT inspiration.
+This is NOT a style guide.
+
+This is the exact person that must remain unchanged.
+
+Your task is to edit the existing person into the requested environment while preserving identity completely.
+
+IDENTITY LOCK REQUIREMENTS:
+- Preserve the exact face.
+- Preserve the exact facial proportions.
+- Preserve the exact jawline.
+- Preserve the exact nose shape.
+- Preserve the exact eye shape and spacing.
+- Preserve the exact eyebrow shape.
+- Preserve the exact lips and smile geometry.
+- Preserve the exact beard style and density.
+- Preserve the exact hairstyle and hairline.
+- Preserve the exact skin tone.
+- Preserve the exact age appearance.
+- Preserve the exact ethnicity.
+
+ONLY ALLOWED TO CHANGE:
+- background
+- environment
+- camera position
+- body pose
+- clothing if explicitly requested
+
+FORBIDDEN:
+- creating a new person
+- changing facial structure
+- changing ethnicity
+- changing age
+- changing beard
+- changing hairstyle
+
+Treat this as an image editing task where the original person must remain identical.`;
+  }
 
   try {
-    console.log(`[NanoBanana2] Generating post ${postIndex + 1}/${totalPosts} in ${aspectRatio}...`);
+    console.log(`[NanoBananaPro] Generating post ${postIndex + 1}/${totalPosts} in ${aspectRatio}...`);
 
-    const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image-preview:generateContent';
+    const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/nano-banana-pro-preview:generateContent';
 
     const parts = [];
 
@@ -4744,21 +4858,54 @@ ${totalPosts > 1 ? `15. SERIES CONSISTENCY: This is part of a ${totalPosts}-post
       return null;
     };
 
-    const [logoInline, productInline] = await Promise.all([
+    const [logoInline, productInline, originalCharacterInline, characterInline, previousSceneInline] = await Promise.all([
       prepareInlineImage(brandLogo, 'brand logo'),
-      prepareInlineImage(productReferenceImage, 'product reference image')
+      prepareInlineImage(productReferenceImage, 'product reference image'),
+      prepareInlineImage(originalCharacterImage, 'original character image'),
+      prepareInlineImage(characterReferenceImage, 'canonical character image'),
+      prepareInlineImage(previousSceneImage, 'previous scene image')
     ]);
 
     const referenceNotes = [];
 
-    if (logoInline?.data) {
+    if (originalCharacterInline?.data) {
       parts.push({
         inlineData: {
-          mimeType: logoInline.mimeType || 'image/png',
-          data: logoInline.data
+          mimeType: originalCharacterInline.mimeType || 'image/png',
+          data: originalCharacterInline.data
         }
       });
-      referenceNotes.push('Image 1 is the exact uploaded brand logo. Use it exactly as-is. Do not recreate or recolor it.');
+      referenceNotes.push(`Image ${parts.length} is the ORIGINAL SELFIE REFERENCE.
+Take the exact person in this uploaded image.
+Keep the identical face, beard, hairstyle, skin tone and facial structure.
+Do not create another person.`);
+    }
+
+    if (characterInline?.data) {
+      parts.push({
+        inlineData: {
+          mimeType: characterInline.mimeType || 'image/png',
+          data: characterInline.data
+        }
+      });
+      referenceNotes.push(`Image ${parts.length} is the CANONICAL STUDIO PORTRAIT.
+Take the exact person in the uploaded image.
+Keep the identical face, beard, hairstyle, skin tone and facial structure.
+Only change the environment to the requested scene.
+Do not create another person. Preserve identity perfectly.`);
+    }
+
+    if (previousSceneInline?.data) {
+      parts.push({
+        inlineData: {
+          mimeType: previousSceneInline.mimeType || 'image/png',
+          data: previousSceneInline.data
+        }
+      });
+      referenceNotes.push(`Image ${parts.length} is the PREVIOUS SCENE IMAGE.
+Take the exact person and visual style from this uploaded image.
+Edit this exact image into the new requested scene.
+Keep the identical face, clothing, and character identity. Do not create a new person.`);
     }
 
     if (productInline?.data) {
@@ -4768,15 +4915,32 @@ ${totalPosts > 1 ? `15. SERIES CONSISTENCY: This is part of a ${totalPosts}-post
           data: productInline.data
         }
       });
-      const imageIndex = logoInline?.data ? 2 : 1;
-      referenceNotes.push(`Image ${imageIndex} is the exact product reference image. Preserve product form, materials, and key structure.`);
+      referenceNotes.push(`Image ${parts.length} is the exact product reference image. Preserve product form, materials, and key structure.`);
+    }
+
+    if (logoInline?.data) {
+      parts.push({
+        inlineData: {
+          mimeType: logoInline.mimeType || 'image/png',
+          data: logoInline.data
+        }
+      });
+      referenceNotes.push(`Image ${parts.length} is the exact uploaded brand logo. Use it exactly as-is. Do not recreate or recolor it.`);
     }
 
     if (referenceNotes.length > 0) {
-      parts.push({ text: `${referenceNotes.join('\n')}\n\n${prompt}` });
+      parts.push({ text: `${referenceNotes.join('\n\n')}\n\n${prompt}` });
     } else {
       parts.push({ text: prompt });
     }
+
+    console.log("Gemini input parts:");
+    console.log(JSON.stringify(parts.map((p, index) => ({
+      index,
+      type: p.inlineData ? "image" : "text",
+      mimeType: p.inlineData ? p.inlineData.mimeType : undefined,
+      textLength: p.text ? p.text.length : 0
+    })), null, 2));
 
     const requestBody = {
       contents: [{ parts }],
@@ -5174,7 +5338,68 @@ Image Text:
     };
   }
 }
+async function extractCharacterVisualTraits(imageBase64) {
+  const prompt = `You are an expert character analyst.
+Analyze the provided character image and extract the visual traits. 
+Return STRICT JSON with the following keys exactly:
+{
+  "hairStyle": "string describing the haircut and style in detail",
+  "facialHair": "string describing the beard/mustache exactly, or 'clean-shaven'",
+  "clothing": "string describing the exact clothing and colors",
+  "ethnicity": "string describing the apparent ethnicity",
+  "ageAppearance": "string describing the approximate age",
+  "accessories": "string describing glasses, chains, earrings, etc. or 'none'"
+}`;
+
+  let inlineData;
+  if (imageBase64.startsWith('data:')) {
+    const parts = imageBase64.split(',');
+    const mime = parts[0].match(/:(.*?);/)[1];
+    inlineData = { mimeType: mime, data: parts[1] };
+  } else {
+    // If it's just raw base64 (assume jpeg)
+    inlineData = { mimeType: 'image/jpeg', data: imageBase64 };
+  }
+
+  const requestBody = {
+    contents: [{
+      parts: [
+        { inlineData },
+        { text: prompt }
+      ]
+    }],
+    generationConfig: {
+      temperature: 0.1,
+      responseMimeType: "application/json"
+    }
+  };
+
+  const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
+  const response = await fetchWithTimeout(`${apiUrl}?key=${GEMINI_API_KEY}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(requestBody)
+  }, 30000);
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error?.message || 'Failed to extract traits');
+  }
+
+  const textResp = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!textResp) return null;
+
+  try {
+    const cleanJson = textResp.replace(/```json/g, '').replace(/```/g, '').trim();
+    return JSON.parse(cleanJson);
+  } catch (e) {
+    console.error("Failed to parse extracted traits JSON", e);
+    return null;
+  }
+}
+
 module.exports = {
+  extractCharacterVisualTraits,
   callGemini,
   parseGeminiJSON,
   generateCampaignSuggestions,

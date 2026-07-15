@@ -255,22 +255,51 @@ const ContentCalendar: React.FC = () => {
 
   
 
-  if (showWeeklyDrafts) {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between border-b pb-4 border-slate-800">
-          <div>
-            <h2 className={`text-xl font-bold ${theme.text}`}>Week {getActiveWeekNumber()} Drafts</h2>
-            <p className={`text-xs ${theme.textMuted} mt-1`}>Review the drafts generated from your weekly content calendar.</p>
-          </div>
-          <button
-            onClick={() => setShowWeeklyDrafts(false)}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm border font-semibold ${isDarkMode ? 'border-slate-750 hover:bg-slate-800 text-slate-350' : 'border-slate-250 hover:bg-slate-50 text-slate-650'}`}
-          >
-            ← Back to Calendar
-          </button>
-        </div>
+  return (
+    <div className="space-y-6 animate-in fade-in duration-300">
+      <button onClick={() => setViewMode('list')} className="mb-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#ffcc29] text-black hover:bg-[#e6b825] transition-colors shadow-sm">
+        ← Back to Plans
+      </button>
 
+      {/* Tabs Navigation */}
+      <div className={`flex items-center gap-6 border-b px-2 mb-6 ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
+        <button
+          onClick={() => setActiveDetailTab('calendar')}
+          className={`pb-3 text-sm font-bold border-b-2 transition-colors ${activeDetailTab === 'calendar' ? 'border-[#ffcc29] text-[#ffcc29]' : 'border-transparent ' + theme.textSecondary + ' hover:' + theme.text}`}
+        >
+          Calendar View
+        </button>
+        <button
+          onClick={() => setActiveDetailTab('planning')}
+          className={`pb-3 text-sm font-bold border-b-2 transition-colors ${activeDetailTab === 'planning' ? 'border-[#ffcc29] text-[#ffcc29]' : 'border-transparent ' + theme.textSecondary + ' hover:' + theme.text}`}
+        >
+          Content Planning
+        </button>
+        <button
+          onClick={() => {
+            setActiveDetailTab('drafts');
+            loadWeeklyDrafts();
+          }}
+          className={`pb-3 text-sm font-bold border-b-2 transition-colors ${activeDetailTab === 'drafts' ? 'border-[#ffcc29] text-[#ffcc29]' : 'border-transparent ' + theme.textSecondary + ' hover:' + theme.text}`}
+        >
+          Weekly Drafts
+        </button>
+      </div>
+
+      {activeDetailTab === 'planning' && (
+        <div className="mt-4">
+          <StrategyDocumentView calendar={calendar} onBack={() => setActiveDetailTab('calendar')} />
+        </div>
+      )}
+
+      {activeDetailTab === 'drafts' && (
+        <div className="space-y-6 mt-4">
+          <div className="flex items-center justify-between border-b pb-4 border-slate-800">
+            <div>
+              <h2 className={`text-xl font-bold ${theme.text}`}>Week {getActiveWeekNumber()} Drafts</h2>
+              <p className={`text-xs ${theme.textMuted} mt-1`}>Review the drafts generated from your weekly content calendar.</p>
+            </div>
+          </div>
         {loadingWeeklyDrafts ? (
           <div className="py-20 flex flex-col items-center justify-center gap-3">
             <Loader2 className="w-8 h-8 animate-spin text-[#ffcc29]" />
@@ -357,56 +386,6 @@ const ContentCalendar: React.FC = () => {
             ))}
           </div>
         )}
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-6 animate-in fade-in duration-300">
-      <button onClick={() => setViewMode('list')} className="mb-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#ffcc29] text-black hover:bg-[#e6b825] transition-colors shadow-sm">
-        ← Back to Plans
-      </button>
-
-      {/* Tabs Navigation */}
-      <div className={`flex items-center gap-6 border-b px-2 mb-6 ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
-        <button
-          onClick={() => setActiveDetailTab('calendar')}
-          className={`pb-3 text-sm font-bold border-b-2 transition-colors ${activeDetailTab === 'calendar' ? 'border-[#ffcc29] text-[#ffcc29]' : 'border-transparent ' + theme.textSecondary + ' hover:' + theme.text}`}
-        >
-          Calendar View
-        </button>
-        <button
-          onClick={() => setActiveDetailTab('planning')}
-          className={`pb-3 text-sm font-bold border-b-2 transition-colors ${activeDetailTab === 'planning' ? 'border-[#ffcc29] text-[#ffcc29]' : 'border-transparent ' + theme.textSecondary + ' hover:' + theme.text}`}
-        >
-          Content Planning
-        </button>
-        <button
-          onClick={() => {
-            setActiveDetailTab('drafts');
-            loadWeeklyDrafts();
-          }}
-          className={`pb-3 text-sm font-bold border-b-2 transition-colors ${activeDetailTab === 'drafts' ? 'border-[#ffcc29] text-[#ffcc29]' : 'border-transparent ' + theme.textSecondary + ' hover:' + theme.text}`}
-        >
-          Weekly Drafts
-        </button>
-      </div>
-
-      {activeDetailTab === 'planning' && (
-        <div className="mt-4">
-          <StrategyDocumentView calendar={calendar} onBack={() => setActiveDetailTab('calendar')} />
-        </div>
-      )}
-
-      {activeDetailTab === 'drafts' && (
-        <div className="space-y-6 mt-4">
-          <div className="flex items-center justify-between border-b pb-4 border-slate-800">
-            <div>
-              <h2 className={`text-xl font-bold ${theme.text}`}>Week {getActiveWeekNumber()} Drafts</h2>
-              <p className={`text-xs ${theme.textMuted} mt-1`}>Review the drafts generated from your weekly content calendar.</p>
-            </div>
-          </div>
-          
         </div>
       )}
 
