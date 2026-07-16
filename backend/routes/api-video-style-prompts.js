@@ -11,6 +11,7 @@
 const express = require('express');
 const {
   generateScenePrompts,
+  generateStyledPrompts,
   styleDefinitions
 } = require('../services/video-style-prompt-engineering');
 
@@ -34,11 +35,12 @@ const router = express.Router();
  *   success: true,
  *   videoStyle: "Cinematic Commercial",
  *   totalDuration: 30,
+ *   promptText: "...",
  *   scenes: [
  *     {
  *       sceneNumber: 1,
  *       title: "Opening Hook",
- *       duration: 6,
+ *       durationSeconds: 6,
  *       imagePrompt: "...",
  *       videoPrompt: "...",
  *       audioStyle: "...",
@@ -84,6 +86,15 @@ router.post('/generateVideoStylePrompts', async (req, res) => {
     // Calculate duration per scene (flexible)
     const baseDurationPerScene = Math.floor(duration / sceneCount);
     
+    // Generate overall styled prompts
+    const overallPrompts = generateStyledPrompts(
+      description,
+      videoStyle,
+      characterName,
+      productName
+    );
+    const combinedPromptText = `${overallPrompts.videoPrompt}\n\nAudio:\n${overallPrompts.audioPrompt}`;
+
     // Generate scene prompts
     const generatedScenes = generateScenePrompts(
       description,
@@ -106,10 +117,10 @@ router.post('/generateVideoStylePrompts', async (req, res) => {
 
       return {
         sceneNumber: scene.sceneNumber || index + 1,
-        title: scene.type,
+        title: scene.sceneType || scene.title || `Scene ${index + 1}`,
         sceneType: scene.sceneType,
         description: scene.description || '',
-        duration: sceneDuration,
+        durationSeconds: sceneDuration,
         setting: scene.setting,
         focus: scene.focus,
         emphasis: scene.emphasis,
@@ -126,7 +137,7 @@ router.post('/generateVideoStylePrompts', async (req, res) => {
         
         // CAMERA DIRECTIONS - for cinematography reference
         cameraDirections: {
-          angles: scene.type ? styleDefinitions[videoStyle].cameraAngles : 'Professional framing',
+          angles: scene.sceneType ? styleDefinitions[videoStyle].cameraAngles : 'Professional framing',
           lighting: scene.lighting || styleDefinitions[videoStyle].colorGrade,
           movement: styleDefinitions[videoStyle].pacing,
           characterActions: scene.characterAction,
@@ -136,7 +147,7 @@ router.post('/generateVideoStylePrompts', async (req, res) => {
     });
 
     // Calculate total generated duration
-    const totalGeneratedDuration = enhancedScenes.reduce((sum, scene) => sum + scene.duration, 0);
+    const totalGeneratedDuration = enhancedScenes.reduce((sum, scene) => sum + scene.durationSeconds, 0);
 
     const response = {
       success: true,
@@ -150,6 +161,7 @@ router.post('/generateVideoStylePrompts', async (req, res) => {
         sceneCount: sceneCount,
         generatedAt: new Date().toISOString()
       },
+      promptText: combinedPromptText,
       scenes: enhancedScenes,
       
       // Summary for quick reference
