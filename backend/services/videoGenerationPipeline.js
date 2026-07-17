@@ -1134,7 +1134,10 @@ async function generateSceneImages({
             const nanoResult = await generateCampaignImageNanoBanana(promptWithConsistency, {
               aspectRatio: '16:9', // default for video
               characterReferenceImage: imageData,
-              isCinematic: true
+              isCinematic: true,
+              brandName: input.useLogo !== false ? String(profile.name || '') : undefined,
+              industry: input.useLogo !== false ? String(profile.industry || '') : undefined,
+              tone: input.useLogo !== false ? String(profile.brandVoice || 'professional') : undefined,
             });
             
             if (nanoResult && (nanoResult.imageUrl || typeof nanoResult === 'string')) {
@@ -1147,9 +1150,9 @@ async function generateSceneImages({
           // Fallback to NanoBanana if no character image is provided
           const result = await generateCampaignImageNanoBanana(promptWithConsistency, {
             aspectRatio: '9:16',
-            brandName: String(profile.name || ''),
-            industry: String(profile.industry || ''),
-            tone: String(profile.brandVoice || 'professional'),
+            brandName: input.useLogo !== false ? String(profile.name || '') : undefined,
+            industry: input.useLogo !== false ? String(profile.industry || '') : undefined,
+            tone: input.useLogo !== false ? String(profile.brandVoice || 'professional') : undefined,
             originalCharacterImage: input.characterEnabled ? input.originalCharacterImage : undefined,
             characterReferenceImage: (input.characterEnabled && input.characterImage) ? input.characterImage : undefined,
             previousSceneImage: previousSceneImageUrl || undefined,

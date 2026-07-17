@@ -1498,12 +1498,15 @@ router.post('/generateImages', protect, checkTrial, videoAiWriteLimiter, async (
           characterName: req.body.characterName || draft?.characterName || undefined,
           videoStyle: req.body.videoStyle || draft?.videoStyle || undefined,
           characterEnabled: draft?.characterEnabled,
+          characterImage: draft?.characterImage,
+          originalCharacterImage: draft?.originalCharacterImage,
           preserveIdentity: draft?.preserveIdentity,
           characterConsistencyStrength: draft?.characterConsistencyStrength,
           characterRace: draft?.characterRace,
           characterBeard: draft?.characterBeard,
           characterAge: draft?.characterAge,
-          characterGender: draft?.characterGender
+          characterGender: draft?.characterGender,
+          useLogo: req.body.useLogo !== undefined ? req.body.useLogo : (draft?.useLogo !== undefined ? draft.useLogo : true)
         },
         user: req.user,
         baseUrl

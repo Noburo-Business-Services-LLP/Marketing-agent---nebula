@@ -136,6 +136,7 @@ const ReelGenerator: React.FC = () => {
   const [characterHairStyle, setCharacterHairStyle] = useState('');
   const [videoStyle, setVideoStyle] = useState('Cinematic Commercial');
   const [preserveIdentity, setPreserveIdentity] = useState(true);
+  const [useLogo, setUseLogo] = useState(true);
   const [characterUsage, setCharacterUsage] = useState('Main Character in all scenes');
   const [characterConsistencyStrength, setCharacterConsistencyStrength] = useState('Strict');
   const [previewImageModal, setPreviewImageModal] = useState<string | null>(null);
@@ -762,41 +763,43 @@ setCharacterAge(nextDraft?.characterAge || '');
 
   const generatePromptAndScenes = async () => withBusy(async () => {
     if (!jobId) throw new Error('Draft missing. Complete step 1 first.');
-    let currentPrompt = promptText;
 
-    if (!currentPrompt) {
-      const promptResponse = await videoGenerationAPI.generatePrompt({ jobId });
-      if (!promptResponse?.success) {
-        throw new Error(promptResponse?.message || 'Prompt generation failed');
-      }
-      currentPrompt = promptResponse.draft?.prompt?.structuredPrompt || promptResponse.draft?.prompt?.promptText || '';
-      setPromptText(currentPrompt);
-      setDraft(promptResponse.draft || draft);
-    }
-
-    const sceneResponse = await videoGenerationAPI.generateScenes({
-      jobId,
-      promptText: currentPrompt || undefined,
-      async: true
+    // Use the new Video Style-Aware Prompt Engineering system
+    const response = await videoGenerationAPI.generateVideoStylePrompts({
+      description: description,
+      videoStyle: videoStyle || 'Cinematic Commercial',
+      characterName: characterName || 'Character',
+      sceneCount: sceneCount || 5,
+      productName: selectedProduct?.name || undefined,
+      duration: durationSeconds || 30
     });
 
-    const queueJobId = sceneResponse?.queueJobId;
-    if (queueJobId) {
-      await pollJob(queueJobId, async (result) => {
-        setScenes(result.sceneData || []);
-        if (result.draft?.prompt?.promptText) {
-          setPromptText(result.draft.prompt.promptText);
-        }
-        setDraft(result.draft || draft);
-      });
-      return;
+    if (!response?.success) {
+      throw new Error(response?.message || 'Style-aware scene generation failed');
     }
 
-    if (!sceneResponse?.success) {
-      throw new Error(sceneResponse?.message || 'Scene generation failed');
+    setScenes(response.scenes || []);
+    if (response.promptText) {
+      setPromptText(response.promptText);
     }
-    setScenes(sceneResponse.sceneData || []);
-    setDraft(sceneResponse.draft || draft);
+    
+    // Save generated scenes to the draft immediately so they persist
+    const saveResponse = await videoGenerationAPI.generateScenes({
+      jobId,
+      sceneData: response.scenes,
+      saveOnly: true
+    });
+    
+    // Save promptText to the draft as well
+    if (response.promptText) {
+      await videoGenerationAPI.generatePrompt({
+        jobId,
+        promptText: response.promptText,
+        saveOnly: true
+      });
+    }
+    
+    setDraft(saveResponse?.draft || draft);
   });
 
   const saveStep2EditsAndNext = async () => withBusy(async () => {
@@ -832,7 +835,8 @@ setCharacterAge(nextDraft?.characterAge || '');
       async: true,
       characterImageBase64: characterImage,
       characterName,
-      videoStyle
+      videoStyle,
+      useLogo
     };
     console.log('📤 Sending payload to backend:', payload);
 
@@ -872,7 +876,8 @@ setCharacterAge(nextDraft?.characterAge || '');
         imagePrompt: scene.imagePrompt,
         characterImageBase64: characterImage,
         characterName,
-        videoStyle
+        videoStyle,
+        useLogo
       };
       console.log('📤 Sending payload to backend:', payload);
 
@@ -1606,7 +1611,7 @@ setCharacterAge(nextDraft?.characterAge || '');
               <div className="flex items-center justify-between mb-4">
                 <h2 className={`text-xl font-bold ${theme.text}`}>Character & Video Style Configuration</h2>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="flex items-center justify-between p-4 rounded-xl border border-slate-200 dark:border-slate-800">
                   <span className={theme.text}>Use Character in Video</span>
                   <button
@@ -1624,6 +1629,15 @@ setCharacterAge(nextDraft?.characterAge || '');
                     disabled={!characterEnabled}
                   >
                     {preserveIdentity ? <ToggleRight className="w-8 h-8" /> : <ToggleLeft className="w-8 h-8" />}
+                  </button>
+                </div>
+                <div className="flex items-center justify-between p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+                  <span className={theme.text}>Include Brand Logo</span>
+                  <button
+                    onClick={() => setUseLogo(!useLogo)}
+                    className={`flex-shrink-0 transition-colors ${useLogo ? 'text-[#ffcc29]' : theme.textMuted}`}
+                  >
+                    {useLogo ? <ToggleRight className="w-8 h-8" /> : <ToggleLeft className="w-8 h-8" />}
                   </button>
                 </div>
               </div>
@@ -1927,24 +1941,26 @@ setCharacterAge(nextDraft?.characterAge || '');
                           </button>
                         </div>
 
-                        <div>
-                          <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Title</label>
-                          <input value={scene.title || ''} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, title: e.target.value } : item))} className={`${inputClass} mt-1`} disabled={isRegen} />
-                        </div>
+                        <div className="flex gap-4">
+                          <div className="flex-1">
+                            <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Title</label>
+                            <input value={scene.title || ''} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, title: e.target.value } : item))} className={`${inputClass} mt-1`} disabled={isRegen} />
+                          </div>
 
-                        <div>
-                          <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Duration (seconds)</label>
-                          <input type="number" min={1} value={scene.durationSeconds || 1} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, durationSeconds: Number(e.target.value) || 1 } : item))} className={`${inputClass} mt-1`} disabled={isRegen} />
+                          <div className="w-1/3">
+                            <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Duration (sec)</label>
+                            <input type="number" min={1} value={scene.durationSeconds || 1} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, durationSeconds: Number(e.target.value) || 1 } : item))} className={`${inputClass} mt-1`} disabled={isRegen} />
+                          </div>
                         </div>
 
                         <div>
                           <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Image Prompt</label>
-                          <textarea value={scene.imagePrompt || ''} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, imagePrompt: e.target.value } : item))} className={`${inputClass} mt-1 min-h-[70px]`} placeholder="Describe the visual for the still image" disabled={isRegen} />
+                          <textarea value={scene.imagePrompt || ''} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, imagePrompt: e.target.value } : item))} className={`${inputClass} mt-1 min-h-[130px] max-h-[300px] overflow-y-auto resize-y`} placeholder="Describe the visual for the still image" disabled={isRegen} />
                         </div>
 
                         <div>
                           <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Video Prompt</label>
-                          <textarea value={scene.videoPrompt || ''} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, videoPrompt: e.target.value } : item))} className={`${inputClass} mt-1 min-h-[70px]`} placeholder="Describe the motion / animation for the clip" disabled={isRegen} />
+                          <textarea value={scene.videoPrompt || ''} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, videoPrompt: e.target.value } : item))} className={`${inputClass} mt-1 min-h-[130px] max-h-[300px] overflow-y-auto resize-y`} placeholder="Describe the motion / animation for the clip" disabled={isRegen} />
                         </div>
 
                         {isRegen && (

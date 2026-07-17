@@ -3302,6 +3302,20 @@ export const inventoryAPI = {
 // AI Video Generation API
 // ================================
 export const videoGenerationAPI = {
+  generateVideoStylePrompts: async (payload: {
+    description: string;
+    videoStyle: string;
+    characterName: string;
+    sceneCount: number;
+    productName?: string;
+    duration?: number;
+  }): Promise<any> => {
+    return apiCall('/generateVideoStylePrompts', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }, true);
+  },
+
   createVideo: async (payload: {
     description: string;
     durationSeconds: number;

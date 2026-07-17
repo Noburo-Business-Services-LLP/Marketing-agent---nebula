@@ -98,6 +98,7 @@ const aiMemoryRoutes = require('./routes/aiMemory');
 const influencerRoutes = require('./routes/influencerRoutes');
 const collaborationRoutes = require('./routes/collaborationRoutes');
 const submissionRoutes = require('./routes/submissionRoutes');
+const videoStylePromptRoutes = require('./routes/api-video-style-prompts');
 const influencerAnalyticsRoutes = require('./routes/analyticsRoutes');
 
 // Admin routes
@@ -434,6 +435,7 @@ app.use('/api/influencers', influencerRoutes);
 app.use('/api/collaborations', collaborationRoutes);
 app.use('/api/submissions', submissionRoutes);
 app.use('/api/drafts', draftRoutes);
+app.use('/api', videoStylePromptRoutes);
 
 // Health check endpoint (handled before rate limiter above)
 
