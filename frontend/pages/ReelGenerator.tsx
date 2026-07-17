@@ -34,12 +34,10 @@ const WIZARD_STEPS = [
   'Prompt + Scenes',
   'Scene Images',
   'Video Clips',
-  'Audio Config',
-  'Audio Mix',
+  'Audio Config & Mix',
   'Video Merge',
   'Thumbnail + Content',
-  'Platform Select',
-  'Scheduling',
+  'Platform Select & Scheduling',
   'Final Output'
 ];
 
@@ -146,6 +144,7 @@ const ReelGenerator: React.FC = () => {
 
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [audioMode, setAudioMode] = useState<AudioMode>('auto');
+  const [audioPriority, setAudioPriority] = useState<'voice' | 'balanced' | 'music'>('balanced');
   const [audioTone, setAudioTone] = useState('professional');
   const [audioLanguageCode, setAudioLanguageCode] = useState('en');
   // TEMP (testing): allow selecting server music library by duration bucket.
@@ -613,6 +612,7 @@ setCharacterAge(nextDraft?.characterAge || '');
   const buildAudioPayload = (overrides: Record<string, any> = {}) => ({
     enabled: audioEnabled,
     mode: audioEnabled ? audioMode : 'off',
+    audioPriority,
     languageCode: audioLanguageCode,
     tone: audioTone,
     musicSource,
@@ -977,7 +977,7 @@ setCharacterAge(nextDraft?.characterAge || '');
       await pollJob(queueJobId, async (result) => {
         setGeneratedTracks(result?.audio?.tracks || null);
         setDraft(result?.draft || draft);
-        setStep(7);
+        /* stay on step 6 */
       });
       return;
     }
@@ -985,7 +985,7 @@ setCharacterAge(nextDraft?.characterAge || '');
     if (!response?.success) throw new Error(response?.message || 'Audio generation failed');
     setGeneratedTracks(response?.audio?.tracks || null);
     setDraft(response?.draft || draft);
-    setStep(7);
+    /* stay on step 6 */
   });
 
   const mixAudio = async () => withBusy(async () => {
@@ -1074,7 +1074,7 @@ setCharacterAge(nextDraft?.characterAge || '');
     setSuccessMessage(response?.message || (publishNow ? 'Post queued for immediate publish.' : 'Post scheduled successfully.'));
     setStatusFilter(publishNow ? 'posted' : 'scheduled');
     // Keep wizard open and land on Final Output so user can see the rendered video
-    setStep(12);
+    setStep(10);
   });
 
   const togglePlatform = (platform: string) => {
@@ -1403,7 +1403,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                   const active = stepNo === step;
                   const done = stepNo < step;
                   // Step 11 (Final Output) is also reachable any time the final video has been rendered
-                  const finalReady = stepNo === 11 && !!(finalOutputUrl || finalVideoUrl);
+                  const finalReady = stepNo === 10 && !!(finalOutputUrl || finalVideoUrl);
                   const clickable = done || finalReady;
                   return (
                     <button
@@ -2075,158 +2075,220 @@ setCharacterAge(nextDraft?.characterAge || '');
             )}
 
             {step === 6 && (
-              <div className={`${panelClass} p-6 space-y-4`}>
-                <h2 className={`font-bold text-lg ${theme.text}`}>Step 5: Audio Configuration</h2>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Audio</label>
-                    <button type="button" onClick={() => setAudioEnabled((v) => !v)} className={`${inputClass} mt-2 text-left`}>
-                      {audioEnabled ? 'ON' : 'OFF'}
-                    </button>
-                  </div>
-                  <div>
-                    <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Voice Mode</label>
-                    <select value={audioMode} onChange={(e) => setAudioMode(e.target.value as AudioMode)} className={`${inputClass} mt-2`} disabled={!audioEnabled}>
-                      <option value="auto">TTS</option>
-                      <option value="upload">Upload Voice</option>
-                      <option value="off">No Voice</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Music</label>
-                    <select value={audioTone} onChange={(e) => setAudioTone(e.target.value)} className={`${inputClass} mt-2`} disabled={!audioEnabled}>
-                      <option value="professional">Professional</option>
-                      <option value="normal">Normal</option>
-                      <option value="fun">Fun</option>
-                      <option value="luxury">Luxury</option>
-                      <option value="simple">Simple</option>
-                    </select>
-                  </div>
+              <div className={`${panelClass} p-6 space-y-6`}>
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                  <h2 className={`font-bold text-xl ${theme.text}`}>Step 5: Audio Config & Mix</h2>
                 </div>
 
-                {audioEnabled && (
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div>
-                      <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Language</label>
-                      <select value={audioLanguageCode} onChange={(e) => setAudioLanguageCode(e.target.value)} className={`${inputClass} mt-2`}>
-                        <option value="en">English</option>
-                        <option value="hi">Hindi</option>
-                        <option value="ta">Tamil</option>
-                        <option value="te">Telugu</option>
-                        <option value="kn">Kannada</option>
-                        <option value="ml">Malayalam</option>
-                      </select>
+                <div className="space-y-6">
+                    {/* Audio Priority Mode */}
+                    <div className={`${isDarkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-slate-50 border-slate-200'} border rounded-2xl p-5`}>
+                      <div className="mb-4">
+                        <h3 className={`font-bold text-sm uppercase tracking-wider ${theme.text}`}>Audio Priority (Mixing Mode)</h3>
+                        <p className={`text-xs mt-1 ${theme.textSecondary}`}>Choose how the background music should behave when the AI voice is speaking.</p>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        {['voice', 'balanced', 'music'].map(mode => (
+                          <button
+                            key={mode}
+                            onClick={() => {
+                              setAudioPriority(mode as any);
+                              if (mode === 'voice') { setVoiceVolume(1.0); setMusicVolume(0.25); }
+                              if (mode === 'balanced') { setVoiceVolume(0.9); setMusicVolume(0.45); }
+                              if (mode === 'music') { setVoiceVolume(0.75); setMusicVolume(0.70); }
+                            }}
+                            className={`px-4 py-4 rounded-xl border text-sm flex flex-col items-center gap-1.5 transition-all ${
+                              audioPriority === mode 
+                                ? 'bg-[#ffcc29]/10 border-[#ffcc29] text-[#ffcc29] shadow-[0_0_15px_rgba(255,204,41,0.15)]' 
+                                : isDarkMode ? 'bg-slate-800/50 border-slate-700/50 text-slate-400 hover:border-slate-600' : 'bg-white border-slate-300 text-slate-600'
+                            }`}
+                          >
+                            <span className="font-bold tracking-wide uppercase text-xs">{mode === 'voice' ? '🎤 Voice Priority' : mode === 'balanced' ? '⚖️ Balanced Mix' : '🎵 Music Priority'}</span>
+                            <span className="text-[10px] opacity-70 font-medium">
+                              {mode === 'voice' ? 'Loud voice, heavy music ducking' : mode === 'balanced' ? 'Equal blend, standard ducking' : 'Loud music, light ducking'}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                    <div>
-                      <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Music Source (Test)</label>
-                      <select
-                        value={musicSource}
-                        onChange={(e) => setMusicSource(e.target.value as 'tone' | 'library')}
-                        className={`${inputClass} mt-2`}
-                      >
-                        <option value="library">Library (by duration)</option>
-                        <option value="tone">Tone Pack (default)</option>
-                      </select>
-                      <p className={`text-[11px] mt-1 ${theme.textSecondary}`}>
-                        Uses backend `music/{durationSeconds}s` when Library is selected.
-                      </p>
-                    </div>
-                    <div>
-                      <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Voice</label>
-                      <select value={voiceGender} onChange={(e) => setVoiceGender(e.target.value as 'male' | 'female')} className={`${inputClass} mt-2`}>
-                        <option value="female">Female</option>
-                        <option value="male">Male</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Voice Volume</label>
-                      <input type="range" min={0} max={2} step={0.1} value={voiceVolume} onChange={(e) => setVoiceVolume(Number(e.target.value))} className="mt-3 w-full" />
-                    </div>
-                    <div>
-                      <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Music Volume</label>
-                      <input type="range" min={0} max={2} step={0.1} value={musicVolume} onChange={(e) => setMusicVolume(Number(e.target.value))} className="mt-3 w-full" />
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                      {/* Voice Settings */}
+                      <div className={`${isDarkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-slate-50 border-slate-200'} border rounded-2xl p-5 space-y-5`}>
+                        <div className="flex items-center justify-between border-b border-slate-800/50 pb-3">
+                          <h3 className={`font-bold text-sm uppercase tracking-wider ${theme.text}`}>Voice Settings</h3>
+                        </div>
+                        
+                        <div>
+                          <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Voice Source</label>
+                          <select value={audioMode} onChange={(e) => setAudioMode(e.target.value as AudioMode)} className={`${inputClass} mt-1.5 w-full`}>
+                            <option value="auto">AI Text-to-Speech (Recommended)</option>
+                            <option value="upload">Upload Custom Voice</option>
+                            <option value="off">No Voice (Music Only)</option>
+                          </select>
+                        </div>
+
+                        {audioMode === 'auto' && (
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Language</label>
+                              <select value={audioLanguageCode} onChange={(e) => setAudioLanguageCode(e.target.value)} className={`${inputClass} mt-1.5 w-full`}>
+                                <option value="en">English</option>
+                                <option value="hi">Hindi</option>
+                                <option value="ta">Tamil</option>
+                                <option value="te">Telugu</option>
+                                <option value="kn">Kannada</option>
+                                <option value="ml">Malayalam</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Gender</label>
+                              <select value={voiceGender} onChange={(e) => setVoiceGender(e.target.value as 'male' | 'female')} className={`${inputClass} mt-1.5 w-full`}>
+                                <option value="female">Female</option>
+                                <option value="male">Male</option>
+                              </select>
+                            </div>
+                          </div>
+                        )}
+
+                        {audioMode === 'upload' && (
+                          <div className="space-y-3 p-3 bg-slate-950/30 rounded-xl border border-slate-800/50">
+                            <input type="file" accept="audio/*" onChange={(e) => onManualVoiceUpload(e.target.files?.[0])} className="text-xs w-full text-slate-300" />
+                            <div className="flex gap-2 pt-2">
+                              {!isRecording ? (
+                                <button onClick={startVoiceRecording} className="px-3 py-2 rounded-lg border border-slate-600 bg-slate-800 text-slate-200 text-xs w-full font-semibold transition-colors hover:bg-slate-700">
+                                  <Mic className="w-3.5 h-3.5 inline mr-1" /> Record Audio
+                                </button>
+                              ) : (
+                                <button onClick={stopVoiceRecording} className="px-3 py-2 rounded-lg border border-red-500/50 bg-red-500/10 text-red-400 text-xs w-full animate-pulse font-semibold">
+                                  Stop Recording
+                                </button>
+                              )}
+                            </div>
+                            {manualVoiceName && <p className={`text-[10px] font-medium text-emerald-400 break-all`}>{manualVoiceName}</p>}
+                          </div>
+                        )}
+
+                        {audioMode !== 'off' && (
+                           <div className="pt-2">
+                             <div className="flex justify-between items-end mb-2">
+                               <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Voice Volume Level</label>
+                               <span className={`text-xs font-bold px-2 py-0.5 bg-slate-800 rounded text-slate-300`}>{Math.round(voiceVolume * 100)}%</span>
+                             </div>
+                             <input type="range" min={0} max={2} step={0.1} value={voiceVolume} onChange={(e) => { setVoiceVolume(Number(e.target.value)); setAudioPriority('' as any); }} className="w-full accent-[#ffcc29]" />
+                           </div>
+                        )}
+                      </div>
+
+                      {/* Music Settings */}
+                      <div className={`${isDarkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-slate-50 border-slate-200'} border rounded-2xl p-5 space-y-5`}>
+                        <div className="flex items-center justify-between border-b border-slate-800/50 pb-3">
+                          <h3 className={`font-bold text-sm uppercase tracking-wider ${theme.text}`}>Background Music</h3>
+                        </div>
+                        
+                        <div>
+                          <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Music Track Selection</label>
+                          <select value={musicSource} onChange={(e) => setMusicSource(e.target.value as 'tone' | 'library')} className={`${inputClass} mt-1.5 w-full`}>
+                            <option value="tone">AI Smart Tone (Auto-select)</option>
+                            <option value="library">Manual Library Search</option>
+                          </select>
+                        </div>
+
+                        {musicSource === 'tone' ? (
+                          <div>
+                            <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Video Mood / Tone</label>
+                            <select value={audioTone} onChange={(e) => setAudioTone(e.target.value)} className={`${inputClass} mt-1.5 w-full`}>
+                              <option value="professional">Professional / Corporate</option>
+                              <option value="normal">Normal / Neutral</option>
+                              <option value="fun">Fun / Upbeat</option>
+                              <option value="luxury">Luxury / Premium</option>
+                              <option value="simple">Simple / Minimalist</option>
+                            </select>
+                          </div>
+                        ) : (
+                          <div>
+                            <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Custom Track Name</label>
+                            <input value={musicTrack} onChange={(e) => setMusicTrack(e.target.value)} placeholder="Leave empty for auto-pick" className={`${inputClass} mt-1.5 w-full`} />
+                          </div>
+                        )}
+
+                        <div className="pt-2">
+                          <div className="flex justify-between items-end mb-2">
+                            <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Music Volume Level</label>
+                            <span className={`text-xs font-bold px-2 py-0.5 bg-slate-800 rounded text-slate-300`}>{Math.round(musicVolume * 100)}%</span>
+                          </div>
+                          <input type="range" min={0} max={2} step={0.1} value={musicVolume} onChange={(e) => { setMusicVolume(Number(e.target.value)); setAudioPriority('' as any); }} className="w-full accent-[#ffcc29]" />
+                        </div>
+                      </div>
                     </div>
                   </div>
-                )}
 
-                {audioEnabled && musicSource === 'library' && (
-                  <div className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3`}>
-                    <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Music Track (Optional)</label>
-                    <input
-                      value={musicTrack}
-                      onChange={(e) => setMusicTrack(e.target.value)}
-                      placeholder="e.g. sonican-tropical-30-seconds-514742.mp3"
-                      className={`${inputClass} mt-2 w-full`}
-                    />
-                    <p className={`text-[11px] mt-1 ${theme.textSecondary}`}>
-                      Leave empty to auto-pick a track for this video duration.
-                    </p>
-                  </div>
-                )}
-
-                {audioEnabled && audioMode === 'upload' && (
-                  <div className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3 space-y-3`}>
-                    <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Upload Voice / Record Voice</label>
-                    <input type="file" accept="audio/*" onChange={(e) => onManualVoiceUpload(e.target.files?.[0])} className="text-sm" />
-                    <div className="flex gap-2">
-                      {!isRecording ? (
-                        <button onClick={startVoiceRecording} className="px-3 py-2 rounded-lg border border-slate-500 text-slate-200 text-sm">
-                          <Mic className="w-4 h-4 inline mr-1" /> Start Recording
-                        </button>
-                      ) : (
-                        <button onClick={stopVoiceRecording} className="px-3 py-2 rounded-lg border border-red-500 text-red-300 text-sm">
-                          Stop Recording
-                        </button>
-                      )}
-                    </div>
-                    {manualVoiceName && <p className={`text-xs ${theme.textSecondary}`}>{manualVoiceName}</p>}
-                  </div>
-                )}
-
-                <div className="flex flex-wrap gap-3">
-                  <button onClick={generateAudioPreview} disabled={!canAudioPreview} className="px-4 py-2 rounded-xl border border-[#ffcc29] text-[#ffcc29] font-semibold disabled:opacity-60">
-                    {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Generate Audio Preview'}
-                  </button>
-                  <button onClick={mixAudio} disabled={busy || !generatedTracks} className="px-4 py-2 rounded-xl border border-slate-500 text-slate-300 font-semibold disabled:opacity-60">
-                    Mix Preview
-                  </button>
-                  <button onClick={generateAudioTracks} disabled={!canStep5Next} className={primaryButtonClass(!canStep5Next)}>
-                    {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Next'}
+                {/* 1. Generate Audio Action */}
+                <div className="pt-6 border-t border-slate-800/50">
+                  <button onClick={generateAudioPreview} disabled={!canAudioPreview} className="px-6 py-3 w-full md:w-auto rounded-xl border border-[#ffcc29] text-[#ffcc29] font-bold text-sm transition-all hover:bg-[#ffcc29]/10 disabled:opacity-50">
+                    {busy ? <Loader2 className="w-4 h-4 animate-spin inline mr-2" /> : '1. Generate Audio'}
                   </button>
                 </div>
 
-                {(generatedTracks?.voiceUrl || generatedTracks?.backgroundUrl || generatedTracks?.manualUrl || finalAudioUrl) && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {/* 2. Raw Previews */}
+                {(generatedTracks?.voiceUrl || generatedTracks?.backgroundUrl || generatedTracks?.manualUrl) && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                     {activeAudioScript && (
-                      <div className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3 md:col-span-2`}>
-                        <p className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Voice Script</p>
-                        <p className={`text-sm mt-2 leading-relaxed whitespace-pre-wrap ${theme.text}`}>{activeAudioScript}</p>
+                      <div className={`${isDarkMode ? 'bg-slate-900/40 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-4 md:col-span-2 shadow-inner`}>
+                        <p className={`text-[11px] font-bold uppercase tracking-wider ${theme.textMuted} mb-2 flex items-center gap-1.5`}>
+                          <span className="w-2 h-2 rounded-full bg-[#ffcc29] inline-block"></span> AI Voice Script
+                        </p>
+                        <p className={`text-sm leading-relaxed whitespace-pre-wrap ${theme.text}`}>{activeAudioScript}</p>
                       </div>
                     )}
+                    
                     {generatedTracks?.voiceUrl && (
-                      <div className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3`}>
-                        <p className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Voice Preview</p>
-                        <audio controls src={generatedTracks.voiceUrl} className="w-full mt-2" />
-                      </div>
-                    )}
-                    {generatedTracks?.backgroundUrl && (
-                      <div className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3`}>
-                        <p className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Music Preview</p>
-                        <audio controls src={generatedTracks.backgroundUrl} className="w-full mt-2" />
+                      <div className={`${isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-4`}>
+                        <p className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted} mb-3`}>Raw Voice Track</p>
+                        <audio controls src={generatedTracks.voiceUrl} className="w-full h-8" />
                       </div>
                     )}
                     {generatedTracks?.manualUrl && (
-                      <div className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3`}>
-                        <p className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Manual Voice Preview</p>
-                        <audio controls src={generatedTracks.manualUrl} className="w-full mt-2" />
+                      <div className={`${isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-4`}>
+                        <p className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted} mb-3`}>Raw Uploaded Voice</p>
+                        <audio controls src={generatedTracks.manualUrl} className="w-full h-8" />
                       </div>
                     )}
-                    {finalAudioUrl && (
-                      <div className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3`}>
-                        <p className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Mixed Preview</p>
-                        <audio controls src={finalAudioUrl} className="w-full mt-2" />
+                    {generatedTracks?.backgroundUrl && (
+                      <div className={`${isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-4`}>
+                        <p className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted} mb-3`}>Raw Music Track</p>
+                        <audio controls src={generatedTracks.backgroundUrl} className="w-full h-8" />
                       </div>
                     )}
+                  </div>
+                )}
+
+                {/* 3. Mix Action */}
+                {(generatedTracks?.voiceUrl || generatedTracks?.backgroundUrl || generatedTracks?.manualUrl) && (
+                  <div className="pt-6 border-t border-slate-800/50 mt-6">
+                    <button onClick={mixAudio} disabled={busy || !generatedTracks} className="px-6 py-3 w-full md:w-auto rounded-xl border border-[#ffcc29] text-[#ffcc29] font-bold text-sm transition-all hover:bg-[#ffcc29]/10 disabled:opacity-50">
+                      2. Mix Preview (Apply Ducking)
+                    </button>
+                  </div>
+                )}
+
+                {/* 4. Final Mixed Preview */}
+                {finalAudioUrl && (
+                  <div className={`${isDarkMode ? 'bg-[#ffcc29]/10 border-[#ffcc29]/30' : 'bg-[#ffcc29]/5 border-[#ffcc29]/20'} border rounded-xl p-5 mt-4 shadow-lg`}>
+                    <div className="flex justify-between items-center mb-4">
+                      <p className={`text-sm font-bold uppercase tracking-wide ${isDarkMode ? 'text-[#ffcc29]' : 'text-yellow-700'}`}>🚀 Final Mixed Output (With Ducking)</p>
+                    </div>
+                    <audio controls src={finalAudioUrl} className="w-full h-10" />
+                  </div>
+                )}
+
+                {/* 5. Next Step Action */}
+                {finalAudioUrl && (
+                  <div className="pt-6 border-t border-slate-800/50 mt-6 flex justify-end">
+                    <button onClick={() => setStep(7)} disabled={!canStep5Next} className={`px-8 py-3 rounded-xl font-bold text-sm transition-all shadow-lg ${canStep5Next ? 'bg-[#ffcc29] text-black hover:bg-[#e6b825] shadow-[#ffcc29]/20' : 'bg-slate-800 text-slate-500'}`}>
+                      Next Step →
+                    </button>
                   </div>
                 )}
               </div>
@@ -2234,57 +2296,12 @@ setCharacterAge(nextDraft?.characterAge || '');
 
             {step === 7 && (
               <div className={`${panelClass} p-6 space-y-4`}>
-                <h2 className={`font-bold text-lg ${theme.text}`}>Step 6: Audio Mixing Preview</h2>
-                {activeAudioScript && (
-                  <div className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3`}>
-                    <p className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Voice Script</p>
-                    <p className={`text-sm mt-2 leading-relaxed whitespace-pre-wrap ${theme.text}`}>{activeAudioScript}</p>
-                  </div>
-                )}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {generatedTracks?.voiceUrl && (
-                    <div className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3`}>
-                      <p className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Voice Preview</p>
-                      <audio controls src={generatedTracks.voiceUrl} className="w-full mt-2" />
-                    </div>
-                  )}
-                  {generatedTracks?.backgroundUrl && (
-                    <div className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3`}>
-                      <p className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Music Preview</p>
-                      <audio controls src={generatedTracks.backgroundUrl} className="w-full mt-2" />
-                    </div>
-                  )}
-                  {generatedTracks?.manualUrl && (
-                    <div className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3`}>
-                      <p className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Manual Voice Preview</p>
-                      <audio controls src={generatedTracks.manualUrl} className="w-full mt-2" />
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                  <button onClick={mixAudio} disabled={busy} className="px-5 py-3 rounded-xl border border-[#ffcc29] text-[#ffcc29] font-semibold disabled:opacity-60">
-                    {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Mix Audio'}
-                  </button>
-                  <button onClick={() => setStep(8)} disabled={!canStep6Next} className={primaryButtonClass(!canStep6Next)}>Next</button>
-                </div>
-                {finalAudioUrl && (
-                  <div className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3`}>
-                    <p className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>final_audio.mp3</p>
-                    <audio controls src={finalAudioUrl} className="w-full mt-2" />
-                  </div>
-                )}
-              </div>
-            )}
-
-            {step === 8 && (
-              <div className={`${panelClass} p-6 space-y-4`}>
                 <h2 className={`font-bold text-lg ${theme.text}`}>Step 7: Video + Audio Merge</h2>
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <button onClick={mergeVideo} disabled={busy} className="px-5 py-3 rounded-xl border border-[#ffcc29] text-[#ffcc29] font-semibold disabled:opacity-60">
                     {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Merge Video + Audio'}
                   </button>
-                  <button onClick={() => setStep(9)} disabled={!canStep7Next} className={primaryButtonClass(!canStep7Next)}>Next</button>
+                  <button onClick={() => setStep(8)} disabled={!canStep7Next} className={primaryButtonClass(!canStep7Next)}>Next</button>
                 </div>
                 {(finalOutputUrl || finalVideoUrl) && (
                   <div>
@@ -2295,7 +2312,7 @@ setCharacterAge(nextDraft?.characterAge || '');
               </div>
             )}
 
-            {step === 9 && (
+            {step === 8 && (
               <div className={`${panelClass} p-6 space-y-4`}>
                 <h2 className={`font-bold text-lg ${theme.text}`}>Step 8: Thumbnail + Content Generation</h2>
                 <button onClick={generateContent} disabled={busy} className="px-4 py-2 rounded-xl border border-[#ffcc29] text-[#ffcc29] font-semibold">
@@ -2323,13 +2340,13 @@ setCharacterAge(nextDraft?.characterAge || '');
                     </div>
                   </div>
                 </div>
-                <button onClick={() => setStep(10)} disabled={!canStep8Next} className={primaryButtonClass(!canStep8Next)}>Next</button>
+                <button onClick={() => setStep(9)} disabled={!canStep8Next} className={primaryButtonClass(!canStep8Next)}>Next</button>
               </div>
             )}
 
-            {step === 10 && (
+            {step === 9 && (
               <div className={`${panelClass} p-6 space-y-4`}>
-                <h2 className={`font-bold text-lg ${theme.text}`}>Step 9: Platform Selection</h2>
+                <h2 className={`font-bold text-lg ${theme.text}`}>Step 9: Platform Selection & Scheduling</h2>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   {['instagram', 'facebook', 'linkedin', 'youtube'].map((platform) => {
                     const active = selectedPlatforms.includes(platform);
@@ -2349,13 +2366,8 @@ setCharacterAge(nextDraft?.characterAge || '');
                     );
                   })}
                 </div>
-                <button onClick={() => setStep(11)} disabled={!canStep9Next} className={primaryButtonClass(!canStep9Next)}>Next</button>
-              </div>
-            )}
-
-            {step === 11 && (
-              <div className={`${panelClass} p-6 space-y-4`}>
-                <h2 className={`font-bold text-lg ${theme.text}`}>Step 10: Scheduling</h2>
+                
+                <h2 className={`font-bold text-lg mt-6 pt-4 border-t ${isDarkMode ? 'border-slate-800' : 'border-slate-200'} ${theme.text}`}>Scheduling</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Date</label>
@@ -2377,7 +2389,7 @@ setCharacterAge(nextDraft?.characterAge || '');
               </div>
             )}
 
-            {step === 12 && (
+            {step === 10 && (
               <div className={`${panelClass} p-6 space-y-4`}>
                 <h2 className={`font-bold text-lg ${theme.text}`}>Final Step: Output</h2>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

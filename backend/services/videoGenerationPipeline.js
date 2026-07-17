@@ -388,9 +388,29 @@ function normalizeAudioOptions(raw = {}) {
     mode = enabled ? 'auto' : 'off';
   }
 
+  const priority = String(raw?.audioPriority || 'balanced').toLowerCase();
+  let voiceVolume = Number.isFinite(Number(raw?.voiceVolume)) ? Number(raw.voiceVolume) : undefined;
+  let musicVolume = Number.isFinite(Number(raw?.musicVolume)) ? Number(raw.musicVolume) : undefined;
+  let duckingFactor = 0.5;
+
+  if (priority === 'voice') {
+    if (voiceVolume === undefined) voiceVolume = 1.0;
+    if (musicVolume === undefined) musicVolume = 0.25;
+    duckingFactor = 0.3;
+  } else if (priority === 'music') {
+    if (voiceVolume === undefined) voiceVolume = 0.75;
+    if (musicVolume === undefined) musicVolume = 0.70;
+    duckingFactor = 0.6;
+  } else {
+    if (voiceVolume === undefined) voiceVolume = 0.90;
+    if (musicVolume === undefined) musicVolume = 0.45;
+    duckingFactor = 0.5;
+  }
+
   return {
     enabled: mode !== 'off',
     mode,
+    audioPriority: priority,
     languageCode: String(raw?.languageCode || 'en').toLowerCase(),
     tone: normalizeTone(raw?.tone) || 'professional',
     musicSource: ['tone', 'library'].includes(String(raw?.musicSource || '').toLowerCase())
@@ -400,8 +420,9 @@ function normalizeAudioOptions(raw = {}) {
     voiceGender: ['male', 'female'].includes(String(raw?.voiceGender || '').toLowerCase())
       ? String(raw.voiceGender).toLowerCase()
       : 'female',
-    voiceVolume: Number.isFinite(Number(raw?.voiceVolume)) ? Number(raw.voiceVolume) : 1,
-    musicVolume: Number.isFinite(Number(raw?.musicVolume)) ? Number(raw.musicVolume) : 0.24,
+    voiceVolume,
+    musicVolume,
+    duckingFactor,
     fitVoiceToDuration: raw?.fitVoiceToDuration !== false,
     manualAudioData: typeof raw?.manualAudioData === 'string' ? raw.manualAudioData : '',
     manualAudioUrl: typeof raw?.manualAudioUrl === 'string' ? raw.manualAudioUrl.trim() : '',
@@ -2738,8 +2759,54 @@ async function mergeAudioTracks({
   const volumeStages = inputTracks
     .map((track, idx) => `[${idx}:a]volume=${track.volume.toFixed(2)}[a${idx}]`)
     .join(';');
-  const mixedInputs = inputTracks.map((_, idx) => `[a${idx}]`).join('');
-  const filterComplex = `${volumeStages};${mixedInputs}amix=inputs=${inputTracks.length}:duration=longest:dropout_transition=2,apad[mix]`;
+
+  const voiceIndices = [];
+  const bgIndices = [];
+  const otherIndices = [];
+  
+  inputTracks.forEach((track, idx) => {
+    if (track.label === 'voice' || track.label === 'manual') {
+      voiceIndices.push(idx);
+    } else if (track.label === 'background') {
+      bgIndices.push(idx);
+    } else {
+      otherIndices.push(idx);
+    }
+  });
+
+  const duckingFactor = normalizedAudioOptions.duckingFactor || 0.5;
+  let filterComplex = volumeStages;
+  let finalMixInputs = [];
+
+  if (voiceIndices.length > 0 && bgIndices.length > 0) {
+    if (voiceIndices.length > 1) {
+      const voiceMixStr = voiceIndices.map(idx => `[a${idx}]`).join('');
+      filterComplex += `;${voiceMixStr}amix=inputs=${voiceIndices.length}:duration=longest:dropout_transition=2[voice_mix]`;
+    } else {
+      filterComplex += `;[a${voiceIndices[0]}]acopy[voice_mix]`;
+    }
+
+    if (bgIndices.length > 1) {
+      const bgMixStr = bgIndices.map(idx => `[a${idx}]`).join('');
+      filterComplex += `;${bgMixStr}amix=inputs=${bgIndices.length}:duration=longest:dropout_transition=2[bg_mix]`;
+    } else {
+      filterComplex += `;[a${bgIndices[0]}]acopy[bg_mix]`;
+    }
+
+    filterComplex += `;[voice_mix]asplit=2[voice_final][voice_control]`;
+
+    const ratio = Math.max(1.5, 8.0 - (duckingFactor * 10)); 
+    filterComplex += `;[bg_mix][voice_control]sidechaincompress=threshold=0.08:ratio=${ratio.toFixed(1)}:attack=50:release=300[bg_ducked]`;
+
+    finalMixInputs.push('[voice_final]', '[bg_ducked]');
+  } else {
+    voiceIndices.forEach(idx => finalMixInputs.push(`[a${idx}]`));
+    bgIndices.forEach(idx => finalMixInputs.push(`[a${idx}]`));
+  }
+
+  otherIndices.forEach(idx => finalMixInputs.push(`[a${idx}]`));
+
+  filterComplex += `;${finalMixInputs.join('')}amix=inputs=${finalMixInputs.length}:duration=longest:dropout_transition=2,apad[mix]`;
 
   args.push(
     '-filter_complex', filterComplex,
