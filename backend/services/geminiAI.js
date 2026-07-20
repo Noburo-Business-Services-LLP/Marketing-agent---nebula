@@ -7,6 +7,7 @@ const { GoogleAuth } = require('google-auth-library');
 const { uploadBase64Image } = require('./imageUploader');
 const fs = require('fs/promises');
 const path = require('path');
+const { compareFaces } = require('./faceVerification');
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 // Cheap + reliable: Flash Lite primary, Flash as fallback
@@ -4675,49 +4676,33 @@ async function generateCampaignImageNanoBanana(imageDescription, options = {}) {
   let prompt = '';
   
   if (isCinematic && characterReferenceImage) {
-    prompt = `SYSTEM ROLE:
-You are an image editing model, not an image generation model.
+    prompt = `================================================
 
-The uploaded character image is the exact person that must appear in every generated scene.
+TASK
 
-This image is NOT a reference image.
-This image is NOT inspiration.
-This image is NOT a style guide.
+Transform the uploaded Character Sheet into the following scene.
 
-This image contains the exact character identity that must be preserved.
+Do not create another character.
 
-TASK:
-Take the exact person from the uploaded character image and place them into the requested scene.
+================================================
 
-IDENTITY RULES:
-- Preserve the exact face.
-- Preserve the exact facial structure.
-- Preserve the exact jawline.
-- Preserve the exact eyes.
-- Preserve the exact nose shape.
-- Preserve the exact skin tone.
-- Preserve the exact hairstyle.
-- Preserve the exact beard and facial hair.
-- Preserve the exact age appearance.
-- Preserve the exact ethnicity.
+REFERENCE
 
-CONTINUITY RULES:
-- This is the same person in every scene.
-- Do not create a new person.
-- Do not modify the person's identity.
-- Only change the environment, background, pose, clothing if requested, and camera angle.
-- Maintain continuity across all scenes.
+Uploaded Character Sheet
 
-PRIORITY ORDER:
-1. Character identity preservation.
-2. Scene correctness.
-3. Cinematic quality.
+================================================
 
-If identity conflicts with aesthetics, preserve identity.
+SCENE
 
-SCENE:
 ${imageDescription}
-ASPECT RATIO: ${aspectRatio}`;
+
+================================================
+
+RULE
+
+Everything not explicitly requested to change must remain identical to the uploaded Character Sheet.
+
+================================================`;
   } else if (isCinematic) {
     prompt = `ROLE: You are an elite cinematic video director.
 OBJECTIVE: Generate a single photorealistic, cinematic video frame exactly as described.
@@ -4780,48 +4765,27 @@ ${totalPosts > 1 ? `15. SERIES CONSISTENCY: This is part of a ${totalPosts}-post
   ) {
     prompt += `
 
-STRICT IMAGE TRANSFORMATION TASK
+================================================
 
-The uploaded image contains the exact person that must appear in the final image.
+TASK
 
-This is NOT a character reference.
-This is NOT inspiration.
-This is NOT a style guide.
+Transform the uploaded Character Sheet into the following scene.
 
-This is the exact person that must remain unchanged.
+Do not create another character.
 
-Your task is to edit the existing person into the requested environment while preserving identity completely.
+================================================
 
-IDENTITY LOCK REQUIREMENTS:
-- Preserve the exact face.
-- Preserve the exact facial proportions.
-- Preserve the exact jawline.
-- Preserve the exact nose shape.
-- Preserve the exact eye shape and spacing.
-- Preserve the exact eyebrow shape.
-- Preserve the exact lips and smile geometry.
-- Preserve the exact beard style and density.
-- Preserve the exact hairstyle and hairline.
-- Preserve the exact skin tone.
-- Preserve the exact age appearance.
-- Preserve the exact ethnicity.
+REFERENCE
 
-ONLY ALLOWED TO CHANGE:
-- background
-- environment
-- camera position
-- body pose
-- clothing if explicitly requested
+Uploaded Character Sheet
 
-FORBIDDEN:
-- creating a new person
-- changing facial structure
-- changing ethnicity
-- changing age
-- changing beard
-- changing hairstyle
+================================================
 
-Treat this as an image editing task where the original person must remain identical.`;
+RULE
+
+Everything not explicitly requested to change must remain identical to the uploaded Character Sheet.
+
+================================================`;
   }
 
   try {
@@ -4928,11 +4892,25 @@ Keep the identical face, clothing, and character identity. Do not create a new p
       referenceNotes.push(`Image ${parts.length} is the exact uploaded brand logo. Use it exactly as-is. Do not recreate or recolor it.`);
     }
 
+    let finalPromptText = prompt;
     if (referenceNotes.length > 0) {
-      parts.push({ text: `${referenceNotes.join('\n\n')}\n\n${prompt}` });
+      finalPromptText = `${referenceNotes.join('\n\n')}\n\n${prompt}`;
+      parts.push({ text: finalPromptText });
     } else {
       parts.push({ text: prompt });
     }
+
+    const imagesSent = parts.filter(p => p.inlineData).length;
+
+    console.log('\n==========================');
+    console.log('REQUEST SUMMARY');
+    console.log('==========================\n');
+    console.log(`Character Sheet: ${!!characterInline?.data || !!originalCharacterInline?.data ? 'YES' : 'NO'}`);
+    console.log(`Previous Scene: ${!!previousSceneInline?.data ? 'YES' : 'NO'}`);
+    console.log(`Product Image: ${!!productInline?.data ? 'YES' : 'NO'}\n`);
+    console.log(`Images Sent: ${imagesSent}\n`);
+    console.log(`Prompt:\n${finalPromptText}\n`);
+    console.log('==========================\n');
 
     console.log("Gemini input parts:");
     console.log(JSON.stringify(parts.map((p, index) => ({
@@ -4950,43 +4928,82 @@ Keep the identical face, clothing, and character identity. Do not create a new p
       }
     };
 
-    const response = await fetchWithTimeout(`${apiUrl}?key=${GEMINI_API_KEY}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(requestBody)
-    }, 120000);
+    const maxRetries = (isCinematic && characterReferenceImage) ? 3 : 1;
+    let attempt = 0;
+    
+    while (attempt < maxRetries) {
+      attempt++;
+      console.log(`[NanoBanana2] Post ${postIndex + 1} - Attempt ${attempt}/${maxRetries}`);
+      
+      const response = await fetchWithTimeout(`${apiUrl}?key=${GEMINI_API_KEY}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody)
+      }, 120000);
 
-    const data = await response.json();
+      const data = await response.json();
 
-    if (!response.ok) {
-      throw new Error(data.error?.message || 'Nano Banana 2 failed');
-    }
+      if (!response.ok) {
+        if (attempt >= maxRetries) throw new Error(data.error?.message || 'Nano Banana 2 failed');
+        console.warn(`[NanoBanana2] API error, retrying...`, data.error?.message);
+        continue;
+      }
 
-    const candidates = data.candidates || [];
-    for (const candidate of candidates) {
-      const responseParts = candidate.content?.parts || [];
-      for (const part of responseParts) {
-        const imgData = part.inlineData || part.inline_data;
-        if (imgData?.data) {
-          const mime = imgData.mimeType || imgData.mime_type || 'image/png';
-          console.log(`[NanoBanana2] Post ${postIndex + 1} generated successfully`);
-
-          const base64Image = `data:${mime};base64,${imgData.data}`;
-          try {
-            const uploadResult = await uploadBase64Image(base64Image, 'nebula-campaign-posts');
-            if (uploadResult.success && uploadResult.url) {
-              return { success: true, imageUrl: uploadResult.url, model: 'nano-banana-2' };
-            }
-          } catch (uploadErr) {
-            console.warn('Cloudinary upload failed, returning base64:', uploadErr.message);
+      const candidates = data.candidates || [];
+      let base64Image = null;
+      let mime = 'image/png';
+      
+      for (const candidate of candidates) {
+        const responseParts = candidate.content?.parts || [];
+        for (const part of responseParts) {
+          const imgData = part.inlineData || part.inline_data;
+          if (imgData?.data) {
+            mime = imgData.mimeType || imgData.mime_type || 'image/png';
+            base64Image = `data:${mime};base64,${imgData.data}`;
+            break;
           }
+        }
+        if (base64Image) break;
+      }
 
-          return { success: true, imageUrl: base64Image, model: 'nano-banana-2' };
+      if (!base64Image) {
+        if (attempt >= maxRetries) throw new Error('Nano Banana 2 returned no image');
+        console.warn(`[NanoBanana2] No image returned, retrying...`);
+        continue;
+      }
+
+      console.log(`[NanoBanana2] Post ${postIndex + 1} generated image successfully on attempt ${attempt}`);
+
+      // FACE SIMILARITY CHECK
+      if (isCinematic && characterReferenceImage) {
+        const refImageBase64 = characterInline?.data ? `data:${characterInline.mimeType};base64,${characterInline.data}` : null;
+        if (refImageBase64) {
+          console.log(`[NanoBanana2] Verifying face similarity...`);
+          const similarity = await compareFaces(refImageBase64, base64Image);
+          if (similarity < 0.80) { // Using 0.80 as threshold (Distance > 0.2)
+            console.warn(`[NanoBanana2] Face similarity too low (${(similarity * 100).toFixed(1)}%). Re-generating...`);
+            if (attempt >= maxRetries) {
+              console.warn(`[NanoBanana2] Max retries reached. Accepting suboptimal image.`);
+            } else {
+              continue; // Retry generation
+            }
+          } else {
+            console.log(`[NanoBanana2] Face similarity acceptable (${(similarity * 100).toFixed(1)}%).`);
+          }
         }
       }
-    }
 
-    throw new Error('Nano Banana 2 returned no image');
+      try {
+        const uploadResult = await uploadBase64Image(base64Image, 'nebula-campaign-posts');
+        if (uploadResult.success && uploadResult.url) {
+          return { success: true, imageUrl: uploadResult.url, model: 'nano-banana-2' };
+        }
+      } catch (uploadErr) {
+        console.warn('Cloudinary upload failed, returning base64:', uploadErr.message);
+      }
+
+      return { success: true, imageUrl: base64Image, model: 'nano-banana-2' };
+    }
 
   } catch (error) {
     console.error(`[NanoBanana2] Post ${postIndex + 1} failed:`, error.message);

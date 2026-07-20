@@ -796,7 +796,23 @@ STRICT CHARACTER RULES:
       usageRules += '\n- IMPORTANT: Do not include the character in every scene. Mix character scenes with b-roll, establishing shots, and product closeups without people.';
     }
 
-    characterContext = `
+    if (input.characterImage) {
+      characterContext = `
+CHARACTER REFERENCE ACTIVE:
+- An approved Character Sheet has been provided for "${input.characterName || 'the main character'}".
+- You MUST NOT describe the character's physical appearance (age, ethnicity, hair, clothing, etc.) in the imagePrompt or videoPrompt.
+- Focus ONLY on the environment, action, camera angle, and lighting.
+- The imagePrompt MUST be formatted as a structured list of scene attributes.
+- Example correct prompt: "Environment: Ancient jungle temple. Action: Exploring carefully. Pose: Walking with a torch. Lighting: Golden sunrise. Camera: Wide cinematic shot. Mood: Adventure."
+
+CRITICAL CHARACTER RULES:
+- Never describe physical traits in the prompt.
+- Do not invent new clothing unless the story requires it.
+- Maintain identical identity in every scene.
+${strictRules}
+${usageRules}`;
+    } else {
+      characterContext = `
 MAIN CHARACTER DETAILS:
 - Name: ${input.characterName || 'N/A'}
 - Age: ${input.characterAge || 'N/A'}
@@ -807,17 +823,13 @@ MAIN CHARACTER DETAILS:
 - Hair Style: ${input.characterHairStyle || 'N/A'}
 - Hair Color: ${input.characterHairColor || 'N/A'}
 - Clothing: ${input.characterClothing || 'N/A'}
-- Reference Image Provided: ${input.characterImage ? 'Yes' : 'No'}
 ${extractedTraitsStr}
 CRITICAL CHARACTER RULES:
 - Use the exact same character identity across all scenes.
-- Preserve exact identity.
-- Maintain identical face structure, eyes, nose, hairstyle, skin tone, and body type.
 - Do not generate different people in different scenes.
-- If a reference image is provided, preserve facial identity exactly.
-- Clothing and environment may change but the character identity must remain unchanged.
 ${strictRules}
 ${usageRules}`;
+    }
   }
   
   let videoStyleContext = '';
@@ -1085,30 +1097,42 @@ async function generateSceneImages({
       }
 
     let characterImageContext = '';
+    const activeCharacterImage = input.characterImageBase64 || input.characterImage || input.originalCharacterImage;
+    
     if (input.characterEnabled && input.preserveIdentity !== false) {
-      const isStrict = input.characterConsistencyStrength === 'Strict';
-      
-      const demographics = [
-        input.characterRace ? `${input.characterRace} ethnicity` : '',
-        input.characterAge ? `${input.characterAge} years old` : '',
-        input.characterGender ? input.characterGender : '',
-        input.characterBeard && input.characterBeard !== 'Clean Shaven (No Beard)' ? `with ${input.characterBeard}` : (input.characterBeard === 'Clean Shaven (No Beard)' ? 'completely clean shaven, absolutely no facial hair' : '')
-      ].filter(Boolean).join(', ');
+      if (!activeCharacterImage) {
+        const isStrict = input.characterConsistencyStrength === 'Strict';
+        
+        const demographics = [
+          input.characterRace ? `${input.characterRace} ethnicity` : '',
+          input.characterAge ? `${input.characterAge} years old` : '',
+          input.characterGender ? input.characterGender : '',
+          input.characterHairStyle ? `with ${input.characterHairStyle} hair` : '',
+          input.characterAppearance ? `wearing ${input.characterAppearance}` : '',
+          input.characterBeard && input.characterBeard !== 'Clean Shaven (No Beard)' ? `with ${input.characterBeard}` : (input.characterBeard === 'Clean Shaven (No Beard)' ? 'completely clean shaven, absolutely no facial hair' : '')
+        ].filter(Boolean).join(', ');
 
-      const demographicString = demographics ? `The character is a ${demographics}.` : '';
+        const demographicString = demographics ? `The character is a ${demographics}.` : '';
 
-      if (isStrict) {
-        characterImageContext = `CRITICAL INSTRUCTION: You MUST exactly recreate the face and identity of the person in the reference image. ${demographicString} DO NOT change their facial structure, skin tone, or demographic. DO NOT hallucinate a different person. Match the reference image 100%. Keep same hairstyle. Maintain same age.`;
+        if (isStrict) {
+          characterImageContext = `CRITICAL INSTRUCTION: You MUST exactly recreate the face and identity of the person in the reference image. ${demographicString} DO NOT change their facial structure, skin tone, or demographic. DO NOT hallucinate a different person. Match the reference image 100%. Keep same hairstyle. Maintain same age.`;
+        } else {
+          characterImageContext = `Maintain general character identity across scenes based on the reference image. ${demographicString}`;
+        }
       } else {
-        characterImageContext = `Maintain general character identity across scenes based on the reference image. ${demographicString}`;
+        // Active character image is present, so the user wants ZERO textual demographic overlap.
+        // We will pass an empty string because the system prompt in geminiAI.js will handle the strict image lock.
+        characterImageContext = '';
       }
     }
 
+    let cleanImagePrompt = scene.imagePrompt || '';
+
     const promptWithConsistency = [
       characterImageContext,
-      scene.imagePrompt,
+      cleanImagePrompt,
       `Consistency style: ${plan.globalVisualStyle}`,
-      input.preserveIdentity !== false ? 'Keep same lead subject identity, lighting logic, and palette continuity with earlier scenes.' : ''
+      input.preserveIdentity !== false && !activeCharacterImage ? 'Keep same lead subject identity, lighting logic, and palette continuity with earlier scenes.' : ''
     ].filter(Boolean).join('\n\n');
 
       const imageResult = await runWithRetries(
@@ -1122,11 +1146,12 @@ async function generateSceneImages({
             console.log("Product Image Present:", !!consistencyReference);
           }
 
-          if (input.characterImageBase64) {
+          const activeCharacterImage = input.characterImageBase64 || input.characterImage || input.originalCharacterImage;
+          if (activeCharacterImage) {
             if (logger) console.log("Using gemini-3.1-flash-image for character consistency...");
             
             // Extract base64 properly
-            let base64Data = input.characterImageBase64;
+            let base64Data = activeCharacterImage;
             let mimeType = 'image/jpeg';
             if (base64Data.startsWith('data:')) {
               const matches = base64Data.match(/^data:(.+);base64,(.*)$/);
@@ -1138,17 +1163,22 @@ async function generateSceneImages({
 
             const fixedSeed = context.jobId ? Math.abs(context.jobId.split('').reduce((hash, char) => ((hash << 5) - hash) + char.charCodeAt(0), 0)) % 100000 : 42;
             
-            let cleanBase64 = input.characterImageBase64;
+            let cleanBase64 = activeCharacterImage;
             if (cleanBase64.includes('data:image')) {
               cleanBase64 = cleanBase64.split(',')[1];
             }
 
-            console.log('\n🎭 ==================== CHARACTER CONSISTENCY (NANO BANANA) ====================');
-            console.log(`📸 Character: ${input.characterName || 'Unknown'}`);
-            console.log(`🎬 Scene: ${promptWithConsistency}`);
-            console.log(`🎨 Style: ${input.videoStyle || 'Cinematic'}`);
-            console.log(`🔧 API: Gemini Nano Banana`);
-            console.log('=========================================================================\n');
+            console.log('\n===========================');
+            console.log('CHARACTER CONSISTENCY');
+            console.log('===========================\n');
+            console.log(`Scene: ${scene.sceneId}\n`);
+            console.log(`Strict Pipeline: true`);
+            console.log(`Character Sheet: ${!!activeCharacterImage}`);
+            console.log(`Previous Scene: ${!!previousSceneImageUrl}`);
+            console.log(`Product Image: ${!!consistencyReference}`);
+            console.log(`Use Logo: ${input.useLogo !== false}\n`);
+            console.log(`Using Model:\nmodels/nano-banana-flash\n`);
+            console.log('===========================\n');
             
             const imageData = `data:image/jpeg;base64,${cleanBase64}`;
 

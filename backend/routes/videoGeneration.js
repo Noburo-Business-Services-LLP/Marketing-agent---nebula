@@ -1506,6 +1506,8 @@ router.post('/generateImages', protect, checkTrial, videoAiWriteLimiter, async (
           characterBeard: draft?.characterBeard,
           characterAge: draft?.characterAge,
           characterGender: draft?.characterGender,
+          characterHairStyle: draft?.characterHairStyle,
+          characterAppearance: draft?.characterAppearance,
           useLogo: req.body.useLogo !== undefined ? req.body.useLogo : (draft?.useLogo !== undefined ? draft.useLogo : true)
         },
         user: req.user,

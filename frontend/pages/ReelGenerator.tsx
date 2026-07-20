@@ -709,7 +709,8 @@ setCharacterAge(nextDraft?.characterAge || '');
       videoStyle,
       preserveIdentity,
       characterUsage,
-      characterConsistencyStrength
+      characterConsistencyStrength,
+      useLogo
     };
 
     const response = await videoGenerationAPI.createVideo(payload);

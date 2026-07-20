@@ -37,9 +37,9 @@ function getScenePrompt(scene = {}) {
   return [
     'Cinematic camera movement,',
     basePrompt,
-    'Dynamic motion, slow smooth pan, tracking shot, premium commercial style, natural light reflections, subtle depth movement.',
-    'Vertical 9:16 professional marketing video, high-detail 1080p look, sharp product details, clean edges, realistic materials.',
-    'Keep faces, hands, product packaging, logos, and object geometry consistent from frame to frame.',
+    'Dynamic and precise motion, slow smooth pan, tracking shot, premium commercial style, natural light reflections, subtle depth movement.',
+    'Vertical 9:16 professional marketing video, ultra-high-quality 1080p look, photorealistic, real video feel, sharp product details, clean edges, realistic materials.',
+    'Keep faces, hands, product packaging, logos, and object geometry perfectly consistent and precise from frame to frame.',
     'Avoid pixelation, distortion, flicker, duplicated objects, warped text, noisy backgrounds, blur, compression artifacts, and low-resolution details.'
   ].filter(Boolean).join(' ');
 }
