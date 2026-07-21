@@ -3302,6 +3302,20 @@ export const inventoryAPI = {
 // AI Video Generation API
 // ================================
 export const videoGenerationAPI = {
+  generateVideoStylePrompts: async (payload: {
+    description: string;
+    videoStyle: string;
+    characterName: string;
+    sceneCount: number;
+    productName?: string;
+    duration?: number;
+  }): Promise<any> => {
+    return apiCall('/generateVideoStylePrompts', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }, true);
+  },
+
   createVideo: async (payload: {
     description: string;
     durationSeconds: number;
@@ -3363,6 +3377,13 @@ export const videoGenerationAPI = {
     return apiCall(`/video-generation/draft/${encodeURIComponent(jobId)}`, { method: 'GET' }, true);
   },
 
+  updateDraft: async (jobId: string, payload: any): Promise<any> => {
+    return apiCall(`/video-generation/draft/${encodeURIComponent(jobId)}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    }, true);
+  },
+
   getDrafts: async (): Promise<any> => {
     return apiCall('/video-generation/drafts', { method: 'GET' }, true);
   },
@@ -3377,6 +3398,13 @@ export const videoGenerationAPI = {
     saveOnly?: boolean;
   }): Promise<any> => {
     return apiCall('/video-generation/generatePrompt', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }, true);
+  },
+
+  generateCharacterPreview: async (payload: any): Promise<{ success: boolean; imageUrl?: string; error?: string }> => {
+    return apiCall('/video-generation/generateCharacterPreview', {
       method: 'POST',
       body: JSON.stringify(payload)
     }, true);

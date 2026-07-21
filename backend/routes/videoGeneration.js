@@ -1010,6 +1010,23 @@ router.delete('/draft/:jobId', protect, videoAiWriteLimiter, async (req, res) =>
   }
 });
 
+router.put('/draft/:jobId', protect, videoAiWriteLimiter, async (req, res) => {
+  try {
+    const userId = toUserId(req.user);
+    const updated = await updateDraft(req.params.jobId, userId, (current) => ({
+      ...current,
+      ...req.body
+    }));
+    return res.json({
+      success: true,
+      draft: updated
+    });
+  } catch (error) {
+    return responseError(res, error, 'Failed to update draft');
+  }
+});
+
+
 router.post('/createDraft', protect, checkTrial, videoAiWriteLimiter, async (req, res) => {
   try {
     const payload = req.body || {};
@@ -1042,6 +1059,82 @@ router.post('/createDraft', protect, checkTrial, videoAiWriteLimiter, async (req
     });
   } catch (error) {
     return responseError(res, error, 'Failed to create draft');
+  }
+});
+
+router.post('/generateCharacterPreview', protect, checkTrial, videoAiWriteLimiter, async (req, res) => {
+  try {
+    const { name, age, gender, hairStyle, beard, race, role, personality, videoStyle, brandName, artStyle, appearance, characterImageBase64 } = req.body;
+    
+    let description = ``;
+    if (gender) description += `Gender: ${gender}. `;
+    if (age) description += `Age: ${age}. `;
+    if (race) description += `Ethnicity/Race: ${race}. `;
+    if (hairStyle) description += `Hair: ${hairStyle}. `;
+    if (appearance) description += `Clothing/Appearance: ${appearance}. `;
+    if (beard && beard !== 'Clean Shaven (No Beard)') {
+      description += `Facial Hair: ${beard}. `;
+    } else {
+      description += `Facial Hair: Completely clean shaven, absolutely no beard or mustache or stubble. `;
+    }
+    
+    const resolvedArtStyle = artStyle || 'Realistic / Photography';
+    
+    let prompt = `Create a professional Master Character Reference Sheet.
+The sheet must show the exact same person in all views and preserve the identical face, hairstyle, beard, skin tone, body proportions, and age.
+
+Include the following sections:
+1. Face Views: Front view, Left profile, Right profile, 45-degree angle.
+2. Body Views: Full body front, Full body side, Full body back.
+3. Expression Sheet: Neutral, Happy, Serious, Thinking.
+4. Pose Sheet: Standing, Walking, Sitting, Pointing.
+
+Requirements:
+- Use the exact same person in every image.
+- Maintain identical facial geometry.
+- Maintain identical beard style.
+- Maintain identical hairstyle and hairline.
+- Maintain identical skin tone and ethnicity.
+- Maintain identical body proportions.
+- Use a clean studio background.
+- Arrange everything in a professional character reference sheet layout.
+- Art Style / Format: ${resolvedArtStyle}.
+- Video Theme Style: ${videoStyle || 'Cinematic, extremely high quality.'}
+- CRITICAL: Do not add glasses, hats, or other face-obscuring accessories unless explicitly specified.
+`;
+
+    if (description) {
+        prompt += `\nSubject details to enforce: ${description}`;
+    }
+    
+    if (characterImageBase64) {
+        prompt += `\n\nCRITICAL: You MUST base this character sheet on the exact person in the provided reference image. Keep their face and identity perfectly identical!`;
+    }
+
+    let cleanBase64 = null;
+    if (characterImageBase64) {
+      cleanBase64 = characterImageBase64;
+      if (cleanBase64.includes('data:image')) {
+        cleanBase64 = cleanBase64.split(',')[1];
+      }
+    }
+
+    const imageUrl = await generateCampaignImageNanoBanana(prompt, {
+      aspectRatio: '16:9',
+      brandName: brandName || '',
+      tone: 'professional',
+      characterReferenceImage: cleanBase64 ? `data:image/jpeg;base64,${cleanBase64}` : null,
+      isCinematic: !!cleanBase64
+    });
+
+    if (!imageUrl || (typeof imageUrl === 'object' && !imageUrl.imageUrl)) {
+      throw new Error('Failed to generate character preview');
+    }
+
+    res.json({ success: true, imageUrl: typeof imageUrl === 'string' ? imageUrl : imageUrl.imageUrl });
+  } catch (error) {
+    console.error('Error in /generateCharacterPreview:', error);
+    res.status(500).json({ success: false, error: error.message || 'Failed to generate character preview' });
   }
 });
 
@@ -1133,7 +1226,22 @@ router.post('/generateScenes', protect, checkTrial, videoAiWriteLimiter, async (
           durationSeconds,
           sceneCount: draft?.input?.sceneCount || sceneData.length,
           productId: draft?.input?.productId || undefined,
-          product: draft?.input?.product || undefined
+          product: draft?.input?.product || undefined,
+          characterEnabled: draft?.characterEnabled,
+          characterImage: draft?.characterImage,
+          characterName: draft?.characterName,
+          characterAge: draft?.characterAge,
+          characterGender: draft?.characterGender,
+          characterRole: draft?.characterRole,
+          characterPersonality: draft?.characterPersonality,
+          characterAppearance: draft?.characterAppearance,
+          characterHairStyle: draft?.characterHairStyle,
+          characterHairColor: draft?.characterHairColor,
+          characterClothing: draft?.characterClothing,
+          videoStyle: draft?.videoStyle,
+          preserveIdentity: draft?.preserveIdentity,
+          characterUsage: draft?.characterUsage,
+          characterConsistencyStrength: draft?.characterConsistencyStrength
         },
         user: req.user
       });
@@ -1187,7 +1295,22 @@ router.post('/generateScenes', protect, checkTrial, videoAiWriteLimiter, async (
         durationSeconds,
         sceneCount: draft?.input?.sceneCount || undefined,
         productId: draft?.input?.productId || undefined,
-        product: draft?.input?.product || undefined
+        product: draft?.input?.product || undefined,
+        characterEnabled: draft?.characterEnabled,
+        characterImage: draft?.characterImage,
+        characterName: draft?.characterName,
+        characterAge: draft?.characterAge,
+        characterGender: draft?.characterGender,
+        characterRole: draft?.characterRole,
+        characterPersonality: draft?.characterPersonality,
+        characterAppearance: draft?.characterAppearance,
+        characterHairStyle: draft?.characterHairStyle,
+        characterHairColor: draft?.characterHairColor,
+        characterClothing: draft?.characterClothing,
+        videoStyle: draft?.videoStyle,
+        preserveIdentity: draft?.preserveIdentity,
+        characterUsage: draft?.characterUsage,
+        characterConsistencyStrength: draft?.characterConsistencyStrength
       },
       user: req.user
     });
@@ -1286,21 +1409,73 @@ router.post('/generateImages', protect, checkTrial, videoAiWriteLimiter, async (
         return res.status(404).json({ success: false, message: 'Scene not found' });
       }
       const targetScene = sourceScenes[idx];
-      const regenPrompt = String(imagePrompt || targetScene.imagePrompt || draft?.prompt?.promptText || '').trim();
-      const regen = await generateCampaignImageNanoBanana(regenPrompt, {
-        aspectRatio: '9:16',
-        linkedProduct: draft?.input?.product || null,
-        productReferenceImage: draft?.input?.sourceImage?.url || draft?.input?.product?.imageUrl || null,
-        tone: 'professional'
-      });
-      if (!regen?.success || !regen?.imageUrl) {
-        throw new Error(regen?.error || 'Image regeneration failed');
+      let regenPrompt = String(imagePrompt || targetScene.imagePrompt || draft?.prompt?.promptText || '').trim();
+      let finalRegenImageUrl = null;
+      if (req.body.characterImageBase64) {
+          const characterImageBase64 = req.body.characterImageBase64;
+          const characterName = req.body.characterName || '';
+          const videoStyle = req.body.videoStyle || draft?.videoStyle || 'Cinematic';
+
+          // Inject strict demographics from draft
+          const demographics = [
+            draft?.characterRace ? `${draft.characterRace} ethnicity` : '',
+            draft?.characterAge ? `${draft.characterAge} years old` : '',
+            draft?.characterGender ? draft.characterGender : '',
+            draft?.characterBeard && draft?.characterBeard !== 'Clean Shaven (No Beard)' ? `with ${draft.characterBeard}` : (draft?.characterBeard === 'Clean Shaven (No Beard)' ? 'completely clean shaven, absolutely no facial hair' : '')
+          ].filter(Boolean).join(', ');
+
+          const demographicString = demographics ? `The character is a ${demographics}.` : '';
+          const strictContext = `CRITICAL INSTRUCTION: You MUST exactly recreate the face and identity of the person in the reference image. ${demographicString} DO NOT change their facial structure, skin tone, or demographic. Match the reference image 100%.`;
+          
+          regenPrompt = `${strictContext}\n\nSCENE TO GENERATE:\n${regenPrompt}`;
+
+          let cleanBase64 = characterImageBase64;
+          if (cleanBase64.includes('data:image')) {
+            cleanBase64 = cleanBase64.split(',')[1];
+          }
+
+          console.log('\n🎭 ==================== CHARACTER CONSISTENCY (NANO BANANA) ====================');
+          console.log(`📸 Character: ${characterName || 'Unknown'}`);
+          console.log(`🎬 Scene: ${regenPrompt}`);
+          console.log(`🎨 Style: ${videoStyle}`);
+          console.log(`🔧 API: Gemini Nano Banana`);
+          console.log('=========================================================================\n');
+
+          const imageData = `data:image/jpeg;base64,${cleanBase64}`;
+          
+          try {
+            const nanoResult = await generateCampaignImageNanoBanana(regenPrompt, {
+              aspectRatio: '16:9', // default for video
+              characterReferenceImage: imageData,
+              isCinematic: true
+            });
+            
+            if (nanoResult && (nanoResult.imageUrl || typeof nanoResult === 'string')) {
+                finalRegenImageUrl = typeof nanoResult === 'string' ? nanoResult : nanoResult.imageUrl;
+            } else {
+                throw new Error('Nano Banana returned no image');
+            }
+          } catch (error) {
+            console.error('Nano Banana API Error:', error);
+            return res.status(500).json({ success: false, message: 'Nano Banana API Error: ' + error.message });
+          }
+      } else {
+        const regen = await generateCampaignImageNanoBanana(regenPrompt, {
+          aspectRatio: '9:16',
+          linkedProduct: draft?.input?.product || null,
+          productReferenceImage: draft?.input?.sourceImage?.url || draft?.input?.product?.imageUrl || null,
+          tone: 'professional'
+        });
+        if (!regen?.success || !regen?.imageUrl) {
+          throw new Error(regen?.error || 'Image regeneration failed');
+        }
+        finalRegenImageUrl = regen.imageUrl;
       }
       nextScenes = sourceScenes.map((scene, index) => (
         index === idx
           ? {
             ...scene,
-            imageUrl: regen.imageUrl,
+            imageUrl: finalRegenImageUrl,
             imagePrompt: regenPrompt
           }
           : scene
@@ -1318,7 +1493,20 @@ router.post('/generateImages', protect, checkTrial, videoAiWriteLimiter, async (
           sceneData: sourceScenes,
           globalVisualStyle: draft?.scenesMetadata?.globalVisualStyle || draft?.scenes?.globalVisualStyle || '',
           voiceScript: draft?.scenesMetadata?.voiceScript || draft?.scenes?.voiceScript || '',
-          thumbnailPrompt: draft?.scenesMetadata?.thumbnailPrompt || draft?.scenes?.thumbnailPrompt || ''
+          thumbnailPrompt: draft?.scenesMetadata?.thumbnailPrompt || draft?.scenes?.thumbnailPrompt || '',
+          characterImageBase64: req.body.characterImageBase64 || draft?.characterImageBase64 || undefined,
+          characterName: req.body.characterName || draft?.characterName || undefined,
+          videoStyle: req.body.videoStyle || draft?.videoStyle || undefined,
+          characterEnabled: draft?.characterEnabled,
+          characterImage: draft?.characterImage,
+          originalCharacterImage: draft?.originalCharacterImage,
+          preserveIdentity: draft?.preserveIdentity,
+          characterConsistencyStrength: draft?.characterConsistencyStrength,
+          characterRace: draft?.characterRace,
+          characterBeard: draft?.characterBeard,
+          characterAge: draft?.characterAge,
+          characterGender: draft?.characterGender,
+          useLogo: req.body.useLogo !== undefined ? req.body.useLogo : (draft?.useLogo !== undefined ? draft.useLogo : true)
         },
         user: req.user,
         baseUrl

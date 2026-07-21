@@ -21,7 +21,30 @@ const videoDraftSchema = new mongoose.Schema(
     schedule: { type: mongoose.Schema.Types.Mixed, default: null },
     jobs: { type: mongoose.Schema.Types.Mixed, default: {} }, // Links background queue Job IDs (e.g. merge/clips)
     finalVideoUrl: { type: String, default: null },
-    thumbnailUrl: { type: String, default: null }
+    thumbnailUrl: { type: String, default: null },
+    characterEnabled: { type: Boolean, default: false },
+    characterImage: { type: String, default: null },
+    originalCharacterImage: { type: String, default: null },
+    characterFaceEmbedding: { type: String, default: null },
+    characterSheet: {
+      frontPortrait: { type: String, default: null },
+      sidePortrait: { type: String, default: null },
+      smilingPortrait: { type: String, default: null },
+      neutralPortrait: { type: String, default: null }
+    },
+    characterName: { type: String, default: null },
+    characterAge: { type: String, default: null },
+    characterGender: { type: String, default: null },
+    characterRole: { type: String, default: null },
+    characterPersonality: { type: String, default: null },
+    characterAppearance: { type: String, default: null },
+    characterHairStyle: { type: String, default: null },
+    characterHairColor: { type: String, default: null },
+    characterClothing: { type: String, default: null },
+    videoStyle: { type: String, default: null },
+    preserveIdentity: { type: Boolean, default: true },
+    characterUsage: { type: String, default: 'Main Character in all scenes' },
+    characterConsistencyStrength: { type: String, default: 'Strict' }
   },
   { collection: 'video_drafts', timestamps: true }
 );

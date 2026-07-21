@@ -14,7 +14,10 @@ import {
   Trash2,
   XCircle,
   ToggleRight,
-  ToggleLeft
+  ToggleLeft,
+  Eye,
+  X,
+  Search
 } from 'lucide-react';
 import { useSmartCalendarAutoFill } from '../hooks/useSmartCalendarAutoFill';
 import { getThemeClasses, useTheme } from '../context/ThemeContext';
@@ -27,6 +30,7 @@ type VideoStatusFilter = 'all' | 'draft' | 'created' | 'scheduled' | 'posted';
 
 const WIZARD_STEPS = [
   'Input',
+  'Character & Video Style Configuration',
   'Prompt + Scenes',
   'Scene Images',
   'Video Clips',
@@ -114,6 +118,29 @@ const ReelGenerator: React.FC = () => {
   const [inputImageData, setInputImageData] = useState('');
   const [inputImageName, setInputImageName] = useState('');
 
+  const [characterEnabled, setCharacterEnabled] = useState(false);
+  const [characterSource, setCharacterSource] = useState<'upload' | 'generate'>('generate');
+  const [generatingCharacter, setGeneratingCharacter] = useState(false);
+  const [characterApproved, setCharacterApproved] = useState(false);
+  const [characterImage, setCharacterImage] = useState('');
+  const [originalCharacterImage, setOriginalCharacterImage] = useState('');
+  const [characterName, setCharacterName] = useState('');
+  const [characterAge, setCharacterAge] = useState('');
+  const [characterGender, setCharacterGender] = useState('');
+  const [characterRole, setCharacterRole] = useState('');
+  const [characterPersonality, setCharacterPersonality] = useState('');
+  const [characterAppearance, setCharacterAppearance] = useState('');
+  const [characterRace, setCharacterRace] = useState('');
+  const [characterBeard, setCharacterBeard] = useState('');
+  const [characterArtStyle, setCharacterArtStyle] = useState('Realistic / Photography');
+  const [characterHairStyle, setCharacterHairStyle] = useState('');
+  const [videoStyle, setVideoStyle] = useState('Cinematic Commercial');
+  const [preserveIdentity, setPreserveIdentity] = useState(true);
+  const [useLogo, setUseLogo] = useState(true);
+  const [characterUsage, setCharacterUsage] = useState('Main Character in all scenes');
+  const [characterConsistencyStrength, setCharacterConsistencyStrength] = useState('Strict');
+  const [previewImageModal, setPreviewImageModal] = useState<string | null>(null);
+
   const [promptText, setPromptText] = useState('');
   const [scenes, setScenes] = useState<any[]>([]);
 
@@ -138,6 +165,7 @@ const ReelGenerator: React.FC = () => {
   const [thumbnailUrl, setThumbnailUrl] = useState('');
   const [caption, setCaption] = useState('');
   const [hashtagsText, setHashtagsText] = useState('');
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
 
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([]);
   const [scheduleDate, setScheduleDate] = useState('');
@@ -237,17 +265,18 @@ const ReelGenerator: React.FC = () => {
 
   const deriveStepFromDraft = (d: any) => {
     const explicit = Number.parseInt(String(d?.currentStep || ''), 10);
-    if (Number.isFinite(explicit) && explicit >= 1) return Math.min(11, Math.max(1, explicit));
-    if (d?.final?.finalOutputUrl || d?.finalOutputUrl) return 11;
-    if (d?.schedule?.scheduledAt || d?.schedule?.postedAt) return 10;
-    if (Array.isArray(d?.platform?.selectedPlatforms) && d.platform.selectedPlatforms.length) return 9;
-    if (d?.content?.thumbnailUrl || d?.content?.caption) return 8;
-    if (d?.merge?.finalOutputUrl || d?.merge?.finalVideoUrl) return 7;
-    if (d?.mix?.finalAudioUrl) return 6;
-    if (d?.audio?.tracks || d?.audio?.config) return 5;
-    if (d?.clips?.sceneData?.length) return 4;
-    if (d?.images?.sceneData?.length) return 3;
-    if (d?.scenes?.sceneData?.length) return 2;
+    if (Number.isFinite(explicit) && explicit >= 1) return Math.min(12, Math.max(1, explicit));
+    if (d?.final?.finalOutputUrl || d?.finalOutputUrl) return 12;
+    if (d?.schedule?.scheduledAt || d?.schedule?.postedAt) return 11;
+    if (Array.isArray(d?.platform?.selectedPlatforms) && d.platform.selectedPlatforms.length) return 10;
+    if (d?.content?.thumbnailUrl || d?.content?.caption) return 9;
+    if (d?.merge?.finalOutputUrl || d?.merge?.finalVideoUrl) return 8;
+    if (d?.mix?.finalAudioUrl) return 7;
+    if (d?.audio?.tracks || d?.audio?.config) return 6;
+    if (d?.clips?.sceneData?.length) return 5;
+    if (d?.images?.sceneData?.length) return 4;
+    if (d?.scenes?.sceneData?.length) return 3;
+    if (d?.characterEnabled !== undefined || d?.videoStyle) return 2;
     return 1;
   };
 
@@ -395,6 +424,23 @@ const ReelGenerator: React.FC = () => {
       setSceneCount(Number(nextDraft.input.sceneCount));
     }
     setPromptText(nextDraft?.prompt?.promptText || '');
+    setCharacterEnabled(!!nextDraft?.characterEnabled);
+    setCharacterImage(nextDraft?.characterImage || '');
+    setOriginalCharacterImage(nextDraft?.originalCharacterImage || '');
+    setCharacterName(nextDraft?.characterName || '');
+setCharacterAge(nextDraft?.characterAge || '');
+    setCharacterGender(nextDraft?.characterGender || '');
+    setCharacterRole(nextDraft?.characterRole || '');
+    setCharacterPersonality(nextDraft?.characterPersonality || '');
+    setCharacterAppearance(nextDraft?.characterAppearance || '');
+    setCharacterHairStyle(nextDraft?.characterHairStyle || '');
+    setCharacterRace(nextDraft?.characterRace || '');
+    setCharacterBeard(nextDraft?.characterBeard || '');
+    setCharacterArtStyle(nextDraft?.characterArtStyle || 'Realistic / Photography');
+    if (nextDraft?.videoStyle) setVideoStyle(nextDraft.videoStyle);
+    if (nextDraft?.preserveIdentity !== undefined) setPreserveIdentity(!!nextDraft.preserveIdentity);
+    if (nextDraft?.characterUsage) setCharacterUsage(nextDraft.characterUsage);
+    if (nextDraft?.characterConsistencyStrength) setCharacterConsistencyStrength(nextDraft.characterConsistencyStrength);
     const draftMusicSource = String(nextDraft?.audio?.config?.musicSource || '').toLowerCase();
     if (draftMusicSource === 'tone' || draftMusicSource === 'library') {
       setMusicSource(draftMusicSource);
@@ -607,6 +653,31 @@ const ReelGenerator: React.FC = () => {
     setStep(2);
   });
 
+  const step2Next = async () => withBusy(async () => {
+    if (!jobId) throw new Error('Draft missing');
+    await videoGenerationAPI.updateDraft(jobId, {
+      characterEnabled,
+      characterImage,
+      originalCharacterImage,
+      characterName,
+      characterAge,
+      characterGender,
+      characterRole,
+      characterPersonality,
+      characterAppearance,
+      characterHairStyle,
+      characterRace,
+      characterBeard,
+      characterArtStyle,
+      videoStyle,
+      preserveIdentity,
+      characterUsage,
+      characterConsistencyStrength,
+      currentStep: 3
+    });
+    setStep(3);
+  });
+
   const startAutoGenerate = async () => withBusy(async () => {
     const effectiveDescription = description.trim();
     if (!effectiveDescription) {
@@ -621,7 +692,24 @@ const ReelGenerator: React.FC = () => {
       productId: selectedProduct?._id || undefined,
       product: selectedProduct || undefined,
       videoType: 'reel',
-      audio: buildAudioPayload()
+      audio: buildAudioPayload(),
+      characterEnabled,
+      characterImage,
+      originalCharacterImage,
+      characterName,
+      characterAge,
+      characterGender,
+      characterRole,
+      characterPersonality,
+      characterAppearance,
+      characterHairStyle,
+      characterRace,
+      characterBeard,
+      characterArtStyle,
+      videoStyle,
+      preserveIdentity,
+      characterUsage,
+      characterConsistencyStrength
     };
 
     const response = await videoGenerationAPI.createVideo(payload);
@@ -634,31 +722,84 @@ const ReelGenerator: React.FC = () => {
     setStatusFilter('draft');
   });
 
-  const generatePromptAndScenes = async () => withBusy(async () => {
-    if (!jobId) throw new Error('Draft missing. Complete step 1 first.');
-    const sceneResponse = await videoGenerationAPI.generateScenes({
-      jobId,
-      promptText: promptText || undefined,
-      async: true
-    });
-
-    const queueJobId = sceneResponse?.queueJobId;
-    if (queueJobId) {
-      await pollJob(queueJobId, async (result) => {
-        setScenes(result.sceneData || []);
-        if (result.draft?.prompt?.promptText) {
-          setPromptText(result.draft.prompt.promptText);
-        }
-        setDraft(result.draft || draft);
-      });
+  const handleGenerateCharacterPreview = async () => {
+    if (characterSource === 'generate' && !characterName && !characterRole && !characterAppearance) {
+      setError('Please provide some character details to generate a preview.');
       return;
     }
-
-    if (!sceneResponse?.success) {
-      throw new Error(sceneResponse?.message || 'Scene generation failed');
+    if (characterSource === 'upload' && !originalCharacterImage) {
+      setError('Please upload a character image first.');
+      return;
     }
-    setScenes(sceneResponse.sceneData || []);
-    setDraft(sceneResponse.draft || draft);
+    setGeneratingCharacter(true);
+    setError('');
+    setCharacterApproved(false);
+    try {
+      const response = await videoGenerationAPI.generateCharacterPreview({
+        name: characterName,
+        age: characterAge,
+        gender: characterGender,
+        hairStyle: characterHairStyle,
+        beard: characterBeard,
+        race: characterRace,
+        role: characterRole,
+        personality: characterPersonality,
+        artStyle: characterArtStyle,
+        videoStyle: videoStyle,
+        appearance: characterAppearance,
+        characterImageBase64: originalCharacterImage
+      });
+      if (response?.success && response?.imageUrl) {
+        setCharacterImage(response.imageUrl);
+      } else {
+        throw new Error(response?.error || 'Failed to generate preview');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Error generating character preview');
+    } finally {
+      setGeneratingCharacter(false);
+    }
+  };
+
+  const generatePromptAndScenes = async () => withBusy(async () => {
+    if (!jobId) throw new Error('Draft missing. Complete step 1 first.');
+
+    // Use the new Video Style-Aware Prompt Engineering system
+    const response = await videoGenerationAPI.generateVideoStylePrompts({
+      description: description,
+      videoStyle: videoStyle || 'Cinematic Commercial',
+      characterName: characterName || 'Character',
+      sceneCount: sceneCount || 5,
+      productName: selectedProduct?.name || undefined,
+      duration: durationSeconds || 30
+    });
+
+    if (!response?.success) {
+      throw new Error(response?.message || 'Style-aware scene generation failed');
+    }
+
+    setScenes(response.scenes || []);
+    if (response.promptText) {
+      setPromptText(response.promptText);
+    }
+    
+    // Save generated scenes to the draft immediately so they persist
+    const saveResponse = await videoGenerationAPI.generateScenes({
+      jobId,
+      sceneData: response.scenes,
+      saveOnly: true
+    });
+    
+    // Save promptText to the draft as well
+    if (response.promptText) {
+      await videoGenerationAPI.generatePrompt({
+        jobId,
+        promptText: response.promptText,
+        saveOnly: true
+      });
+    }
+    
+    setDraft(saveResponse?.draft || draft);
   });
 
   const saveStep2EditsAndNext = async () => withBusy(async () => {
@@ -675,18 +816,32 @@ const ReelGenerator: React.FC = () => {
     });
     setScenes(sceneResponse?.sceneData || scenes);
     setDraft(sceneResponse?.draft || draft);
-    setStep(3);
+    setStep(4);
   });
 
   const generateSceneImages = async () => withBusy(async () => {
     if (!jobId) throw new Error('Draft missing');
-    const response = await videoGenerationAPI.generateImages({
+    
+    console.log('🎭 FRONTEND DEBUG: Image Generation Starting (ALL SCENES)');
+    console.log('   Character Image:', characterImage ? '✓ Present' : '❌ MISSING');
+    console.log('   Character Image Size:', characterImage?.length);
+    console.log('   Character Name:', characterName);
+    console.log('   Video ID:', jobId);
+
+    const payload = {
       jobId,
       action: 'generateAll',
       sceneData: scenes,
-      async: true
-    });
+      async: true,
+      characterImageBase64: characterImage,
+      characterName,
+      videoStyle,
+      useLogo
+    };
+    console.log('📤 Sending payload to backend:', payload);
 
+    const response = await videoGenerationAPI.generateImages(payload);
+    console.log('📥 Backend response:', response);
     const queueJobId = response?.queueJobId;
     if (queueJobId) {
       await pollJob(queueJobId, async (result) => {
@@ -707,12 +862,28 @@ const ReelGenerator: React.FC = () => {
     markSceneRegenerating(sid, true);
     setError('');
     try {
-      const response = await videoGenerationAPI.generateImages({
+      console.log('🎭 FRONTEND DEBUG: Image Regeneration Starting (SINGLE SCENE)');
+      console.log('   Character Image:', characterImage ? '✓ Present' : '❌ MISSING');
+      console.log('   Character Image Size:', characterImage?.length);
+      console.log('   Character Name:', characterName);
+      console.log('   Video ID:', jobId);
+      console.log('   Scene Prompt:', scene.imagePrompt);
+
+      const payload = {
         jobId,
         action: 'regenerate',
         sceneId: scene.sceneId,
-        imagePrompt: scene.imagePrompt
-      });
+        imagePrompt: scene.imagePrompt,
+        characterImageBase64: characterImage,
+        characterName,
+        videoStyle,
+        useLogo
+      };
+      console.log('📤 Sending payload to backend:', payload);
+
+      const response = await videoGenerationAPI.generateImages(payload);
+      console.log('📥 Backend response:', response);
+
       if (!response?.success) throw new Error(response?.message || 'Image regeneration failed');
       setScenes(response.sceneData || []);
       setDraft(response.draft || draft);
@@ -806,7 +977,7 @@ const ReelGenerator: React.FC = () => {
       await pollJob(queueJobId, async (result) => {
         setGeneratedTracks(result?.audio?.tracks || null);
         setDraft(result?.draft || draft);
-        setStep(6);
+        setStep(7);
       });
       return;
     }
@@ -814,7 +985,7 @@ const ReelGenerator: React.FC = () => {
     if (!response?.success) throw new Error(response?.message || 'Audio generation failed');
     setGeneratedTracks(response?.audio?.tracks || null);
     setDraft(response?.draft || draft);
-    setStep(6);
+    setStep(7);
   });
 
   const mixAudio = async () => withBusy(async () => {
@@ -903,7 +1074,7 @@ const ReelGenerator: React.FC = () => {
     setSuccessMessage(response?.message || (publishNow ? 'Post queued for immediate publish.' : 'Post scheduled successfully.'));
     setStatusFilter(publishNow ? 'posted' : 'scheduled');
     // Keep wizard open and land on Final Output so user can see the rendered video
-    setStep(11);
+    setStep(12);
   });
 
   const togglePlatform = (platform: string) => {
@@ -1401,7 +1572,7 @@ const ReelGenerator: React.FC = () => {
                     />
                   </div>
                   <div>
-                    <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Upload Image (Optional)</label>
+                    <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Upload Product Image (Optional)</label>
                     <input type="file" accept="image/*" className="mt-2 text-sm" onChange={(e) => onInputImage(e.target.files?.[0])} />
                     {inputImageName && <p className={`text-xs mt-1 ${theme.textSecondary}`}>{inputImageName}</p>}
                   </div>
@@ -1436,6 +1607,306 @@ const ReelGenerator: React.FC = () => {
             )}
 
             {step === 2 && (
+            <div className={`p-6 space-y-6 ${panelClass}`}>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className={`text-xl font-bold ${theme.text}`}>Character & Video Style Configuration</h2>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="flex items-center justify-between p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+                  <span className={theme.text}>Use Character in Video</span>
+                  <button
+                    onClick={() => setCharacterEnabled(!characterEnabled)}
+                    className={`flex-shrink-0 transition-colors ${characterEnabled ? 'text-[#ffcc29]' : theme.textMuted}`}
+                  >
+                    {characterEnabled ? <ToggleRight className="w-8 h-8" /> : <ToggleLeft className="w-8 h-8" />}
+                  </button>
+                </div>
+                <div className="flex items-center justify-between p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+                  <span className={theme.text}>Preserve Character Identity</span>
+                  <button
+                    onClick={() => setPreserveIdentity(!preserveIdentity)}
+                    className={`flex-shrink-0 transition-colors ${preserveIdentity ? 'text-[#ffcc29]' : theme.textMuted}`}
+                    disabled={!characterEnabled}
+                  >
+                    {preserveIdentity ? <ToggleRight className="w-8 h-8" /> : <ToggleLeft className="w-8 h-8" />}
+                  </button>
+                </div>
+                <div className="flex items-center justify-between p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+                  <span className={theme.text}>Include Brand Logo</span>
+                  <button
+                    onClick={() => setUseLogo(!useLogo)}
+                    className={`flex-shrink-0 transition-colors ${useLogo ? 'text-[#ffcc29]' : theme.textMuted}`}
+                  >
+                    {useLogo ? <ToggleRight className="w-8 h-8" /> : <ToggleLeft className="w-8 h-8" />}
+                  </button>
+                </div>
+              </div>
+
+              {characterEnabled && (
+                <div className="space-y-4 mt-4">
+                  <div>
+                    <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Character Name</label>
+                    <input type="text" className={inputClass} value={characterName} onChange={(e) => setCharacterName(e.target.value)} placeholder="e.g. Sarah" />
+                  </div>
+
+                  <div className="mt-4 p-4 rounded-xl border border-slate-200 dark:border-slate-800 space-y-4">
+                    <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Character Source</label>
+                    <div className="flex items-center gap-4">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input type="radio" checked={characterSource === 'generate'} onChange={() => setCharacterSource('generate')} />
+                        <span className={theme.text}>Generate AI Character</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input type="radio" checked={characterSource === 'upload'} onChange={() => setCharacterSource('upload')} />
+                        <span className={theme.text}>Upload Image</span>
+                      </label>
+                    </div>
+
+                    {characterSource === 'upload' ? (
+                      <div>
+                        <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Upload Character Image</label>
+                        <input 
+                          type="file" 
+                          accept="image/*"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              const base64 = await fileToDataUrl(file);
+                              if (base64) {
+                                setCharacterImage(base64);
+                                setOriginalCharacterImage(base64);
+                                setCharacterApproved(true);
+                              }
+                            }
+                          }}
+                          className={inputClass}
+                        />
+                        {characterImage && (
+                          <div className="mt-2 relative inline-block">
+                            <img src={characterImage} alt="Character Reference" className="h-24 w-24 object-cover rounded-lg" />
+                            <button onClick={() => { setCharacterImage(''); setCharacterApproved(false); }} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1"><XCircle className="w-4 h-4" /></button>
+                          </div>
+                        )}
+
+                        {originalCharacterImage && (
+                          <div className="mt-4 p-4 border rounded-xl border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/20 text-center space-y-3">
+                            <h3 className={`font-bold ${theme.text}`}>Master Character Sheet</h3>
+                            <p className={`text-sm ${theme.textMuted}`}>Generate a 360° character sheet to improve consistency across all scenes.</p>
+                            
+                            {characterImage !== originalCharacterImage && characterImage && (
+                              <div className="relative group cursor-pointer" onClick={() => setPreviewImageModal(characterImage)}>
+                                <img src={characterImage} alt="Master Sheet" className="h-48 w-full object-contain rounded-xl mx-auto shadow-md transition-transform group-hover:scale-[1.02]" />
+                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl flex items-center justify-center">
+                                  <span className="text-white font-medium bg-black/50 px-3 py-1 rounded-lg flex items-center"><Search className="w-4 h-4 mr-2" /> Click to Preview</span>
+                                </div>
+                              </div>
+                            )}
+
+                            {!characterApproved || characterImage === originalCharacterImage ? (
+                              <div className="flex justify-center gap-3 mt-2">
+                                <button onClick={handleGenerateCharacterPreview} disabled={generatingCharacter} className="px-4 py-2 bg-indigo-500 text-white font-semibold rounded-xl hover:bg-indigo-600 transition disabled:opacity-50">
+                                  {generatingCharacter ? <Loader2 className="w-4 h-4 animate-spin inline mr-2" /> : <Sparkles className="w-4 h-4 inline mr-2" />}
+                                  Generate Master Sheet
+                                </button>
+                                {characterImage !== originalCharacterImage && characterImage && (
+                                    <button onClick={() => setCharacterApproved(true)} className="px-3 py-2 bg-emerald-500 text-white rounded-lg text-sm font-medium hover:bg-emerald-600 transition">
+                                      Approve
+                                    </button>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="text-emerald-500 font-bold text-sm">✓ Character Sheet Approved</div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Age</label>
+                            <input type="text" className={inputClass} value={characterAge} onChange={(e) => setCharacterAge(e.target.value)} placeholder="e.g. 28" />
+                          </div>
+                          <div>
+                            <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Gender</label>
+                            <select className={inputClass} value={characterGender} onChange={(e) => setCharacterGender(e.target.value)}>
+                              <option value="">Select Gender</option>
+                              <option value="Male">Male</option>
+                              <option value="Female">Female</option>
+                              <option value="Other">Other</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Ethnicity / Race</label>
+                            <select className={inputClass} value={characterRace} onChange={(e) => setCharacterRace(e.target.value)}>
+                              <option value="">Select Ethnicity (Optional)</option>
+                              <option value="Indian">Indian</option>
+                              <option value="South Indian">South Indian</option>
+                              <option value="Asian">Asian</option>
+                              <option value="American">American</option>
+                              <option value="European">European</option>
+                              <option value="Arab">Arab</option>
+                              <option value="Japanese">Japanese</option>
+                              <option value="Mexican">Mexican</option>
+                              <option value="African">African</option>
+                              <option value="Latino">Latino</option>
+                              <option value="Mixed">Mixed</option>
+                            </select>
+                          </div>
+                          {characterGender !== 'Female' && (
+                            <div>
+                              <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Facial Hair / Beard</label>
+                              <select className={inputClass} value={characterBeard} onChange={(e) => setCharacterBeard(e.target.value)}>
+                                <option value="">Clean Shaven (No Beard)</option>
+                                <option value="Stubble">Stubble</option>
+                                <option value="Short Beard">Short Beard</option>
+                                <option value="Full Beard">Full Beard</option>
+                                <option value="Goatee">Goatee</option>
+                                <option value="Mustache Only">Mustache Only</option>
+                              </select>
+                            </div>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Role</label>
+                            <input type="text" className={inputClass} value={characterRole} onChange={(e) => setCharacterRole(e.target.value)} placeholder="e.g. Startup Founder" />
+                          </div>
+                          <div>
+                            <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Personality</label>
+                            <select className={inputClass} value={characterPersonality} onChange={(e) => setCharacterPersonality(e.target.value)}>
+                              <option value="">Select Personality</option>
+                              <option value="Professional">Professional</option>
+                              <option value="Casual">Casual</option>
+                              <option value="Energetic">Energetic</option>
+                              <option value="Calm">Calm</option>
+                              <option value="Confident">Confident</option>
+                              <option value="Friendly">Friendly</option>
+                              <option value="Serious">Serious</option>
+                              <option value="Funny">Funny</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div>
+                          <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Appearance / Clothing</label>
+                          <input type="text" className={inputClass} value={characterAppearance} onChange={(e) => setCharacterAppearance(e.target.value)} placeholder="e.g. Modern business woman, Premium formal outfit" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Hair Style & Color</label>
+                            <input type="text" className={inputClass} value={characterHairStyle} onChange={(e) => setCharacterHairStyle(e.target.value)} placeholder="e.g. Long straight black hair" />
+                          </div>
+                          <div>
+                            <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Format / Art Style</label>
+                            <select className={inputClass} value={characterArtStyle} onChange={(e) => setCharacterArtStyle(e.target.value)}>
+                              <option value="Realistic / Photography">Real Person / Realistic</option>
+                              <option value="Anime / Manga">Anime</option>
+                              <option value="3D Animation / Cartoon">3D Animation / Cartoon Character</option>
+                              <option value="Vector Illustration">Vector Illustration</option>
+                            </select>
+                          </div>
+                        </div>
+                        <button
+                          onClick={handleGenerateCharacterPreview}
+                          disabled={generatingCharacter}
+                          className="px-4 py-2 bg-indigo-500 text-white font-semibold rounded-xl hover:bg-indigo-600 transition disabled:opacity-50"
+                        >
+                          {generatingCharacter ? <Loader2 className="w-4 h-4 animate-spin inline mr-2" /> : <Sparkles className="w-4 h-4 inline mr-2" />}
+                          Generate Character Preview
+                        </button>
+                        
+                        {characterImage && (
+                          <div className="p-4 border rounded-xl border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/20 text-center space-y-3">
+                            <h3 className={`font-bold ${theme.text}`}>Generated Character</h3>
+                            
+                            <div className="relative group cursor-pointer" onClick={() => setPreviewImageModal(characterImage)}>
+                              <img src={characterImage} alt="Generated Character Preview" className="h-48 w-full object-contain rounded-xl mx-auto shadow-md transition-transform group-hover:scale-[1.02]" />
+                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl flex items-center justify-center">
+                                <span className="text-white font-medium bg-black/50 px-3 py-1 rounded-lg flex items-center"><Search className="w-4 h-4 mr-2" /> Click to Preview</span>
+                              </div>
+                            </div>
+                            
+                            {!characterApproved ? (
+                              <div className="flex justify-center gap-3 mt-2">
+                                <button onClick={handleGenerateCharacterPreview} disabled={generatingCharacter} className="px-3 py-1.5 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+                                  Regenerate
+                                </button>
+                                <button onClick={() => setCharacterApproved(true)} className="px-3 py-1.5 bg-emerald-500 text-white rounded-lg text-sm font-medium hover:bg-emerald-600 transition">
+                                  Approve Character
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="text-emerald-500 font-bold text-sm">✓ Character Approved</div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4 mt-4">
+                    <div>
+                      <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Character Usage</label>
+                      <select className={inputClass} value={characterUsage} onChange={(e) => setCharacterUsage(e.target.value)}>
+                        <option value="Main Character in all scenes">Main Character in all scenes</option>
+                        <option value="Character only in selected scenes">Character only in selected scenes</option>
+                        <option value="Background character only">Background character only</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Character Consistency Strength</label>
+                      <select className={inputClass} value={characterConsistencyStrength} onChange={(e) => setCharacterConsistencyStrength(e.target.value)}>
+                        <option value="Low">Low</option>
+                        <option value="Medium">Medium</option>
+                        <option value="High">High</option>
+                        <option value="Strict">Strict</option>
+                      </select>
+                    </div>
+                  </div>
+                  
+                </div>
+              )}
+
+              <div className="mt-6">
+                <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Video Style</label>
+                <select className={inputClass} value={videoStyle} onChange={(e) => {
+                  const style = e.target.value;
+                  setVideoStyle(style);
+                  if (style === 'Storytelling' && characterConsistencyStrength !== 'Strict') {
+                    setCharacterConsistencyStrength('Strict');
+                  }
+                }}>
+                  <option value="Cinematic Commercial">Cinematic Commercial</option>
+                  <option value="Storytelling">Storytelling</option>
+                  <option value="Product Advertisement">Product Advertisement</option>
+                  <option value="Daily Life Vlog">Daily Life Vlog</option>
+                  <option value="Documentary">Documentary</option>
+                  <option value="Educational">Educational</option>
+                  <option value="Motivational">Motivational</option>
+                  <option value="Corporate Presentation">Corporate Presentation</option>
+                  <option value="Testimonial">Testimonial</option>
+                  <option value="Product Showcase">Product Showcase</option>
+                  <option value="News Update">News Update</option>
+                  <option value="Social Media Reel">Social Media Reel</option>
+                  <option value="Luxury Advertisement">Luxury Advertisement</option>
+                </select>
+              </div>
+
+              <div className="flex justify-end pt-4 border-t border-slate-200 dark:border-slate-800">
+                <button
+                  onClick={step2Next}
+                  disabled={busy || (characterEnabled && !characterApproved && characterSource === 'generate')}
+                  className="px-6 py-2.5 bg-[#ffcc29] text-black font-semibold rounded-xl hover:bg-[#e6b825] transition disabled:opacity-50"
+                >
+                  {characterEnabled && !characterApproved && characterSource === 'generate' ? 'Approve Character to Continue' : 'Save & Next (Prompt + Scenes)'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {step === 3 && (
               <div className={`${panelClass} p-6 space-y-4`}>
                 <h2 className={`font-bold text-lg ${theme.text}`}>Step 2: Prompt + Scene Generation</h2>
                 <div className="flex gap-3">
@@ -1470,24 +1941,26 @@ const ReelGenerator: React.FC = () => {
                           </button>
                         </div>
 
-                        <div>
-                          <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Title</label>
-                          <input value={scene.title || ''} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, title: e.target.value } : item))} className={`${inputClass} mt-1`} disabled={isRegen} />
-                        </div>
+                        <div className="flex gap-4">
+                          <div className="flex-1">
+                            <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Title</label>
+                            <input value={scene.title || ''} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, title: e.target.value } : item))} className={`${inputClass} mt-1`} disabled={isRegen} />
+                          </div>
 
-                        <div>
-                          <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Duration (seconds)</label>
-                          <input type="number" min={1} value={scene.durationSeconds || 1} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, durationSeconds: Number(e.target.value) || 1 } : item))} className={`${inputClass} mt-1`} disabled={isRegen} />
+                          <div className="w-1/3">
+                            <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Duration (sec)</label>
+                            <input type="number" min={1} value={scene.durationSeconds || 1} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, durationSeconds: Number(e.target.value) || 1 } : item))} className={`${inputClass} mt-1`} disabled={isRegen} />
+                          </div>
                         </div>
 
                         <div>
                           <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Image Prompt</label>
-                          <textarea value={scene.imagePrompt || ''} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, imagePrompt: e.target.value } : item))} className={`${inputClass} mt-1 min-h-[70px]`} placeholder="Describe the visual for the still image" disabled={isRegen} />
+                          <textarea value={scene.imagePrompt || ''} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, imagePrompt: e.target.value } : item))} className={`${inputClass} mt-1 min-h-[130px] max-h-[300px] overflow-y-auto resize-y`} placeholder="Describe the visual for the still image" disabled={isRegen} />
                         </div>
 
                         <div>
                           <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Video Prompt</label>
-                          <textarea value={scene.videoPrompt || ''} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, videoPrompt: e.target.value } : item))} className={`${inputClass} mt-1 min-h-[70px]`} placeholder="Describe the motion / animation for the clip" disabled={isRegen} />
+                          <textarea value={scene.videoPrompt || ''} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, videoPrompt: e.target.value } : item))} className={`${inputClass} mt-1 min-h-[130px] max-h-[300px] overflow-y-auto resize-y`} placeholder="Describe the motion / animation for the clip" disabled={isRegen} />
                         </div>
 
                         {isRegen && (
@@ -1510,7 +1983,7 @@ const ReelGenerator: React.FC = () => {
               </div>
             )}
 
-            {step === 3 && (
+            {step === 4 && (
               <div className={`${panelClass} p-6 space-y-4`}>
                 <h2 className={`font-bold text-lg ${theme.text}`}>Step 3: Image Generation (Scene Preview)</h2>
                 <button onClick={generateSceneImages} disabled={busy} className="px-4 py-2 rounded-xl border border-[#ffcc29] text-[#ffcc29] font-semibold">
@@ -1523,9 +1996,16 @@ const ReelGenerator: React.FC = () => {
                       <div key={scene.sceneId || idx} className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3`}>
                         <p className={`font-semibold ${theme.text}`}>{scene.title || `Scene ${idx + 1}`}</p>
                         <textarea value={scene.imagePrompt || ''} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, imagePrompt: e.target.value } : item))} className={`${inputClass} mt-2 min-h-[70px]`} disabled={isRegen} />
-                        <div className="relative mt-3">
+                        <div className="relative mt-3 group cursor-pointer" onClick={() => { if (scene.imageUrl) setPreviewImageUrl(scene.imageUrl); }}>
                           {scene.imageUrl ? (
-                            <img src={scene.imageUrl} alt={scene.title} className={`w-full h-52 object-cover rounded-lg border border-slate-700 transition-all duration-300 ${isRegen ? 'opacity-30 blur-sm' : ''}`} />
+                            <>
+                              <img src={scene.imageUrl} alt={scene.title} className={`w-full h-52 object-cover rounded-lg border border-slate-700 transition-all duration-300 ${isRegen ? 'opacity-30 blur-sm' : ''}`} />
+                              {!isRegen && (
+                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-lg">
+                                  <Eye className="w-8 h-8 text-white" />
+                                </div>
+                              )}
+                            </>
                           ) : (
                             <div className="h-52 rounded-lg border border-dashed border-slate-600 flex items-center justify-center">
                               <ImageIcon className="w-7 h-7 text-slate-500" />
@@ -1559,11 +2039,11 @@ const ReelGenerator: React.FC = () => {
                     );
                   })}
                 </div>
-                <button onClick={() => setStep(4)} disabled={!canStep3Next} className={primaryButtonClass(!canStep3Next)}>Next</button>
+                <button onClick={() => setStep(5)} disabled={!canStep3Next} className={primaryButtonClass(!canStep3Next)}>Next</button>
               </div>
             )}
 
-            {step === 4 && (
+            {step === 5 && (
               <div className={`${panelClass} p-6 space-y-4`}>
                 <h2 className={`font-bold text-lg ${theme.text}`}>Step 4: Video Clip Generation</h2>
                 <button onClick={generateClips} disabled={busy} className="px-4 py-2 rounded-xl border border-[#ffcc29] text-[#ffcc29] font-semibold">
@@ -1590,11 +2070,11 @@ const ReelGenerator: React.FC = () => {
                     </div>
                   ))}
                 </div>
-                <button onClick={() => setStep(5)} disabled={!canStep4Next} className={primaryButtonClass(!canStep4Next)}>Next</button>
+                <button onClick={() => setStep(6)} disabled={!canStep4Next} className={primaryButtonClass(!canStep4Next)}>Next</button>
               </div>
             )}
 
-            {step === 5 && (
+            {step === 6 && (
               <div className={`${panelClass} p-6 space-y-4`}>
                 <h2 className={`font-bold text-lg ${theme.text}`}>Step 5: Audio Configuration</h2>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1752,7 +2232,7 @@ const ReelGenerator: React.FC = () => {
               </div>
             )}
 
-            {step === 6 && (
+            {step === 7 && (
               <div className={`${panelClass} p-6 space-y-4`}>
                 <h2 className={`font-bold text-lg ${theme.text}`}>Step 6: Audio Mixing Preview</h2>
                 {activeAudioScript && (
@@ -1786,7 +2266,7 @@ const ReelGenerator: React.FC = () => {
                   <button onClick={mixAudio} disabled={busy} className="px-5 py-3 rounded-xl border border-[#ffcc29] text-[#ffcc29] font-semibold disabled:opacity-60">
                     {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Mix Audio'}
                   </button>
-                  <button onClick={() => setStep(7)} disabled={!canStep6Next} className={primaryButtonClass(!canStep6Next)}>Next</button>
+                  <button onClick={() => setStep(8)} disabled={!canStep6Next} className={primaryButtonClass(!canStep6Next)}>Next</button>
                 </div>
                 {finalAudioUrl && (
                   <div className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3`}>
@@ -1797,14 +2277,14 @@ const ReelGenerator: React.FC = () => {
               </div>
             )}
 
-            {step === 7 && (
+            {step === 8 && (
               <div className={`${panelClass} p-6 space-y-4`}>
                 <h2 className={`font-bold text-lg ${theme.text}`}>Step 7: Video + Audio Merge</h2>
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <button onClick={mergeVideo} disabled={busy} className="px-5 py-3 rounded-xl border border-[#ffcc29] text-[#ffcc29] font-semibold disabled:opacity-60">
                     {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Merge Video + Audio'}
                   </button>
-                  <button onClick={() => setStep(8)} disabled={!canStep7Next} className={primaryButtonClass(!canStep7Next)}>Next</button>
+                  <button onClick={() => setStep(9)} disabled={!canStep7Next} className={primaryButtonClass(!canStep7Next)}>Next</button>
                 </div>
                 {(finalOutputUrl || finalVideoUrl) && (
                   <div>
@@ -1815,7 +2295,7 @@ const ReelGenerator: React.FC = () => {
               </div>
             )}
 
-            {step === 8 && (
+            {step === 9 && (
               <div className={`${panelClass} p-6 space-y-4`}>
                 <h2 className={`font-bold text-lg ${theme.text}`}>Step 8: Thumbnail + Content Generation</h2>
                 <button onClick={generateContent} disabled={busy} className="px-4 py-2 rounded-xl border border-[#ffcc29] text-[#ffcc29] font-semibold">
@@ -1843,11 +2323,11 @@ const ReelGenerator: React.FC = () => {
                     </div>
                   </div>
                 </div>
-                <button onClick={() => setStep(9)} disabled={!canStep8Next} className={primaryButtonClass(!canStep8Next)}>Next</button>
+                <button onClick={() => setStep(10)} disabled={!canStep8Next} className={primaryButtonClass(!canStep8Next)}>Next</button>
               </div>
             )}
 
-            {step === 9 && (
+            {step === 10 && (
               <div className={`${panelClass} p-6 space-y-4`}>
                 <h2 className={`font-bold text-lg ${theme.text}`}>Step 9: Platform Selection</h2>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -1869,11 +2349,11 @@ const ReelGenerator: React.FC = () => {
                     );
                   })}
                 </div>
-                <button onClick={() => setStep(10)} disabled={!canStep9Next} className={primaryButtonClass(!canStep9Next)}>Next</button>
+                <button onClick={() => setStep(11)} disabled={!canStep9Next} className={primaryButtonClass(!canStep9Next)}>Next</button>
               </div>
             )}
 
-            {step === 10 && (
+            {step === 11 && (
               <div className={`${panelClass} p-6 space-y-4`}>
                 <h2 className={`font-bold text-lg ${theme.text}`}>Step 10: Scheduling</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1897,7 +2377,7 @@ const ReelGenerator: React.FC = () => {
               </div>
             )}
 
-            {step === 11 && (
+            {step === 12 && (
               <div className={`${panelClass} p-6 space-y-4`}>
                 <h2 className={`font-bold text-lg ${theme.text}`}>Final Step: Output</h2>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -1965,6 +2445,34 @@ const ReelGenerator: React.FC = () => {
           </>
         )}
       </div>
+
+      {/* Full Screen Image Preview Modal */}
+      {previewImageUrl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4" onClick={() => setPreviewImageUrl(null)}>
+          <button 
+            className="absolute top-6 right-6 text-white hover:text-gray-300 transition"
+            onClick={(e) => { e.stopPropagation(); setPreviewImageUrl(null); }}
+          >
+            <X className="w-8 h-8" />
+          </button>
+          <img 
+            src={previewImageUrl} 
+            alt="Preview" 
+            className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
+      
+      {/* Full Screen Image Preview Modal */}
+      {previewImageModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4" onClick={() => setPreviewImageModal(null)}>
+          <button className="absolute top-4 right-4 text-white bg-white/10 hover:bg-white/20 p-2 rounded-full transition">
+            <XCircle className="w-6 h-6" />
+          </button>
+          <img src={previewImageModal} alt="Preview" className="max-w-full max-h-full object-contain rounded-lg" onClick={(e) => e.stopPropagation()} />
+        </div>
+      )}
     </div>
   );
 };
