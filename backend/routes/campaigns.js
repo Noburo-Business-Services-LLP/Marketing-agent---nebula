@@ -2537,50 +2537,69 @@ router.post('/', protect, async (req, res) => {
       userId
     };
 
-    // Pre-upload any base64 images to Cloudinary before saving.
-    // A base64 data URL of a ~13MB image is ~17MB, which exceeds MongoDB's
-    // 16MiB BSON document limit and blows up with an "offset out of range"
-    // error deep inside the BSON serializer. Save the Cloudinary URL instead.
-    if (campaignData.creative && typeof campaignData.creative === 'object') {
-      if (Array.isArray(campaignData.creative.imageUrls) && campaignData.creative.imageUrls.length > 0) {
-        const rewritten = [];
-        for (const url of campaignData.creative.imageUrls) {
-          if (typeof url === 'string' && isBase64DataUrl(url)) {
-            try {
-              const publicUrl = await ensurePublicUrl(url, { strict: true });
-              if (publicUrl) {
-                rewritten.push(publicUrl);
-              } else {
-                return res.status(413).json({
-                  success: false,
-                  message: 'Image too large or Cloudinary upload failed. Try a smaller file.'
-                });
-              }
-            } catch (uploadErr) {
-              console.error('Base64 image pre-upload failed on campaign create:', uploadErr?.message);
-              return res.status(413).json({
-                success: false,
-                message: `Image upload failed: ${uploadErr?.message || 'unknown error'}`
-              });
-            }
-          } else {
-            rewritten.push(url);
+    // Diagnostic: find any string field over 1MB anywhere in the payload.
+    // MongoDB's 16MiB BSON limit trips deep in the serializer with a cryptic
+    // "The value of 'offset' is out of range" error — this log narrows down
+    // which field is the offender so we can strip/upload it.
+    try {
+      const findBigStrings = (obj, path = '$', out = []) => {
+        if (out.length > 20 || obj === null || obj === undefined) return out;
+        if (typeof obj === 'string') {
+          if (obj.length > 1024 * 1024) {
+            out.push({ path, sizeMB: (obj.length / 1024 / 1024).toFixed(2), prefix: obj.substring(0, 60) });
+          }
+        } else if (Array.isArray(obj)) {
+          obj.forEach((v, i) => findBigStrings(v, `${path}[${i}]`, out));
+        } else if (typeof obj === 'object') {
+          for (const k of Object.keys(obj)) findBigStrings(obj[k], `${path}.${k}`, out);
+        }
+        return out;
+      };
+      const bigFields = findBigStrings(campaignData);
+      if (bigFields.length > 0) {
+        console.log('[campaigns.create] Large string fields detected:', JSON.stringify(bigFields));
+      }
+    } catch (_) { /* diagnostic only */ }
+
+    // Walk the entire payload and upload ANY base64 data URL to Cloudinary
+    // before saving. Covers imageUrls/mediaUrl/instagramAudio/etc. so we
+    // never persist a raw 17MB base64 string into a Mongo document.
+    const isBase64 = (s) => typeof s === 'string' && /^data:(image|application|video|audio)\//i.test(s);
+    const uploadEverywhere = async (obj) => {
+      if (!obj || typeof obj !== 'object') return;
+      if (Array.isArray(obj)) {
+        for (let i = 0; i < obj.length; i++) {
+          const v = obj[i];
+          if (isBase64(v)) {
+            const publicUrl = await ensurePublicUrl(v, { strict: true });
+            if (!publicUrl) throw new Error('Cloudinary upload returned empty URL');
+            obj[i] = publicUrl;
+          } else if (v && typeof v === 'object') {
+            await uploadEverywhere(v);
           }
         }
-        campaignData.creative.imageUrls = rewritten;
+        return;
       }
-      if (typeof campaignData.creative.mediaUrl === 'string' && isBase64DataUrl(campaignData.creative.mediaUrl)) {
-        try {
-          const publicUrl = await ensurePublicUrl(campaignData.creative.mediaUrl, { strict: true });
-          if (publicUrl) campaignData.creative.mediaUrl = publicUrl;
-        } catch (uploadErr) {
-          console.error('Base64 mediaUrl pre-upload failed on campaign create:', uploadErr?.message);
-          return res.status(413).json({
-            success: false,
-            message: `Media upload failed: ${uploadErr?.message || 'unknown error'}`
-          });
+      for (const k of Object.keys(obj)) {
+        const v = obj[k];
+        if (isBase64(v)) {
+          const publicUrl = await ensurePublicUrl(v, { strict: true });
+          if (!publicUrl) throw new Error('Cloudinary upload returned empty URL');
+          obj[k] = publicUrl;
+        } else if (v && typeof v === 'object') {
+          await uploadEverywhere(v);
         }
       }
+    };
+
+    try {
+      await uploadEverywhere(campaignData);
+    } catch (uploadErr) {
+      console.error('[campaigns.create] Base64 pre-upload failed:', uploadErr?.message);
+      return res.status(413).json({
+        success: false,
+        message: `Media upload failed: ${uploadErr?.message || 'unknown error'}`
+      });
     }
 
     const campaign = new Campaign(campaignData);
