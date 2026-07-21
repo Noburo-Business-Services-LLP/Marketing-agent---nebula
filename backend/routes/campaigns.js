@@ -2531,11 +2531,57 @@ router.post('/upload-audio', protect, async (req, res) => {
 router.post('/', protect, async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
-    
+
     const campaignData = {
       ...req.body,
       userId
     };
+
+    // Pre-upload any base64 images to Cloudinary before saving.
+    // A base64 data URL of a ~13MB image is ~17MB, which exceeds MongoDB's
+    // 16MiB BSON document limit and blows up with an "offset out of range"
+    // error deep inside the BSON serializer. Save the Cloudinary URL instead.
+    if (campaignData.creative && typeof campaignData.creative === 'object') {
+      if (Array.isArray(campaignData.creative.imageUrls) && campaignData.creative.imageUrls.length > 0) {
+        const rewritten = [];
+        for (const url of campaignData.creative.imageUrls) {
+          if (typeof url === 'string' && isBase64DataUrl(url)) {
+            try {
+              const publicUrl = await ensurePublicUrl(url, { strict: true });
+              if (publicUrl) {
+                rewritten.push(publicUrl);
+              } else {
+                return res.status(413).json({
+                  success: false,
+                  message: 'Image too large or Cloudinary upload failed. Try a smaller file.'
+                });
+              }
+            } catch (uploadErr) {
+              console.error('Base64 image pre-upload failed on campaign create:', uploadErr?.message);
+              return res.status(413).json({
+                success: false,
+                message: `Image upload failed: ${uploadErr?.message || 'unknown error'}`
+              });
+            }
+          } else {
+            rewritten.push(url);
+          }
+        }
+        campaignData.creative.imageUrls = rewritten;
+      }
+      if (typeof campaignData.creative.mediaUrl === 'string' && isBase64DataUrl(campaignData.creative.mediaUrl)) {
+        try {
+          const publicUrl = await ensurePublicUrl(campaignData.creative.mediaUrl, { strict: true });
+          if (publicUrl) campaignData.creative.mediaUrl = publicUrl;
+        } catch (uploadErr) {
+          console.error('Base64 mediaUrl pre-upload failed on campaign create:', uploadErr?.message);
+          return res.status(413).json({
+            success: false,
+            message: `Media upload failed: ${uploadErr?.message || 'unknown error'}`
+          });
+        }
+      }
+    }
 
     const campaign = new Campaign(campaignData);
     await campaign.save();
