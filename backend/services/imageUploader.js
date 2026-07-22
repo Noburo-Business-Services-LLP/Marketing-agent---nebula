@@ -478,14 +478,71 @@ async function deleteImage(publicId) {
   }
 }
 
+/**
+ * Upload a base64 video (mp4/webm/mov) to Cloudinary. Uses upload_stream
+ * with a Buffer so we can push files larger than Cloudinary's ~10MB
+ * data-URI cap (paid plan supports up to 100MB per file).
+ * Cloudinary treats videos with resource_type: 'video'.
+ * @param {string} base64Data - Base64 video (with or without data URL prefix)
+ * @param {string} folder - Cloudinary folder
+ */
+async function uploadBase64Video(base64Data, folder = 'nebula-user-videos') {
+  const maxRetries = 2;
+  const baseDelayMs = 500;
+  const commaIdx = base64Data.indexOf(',');
+  const rawBase64 = commaIdx >= 0 ? base64Data.slice(commaIdx + 1) : base64Data;
+  const buffer = Buffer.from(rawBase64, 'base64');
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const result = await new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          { folder, resource_type: 'video', timeout: 180000 },
+          (err, res) => (err ? reject(err) : resolve(res))
+        );
+        stream.end(buffer);
+      });
+
+      console.log('✅ Video uploaded to Cloudinary:', result.secure_url);
+      return {
+        success: true,
+        url: result.secure_url,
+        publicId: result.public_id,
+        bytes: result.bytes,
+        format: result.format,
+        duration: result.duration
+      };
+    } catch (error) {
+      const errMsg = error?.message || error?.toString?.() || 'Cloudinary video upload failed';
+      console.error('❌ Cloudinary video upload error:', errMsg, {
+        attempt: attempt + 1,
+        code: error?.code,
+        http_code: error?.http_code
+      });
+      if (attempt < maxRetries && isRetriableCloudinaryError(error)) {
+        await sleep(baseDelayMs * (attempt + 1));
+        continue;
+      }
+      return { success: false, error: errMsg };
+    }
+  }
+  return { success: false, error: 'Cloudinary video upload failed after retries' };
+}
+
+function isBase64VideoDataUrl(url) {
+  return typeof url === 'string' && url.startsWith('data:video');
+}
+
 module.exports = {
   uploadBase64Image,
   uploadMultipleImages,
   isBase64DataUrl,
   isBase64AudioDataUrl,
+  isBase64VideoDataUrl,
   ensurePublicUrl,
   ensurePublicAudioUrl,
   uploadBase64Audio,
+  uploadBase64Video,
   uploadVideoFile,
   uploadInstagramSafeVideoFile,
   uploadLogo,

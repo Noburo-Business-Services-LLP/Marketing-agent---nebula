@@ -500,7 +500,7 @@ async function generateSocialMediaPosts(input) {
 
 
 // Import image uploader for converting base64 to hosted URLs
-const { ensurePublicUrl, ensurePublicAudioUrl, uploadBase64Audio, isBase64DataUrl } = require('../services/imageUploader');
+const { ensurePublicUrl, ensurePublicAudioUrl, uploadBase64Audio, uploadBase64Video, isBase64DataUrl, isBase64AudioDataUrl, isBase64VideoDataUrl } = require('../services/imageUploader');
 // Media composer (image -> video + audio) for Instagram audio posts
 const { composeImageToVideoWithAudio, validateVideoForInstagramPosting } = require('../services/mediaComposer');
 const {
@@ -2564,6 +2564,26 @@ router.post('/', protect, async (req, res) => {
     // Walk the entire payload and upload ANY base64 data URL to Cloudinary
     // before saving. Covers imageUrls/mediaUrl/instagramAudio/etc. so we
     // never persist a raw 17MB base64 string into a Mongo document.
+    // Route each media type to its correct Cloudinary uploader:
+    //   video/*  → uploadBase64Video (resource_type: 'video', stream upload)
+    //   audio/*  → uploadBase64Audio (resource_type: 'video' per Cloudinary convention)
+    //   image/*  → uploadBase64Image (via ensurePublicUrl)
+    const uploadOneBase64 = async (dataUrl) => {
+      if (isBase64VideoDataUrl(dataUrl)) {
+        const r = await uploadBase64Video(dataUrl, 'nebula-user-videos');
+        if (!r?.success || !r?.url) throw new Error(r?.error || 'Cloudinary video upload failed');
+        return r.url;
+      }
+      if (isBase64AudioDataUrl(dataUrl)) {
+        const r = await uploadBase64Audio(dataUrl, 'nebula-user-audio');
+        if (!r?.success || !r?.url) throw new Error(r?.error || 'Cloudinary audio upload failed');
+        return r.url;
+      }
+      // image/* + application/* → image path
+      const publicUrl = await ensurePublicUrl(dataUrl, { strict: true });
+      if (!publicUrl) throw new Error('Cloudinary image upload returned empty URL');
+      return publicUrl;
+    };
     const isBase64 = (s) => typeof s === 'string' && /^data:(image|application|video|audio)\//i.test(s);
     const uploadEverywhere = async (obj) => {
       if (!obj || typeof obj !== 'object') return;
@@ -2571,9 +2591,7 @@ router.post('/', protect, async (req, res) => {
         for (let i = 0; i < obj.length; i++) {
           const v = obj[i];
           if (isBase64(v)) {
-            const publicUrl = await ensurePublicUrl(v, { strict: true });
-            if (!publicUrl) throw new Error('Cloudinary upload returned empty URL');
-            obj[i] = publicUrl;
+            obj[i] = await uploadOneBase64(v);
           } else if (v && typeof v === 'object') {
             await uploadEverywhere(v);
           }
@@ -2583,9 +2601,7 @@ router.post('/', protect, async (req, res) => {
       for (const k of Object.keys(obj)) {
         const v = obj[k];
         if (isBase64(v)) {
-          const publicUrl = await ensurePublicUrl(v, { strict: true });
-          if (!publicUrl) throw new Error('Cloudinary upload returned empty URL');
-          obj[k] = publicUrl;
+          obj[k] = await uploadOneBase64(v);
         } else if (v && typeof v === 'object') {
           await uploadEverywhere(v);
         }
