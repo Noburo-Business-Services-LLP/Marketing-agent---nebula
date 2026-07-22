@@ -1,0 +1,87 @@
+{step === 2 && (
+  <div className={`p-6 space-y-6 ${panelClass}`}>
+    <div className="flex items-center justify-between mb-4">
+      <h2 className={`text-xl font-bold ${theme.text}`}>Character Manager</h2>
+    </div>
+    
+    <div className="overflow-x-auto">
+      <table className="w-full text-left border-collapse">
+        <thead>
+          <tr className={`border-b ${theme.border}`}>
+            <th className={`p-3 ${theme.textMuted}`}>ID</th>
+            <th className={`p-3 ${theme.textMuted}`}>Name</th>
+            <th className={`p-3 ${theme.textMuted}`}>Role</th>
+            <th className={`p-3 ${theme.textMuted}`}>Status</th>
+            <th className={`p-3 ${theme.textMuted}`}>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {(draft?.productionBible?.characterBible || []).map((char: any) => {
+            const stateChar = Array.isArray(draft?.characters) ? draft.characters.find((c: any) => c.id === char.characterId) : null;
+            return (
+              <tr key={char.characterId} className={`border-b ${theme.border} hover:bg-slate-50 dark:hover:bg-slate-900/50`}>
+                <td className={`p-3 font-mono text-sm ${theme.textMuted}`}>{char.characterId}</td>
+                <td className={`p-3 font-semibold ${theme.text}`}>{char.name}</td>
+                <td className={`p-3 ${theme.text}`}>Character</td>
+                <td className={`p-3`}>
+                  {stateChar?.image ? (
+                    <span className="text-emerald-500 font-medium">Generated</span>
+                  ) : (
+                    <span className="text-amber-500 font-medium">Pending</span>
+                  )}
+                </td>
+                <td className="p-3">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={async () => {
+                         try {
+                           setBusy(true);
+                           const res = await videoGenerationAPI.generateCharacterPreview({
+                             name: char.name,
+                             age: char.appearance?.ageAppearance || '25',
+                             gender: 'Any',
+                             hairStyle: char.hair?.style || 'Natural',
+                             appearance: JSON.stringify(char.appearance),
+                             artStyle: 'Realistic / Photography'
+                           });
+                           if (res?.image) {
+                             const updatedChars = [...(draft?.characters || [])];
+                             const idx = updatedChars.findIndex((c: any) => c.id === char.characterId);
+                             const newChar = { id: char.characterId, name: char.name, role: 'Character', image: res.image };
+                             if (idx > -1) updatedChars[idx] = newChar;
+                             else updatedChars.push(newChar);
+                             
+                             await videoGenerationAPI.updateDraft(jobId!, { characters: updatedChars });
+                             setDraft(prev => prev ? { ...prev, characters: updatedChars } : prev);
+                           }
+                         } finally {
+                           setBusy(false);
+                         }
+                      }}
+                      disabled={busy}
+                      className="px-3 py-1.5 bg-indigo-500 text-white rounded-lg text-sm font-medium hover:bg-indigo-600 transition disabled:opacity-50"
+                    >
+                      Generate
+                    </button>
+                    {stateChar?.image && (
+                      <img src={stateChar.image} className="w-10 h-10 rounded-full object-cover border cursor-pointer" alt={char.name} onClick={() => setPreviewImageModal(stateChar.image)} />
+                    )}
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+    
+    <div className="flex gap-3 justify-end mt-6">
+      <button onClick={() => setStep(1)} disabled={busy} className="px-6 py-2 rounded-xl font-medium border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+        Back
+      </button>
+      <button onClick={() => setStep(3)} disabled={busy} className="px-6 py-2 rounded-xl font-medium bg-[#ffcc29] text-black hover:bg-[#e6b825] transition-colors">
+        Next: Screenplay
+      </button>
+    </div>
+  </div>
+)}

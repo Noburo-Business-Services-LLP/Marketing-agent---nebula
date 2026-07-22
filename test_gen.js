@@ -1,0 +1,1 @@
+const { generateScenesPlan } = require("./backend/services/videoGenerationPipeline"); async function test() { try { const res = await generateScenesPlan({ input: { description: "Saree ad", durationSeconds: 30, sceneCount: 4 }, user: {} }); console.log(JSON.stringify(res.scenes, null, 2)); } catch (e) { console.error(e); } } test();

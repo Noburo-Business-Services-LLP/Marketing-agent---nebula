@@ -13,6 +13,7 @@ const { callGemini, parseGeminiJSON, generateCampaignImageNanoBanana, extractCha
 const { getPublicBaseUrl, normalizeTone, audioFilePathForTone } = require('../utils/toneAudio');
 const { generateVideoClip, generateCharacterImageFal, generateCharacterSheetFal, applyFaceSwapFal, extractFaceEmbedding } = require('./videoService');
 const { uploadVideoFile } = require('./imageUploader');
+const promptBuilder = require('./promptBuilder');
 
 const STORAGE_ROOT = path.resolve(__dirname, '../storage/ai-videos');
 const VIDEO_TARGET = { width: 1080, height: 1920, fps: 30 };
@@ -548,7 +549,6 @@ function buildFallbackSceneSkeleton({
     cursor = endSec;
 
     const chunk = chunks[idx] || chunks[chunks.length - 1] || description;
-    const productLine = productName ? `Feature ${productName} naturally in the frame.` : 'Focus on a clear visual story.';
 
     return {
       index: idx + 1,
@@ -557,10 +557,18 @@ function buildFallbackSceneSkeleton({
       durationSeconds: duration,
       startSec,
       endSec,
-      imagePrompt: `${chunk}. ${productLine} Keep composition vertical 9:16 and premium.`,
-      videoPrompt: `${chunk}. Add subtle stable camera motion (slow push-in, pan, reveal). Keep details sharp and avoid warped objects, flicker, pixelation, and noisy artifacts.`,
-      voiceLine: chunk,
-      onScreenText: chunk.slice(0, 90)
+      imagePrompt: String(chunk || description).trim(),
+      videoPrompt: String(chunk || description).trim(),
+      voiceLine: String(chunk || '').trim(),
+      onScreenText: String(chunk || '').trim(),
+      purpose: 'Establish Scene',
+      emotion: 'Neutral',
+      camera: 'Wide shot',
+      lighting: 'Natural',
+      locationId: '',
+      characterIds: [],
+      wardrobeIds: [],
+      action: String(chunk || description).trim()
     };
   });
 }
@@ -752,93 +760,24 @@ async function generateScenesPlan({
     product
   });
 
-  let characterContext = '';
-  let extractedTraitsStr = '';
-  if (input.characterEnabled && input.characterImage) {
-    if (logger) logger("Extracting visual traits from character image...");
-    try {
-      const traits = await extractCharacterVisualTraits(input.characterImage);
-      if (traits) {
-        extractedTraitsStr = `\nEXTRACTED VISUAL TRAITS (MUST BE PRESERVED IN EVERY SCENE):\n- Hair Style: ${traits.hairStyle || 'N/A'}\n- Facial Hair: ${traits.facialHair || 'N/A'}\n- Clothing: ${traits.clothing || 'N/A'}\n- Ethnicity: ${traits.ethnicity || 'N/A'}\n- Age Appearance: ${traits.ageAppearance || 'N/A'}\n- Accessories: ${traits.accessories || 'none'}\n`;
-        if (logger) logger("Traits successfully extracted and injected.");
-      }
-    } catch (err) {
-      if (logger) logger(`Warning: Failed to extract character traits: ${err.message}`);
-    }
-  }
-  if (input.characterEnabled) {
-    const isStrict = input.characterConsistencyStrength === 'Strict';
-    const mainInAll = input.characterUsage === 'Main Character In All Scenes';
-
-    let strictRules = '';
-    if (isStrict) {
-      strictRules = `
-STRICT CHARACTER RULES:
-- Never change face.
-- Never change hairstyle.
-- Never change beard.
-- Never change age.
-- Never change body type.
-- Never generate another person.
-- Never remove the character from the scene.
-- Maintain identical identity in every scene.
-- Maintain identical identity in every generated image.
-- Maintain identical identity in every generated video clip.`;
-    }
-
-    let usageRules = `\n- Character Usage Strategy: ${input.characterUsage}`;
-    if (mainInAll) {
-      usageRules += `
-- The main character MUST appear visibly in every scene.
-- Do not create: product-only shots, abstract graphics, UI screens, empty environments.
-- The story must revolve around this character.`;
-    } else {
-      usageRules += '\n- IMPORTANT: Do not include the character in every scene. Mix character scenes with b-roll, establishing shots, and product closeups without people.';
-    }
-
-    if (input.characterImage) {
-      characterContext = `
-CHARACTER REFERENCE ACTIVE:
-- An approved Character Sheet has been provided for "${input.characterName || 'the main character'}".
-- You MUST NOT describe the character's physical appearance (age, ethnicity, hair, clothing, etc.) in the imagePrompt or videoPrompt.
-- Focus ONLY on the environment, action, camera angle, and lighting.
-- The imagePrompt MUST be formatted as a structured list of scene attributes.
-- Example correct prompt: "Environment: Ancient jungle temple. Action: Exploring carefully. Pose: Walking with a torch. Lighting: Golden sunrise. Camera: Wide cinematic shot. Mood: Adventure."
-
-CRITICAL CHARACTER RULES:
-- Never describe physical traits in the prompt.
-- Do not invent new clothing unless the story requires it.
-- Maintain identical identity in every scene.
-${strictRules}
-${usageRules}`;
-    } else {
-      characterContext = `
-MAIN CHARACTER DETAILS:
-- Name: ${input.characterName || 'N/A'}
-- Age: ${input.characterAge || 'N/A'}
-- Gender: ${input.characterGender || 'N/A'}
-- Role: ${input.characterRole || 'N/A'}
-- Personality: ${input.characterPersonality || 'N/A'}
-- Appearance: ${input.characterAppearance || 'N/A'}
-- Hair Style: ${input.characterHairStyle || 'N/A'}
-- Hair Color: ${input.characterHairColor || 'N/A'}
-- Clothing: ${input.characterClothing || 'N/A'}
-${extractedTraitsStr}
-CRITICAL CHARACTER RULES:
-- Use the exact same character identity across all scenes.
-- Do not generate different people in different scenes.
-${strictRules}
-${usageRules}`;
-    }
-  }
-  
-  let videoStyleContext = '';
+  let characterContext = `
+  CASTING & CHARACTER RULES:
+  - Generate a full CAST of characters required for this story (e.g. Bride, Mother, Father, Salesman, Hero, Villain, etc.).
+  - Do NOT restrict yourself to a single character unless the story explicitly calls for only one person.
+  - In the characterBible, define each character's appearance, role, and ID.
+  - In the scenes array, use the \`characterIds\` array to explicitly state which characters appear in that specific scene.
+  - Maintain identical identities for characters across scenes.
+  `;
+    let videoStyleContext = '';
   if (input.videoStyle) {
     videoStyleContext = `\nVideo Style: ${input.videoStyle}`;
     if (input.videoStyle === 'Storytelling') {
       videoStyleContext += `
 - The storyboard must follow a story progression: Beginning, Challenge, Learning, Growth, Achievement, Success.
 - The same character must appear throughout the story.`;
+    } else if (input.videoStyle === 'Ads') {
+      videoStyleContext += `
+- The storyboard must focus entirely on grabbing attention, clear value proposition, and a strong call to action in a fast-paced format.`;
     } else if (input.videoStyle === 'Cinematic Commercial') {
       videoStyleContext += `
 - Use: cinematic camera movement, premium lighting, shallow depth of field, commercial composition, smooth transitions.`;
@@ -848,31 +787,108 @@ ${usageRules}`;
     }
   }
 
-  const systemPrompt = `You are a storyboard planner for short vertical AI videos.${videoStyleContext}${characterContext}
-Return strict JSON with this schema:
+  const systemPrompt = `You are a MASTER AI CREATIVE DIRECTOR producing a "Production Bible" and Cinematic Screenplay for a highly professional ad campaign.${videoStyleContext}${characterContext}
+
+Your responsibility is to convert the user's simple business idea into a deeply structured PRODUCTION BIBLE and a compelling STORY driven by human emotion and cinematic flow. Do NOT generate generic "professional settings" or "content delivery" scenes. A real commercial starts with a story arc.
+
+Return strict JSON with this exact schema:
 {
   "globalVisualStyle": "string",
   "thumbnailPrompt": "string",
   "voiceScript": "string",
+  "productionBible": {
+    "voiceoverStyle": "string (e.g. FIRST_PERSON, THIRD_PERSON, BRAND_NARRATOR, DIALOGUE, POETIC)",
+    "characterBible": [
+      {
+        "characterId": "CH_001",
+        "name": "string",
+        "appearance": {
+          "faceShape": "string",
+          "forehead": "string",
+          "eyebrows": "string",
+          "eyes": "string",
+          "nose": "string",
+          "lips": "string",
+          "jawline": "string",
+          "cheekbones": "string",
+          "skinTexture": "string",
+          "skinTone": "string"
+        },
+        "hair": {
+          "style": "string",
+          "length": "string",
+          "flowers": "string",
+          "parting": "string"
+        }
+      }
+    ],
+    "wardrobeBible": [
+      {
+        "wardrobeId": "WD_001",
+        "type": "string",
+        "primaryColor": "string",
+        "secondaryColor": "string",
+        "border": { "width": "string", "design": "string" },
+        "pallu": { "style": "string" },
+        "bodyPattern": "string",
+        "fabric": "string",
+        "blouse": { "color": "string", "sleeves": "string" },
+        "continuityRule": "string"
+      }
+    ],
+    "locationBible": [
+      {
+        "locationId": "LOC_001",
+        "name": "string",
+        "summary": "string",
+        "architecture": "string (Highly detailed flooring, walls, pillars, furniture)",
+        "lighting": "string (Time of day, light sources)",
+        "colors": ["string"],
+        "restrictions": ["string (e.g. No modern furniture, no electronics)"]
+      }
+    ]
+  },
   "scenes": [
     {
-      "title": "string",
-      "imagePrompt": "string",
-      "videoPrompt": "string",
+      "scene": "number (e.g. 1)",
+      "title": "string (e.g. Morning Memories)",
+      "purpose": "string",
+      "locationId": "string (Must reference locationBible)",
+      "characterIds": ["string (Must reference characterBible)"],
+      "wardrobeIds": ["string (Must reference wardrobeBible)"],
+      "emotion": "string (e.g. Nostalgia)",
+      "camera": "string (e.g. Wide Establishing Shot, Slow Dolly)",
+      "lighting": "string (e.g. Golden Morning, Warm cinematic)",
+      "duration": "number",
+      "action": "string (Detailed action, e.g. Mother opens an old wooden trunk...)",
       "voiceLine": "string",
-      "onScreenText": "string"
+      "onScreenText": "string",
+      "imagePrompt": "string (A highly detailed Midjourney-style image prompt describing the still visual, lighting, character, and composition)",
+      "videoPrompt": "string (A detailed RunwayML/Kling-style motion prompt describing the exact camera movement, subject action, and physics)"
     }
   ]
 }
 
 Rules:
-- Priority Order (Highest to Lowest): Character Identity Rules, Character Reference Image, Character Usage Rules, Video Style Rules, User Description, Product Information, AI Creativity. Never violate a higher priority rule to satisfy a lower priority rule.
-- Output between ${MIN_SCENES} and ${MAX_SCENES} scenes.
-- You MUST return exactly ${sceneCount} scenes.
-- Keep all scene prompts visually consistent.
-- Every scene must be suitable for 9:16 vertical video.
-- "voiceScript" must be a coherent narration for the full video.
-- Keep on-screen text short and clear.
+- Priority Order (Highest to Lowest): Character Identity Rules, Character Usage Rules, Video Style Rules, User Description, Product Information, AI Creativity.
+- Output between ${MIN_SCENES} and ${MAX_SCENES} scenes. You MUST return exactly ${sceneCount} scenes.
+- Think like a Hollywood Director: EVERY scene must have a clear purpose, a specific location, an emotional core, and cinematic camera/lighting instructions.
+- Avoid generic filler scenes like "woman sitting at a desk looking at a tablet" unless the product is a software tool. If the product is a luxury saree, show the tradition, the fabric, the draping, the wedding hall.
+- "action" must clearly describe what is happening in the scene.
+
+VOICEOVER RULES:
+- Choose an appropriate "voiceoverStyle" (e.g., FIRST_PERSON, THIRD_PERSON, BRAND_NARRATOR). For emotional/bridal ads, default to FIRST_PERSON.
+- Never mention scene numbers.
+- Never output "(Scene 1)", "(Scene 2)", etc.
+- Never describe the screenplay.
+- Never say "Here is [Character Name]..."
+- Never introduce the character to the audience.
+- If First Person mode is applicable, the main character speaks in her own voice.
+- Write natural spoken words, not literary narration.
+- Keep the flow continuous across the entire advertisement.
+- The voiceover should feel like genuine emotions rather than explaining what the viewer is seeing.
+- End with a short brand tagline and call-to-action.
+
 - Do not include markdown.`;
 
   const userPrompt = [
@@ -900,7 +916,7 @@ Rules:
         const result = await callGemini(callPrompt, {
           skipCache: true,
           temperature: 0.65,
-          maxTokens: 2500,
+          maxTokens: 8192,
           timeout: 120000
         });
         
@@ -948,8 +964,14 @@ Rules:
         durationSeconds: duration,
         startSec,
         endSec,
-        imagePrompt: String(source?.imagePrompt || fallbackScenes[index]?.imagePrompt || input.description).trim(),
-        videoPrompt: String(source?.videoPrompt || fallbackScenes[index]?.videoPrompt || input.description).trim(),
+        purpose: String(source?.purpose || '').trim(),
+        locationId: String(source?.locationId || '').trim(),
+        characterIds: Array.isArray(source?.characterIds) ? source.characterIds : [],
+        wardrobeIds: Array.isArray(source?.wardrobeIds) ? source.wardrobeIds : [],
+        emotion: String(source?.emotion || '').trim(),
+        camera: String(source?.camera || '').trim(),
+        lighting: String(source?.lighting || '').trim(),
+        action: String(source?.action || '').trim(),
         voiceLine: String(source?.voiceLine || source?.onScreenText || fallbackScenes[index]?.voiceLine || '').trim(),
         onScreenText: String(source?.onScreenText || source?.voiceLine || '').trim()
       };
@@ -968,6 +990,7 @@ Rules:
       globalVisualStyle,
       thumbnailPrompt,
       voiceScript,
+      productionBible: parsed?.productionBible || null,
       scenes: normalizedScenes
     };
   } catch (error) {
@@ -1068,7 +1091,7 @@ async function generateSceneImages({
       const mediaUrl = buildMediaUrl(context.baseUrl, context.jobId, ['images', fileName]);
 
       // Cache guard: Check if the scene image is ALREADY generated in a prior attempt and exists!
-      if (scene.imageUrl && scene.imageUrl.startsWith('http') && fs.existsSync(localPath)) {
+      if (!input.bypassCache && scene.imageUrl && scene.imageUrl.startsWith('http') && fs.existsSync(localPath)) {
         if (logger) logger(`Reusing existing generated image for scene ${scene.sceneId}`);
         const reusedScene = {
           ...scene,
@@ -1082,7 +1105,7 @@ async function generateSceneImages({
       }
 
       // First scene can use uploaded image or product image directly.
-      const canUseReferenceDirectly = index === 0 && referenceImage?.localPath;
+      const canUseReferenceDirectly = index === 0 && referenceImage?.localPath && !scene.imagePrompt;
 
       if (canUseReferenceDirectly) {
       await fs.promises.copyFile(referenceImage.localPath, localPath);
@@ -1096,11 +1119,21 @@ async function generateSceneImages({
         continue;
       }
 
+    const charactersList = Array.isArray(input.characters) ? input.characters : (Array.isArray(plan?.characters) ? plan.characters : []);
+    let sceneCharacterImage = input.characterImageBase64 || input.characterImage || input.originalCharacterImage;
+
+    if (charactersList.length > 0) {
+      const sceneText = `${scene.title || ''} ${scene.action || ''} ${scene.imagePrompt || ''}`.toLowerCase();
+      const matched = charactersList.find(c => c.name && sceneText.includes(String(c.name).toLowerCase()));
+      if (matched && (matched.imageUrl || matched.image)) {
+        sceneCharacterImage = matched.imageUrl || matched.image;
+      }
+    }
+
     let characterImageContext = '';
-    const activeCharacterImage = input.characterImageBase64 || input.characterImage || input.originalCharacterImage;
     
     if (input.characterEnabled && input.preserveIdentity !== false) {
-      if (!activeCharacterImage) {
+      if (!sceneCharacterImage) {
         const isStrict = input.characterConsistencyStrength === 'Strict';
         
         const demographics = [
@@ -1120,19 +1153,60 @@ async function generateSceneImages({
           characterImageContext = `Maintain general character identity across scenes based on the reference image. ${demographicString}`;
         }
       } else {
-        // Active character image is present, so the user wants ZERO textual demographic overlap.
-        // We will pass an empty string because the system prompt in geminiAI.js will handle the strict image lock.
         characterImageContext = '';
       }
     }
 
-    let cleanImagePrompt = scene.imagePrompt || '';
+    let builtImagePrompt = promptBuilder.buildSceneImagePrompt(scene, plan);
+    let builtNegativePrompt = promptBuilder.buildSceneNegativePrompt(scene, plan);
+
+    // Find the character name for reference header mapping
+    let characterHeader = 'No character reference';
+    if (charactersList.length > 0) {
+      const sceneText = `${scene.title || ''} ${scene.action || ''} ${scene.imagePrompt || ''}`.toLowerCase();
+      const matched = charactersList.find(c => c.name && sceneText.includes(String(c.name).toLowerCase()));
+      if (matched) {
+        characterHeader = `${matched.name} (Reference Image)`;
+      }
+    }
+
+    const compositionRules = `
+CRITICAL COMPOSITION RULES
+- Generate EXACTLY ONE cinematic frame.
+- This image represents ONLY ONE scene.
+- Do NOT create multiple frames.
+- Do NOT create a storyboard.
+- Do NOT create a collage.
+- Do NOT split the image.
+- Do NOT create top and bottom layouts.
+- Do NOT create left and right layouts.
+- Do NOT create multiple camera angles.
+- Do NOT create comic panels.
+- Do NOT create contact sheets.
+- Do NOT show before/after.
+- Do NOT show sequences.
+- Only ONE camera.
+- Only ONE moment.
+- Only ONE composition.
+- The entire 9:16 canvas must be occupied by a single cinematic shot.
+- The output must look like a frame captured from a Hollywood commercial.
+- No text.
+- No borders.
+- No panels.
+- No grids.
+- No split screen.
+- No montage.
+`.trim();
 
     const promptWithConsistency = [
-      characterImageContext,
-      cleanImagePrompt,
-      `Consistency style: ${plan.globalVisualStyle}`,
-      input.preserveIdentity !== false && !activeCharacterImage ? 'Keep same lead subject identity, lighting logic, and palette continuity with earlier scenes.' : ''
+      `Character Reference:\n${characterHeader}`,
+      `Scene Story:\n${scene.action || 'No action specified'}`,
+      `Scene Image Prompt:\n${builtImagePrompt}`,
+      characterImageContext ? `Identity Instruction:\n${characterImageContext}` : '',
+      builtNegativePrompt ? `STRICT NEGATIVE CONSTRAINTS (AVOID THESE):\n${builtNegativePrompt}` : '',
+      `Consistency style:\n${plan.globalVisualStyle}`,
+      input.preserveIdentity !== false && !sceneCharacterImage ? 'Keep same lead subject identity, lighting logic, and palette continuity with earlier scenes.' : '',
+      compositionRules
     ].filter(Boolean).join('\n\n');
 
       const imageResult = await runWithRetries(
@@ -1140,32 +1214,21 @@ async function generateSceneImages({
         async () => {
           if (logger) {
             console.log("Scene:", index + 1);
-            console.log("Character Image Present:", !!input.characterImageBase64);
-            console.log("Canonical Character Present:", !!input.characterImage);
+            console.log("Character Image Present:", !!sceneCharacterImage);
             console.log("Previous Scene Present:", !!previousSceneImageUrl);
             console.log("Product Image Present:", !!consistencyReference);
           }
 
-          const activeCharacterImage = input.characterImageBase64 || input.characterImage || input.originalCharacterImage;
-          if (activeCharacterImage) {
-            if (logger) console.log("Using gemini-3.1-flash-image for character consistency...");
+          if (sceneCharacterImage) {
+            if (logger) console.log(`Using character reference image for scene ${scene.sceneId}...`);
             
-            // Extract base64 properly
-            let base64Data = activeCharacterImage;
-            let mimeType = 'image/jpeg';
-            if (base64Data.startsWith('data:')) {
-              const matches = base64Data.match(/^data:(.+);base64,(.*)$/);
-              if (matches && matches.length === 3) {
-                mimeType = matches[1];
-                base64Data = matches[2];
+            let imageData = sceneCharacterImage;
+            if (!imageData.startsWith('http') && !imageData.startsWith('data:')) {
+              let cleanBase64 = sceneCharacterImage;
+              if (cleanBase64.includes('data:image')) {
+                cleanBase64 = cleanBase64.split(',')[1];
               }
-            }
-
-            const fixedSeed = context.jobId ? Math.abs(context.jobId.split('').reduce((hash, char) => ((hash << 5) - hash) + char.charCodeAt(0), 0)) % 100000 : 42;
-            
-            let cleanBase64 = activeCharacterImage;
-            if (cleanBase64.includes('data:image')) {
-              cleanBase64 = cleanBase64.split(',')[1];
+              imageData = `data:image/jpeg;base64,${cleanBase64}`;
             }
 
             console.log('\n===========================');
@@ -1173,22 +1236,20 @@ async function generateSceneImages({
             console.log('===========================\n');
             console.log(`Scene: ${scene.sceneId}\n`);
             console.log(`Strict Pipeline: true`);
-            console.log(`Character Sheet: ${!!activeCharacterImage}`);
+            console.log(`Character Reference: ${sceneCharacterImage.slice(0, 60)}...`);
             console.log(`Previous Scene: ${!!previousSceneImageUrl}`);
-            console.log(`Product Image: ${!!consistencyReference}`);
-            console.log(`Use Logo: ${input.useLogo !== false}\n`);
+            console.log(`Use Logo: ${input.useLogo === true}\n`);
             console.log(`Using Model:\nmodels/nano-banana-flash\n`);
             console.log('===========================\n');
-            
-            const imageData = `data:image/jpeg;base64,${cleanBase64}`;
 
             const nanoResult = await generateCampaignImageNanoBanana(promptWithConsistency, {
-              aspectRatio: '16:9', // default for video
+              aspectRatio: '9:16',
               characterReferenceImage: imageData,
+              originalCharacterImage: imageData,
               isCinematic: true,
-              brandName: input.useLogo !== false ? String(profile.name || '') : undefined,
-              industry: input.useLogo !== false ? String(profile.industry || '') : undefined,
-              tone: input.useLogo !== false ? String(profile.brandVoice || 'professional') : undefined,
+              brandName: input.useLogo === true ? String(profile.name || '') : undefined,
+              industry: input.useLogo === true ? String(profile.industry || '') : undefined,
+              tone: input.useLogo === true ? String(profile.brandVoice || 'professional') : undefined,
             });
             
             if (nanoResult && (nanoResult.imageUrl || typeof nanoResult === 'string')) {
@@ -1200,6 +1261,7 @@ async function generateSceneImages({
 
           // Fallback to NanoBanana if no character image is provided
           const result = await generateCampaignImageNanoBanana(promptWithConsistency, {
+            isCinematic: true,
             aspectRatio: '9:16',
             brandName: input.useLogo !== false ? String(profile.name || '') : undefined,
             industry: input.useLogo !== false ? String(profile.industry || '') : undefined,
@@ -1228,14 +1290,14 @@ async function generateSceneImages({
 
       let finalImageUrl = imageResult;
 
-      if (input.characterEnabled && input.characterImage && input.preserveIdentity !== false) {
+      if (input.characterEnabled && sceneCharacterImage && input.preserveIdentity !== false) {
         if (logger) {
           logger(`Executing Face Swap post-processing for scene ${scene.sceneId}...`);
           console.log("Starting FaceSwap for Scene", index + 1);
-          console.log("Source Face:", input.originalCharacterImage ? "present" : "missing");
+          console.log("Source Face:", sceneCharacterImage ? "present" : "missing");
           console.log("Target Scene:", imageResult);
         }
-        const faceSwapTarget = input.originalCharacterImage || input.characterImage;
+        const faceSwapTarget = sceneCharacterImage;
         finalImageUrl = await applyFaceSwapFal(imageResult, faceSwapTarget);
         
         if (logger) {
@@ -1425,7 +1487,10 @@ async function generateSceneClips({
     let enriched;
     try {
       if (context.input?.characterEnabled || context.input?.videoStyle) {
-        scene.videoPrompt = `${scene.videoPrompt}. ${context.input.videoStyle ? `Cinematic Style: ${context.input.videoStyle}.` : ''} ${context.input.characterEnabled ? 'Maintain exact facial identity. Preserve character appearance. Do not generate a different person. Animate naturally while preserving identity.' : ''}`;
+        let builtVideoPrompt = promptBuilder.buildSceneVideoPrompt(scene, context.plan);
+        scene.videoPrompt = `${builtVideoPrompt}. ${context.input.videoStyle ? `Cinematic Style: ${context.input.videoStyle}.` : ''} ${context.input.characterEnabled ? 'Maintain exact facial identity. Preserve character appearance. Do not generate a different person. Animate naturally while preserving identity.' : ''}`;
+      } else {
+        scene.videoPrompt = promptBuilder.buildSceneVideoPrompt(scene, context.plan);
       }
       
       console.log(`[${new Date().toISOString()}] [Job ID: ${context.jobId}] STEP 4: Fal.ai render started for scene ${scene.sceneId}`);
@@ -3277,7 +3342,8 @@ async function runGenerateScenes({
     sceneCount: plan.sceneCount,
     globalVisualStyle: plan.globalVisualStyle,
     voiceScript: plan.voiceScript,
-    thumbnailPrompt: plan.thumbnailPrompt
+    thumbnailPrompt: plan.thumbnailPrompt,
+    productionBible: plan.productionBible
   };
 }
 

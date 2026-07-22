@@ -165,21 +165,30 @@ async function callGemini(prompt, options = {}) {
         }
         lastApiCall = Date.now();
 
+        const reqBody = {
+          contents: [{
+            parts: [{ text: prompt }]
+          }],
+          generationConfig: {
+            temperature: options.temperature || 0.7,
+            maxOutputTokens: options.maxTokens || 8192, // Increased default for longer responses
+            topP: 0.9,
+            ...(options.responseMimeType ? { responseMimeType: options.responseMimeType } : {})
+          }
+        };
+
+        if (options.systemInstruction) {
+          reqBody.systemInstruction = {
+            parts: [{ text: options.systemInstruction }]
+          };
+        }
+
         const response = await fetchWithTimeout(`${apiUrl}?key=${GEMINI_API_KEY}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({
-            contents: [{
-              parts: [{ text: prompt }]
-            }],
-            generationConfig: {
-              temperature: options.temperature || 0.7,
-              maxOutputTokens: options.maxTokens || 8192, // Increased default for longer responses
-              topP: 0.9
-            }
-          })
+          body: JSON.stringify(reqBody)
         }, timeout);
 
         const data = await response.json();
@@ -208,8 +217,19 @@ async function callGemini(prompt, options = {}) {
 
         // Cache successful response
         if (!options.skipCache) {
-          const cacheKey = getCacheKey(prompt);
-          responseCache.set(cacheKey, { response: text, timestamp: Date.now() });
+          let shouldCache = true;
+          if (options.responseMimeType === 'application/json') {
+            try {
+              parseGeminiJSON(text);
+            } catch (jsonErr) {
+              shouldCache = false;
+              console.log('⚠️ Gemini response is not valid JSON, skipping cache.');
+            }
+          }
+          if (shouldCache) {
+            const cacheKey = getCacheKey(prompt);
+            responseCache.set(cacheKey, { response: text, timestamp: Date.now() });
+          }
         }
 
         const duration = Date.now() - startTime;

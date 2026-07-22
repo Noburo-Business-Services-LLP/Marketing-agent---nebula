@@ -1,0 +1,10 @@
+        <div className="flex gap-3">
+          {allCharacters.filter((c: any) => !c.image).length > 0 && (
+            <button onClick={autoGeneratePending} disabled={busy} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-medium rounded-xl transition shadow-sm">
+              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />} Auto-Generate Pending
+            </button>
+          )}
+          <button onClick={() => openEditor()} className="flex items-center gap-2 px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white font-medium rounded-xl transition">
+            <Plus className="w-4 h-4" /> Add Character
+          </button>
+        </div>

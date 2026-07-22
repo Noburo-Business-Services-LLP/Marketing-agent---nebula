@@ -23,6 +23,7 @@ import { useSmartCalendarAutoFill } from '../hooks/useSmartCalendarAutoFill';
 import { getThemeClasses, useTheme } from '../context/ThemeContext';
 import { contentCalendarAPI, inventoryAPI, videoGenerationAPI, draftsAPI } from '../services/api';
 import { Product, Draft } from '../types';
+import { CharacterManager } from '../components/CharacterManager';
 import { useLocation, useSearchParams } from 'react-router-dom';
 
 type AudioMode = 'off' | 'auto' | 'upload';
@@ -117,6 +118,8 @@ const ReelGenerator: React.FC = () => {
   const [inputImageName, setInputImageName] = useState('');
 
   const [characterEnabled, setCharacterEnabled] = useState(false);
+  const [preserveCharacter, setPreserveCharacter] = useState(false);
+  const [includeBrandLogo, setIncludeBrandLogo] = useState(false);
   const [characterSource, setCharacterSource] = useState<'upload' | 'generate'>('generate');
   const [generatingCharacter, setGeneratingCharacter] = useState(false);
   const [characterApproved, setCharacterApproved] = useState(false);
@@ -649,7 +652,14 @@ setCharacterAge(nextDraft?.characterAge || '');
   };
 
   const step1Next = async () => withBusy(async () => {
-    await ensureDraftForAudioTest();
+    const activeJobId = await ensureDraftForAudioTest();
+    if (!activeJobId) throw new Error('Draft missing');
+    
+    if (!draft?.scenes || draft.scenes.length === 0) {
+      const sceneResponse = await videoGenerationAPI.generateScenes({ jobId: activeJobId });
+      setScenes(sceneResponse?.sceneData || []);
+      setDraft(sceneResponse?.draft || draft);
+    }
     setStep(2);
   });
 
@@ -1607,305 +1617,63 @@ setCharacterAge(nextDraft?.characterAge || '');
               </div>
             )}
 
-            {step === 2 && (
-            <div className={`p-6 space-y-6 ${panelClass}`}>
-              <div className="flex items-center justify-between mb-4">
-                <h2 className={`text-xl font-bold ${theme.text}`}>Character & Video Style Configuration</h2>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="flex items-center justify-between p-4 rounded-xl border border-slate-200 dark:border-slate-800">
-                  <span className={theme.text}>Use Character in Video</span>
-                  <button
-                    onClick={() => setCharacterEnabled(!characterEnabled)}
-                    className={`flex-shrink-0 transition-colors ${characterEnabled ? 'text-[#ffcc29]' : theme.textMuted}`}
-                  >
-                    {characterEnabled ? <ToggleRight className="w-8 h-8" /> : <ToggleLeft className="w-8 h-8" />}
-                  </button>
+                      {step === 2 && (
+            <div className={`${panelClass} p-6 space-y-8`}>
+              <h2 className={`font-bold text-xl ${theme.text}`}>Step 2: Character & Video Style Configuration</h2>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-4">
+                  <h3 className={`text-sm font-semibold uppercase tracking-wider ${theme.textMuted}`}>General Settings</h3>
+                  <label className={`flex items-center gap-3 cursor-pointer ${theme.text}`}>
+                    <input type="checkbox" className="w-5 h-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600" checked={characterEnabled} onChange={e => setCharacterEnabled(e.target.checked)} />
+                    <span className="font-medium">Use Character in Video</span>
+                  </label>
+                  <label className={`flex items-center gap-3 cursor-pointer ${theme.text}`}>
+                    <input type="checkbox" className="w-5 h-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600" checked={preserveCharacter} onChange={e => setPreserveCharacter(e.target.checked)} />
+                    <span className="font-medium">Preserve Character Identity</span>
+                  </label>
+                  <label className={`flex items-center gap-3 cursor-pointer ${theme.text}`}>
+                    <input type="checkbox" className="w-5 h-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600" checked={includeBrandLogo} onChange={e => setIncludeBrandLogo(e.target.checked)} />
+                    <span className="font-medium">Include Brand Logo</span>
+                  </label>
                 </div>
-                <div className="flex items-center justify-between p-4 rounded-xl border border-slate-200 dark:border-slate-800">
-                  <span className={theme.text}>Preserve Character Identity</span>
-                  <button
-                    onClick={() => setPreserveIdentity(!preserveIdentity)}
-                    className={`flex-shrink-0 transition-colors ${preserveIdentity ? 'text-[#ffcc29]' : theme.textMuted}`}
-                    disabled={!characterEnabled}
-                  >
-                    {preserveIdentity ? <ToggleRight className="w-8 h-8" /> : <ToggleLeft className="w-8 h-8" />}
-                  </button>
-                </div>
-                <div className="flex items-center justify-between p-4 rounded-xl border border-slate-200 dark:border-slate-800">
-                  <span className={theme.text}>Include Brand Logo</span>
-                  <button
-                    onClick={() => setUseLogo(!useLogo)}
-                    className={`flex-shrink-0 transition-colors ${useLogo ? 'text-[#ffcc29]' : theme.textMuted}`}
-                  >
-                    {useLogo ? <ToggleRight className="w-8 h-8" /> : <ToggleLeft className="w-8 h-8" />}
-                  </button>
+
+                <div className="space-y-4">
+                  <h3 className={`text-sm font-semibold uppercase tracking-wider ${theme.textMuted}`}>Video Style</h3>
+                  <select value={videoStyle} onChange={e => setVideoStyle(e.target.value)} className={`${inputClass} mt-2 w-full`}>
+                    <option value="Storytelling">Storytelling</option>
+                    <option value="Cinematic Commercial">Cinematic Commercial</option>
+                    <option value="Product Showcase">Product Showcase</option>
+                    <option value="UGC / TikTok">UGC / TikTok</option>
+                    <option value="Ads">Ads</option>
+                  </select>
                 </div>
               </div>
 
               {characterEnabled && (
-                <div className="space-y-4 mt-4">
-                  <div>
-                    <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Character Name</label>
-                    <input type="text" className={inputClass} value={characterName} onChange={(e) => setCharacterName(e.target.value)} placeholder="e.g. Sarah" />
-                  </div>
-
-                  <div className="mt-4 p-4 rounded-xl border border-slate-200 dark:border-slate-800 space-y-4">
-                    <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Character Source</label>
-                    <div className="flex items-center gap-4">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input type="radio" checked={characterSource === 'generate'} onChange={() => setCharacterSource('generate')} />
-                        <span className={theme.text}>Generate AI Character</span>
-                      </label>
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input type="radio" checked={characterSource === 'upload'} onChange={() => setCharacterSource('upload')} />
-                        <span className={theme.text}>Upload Image</span>
-                      </label>
-                    </div>
-
-                    {characterSource === 'upload' ? (
-                      <div>
-                        <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Upload Character Image</label>
-                        <input 
-                          type="file" 
-                          accept="image/*"
-                          onChange={async (e) => {
-                            const file = e.target.files?.[0];
-                            if (file) {
-                              const base64 = await fileToDataUrl(file);
-                              if (base64) {
-                                setCharacterImage(base64);
-                                setOriginalCharacterImage(base64);
-                                setCharacterApproved(true);
-                              }
-                            }
-                          }}
-                          className={inputClass}
-                        />
-                        {characterImage && (
-                          <div className="mt-2 relative inline-block">
-                            <img src={characterImage} alt="Character Reference" className="h-24 w-24 object-cover rounded-lg" />
-                            <button onClick={() => { setCharacterImage(''); setCharacterApproved(false); }} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1"><XCircle className="w-4 h-4" /></button>
-                          </div>
-                        )}
-
-                        {originalCharacterImage && (
-                          <div className="mt-4 p-4 border rounded-xl border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/20 text-center space-y-3">
-                            <h3 className={`font-bold ${theme.text}`}>Master Character Sheet</h3>
-                            <p className={`text-sm ${theme.textMuted}`}>Generate a 360° character sheet to improve consistency across all scenes.</p>
-                            
-                            {characterImage !== originalCharacterImage && characterImage && (
-                              <div className="relative group cursor-pointer" onClick={() => setPreviewImageModal(characterImage)}>
-                                <img src={characterImage} alt="Master Sheet" className="h-48 w-full object-contain rounded-xl mx-auto shadow-md transition-transform group-hover:scale-[1.02]" />
-                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl flex items-center justify-center">
-                                  <span className="text-white font-medium bg-black/50 px-3 py-1 rounded-lg flex items-center"><Search className="w-4 h-4 mr-2" /> Click to Preview</span>
-                                </div>
-                              </div>
-                            )}
-
-                            {!characterApproved || characterImage === originalCharacterImage ? (
-                              <div className="flex justify-center gap-3 mt-2">
-                                <button onClick={handleGenerateCharacterPreview} disabled={generatingCharacter} className="px-4 py-2 bg-indigo-500 text-white font-semibold rounded-xl hover:bg-indigo-600 transition disabled:opacity-50">
-                                  {generatingCharacter ? <Loader2 className="w-4 h-4 animate-spin inline mr-2" /> : <Sparkles className="w-4 h-4 inline mr-2" />}
-                                  Generate Master Sheet
-                                </button>
-                                {characterImage !== originalCharacterImage && characterImage && (
-                                    <button onClick={() => setCharacterApproved(true)} className="px-3 py-2 bg-emerald-500 text-white rounded-lg text-sm font-medium hover:bg-emerald-600 transition">
-                                      Approve
-                                    </button>
-                                )}
-                              </div>
-                            ) : (
-                              <div className="text-emerald-500 font-bold text-sm">✓ Character Sheet Approved</div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Age</label>
-                            <input type="text" className={inputClass} value={characterAge} onChange={(e) => setCharacterAge(e.target.value)} placeholder="e.g. 28" />
-                          </div>
-                          <div>
-                            <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Gender</label>
-                            <select className={inputClass} value={characterGender} onChange={(e) => setCharacterGender(e.target.value)}>
-                              <option value="">Select Gender</option>
-                              <option value="Male">Male</option>
-                              <option value="Female">Female</option>
-                              <option value="Other">Other</option>
-                            </select>
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Ethnicity / Race</label>
-                            <select className={inputClass} value={characterRace} onChange={(e) => setCharacterRace(e.target.value)}>
-                              <option value="">Select Ethnicity (Optional)</option>
-                              <option value="Indian">Indian</option>
-                              <option value="South Indian">South Indian</option>
-                              <option value="Asian">Asian</option>
-                              <option value="American">American</option>
-                              <option value="European">European</option>
-                              <option value="Arab">Arab</option>
-                              <option value="Japanese">Japanese</option>
-                              <option value="Mexican">Mexican</option>
-                              <option value="African">African</option>
-                              <option value="Latino">Latino</option>
-                              <option value="Mixed">Mixed</option>
-                            </select>
-                          </div>
-                          {characterGender !== 'Female' && (
-                            <div>
-                              <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Facial Hair / Beard</label>
-                              <select className={inputClass} value={characterBeard} onChange={(e) => setCharacterBeard(e.target.value)}>
-                                <option value="">Clean Shaven (No Beard)</option>
-                                <option value="Stubble">Stubble</option>
-                                <option value="Short Beard">Short Beard</option>
-                                <option value="Full Beard">Full Beard</option>
-                                <option value="Goatee">Goatee</option>
-                                <option value="Mustache Only">Mustache Only</option>
-                              </select>
-                            </div>
-                          )}
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Role</label>
-                            <input type="text" className={inputClass} value={characterRole} onChange={(e) => setCharacterRole(e.target.value)} placeholder="e.g. Startup Founder" />
-                          </div>
-                          <div>
-                            <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Personality</label>
-                            <select className={inputClass} value={characterPersonality} onChange={(e) => setCharacterPersonality(e.target.value)}>
-                              <option value="">Select Personality</option>
-                              <option value="Professional">Professional</option>
-                              <option value="Casual">Casual</option>
-                              <option value="Energetic">Energetic</option>
-                              <option value="Calm">Calm</option>
-                              <option value="Confident">Confident</option>
-                              <option value="Friendly">Friendly</option>
-                              <option value="Serious">Serious</option>
-                              <option value="Funny">Funny</option>
-                            </select>
-                          </div>
-                        </div>
-                        <div>
-                          <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Appearance / Clothing</label>
-                          <input type="text" className={inputClass} value={characterAppearance} onChange={(e) => setCharacterAppearance(e.target.value)} placeholder="e.g. Modern business woman, Premium formal outfit" />
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Hair Style & Color</label>
-                            <input type="text" className={inputClass} value={characterHairStyle} onChange={(e) => setCharacterHairStyle(e.target.value)} placeholder="e.g. Long straight black hair" />
-                          </div>
-                          <div>
-                            <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Format / Art Style</label>
-                            <select className={inputClass} value={characterArtStyle} onChange={(e) => setCharacterArtStyle(e.target.value)}>
-                              <option value="Realistic / Photography">Real Person / Realistic</option>
-                              <option value="Anime / Manga">Anime</option>
-                              <option value="3D Animation / Cartoon">3D Animation / Cartoon Character</option>
-                              <option value="Vector Illustration">Vector Illustration</option>
-                            </select>
-                          </div>
-                        </div>
-                        <button
-                          onClick={handleGenerateCharacterPreview}
-                          disabled={generatingCharacter}
-                          className="px-4 py-2 bg-indigo-500 text-white font-semibold rounded-xl hover:bg-indigo-600 transition disabled:opacity-50"
-                        >
-                          {generatingCharacter ? <Loader2 className="w-4 h-4 animate-spin inline mr-2" /> : <Sparkles className="w-4 h-4 inline mr-2" />}
-                          Generate Character Preview
-                        </button>
-                        
-                        {characterImage && (
-                          <div className="p-4 border rounded-xl border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/20 text-center space-y-3">
-                            <h3 className={`font-bold ${theme.text}`}>Generated Character</h3>
-                            
-                            <div className="relative group cursor-pointer" onClick={() => setPreviewImageModal(characterImage)}>
-                              <img src={characterImage} alt="Generated Character Preview" className="h-48 w-full object-contain rounded-xl mx-auto shadow-md transition-transform group-hover:scale-[1.02]" />
-                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl flex items-center justify-center">
-                                <span className="text-white font-medium bg-black/50 px-3 py-1 rounded-lg flex items-center"><Search className="w-4 h-4 mr-2" /> Click to Preview</span>
-                              </div>
-                            </div>
-                            
-                            {!characterApproved ? (
-                              <div className="flex justify-center gap-3 mt-2">
-                                <button onClick={handleGenerateCharacterPreview} disabled={generatingCharacter} className="px-3 py-1.5 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-800 transition">
-                                  Regenerate
-                                </button>
-                                <button onClick={() => setCharacterApproved(true)} className="px-3 py-1.5 bg-emerald-500 text-white rounded-lg text-sm font-medium hover:bg-emerald-600 transition">
-                                  Approve Character
-                                </button>
-                              </div>
-                            ) : (
-                              <div className="text-emerald-500 font-bold text-sm">✓ Character Approved</div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-4 mt-4">
-                    <div>
-                      <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Character Usage</label>
-                      <select className={inputClass} value={characterUsage} onChange={(e) => setCharacterUsage(e.target.value)}>
-                        <option value="Main Character in all scenes">Main Character in all scenes</option>
-                        <option value="Character only in selected scenes">Character only in selected scenes</option>
-                        <option value="Background character only">Background character only</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Character Consistency Strength</label>
-                      <select className={inputClass} value={characterConsistencyStrength} onChange={(e) => setCharacterConsistencyStrength(e.target.value)}>
-                        <option value="Low">Low</option>
-                        <option value="Medium">Medium</option>
-                        <option value="High">High</option>
-                        <option value="Strict">Strict</option>
-                      </select>
-                    </div>
-                  </div>
-                  
+                <div className="border-t dark:border-slate-800 pt-8 mt-8">
+                  <CharacterManager
+                    jobId={jobId!}
+                    draft={draft}
+                    setDraft={setDraft}
+                    setStep={setStep}
+                    busy={busy}
+                    setBusy={setBusy}
+                  />
                 </div>
               )}
 
-              <div className="mt-6">
-                <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Video Style</label>
-                <select className={inputClass} value={videoStyle} onChange={(e) => {
-                  const style = e.target.value;
-                  setVideoStyle(style);
-                  if (style === 'Storytelling' && characterConsistencyStrength !== 'Strict') {
-                    setCharacterConsistencyStrength('Strict');
-                  }
-                }}>
-                  <option value="Cinematic Commercial">Cinematic Commercial</option>
-                  <option value="Storytelling">Storytelling</option>
-                  <option value="Product Advertisement">Product Advertisement</option>
-                  <option value="Daily Life Vlog">Daily Life Vlog</option>
-                  <option value="Documentary">Documentary</option>
-                  <option value="Educational">Educational</option>
-                  <option value="Motivational">Motivational</option>
-                  <option value="Corporate Presentation">Corporate Presentation</option>
-                  <option value="Testimonial">Testimonial</option>
-                  <option value="Product Showcase">Product Showcase</option>
-                  <option value="News Update">News Update</option>
-                  <option value="Social Media Reel">Social Media Reel</option>
-                  <option value="Luxury Advertisement">Luxury Advertisement</option>
-                </select>
-              </div>
-
-              <div className="flex justify-end pt-4 border-t border-slate-200 dark:border-slate-800">
-                <button
-                  onClick={step2Next}
-                  disabled={busy || (characterEnabled && !characterApproved && characterSource === 'generate')}
-                  className="px-6 py-2.5 bg-[#ffcc29] text-black font-semibold rounded-xl hover:bg-[#e6b825] transition disabled:opacity-50"
-                >
-                  {characterEnabled && !characterApproved && characterSource === 'generate' ? 'Approve Character to Continue' : 'Save & Next (Prompt + Scenes)'}
+              <div className="flex gap-3 justify-end mt-8 border-t dark:border-slate-800 pt-6">
+                <button onClick={() => setStep(1)} disabled={busy} className="px-6 py-2 rounded-xl font-medium border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                  Back
+                </button>
+                <button onClick={() => setStep(3)} disabled={busy} className="px-6 py-2 rounded-xl font-medium bg-[#ffcc29] text-black hover:bg-[#e6b825] transition-colors">
+                  Next: Screenplay
                 </button>
               </div>
             </div>
           )}
+
 
           {step === 3 && (
               <div className={`${panelClass} p-6 space-y-4`}>
@@ -1951,6 +1719,40 @@ setCharacterAge(nextDraft?.characterAge || '');
                           <div className="w-1/3">
                             <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Duration (sec)</label>
                             <input type="number" min={1} value={scene.durationSeconds || 1} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, durationSeconds: Number(e.target.value) || 1 } : item))} className={`${inputClass} mt-1`} disabled={isRegen} />
+                          </div>
+                        </div>
+
+                        <div className="mt-3 space-y-2">
+                          <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Characters in Scene</label>
+                          <div className="flex flex-wrap gap-2">
+                            {(draft?.characters || []).map((char: any) => {
+                              const isSelected = (scene.characterIds || []).includes(char.id || char.characterId);
+                              return (
+                                <label key={char.id || char.characterId} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border cursor-pointer transition-colors ${isSelected ? 'bg-indigo-50 border-indigo-200 dark:bg-indigo-900/30 dark:border-indigo-800' : 'bg-white border-slate-200 dark:bg-slate-800 dark:border-slate-700'}`}>
+                                  <input
+                                    type="checkbox"
+                                    className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600"
+                                    checked={isSelected}
+                                    onChange={(e) => {
+                                      const charId = char.id || char.characterId;
+                                      setScenes((prev) => prev.map((item, i) => {
+                                        if (i !== idx) return item;
+                                        const currentIds = item.characterIds || [];
+                                        const newIds = e.target.checked 
+                                          ? [...currentIds, charId] 
+                                          : currentIds.filter(id => id !== charId);
+                                        return { ...item, characterIds: newIds };
+                                      }));
+                                    }}
+                                    disabled={isRegen}
+                                  />
+                                  <span className={`text-sm font-medium ${isSelected ? 'text-indigo-700 dark:text-indigo-300' : theme.text}`}>{char.name || char.id}</span>
+                                </label>
+                              );
+                            })}
+                            {(!draft?.characters || draft.characters.length === 0) && (
+                              <span className={`text-sm italic ${theme.textMuted}`}>No characters available. Add them in Step 2.</span>
+                            )}
                           </div>
                         </div>
 

@@ -35,6 +35,7 @@ function getScenePrompt(scene = {}) {
 
   // Motion-first prompt modifications
   return [
+    'CRITICAL: Single continuous camera shot only. Do NOT make any camera cuts, jump cuts, scene edits, transitions, or split screens. Keep the video completely continuous from the first frame to the last frame.',
     'Cinematic camera movement,',
     basePrompt,
     'Dynamic and precise motion, slow smooth pan, tracking shot, premium commercial style, natural light reflections, subtle depth movement.',
@@ -193,7 +194,8 @@ async function generateVideoClip(scene = {}) {
   const input = seedance
     ? {
         prompt,
-        ...(imageUrl ? { image_url: imageUrl } : { aspect_ratio: FAL_VIDEO_ASPECT_RATIO, resolution: FAL_VIDEO_RESOLUTION }),
+        image_url: imageUrl || undefined,
+        aspect_ratio: '9:16',
         duration: String(getSeedanceDuration(scene)),
         camera_fixed: false,
         seed,
@@ -204,6 +206,8 @@ async function generateVideoClip(scene = {}) {
       }
     : {
         prompt,
+        image_url: imageUrl || undefined,
+        aspect_ratio: '9:16',
         num_frames: numFrames,
         video_size: VIDEO_SIZE,
         fps: 25,
@@ -214,10 +218,6 @@ async function generateVideoClip(scene = {}) {
         dynamic_camera: true,
         cinematic_movement: true
       };
-
-  if (imageUrl && !seedance) {
-    input.image_url = imageUrl;
-  }
 
   const payload = { model, input };
   console.log("Fal request payload:", JSON.stringify(payload, null, 2));

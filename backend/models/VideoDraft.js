@@ -7,6 +7,8 @@ const videoDraftSchema = new mongoose.Schema(
     currentStep: { type: Number, default: 1 },
     input: { type: mongoose.Schema.Types.Mixed, default: {} },
     prompt: { type: mongoose.Schema.Types.Mixed, default: null },
+    productionBible: { type: mongoose.Schema.Types.Mixed, default: null },
+    masterReferences: { type: mongoose.Schema.Types.Mixed, default: {} },
     scenes: { type: mongoose.Schema.Types.Mixed, default: null },
     images: { type: mongoose.Schema.Types.Mixed, default: null },
     clips: { type: mongoose.Schema.Types.Mixed, default: null },
@@ -22,6 +24,13 @@ const videoDraftSchema = new mongoose.Schema(
     jobs: { type: mongoose.Schema.Types.Mixed, default: {} }, // Links background queue Job IDs (e.g. merge/clips)
     finalVideoUrl: { type: String, default: null },
     thumbnailUrl: { type: String, default: null },
+    characters: { type: mongoose.Schema.Types.Mixed, default: [] },
+    productionBible: { type: mongoose.Schema.Types.Mixed, default: {} },
+    wardrobes: { type: mongoose.Schema.Types.Mixed, default: [] },
+    locations: { type: mongoose.Schema.Types.Mixed, default: [] },
+    screenplay: { type: mongoose.Schema.Types.Mixed, default: [] },
+    sceneImages: { type: mongoose.Schema.Types.Mixed, default: {} },
+    sceneVideos: { type: mongoose.Schema.Types.Mixed, default: {} },
     characterEnabled: { type: Boolean, default: false },
     characterImage: { type: String, default: null },
     originalCharacterImage: { type: String, default: null },
@@ -47,7 +56,8 @@ const videoDraftSchema = new mongoose.Schema(
     videoStyle: { type: String, default: null },
     preserveIdentity: { type: Boolean, default: true },
     characterUsage: { type: String, default: 'Main Character in all scenes' },
-    characterConsistencyStrength: { type: String, default: 'Strict' }
+    characterConsistencyStrength: { type: String, default: 'Strict' },
+    useLogo: { type: Boolean, default: false }
   },
   { collection: 'video_drafts', timestamps: true }
 );

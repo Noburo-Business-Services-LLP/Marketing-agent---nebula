@@ -193,7 +193,7 @@ videoGenerationQueue.registerHandler('merge_video', async (payload, { update, lo
   const sceneDataForSubtitles =
     subtitles?.enabled === true && draft?.audio?.config?.languageCode && draft.audio.config.languageCode !== 'en' && translatedSceneData?.length
       ? translatedSceneData
-      : (draft?.clips?.sceneData || draft?.images?.sceneData || draft?.scenes?.sceneData || []);
+      : (draft?.clips?.sceneData || draft?.images?.sceneData || (Array.isArray(draft?.scenes) ? draft.scenes : null) || draft?.scenes?.sceneData || []);
 
   const merged = await runMergeVideo({
     payload: {
@@ -265,7 +265,7 @@ videoGenerationQueue.registerHandler('merge_video', async (payload, { update, lo
       action: 'video_merge',
       prompt: draft?.prompt?.promptText || '',
       userInput: draft.input || {},
-      sceneData: draft?.clips?.sceneData || draft?.images?.sceneData || draft?.scenes?.sceneData || [],
+      sceneData: draft?.clips?.sceneData || draft?.images?.sceneData || (Array.isArray(draft?.scenes) ? draft.scenes : null) || draft?.scenes?.sceneData || [],
       generatedVideos: [updated.merge.finalOutputUrl || updated.merge.finalVideoUrl].filter(Boolean),
       audioSettings: draft?.audio?.config || {},
       duration: draft?.input?.durationSeconds || null,
@@ -745,13 +745,19 @@ Rules:
 }
 
 async function generateCaptionAndHashtags({ draft, selectedPlatforms = [] }) {
-  const sceneSummary = Array.isArray(draft?.scenes?.sceneData)
-    ? draft.scenes.sceneData
+  const sceneSummary = Array.isArray(draft?.scenes)
+    ? draft.scenes
       .map((scene) => String(scene?.voiceLine || scene?.onScreenText || scene?.title || '').trim())
       .filter(Boolean)
       .slice(0, 5)
       .join(' | ')
-    : '';
+    : Array.isArray(draft?.scenes?.sceneData)
+      ? draft.scenes.sceneData
+        .map((scene) => String(scene?.voiceLine || scene?.onScreenText || scene?.title || '').trim())
+        .filter(Boolean)
+        .slice(0, 5)
+        .join(' | ')
+      : '';
 
   const aiMemoryContext = await buildAIContext({
     userId: draft?.userId,
@@ -852,6 +858,48 @@ router.post('/createVideo', protect, checkTrial, videoAiWriteLimiter, async (req
   
   if (!userId) {
     return res.status(401).json({ success: false, message: 'Authentication required' });
+  }
+
+  const { jobId, sceneId, prompt, imageUrl, duration } = req.body || {};
+
+  if (sceneId) {
+    try {
+      const { generateVideoClip } = require('../services/videoService');
+      const VideoDraft = require('../models/VideoDraft');
+
+      const draft = await VideoDraft.findOne({ jobId });
+      if (!draft) {
+        return res.status(404).json({ success: false, message: 'Draft not found' });
+      }
+
+      console.log(`🎬 Generating video clip for scene ${sceneId} with configured Fal AI video model...`);
+      const sceneData = {
+        sceneId,
+        videoPrompt: prompt,
+        imageUrl: imageUrl,
+        durationSeconds: duration || 5
+      };
+
+      const result = await generateVideoClip(sceneData);
+      const videoUrl = result.videoUrl;
+
+      // Update the draft scenes in MongoDB
+      const sourceScenes = draft.scenes || [];
+      const updatedScenes = sourceScenes.map(s => 
+        String(s.sceneId) === String(sceneId) ? { ...s, generatedVideoUrl: videoUrl } : s
+      );
+
+      draft.scenes = updatedScenes;
+      await draft.save();
+
+      return res.json({
+        success: true,
+        videoUrl
+      });
+    } catch (error) {
+      console.error('Single scene video generation failed:', error);
+      return res.status(500).json({ success: false, message: 'Video generation failed: ' + error.message });
+    }
   }
 
   // Deduct 7 credits synchronously before enqueuing
@@ -1239,6 +1287,7 @@ router.post('/generateScenes', protect, checkTrial, videoAiWriteLimiter, async (
           characterHairColor: draft?.characterHairColor,
           characterClothing: draft?.characterClothing,
           videoStyle: draft?.videoStyle,
+          location: draft?.location || req.body.location || '',
           preserveIdentity: draft?.preserveIdentity,
           characterUsage: draft?.characterUsage,
           characterConsistencyStrength: draft?.characterConsistencyStrength
@@ -1267,6 +1316,7 @@ router.post('/generateScenes', protect, checkTrial, videoAiWriteLimiter, async (
         ...current,
         currentStep: Math.max(Number(current.currentStep || 1), 2),
         scenes: normalizedScenes,
+        productionBible: current?.productionBible || null,
         scenesMetadata: {
           voiceScript: current?.scenesMetadata?.voiceScript || current?.scenes?.voiceScript || '',
           thumbnailPrompt: current?.scenesMetadata?.thumbnailPrompt || current?.scenes?.thumbnailPrompt || '',
@@ -1308,6 +1358,7 @@ router.post('/generateScenes', protect, checkTrial, videoAiWriteLimiter, async (
         characterHairColor: draft?.characterHairColor,
         characterClothing: draft?.characterClothing,
         videoStyle: draft?.videoStyle,
+        location: draft?.location || req.body.location || '',
         preserveIdentity: draft?.preserveIdentity,
         characterUsage: draft?.characterUsage,
         characterConsistencyStrength: draft?.characterConsistencyStrength
@@ -1320,6 +1371,7 @@ router.post('/generateScenes', protect, checkTrial, videoAiWriteLimiter, async (
       ...current,
       currentStep: Math.max(Number(current.currentStep || 1), 2),
       scenes: normalizedScenes,
+      productionBible: generated?.productionBible || current?.productionBible || null,
       scenesMetadata: {
         voiceScript: generated.voiceScript || '',
         thumbnailPrompt: generated.thumbnailPrompt || '',
@@ -1368,6 +1420,7 @@ router.post('/generateImages', protect, checkTrial, videoAiWriteLimiter, async (
     const sourceScenes = sanitizeSceneData(
       sceneData ||
       draft?.images?.sceneData ||
+      (Array.isArray(draft?.scenes) ? draft.scenes : null) ||
       draft?.scenes?.sceneData ||
       [],
       durationSeconds
@@ -1411,9 +1464,15 @@ router.post('/generateImages', protect, checkTrial, videoAiWriteLimiter, async (
       const targetScene = sourceScenes[idx];
       let regenPrompt = String(imagePrompt || targetScene.imagePrompt || draft?.prompt?.promptText || '').trim();
       let finalRegenImageUrl = null;
-      if (req.body.characterImageBase64) {
-          const characterImageBase64 = req.body.characterImageBase64;
-          const characterName = req.body.characterName || '';
+      const characterEnabled = draft?.characterEnabled || (Array.isArray(draft?.characters) && draft.characters.length > 0);
+      const mainCharacterUrl = Array.isArray(draft?.characters) && draft.characters.length > 0
+        ? (draft.characters.find(c => String(c.role || '').toLowerCase() === 'bride' || String(c.name || '').toLowerCase() === 'priya')?.imageUrl || draft.characters[0]?.imageUrl)
+        : null;
+
+      const characterImage = req.body.characterImageBase64 || draft?.characterImage || mainCharacterUrl;
+
+      if (characterEnabled && characterImage) {
+          const characterName = req.body.characterName || (Array.isArray(draft?.characters) && draft.characters[0]?.name) || '';
           const videoStyle = req.body.videoStyle || draft?.videoStyle || 'Cinematic';
 
           // Inject strict demographics from draft
@@ -1429,25 +1488,14 @@ router.post('/generateImages', protect, checkTrial, videoAiWriteLimiter, async (
           
           regenPrompt = `${strictContext}\n\nSCENE TO GENERATE:\n${regenPrompt}`;
 
-          let cleanBase64 = characterImageBase64;
-          if (cleanBase64.includes('data:image')) {
-            cleanBase64 = cleanBase64.split(',')[1];
-          }
-
-          console.log('\n🎭 ==================== CHARACTER CONSISTENCY (NANO BANANA) ====================');
-          console.log(`📸 Character: ${characterName || 'Unknown'}`);
-          console.log(`🎬 Scene: ${regenPrompt}`);
-          console.log(`🎨 Style: ${videoStyle}`);
-          console.log(`🔧 API: Gemini Nano Banana`);
-          console.log('=========================================================================\n');
-
-          const imageData = `data:image/jpeg;base64,${cleanBase64}`;
-          
           try {
             const nanoResult = await generateCampaignImageNanoBanana(regenPrompt, {
-              aspectRatio: '16:9', // default for video
-              characterReferenceImage: imageData,
-              isCinematic: true
+              isCinematic: true,
+              aspectRatio: '9:16', // default for video
+              characterReferenceImage: characterImage,
+              originalCharacterImage: characterImage,
+              preserveCharacterIdentity: true,
+              consistencyStrength: 'strict'
             });
             
             if (nanoResult && (nanoResult.imageUrl || typeof nanoResult === 'string')) {
@@ -1461,6 +1509,7 @@ router.post('/generateImages', protect, checkTrial, videoAiWriteLimiter, async (
           }
       } else {
         const regen = await generateCampaignImageNanoBanana(regenPrompt, {
+          isCinematic: true,
           aspectRatio: '9:16',
           linkedProduct: draft?.input?.product || null,
           productReferenceImage: draft?.input?.sourceImage?.url || draft?.input?.product?.imageUrl || null,
@@ -1481,9 +1530,17 @@ router.post('/generateImages', protect, checkTrial, videoAiWriteLimiter, async (
           : scene
       ));
     } else {
+      const characterEnabled = draft?.characterEnabled || (Array.isArray(draft?.characters) && draft.characters.length > 0);
+      const mainCharacterUrl = Array.isArray(draft?.characters) && draft.characters.length > 0
+        ? (draft.characters.find(c => String(c.role || '').toLowerCase() === 'bride' || String(c.name || '').toLowerCase() === 'priya')?.imageUrl || draft.characters[0]?.imageUrl)
+        : null;
+
+      const characterImage = req.body.characterImageBase64 || draft?.characterImage || mainCharacterUrl || undefined;
+
       const generated = await runGenerateImages({
         payload: {
           jobId,
+          bypassCache: req.body.bypassCache === true || action === 'generateAll',
           description: String(draft?.prompt?.promptText || draft?.input?.description || ''),
           durationSeconds,
           sceneCount: draft?.input?.sceneCount || sourceScenes.length,
@@ -1497,9 +1554,10 @@ router.post('/generateImages', protect, checkTrial, videoAiWriteLimiter, async (
           characterImageBase64: req.body.characterImageBase64 || draft?.characterImageBase64 || undefined,
           characterName: req.body.characterName || draft?.characterName || undefined,
           videoStyle: req.body.videoStyle || draft?.videoStyle || undefined,
-          characterEnabled: draft?.characterEnabled,
-          characterImage: draft?.characterImage,
-          originalCharacterImage: draft?.originalCharacterImage,
+          characters: draft?.characters || [],
+          characterEnabled: characterEnabled,
+          characterImage: characterImage,
+          originalCharacterImage: characterImage,
           preserveIdentity: draft?.preserveIdentity,
           characterConsistencyStrength: draft?.characterConsistencyStrength,
           characterRace: draft?.characterRace,
@@ -1508,7 +1566,7 @@ router.post('/generateImages', protect, checkTrial, videoAiWriteLimiter, async (
           characterGender: draft?.characterGender,
           characterHairStyle: draft?.characterHairStyle,
           characterAppearance: draft?.characterAppearance,
-          useLogo: req.body.useLogo !== undefined ? req.body.useLogo : (draft?.useLogo !== undefined ? draft.useLogo : true)
+          useLogo: req.body.useLogo !== undefined ? req.body.useLogo : (draft?.useLogo !== undefined ? draft.useLogo : (draft?.input?.useLogo !== undefined ? draft.input.useLogo : false))
         },
         user: req.user,
         baseUrl
@@ -1573,6 +1631,7 @@ router.post('/generateClips', protect, checkTrial, videoAiWriteLimiter, async (r
     const sourceScenes = sanitizeSceneData(
       sceneData ||
       draft?.images?.sceneData ||
+      (Array.isArray(draft?.scenes) ? draft.scenes : null) ||
       draft?.scenes?.sceneData ||
       [],
       draft?.input?.durationSeconds || 60
@@ -1716,6 +1775,7 @@ router.post('/generateAudio', protect, checkTrial, videoAiWriteLimiter, async (r
     const sourceVoiceScript = String(audio?.voiceScript || deriveVoiceScriptFromDraft(draft) || '').trim();
 
     const sceneDataForTiming =
+      (Array.isArray(draft?.scenes) && draft.scenes.length ? draft.scenes : null) ||
       (Array.isArray(draft?.scenes?.sceneData) && draft.scenes.sceneData.length ? draft.scenes.sceneData : null) ||
       (Array.isArray(draft?.clips?.sceneData) && draft.clips.sceneData.length ? draft.clips.sceneData : null) ||
       (Array.isArray(draft?.images?.sceneData) && draft.images.sceneData.length ? draft.images.sceneData : null) ||
@@ -1955,7 +2015,7 @@ router.post('/mergeVideo', protect, checkTrial, videoAiWriteLimiter, async (req,
           draft.audio.config.localizedSceneData.length
         )
           ? draft.audio.config.localizedSceneData
-          : (draft?.clips?.sceneData || draft?.images?.sceneData || draft?.scenes?.sceneData || [])
+          : (draft?.clips?.sceneData || draft?.images?.sceneData || (Array.isArray(draft?.scenes) ? draft.scenes : null) || draft?.scenes?.sceneData || [])
       },
       baseUrl: reqBaseUrl(req)
     });
@@ -2000,7 +2060,7 @@ router.post('/mergeVideo', protect, checkTrial, videoAiWriteLimiter, async (req,
       action: 'video_merge',
       prompt: draft?.prompt?.promptText || '',
       userInput: draft.input || {},
-      sceneData: draft?.clips?.sceneData || draft?.images?.sceneData || draft?.scenes?.sceneData || [],
+      sceneData: draft?.clips?.sceneData || draft?.images?.sceneData || (Array.isArray(draft?.scenes) ? draft.scenes : null) || draft?.scenes?.sceneData || [],
       generatedVideos: [updated.merge.finalOutputUrl || updated.merge.finalVideoUrl].filter(Boolean),
       audioSettings: draft?.audio?.config || {},
       duration: draft?.input?.durationSeconds || null,

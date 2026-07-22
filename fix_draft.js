@@ -1,0 +1,1 @@
+const fs = require('fs'); let code = fs.readFileSync('backend/models/VideoDraft.js', 'utf8'); code = code.replace(/characterConsistencyStrength: { type: String, default: 'Strict' },/g, 'characterConsistencyStrength: { type: String, default: \'Strict\' },\n      location: { type: String, default: \'\' },'); fs.writeFileSync('backend/models/VideoDraft.js', code);

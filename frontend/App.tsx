@@ -11,6 +11,7 @@ import Dashboard from './pages/Dashboard';
 import Campaigns from './pages/Campaigns';
 import ContentCalendar from './pages/ContentCalendar';
 import ReelGenerator from './pages/ReelGenerator';
+import DirectorStudio from './pages/DirectorStudio';
 import AdCampaigns from './pages/AdCampaigns';
 import Competitors from './pages/Competitors';
 import ConnectSocials from './pages/ConnectSocials';
@@ -178,7 +179,7 @@ const App: React.FC = () => {
                     <Route path="/dashboard" element={<Dashboard />} />
                     <Route path="/content-calendar" element={<ContentCalendar />} />
                     <Route path="/campaigns" element={<Campaigns />} />
-                    <Route path="/reels" element={<ReelGenerator />} />
+                    <Route path="/reels" element={<DirectorStudio />} />
                     <Route path="/ad-campaigns" element={<AdCampaigns />} />
                     <Route path="/competitors" element={<Competitors />} />
                     <Route path="/connect-socials" element={<ConnectSocials />} />

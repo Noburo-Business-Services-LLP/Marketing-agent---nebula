@@ -78,11 +78,11 @@ async function writeDraft(draft) {
   try {
     await VideoDraft.findOneAndUpdate(
       { jobId: draft.jobId },
-      payload,
+      { $set: payload },
       { upsert: true, new: true }
     );
   } catch (dbError) {
-    console.error('⚠️ Failed to save draft to MongoDB:', dbError.message);
+    console.error('Failed to save draft to MongoDB:', dbError.message);
   }
 
   // 2. Persist to Disk (local folder backup)

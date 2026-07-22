@@ -3366,6 +3366,7 @@ export const videoGenerationAPI = {
     imageUrl?: string;
     productId?: string;
     product?: any;
+    videoStyle?: string;
   }): Promise<any> => {
     return apiCall('/video-generation/createDraft', {
       method: 'POST',
@@ -4042,3 +4043,114 @@ export const draftsAPI = {
   }
 };
 
+
+
+// ================================
+// AI Director API
+// ================================
+export const aiDirectorAPI = {
+  analyzeBrand: async (payload: {
+    jobId: string;
+    businessName?: string;
+    industry?: string;
+    brandSummary?: string;
+    targetAudience?: string;
+    brandTone?: string;
+    commercialObjective?: string;
+    duration?: number;
+    videoStyle?: string;
+  }): Promise<any> => {
+    return apiCall('/director/analyze-brand', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }, true);
+  },
+
+  planCharacters: async (payload: {
+    jobId: string;
+    productionBible: any;
+  }): Promise<any> => {
+    return apiCall('/director/plan-characters', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }, true);
+  },
+
+  generateScreenplay: async (payload: {
+    jobId: string;
+    productionBible: any;
+    characters: any[];
+    duration?: number;
+  }): Promise<any> => {
+    return apiCall('/director/generate-screenplay', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }, true);
+  },
+
+  buildImagePrompts: async (payload: {
+    jobId: string;
+    screenplay: any[];
+    characters: any[];
+    productionBible: any;
+  }): Promise<any> => {
+    return apiCall('/director/build-image-prompts', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }, true);
+  },
+
+  buildVideoPrompts: async (payload: {
+    jobId: string;
+    screenplay: any[];
+  }): Promise<any> => {
+    return apiCall('/director/build-video-prompts', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }, true);
+  },
+
+  generateStory: async (payload: {
+    jobId: string;
+    businessName?: string;
+    industry?: string;
+    brandSummary?: string;
+    targetAudience?: string;
+    brandTone?: string;
+    commercialObjective?: string;
+    duration?: number;
+    videoStyle?: string;
+  }): Promise<any> => {
+    return apiCall('/director/generate-story', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }, true);
+  },
+
+  editScene: async (payload: {
+    jobId: string;
+    sceneId: string;
+    userDirection: string;
+    currentScene: any;
+    productionBible: any;
+    characters: any[];
+  }): Promise<any> => {
+    return apiCall('/director/edit-scene', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }, true);
+  },
+
+  buildPromptsForScene: async (payload: {
+    jobId: string;
+    sceneId: string;
+    scene: any;
+    characters: any[];
+    productionBible: any;
+  }): Promise<any> => {
+    return apiCall('/director/build-prompts-for-scene', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }, true);
+  }
+};

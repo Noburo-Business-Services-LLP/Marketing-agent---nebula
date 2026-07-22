@@ -1,0 +1,55 @@
+          {step === 2 && (
+            <div className={`${panelClass} p-6 space-y-8`}>
+              <h2 className={`font-bold text-xl ${theme.text}`}>Step 2: Character & Video Style Configuration</h2>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-4">
+                  <h3 className={`text-sm font-semibold uppercase tracking-wider ${theme.textMuted}`}>General Settings</h3>
+                  <label className={`flex items-center gap-3 cursor-pointer ${theme.text}`}>
+                    <input type="checkbox" className="w-5 h-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600" checked={characterEnabled} onChange={e => setCharacterEnabled(e.target.checked)} />
+                    <span className="font-medium">Use Character in Video</span>
+                  </label>
+                  <label className={`flex items-center gap-3 cursor-pointer ${theme.text}`}>
+                    <input type="checkbox" className="w-5 h-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600" checked={preserveCharacter} onChange={e => setPreserveCharacter(e.target.checked)} />
+                    <span className="font-medium">Preserve Character Identity</span>
+                  </label>
+                  <label className={`flex items-center gap-3 cursor-pointer ${theme.text}`}>
+                    <input type="checkbox" className="w-5 h-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600" checked={includeBrandLogo} onChange={e => setIncludeBrandLogo(e.target.checked)} />
+                    <span className="font-medium">Include Brand Logo</span>
+                  </label>
+                </div>
+
+                <div className="space-y-4">
+                  <h3 className={`text-sm font-semibold uppercase tracking-wider ${theme.textMuted}`}>Video Style</h3>
+                  <select value={videoStyle} onChange={e => setVideoStyle(e.target.value)} className={`${inputClass} mt-2 w-full`}>
+                    <option value="Storytelling">Storytelling</option>
+                    <option value="Cinematic Commercial">Cinematic Commercial</option>
+                    <option value="Product Showcase">Product Showcase</option>
+                    <option value="UGC / TikTok">UGC / TikTok</option>
+                  </select>
+                </div>
+              </div>
+
+              {characterEnabled && (
+                <div className="border-t dark:border-slate-800 pt-8 mt-8">
+                  <CharacterManager
+                    jobId={jobId!}
+                    draft={draft}
+                    setDraft={setDraft}
+                    setStep={setStep}
+                    busy={busy}
+                    setBusy={setBusy}
+                  />
+                </div>
+              )}
+
+              <div className="flex gap-3 justify-end mt-8 border-t dark:border-slate-800 pt-6">
+                <button onClick={() => setStep(1)} disabled={busy} className="px-6 py-2 rounded-xl font-medium border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                  Back
+                </button>
+                <button onClick={() => setStep(3)} disabled={busy} className="px-6 py-2 rounded-xl font-medium bg-[#ffcc29] text-black hover:bg-[#e6b825] transition-colors">
+                  Next: Screenplay
+                </button>
+              </div>
+            </div>
+          )}

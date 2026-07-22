@@ -94,6 +94,7 @@ const contentCalendarRoutes = require('./routes/contentCalendar');
 const googleCalendarRoutes = require('./routes/googleCalendar');
 const productRoutes = require('./routes/products');
 const videoGenerationRoutes = require('./routes/videoGeneration');
+const apiDirectorRoutes = require('./routes/api-director');
 const aiMemoryRoutes = require('./routes/aiMemory');
 const influencerRoutes = require('./routes/influencerRoutes');
 const collaborationRoutes = require('./routes/collaborationRoutes');
@@ -430,6 +431,7 @@ app.use('/api/google-calendar', googleCalendarRoutes);
 app.use('/api/products', productRoutes);
 // Video generation has its own per-route limiters (job polling must not trip AI limiter).
 app.use('/api/video-generation', videoGenerationRoutes);
+app.use('/api/director', apiDirectorRoutes);
 app.use('/api/ai-memory', aiMemoryRoutes);
 app.use('/api/influencers', influencerRoutes);
 app.use('/api/collaborations', collaborationRoutes);
