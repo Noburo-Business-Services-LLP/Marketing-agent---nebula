@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   Clapperboard, Users, BookOpen, Wand2, Check,
   Edit3, Loader2, RefreshCw, Image as ImageIcon, Video,
@@ -87,6 +87,10 @@ export default function DirectorStudio() {
   const [reelDraftsList, setReelDraftsList] = useState<Draft[]>([]);
   const [deletingDraftId, setDeletingDraftId] = useState('');
 
+  // Auto-save timer ref
+  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const LS_KEY = 'director_studio_draft_v1';
+
   // Active Wizard state
   const [currentStep, setCurrentStep] = useState(1);
   const [busy, setBusy] = useState(false);
@@ -165,6 +169,42 @@ export default function DirectorStudio() {
     fetchDrafts();
   }, []);
 
+  // ── AUTO-RESUME: if user had an active draft open when they refreshed/navigated away, re-open it
+  useEffect(() => {
+    const savedRaw = localStorage.getItem('director_studio_draft_v1');
+    if (!savedRaw) return;
+    try {
+      const saved = JSON.parse(savedRaw);
+      if (saved.jobId) {
+        // Silently reload the draft in the background
+        (async () => {
+          try {
+            const res = await videoGenerationAPI.getDraft(saved.jobId);
+            if (res?.success && res?.draft) {
+              const d = res.draft;
+              setDraft(d);
+              setJobId(d.jobId);
+              setScenes(d.scenes || []);
+              setCharacters(d.characters || []);
+              setBusinessName(d.businessName || saved.businessName || '');
+              setIndustry(d.industry || saved.industry || '');
+              setTargetAudience(d.targetAudience || saved.targetAudience || '');
+              setBrandTone(d.brandTone || saved.brandTone || '');
+              setCommercialObjective(d.commercialObjective || saved.commercialObjective || '');
+              setBrandSummary(d.brandSummary || d.description || saved.brandSummary || '');
+              setVideoStyle(d.videoStyle || saved.videoStyle || 'Cinematic Commercial');
+              setDurationSeconds(d.durationSeconds || saved.durationSeconds || 30);
+              setUseLogo(d.useLogo !== undefined ? d.useLogo : (saved.useLogo || false));
+              setUseCharacters(saved.useCharacters !== undefined ? saved.useCharacters : true);
+              setSelectedProductId(saved.selectedProductId || '');
+              // Do NOT auto-open wizard: let user choose when to resume
+            }
+          } catch (_) { /* silent */ }
+        })();
+      }
+    } catch (_) { /* corrupt data — ignore */ }
+  }, []);
+
   useEffect(() => {
     const fetchProducts = async () => {
       try {
@@ -192,12 +232,76 @@ export default function DirectorStudio() {
     }
   }, [jobId, currentStep]);
 
+  // ── AUTO-SAVE Step 1 fields to localStorage immediately on every change
+  useEffect(() => {
+    if (!showWizard) return;
+    const snapshot = {
+      businessName, industry, targetAudience, brandSummary, brandTone,
+      commercialObjective, videoStyle, durationSeconds, useCharacters, useLogo,
+      selectedProductId, jobId
+    };
+    localStorage.setItem(LS_KEY, JSON.stringify(snapshot));
+  }, [businessName, industry, targetAudience, brandSummary, brandTone,
+      commercialObjective, videoStyle, durationSeconds, useCharacters, useLogo,
+      selectedProductId, showWizard, jobId]);
+
+  // ── DEBOUNCED AUTO-SAVE to backend whenever Step 1 fields change and jobId exists
+  const scheduleBackendAutoSave = useCallback(() => {
+    if (!jobId) return;
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+    autoSaveTimer.current = setTimeout(async () => {
+      try {
+        await videoGenerationAPI.updateDraft(jobId, {
+          businessName, industry, targetAudience, brandSummary, brandTone,
+          commercialObjective, videoStyle, durationSeconds, useCharacters, useLogo,
+          description: brandSummary || `Commercial for ${businessName || 'Brand'}`
+        });
+      } catch (_) { /* silent */ }
+    }, 1500);
+  }, [jobId, businessName, industry, targetAudience, brandSummary, brandTone,
+      commercialObjective, videoStyle, durationSeconds, useCharacters, useLogo]);
+
+  useEffect(() => {
+    if (jobId && showWizard) scheduleBackendAutoSave();
+    return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); };
+  }, [businessName, industry, targetAudience, brandSummary, brandTone,
+      commercialObjective, videoStyle, durationSeconds, useCharacters, useLogo, jobId, showWizard]);
+
   const filteredVideoDrafts = useMemo(
     () => videoDrafts.filter((item) => statusFilter === 'all' || item.status === statusFilter),
     [videoDrafts, statusFilter]
   );
 
   const resetWizard = () => {
+    // Try to restore partial draft data from localStorage for a new session
+    const savedRaw = localStorage.getItem(LS_KEY);
+    if (savedRaw) {
+      try {
+        const saved = JSON.parse(savedRaw);
+        // Only restore if it's a truly new session (no jobId stored or jobId mismatch)
+        if (!saved.jobId) {
+          setBusinessName(saved.businessName || '');
+          setIndustry(saved.industry || '');
+          setTargetAudience(saved.targetAudience || '');
+          setBrandSummary(saved.brandSummary || '');
+          setBrandTone(saved.brandTone || '');
+          setCommercialObjective(saved.commercialObjective || '');
+          setVideoStyle(saved.videoStyle || 'Cinematic Commercial');
+          setDurationSeconds(saved.durationSeconds || 30);
+          setUseCharacters(saved.useCharacters !== undefined ? saved.useCharacters : true);
+          setUseLogo(saved.useLogo !== undefined ? saved.useLogo : false);
+          setSelectedProductId(saved.selectedProductId || '');
+          setJobId('');
+          setDraft(null);
+          setScenes([]);
+          setCharacters([]);
+          setCurrentStep(1);
+          setShowWizard(true);
+          return;
+        }
+      } catch (_) { /* corrupt data — ignore */ }
+    }
+    // No saved data: full clean reset
     setJobId('');
     setDraft(null);
     setScenes([]);
@@ -246,8 +350,15 @@ export default function DirectorStudio() {
         setDurationSeconds(d.durationSeconds || 30);
         setUseLogo(d.useLogo !== undefined ? d.useLogo : false);
         setShowWizard(true);
+        // Resume from: localStorage > DB saved step > scenes heuristic
         const savedStep = localStorage.getItem(`director_studio_step_${d.jobId}`);
-        setCurrentStep(savedStep ? Number(savedStep) : (d.scenes && d.scenes.length > 0 ? 3 : 1));
+        if (savedStep) {
+          setCurrentStep(Number(savedStep));
+        } else if (d.currentStep && d.currentStep > 1) {
+          setCurrentStep(d.currentStep);
+        } else {
+          setCurrentStep(d.scenes && d.scenes.length > 0 ? 3 : 1);
+        }
       }
     } catch (e: any) {
       alert(e?.message || 'Failed to load draft');
@@ -299,13 +410,39 @@ export default function DirectorStudio() {
         activeJobId = draftRes.draft.jobId;
         setDraft(draftRes.draft);
         setJobId(activeJobId);
+      } else {
+        const updatedFields = {
+          businessName,
+          industry,
+          targetAudience,
+          brandTone,
+          commercialObjective,
+          description: brandSummary || `Commercial for ${businessName || 'Brand'}`,
+          videoStyle,
+          durationSeconds,
+          imageData: imageDataUrl,
+          productId: selectedProductId,
+          useLogo
+        };
+        const draftRes = await videoGenerationAPI.updateDraft(activeJobId, updatedFields);
+        if (draftRes?.draft) {
+          setDraft(draftRes.draft);
+        }
       }
 
       // Step 1 -> Step 2 Character Manager or Step 3 Direct Story
       if (useCharacters) {
         setCurrentStep(2);
       } else {
-        await handleGenerateStoryWithJobId(activeJobId);
+        if (scenes.length > 0) {
+          if (window.confirm("You already have an existing story and screenplay generated. Do you want to regenerate it from scratch? (Regenerating will replace all your scenes, prompts, and images. Cancel to keep your existing story and proceed.)")) {
+            await handleGenerateStoryWithJobId(activeJobId);
+          } else {
+            setCurrentStep(3);
+          }
+        } else {
+          await handleGenerateStoryWithJobId(activeJobId);
+        }
       }
 
       fetchDrafts();
@@ -682,7 +819,11 @@ export default function DirectorStudio() {
                   type="button"
                   onClick={() => {
                     if (tab.id === 'create') {
-                      resetWizard();
+                      if (!jobId) {
+                        resetWizard();
+                      } else {
+                        setShowWizard(true);
+                      }
                     } else {
                       setShowWizard(false);
                       setStatusFilter(tab.id as VideoStatusFilter);
