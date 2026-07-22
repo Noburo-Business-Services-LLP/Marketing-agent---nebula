@@ -10,6 +10,7 @@ const { GoogleAuth } = require('google-auth-library');
 const Product = require('../models/Product');
 const VideoDraft = require('../models/VideoDraft');
 const { callGemini, parseGeminiJSON, generateCampaignImageNanoBanana, extractCharacterVisualTraits } = require('./geminiAI');
+const { callOpenAI } = require('./openAI');
 const { getPublicBaseUrl, normalizeTone, audioFilePathForTone } = require('../utils/toneAudio');
 const { generateVideoClip, generateCharacterImageFal, generateCharacterSheetFal, applyFaceSwapFal, extractFaceEmbedding } = require('./videoService');
 const { uploadVideoFile } = require('./imageUploader');
@@ -815,32 +816,104 @@ ${usageRules}`;
     }
   }
 
-  const systemPrompt = `You are a storyboard planner for short vertical AI videos.${videoStyleContext}${characterContext}
-Return strict JSON with this schema:
+  // "Award-winning Creative Director" storyboard prompt sourced from
+  // Script & Scenes.docx, tweaked for dynamic tone/scene-count/duration
+  // and forced to STRICT JSON so downstream image/video/TTS steps work.
+  const brandToneFromProfile = Array.isArray(profile?.brandVoice)
+    ? profile.brandVoice.join(', ')
+    : String(profile?.brandVoice || profile?.tone || 'Emotional');
+  const brandSummary = String(profile?.description || profile?.bio || profile?.about || '').trim();
+
+  const systemPrompt = `You are an award-winning Creative Director and Film Director who has created commercials for brands like Apple, Nike, Google, Tanishq and Dove.
+The commercial concept has already been finalized.
+Your job is to convert this concept into a production-ready commercial.
+This is NOT a social media content piece.
+This is a premium brand film.
+═══════════════════════════════════════
+BRAND DETAILS
+Business Name: ${profile?.name || 'N/A'}
+Industry: ${profile?.industry || 'N/A'}
+Target Audience: ${profile?.targetAudience || 'General audience'}
+Brand Tone: ${brandToneFromProfile}
+Brand Summary: ${brandSummary || 'N/A'}
+═══════════════════════════════════════
+APPROVED CONCEPT
+${input.description}
+═══════════════════════════════════════
+OBJECTIVE
+Expand this concept into a cinematic commercial that emotionally connects with the audience before introducing the brand.
+The audience should remember the feeling first, and the brand second.
+Avoid generic advertising.
+Avoid direct selling.
+Avoid explaining the product.
+Show emotions instead of information.
+Think like the best commercial for this brand's tier — luxury polish if premium, warm authenticity if traditional, kinetic energy if D2C/reel-first. Match the Brand Tone above.
+═══════════════════════════════════════
+Create the following in order:
+
+## 1. STORY
+Expand the concept into a complete story.
+The story should have:
+• Hook
+• Beginning
+• Emotional progression
+• Climax
+• Brand Reveal
+• Ending
+Maximum duration: ${input.durationSeconds} seconds
+Maximum scenes: ${sceneCount}
+The story should naturally flow from one scene to another.
+═══════════════════════════════════════
+## 2. VOICE OVER
+Write a premium cinematic narration.
+Rules:
+• Aim for a word count that fits ${input.durationSeconds} seconds of narration at a natural pace (~2 words/second)
+• One short sentence at a time
+• Natural pauses
+• Emotional
+• Poetic
+• Don't explain visuals
+• Don't mention products unnecessarily
+• End with a memorable brand line
+═══════════════════════════════════════
+## 3. SCENE BREAKDOWN
+Create a production-ready scene breakdown.
+For every scene include: Scene Title, Purpose, Visual Description, Emotion, Camera Angle, Camera Movement, Duration (seconds), Voice-over Line, Transition to next scene.
+═══════════════════════════════════════
+## CREATIVE RULES
+Before finalizing, check that:
+✓ The first 5 seconds create curiosity.
+✓ Every scene moves the story forward.
+✓ Every scene has only ONE dominant emotion.
+✓ The product is never the hero.
+✓ The brand appears naturally near the end.
+✓ The ending feels memorable.
+✓ The audience should feel something before seeing the logo.
+✓ The commercial should feel worthy of its brand tier.
+If any scene feels generic or unnecessary, rewrite it before presenting the final output.
+${videoStyleContext}${characterContext}
+═══════════════════════════════════════
+OUTPUT FORMAT — STRICT JSON ONLY
+Return ONLY a valid JSON object (no markdown, no code fences, no prose) with this exact schema:
 {
-  "globalVisualStyle": "string",
-  "thumbnailPrompt": "string",
-  "voiceScript": "string",
+  "globalVisualStyle": "string — cinematography direction that applies to every scene",
+  "thumbnailPrompt": "string — an attention-grabbing thumbnail image description",
+  "voiceScript": "string — the full narration from VOICE OVER above, one string, no headings",
   "scenes": [
     {
-      "title": "string",
-      "imagePrompt": "string",
-      "videoPrompt": "string",
-      "voiceLine": "string",
-      "onScreenText": "string"
+      "title": "string — scene title",
+      "imagePrompt": "string — photoreal visual description for image gen (environment, lighting, camera angle, character continuity, mood)",
+      "videoPrompt": "string — motion only (camera movement, character movement, environmental movement); do NOT repeat imagePrompt visuals",
+      "voiceLine": "string — the narration line for THIS scene from the VOICE OVER",
+      "onScreenText": "string — optional short caption or empty string"
     }
   ]
 }
-
-Rules:
-- Priority Order (Highest to Lowest): Character Identity Rules, Character Reference Image, Character Usage Rules, Video Style Rules, User Description, Product Information, AI Creativity. Never violate a higher priority rule to satisfy a lower priority rule.
-- Output between ${MIN_SCENES} and ${MAX_SCENES} scenes.
-- You MUST return exactly ${sceneCount} scenes.
-- Keep all scene prompts visually consistent.
-- Every scene must be suitable for 9:16 vertical video.
-- "voiceScript" must be a coherent narration for the full video.
-- Keep on-screen text short and clear.
-- Do not include markdown.`;
+Priority Order (Highest to Lowest): Character Identity Rules, Character Reference Image, Character Usage Rules, Video Style Rules, Approved Concept, Brand Details, AI Creativity. Never violate a higher priority rule to satisfy a lower priority rule.
+You MUST return exactly ${sceneCount} scenes.
+The number of scenes and voice-line lengths must be consistent with ${input.durationSeconds} seconds of total video.
+Every scene must be suitable for 9:16 vertical video.
+Do not include any text outside the JSON object.`;
 
   const userPrompt = [
     `Description: ${input.description}`,
@@ -864,12 +937,25 @@ Rules:
       'scene generation',
       async () => {
         const callPrompt = `${systemPrompt}\n\n${userPrompt}${validationError ? '\n\nIMPORTANT CORRECTION REQUIRED: ' + validationError : ''}`;
-        const result = await callGemini(callPrompt, {
-          skipCache: true,
-          temperature: 0.65,
-          maxTokens: 2500,
-          timeout: 120000
-        });
+        // Primary: OpenAI (gpt-4o) for the creative brain of the video.
+        // Fallback: Gemini, so the pipeline still works if OpenAI errors out.
+        let result;
+        try {
+          result = await callOpenAI(callPrompt, {
+            temperature: 0.7,
+            maxTokens: 2500,
+            timeout: 120000,
+            jsonMode: true
+          });
+        } catch (openAiErr) {
+          if (logger) logger(`OpenAI scene generation failed, falling back to Gemini: ${openAiErr.message || openAiErr}`);
+          result = await callGemini(callPrompt, {
+            skipCache: true,
+            temperature: 0.65,
+            maxTokens: 2500,
+            timeout: 120000
+          });
+        }
         
         // Validation Layer
         if (input.characterEnabled && input.characterUsage === 'Main Character In All Scenes') {
