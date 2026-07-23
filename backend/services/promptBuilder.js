@@ -67,12 +67,15 @@ CRITICAL:
 - Single camera angle.
 - Single composition.
 - Single moment in time.
+- One clear main subject only.
+- One outfit, one pose, one facial expression.
 - Full-frame vertical composition.
 - No borders, black bars, white margins, or frame dividers.
 - One camera. One shot. One composition. One moment.
 - Never combine multiple scenes into one image.
 - Never visualize more than one shot.
 - Never create sequential storytelling inside one image.
+- Never show a second person, duplicate person, family, group, crowd, or alternate pose.
 `.trim();
 
 function buildSceneImagePrompt(scene, plan = null) {
@@ -130,7 +133,9 @@ function buildSceneNegativePrompt(scene, plan = null) {
     "multiple camera angles", "multiple scenes", "multiple frames",
     "before after", "sequence", "montage", "duplicate person",
     "repeated subject", "multiple versions of the character", "multiple views",
-    "multi-panel", "picture-in-picture", "quad", "panels"
+    "multi-panel", "picture-in-picture", "quad", "panels",
+    "multiple people", "group shot", "crowd", "family", "duplicate subject",
+    "alternate pose", "alternate angle", "second person"
   ];
 
   // Contextual negative constraints

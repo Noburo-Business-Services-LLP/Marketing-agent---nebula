@@ -1174,6 +1174,8 @@ async function generateSceneImages({
 CRITICAL COMPOSITION RULES
 - Generate EXACTLY ONE cinematic frame.
 - This image represents ONLY ONE scene.
+- One clear main subject only.
+- One outfit, one pose, one facial expression.
 - Do NOT create multiple frames.
 - Do NOT create a storyboard.
 - Do NOT create a collage.
@@ -1185,6 +1187,7 @@ CRITICAL COMPOSITION RULES
 - Do NOT create contact sheets.
 - Do NOT show before/after.
 - Do NOT show sequences.
+- Do NOT include duplicate people, alternate poses, multiple people, family, or crowd.
 - Only ONE camera.
 - Only ONE moment.
 - Only ONE composition.

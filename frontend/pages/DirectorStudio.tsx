@@ -175,33 +175,69 @@ export default function DirectorStudio() {
     if (!savedRaw) return;
     try {
       const saved = JSON.parse(savedRaw);
-      if (saved.jobId) {
-        // Silently reload the draft in the background
-        (async () => {
-          try {
-            const res = await videoGenerationAPI.getDraft(saved.jobId);
-            if (res?.success && res?.draft) {
-              const d = res.draft;
-              setDraft(d);
-              setJobId(d.jobId);
-              setScenes(d.scenes || []);
-              setCharacters(d.characters || []);
-              setBusinessName(d.businessName || saved.businessName || '');
-              setIndustry(d.industry || saved.industry || '');
-              setTargetAudience(d.targetAudience || saved.targetAudience || '');
-              setBrandTone(d.brandTone || saved.brandTone || '');
-              setCommercialObjective(d.commercialObjective || saved.commercialObjective || '');
-              setBrandSummary(d.brandSummary || d.description || saved.brandSummary || '');
-              setVideoStyle(d.videoStyle || saved.videoStyle || 'Cinematic Commercial');
-              setDurationSeconds(d.durationSeconds || saved.durationSeconds || 30);
-              setUseLogo(d.useLogo !== undefined ? d.useLogo : (saved.useLogo || false));
-              setUseCharacters(saved.useCharacters !== undefined ? saved.useCharacters : true);
-              setSelectedProductId(saved.selectedProductId || '');
-              // Do NOT auto-open wizard: let user choose when to resume
-            }
-          } catch (_) { /* silent */ }
-        })();
-      }
+      if (!saved?.jobId) return;
+
+      const restoreFromSnapshot = (snapshot: any) => {
+        if (!snapshot) return;
+        setDraft(snapshot.draft || null);
+        setJobId(snapshot.jobId || '');
+        setScenes(Array.isArray(snapshot.scenes) ? snapshot.scenes : (snapshot.draft?.scenes || []));
+        setCharacters(Array.isArray(snapshot.characters) ? snapshot.characters : (snapshot.draft?.characters || []));
+        setBusinessName(snapshot.businessName || snapshot.draft?.businessName || '');
+        setIndustry(snapshot.industry || snapshot.draft?.industry || '');
+        setTargetAudience(snapshot.targetAudience || snapshot.draft?.targetAudience || '');
+        setBrandTone(snapshot.brandTone || snapshot.draft?.brandTone || '');
+        setCommercialObjective(snapshot.commercialObjective || snapshot.draft?.commercialObjective || '');
+        setBrandSummary(snapshot.brandSummary || snapshot.draft?.brandSummary || snapshot.draft?.description || '');
+        setVideoStyle(snapshot.videoStyle || snapshot.draft?.videoStyle || 'Cinematic Commercial');
+        setDurationSeconds(snapshot.durationSeconds || snapshot.draft?.durationSeconds || 30);
+        setUseLogo(snapshot.useLogo !== undefined ? snapshot.useLogo : (snapshot.draft?.useLogo !== undefined ? snapshot.draft.useLogo : false));
+        setUseCharacters(snapshot.useCharacters !== undefined ? snapshot.useCharacters : true);
+        setSelectedProductId(snapshot.selectedProductId || snapshot.draft?.selectedProductId || '');
+        setImageDataUrl(snapshot.imageDataUrl || snapshot.draft?.imageDataUrl || '');
+        setFinalAudioUrl(snapshot.finalAudioUrl || snapshot.draft?.finalAudioUrl || '');
+        setFinalVideoUrl(snapshot.finalVideoUrl || snapshot.draft?.finalVideoUrl || '');
+        setFinalOutputUrl(snapshot.finalOutputUrl || snapshot.draft?.finalOutputUrl || '');
+        setThumbnailUrl(snapshot.thumbnailUrl || snapshot.draft?.thumbnailUrl || '');
+        setCaption(snapshot.caption || snapshot.draft?.caption || '');
+        setHashtagsText(snapshot.hashtagsText || snapshot.draft?.hashtagsText || '');
+        setSelectedPlatforms(Array.isArray(snapshot.selectedPlatforms) ? snapshot.selectedPlatforms : (snapshot.draft?.selectedPlatforms || []));
+        setScheduleDate(snapshot.scheduleDate || snapshot.draft?.scheduleDate || '');
+        setScheduleTime(snapshot.scheduleTime || snapshot.draft?.scheduleTime || '');
+        setCurrentStep(Number(snapshot.currentStep || 1));
+        setShowWizard(true);
+      };
+
+      restoreFromSnapshot(saved);
+
+      (async () => {
+        try {
+          const res = await videoGenerationAPI.getDraft(saved.jobId);
+          if (res?.success && res?.draft) {
+            const d = res.draft;
+            setDraft(d);
+            setJobId(d.jobId);
+            setScenes(d.scenes || []);
+            setCharacters(d.characters || []);
+            setBusinessName(d.businessName || saved.businessName || '');
+            setIndustry(d.industry || saved.industry || '');
+            setTargetAudience(d.targetAudience || saved.targetAudience || '');
+            setBrandTone(d.brandTone || saved.brandTone || '');
+            setCommercialObjective(d.commercialObjective || saved.commercialObjective || '');
+            setBrandSummary(d.brandSummary || d.description || saved.brandSummary || '');
+            setVideoStyle(d.videoStyle || saved.videoStyle || 'Cinematic Commercial');
+            setDurationSeconds(d.durationSeconds || saved.durationSeconds || 30);
+            setUseLogo(d.useLogo !== undefined ? d.useLogo : (saved.useLogo || false));
+            setUseCharacters(saved.useCharacters !== undefined ? saved.useCharacters : true);
+            setSelectedProductId(saved.selectedProductId || '');
+            setShowWizard(true);
+            const savedStep = localStorage.getItem(`director_studio_step_${d.jobId}`);
+            if (savedStep) setCurrentStep(Number(savedStep));
+            else if (saved.currentStep) setCurrentStep(Number(saved.currentStep));
+            else if (d.currentStep) setCurrentStep(Number(d.currentStep));
+          }
+        } catch (_) { /* silent */ }
+      })();
     } catch (_) { /* corrupt data — ignore */ }
   }, []);
 
@@ -232,18 +268,25 @@ export default function DirectorStudio() {
     }
   }, [jobId, currentStep]);
 
-  // ── AUTO-SAVE Step 1 fields to localStorage immediately on every change
+  // ── SAVE the full draft state to localStorage so it can be restored with all scene/story/image/video details
   useEffect(() => {
-    if (!showWizard) return;
     const snapshot = {
+      jobId,
+      draft,
+      scenes,
+      characters,
       businessName, industry, targetAudience, brandSummary, brandTone,
       commercialObjective, videoStyle, durationSeconds, useCharacters, useLogo,
-      selectedProductId, jobId
+      selectedProductId, imageDataUrl, finalAudioUrl, finalVideoUrl, finalOutputUrl,
+      thumbnailUrl, caption, hashtagsText, selectedPlatforms, scheduleDate, scheduleTime,
+      currentStep
     };
     localStorage.setItem(LS_KEY, JSON.stringify(snapshot));
-  }, [businessName, industry, targetAudience, brandSummary, brandTone,
-      commercialObjective, videoStyle, durationSeconds, useCharacters, useLogo,
-      selectedProductId, showWizard, jobId]);
+  }, [jobId, draft, scenes, characters, businessName, industry, targetAudience,
+      brandSummary, brandTone, commercialObjective, videoStyle, durationSeconds,
+      useCharacters, useLogo, selectedProductId, imageDataUrl, finalAudioUrl,
+      finalVideoUrl, finalOutputUrl, thumbnailUrl, caption, hashtagsText,
+      selectedPlatforms, scheduleDate, scheduleTime, currentStep]);
 
   // ── DEBOUNCED AUTO-SAVE to backend whenever Step 1 fields change and jobId exists
   const scheduleBackendAutoSave = useCallback(() => {
@@ -273,39 +316,22 @@ export default function DirectorStudio() {
   );
 
   const resetWizard = () => {
-    // Try to restore partial draft data from localStorage for a new session
-    const savedRaw = localStorage.getItem(LS_KEY);
-    if (savedRaw) {
-      try {
-        const saved = JSON.parse(savedRaw);
-        // Only restore if it's a truly new session (no jobId stored or jobId mismatch)
-        if (!saved.jobId) {
-          setBusinessName(saved.businessName || '');
-          setIndustry(saved.industry || '');
-          setTargetAudience(saved.targetAudience || '');
-          setBrandSummary(saved.brandSummary || '');
-          setBrandTone(saved.brandTone || '');
-          setCommercialObjective(saved.commercialObjective || '');
-          setVideoStyle(saved.videoStyle || 'Cinematic Commercial');
-          setDurationSeconds(saved.durationSeconds || 30);
-          setUseCharacters(saved.useCharacters !== undefined ? saved.useCharacters : true);
-          setUseLogo(saved.useLogo !== undefined ? saved.useLogo : false);
-          setSelectedProductId(saved.selectedProductId || '');
-          setJobId('');
-          setDraft(null);
-          setScenes([]);
-          setCharacters([]);
-          setCurrentStep(1);
-          setShowWizard(true);
-          return;
-        }
-      } catch (_) { /* corrupt data — ignore */ }
+    // Always clear the last persisted resume snapshot so a fresh Create action starts a brand new draft.
+    localStorage.removeItem(LS_KEY);
+    if (jobId) {
+      localStorage.removeItem(`director_studio_step_${jobId}`);
     }
-    // No saved data: full clean reset
+
+    // Full clean reset for a brand-new reel session.
     setJobId('');
     setDraft(null);
     setScenes([]);
     setCharacters([]);
+    setGeneratingAllImages(false);
+    setGeneratingAllVideos(false);
+
+    setUseCharacters(true);
+    setUseLogo(false);
     setBusinessName('');
     setIndustry('');
     setTargetAudience('');
@@ -314,8 +340,20 @@ export default function DirectorStudio() {
     setCommercialObjective('');
     setVideoStyle('Cinematic Commercial');
     setDurationSeconds(30);
+
+    setProducts([]);
     setSelectedProductId('');
     setImageDataUrl('');
+
+    setAudioEnabled(true);
+    setAudioMode('auto');
+    setAudioPriority('balanced');
+    setAudioTone('professional');
+    setAudioLanguageCode('en');
+    setVoiceGender('female');
+    setVoiceVolume(1);
+    setMusicVolume(0.24);
+    setGeneratedTracks(null);
     setFinalAudioUrl('');
     setFinalVideoUrl('');
     setFinalOutputUrl('');
@@ -325,6 +363,8 @@ export default function DirectorStudio() {
     setSelectedPlatforms([]);
     setScheduleDate('');
     setScheduleTime('');
+    setPreviewImageUrl(null);
+
     setCurrentStep(1);
     setShowWizard(true);
   };
@@ -843,11 +883,7 @@ export default function DirectorStudio() {
                   type="button"
                   onClick={() => {
                     if (tab.id === 'create') {
-                      if (!jobId) {
-                        resetWizard();
-                      } else {
-                        setShowWizard(true);
-                      }
+                      resetWizard();
                     } else {
                       setShowWizard(false);
                       setStatusFilter(tab.id as VideoStatusFilter);
@@ -1268,7 +1304,7 @@ export default function DirectorStudio() {
                           className={`${inputClass} text-xs mt-1 min-h-[76px] resize-none font-mono`}
                           value={scene.imagePrompt || ''}
                           onChange={(e) => handleUpdateScene(scene.sceneId, { imagePrompt: e.target.value })}
-                          placeholder="Add the extra details you want improved, like lighting, facial expression, camera angle, brand style, or product focus..."
+                          placeholder="Target a small change while keeping the same scene identity, like: 'keep the same pose and background, only change the saree color to emerald green'..."
                         />
                       </div>
                       <button onClick={() => handleGenerateSceneImage(scene)} disabled={imgLoadingSceneId !== null || generatingAllImages || !scene.imagePrompt} className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold disabled:opacity-40 flex items-center justify-center gap-2">

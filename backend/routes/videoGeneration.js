@@ -1462,7 +1462,15 @@ router.post('/generateImages', protect, checkTrial, videoAiWriteLimiter, async (
         return res.status(404).json({ success: false, message: 'Scene not found' });
       }
       const targetScene = sourceScenes[idx];
-      let regenPrompt = String(imagePrompt || targetScene.imagePrompt || draft?.prompt?.promptText || '').trim();
+      const rawScenePrompt = String(imagePrompt || targetScene.imagePrompt || draft?.prompt?.promptText || '').trim();
+      const refinementGuardrails = [
+        'You are performing a targeted image refinement of an existing scene.',
+        'Keep the same subject identity, same face, same character, same pose, same camera framing, same overall composition, and same background unless the user explicitly asks to change one of those elements.',
+        'If the user requests only a small attribute change such as changing clothing color, accessory, or prop, only modify that requested attribute and preserve everything else as closely as possible.',
+        'Do NOT redesign the scene, change the camera angle, change the subject, or create a new composition.',
+        'Do NOT switch the model or make the scene look like a different shot. Preserve the original scene layout and continuity.'
+      ].join(' ');
+      let regenPrompt = `${refinementGuardrails}\n\nUSER REFINEMENT REQUEST:\n${rawScenePrompt}`;
       let finalRegenImageUrl = null;
       const characterEnabled = draft?.characterEnabled || (Array.isArray(draft?.characters) && draft.characters.length > 0);
       const mainCharacterUrl = Array.isArray(draft?.characters) && draft.characters.length > 0
