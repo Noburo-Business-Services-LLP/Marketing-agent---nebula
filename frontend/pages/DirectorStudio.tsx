@@ -496,6 +496,20 @@ export default function DirectorStudio() {
     setScenes(prev => prev.map((s) => s.sceneId === sceneId ? { ...s, ...updates } : s));
   };
 
+  const mergeSceneRegenerationResult = (sceneId: string, nextScene: any) => {
+    setScenes(prev => prev.map((currentScene) => {
+      if (currentScene.sceneId !== sceneId) return currentScene;
+      const mergedScene = {
+        ...currentScene,
+        ...nextScene,
+        imageUrl: nextScene?.imageUrl || nextScene?.generatedImageUrl || currentScene.imageUrl || currentScene.generatedImageUrl || '',
+        generatedImageUrl: nextScene?.generatedImageUrl || nextScene?.imageUrl || currentScene.generatedImageUrl || currentScene.imageUrl || '',
+        generatedVideoUrl: nextScene?.generatedVideoUrl || currentScene.generatedVideoUrl || ''
+      };
+      return mergedScene;
+    }));
+  };
+
   const handleGenerateScenePrompts = async (scene: any) => {
     setPromptLoadingSceneId(scene.sceneId);
     try {
@@ -554,7 +568,12 @@ export default function DirectorStudio() {
         style: videoStyle
       } as any);
       if (res?.sceneData) {
-        setScenes(res.sceneData);
+        const updatedScene = res.sceneData.find((item: any) => String(item.sceneId) === String(scene.sceneId));
+        if (updatedScene) {
+          mergeSceneRegenerationResult(scene.sceneId, updatedScene);
+        } else {
+          setScenes(res.sceneData);
+        }
       } else {
         const url = res?.images?.[scene.sceneId]?.imageUrl || res?.imageUrl || res?.draft?.scenes?.find((s: any) => s.sceneId === scene.sceneId)?.imageUrl;
         if (url) handleUpdateScene(scene.sceneId, { generatedImageUrl: url, imageUrl: url });
@@ -613,7 +632,12 @@ export default function DirectorStudio() {
         imageUrl: scene.imageUrl || scene.generatedImageUrl,
         duration: scene.durationSeconds || 5
       } as any);
-      if (res?.videoUrl) handleUpdateScene(scene.sceneId, { generatedVideoUrl: res.videoUrl });
+      if (res?.videoUrl) {
+        handleUpdateScene(scene.sceneId, {
+          generatedVideoUrl: res.videoUrl,
+          videoPrompt: scene.videoPrompt
+        });
+      }
     } catch (e: any) {
       alert(e?.message || 'Video generation failed');
     } finally {
@@ -1238,9 +1262,18 @@ export default function DirectorStudio() {
                           <ImageIcon className="w-8 h-8 text-slate-600" />
                         </div>
                       )}
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-400 uppercase">Refine Image Prompt</label>
+                        <textarea
+                          className={`${inputClass} text-xs mt-1 min-h-[76px] resize-none font-mono`}
+                          value={scene.imagePrompt || ''}
+                          onChange={(e) => handleUpdateScene(scene.sceneId, { imagePrompt: e.target.value })}
+                          placeholder="Add the extra details you want improved, like lighting, facial expression, camera angle, brand style, or product focus..."
+                        />
+                      </div>
                       <button onClick={() => handleGenerateSceneImage(scene)} disabled={imgLoadingSceneId !== null || generatingAllImages || !scene.imagePrompt} className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold disabled:opacity-40 flex items-center justify-center gap-2">
                         {imgLoadingSceneId === scene.sceneId ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImageIcon className="w-4 h-4" />}
-                        {(scene.imageUrl || scene.generatedImageUrl) ? 'Regenerate Image' : 'Generate Image'}
+                        {(scene.imageUrl || scene.generatedImageUrl) ? 'Improve & Regenerate Image' : 'Generate Image'}
                       </button>
                     </div>
                   ))}
@@ -1274,9 +1307,18 @@ export default function DirectorStudio() {
                           <Video className="w-8 h-8 text-slate-600" />
                         </div>
                       )}
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-400 uppercase">Refine Motion Prompt</label>
+                        <textarea
+                          className={`${inputClass} text-xs mt-1 min-h-[76px] resize-none font-mono`}
+                          value={scene.videoPrompt || ''}
+                          onChange={(e) => handleUpdateScene(scene.sceneId, { videoPrompt: e.target.value })}
+                          placeholder="Add motion details, camera movement, speed, style, transitions, or subject actions you want to emphasize..."
+                        />
+                      </div>
                       <button onClick={() => handleGenerateSceneVideo(scene)} disabled={vidLoadingSceneId !== null || generatingAllVideos || !scene.videoPrompt} className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold disabled:opacity-40 flex items-center gap-2">
                         {vidLoadingSceneId === scene.sceneId ? <Loader2 className="w-4 h-4 animate-spin" /> : <Video className="w-4 h-4" />}
-                        {scene.generatedVideoUrl ? 'Regenerate Video Clip' : 'Generate Video Clip'}
+                        {scene.generatedVideoUrl ? 'Improve & Regenerate Video Clip' : 'Generate Video Clip'}
                       </button>
                     </div>
                   ))}

@@ -207,13 +207,22 @@ router.post('/build-image-prompts', protect, videoAiWriteLimiter, async (req, re
     const systemPrompt = `You are a MASTER CINEMATOGRAPHER AND AI PROMPT ENGINEER. Convert the scene data into highly detailed Midjourney-style image prompts.
 
 CRITICAL REQUIREMENT:
-The generated image prompt must describe a single continuous 9:16 vertical commercial frame.
+Generate ONE cinematic keyframe representing ONLY this scene.
+This is NOT a storyboard.
+This is NOT multiple frames.
+This is NOT a comic page.
+It is ONE photograph taken from ONE camera.
+Everything must exist in ONE composition.
+
 Strictly enforce:
-- Single cinematic shot.
-- Full-screen composition.
-- One camera angle.
-- One frame only.
-- Strictly NO split screen, collage, storyboard, grid layout, multiple views, diptych, triptych, picture-in-picture, contact sheet, or multi-panel.
+- Generate EXACTLY ONE IMAGE.
+- Portrait 9:16 only.
+- Single cinematic frame.
+- Single camera angle.
+- Single composition.
+- Single moment in time.
+- One continuous cinematic scene only.
+- Strictly NO storyboard, collage, comic panels, split screen, image grid, contact sheet, film strip, multiple scenes, multiple frames, multiple camera angles, before/after layouts, or montage.
 
 Return strict JSON with this exact schema:
 {

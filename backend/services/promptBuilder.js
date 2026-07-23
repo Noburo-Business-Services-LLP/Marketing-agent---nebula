@@ -55,6 +55,26 @@ function getLocationRestrictions(locationId, productionBible) {
   return [];
 }
 
+const STRICT_IMAGE_RULES = `
+CRITICAL:
+- Generate EXACTLY ONE IMAGE.
+- Generate ONE cinematic keyframe representing ONLY this scene.
+- This is NOT a storyboard.
+- This is NOT multiple frames.
+- This is NOT a comic page.
+- Return ONE continuous cinematic photograph only.
+- Portrait 9:16 only.
+- Single camera angle.
+- Single composition.
+- Single moment in time.
+- Full-frame vertical composition.
+- No borders, black bars, white margins, or frame dividers.
+- One camera. One shot. One composition. One moment.
+- Never combine multiple scenes into one image.
+- Never visualize more than one shot.
+- Never create sequential storytelling inside one image.
+`.trim();
+
 function buildSceneImagePrompt(scene, plan = null) {
   const parts = [];
   const bible = plan?.productionBible;
@@ -94,20 +114,23 @@ function buildSceneImagePrompt(scene, plan = null) {
 
   // 6. Hardcoded framing constraints for realism
   parts.push("FRAMING: Both hands fully visible, natural human anatomy, realistic fabric folds, no body clipping, perfectly framed.");
-  parts.push("COMPOSITION: Single cinematic shot, full-screen composition, one camera angle, one frame only, 9:16 vertical commercial frame. Strictly no split screen, no collage, no storyboard, no grid layout, no multiple views.");
+  parts.push(STRICT_IMAGE_RULES);
 
   return parts.filter(Boolean).join("\n\n");
 }
 
 function buildSceneNegativePrompt(scene, plan = null) {
   const negatives = [
-    "cropped", "out of frame", "deformed", "mutated", "extra fingers", 
-    "missing limbs", "poorly drawn hands", "bad anatomy", "watermark", 
-    "signature", "text", "blurry", "low resolution", "cartoon", 
+    "cropped", "out of frame", "deformed", "mutated", "extra fingers",
+    "missing limbs", "poorly drawn hands", "bad anatomy", "watermark",
+    "signature", "text", "blurry", "low resolution", "cartoon",
     "illustration", "3d render",
-    "split screen", "collage", "storyboard", "grid layout", "multiple views", 
-    "montage", "contact sheet", "multi-panel", "picture-in-picture", "diptych", 
-    "triptych", "quad", "panels", "multiple angles"
+    "storyboard", "multiple panels", "triptych", "diptych", "comic",
+    "film strip", "contact sheet", "collage", "grid", "split screen",
+    "multiple camera angles", "multiple scenes", "multiple frames",
+    "before after", "sequence", "montage", "duplicate person",
+    "repeated subject", "multiple versions of the character", "multiple views",
+    "multi-panel", "picture-in-picture", "quad", "panels"
   ];
 
   // Contextual negative constraints
