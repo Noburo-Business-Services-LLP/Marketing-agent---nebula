@@ -3,7 +3,7 @@ import {
   Clapperboard, Users, BookOpen, Wand2, Check,
   Edit3, Loader2, RefreshCw, Image as ImageIcon, Video,
   MapPin, Heart, Camera, Shirt, Mic2, ChevronDown, ChevronUp,
-  AlertCircle, Film, User, Sparkles, ArrowRight, ArrowLeft, Package, Trash2, Plus, Music2, Eye
+  AlertCircle, Film, User, Sparkles, ArrowRight, ArrowLeft, Package, Trash2, Plus, Music2, Eye, X
 } from 'lucide-react';
 import { videoGenerationAPI, aiDirectorAPI, inventoryAPI, draftsAPI, contentCalendarAPI } from '../services/api';
 import { CharacterManager } from '../components/CharacterManager';
@@ -139,6 +139,11 @@ export default function DirectorStudio() {
   const [scheduleDate, setScheduleDate] = useState('');
   const [scheduleTime, setScheduleTime] = useState('');
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  const [editModal, setEditModal] = useState<{
+    type: 'image' | 'video';
+    scene: any;
+    instruction: string;
+  } | null>(null);
 
   // Per-scene editing & generation states
   const [promptLoadingSceneId, setPromptLoadingSceneId] = useState<string | null>(null);
@@ -542,6 +547,8 @@ export default function DirectorStudio() {
       const mergedScene = {
         ...currentScene,
         ...nextScene,
+        imagePrompt: currentScene.imagePrompt || nextScene?.imagePrompt || '',
+        videoPrompt: currentScene.videoPrompt || nextScene?.videoPrompt || '',
         imageUrl: nextScene?.imageUrl || nextScene?.generatedImageUrl || currentScene.imageUrl || currentScene.generatedImageUrl || '',
         generatedImageUrl: nextScene?.generatedImageUrl || nextScene?.imageUrl || currentScene.generatedImageUrl || currentScene.imageUrl || '',
         generatedVideoUrl: nextScene?.generatedVideoUrl || currentScene.generatedVideoUrl || ''
@@ -597,14 +604,30 @@ export default function DirectorStudio() {
     }
   };
 
-  const handleGenerateSceneImage = async (scene: any) => {
+  const buildEditPrompt = (basePrompt: string, instruction: string) => {
+    const cleanBasePrompt = String(basePrompt || '').trim();
+    const cleanInstruction = String(instruction || '').trim();
+    if (!cleanInstruction) return cleanBasePrompt;
+    return [
+      cleanBasePrompt,
+      'Targeted edit request:',
+      cleanInstruction,
+      'Preserve everything else from the current scene unless the edit request explicitly changes it.'
+    ].filter(Boolean).join('\n\n');
+  };
+
+  const handleGenerateSceneImage = async (scene: any, instruction = '') => {
     setImgLoadingSceneId(scene.sceneId);
+    const basePrompt = String(scene.imagePrompt || '').trim();
+    const finalPrompt = buildEditPrompt(basePrompt, instruction);
     try {
       const res = await videoGenerationAPI.generateImages({
         jobId,
         action: 'regenerate',
         sceneId: scene.sceneId,
-        prompt: scene.imagePrompt,
+        prompt: finalPrompt,
+        imagePrompt: finalPrompt,
+        imageUrl: scene.imageUrl || scene.generatedImageUrl,
         style: videoStyle
       } as any);
       if (res?.sceneData) {
@@ -618,6 +641,7 @@ export default function DirectorStudio() {
         const url = res?.images?.[scene.sceneId]?.imageUrl || res?.imageUrl || res?.draft?.scenes?.find((s: any) => s.sceneId === scene.sceneId)?.imageUrl;
         if (url) handleUpdateScene(scene.sceneId, { generatedImageUrl: url, imageUrl: url });
       }
+      handleUpdateScene(scene.sceneId, { imagePrompt: basePrompt });
     } catch (e: any) {
       alert(e?.message || 'Image generation failed');
     } finally {
@@ -640,6 +664,7 @@ export default function DirectorStudio() {
           action: 'regenerate',
           sceneId: scene.sceneId,
           prompt: scene.imagePrompt,
+          imagePrompt: scene.imagePrompt,
           style: videoStyle
         } as any);
         
@@ -662,20 +687,22 @@ export default function DirectorStudio() {
     }
   };
 
-  const handleGenerateSceneVideo = async (scene: any) => {
+  const handleGenerateSceneVideo = async (scene: any, instruction = '') => {
     setVidLoadingSceneId(scene.sceneId);
+    const basePrompt = String(scene.videoPrompt || '').trim();
+    const finalPrompt = buildEditPrompt(basePrompt, instruction);
     try {
       const res: any = await videoGenerationAPI.createVideo({
         jobId,
         sceneId: scene.sceneId,
-        prompt: scene.videoPrompt,
+        prompt: finalPrompt,
         imageUrl: scene.imageUrl || scene.generatedImageUrl,
         duration: scene.durationSeconds || 5
       } as any);
       if (res?.videoUrl) {
         handleUpdateScene(scene.sceneId, {
           generatedVideoUrl: res.videoUrl,
-          videoPrompt: scene.videoPrompt
+          videoPrompt: basePrompt
         });
       }
     } catch (e: any) {
@@ -683,6 +710,21 @@ export default function DirectorStudio() {
     } finally {
       setVidLoadingSceneId(null);
     }
+  };
+
+  const openSceneEditModal = (type: 'image' | 'video', scene: any) => {
+    setEditModal({ type, scene, instruction: '' });
+  };
+
+  const submitSceneEdit = async () => {
+    if (!editModal?.scene || !editModal.instruction.trim()) return;
+    const targetScene = scenes.find((scene) => String(scene.sceneId) === String(editModal.scene.sceneId)) || editModal.scene;
+    if (editModal.type === 'image') {
+      await handleGenerateSceneImage(targetScene, editModal.instruction);
+    } else {
+      await handleGenerateSceneVideo(targetScene, editModal.instruction);
+    }
+    setEditModal(null);
   };
 
   const handleGenerateAllVideos = async () => {
@@ -1298,19 +1340,17 @@ export default function DirectorStudio() {
                           <ImageIcon className="w-8 h-8 text-slate-600" />
                         </div>
                       )}
-                      <div>
-                        <label className="text-[11px] font-bold text-slate-400 uppercase">Refine Image Prompt</label>
-                        <textarea
-                          className={`${inputClass} text-xs mt-1 min-h-[76px] resize-none font-mono`}
-                          value={scene.imagePrompt || ''}
-                          onChange={(e) => handleUpdateScene(scene.sceneId, { imagePrompt: e.target.value })}
-                          placeholder="Target a small change while keeping the same scene identity, like: 'keep the same pose and background, only change the saree color to emerald green'..."
-                        />
-                      </div>
-                      <button onClick={() => handleGenerateSceneImage(scene)} disabled={imgLoadingSceneId !== null || generatingAllImages || !scene.imagePrompt} className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold disabled:opacity-40 flex items-center justify-center gap-2">
+                      {(scene.imageUrl || scene.generatedImageUrl) ? (
+                        <button onClick={() => openSceneEditModal('image', scene)} disabled={imgLoadingSceneId !== null || generatingAllImages} className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold disabled:opacity-40 flex items-center justify-center gap-2">
+                          {imgLoadingSceneId === scene.sceneId ? <Loader2 className="w-4 h-4 animate-spin" /> : <Edit3 className="w-4 h-4" />}
+                          Edit Image
+                        </button>
+                      ) : (
+                        <button onClick={() => handleGenerateSceneImage(scene)} disabled={imgLoadingSceneId !== null || generatingAllImages || !scene.imagePrompt} className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold disabled:opacity-40 flex items-center justify-center gap-2">
                         {imgLoadingSceneId === scene.sceneId ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImageIcon className="w-4 h-4" />}
-                        {(scene.imageUrl || scene.generatedImageUrl) ? 'Improve & Regenerate Image' : 'Generate Image'}
-                      </button>
+                          Generate Image
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -1343,19 +1383,17 @@ export default function DirectorStudio() {
                           <Video className="w-8 h-8 text-slate-600" />
                         </div>
                       )}
-                      <div>
-                        <label className="text-[11px] font-bold text-slate-400 uppercase">Refine Motion Prompt</label>
-                        <textarea
-                          className={`${inputClass} text-xs mt-1 min-h-[76px] resize-none font-mono`}
-                          value={scene.videoPrompt || ''}
-                          onChange={(e) => handleUpdateScene(scene.sceneId, { videoPrompt: e.target.value })}
-                          placeholder="Add motion details, camera movement, speed, style, transitions, or subject actions you want to emphasize..."
-                        />
-                      </div>
-                      <button onClick={() => handleGenerateSceneVideo(scene)} disabled={vidLoadingSceneId !== null || generatingAllVideos || !scene.videoPrompt} className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold disabled:opacity-40 flex items-center gap-2">
+                      {(scene.generatedVideoUrl) ? (
+                        <button onClick={() => openSceneEditModal('video', scene)} disabled={vidLoadingSceneId !== null || generatingAllVideos || !scene.videoPrompt} className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold disabled:opacity-40 flex items-center justify-center gap-2">
+                          {vidLoadingSceneId === scene.sceneId ? <Loader2 className="w-4 h-4 animate-spin" /> : <Edit3 className="w-4 h-4" />}
+                          Edit Video Clip
+                        </button>
+                      ) : (
+                        <button onClick={() => handleGenerateSceneVideo(scene)} disabled={vidLoadingSceneId !== null || generatingAllVideos || !scene.videoPrompt} className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold disabled:opacity-40 flex items-center justify-center gap-2">
                         {vidLoadingSceneId === scene.sceneId ? <Loader2 className="w-4 h-4 animate-spin" /> : <Video className="w-4 h-4" />}
-                        {scene.generatedVideoUrl ? 'Improve & Regenerate Video Clip' : 'Generate Video Clip'}
-                      </button>
+                          Generate Video Clip
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -1529,6 +1567,92 @@ export default function DirectorStudio() {
           </div>
         )}
       </div>
+
+      {/* Scene Edit Modal */}
+      {editModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+          <div className={`${panelClass} w-full max-w-2xl max-h-[92vh] overflow-y-auto p-5 sm:p-6 space-y-5`}>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  {editModal.type === 'image' ? <ImageIcon className="w-4 h-4 text-[#ffcc29]" /> : <Video className="w-4 h-4 text-[#ffcc29]" />}
+                  Edit {editModal.type === 'image' ? 'Image' : 'Video Clip'}
+                </h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  Scene {editModal.scene?.sceneNumber}: {editModal.scene?.title}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditModal(null)}
+                className="w-9 h-9 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800 flex items-center justify-center"
+                aria-label="Close edit popup"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex justify-center">
+              {editModal.type === 'image' ? (
+                editModal.scene?.imageUrl || editModal.scene?.generatedImageUrl ? (
+                  <img
+                    src={editModal.scene.imageUrl || editModal.scene.generatedImageUrl}
+                    alt="Selected scene"
+                    className="w-full max-w-[260px] aspect-[9/16] object-cover rounded-lg border border-slate-700"
+                  />
+                ) : (
+                  <div className="w-full max-w-[260px] aspect-[9/16] rounded-lg border border-dashed border-slate-700 flex items-center justify-center">
+                    <ImageIcon className="w-8 h-8 text-slate-600" />
+                  </div>
+                )
+              ) : editModal.scene?.generatedVideoUrl ? (
+                <video
+                  src={editModal.scene.generatedVideoUrl}
+                  controls
+                  className="w-full max-w-[260px] aspect-[9/16] rounded-lg border border-slate-700"
+                />
+              ) : (
+                <div className="w-full max-w-[260px] aspect-[9/16] rounded-lg border border-dashed border-slate-700 flex items-center justify-center">
+                  <Video className="w-8 h-8 text-slate-600" />
+                </div>
+              )}
+            </div>
+
+            <div>
+              <label className="text-[11px] font-bold text-slate-400 uppercase">
+                {editModal.type === 'image' ? 'Image Edit Instruction' : 'Video Edit Instruction'}
+              </label>
+              <textarea
+                className={`${inputClass} text-xs mt-1 min-h-[120px] resize-none`}
+                value={editModal.instruction}
+                onChange={(e) => setEditModal((current) => current ? { ...current, instruction: e.target.value } : current)}
+                placeholder={editModal.type === 'image'
+                  ? 'Example: keep the same woman and background, make her face look straight at camera, change only the saree color to royal blue'
+                  : 'Example: keep the same image, add slow camera push-in, make the woman turn slightly toward camera, keep motion elegant'}
+              />
+            </div>
+
+            <div className="flex flex-col sm:flex-row justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setEditModal(null)}
+                className="px-4 py-2.5 rounded-xl border border-slate-700 text-slate-300 text-xs font-semibold hover:bg-slate-800"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={submitSceneEdit}
+                disabled={!editModal.instruction.trim() || imgLoadingSceneId !== null || vidLoadingSceneId !== null}
+                className="px-5 py-2.5 rounded-xl bg-[#ffcc29] text-black text-xs font-bold hover:bg-[#e6b825] disabled:opacity-40 flex items-center justify-center gap-2"
+              >
+                {(imgLoadingSceneId === editModal.scene?.sceneId || vidLoadingSceneId === editModal.scene?.sceneId) && <Loader2 className="w-4 h-4 animate-spin" />}
+                Regenerate This {editModal.type === 'image' ? 'Image' : 'Video'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Preview Modal */}
       {previewImageUrl && (

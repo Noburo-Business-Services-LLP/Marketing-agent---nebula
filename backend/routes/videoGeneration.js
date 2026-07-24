@@ -1462,6 +1462,7 @@ router.post('/generateImages', protect, checkTrial, videoAiWriteLimiter, async (
         return res.status(404).json({ success: false, message: 'Scene not found' });
       }
       const targetScene = sourceScenes[idx];
+      const originalSceneImageUrl = String(imageUrl || targetScene.imageUrl || targetScene.generatedImageUrl || '').trim();
       const rawScenePrompt = String(imagePrompt || targetScene.imagePrompt || draft?.prompt?.promptText || '').trim();
       const refinementGuardrails = [
         'You are performing a targeted image refinement of an existing scene.',
@@ -1502,6 +1503,7 @@ router.post('/generateImages', protect, checkTrial, videoAiWriteLimiter, async (
               aspectRatio: '9:16', // default for video
               characterReferenceImage: characterImage,
               originalCharacterImage: characterImage,
+              previousSceneImage: originalSceneImageUrl || null,
               preserveCharacterIdentity: true,
               consistencyStrength: 'strict'
             });
@@ -1520,6 +1522,7 @@ router.post('/generateImages', protect, checkTrial, videoAiWriteLimiter, async (
           isCinematic: true,
           aspectRatio: '9:16',
           linkedProduct: draft?.input?.product || null,
+          previousSceneImage: originalSceneImageUrl || null,
           productReferenceImage: draft?.input?.sourceImage?.url || draft?.input?.product?.imageUrl || null,
           tone: 'professional'
         });
@@ -1533,7 +1536,8 @@ router.post('/generateImages', protect, checkTrial, videoAiWriteLimiter, async (
           ? {
             ...scene,
             imageUrl: finalRegenImageUrl,
-            imagePrompt: regenPrompt
+            generatedImageUrl: finalRegenImageUrl,
+            imagePrompt: targetScene.imagePrompt || rawScenePrompt
           }
           : scene
       ));

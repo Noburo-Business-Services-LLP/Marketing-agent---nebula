@@ -4887,9 +4887,9 @@ Do not create another person. Preserve identity perfectly.`);
         }
       });
       referenceNotes.push(`Image ${parts.length} is the PREVIOUS SCENE IMAGE.
-Take the exact person and visual style from this uploaded image.
-Edit this exact image into the new requested scene.
-Keep the identical face, clothing, and character identity. Do not create a new person.`);
+Use this exact image as the base for a targeted edit.
+Apply only the explicitly requested changes.
+Preserve the same person, face, pose, camera framing, background, visual style, and all unrequested clothing details. Do not create a new person or a new composition.`);
     }
 
     if (productInline?.data) {

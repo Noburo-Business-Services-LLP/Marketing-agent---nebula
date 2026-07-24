@@ -634,16 +634,23 @@ function normalizeCreateInput(payload = {}, options = {}) {
     subtitles,
     characterEnabled: !!payload.characterEnabled,
     characterImage: String(payload.characterImage || '').trim(),
+    characterImageBase64: String(payload.characterImageBase64 || '').trim(),
+    originalCharacterImage: String(payload.originalCharacterImage || '').trim(),
     characterName: String(payload.characterName || '').trim(),
     characterAge: String(payload.characterAge || '').trim(),
     characterGender: String(payload.characterGender || '').trim(),
     characterRole: String(payload.characterRole || '').trim(),
     characterPersonality: String(payload.characterPersonality || '').trim(),
     characterAppearance: String(payload.characterAppearance || '').trim(),
+    characterRace: String(payload.characterRace || '').trim(),
+    characterBeard: String(payload.characterBeard || '').trim(),
+    characterArtStyle: String(payload.characterArtStyle || '').trim(),
     characterHairStyle: String(payload.characterHairStyle || '').trim(),
     characterHairColor: String(payload.characterHairColor || '').trim(),
     characterClothing: String(payload.characterClothing || '').trim(),
     videoStyle: String(payload.videoStyle || '').trim(),
+    location: String(payload.location || '').trim(),
+    useLogo: payload.useLogo !== false,
     preserveIdentity: payload.preserveIdentity !== false,
     characterUsage: String(payload.characterUsage || 'Main Character in all scenes').trim(),
     characterConsistencyStrength: String(payload.characterConsistencyStrength || 'Strict').trim()
@@ -664,6 +671,7 @@ function createJobContext({ baseUrl, providedJobId = null, input = {} }) {
   return {
     jobId,
     baseUrl: String(baseUrl || '').replace(/\/+$/, ''),
+    input,
     dirs
   };
 }
@@ -897,6 +905,20 @@ VOICEOVER RULES:
     `Preferred scene count: ${sceneCount}`,
     input.styleHint ? `Style hint: ${input.styleHint}` : '',
     input.voiceHint ? `Voice hint: ${input.voiceHint}` : '',
+    input.location ? `Location setting requirement: ${input.location}` : '',
+    input.characterEnabled ? `Character identity enabled: yes` : '',
+    input.characterName ? `Main character name: ${input.characterName}` : '',
+    input.characterRole ? `Main character role: ${input.characterRole}` : '',
+    input.characterAge ? `Main character age: ${input.characterAge}` : '',
+    input.characterGender ? `Main character gender: ${input.characterGender}` : '',
+    input.characterRace ? `Main character race/ethnicity: ${input.characterRace}` : '',
+    input.characterBeard ? `Main character beard/facial hair: ${input.characterBeard}` : '',
+    input.characterHairStyle ? `Main character hair style: ${input.characterHairStyle}` : '',
+    input.characterAppearance ? `Main character appearance/clothing: ${input.characterAppearance}` : '',
+    input.characterPersonality ? `Main character personality: ${input.characterPersonality}` : '',
+    input.characterEnabled && input.preserveIdentity !== false ? 'Identity rule: preserve the same character identity across all scenes.' : '',
+    input.characterUsage ? `Character usage rule: ${input.characterUsage}` : '',
+    input.characterConsistencyStrength ? `Character consistency strength: ${input.characterConsistencyStrength}` : '',
     product?.name ? `Product name: ${product.name}` : '',
     product?.description ? `Product description: ${product.description}` : '',
     profile?.name ? `Brand: ${profile.name}` : '',
@@ -921,7 +943,8 @@ VOICEOVER RULES:
         });
         
         // Validation Layer
-        if (input.characterEnabled && input.characterUsage === 'Main Character In All Scenes') {
+        const mainCharacterEveryScene = String(input.characterUsage || '').toLowerCase() === 'main character in all scenes';
+        if (input.characterEnabled && mainCharacterEveryScene) {
           const parsed = parseGeminiJSON(result);
           const scenes = Array.isArray(parsed?.scenes) ? parsed.scenes : [];
           const charRef = (input.characterName || '').toLowerCase();
@@ -3146,6 +3169,7 @@ async function runCreateVideoPipeline({
   update(5, 'generateScenes');
   log('Generating structured scene plan');
   const plan = await measureStep('generateScenes', () => generateScenesPlan({ input, product, user, logger: log }), log);
+  context.plan = plan;
 
   console.log(`[${new Date().toISOString()}] [Job ID: ${context.jobId}] STEP 2: Scene generation completed. Storyboard with ${plan.scenes?.length} scenes generated successfully.`);
   log(`STEP 2: Scene generation completed`);
