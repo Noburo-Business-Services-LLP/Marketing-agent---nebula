@@ -1069,6 +1069,115 @@ async function prepareReferenceImage({
   return null;
 }
 
+// Enrich each scene's imagePrompt using the "Image Prompts.docx" spec.
+// Runs before the Nano Banana image gen loop so every scene gets a
+// production-ready cinematic prompt (character IDs, camera, lens,
+// lighting, composition, environment, product placement, mood).
+async function enrichImagePromptsWithLLM({ scenes, plan, input, product, profile, referenceImageSource, logger }) {
+  if (!Array.isArray(scenes) || scenes.length === 0) return scenes;
+
+  const referenceClause = referenceImageSource
+    ? 'A reference image is provided. EVERY scene prompt MUST begin with the line: "Use uploaded reference image as primary reference." on its own line, then continue with the rest of the prompt.'
+    : 'No reference image is provided.';
+
+  const characterBlock = input.characterEnabled
+    ? `CHARACTERS (use these identities consistently across every scene):
+- Name: ${input.characterName || 'Lead Character'}
+- Age: ${input.characterAge || 'N/A'}
+- Gender: ${input.characterGender || 'N/A'}
+- Appearance: ${input.characterAppearance || 'N/A'}
+- Hair: ${input.characterHairStyle || 'N/A'} / ${input.characterHairColor || 'N/A'}
+- Clothing: ${input.characterClothing || 'N/A'}
+- Consistency Strength: ${input.characterConsistencyStrength || 'Loose'}`
+    : 'No fixed character — write character-agnostic prompts unless the storyboard names someone.';
+
+  const brandToneFromProfile = Array.isArray(profile?.brandVoice)
+    ? profile.brandVoice.join(', ')
+    : String(profile?.brandVoice || profile?.tone || 'Cinematic');
+
+  const systemPrompt = `You are an Expert AI Image Prompt Engineer for premium commercial ad production.
+Using the approved storyboard below, create one premium AI image prompt for every scene.
+
+Each prompt MUST include, in a natural single-paragraph form:
+• Character reference IDs (use the same character name across all scenes)
+• Character actions
+• Facial expressions
+• Camera angle (e.g. low angle, over-the-shoulder, close-up, wide establishing shot)
+• Lens suggestion (e.g. 35mm, 50mm, 85mm, macro)
+• Lighting (e.g. golden hour, softbox, rim light, chiaroscuro)
+• Composition (rule of thirds, symmetry, negative space, leading lines)
+• Environment
+• Product placement (if applicable)
+• Cinematic style
+• Mood / dominant emotion
+
+Rules:
+- Photorealistic, cinematic, commercial quality, production-ready.
+- Optimized for GPT Images / Nano Banana / Flux.
+- Maintain the same characters, color palette, location logic, and visual style consistency across every scene.
+- Do NOT describe motion — this is a still image prompt.
+- Do NOT generate images. Only generate production-ready prompts.
+- ${referenceClause}
+
+BRAND CONTEXT
+- Business: ${profile?.name || 'N/A'}
+- Industry: ${profile?.industry || 'N/A'}
+- Target Audience: ${profile?.targetAudience || 'General audience'}
+- Brand Tone: ${brandToneFromProfile}
+
+${characterBlock}
+
+GLOBAL VISUAL STYLE (must be consistent across all scenes):
+${plan?.globalVisualStyle || 'Premium cinematic vertical ad style with consistent lighting and color palette.'}
+
+STORYBOARD SCENES (source material):
+${scenes.map((s, i) => `Scene ${i + 1} — id: ${s.sceneId}
+  Title: ${s.title || ''}
+  Existing imagePrompt: ${s.imagePrompt || ''}
+  Voice line: ${s.voiceLine || ''}`).join('\n\n')}
+
+OUTPUT FORMAT — STRICT JSON ONLY
+Return ONLY a valid JSON object with this exact schema:
+{
+  "scenes": [
+    { "sceneId": "scene_1", "imagePrompt": "single paragraph string covering all 11 required elements" }
+  ]
+}
+- Return exactly ${scenes.length} scenes in the same sceneId order as above.
+- No markdown, no code fences, no text outside the JSON.`;
+
+  try {
+    let raw;
+    try {
+      raw = await callOpenAI(systemPrompt, {
+        temperature: 0.6,
+        maxTokens: 3000,
+        timeout: 120000,
+        jsonMode: true
+      });
+    } catch (openAiErr) {
+      if (logger) logger(`OpenAI image-prompt enrichment failed, falling back to Gemini: ${openAiErr.message || openAiErr}`);
+      raw = await callGemini(systemPrompt, {
+        skipCache: true,
+        temperature: 0.6,
+        maxTokens: 3000,
+        timeout: 120000
+      });
+    }
+    const parsed = parseGeminiJSON(raw);
+    const enriched = Array.isArray(parsed?.scenes) ? parsed.scenes : [];
+    if (!enriched.length) return scenes;
+    const byId = new Map(enriched.map((s) => [String(s?.sceneId || '').trim(), String(s?.imagePrompt || '').trim()]));
+    return scenes.map((s) => {
+      const better = byId.get(String(s.sceneId).trim());
+      return better ? { ...s, imagePrompt: better } : s;
+    });
+  } catch (err) {
+    if (logger) logger(`Image-prompt enrichment failed, using storyboard prompts as-is: ${err.message || err}`);
+    return scenes;
+  }
+}
+
 async function generateSceneImages({
   input,
   product,
@@ -1083,6 +1192,27 @@ async function generateSceneImages({
   const consistencyReference = String(
     input.imageData || input.imageUrl || product?.imageUrl || referenceImage?.source || ''
   ).trim();
+
+  // Enrich imagePrompts with the "Image Prompts.docx" specification before
+  // sending to Nano Banana. This adds camera angle, lens, lighting,
+  // composition, mood etc. that the storyboard-planner prompt didn't
+  // enforce, and keeps the character identity consistent across scenes.
+  const enrichedScenes = await enrichImagePromptsWithLLM({
+    scenes: sceneData,
+    plan,
+    input,
+    product,
+    profile,
+    referenceImageSource: consistencyReference,
+    logger
+  });
+  // Mutate plan.scenes in place so downstream code (which references
+  // plan.scenes) also sees the enriched prompts.
+  if (Array.isArray(plan?.scenes) && Array.isArray(enrichedScenes) && enrichedScenes.length === plan.scenes.length) {
+    for (let i = 0; i < enrichedScenes.length; i++) {
+      plan.scenes[i] = enrichedScenes[i];
+    }
+  }
 
   let characterSheet = input.characterSheet || null;
   
