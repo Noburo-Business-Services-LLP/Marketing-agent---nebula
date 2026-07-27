@@ -3636,6 +3636,213 @@ async function runGenerateVideoClips({
   };
 }
 
+// Rewrite the voiceover script using the "Voiceover Assistant" spec from
+// the docx. Aims for natural, emotional, believable narration that sounds
+// human — not AI marketing copy. Runs before TTS synthesis so ElevenLabs
+// / Google TTS speaks the polished version.
+async function enrichVoiceoverWithLLM({ voiceScript, sceneData, input, product, profile, languageCode, logger }) {
+  const source = String(voiceScript || '').trim();
+  if (!source) return { voiceScript: source, voiceType: null, speakingStyle: null };
+
+  const durationSeconds = Number(input?.durationSeconds || 60) || 60;
+  // Docx word budgets: 30s = 60-75, 45s = 90-110, 60s = 120-150
+  // Interpolate for other durations at ~2.2 words/sec.
+  const targetWords = Math.round(durationSeconds * 2.2);
+  const minWords = Math.round(targetWords * 0.85);
+  const maxWords = Math.round(targetWords * 1.15);
+
+  const brandToneFromProfile = Array.isArray(profile?.brandVoice)
+    ? profile.brandVoice.join(', ')
+    : String(profile?.brandVoice || profile?.tone || 'Emotional');
+
+  const sceneSummary = Array.isArray(sceneData) && sceneData.length
+    ? sceneData.map((s, i) => `Scene ${i + 1}: ${s.title || ''} — ${s.voiceLine || ''}`).join('\n')
+    : '';
+
+  const isTamil = String(languageCode || 'en').toLowerCase().startsWith('ta');
+
+  const systemPrompt = `You are an Elite Advertisement Voiceover Writer.
+Your job is to create professional, emotional and natural-sounding voiceovers for commercial advertisements.
+
+PRIMARY OBJECTIVE
+Create voiceovers that sound like real humans.
+The voiceover must feel: natural, emotional, conversational, believable, professional.
+Avoid: cringe marketing language, overused advertising phrases, robotic wording, generic AI content.
+
+VOICEOVER STYLE
+Write like Tamil TV commercials, premium brand films, emotional storytelling ads, real conversations.
+The voiceover should feel like someone is sharing a story — not selling a product.
+
+BUSINESS CONTEXT
+- Business Name: ${profile?.name || 'N/A'}
+- Business Type / Industry: ${profile?.industry || 'N/A'}
+- Products / Services: ${product?.name || profile?.description || 'N/A'}
+- Target Audience: ${profile?.targetAudience || 'General audience'}
+- Brand Tone / Core Emotion: ${brandToneFromProfile}
+
+STORYBOARD (source material — align voiceover with the scene flow):
+${sceneSummary || String(source).slice(0, 400)}
+
+DURATION RULES
+- Total duration: ${durationSeconds} seconds
+- Target word count: ${targetWords} words (acceptable range: ${minWords}-${maxWords})
+- Never exceed the requested duration.
+
+IMPORTANT RULES
+- Sound human. Sound emotional. Sound believable. Sound cinematic.
+- Create pauses naturally with short sentences and line breaks.
+- Make every sentence easy to speak.
+- Match the emotion of the storyboard.
+- Match the business type.
+- The output must feel like a real commercial — not an AI-generated script.
+- Output MUST be directly usable in ElevenLabs / AI voice generators (plain text, no stage directions, no bracketed notes).
+
+${isTamil ? `LANGUAGE — TAMIL REQUESTED
+- Generate the voiceover naturally in spoken Tamil (do NOT translate word-by-word from English).
+- Also provide a Tanglish (romanized Tamil) version for TTS compatibility.
+- Set voiceScript to the Tamil version. Set tanglishVoiceScript to the romanized version.
+` : `LANGUAGE
+- English voiceover. Natural, conversational, cinematic tone.
+`}
+
+OUTPUT FORMAT — STRICT JSON ONLY
+{
+  "hook": "string — first 3-5 seconds that pull the viewer in",
+  "mainVoiceover": "string — the middle body of the narration",
+  "closingCta": "string — final memorable brand line",
+  "voiceScript": "string — the full concatenated voiceover (hook + main + cta), ready for TTS",
+  ${isTamil ? '"tanglishVoiceScript": "string — romanized Tamil version of voiceScript",' : ''}
+  "estimatedDurationSeconds": number,
+  "voiceType": "one of: Female Soft | Female Elegant | Female Luxury | Male Deep | Male Corporate | Male Storytelling | Young Adult | Elderly Narrator",
+  "speakingStyle": "string — brief guidance for the TTS engine (pace, pauses, warmth)"
+}
+No markdown. No code fences. No prose outside the JSON.`;
+
+  try {
+    let raw;
+    try {
+      raw = await callOpenAI(systemPrompt, {
+        temperature: 0.75,
+        maxTokens: 2000,
+        timeout: 90000,
+        jsonMode: true
+      });
+    } catch (openAiErr) {
+      if (logger) logger(`OpenAI voiceover enrichment failed, falling back to Gemini: ${openAiErr.message || openAiErr}`);
+      raw = await callGemini(systemPrompt, {
+        skipCache: true,
+        temperature: 0.7,
+        maxTokens: 2000,
+        timeout: 90000
+      });
+    }
+    const parsed = parseGeminiJSON(raw);
+    const enrichedScript = String(parsed?.voiceScript || '').trim()
+      || [parsed?.hook, parsed?.mainVoiceover, parsed?.closingCta].filter(Boolean).join(' ').trim();
+    if (!enrichedScript) return { voiceScript: source, voiceType: null, speakingStyle: null };
+    return {
+      voiceScript: enrichedScript,
+      tanglishVoiceScript: String(parsed?.tanglishVoiceScript || '').trim() || null,
+      voiceType: String(parsed?.voiceType || '').trim() || null,
+      speakingStyle: String(parsed?.speakingStyle || '').trim() || null,
+      hook: String(parsed?.hook || '').trim() || null,
+      cta: String(parsed?.closingCta || '').trim() || null
+    };
+  } catch (err) {
+    if (logger) logger(`Voiceover enrichment failed, using storyboard voiceScript as-is: ${err.message || err}`);
+    return { voiceScript: source, voiceType: null, speakingStyle: null };
+  }
+}
+
+// Recommend background music per the "Commercial Music Director" spec.
+// Analyzes the storyboard + voiceover and returns style/mood/instruments/
+// tempo/reference-feel + opening/middle/ending music guidance. Stored on
+// the draft for the UI to show and for future music-picker automation.
+async function recommendMusicWithLLM({ voiceScript, sceneData, input, product, profile, logger }) {
+  const durationSeconds = Number(input?.durationSeconds || 60) || 60;
+  const brandToneFromProfile = Array.isArray(profile?.brandVoice)
+    ? profile.brandVoice.join(', ')
+    : String(profile?.brandVoice || profile?.tone || 'Emotional');
+
+  const sceneSummary = Array.isArray(sceneData) && sceneData.length
+    ? sceneData.map((s, i) => `Scene ${i + 1}: ${s.title || ''} — ${s.voiceLine || ''}`).join('\n')
+    : '';
+
+  const systemPrompt = `You are a Commercial Music Director for premium ad production.
+Analyze the storyboard and voiceover, then recommend the background music that will most enhance the emotion of the advertisement.
+
+BUSINESS CONTEXT
+- Business: ${profile?.name || 'N/A'}
+- Industry: ${profile?.industry || 'N/A'}
+- Product: ${product?.name || 'N/A'}
+- Brand Tone: ${brandToneFromProfile}
+- Total Duration: ${durationSeconds} seconds
+
+STORYBOARD:
+${sceneSummary || 'N/A'}
+
+VOICEOVER:
+${String(voiceScript || '').slice(0, 800)}
+
+Recommend the music using this framework:
+- Music Style
+- Mood
+- Instruments
+- Tempo (BPM range)
+- Reference Feel (compare to one of: Tamil Emotional | Family Advertisement | Luxury Jewellery | Restaurant Commercial | Corporate Inspiration | Fashion Brand | Premium Product Commercial — or your own if none fit)
+- Opening Music (first ~${Math.round(durationSeconds * 0.25)}s) — mood/direction for how the track opens
+- Middle Music (middle section) — how energy builds
+- Ending Music (last ~${Math.round(durationSeconds * 0.2)}s) — how it resolves and lands the brand
+
+OUTPUT FORMAT — STRICT JSON ONLY
+{
+  "style": "string",
+  "mood": "string",
+  "instruments": ["string", "string"],
+  "tempoBpm": number,
+  "referenceFeel": "string",
+  "openingMusic": "string",
+  "middleMusic": "string",
+  "endingMusic": "string"
+}
+No markdown. No code fences. No prose outside the JSON.`;
+
+  try {
+    let raw;
+    try {
+      raw = await callOpenAI(systemPrompt, {
+        temperature: 0.6,
+        maxTokens: 1000,
+        timeout: 60000,
+        jsonMode: true
+      });
+    } catch (openAiErr) {
+      if (logger) logger(`OpenAI music recommendation failed, falling back to Gemini: ${openAiErr.message || openAiErr}`);
+      raw = await callGemini(systemPrompt, {
+        skipCache: true,
+        temperature: 0.6,
+        maxTokens: 1000,
+        timeout: 60000
+      });
+    }
+    const parsed = parseGeminiJSON(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    return {
+      style: String(parsed.style || '').trim(),
+      mood: String(parsed.mood || '').trim(),
+      instruments: Array.isArray(parsed.instruments) ? parsed.instruments.map((x) => String(x).trim()).filter(Boolean) : [],
+      tempoBpm: Number(parsed.tempoBpm) || null,
+      referenceFeel: String(parsed.referenceFeel || '').trim(),
+      openingMusic: String(parsed.openingMusic || '').trim(),
+      middleMusic: String(parsed.middleMusic || '').trim(),
+      endingMusic: String(parsed.endingMusic || '').trim()
+    };
+  } catch (err) {
+    if (logger) logger(`Music recommendation failed: ${err.message || err}`);
+    return null;
+  }
+}
+
 async function runGenerateAudio({
   payload,
   baseUrl
@@ -3656,7 +3863,53 @@ async function runGenerateAudio({
     sceneData: Array.isArray(payload?.sceneData) ? payload.sceneData : []
   };
 
+  // Hydrate context so the enrichers can read business profile + product.
+  let profileForEnrichment = {};
+  let productForEnrichment = null;
+  try {
+    if (payload?.jobId) {
+      const draft = await VideoDraft.findOne({ jobId: payload.jobId }).lean();
+      if (draft) {
+        productForEnrichment = draft?.input?.product || null;
+        if (draft.userId) {
+          const draftUser = await User.findById(draft.userId).lean().catch(() => null);
+          if (draftUser?.businessProfile) profileForEnrichment = draftUser.businessProfile;
+        }
+      }
+    }
+  } catch (_) { /* soft-fail — enrichment will use defaults */ }
+
+  // STEP 7 (docx): Rewrite the voiceScript via the "Elite Voiceover Writer"
+  // prompt BEFORE TTS synthesizes it. Improves human tone, matches the
+  // storyboard emotion, respects duration word budgets, avoids AI clichés.
+  const enrichedVoice = await enrichVoiceoverWithLLM({
+    voiceScript: plan.voiceScript,
+    sceneData: plan.sceneData,
+    input,
+    product: productForEnrichment,
+    profile: profileForEnrichment,
+    languageCode: payload?.audio?.languageCode || 'en',
+    logger: null
+  });
+  if (enrichedVoice?.voiceScript) {
+    plan.voiceScript = enrichedVoice.voiceScript;
+    plan.sourceVoiceScript = enrichedVoice.voiceScript;
+  }
+
+  // STEP 6 (docx): Run in parallel with voice synthesis — recommend
+  // background music. Result is returned to the caller for UI display
+  // and saved on the draft.
+  const musicRecommendationPromise = recommendMusicWithLLM({
+    voiceScript: plan.voiceScript,
+    sceneData: plan.sceneData,
+    input,
+    product: productForEnrichment,
+    profile: profileForEnrichment,
+    logger: null
+  });
+
   const audioTracks = await generateAudioTracks({ input, plan, context });
+  const musicRecommendation = await musicRecommendationPromise;
   const mergedAudio = (!skipMix && audioTracks.enabled)
     ? await mergeAudioTracks({
       audioTracks: audioTracks.tracks,
@@ -3675,6 +3928,8 @@ async function runGenerateAudio({
     finalAudioUrl: mergedAudio?.url || null,
     localizedVoiceScript: audioTracks.tracks?.voice?.script || null,
     localizedSceneData: audioTracks.tracks?.voice?.sceneData || null,
+    enrichedVoiceover: enrichedVoice || null,
+    musicRecommendation: musicRecommendation || null,
     tracks: {
       manualUrl: audioTracks.tracks?.manual?.url || null,
       voiceUrl: audioTracks.tracks?.voice?.url || null,
