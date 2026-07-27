@@ -9,6 +9,7 @@ import Onboarding from './pages/Onboarding';
 import TrialExpired from './pages/TrialExpired';
 import Dashboard from './pages/Dashboard';
 import GravityHome from './pages/GravityHome';
+import GravityCreate from './pages/GravityCreate';
 import Campaigns from './pages/Campaigns';
 import ContentCalendar from './pages/ContentCalendar';
 import ReelGenerator from './pages/ReelGenerator';
@@ -179,7 +180,8 @@ const App: React.FC = () => {
                     <Route path="/dashboard" element={<GravityHome />} />
                     <Route path="/dashboard-classic" element={<Dashboard />} />
                     <Route path="/content-calendar" element={<ContentCalendar />} />
-                    <Route path="/campaigns" element={<Campaigns />} />
+                    <Route path="/campaigns" element={<GravityCreate />} />
+                    <Route path="/campaigns-classic" element={<Campaigns />} />
                     <Route path="/reels" element={<ReelGenerator />} />
                     <Route path="/ad-campaigns" element={<AdCampaigns />} />
                     <Route path="/competitors" element={<Competitors />} />
