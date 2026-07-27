@@ -9,6 +9,7 @@ const { GoogleAuth } = require('google-auth-library');
 
 const Product = require('../models/Product');
 const VideoDraft = require('../models/VideoDraft');
+const User = require('../models/User');
 const { callGemini, parseGeminiJSON, generateCampaignImageNanoBanana, extractCharacterVisualTraits } = require('./geminiAI');
 const { callOpenAI } = require('./openAI');
 const { getPublicBaseUrl, normalizeTone, audioFilePathForTone } = require('../utils/toneAudio');
@@ -1491,12 +1492,122 @@ async function normalizeSceneVideoClip({ inputPath, outputPath, durationSeconds 
   await runFfmpeg(args);
 }
 
+// Enrich each scene's videoPrompt using the "Video Prompts.docx" spec.
+// Runs before Fal.ai Kling clip generation so every scene gets a
+// natural, premium image-to-video prompt covering camera/character/
+// facial/background movement, lighting changes, duration, ending frame.
+async function enrichVideoPromptsWithLLM({ scenes, plan, input, product, profile, logger }) {
+  if (!Array.isArray(scenes) || scenes.length === 0) return scenes;
+
+  const brandToneFromProfile = Array.isArray(profile?.brandVoice)
+    ? profile.brandVoice.join(', ')
+    : String(profile?.brandVoice || profile?.tone || 'Cinematic');
+
+  const characterMotionBlock = input?.characterEnabled
+    ? `- The main character (${input.characterName || 'lead character'}) MUST retain identical facial identity across the clip. Do NOT morph the face.`
+    : '';
+
+  const systemPrompt = `You are a Professional AI Video Prompt Engineer for premium commercial ad production.
+Using the approved storyboard and its generated scene images, create ONE image-to-video prompt for every scene.
+
+Each prompt MUST describe:
+• Camera movement (e.g. slow push in, pull out, orbit shot, tracking shot, handheld realism, subtle dolly, static)
+• Character movement (natural gestures, small posture shifts — no exaggerated motion)
+• Facial movement (subtle expression shifts only — no morphing, no unrealistic changes)
+• Background movement (drifting particles, cloth flow, lighting flicker, ambient life — subtle)
+• Lighting changes (rim light shift, sun ray reveal, subtle temperature drift)
+• Duration (seconds — match the scene's durationSeconds)
+• Ending frame (what the last visible frame should be, to enable smooth cut to next scene)
+
+Rules:
+- Natural movement ONLY. No exaggerated AI motion.
+- No morphing of faces, hands, product geometry, text, or logos.
+- No unrealistic facial changes.
+- Every scene should feel like a premium commercial worthy of a top brand.
+- Optimize for Kling, Minimax, Veo, Runway image-to-video models.
+- Do NOT repeat visual details already present in the scene image (environment, wardrobe, lighting palette). Focus ONLY on MOTION.
+- Keep prompts crisp — 2-4 sentences per scene.
+${characterMotionBlock}
+
+BRAND CONTEXT
+- Business: ${profile?.name || 'N/A'}
+- Industry: ${profile?.industry || 'N/A'}
+- Brand Tone: ${brandToneFromProfile}
+- Global Visual Style: ${plan?.globalVisualStyle || 'Premium cinematic vertical ad style.'}
+
+STORYBOARD SCENES (source material — use imagePrompt as the visual anchor, describe motion that fits it):
+${scenes.map((s, i) => `Scene ${i + 1} — id: ${s.sceneId}
+  Title: ${s.title || ''}
+  imagePrompt (visual anchor): ${s.imagePrompt || ''}
+  existing videoPrompt: ${s.videoPrompt || ''}
+  Duration: ${s.durationSeconds || 3} seconds
+  Voice line: ${s.voiceLine || ''}`).join('\n\n')}
+
+OUTPUT FORMAT — STRICT JSON ONLY
+Return ONLY a valid JSON object with this exact schema:
+{
+  "scenes": [
+    { "sceneId": "scene_1", "videoPrompt": "single string covering camera/character/facial/background movement + lighting changes + duration + ending frame" }
+  ]
+}
+- Return exactly ${scenes.length} scenes in the same sceneId order as above.
+- No markdown, no code fences, no text outside the JSON.`;
+
+  try {
+    let raw;
+    try {
+      raw = await callOpenAI(systemPrompt, {
+        temperature: 0.6,
+        maxTokens: 3000,
+        timeout: 120000,
+        jsonMode: true
+      });
+    } catch (openAiErr) {
+      if (logger) logger(`OpenAI video-prompt enrichment failed, falling back to Gemini: ${openAiErr.message || openAiErr}`);
+      raw = await callGemini(systemPrompt, {
+        skipCache: true,
+        temperature: 0.6,
+        maxTokens: 3000,
+        timeout: 120000
+      });
+    }
+    const parsed = parseGeminiJSON(raw);
+    const enriched = Array.isArray(parsed?.scenes) ? parsed.scenes : [];
+    if (!enriched.length) return scenes;
+    const byId = new Map(enriched.map((s) => [String(s?.sceneId || '').trim(), String(s?.videoPrompt || '').trim()]));
+    return scenes.map((s) => {
+      const better = byId.get(String(s.sceneId).trim());
+      return better ? { ...s, videoPrompt: better } : s;
+    });
+  } catch (err) {
+    if (logger) logger(`Video-prompt enrichment failed, using storyboard prompts as-is: ${err.message || err}`);
+    return scenes;
+  }
+}
+
 async function generateSceneClips({
   scenes,
   context,
   logger = null,
   onSceneDone = null
 }) {
+  // Enrich videoPrompts with the "Video Prompts.docx" specification before
+  // sending each scene to Fal.ai. Adds proper motion vocabulary and
+  // guards against face morphing / exaggerated AI motion.
+  const enrichedScenes = await enrichVideoPromptsWithLLM({
+    scenes,
+    plan: context?.plan || null,
+    input: context?.input || {},
+    product: context?.product || null,
+    profile: context?.user?.businessProfile || {},
+    logger
+  });
+  if (Array.isArray(enrichedScenes) && enrichedScenes.length === scenes.length) {
+    for (let i = 0; i < enrichedScenes.length; i++) {
+      scenes[i] = enrichedScenes[i];
+    }
+  }
+
   // Upload a local clip to Cloudinary. Never throws — returns null on failure.
   const uploadClipToCloud = async (sceneId, localPath) => {
     try {
@@ -3201,6 +3312,14 @@ async function runCreateVideoPipeline({
   console.log(`[${new Date().toISOString()}] [Job ID: ${context.jobId}] STEP 2: Scene generation completed. Storyboard with ${plan.scenes?.length} scenes generated successfully.`);
   log(`STEP 2: Scene generation completed`);
 
+  // Attach input/plan/product/user to context so downstream steps
+  // (generateSceneClips + prompt enrichment) can read them without
+  // threading through every function signature.
+  context.input = input;
+  context.plan = plan;
+  context.product = product;
+  context.user = user;
+
   update(20, 'generateImages', { scenes: plan.scenes.length });
   log('Generating scene images with consistency');
   const audioTracksPromise = measureStep(
@@ -3445,6 +3564,29 @@ async function runGenerateVideoClips({
   const context = createJobContext({ baseUrl: baseUrl || getPublicBaseUrl(), providedJobId: payload?.jobId });
   const rawScenes = Array.isArray(payload?.sceneData) ? payload.sceneData : [];
   if (!rawScenes.length) throw new Error('sceneData is required for generateVideoClips');
+
+  // Hydrate context with draft's input/plan/product/user so prompt
+  // enrichment inside generateSceneClips has the full picture. Falls
+  // back gracefully if the draft can't be loaded.
+  try {
+    if (payload?.jobId) {
+      const draft = await VideoDraft.findOne({ jobId: payload.jobId }).lean();
+      if (draft) {
+        context.input = draft.input || {};
+        context.plan = {
+          scenes: draft.scenes || rawScenes,
+          globalVisualStyle: draft?.scenesMetadata?.globalVisualStyle || ''
+        };
+        context.product = draft?.input?.product || null;
+        if (draft.userId) {
+          const draftUser = await User.findById(draft.userId).lean().catch(() => null);
+          if (draftUser) context.user = draftUser;
+        }
+      }
+    }
+  } catch (hydrateErr) {
+    if (typeof onLog === 'function') onLog(`Context hydration for generateClips failed: ${hydrateErr.message}`);
+  }
 
   const scenes = await runWithConcurrency(rawScenes, MEDIA_IO_CONCURRENCY, async (rawScene, i) => {
     const normalized = ensureSceneInputForClipStage(rawScene, i);
