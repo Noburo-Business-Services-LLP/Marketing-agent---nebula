@@ -3418,6 +3418,20 @@ export const videoGenerationAPI = {
     }, true);
   },
 
+  improvePrompt: async (payload: {
+    jobId: string;
+    sceneId?: string;
+    sceneIndex?: number;
+    promptType: 'image' | 'video';
+    userDescription: string;
+    sceneData?: any[];
+  }): Promise<any> => {
+    return apiCall('/video-generation/improvePrompt', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }, true);
+  },
+
   generateImages: async (payload: any): Promise<any> => {
     return apiCall('/video-generation/generateImages', {
       method: 'POST',
@@ -3478,9 +3492,12 @@ export const videoGenerationAPI = {
     selectedPlatforms?: string[];
     async?: boolean;
   }): Promise<any> => {
+    // Run synchronously by default so the response carries the generated
+    // thumbnailUrl (there is no client-side polling for this step). Callers can
+    // still opt into the background queue by passing async: true explicitly.
     return apiCall('/video-generation/generateContent', {
       method: 'POST',
-      body: JSON.stringify({ ...payload, async: true })
+      body: JSON.stringify(payload)
     }, true);
   },
 
@@ -4059,6 +4076,7 @@ export const aiDirectorAPI = {
     commercialObjective?: string;
     duration?: number;
     videoStyle?: string;
+    storyDirection?: string;
   }): Promise<any> => {
     return apiCall('/director/analyze-brand', {
       method: 'POST',
@@ -4120,6 +4138,7 @@ export const aiDirectorAPI = {
     commercialObjective?: string;
     duration?: number;
     videoStyle?: string;
+    storyDirection?: string;
   }): Promise<any> => {
     return apiCall('/director/generate-story', {
       method: 'POST',
@@ -4149,6 +4168,20 @@ export const aiDirectorAPI = {
     productionBible: any;
   }): Promise<any> => {
     return apiCall('/director/build-prompts-for-scene', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }, true);
+  },
+
+  improvePrompt: async (payload: {
+    jobId: string;
+    sceneId: string;
+    scene: any;
+    promptType: 'image' | 'video';
+    existingPrompt: string;
+    userRequest: string;
+  }): Promise<any> => {
+    return apiCall('/director/improve-prompt', {
       method: 'POST',
       body: JSON.stringify(payload)
     }, true);

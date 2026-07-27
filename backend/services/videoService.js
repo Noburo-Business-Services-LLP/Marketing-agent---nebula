@@ -8,6 +8,14 @@ const IMAGE_TO_VIDEO_MODEL = process.env.FAL_IMAGE_TO_VIDEO_MODEL || 'fal-ai/kli
 const DEFAULT_MODEL = process.env.FAL_TEXT_TO_VIDEO_MODEL || 'fal-ai/kling-video/v1/standard/text-to-video';
 const DEFAULT_SEED = Number.parseInt(String(process.env.FAL_VIDEO_SEED || '-1'), 10);
 const DEFAULT_NUM_FRAMES = 33;
+const FAL_VIDEO_SUBSCRIBE_TIMEOUT_MS = Math.max(
+  60 * 1000,
+  Number.parseInt(String(process.env.FAL_VIDEO_SUBSCRIBE_TIMEOUT_MS || String(6 * 60 * 1000)), 10) || (6 * 60 * 1000)
+);
+const FAL_VIDEO_MAX_RETRIES = Math.max(
+  0,
+  Number.parseInt(String(process.env.FAL_VIDEO_MAX_RETRIES || '1'), 10) || 1
+);
 const VIDEO_SIZE = {
   width: clamp(process.env.FAL_VIDEO_WIDTH || 576, 288, 1080),
   height: clamp(process.env.FAL_VIDEO_HEIGHT || 1024, 512, 1920)
@@ -157,6 +165,17 @@ async function retry(label, fn, maxRetries = 2) {
   throw lastError || new Error(`${label} failed`);
 }
 
+function withTimeout(promise, timeoutMs, message) {
+  let timer = null;
+  const timeoutPromise = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), timeoutMs);
+  });
+
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
 function mapFalError(error, model) {
   const status = Number(error?.status || 0);
   const message = String(error?.message || '').trim();
@@ -230,25 +249,69 @@ async function generateVideoClip(scene = {}) {
       async (attempt) => {
         console.log(`Fal render attempt ${attempt + 1} starting...`);
         const subStart = Date.now();
-        const res = await fal.subscribe(model, { input });
+        const res = await withTimeout(
+          fal.subscribe(model, { input }),
+          FAL_VIDEO_SUBSCRIBE_TIMEOUT_MS,
+          `Fal.ai video render timed out after ${Math.round(FAL_VIDEO_SUBSCRIBE_TIMEOUT_MS / 60000)} minutes`
+        );
         const subDuration = Date.now() - subStart;
         console.log(`Fal render attempt ${attempt + 1} completed in ${subDuration}ms. Status: Success`);
         return res;
       },
-      2
+      FAL_VIDEO_MAX_RETRIES
     );
     const durationMs = Date.now() - startTime;
     console.log(`Scene ${scene.sceneId || scene.id || 'unknown'} render duration: ${durationMs}ms`);
     console.log("Fal response JSON:", JSON.stringify(result, null, 2));
 
-    const videoUrl = extractVideoUrl(result);
-    console.log("Fal response URL:", videoUrl);
+    const rawVideoUrl = extractVideoUrl(result);
+    console.log("Fal response URL:", rawVideoUrl);
+
+    let finalVideoUrl = rawVideoUrl;
+    try {
+      const { uploadVideoFile } = require('./imageUploader');
+      console.log('☁️ Uploading generated Fal video clip to Cloudinary folder nebula-scene-clips...');
+      const uploadRes = await uploadVideoFile(rawVideoUrl, 'nebula-scene-clips');
+      if (uploadRes && uploadRes.url) {
+        finalVideoUrl = uploadRes.url;
+        console.log('✅ Video clip permanently uploaded to Cloudinary:', finalVideoUrl);
+      }
+    } catch (cloudErr) {
+      console.warn('⚠️ Cloudinary upload warning for video clip (using direct Fal URL as fallback):', cloudErr.message);
+    }
+
+    // Save local copy to job storage if jobId is available
+    const jobId = scene.jobId || scene.job_id;
+    if (jobId && rawVideoUrl) {
+      try {
+        const fs = require('fs');
+        const path = require('path');
+        const axios = require('axios');
+        const clipsDir = path.resolve(`./storage/ai-videos/${jobId}/clips`);
+        if (!fs.existsSync(clipsDir)) {
+          fs.mkdirSync(clipsDir, { recursive: true });
+        }
+        const localFileName = `scene_${scene.sceneId || scene.id || Date.now()}.mp4`;
+        const localFilePath = path.join(clipsDir, localFileName);
+        const writer = fs.createWriteStream(localFilePath);
+        const resp = await axios.get(rawVideoUrl, { responseType: 'stream', timeout: 30000 });
+        resp.data.pipe(writer);
+        await new Promise((resolve, reject) => {
+          writer.on('finish', resolve);
+          writer.on('error', reject);
+        });
+        console.log(`💾 Local backup video clip saved to disk: ${localFilePath}`);
+      } catch (localSaveErr) {
+        console.warn('⚠️ Failed to save local video clip backup to disk:', localSaveErr.message);
+      }
+    }
 
     return {
       ...scene,
-      video_url: videoUrl,
-      videoUrl,
-      clipUrl: videoUrl,
+      video_url: finalVideoUrl,
+      videoUrl: finalVideoUrl,
+      clipUrl: finalVideoUrl,
+      rawFalUrl: rawVideoUrl,
       fal: {
         model,
         seed,

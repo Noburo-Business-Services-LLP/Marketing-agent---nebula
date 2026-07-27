@@ -929,27 +929,57 @@ const Campaigns: React.FC = () => {
   useEffect(() => {
     if (!activeGeneratingDraftId) return;
 
-    let intervalId = setInterval(async () => {
+    let isPolling = true;
+
+    const pollDraftStatus = async () => {
+      if (!isPolling) return;
       try {
         const response = await draftsAPI.getDraft(activeGeneratingDraftId);
         const draft = response.draft;
-        if (draft) {
-          if (draft.status === 'completed' && draft.imageUrl) {
-            setCreatePostImageUrl(draft.imageUrl);
-            setActiveGeneratingDraftId(null);
-            clearInterval(intervalId);
-          } else if (draft.status === 'failed') {
-            alert(`Background image generation failed: ${draft.errorMessage || 'Unknown error'}`);
-            setActiveGeneratingDraftId(null);
-            clearInterval(intervalId);
+
+        if (draft && (draft.status === 'completed' || draft.status === 'failed')) {
+          isPolling = false;
+          setActiveGeneratingDraftId(null);
+          
+          setDraftsList(prev => {
+            const index = prev.findIndex(d => d._id === draft._id);
+            if (index > -1) {
+              const next = [...prev];
+              next[index] = draft;
+              return next;
+            }
+            return [draft, ...prev];
+          });
+
+          if (draft.status === 'completed') {
+            setNotification({ type: 'success', message: 'Content generation complete!' });
+            if (createPostEditorOpenRef.current) {
+              setCreatePostImageUrl(draft.imageUrl || null);
+              setCreatePostCaption(draft.caption || '');
+              setCreatePostHashtags(draft.hashtags || []);
+              setCreatePostGenerating(false);
+            }
+          } else { // status === 'failed'
+            setNotification({ type: 'error', message: `Generation failed: ${draft.errorMessage || 'Unknown error'}` });
+            if (createPostEditorOpenRef.current) {
+              setCreatePostGenerating(false);
+            }
           }
         }
       } catch (err) {
         console.error('Failed to poll draft status:', err);
+        // Stop polling on error
+        isPolling = false;
+        setActiveGeneratingDraftId(null);
       }
-    }, 4000);
+    };
 
-    return () => clearInterval(intervalId);
+    const intervalId = setInterval(pollDraftStatus, 3000);
+
+    return () => {
+      isPolling = false;
+      clearInterval(intervalId);
+    };
   }, [activeGeneratingDraftId]);
 
   useEffect(() => {

@@ -20,7 +20,7 @@ const videoAiWriteLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many AI generation requests, please try again later.' },
-  keyGenerator: (req) => String(req.user?._id || req.user?.id || req.ip)
+  keyGenerator: (req) => String(req.user?._id || req.user?.id)
 });
 
 /**
@@ -339,7 +339,18 @@ Return strict JSON with this exact schema:
 router.post('/generate-story', protect, videoAiWriteLimiter, async (req, res) => {
   try {
     const userId = toUserId(req.user);
-    const { jobId, businessName, industry, brandSummary, targetAudience, brandTone, commercialObjective, duration, videoStyle } = req.body;
+    const {
+      jobId,
+      businessName,
+      industry,
+      brandSummary,
+      targetAudience,
+      brandTone,
+      commercialObjective,
+      duration,
+      videoStyle,
+      storyDirection
+    } = req.body;
 
     if (!jobId) return res.status(400).json({ success: false, message: 'jobId is required' });
 
@@ -357,6 +368,7 @@ Given the brand context and character cast below, you will:
 2. Use the provided cast characters in the scene breakdown where applicable.
 3. Write the full story as a numbered scene breakdown (assign specific characterIds to each scene)
 4. Write the complete voiceover script
+5. If Director Notes / Requested Changes are provided, follow them as the primary revision direction while preserving brand fit and production quality.
 
 Return strict JSON with this EXACT schema (no extra keys, no markdown):
 {
@@ -403,6 +415,7 @@ Brand Tone: ${brandTone || 'N/A'}
 Commercial Objective: ${commercialObjective || 'N/A'}
 Duration: ${duration || 30} seconds
 Video Style: ${videoStyle || 'Cinematic Commercial'}
+Director Notes / Requested Changes: ${storyDirection || 'N/A'}
 
 Approved Cast Characters:
 ${characterContextStr}
@@ -436,6 +449,7 @@ ${characterContextStr}
       commercialObjective,
       description: brandSummary || promptText,
       brandSummary: brandSummary || promptText,
+      storyDirection: storyDirection || current.storyDirection || '',
       durationSeconds: duration || 30,
       videoStyle: videoStyle || 'Cinematic Commercial',
       productionBible: parsed.productionBible || {},
@@ -612,6 +626,109 @@ ${characterContext || 'No specific characters'}
     });
   } catch (error) {
     return responseError(res, error, 'Failed to build prompts for scene');
+  }
+});
+
+/**
+ * POST /api/director/improve-prompt
+ * Refines exactly one selected prompt for one scene.
+ */
+router.post('/improve-prompt', protect, videoAiWriteLimiter, async (req, res) => {
+  try {
+    const userId = toUserId(req.user);
+    const { jobId, sceneId, scene, promptType, existingPrompt, userRequest } = req.body || {};
+
+    if (!jobId || !sceneId || !scene || !['image', 'video'].includes(promptType)) {
+      return res.status(400).json({ success: false, message: 'jobId, sceneId, scene, and promptType are required' });
+    }
+
+    const cleanExistingPrompt = String(existingPrompt || '').trim();
+    const cleanUserRequest = String(userRequest || '').trim();
+
+    if (!cleanExistingPrompt) {
+      return res.status(400).json({ success: false, message: 'Existing prompt is required' });
+    }
+    if (!cleanUserRequest) {
+      return res.status(400).json({ success: false, message: 'Improvement request is required' });
+    }
+
+    const label = promptType === 'image' ? 'Image Prompt' : 'Video Prompt';
+    const systemPrompt = `You are an expert AI Prompt Refinement Assistant for cinematic image and video generation.
+
+Your task is to improve an existing prompt based ONLY on the user's requested modifications.
+
+Rules:
+1. Update ONLY the selected prompt.
+2. Do NOT modify prompts from other scenes.
+3. Preserve the existing story continuity.
+4. Preserve the same character identity, face, clothing, age, hairstyle, body proportions, and background unless explicitly requested.
+5. Preserve the same scene purpose and narrative.
+6. Preserve camera framing and composition unless the user requests a different camera angle.
+7. Preserve lighting, mood, and environment unless explicitly requested.
+8. Apply ONLY the requested improvements.
+9. If the user asks to add something, integrate it naturally into the existing prompt.
+10. If the user asks to remove something, remove only that element.
+11. Do not rewrite the prompt from scratch unless required.
+12. Return ONLY the updated prompt.
+13. Do not explain your changes.
+14. Do not return markdown.
+15. Keep the prompt optimized for high-quality AI image/video generation.`;
+
+    const promptText = `
+Scene:
+${scene.title || sceneId}
+
+Scene Details:
+${JSON.stringify(scene, null, 2)}
+
+Prompt Type:
+${label}
+
+Existing Prompt:
+${cleanExistingPrompt}
+
+User Improvement Request:
+${cleanUserRequest}
+
+Update only this prompt.
+`.trim();
+
+    const rawResponse = await callGemini(promptText, { systemInstruction: systemPrompt });
+    const improvedPrompt = String(rawResponse || '')
+      .replace(/^```(?:\w+)?/i, '')
+      .replace(/```$/i, '')
+      .trim();
+
+    if (!improvedPrompt) {
+      return res.status(500).json({ success: false, message: 'AI did not return an improved prompt' });
+    }
+
+    const field = promptType === 'image' ? 'imagePrompt' : 'videoPrompt';
+    const updated = await updateDraft(jobId, userId, (current) => {
+      const existingScenes = Array.isArray(current.scenes) ? current.scenes : [];
+      const updatedScenes = existingScenes.map((s, index) => {
+        const sameScene =
+          String(s.sceneId || '') === String(sceneId) ||
+          String(s.index || s.sceneNumber || index + 1) === String(scene.index || scene.sceneNumber || '');
+
+        return sameScene ? { ...s, [field]: improvedPrompt } : s;
+      });
+
+      return {
+        ...current,
+        scenes: updatedScenes.length ? updatedScenes : current.scenes
+      };
+    });
+
+    return res.json({
+      success: true,
+      draft: updated,
+      sceneId,
+      promptType,
+      prompt: improvedPrompt
+    });
+  } catch (error) {
+    return responseError(res, error, 'Failed to improve prompt');
   }
 });
 

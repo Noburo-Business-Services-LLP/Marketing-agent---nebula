@@ -144,6 +144,10 @@ const ReelGenerator: React.FC = () => {
 
   const [promptText, setPromptText] = useState('');
   const [scenes, setScenes] = useState<any[]>([]);
+  const [promptImprovementSceneIndex, setPromptImprovementSceneIndex] = useState(0);
+  const [promptImprovementType, setPromptImprovementType] = useState<'image' | 'video'>('image');
+  const [promptImprovementRequest, setPromptImprovementRequest] = useState('');
+  const [improvingPrompt, setImprovingPrompt] = useState(false);
 
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [audioMode, setAudioMode] = useState<AudioMode>('auto');
@@ -234,6 +238,16 @@ const ReelGenerator: React.FC = () => {
   useEffect(() => {
     loadVideoDrafts();
   }, []);
+
+  useEffect(() => {
+    if (!scenes.length) {
+      setPromptImprovementSceneIndex(0);
+      return;
+    }
+    if (promptImprovementSceneIndex >= scenes.length) {
+      setPromptImprovementSceneIndex(scenes.length - 1);
+    }
+  }, [scenes.length, promptImprovementSceneIndex]);
 
   useEffect(() => {
     try {
@@ -461,9 +475,9 @@ setCharacterAge(nextDraft?.characterAge || '');
     if (nextDraft?.mix?.finalAudioUrl) setFinalAudioUrl(nextDraft.mix.finalAudioUrl);
     if (nextDraft?.merge?.finalVideoUrl) setFinalVideoUrl(nextDraft.merge.finalVideoUrl);
     if (nextDraft?.merge?.finalOutputUrl) setFinalOutputUrl(nextDraft.merge.finalOutputUrl);
-    if (nextDraft?.content?.thumbnailUrl) setThumbnailUrl(nextDraft.content.thumbnailUrl);
-    if (nextDraft?.content?.caption) setCaption(nextDraft.content.caption);
-    if (Array.isArray(nextDraft?.content?.hashtags)) setHashtagsText(nextDraft.content.hashtags.join(' '));
+    if (nextDraft?.content?.thumbnailUrl || nextDraft?.content?.caption || Array.isArray(nextDraft?.content?.hashtags)) {
+      applyGeneratedContent(nextDraft.content, nextDraft);
+    }
     if (Array.isArray(nextDraft?.platform?.selectedPlatforms)) setSelectedPlatforms(nextDraft.platform.selectedPlatforms);
     if (nextDraft?.schedule?.scheduledAt) {
       const dateObj = new Date(nextDraft.schedule.scheduledAt);
@@ -524,6 +538,13 @@ setCharacterAge(nextDraft?.characterAge || '');
       setDraft(result?.draft || nextDraft);
       await loadVideoDrafts();
     })) return;
+
+    if (resumeJob(draftJobs.content, 'content', async (result) => {
+      const content = result?.content || result?.draft?.content || {};
+      applyGeneratedContent(content, result?.draft || nextDraft);
+      setDraft(result?.draft || nextDraft);
+      await loadVideoDrafts();
+    })) return;
   };
 
   useEffect(() => {
@@ -546,6 +567,18 @@ setCharacterAge(nextDraft?.characterAge || '');
     } finally {
       setBusy(false);
     }
+  };
+
+  const applyGeneratedContent = (content: any = {}, sourceDraft: any = draft) => {
+    const fallbackCaption = String(sourceDraft?.input?.description || description || '').trim();
+    const tags = Array.isArray(content?.hashtags)
+      ? content.hashtags
+      : String(content?.hashtags || '').split(/\s+/).filter(Boolean);
+    const draftTags = Array.isArray(sourceDraft?.content?.hashtags) ? sourceDraft.content.hashtags : [];
+
+    setThumbnailUrl(content?.thumbnailUrl || sourceDraft?.content?.thumbnailUrl || '');
+    setCaption(String(content?.caption || sourceDraft?.content?.caption || fallbackCaption || '').trim());
+    setHashtagsText(tags.length ? tags.join(' ') : draftTags.join(' '));
   };
 
   const onInputImage = async (file?: File | null) => {
@@ -830,6 +863,42 @@ setCharacterAge(nextDraft?.characterAge || '');
     setStep(4);
   });
 
+  const improveSelectedPrompt = async () => {
+    if (!jobId) { setError('Draft missing'); return; }
+    if (!scenes.length) { setError('Generate scenes before improving a prompt.'); return; }
+
+    const safeIndex = Math.min(Math.max(promptImprovementSceneIndex, 0), scenes.length - 1);
+    const selectedScene = scenes[safeIndex];
+    const request = promptImprovementRequest.trim();
+    if (!request) { setError('Describe what you want to improve.'); return; }
+
+    setImprovingPrompt(true);
+    setError('');
+    try {
+      const response = await videoGenerationAPI.improvePrompt({
+        jobId,
+        sceneId: selectedScene?.sceneId,
+        sceneIndex: safeIndex,
+        promptType: promptImprovementType,
+        userDescription: request,
+        sceneData: scenes
+      });
+
+      if (!response?.success) {
+        throw new Error(response?.message || 'Prompt improvement failed');
+      }
+
+      setScenes(response.sceneData || scenes);
+      setDraft(response.draft || draft);
+      setPromptImprovementRequest('');
+      setSuccessMessage(`Scene ${safeIndex + 1} ${promptImprovementType === 'image' ? 'image' : 'video'} prompt improved.`);
+    } catch (e: any) {
+      setError(e?.message || 'Prompt improvement failed');
+    } finally {
+      setImprovingPrompt(false);
+    }
+  };
+
   const generateSceneImages = async () => withBusy(async () => {
     if (!jobId) throw new Error('Draft missing');
     
@@ -1054,12 +1123,23 @@ setCharacterAge(nextDraft?.characterAge || '');
       jobId,
       selectedPlatforms
     });
+
+    const queueJobId = response?.queueJobId;
+    if (queueJobId) {
+      await pollJob(queueJobId, async (result) => {
+        const content = result?.content || result?.draft?.content || {};
+        applyGeneratedContent(content, result?.draft || draft);
+        setDraft(result?.draft || draft);
+        await loadVideoDrafts();
+      });
+      return;
+    }
+
     if (!response?.success) throw new Error(response?.message || 'Content generation failed');
     const content = response?.content || {};
-    setThumbnailUrl(content.thumbnailUrl || '');
-    setCaption(content.caption || '');
-    setHashtagsText(Array.isArray(content.hashtags) ? content.hashtags.join(' ') : '');
+    applyGeneratedContent(content, response?.draft || draft);
     setDraft(response?.draft || draft);
+    await loadVideoDrafts();
   });
 
   const schedulePost = async (publishNow = false) => withBusy(async () => {
@@ -1107,6 +1187,10 @@ setCharacterAge(nextDraft?.characterAge || '');
       setInputImageName('');
       setPromptText('');
       setScenes([]);
+      setPromptImprovementSceneIndex(0);
+      setPromptImprovementType('image');
+      setPromptImprovementRequest('');
+      setImprovingPrompt(false);
       setGeneratedTracks(null);
       setFinalAudioUrl('');
       setFinalVideoUrl('');
@@ -1390,6 +1474,12 @@ setCharacterAge(nextDraft?.characterAge || '');
                       </div>
                       {item.scheduledAt && (
                         <p className={`text-xs ${theme.textSecondary}`}>Scheduled for {new Date(item.scheduledAt).toLocaleString()}</p>
+                      )}
+                      {item.caption && (
+                        <p className={`text-xs ${theme.textSecondary} line-clamp-2`}>{item.caption}</p>
+                      )}
+                      {Array.isArray(item.hashtags) && item.hashtags.length > 0 && (
+                        <p className="text-xs text-[#ffcc29] line-clamp-1">{item.hashtags.join(' ')}</p>
                       )}
                     </div>
                   </div>
@@ -1690,6 +1780,83 @@ setCharacterAge(nextDraft?.characterAge || '');
                 <div>
                   <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Generated Prompt (Editable)</label>
                   <textarea value={promptText} onChange={(e) => setPromptText(e.target.value)} className={`${inputClass} mt-2 min-h-[100px]`} />
+                </div>
+
+                <div className={`border-t ${isDarkMode ? 'border-slate-800' : 'border-slate-200'} pt-4 space-y-4`}>
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-[#ffcc29]" />
+                    <p className={`text-sm font-semibold ${theme.text}`}>Prompt Improvement</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Scene</label>
+                      <select
+                        value={promptImprovementSceneIndex}
+                        onChange={(e) => setPromptImprovementSceneIndex(Number(e.target.value) || 0)}
+                        className={`${inputClass} mt-2`}
+                        disabled={!scenes.length || improvingPrompt}
+                      >
+                        {scenes.length ? scenes.map((scene, idx) => (
+                          <option key={scene.sceneId || idx} value={idx}>
+                            Scene {idx + 1}{scene.title ? ` - ${scene.title}` : ''}
+                          </option>
+                        )) : <option value={0}>No scenes available</option>}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Prompt Type</label>
+                      <div className="mt-2 flex flex-wrap gap-3">
+                        <label className={`flex items-center gap-2 text-sm font-medium ${theme.text}`}>
+                          <input
+                            type="radio"
+                            name="promptImprovementType"
+                            value="image"
+                            checked={promptImprovementType === 'image'}
+                            onChange={() => setPromptImprovementType('image')}
+                            disabled={improvingPrompt}
+                          />
+                          Image Prompt
+                        </label>
+                        <label className={`flex items-center gap-2 text-sm font-medium ${theme.text}`}>
+                          <input
+                            type="radio"
+                            name="promptImprovementType"
+                            value="video"
+                            checked={promptImprovementType === 'video'}
+                            onChange={() => setPromptImprovementType('video')}
+                            disabled={improvingPrompt}
+                          />
+                          Video Prompt
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Describe what you want to improve</label>
+                    <textarea
+                      value={promptImprovementRequest}
+                      onChange={(e) => setPromptImprovementRequest(e.target.value)}
+                      className={`${inputClass} mt-2 min-h-[120px]`}
+                      placeholder="Make the saree royal blue. Add warm sunset lighting. Keep everything else the same."
+                      disabled={improvingPrompt}
+                    />
+                  </div>
+
+                  <button
+                    onClick={improveSelectedPrompt}
+                    disabled={improvingPrompt || !scenes.length || !promptImprovementRequest.trim()}
+                    className={`px-4 py-2 rounded-xl font-semibold inline-flex items-center gap-2 transition-colors ${
+                      improvingPrompt || !scenes.length || !promptImprovementRequest.trim()
+                        ? 'bg-slate-700/60 text-slate-400 cursor-not-allowed'
+                        : 'bg-[#ffcc29] text-black hover:bg-[#e6b825]'
+                    }`}
+                  >
+                    {improvingPrompt ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                    {improvingPrompt ? 'Improving Prompt' : 'Improve Prompt'}
+                  </button>
                 </div>
 
                 <div className="space-y-3">

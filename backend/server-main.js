@@ -486,8 +486,20 @@ app.get('/api/demo/dashboard', (req, res) => {
 app.use('/audio', express.static(path.join(__dirname, 'tone-audio')));
 app.use('/generated-media', express.static(path.join(__dirname, 'storage', 'ai-videos')));
 
+const publicDir = path.join(__dirname, 'public');
+
 // Serve static files from React frontend build
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(publicDir, {
+  setHeaders: (res, filePath) => {
+    if (path.basename(filePath) === 'index.html') {
+      res.setHeader('Cache-Control', 'no-store');
+      return;
+    }
+    if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    }
+  }
+}));
 
 // Catch-all handler for React Router - serve index.html for any non-API routes
 app.get('*', (req, res, next) => {
@@ -495,8 +507,14 @@ app.get('*', (req, res, next) => {
   if (req.path.startsWith('/api')) {
     return next();
   }
+  // Do not serve index.html for missing static assets. Returning HTML for a
+  // stale JS URL makes the browser fail module loading and leaves a black page.
+  if (path.extname(req.path)) {
+    return next();
+  }
   // Otherwise serve React app
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  res.setHeader('Cache-Control', 'no-store');
+  res.sendFile(path.join(publicDir, 'index.html'));
 });
 
 // API 404 handler

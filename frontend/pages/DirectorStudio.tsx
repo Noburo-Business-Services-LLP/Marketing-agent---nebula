@@ -12,6 +12,7 @@ import { Product, Draft } from '../types';
 
 type VideoStatusFilter = 'all' | 'draft' | 'created' | 'scheduled' | 'posted';
 type AudioMode = 'off' | 'auto' | 'upload';
+type PromptImproveType = 'image' | 'video';
 
 const VIDEO_STYLES = [
   'Cinematic Commercial', 'Luxury Brand Film', 'Documentary Style',
@@ -32,6 +33,94 @@ const WIZARD_STEPS = [
   { id: 9, label: 'Thumbnail & Content', icon: Sparkles },
   { id: 10, label: 'Publish & Schedule', icon: Check },
 ];
+
+const MIN_WIZARD_STEP = WIZARD_STEPS[0].id;
+const MAX_WIZARD_STEP = WIZARD_STEPS[WIZARD_STEPS.length - 1].id;
+
+function normalizeWizardStep(value: unknown, fallback = MIN_WIZARD_STEP) {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) return fallback;
+  return Math.min(MAX_WIZARD_STEP, Math.max(MIN_WIZARD_STEP, Math.trunc(numericValue)));
+}
+
+// Split a stored ISO timestamp back into the local date (yyyy-mm-dd) and time (HH:mm)
+// strings expected by the <input type="date"> / <input type="time"> controls.
+function splitScheduledAt(scheduledAt: unknown): { date: string; time: string } {
+  const raw = String(scheduledAt || '').trim();
+  if (!raw) return { date: '', time: '' };
+  const dt = new Date(raw);
+  if (Number.isNaN(dt.getTime())) return { date: '', time: '' };
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return {
+    date: `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`,
+    time: `${pad(dt.getHours())}:${pad(dt.getMinutes())}`
+  };
+}
+
+function compactDirectorScene(scene: any) {
+  return {
+    sceneId: scene?.sceneId,
+    sceneNumber: scene?.sceneNumber,
+    title: scene?.title,
+    action: scene?.action,
+    voiceLine: scene?.voiceLine,
+    durationSeconds: scene?.durationSeconds,
+    imagePrompt: scene?.imagePrompt,
+    videoPrompt: scene?.videoPrompt,
+    imageUrl: scene?.imageUrl,
+    generatedImageUrl: scene?.generatedImageUrl,
+    clipUrl: scene?.clipUrl,
+    videoUrl: scene?.videoUrl,
+    generatedVideoUrl: scene?.generatedVideoUrl
+  };
+}
+
+function compactDirectorDraft(draft: any) {
+  if (!draft) return null;
+  return {
+    jobId: draft.jobId,
+    businessName: draft.businessName,
+    industry: draft.industry,
+    targetAudience: draft.targetAudience,
+    brandTone: draft.brandTone,
+    commercialObjective: draft.commercialObjective,
+    brandSummary: draft.brandSummary,
+    description: draft.description,
+    videoStyle: draft.videoStyle,
+    durationSeconds: draft.durationSeconds,
+    useLogo: draft.useLogo,
+    useCharacters: draft.useCharacters,
+    storyDirection: draft.storyDirection,
+    selectedProductId: draft.selectedProductId,
+    productId: draft.productId,
+    productionBible: draft.productionBible,
+    voiceScript: draft.voiceScript,
+    scenes: Array.isArray(draft.scenes) ? draft.scenes.map(compactDirectorScene) : [],
+    characters: Array.isArray(draft.characters) ? draft.characters : [],
+    finalAudioUrl: draft.finalAudioUrl,
+    finalVideoUrl: draft.finalVideoUrl,
+    finalOutputUrl: draft.finalOutputUrl,
+    thumbnailUrl: draft.thumbnailUrl,
+    caption: draft.caption,
+    hashtagsText: draft.hashtagsText,
+    audio: draft.audio,
+    mix: draft.mix,
+    selectedPlatforms: draft.selectedPlatforms,
+    scheduleDate: draft.scheduleDate,
+    scheduleTime: draft.scheduleTime,
+    currentStep: draft.currentStep
+  };
+}
+
+function safeSetLocalStorage(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch (error) {
+    console.warn(`Could not save ${key} in browser storage`, error);
+    return false;
+  }
+}
 
 function fileToDataUrl(file: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -72,6 +161,103 @@ function statusLabel(status?: string) {
   }
 }
 
+function sceneNumberOf(scene: any, index: number) {
+  return Number(scene?.sceneNumber || scene?.index || index + 1) || index + 1;
+}
+
+function sceneStoryText(scene: any) {
+  return String(
+    scene?.action ||
+    scene?.story ||
+    scene?.description ||
+    scene?.narration ||
+    scene?.voiceLine ||
+    scene?.imagePrompt ||
+    ''
+  ).trim();
+}
+
+function normalizeDirectorScene(scene: any, index: number) {
+  const sceneNumber = sceneNumberOf(scene, index);
+  return {
+    ...scene,
+    sceneId: String(scene?.sceneId || scene?.id || `SC_${String(sceneNumber).padStart(3, '0')}`),
+    sceneNumber,
+    title: String(scene?.title || `Scene ${sceneNumber}`),
+    action: sceneStoryText(scene),
+    durationSeconds: Number(scene?.durationSeconds || scene?.duration || 5) || 5,
+    generatedImageUrl: scene?.generatedImageUrl || scene?.imageUrl || '',
+    imageUrl: scene?.imageUrl || scene?.generatedImageUrl || '',
+    clipUrl: scene?.clipUrl || scene?.generatedVideoUrl || scene?.videoUrl || scene?.video_url || '',
+    videoUrl: scene?.videoUrl || scene?.generatedVideoUrl || scene?.clipUrl || scene?.video_url || '',
+    generatedVideoUrl: scene?.generatedVideoUrl || scene?.videoUrl || scene?.video_url || scene?.clipUrl || ''
+  };
+}
+
+function resolveDirectorScenes(source: any, fallback: any = {}) {
+  const layers = [
+    source?.scenes,
+    source?.images?.sceneData,
+    source?.clips?.sceneData,
+    source?.scenes?.sceneData,
+    fallback?.scenes,
+    fallback?.draft?.scenes,
+    fallback?.draft?.images?.sceneData,
+    fallback?.draft?.clips?.sceneData
+  ].filter(Array.isArray);
+
+  if (!layers.length) return [];
+
+  // URL fields that should never be overwritten with empty/falsy values
+  const urlFields = ['clipUrl', 'videoUrl', 'generatedVideoUrl', 'video_url', 'imageUrl', 'generatedImageUrl'];
+
+  const merged = new Map<string, any>();
+  layers.forEach((layer: any[]) => {
+    layer.forEach((scene, index) => {
+      const normalized = normalizeDirectorScene(scene, index);
+      const key = normalized.sceneId || String(normalized.sceneNumber || index + 1);
+      const current = merged.get(key) || {};
+
+      // Strip empty URL fields from normalized so they don't overwrite valid existing values
+      const safeNormalized = { ...normalized };
+      urlFields.forEach((field) => {
+        if (!safeNormalized[field] && current[field]) {
+          delete safeNormalized[field];
+        }
+      });
+
+      merged.set(key, normalizeDirectorScene({ ...current, ...safeNormalized }, index));
+    });
+  });
+
+  return Array.from(merged.values()).sort((a, b) => sceneNumberOf(a, 0) - sceneNumberOf(b, 0));
+}
+
+function directorSceneClipUrl(scene: any) {
+  return String(scene?.clipUrl || scene?.generatedVideoUrl || scene?.videoUrl || scene?.video_url || scene?.falVideoUrl || '').trim();
+}
+
+function collectDirectorClipUrls(...sources: any[]) {
+  const urls: string[] = [];
+  sources.forEach((source) => {
+    if (!source) return;
+    if (Array.isArray(source)) {
+      source.forEach((item) => {
+        if (typeof item === 'string') urls.push(item);
+        else urls.push(directorSceneClipUrl(item));
+      });
+      return;
+    }
+    if (Array.isArray(source?.clipUrls)) urls.push(...source.clipUrls);
+    if (Array.isArray(source?.clips?.clipUrls)) urls.push(...source.clips.clipUrls);
+    if (Array.isArray(source?.clips?.sceneData)) urls.push(...source.clips.sceneData.map(directorSceneClipUrl));
+    if (Array.isArray(source?.scenes)) urls.push(...source.scenes.map(directorSceneClipUrl));
+    if (Array.isArray(source?.scenes?.sceneData)) urls.push(...source.scenes.sceneData.map(directorSceneClipUrl));
+    if (Array.isArray(source?.images?.sceneData)) urls.push(...source.images.sceneData.map(directorSceneClipUrl));
+  });
+  return [...new Set(urls.map((url) => String(url || '').trim()).filter(Boolean))];
+}
+
 export default function DirectorStudio() {
   const { isDarkMode } = useTheme();
   const theme = getThemeClasses(isDarkMode);
@@ -89,12 +275,14 @@ export default function DirectorStudio() {
 
   // Auto-save timer ref
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const storyAutoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const LS_KEY = 'director_studio_draft_v1';
 
   // Active Wizard state
   const [currentStep, setCurrentStep] = useState(1);
   const [busy, setBusy] = useState(false);
   const [busyMsg, setBusyMsg] = useState('');
+  const [hydratingDraft, setHydratingDraft] = useState(false);
   const [draft, setDraft] = useState<any>(null);
   const [jobId, setJobId] = useState('');
   const [scenes, setScenes] = useState<any[]>([]);
@@ -113,6 +301,7 @@ export default function DirectorStudio() {
   const [commercialObjective, setCommercialObjective] = useState('');
   const [videoStyle, setVideoStyle] = useState('Cinematic Commercial');
   const [durationSeconds, setDurationSeconds] = useState(30);
+  const [storyDirection, setStoryDirection] = useState('');
 
   // Optional media & product selection
   const [products, setProducts] = useState<Product[]>([]);
@@ -147,8 +336,61 @@ export default function DirectorStudio() {
 
   // Per-scene editing & generation states
   const [promptLoadingSceneId, setPromptLoadingSceneId] = useState<string | null>(null);
+  const [improvingPrompt, setImprovingPrompt] = useState(false);
+  const [promptImproveSceneId, setPromptImproveSceneId] = useState('');
+  const [promptImproveType, setPromptImproveType] = useState<PromptImproveType>('image');
+  const [promptImproveRequest, setPromptImproveRequest] = useState('');
   const [imgLoadingSceneId, setImgLoadingSceneId] = useState<string | null>(null);
   const [vidLoadingSceneId, setVidLoadingSceneId] = useState<string | null>(null);
+
+  const applyDraftState = useCallback((d: any, fallback: any = {}) => {
+    if (!d) return;
+    setDraft(d);
+    setJobId(d.jobId || fallback.jobId || '');
+    setScenes(resolveDirectorScenes(d, fallback));
+    setCharacters(Array.isArray(d.characters) ? d.characters : []);
+    setBusinessName(d.businessName || fallback.businessName || '');
+    setIndustry(d.industry || fallback.industry || '');
+    setTargetAudience(d.targetAudience || fallback.targetAudience || '');
+    setBrandTone(d.brandTone || fallback.brandTone || '');
+    setCommercialObjective(d.commercialObjective || fallback.commercialObjective || '');
+    setBrandSummary(d.brandSummary || d.description || fallback.brandSummary || '');
+    setVideoStyle(d.videoStyle || fallback.videoStyle || 'Cinematic Commercial');
+    setDurationSeconds(d.durationSeconds || fallback.durationSeconds || 30);
+    setUseLogo(d.useLogo !== undefined ? d.useLogo : (fallback.useLogo || false));
+    setUseCharacters(fallback.useCharacters !== undefined ? fallback.useCharacters : (d.useCharacters !== undefined ? d.useCharacters : true));
+    setStoryDirection(d.storyDirection || fallback.storyDirection || '');
+    setSelectedProductId(d.selectedProductId || d.productId || fallback.selectedProductId || '');
+    setImageDataUrl(d.imageDataUrl || fallback.imageDataUrl || '');
+    setFinalAudioUrl(d.finalAudioUrl || fallback.finalAudioUrl || '');
+    setFinalVideoUrl(d.finalVideoUrl || fallback.finalVideoUrl || '');
+    setFinalOutputUrl(d.finalOutputUrl || fallback.finalOutputUrl || '');
+    setThumbnailUrl(d.thumbnailUrl || d.content?.thumbnailUrl || d.thumbnails?.url || fallback.thumbnailUrl || '');
+    setCaption(d.caption || d.content?.caption || fallback.caption || '');
+    const dTags = d.hashtagsText || (Array.isArray(d.content?.hashtags) ? d.content.hashtags.join(' ') : '') || fallback.hashtagsText || '';
+    setHashtagsText(dTags);
+    const audioConfig = d.audio?.config || fallback.audio?.config || {};
+    const audioTracks = d.audio?.tracks || fallback.audio?.tracks || null;
+    const mixedUrl = d.mix?.finalAudioUrl || fallback.mix?.finalAudioUrl || d.finalAudioUrl || fallback.finalAudioUrl || '';
+    setAudioEnabled(audioConfig.enabled !== false);
+    setAudioMode((audioConfig.mode || fallback.audioMode || 'auto') as AudioMode);
+    setAudioPriority((audioConfig.audioPriority || fallback.audioPriority || 'balanced') as 'voice' | 'balanced' | 'music');
+    setAudioTone(audioConfig.tone || fallback.audioTone || 'professional');
+    setAudioLanguageCode(audioConfig.languageCode || fallback.audioLanguageCode || 'en');
+    setVoiceGender((audioConfig.voiceGender || fallback.voiceGender || 'female') as 'male' | 'female');
+    setVoiceVolume(Number.isFinite(Number(audioConfig.voiceVolume)) ? Number(audioConfig.voiceVolume) : (fallback.voiceVolume || 1));
+    setMusicVolume(Number.isFinite(Number(audioConfig.musicVolume)) ? Number(audioConfig.musicVolume) : (fallback.musicVolume || 0.24));
+    setGeneratedTracks(audioTracks);
+    setFinalAudioUrl(mixedUrl);
+    const platforms = (Array.isArray(d.platform?.selectedPlatforms) && d.platform.selectedPlatforms.length)
+      ? d.platform.selectedPlatforms
+      : (Array.isArray(d.selectedPlatforms) ? d.selectedPlatforms : (fallback.selectedPlatforms || []));
+    setSelectedPlatforms(platforms);
+    const sched = splitScheduledAt(d.schedule?.scheduledAt);
+    setScheduleDate(sched.date || d.scheduleDate || fallback.scheduleDate || '');
+    setScheduleTime(sched.time || d.scheduleTime || fallback.scheduleTime || '');
+    setShowWizard(true);
+  }, []);
 
   const fetchDrafts = async () => {
     try {
@@ -181,12 +423,13 @@ export default function DirectorStudio() {
     try {
       const saved = JSON.parse(savedRaw);
       if (!saved?.jobId) return;
+      setHydratingDraft(true);
 
       const restoreFromSnapshot = (snapshot: any) => {
         if (!snapshot) return;
         setDraft(snapshot.draft || null);
         setJobId(snapshot.jobId || '');
-        setScenes(Array.isArray(snapshot.scenes) ? snapshot.scenes : (snapshot.draft?.scenes || []));
+        setScenes(resolveDirectorScenes(snapshot.draft || snapshot, snapshot));
         setCharacters(Array.isArray(snapshot.characters) ? snapshot.characters : (snapshot.draft?.characters || []));
         setBusinessName(snapshot.businessName || snapshot.draft?.businessName || '');
         setIndustry(snapshot.industry || snapshot.draft?.industry || '');
@@ -198,18 +441,32 @@ export default function DirectorStudio() {
         setDurationSeconds(snapshot.durationSeconds || snapshot.draft?.durationSeconds || 30);
         setUseLogo(snapshot.useLogo !== undefined ? snapshot.useLogo : (snapshot.draft?.useLogo !== undefined ? snapshot.draft.useLogo : false));
         setUseCharacters(snapshot.useCharacters !== undefined ? snapshot.useCharacters : true);
+        setStoryDirection(snapshot.storyDirection || snapshot.draft?.storyDirection || '');
         setSelectedProductId(snapshot.selectedProductId || snapshot.draft?.selectedProductId || '');
         setImageDataUrl(snapshot.imageDataUrl || snapshot.draft?.imageDataUrl || '');
-        setFinalAudioUrl(snapshot.finalAudioUrl || snapshot.draft?.finalAudioUrl || '');
+        const audioConfig = snapshot.draft?.audio?.config || snapshot.audio?.config || {};
+        const audioTracks = snapshot.draft?.audio?.tracks || snapshot.audio?.tracks || null;
+        const mixedUrl = snapshot.draft?.mix?.finalAudioUrl || snapshot.mix?.finalAudioUrl || snapshot.finalAudioUrl || snapshot.draft?.finalAudioUrl || '';
+        setAudioEnabled(audioConfig.enabled !== false);
+        setAudioMode((audioConfig.mode || snapshot.audioMode || 'auto') as AudioMode);
+        setAudioPriority((audioConfig.audioPriority || snapshot.audioPriority || 'balanced') as 'voice' | 'balanced' | 'music');
+        setAudioTone(audioConfig.tone || snapshot.audioTone || 'professional');
+        setAudioLanguageCode(audioConfig.languageCode || snapshot.audioLanguageCode || 'en');
+        setVoiceGender((audioConfig.voiceGender || snapshot.voiceGender || 'female') as 'male' | 'female');
+        setVoiceVolume(Number.isFinite(Number(audioConfig.voiceVolume)) ? Number(audioConfig.voiceVolume) : (snapshot.voiceVolume || 1));
+        setMusicVolume(Number.isFinite(Number(audioConfig.musicVolume)) ? Number(audioConfig.musicVolume) : (snapshot.musicVolume || 0.24));
+        setGeneratedTracks(audioTracks);
+        setFinalAudioUrl(mixedUrl);
         setFinalVideoUrl(snapshot.finalVideoUrl || snapshot.draft?.finalVideoUrl || '');
         setFinalOutputUrl(snapshot.finalOutputUrl || snapshot.draft?.finalOutputUrl || '');
-        setThumbnailUrl(snapshot.thumbnailUrl || snapshot.draft?.thumbnailUrl || '');
-        setCaption(snapshot.caption || snapshot.draft?.caption || '');
-        setHashtagsText(snapshot.hashtagsText || snapshot.draft?.hashtagsText || '');
+        setThumbnailUrl(snapshot.thumbnailUrl || snapshot.draft?.thumbnailUrl || snapshot.draft?.content?.thumbnailUrl || snapshot.draft?.thumbnails?.url || '');
+        setCaption(snapshot.caption || snapshot.draft?.caption || snapshot.draft?.content?.caption || '');
+        const snapTags = snapshot.hashtagsText || snapshot.draft?.hashtagsText || (Array.isArray(snapshot.draft?.content?.hashtags) ? snapshot.draft.content.hashtags.join(' ') : '') || '';
+        setHashtagsText(snapTags);
         setSelectedPlatforms(Array.isArray(snapshot.selectedPlatforms) ? snapshot.selectedPlatforms : (snapshot.draft?.selectedPlatforms || []));
         setScheduleDate(snapshot.scheduleDate || snapshot.draft?.scheduleDate || '');
         setScheduleTime(snapshot.scheduleTime || snapshot.draft?.scheduleTime || '');
-        setCurrentStep(Number(snapshot.currentStep || 1));
+        setCurrentStep(normalizeWizardStep(snapshot.currentStep));
         setShowWizard(true);
       };
 
@@ -220,28 +477,16 @@ export default function DirectorStudio() {
           const res = await videoGenerationAPI.getDraft(saved.jobId);
           if (res?.success && res?.draft) {
             const d = res.draft;
-            setDraft(d);
-            setJobId(d.jobId);
-            setScenes(d.scenes || []);
-            setCharacters(d.characters || []);
-            setBusinessName(d.businessName || saved.businessName || '');
-            setIndustry(d.industry || saved.industry || '');
-            setTargetAudience(d.targetAudience || saved.targetAudience || '');
-            setBrandTone(d.brandTone || saved.brandTone || '');
-            setCommercialObjective(d.commercialObjective || saved.commercialObjective || '');
-            setBrandSummary(d.brandSummary || d.description || saved.brandSummary || '');
-            setVideoStyle(d.videoStyle || saved.videoStyle || 'Cinematic Commercial');
-            setDurationSeconds(d.durationSeconds || saved.durationSeconds || 30);
-            setUseLogo(d.useLogo !== undefined ? d.useLogo : (saved.useLogo || false));
-            setUseCharacters(saved.useCharacters !== undefined ? saved.useCharacters : true);
-            setSelectedProductId(saved.selectedProductId || '');
-            setShowWizard(true);
+            applyDraftState(d, saved);
             const savedStep = localStorage.getItem(`director_studio_step_${d.jobId}`);
-            if (savedStep) setCurrentStep(Number(savedStep));
-            else if (saved.currentStep) setCurrentStep(Number(saved.currentStep));
-            else if (d.currentStep) setCurrentStep(Number(d.currentStep));
+            if (savedStep) setCurrentStep(normalizeWizardStep(savedStep));
+            else if (saved.currentStep) setCurrentStep(normalizeWizardStep(saved.currentStep));
+            else if (d.currentStep) setCurrentStep(normalizeWizardStep(d.currentStep));
           }
         } catch (_) { /* silent */ }
+        finally {
+          setHydratingDraft(false);
+        }
       })();
     } catch (_) { /* corrupt data — ignore */ }
   }, []);
@@ -259,39 +504,85 @@ export default function DirectorStudio() {
   }, []);
 
   useEffect(() => {
-    if (draft?.scenes) setScenes(draft.scenes);
+    if (draft?.scenes || draft?.images?.sceneData || draft?.clips?.sceneData) setScenes(resolveDirectorScenes(draft));
     if (draft?.characters) setCharacters(draft.characters);
-    if (draft?.finalAudioUrl) setFinalAudioUrl(draft.finalAudioUrl);
+    if (draft?.audio?.tracks) setGeneratedTracks(draft.audio.tracks);
+    if (draft?.audio?.config) {
+      setAudioEnabled(draft.audio.config.enabled !== false);
+      setAudioMode((draft.audio.config.mode || 'auto') as AudioMode);
+      setAudioPriority((draft.audio.config.audioPriority || 'balanced') as 'voice' | 'balanced' | 'music');
+      setAudioTone(draft.audio.config.tone || 'professional');
+      setAudioLanguageCode(draft.audio.config.languageCode || 'en');
+      setVoiceGender((draft.audio.config.voiceGender || 'female') as 'male' | 'female');
+      if (Number.isFinite(Number(draft.audio.config.voiceVolume))) setVoiceVolume(Number(draft.audio.config.voiceVolume));
+      if (Number.isFinite(Number(draft.audio.config.musicVolume))) setMusicVolume(Number(draft.audio.config.musicVolume));
+    }
+    if (draft?.mix?.finalAudioUrl || draft?.finalAudioUrl) setFinalAudioUrl(draft?.mix?.finalAudioUrl || draft.finalAudioUrl);
     if (draft?.finalVideoUrl) setFinalVideoUrl(draft.finalVideoUrl);
     if (draft?.finalOutputUrl) setFinalOutputUrl(draft.finalOutputUrl);
-    if (draft?.thumbnailUrl) setThumbnailUrl(draft.thumbnailUrl);
+    if (draft?.thumbnailUrl || draft?.content?.thumbnailUrl || draft?.thumbnails?.url) {
+      setThumbnailUrl(draft.thumbnailUrl || draft.content?.thumbnailUrl || draft.thumbnails?.url);
+    }
   }, [draft]);
 
   useEffect(() => {
+    if (!scenes.length) {
+      setPromptImproveSceneId('');
+      return;
+    }
+    if (!scenes.some((scene) => String(scene.sceneId) === String(promptImproveSceneId))) {
+      setPromptImproveSceneId(String(scenes[0].sceneId));
+    }
+  }, [scenes, promptImproveSceneId]);
+
+  useEffect(() => {
     if (jobId && currentStep) {
-      localStorage.setItem(`director_studio_step_${jobId}`, String(currentStep));
+      safeSetLocalStorage(`director_studio_step_${jobId}`, String(currentStep));
     }
   }, [jobId, currentStep]);
 
   // ── SAVE the full draft state to localStorage so it can be restored with all scene/story/image/video details
   useEffect(() => {
+    if (!jobId || hydratingDraft) return;
     const snapshot = {
       jobId,
-      draft,
-      scenes,
+      draft: compactDirectorDraft(draft),
+      scenes: scenes.map(compactDirectorScene),
       characters,
       businessName, industry, targetAudience, brandSummary, brandTone,
       commercialObjective, videoStyle, durationSeconds, useCharacters, useLogo,
-      selectedProductId, imageDataUrl, finalAudioUrl, finalVideoUrl, finalOutputUrl,
+      storyDirection,
+      selectedProductId,
+      imageDataUrl: imageDataUrl && !imageDataUrl.startsWith('data:') ? imageDataUrl : '',
+      finalAudioUrl, finalVideoUrl, finalOutputUrl,
+      audio: {
+        config: {
+          enabled: audioEnabled,
+          mode: audioEnabled ? audioMode : 'off',
+          audioPriority,
+          tone: audioTone,
+          languageCode: audioLanguageCode,
+          voiceGender,
+          voiceVolume,
+          musicVolume
+        },
+        tracks: generatedTracks
+      },
+      mix: finalAudioUrl ? { finalAudioUrl } : null,
       thumbnailUrl, caption, hashtagsText, selectedPlatforms, scheduleDate, scheduleTime,
       currentStep
     };
-    localStorage.setItem(LS_KEY, JSON.stringify(snapshot));
+    const saved = safeSetLocalStorage(LS_KEY, JSON.stringify(snapshot));
+    if (!saved) {
+      safeSetLocalStorage(LS_KEY, JSON.stringify({ jobId, currentStep }));
+    }
   }, [jobId, draft, scenes, characters, businessName, industry, targetAudience,
       brandSummary, brandTone, commercialObjective, videoStyle, durationSeconds,
-      useCharacters, useLogo, selectedProductId, imageDataUrl, finalAudioUrl,
+      useCharacters, useLogo, storyDirection, selectedProductId, imageDataUrl, finalAudioUrl,
       finalVideoUrl, finalOutputUrl, thumbnailUrl, caption, hashtagsText,
-      selectedPlatforms, scheduleDate, scheduleTime, currentStep]);
+      audioEnabled, audioMode, audioPriority, audioTone, audioLanguageCode, voiceGender,
+      voiceVolume, musicVolume, generatedTracks, selectedPlatforms, scheduleDate, scheduleTime,
+      currentStep, hydratingDraft]);
 
   // ── DEBOUNCED AUTO-SAVE to backend whenever Step 1 fields change and jobId exists
   const scheduleBackendAutoSave = useCallback(() => {
@@ -302,18 +593,64 @@ export default function DirectorStudio() {
         await videoGenerationAPI.updateDraft(jobId, {
           businessName, industry, targetAudience, brandSummary, brandTone,
           commercialObjective, videoStyle, durationSeconds, useCharacters, useLogo,
+          selectedProductId,
+          imageDataUrl: imageDataUrl && !imageDataUrl.startsWith('data:') ? imageDataUrl : undefined,
+          storyDirection, currentStep,
           description: brandSummary || `Commercial for ${businessName || 'Brand'}`
         });
       } catch (_) { /* silent */ }
     }, 1500);
   }, [jobId, businessName, industry, targetAudience, brandSummary, brandTone,
-      commercialObjective, videoStyle, durationSeconds, useCharacters, useLogo]);
+      commercialObjective, videoStyle, durationSeconds, useCharacters, useLogo,
+      selectedProductId, imageDataUrl, storyDirection, currentStep]);
 
   useEffect(() => {
-    if (jobId && showWizard) scheduleBackendAutoSave();
+    if (jobId && showWizard && !hydratingDraft) scheduleBackendAutoSave();
     return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); };
   }, [businessName, industry, targetAudience, brandSummary, brandTone,
-      commercialObjective, videoStyle, durationSeconds, useCharacters, useLogo, jobId, showWizard]);
+      commercialObjective, videoStyle, durationSeconds, useCharacters, useLogo,
+      selectedProductId, imageDataUrl, storyDirection, currentStep, jobId, showWizard, hydratingDraft]);
+
+  const getBestContinueStep = () => {
+    if (selectedPlatforms.length > 0 || scheduleDate || scheduleTime) return 10;
+    if (thumbnailUrl || caption || hashtagsText) return 10;
+    if (finalOutputUrl || finalVideoUrl) return 9;
+    if (finalAudioUrl) return 8;
+    if (scenes.some((scene) => scene.generatedVideoUrl)) return 7;
+    if (scenes.some((scene) => scene.imageUrl || scene.generatedImageUrl)) return 6;
+    if (scenes.some((scene) => scene.imagePrompt || scene.videoPrompt)) return 5;
+    if (scenes.length > 0 || draft?.productionBible || draft?.voiceScript) return 3;
+    if (characters.length > 0) return 2;
+    return 1;
+  };
+
+  const getUnlockedStep = () => Math.max(currentStep, getBestContinueStep());
+
+  const goToWizardStep = (targetStep: number) => {
+    if (targetStep <= getUnlockedStep()) {
+      setCurrentStep(targetStep);
+    }
+  };
+
+  useEffect(() => {
+    if (!jobId || !showWizard || hydratingDraft) return;
+    const hasStoryState = scenes.length > 0 || Boolean(draft?.productionBible) || Boolean(draft?.voiceScript);
+    if (!hasStoryState) return;
+    if (storyAutoSaveTimer.current) clearTimeout(storyAutoSaveTimer.current);
+    storyAutoSaveTimer.current = setTimeout(async () => {
+      try {
+        await videoGenerationAPI.updateDraft(jobId, {
+          scenes: scenes.map(compactDirectorScene),
+          characters,
+          productionBible: draft?.productionBible || {},
+          voiceScript: draft?.voiceScript || '',
+          storyDirection,
+          currentStep
+        });
+      } catch (_) { /* silent */ }
+    }, 900);
+    return () => { if (storyAutoSaveTimer.current) clearTimeout(storyAutoSaveTimer.current); };
+  }, [jobId, showWizard, hydratingDraft, scenes, characters, draft?.productionBible, draft?.voiceScript, storyDirection, currentStep]);
 
   const filteredVideoDrafts = useMemo(
     () => videoDrafts.filter((item) => statusFilter === 'all' || item.status === statusFilter),
@@ -377,30 +714,18 @@ export default function DirectorStudio() {
   const openVideoDraft = async (targetJobId: string) => {
     try {
       setBusy(true);
+      setHydratingDraft(true);
       setBusyMsg('Loading draft...');
       const res = await videoGenerationAPI.getDraft(targetJobId);
       if (res?.success && res?.draft) {
         const d = res.draft;
-        setDraft(d);
-        setJobId(d.jobId);
-        setScenes(d.scenes || []);
-        setCharacters(d.characters || []);
-        setBusinessName(d.businessName || '');
-        setIndustry(d.industry || '');
-        setTargetAudience(d.targetAudience || '');
-        setBrandTone(d.brandTone || '');
-        setCommercialObjective(d.commercialObjective || '');
-        setBrandSummary(d.brandSummary || d.description || '');
-        setVideoStyle(d.videoStyle || 'Cinematic Commercial');
-        setDurationSeconds(d.durationSeconds || 30);
-        setUseLogo(d.useLogo !== undefined ? d.useLogo : false);
-        setShowWizard(true);
+        applyDraftState(d);
         // Resume from: localStorage > DB saved step > scenes heuristic
         const savedStep = localStorage.getItem(`director_studio_step_${d.jobId}`);
         if (savedStep) {
-          setCurrentStep(Number(savedStep));
+          setCurrentStep(normalizeWizardStep(savedStep));
         } else if (d.currentStep && d.currentStep > 1) {
-          setCurrentStep(d.currentStep);
+          setCurrentStep(normalizeWizardStep(d.currentStep));
         } else {
           setCurrentStep(d.scenes && d.scenes.length > 0 ? 3 : 1);
         }
@@ -408,6 +733,7 @@ export default function DirectorStudio() {
     } catch (e: any) {
       alert(e?.message || 'Failed to load draft');
     } finally {
+      setHydratingDraft(false);
       setBusy(false);
       setBusyMsg('');
     }
@@ -438,8 +764,15 @@ export default function DirectorStudio() {
   };
 
   const handleStep1Submit = async () => {
+    const continueStep = jobId ? getBestContinueStep() : 1;
+    const shouldContinueExistingDraft = Boolean(jobId && continueStep > 2);
+
+    if (shouldContinueExistingDraft) {
+      setCurrentStep(continueStep);
+    }
+
     setBusy(true);
-    setBusyMsg('Saving brief & initializing commercial draft...');
+    setBusyMsg(shouldContinueExistingDraft ? 'Saving brief changes...' : 'Saving brief & initializing commercial draft...');
     try {
       let activeJobId = jobId;
 
@@ -473,6 +806,18 @@ export default function DirectorStudio() {
         if (draftRes?.draft) {
           setDraft(draftRes.draft);
         }
+      }
+
+      if (shouldContinueExistingDraft) {
+        fetchDrafts();
+        return;
+      }
+
+      const bestContinueStep = getBestContinueStep();
+      if (bestContinueStep > 2) {
+        setCurrentStep(bestContinueStep);
+        fetchDrafts();
+        return;
       }
 
       // Step 1 -> Step 2 Character Manager or Step 3 Direct Story
@@ -512,7 +857,8 @@ export default function DirectorStudio() {
         brandTone,
         commercialObjective,
         duration: durationSeconds,
-        videoStyle
+        videoStyle,
+        storyDirection
       });
       if (res?.draft) {
         setDraft(res.draft);
@@ -537,13 +883,38 @@ export default function DirectorStudio() {
     await handleGenerateStoryWithJobId(jobId);
   };
 
+  const handleTryStoryDirection = async () => {
+    if (!jobId || !storyDirection.trim()) return;
+    if (scenes.length > 0 && !window.confirm('Try this story direction? This will regenerate the story and replace the current screenplay scenes.')) {
+      return;
+    }
+    await handleGenerateStoryWithJobId(jobId);
+  };
+
   const handleUpdateScene = (sceneId: string, updates: any) => {
-    setScenes(prev => prev.map((s) => s.sceneId === sceneId ? { ...s, ...updates } : s));
+    setScenes(prev => prev.map((s) => String(s.sceneId) === String(sceneId) ? normalizeDirectorScene({ ...s, ...updates }, Number(s.sceneNumber || s.index || 1) - 1) : s));
+  };
+
+  const handleUpdateProductionBible = (field: string, value: string) => {
+    setDraft((current: any) => ({
+      ...(current || {}),
+      productionBible: {
+        ...(current?.productionBible || {}),
+        [field]: value
+      }
+    }));
+  };
+
+  const handleUpdateVoiceScript = (value: string) => {
+    setDraft((current: any) => ({
+      ...(current || {}),
+      voiceScript: value
+    }));
   };
 
   const mergeSceneRegenerationResult = (sceneId: string, nextScene: any) => {
     setScenes(prev => prev.map((currentScene) => {
-      if (currentScene.sceneId !== sceneId) return currentScene;
+      if (String(currentScene.sceneId) !== String(sceneId)) return currentScene;
       const mergedScene = {
         ...currentScene,
         ...nextScene,
@@ -553,7 +924,7 @@ export default function DirectorStudio() {
         generatedImageUrl: nextScene?.generatedImageUrl || nextScene?.imageUrl || currentScene.generatedImageUrl || currentScene.imageUrl || '',
         generatedVideoUrl: nextScene?.generatedVideoUrl || currentScene.generatedVideoUrl || ''
       };
-      return mergedScene;
+      return normalizeDirectorScene(mergedScene, Number(currentScene.sceneNumber || currentScene.index || 1) - 1);
     }));
   };
 
@@ -601,6 +972,39 @@ export default function DirectorStudio() {
     } finally {
       setBusy(false);
       setBusyMsg('');
+    }
+  };
+
+  const handleImprovePrompt = async () => {
+    const selectedScene = scenes.find((scene) => String(scene.sceneId) === String(promptImproveSceneId));
+    if (!selectedScene || !jobId || !promptImproveRequest.trim()) return;
+
+    const field = promptImproveType === 'image' ? 'imagePrompt' : 'videoPrompt';
+    const existingPrompt = String(selectedScene[field] || '').trim();
+    if (!existingPrompt) {
+      alert(`Scene ${selectedScene.sceneNumber || ''} does not have a ${promptImproveType} prompt yet.`);
+      return;
+    }
+
+    setImprovingPrompt(true);
+    try {
+      const res = await aiDirectorAPI.improvePrompt({
+        jobId,
+        sceneId: selectedScene.sceneId,
+        scene: selectedScene,
+        promptType: promptImproveType,
+        existingPrompt,
+        userRequest: promptImproveRequest
+      });
+
+      if (res?.prompt) {
+        handleUpdateScene(selectedScene.sceneId, { [field]: res.prompt });
+        setPromptImproveRequest('');
+      }
+    } catch (e: any) {
+      alert(e?.message || 'Failed to improve prompt');
+    } finally {
+      setImprovingPrompt(false);
     }
   };
 
@@ -700,10 +1104,33 @@ export default function DirectorStudio() {
         duration: scene.durationSeconds || 5
       } as any);
       if (res?.videoUrl) {
-        handleUpdateScene(scene.sceneId, {
+        const updatedScene = {
+          clipUrl: res.videoUrl,
+          videoUrl: res.videoUrl,
           generatedVideoUrl: res.videoUrl,
           videoPrompt: basePrompt
-        });
+        };
+        handleUpdateScene(scene.sceneId, updatedScene);
+        if (res?.draft) {
+          applyDraftState(res.draft);
+        } else {
+          setScenes((prevScenes) => {
+            const nextScenes = prevScenes.map((s) =>
+              String(s.sceneId) === String(scene.sceneId)
+                ? normalizeDirectorScene({ ...s, ...updatedScene }, Number(s.sceneNumber || s.index || 1) - 1)
+                : s
+            );
+            const clipUrls = nextScenes.map((s) => directorSceneClipUrl(s)).filter(Boolean);
+            videoGenerationAPI.updateDraft(jobId, {
+              scenes: nextScenes.map(compactDirectorScene),
+              clips: {
+                sceneData: nextScenes.map(compactDirectorScene),
+                clipUrls
+              }
+            }).catch(() => { /* silent */ });
+            return nextScenes;
+          });
+        }
       }
     } catch (e: any) {
       alert(e?.message || 'Video generation failed');
@@ -731,15 +1158,15 @@ export default function DirectorStudio() {
     if (!jobId || scenes.length === 0) return;
     setGeneratingAllVideos(true);
     setBusy(true);
+    let latestScenes = [...scenes];
     try {
-      for (let i = 0; i < scenes.length; i++) {
-        const scene = scenes[i];
+      for (let i = 0; i < latestScenes.length; i++) {
+        const scene = latestScenes[i];
         const sceneImg = scene.imageUrl || scene.generatedImageUrl;
         if (!sceneImg) {
-          // Skip if there's no image yet
           continue;
         }
-        setBusyMsg(`AI Director is animating Video Clip for Scene ${i + 1}/${scenes.length}: ${scene.title}...`);
+        setBusyMsg(`AI Director is animating Video Clip for Scene ${i + 1}/${latestScenes.length}: ${scene.title}...`);
         setVidLoadingSceneId(scene.sceneId);
         
         const res: any = await videoGenerationAPI.createVideo({
@@ -751,8 +1178,29 @@ export default function DirectorStudio() {
         } as any);
         
         if (res?.videoUrl) {
-          handleUpdateScene(scene.sceneId, { generatedVideoUrl: res.videoUrl });
+          const updatedFields = { clipUrl: res.videoUrl, videoUrl: res.videoUrl, generatedVideoUrl: res.videoUrl };
+          latestScenes = latestScenes.map((s) =>
+            String(s.sceneId) === String(scene.sceneId)
+              ? normalizeDirectorScene({ ...s, ...updatedFields }, Number(s.sceneNumber || s.index || 1) - 1)
+              : s
+          );
+          handleUpdateScene(scene.sceneId, updatedFields);
+          if (res?.draft) {
+            applyDraftState(res.draft);
+          }
         }
+      }
+      if (jobId) {
+        const clipUrls = latestScenes.map((s) => directorSceneClipUrl(s)).filter(Boolean);
+        await videoGenerationAPI.updateDraft(jobId, {
+          scenes: latestScenes.map(compactDirectorScene),
+          clips: {
+            sceneData: latestScenes.map(compactDirectorScene),
+            clipUrls
+          }
+        }).catch(() => { /* silent */ });
+        const refreshed = await videoGenerationAPI.getDraft(jobId);
+        if (refreshed?.draft) applyDraftState(refreshed.draft);
       }
     } catch (e: any) {
       alert(e?.message || 'Failed to generate all video clips');
@@ -765,19 +1213,50 @@ export default function DirectorStudio() {
   };
 
   // Audio generation & mixing
+  const activeVoiceScript = String(
+    draft?.voiceScript ||
+    draft?.scenesMetadata?.voiceScript ||
+    draft?.scenes?.voiceScript ||
+    scenes.map((scene) => scene?.voiceLine || scene?.action || '').filter(Boolean).join(' ')
+  ).trim();
+
+  const buildAudioPayload = () => ({
+    enabled: audioEnabled,
+    mode: audioEnabled ? audioMode : 'off',
+    audioPriority,
+    tone: audioTone,
+    brandTone: brandTone || audioTone || 'Professional',
+    languageCode: audioLanguageCode,
+    voiceGender,
+    voiceVolume,
+    musicVolume,
+    voiceScript: activeVoiceScript
+  });
+
   const handleGenerateAudio = async () => {
     if (!jobId) return;
+    if (audioMode === 'auto' && !activeVoiceScript) {
+      alert('Please generate or enter the AI voice script before creating Text-to-Speech audio.');
+      setCurrentStep(3);
+      return;
+    }
     setBusy(true);
     setBusyMsg('Generating voice script & audio tracks...');
     try {
       const res = await videoGenerationAPI.generateAudio({
         jobId,
-        audioMode,
-        audioTone,
-        languageCode: audioLanguageCode,
-        voiceGender
+        audio: buildAudioPayload()
       });
-      if (res?.tracks) setGeneratedTracks(res.tracks);
+      const tracks = res?.audio?.tracks || res?.tracks || null;
+      if (tracks) setGeneratedTracks(tracks);
+      if (res?.audio) {
+        setDraft((current: any) => ({
+          ...(current || {}),
+          audio: res.audio,
+          mix: null
+        }));
+      }
+      setFinalAudioUrl('');
     } catch (e: any) {
       alert(e?.message || 'Audio generation failed');
     } finally {
@@ -793,11 +1272,17 @@ export default function DirectorStudio() {
     try {
       const res = await videoGenerationAPI.mixAudio({
         jobId,
+        tracks: generatedTracks || undefined,
         voiceVolume,
         musicVolume,
-        priorityMode: audioPriority
+        priorityMode: audioPriority,
+        audio: {
+          ...buildAudioPayload(),
+          audioPriority
+        }
       });
       if (res?.finalAudioUrl) setFinalAudioUrl(res.finalAudioUrl);
+      if (res?.draft) setDraft(res.draft);
     } catch (e: any) {
       alert(e?.message || 'Audio mix failed');
     } finally {
@@ -812,9 +1297,42 @@ export default function DirectorStudio() {
     setBusy(true);
     setBusyMsg('Merging video clips with audio tracks...');
     try {
-      const res = await videoGenerationAPI.mergeVideo({ jobId });
+      // Collect clip URLs from current React state first
+      let clipUrls = collectDirectorClipUrls(scenes, draft);
+
+      // If no clips in local state, fetch fresh draft from backend
+      if (!clipUrls.length) {
+        setBusyMsg('Fetching latest clip data from server...');
+        const latest = await videoGenerationAPI.getDraft(jobId);
+        if (latest?.draft) {
+          applyDraftState(latest.draft);
+          clipUrls = collectDirectorClipUrls(latest.draft);
+        }
+      }
+
+      if (!clipUrls.length) {
+        alert('No video clips found. Please generate video clips for your scenes first (Step 6), then try merging again.');
+        setBusy(false);
+        setBusyMsg('');
+        return;
+      }
+
+      setBusyMsg(`Merging ${clipUrls.length} video clip(s) with audio tracks...`);
+      const res = await videoGenerationAPI.mergeVideo({
+        jobId,
+        clipUrls,
+        finalAudioUrl: finalAudioUrl || undefined
+      });
       if (res?.finalOutputUrl) setFinalOutputUrl(res.finalOutputUrl);
       if (res?.finalVideoUrl) setFinalVideoUrl(res.finalVideoUrl);
+      if (!res?.finalOutputUrl && !res?.finalVideoUrl) {
+        // Async/queued merge — poll the draft to get the result
+        setBusyMsg('Video merge queued. Fetching result...');
+        const refreshed = await videoGenerationAPI.getDraft(jobId);
+        if (refreshed?.draft?.merge?.finalOutputUrl) setFinalOutputUrl(refreshed.draft.merge.finalOutputUrl);
+        if (refreshed?.draft?.merge?.finalVideoUrl) setFinalVideoUrl(refreshed.draft.merge.finalVideoUrl);
+        if (refreshed?.draft?.finalVideoUrl) setFinalVideoUrl(refreshed.draft.finalVideoUrl);
+      }
     } catch (e: any) {
       alert(e?.message || 'Video merge failed');
     } finally {
@@ -823,16 +1341,22 @@ export default function DirectorStudio() {
     }
   };
 
-  // Thumbnail & content generation
+  // Thumbnail, caption & hashtag generation
   const handleGenerateContent = async () => {
     if (!jobId) return;
     setBusy(true);
     setBusyMsg('Generating thumbnail, caption, and hashtags...');
     try {
       const res = await videoGenerationAPI.generateContent({ jobId });
-      if (res?.thumbnailUrl) setThumbnailUrl(res.thumbnailUrl);
-      if (res?.caption) setCaption(res.caption);
-      if (res?.hashtags) setHashtagsText(res.hashtags);
+      const newThumb = res?.thumbnailUrl || res?.content?.thumbnailUrl || res?.draft?.thumbnailUrl || '';
+      if (newThumb) setThumbnailUrl(newThumb);
+      const newCaption = res?.caption ?? res?.content?.caption ?? '';
+      if (newCaption) setCaption(newCaption);
+      const rawTags = res?.hashtags ?? res?.content?.hashtags ?? '';
+      const newTags = Array.isArray(rawTags) ? rawTags.join(' ') : String(rawTags || '');
+      if (newTags) setHashtagsText(newTags);
+      // Keep the local draft in sync so the generated content persists on refresh.
+      if (res?.draft) setDraft(res.draft);
     } catch (e: any) {
       alert(e?.message || 'Content generation failed');
     } finally {
@@ -844,14 +1368,21 @@ export default function DirectorStudio() {
   // Publish / Schedule
   const handleSchedulePost = async (publishNow = false) => {
     if (!jobId) return;
+    if (!selectedPlatforms.length) {
+      alert('Select at least one platform');
+      return;
+    }
+    // Combine the date + time inputs into a single ISO timestamp the backend expects.
+    const scheduledAt = (!publishNow && scheduleDate && scheduleTime)
+      ? new Date(`${scheduleDate}T${scheduleTime}`).toISOString()
+      : undefined;
     setBusy(true);
     setBusyMsg(publishNow ? 'Publishing video...' : 'Scheduling post...');
     try {
       await videoGenerationAPI.schedulePost({
         jobId,
-        platforms: selectedPlatforms,
-        scheduleDate: publishNow ? undefined : scheduleDate,
-        scheduleTime: publishNow ? undefined : scheduleTime,
+        selectedPlatforms,
+        scheduledAt,
         publishNow
       });
       alert(publishNow ? 'Video published successfully!' : 'Video scheduled successfully!');
@@ -1163,7 +1694,7 @@ export default function DirectorStudio() {
                 </div>
 
                 <button onClick={handleStep1Submit} disabled={!businessName} className="w-full py-4 rounded-xl font-bold bg-gradient-to-r from-[#ffcc29] to-amber-500 text-black hover:opacity-90 transition-all flex items-center justify-center gap-2 text-base shadow-lg disabled:opacity-40">
-                  {useCharacters ? 'Proceed to Character Manager →' : 'Generate Commercial Story & Screenplay →'}
+                  {getBestContinueStep() > 2 ? `Save Brief & Continue to Step ${getBestContinueStep()} →` : (useCharacters ? 'Proceed to Character Manager →' : 'Generate Commercial Story & Screenplay →')}
                 </button>
               </div>
             )}
@@ -1224,7 +1755,12 @@ export default function DirectorStudio() {
                   </div>
                   <div className="flex items-center gap-3">
                     <button
-                      onClick={handleGenerateStory}
+                      onClick={() => {
+                        if (scenes.length > 0 && !window.confirm('Regenerate the story? This will replace the current screenplay scenes.')) {
+                          return;
+                        }
+                        handleGenerateStory();
+                      }}
                       disabled={busy}
                       className="px-4 py-2 rounded-xl border border-[#ffcc29]/40 text-[#ffcc29] font-semibold text-xs hover:bg-[#ffcc29]/10 transition flex items-center gap-1.5"
                     >
@@ -1236,13 +1772,45 @@ export default function DirectorStudio() {
                   </div>
                 </div>
 
+                <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <h3 className="text-sm font-bold text-white flex items-center gap-2"><Edit3 className="w-4 h-4 text-[#ffcc29]" /> Director Notes</h3>
+                      <p className="text-xs text-slate-400 mt-1">Add your idea, change request, or missing detail, then try a fresh story version.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleTryStoryDirection}
+                      disabled={busy || !storyDirection.trim() || !jobId}
+                      className="px-4 py-2 rounded-xl bg-[#ffcc29] text-black font-bold text-xs hover:bg-[#e6b825] transition disabled:opacity-40 flex items-center gap-1.5"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" /> Try Direction
+                    </button>
+                  </div>
+                  <textarea
+                    className={`${inputClass} text-xs min-h-[90px] resize-none`}
+                    value={storyDirection}
+                    onChange={(e) => setStoryDirection(e.target.value)}
+                    placeholder="Example: make Priya's grandmother give the blessing, add one scene inside the Murugan Silks showroom, and make the voiceover more emotional in Tamil-English style."
+                  />
+                </div>
+
                 {draft?.productionBible && (
                   <div className="bg-[#ffcc29]/5 border border-[#ffcc29]/20 rounded-xl p-5 space-y-3">
                     <h3 className="text-sm font-bold text-[#ffcc29] flex items-center gap-2"><Sparkles className="w-4 h-4" /> Production Bible</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                      {draft.productionBible.emotionalHook && <div><span className="font-semibold text-slate-400 uppercase">Emotional Hook:</span><p className="mt-0.5 text-slate-200">{draft.productionBible.emotionalHook}</p></div>}
-                      {draft.productionBible.creativeDirection && <div><span className="font-semibold text-slate-400 uppercase">Creative Direction:</span><p className="mt-0.5 text-slate-200">{draft.productionBible.creativeDirection}</p></div>}
-                      {draft.productionBible.story && <div className="md:col-span-2"><span className="font-semibold text-slate-400 uppercase">Narrative Story Arc:</span><p className="mt-0.5 text-slate-200">{draft.productionBible.story}</p></div>}
+                      <div>
+                        <span className="font-semibold text-slate-400 uppercase">Emotional Hook</span>
+                        <textarea className={`${inputClass} text-xs mt-1 min-h-[80px] resize-none`} value={draft.productionBible.emotionalHook || ''} onChange={(e) => handleUpdateProductionBible('emotionalHook', e.target.value)} />
+                      </div>
+                      <div>
+                        <span className="font-semibold text-slate-400 uppercase">Creative Direction</span>
+                        <textarea className={`${inputClass} text-xs mt-1 min-h-[80px] resize-none`} value={draft.productionBible.creativeDirection || ''} onChange={(e) => handleUpdateProductionBible('creativeDirection', e.target.value)} />
+                      </div>
+                      <div className="md:col-span-2">
+                        <span className="font-semibold text-slate-400 uppercase">Narrative Story Arc</span>
+                        <textarea className={`${inputClass} text-xs mt-1 min-h-[90px] resize-none`} value={draft.productionBible.story || ''} onChange={(e) => handleUpdateProductionBible('story', e.target.value)} />
+                      </div>
                     </div>
                   </div>
                 )}
@@ -1250,7 +1818,7 @@ export default function DirectorStudio() {
                 {draft?.voiceScript && (
                   <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4">
                     <h4 className="text-xs font-bold text-slate-400 uppercase flex items-center gap-2 mb-1.5"><Mic2 className="w-3.5 h-3.5 text-[#ffcc29]" /> Voiceover Script</h4>
-                    <p className="text-xs text-slate-300 italic whitespace-pre-line leading-relaxed">{draft.voiceScript}</p>
+                    <textarea className={`${inputClass} text-xs min-h-[110px] resize-none italic leading-relaxed`} value={draft.voiceScript || ''} onChange={(e) => handleUpdateVoiceScript(e.target.value)} />
                   </div>
                 )}
 
@@ -1290,26 +1858,104 @@ export default function DirectorStudio() {
                   </div>
                 </div>
 
-                <div className="space-y-6">
-                  {scenes.map((scene) => (
-                    <div key={scene.sceneId} className="border border-slate-800 bg-slate-900/50 rounded-xl p-5 space-y-4">
-                      <div className="flex items-center justify-between">
-                        <h4 className="font-bold text-sm text-white">Scene {scene.sceneNumber}: {scene.title}</h4>
-                        <button onClick={() => handleGenerateScenePrompts(scene)} disabled={promptLoadingSceneId === scene.sceneId} className="px-3 py-1.5 rounded-lg bg-[#ffcc29] text-black text-xs font-bold hover:bg-[#e6b825] disabled:opacity-40 flex items-center gap-1.5">
-                          {promptLoadingSceneId === scene.sceneId ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                          {scene.imagePrompt ? 'Regenerate Prompts' : 'Generate Prompts'}
-                        </button>
-                      </div>
-                      <div>
-                        <label className="text-[11px] font-bold text-slate-400 uppercase">Image Prompt (Gemini AI)</label>
-                        <textarea className={`${inputClass} text-xs mt-1 min-h-[70px] resize-none font-mono`} value={scene.imagePrompt || ''} onChange={(e) => handleUpdateScene(scene.sceneId, { imagePrompt: e.target.value })} placeholder="Click 'Generate Prompts' or type custom prompt..." />
-                      </div>
-                      <div>
-                        <label className="text-[11px] font-bold text-slate-400 uppercase">Motion / Video Prompt</label>
-                        <textarea className={`${inputClass} text-xs mt-1 min-h-[60px] resize-none font-mono`} value={scene.videoPrompt || ''} onChange={(e) => handleUpdateScene(scene.sceneId, { videoPrompt: e.target.value })} placeholder="Click 'Generate Prompts' or type camera motion..." />
+                <div className="border border-slate-800 bg-slate-900/50 rounded-xl p-5 space-y-4">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-[#ffcc29]" />
+                    <h3 className="text-sm font-bold text-white">Prompt Improvement</h3>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-400 uppercase">Scene</label>
+                      <select
+                        className={`${inputClass} mt-1.5`}
+                        value={promptImproveSceneId}
+                        onChange={(e) => setPromptImproveSceneId(e.target.value)}
+                        disabled={!scenes.length || improvingPrompt}
+                      >
+                        {scenes.length ? scenes.map((scene, idx) => (
+                          <option key={scene.sceneId || idx} value={scene.sceneId}>
+                            Scene {scene.sceneNumber || idx + 1}{scene.title ? ` - ${scene.title}` : ''}
+                          </option>
+                        )) : <option value="">No scenes available</option>}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-400 uppercase">Prompt Type</label>
+                      <div className="mt-2 flex flex-wrap gap-4">
+                        <label className="flex items-center gap-2 text-sm text-slate-200">
+                          <input
+                            type="radio"
+                            name="directorPromptImproveType"
+                            checked={promptImproveType === 'image'}
+                            onChange={() => setPromptImproveType('image')}
+                            disabled={improvingPrompt}
+                          />
+                          Image Prompt
+                        </label>
+                        <label className="flex items-center gap-2 text-sm text-slate-200">
+                          <input
+                            type="radio"
+                            name="directorPromptImproveType"
+                            checked={promptImproveType === 'video'}
+                            onChange={() => setPromptImproveType('video')}
+                            disabled={improvingPrompt}
+                          />
+                          Video Prompt
+                        </label>
                       </div>
                     </div>
-                  ))}
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-400 uppercase">Describe what you want to improve</label>
+                    <textarea
+                      className={`${inputClass} mt-1.5 min-h-[110px] resize-y`}
+                      value={promptImproveRequest}
+                      onChange={(e) => setPromptImproveRequest(e.target.value)}
+                      placeholder="Make the saree royal blue. Add warm sunset lighting. Keep everything else the same."
+                      disabled={improvingPrompt}
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleImprovePrompt}
+                    disabled={improvingPrompt || !scenes.length || !promptImproveRequest.trim()}
+                    className="px-4 py-2.5 rounded-xl bg-[#ffcc29] text-black text-xs font-bold hover:bg-[#e6b825] disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    {improvingPrompt ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                    {improvingPrompt ? 'Improving Prompt' : 'Improve Prompt'}
+                  </button>
+                </div>
+
+                <div className="space-y-6">
+                  {(!scenes || scenes.length === 0) ? (
+                    <div className="border border-dashed border-slate-800 rounded-xl p-6 text-center text-sm text-slate-400">
+                      No scenes yet. Generate the AI Director story first, then return to this prompt page.
+                    </div>
+                  ) : (
+                    scenes.map((scene) => (
+                      <div key={scene.sceneId} className="border border-slate-800 bg-slate-900/50 rounded-xl p-5 space-y-4">
+                        <div className="flex items-center justify-between">
+                          <h4 className="font-bold text-sm text-white">Scene {scene.sceneNumber}: {scene.title}</h4>
+                          <button onClick={() => handleGenerateScenePrompts(scene)} disabled={promptLoadingSceneId === scene.sceneId} className="px-3 py-1.5 rounded-lg bg-[#ffcc29] text-black text-xs font-bold hover:bg-[#e6b825] disabled:opacity-40 flex items-center gap-1.5">
+                            {promptLoadingSceneId === scene.sceneId ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                            {scene.imagePrompt ? 'Regenerate Prompts' : 'Generate Prompts'}
+                          </button>
+                        </div>
+                        <div>
+                          <label className="text-[11px] font-bold text-slate-400 uppercase">Image Prompt (Gemini AI)</label>
+                          <textarea className={`${inputClass} text-xs mt-1 min-h-[70px] resize-none font-mono`} value={scene.imagePrompt || ''} onChange={(e) => handleUpdateScene(scene.sceneId, { imagePrompt: e.target.value })} placeholder="Click 'Generate Prompts' or type custom prompt..." />
+                        </div>
+                        <div>
+                          <label className="text-[11px] font-bold text-slate-400 uppercase">Motion / Video Prompt</label>
+                          <textarea className={`${inputClass} text-xs mt-1 min-h-[60px] resize-none font-mono`} value={scene.videoPrompt || ''} onChange={(e) => handleUpdateScene(scene.sceneId, { videoPrompt: e.target.value })} placeholder="Click 'Generate Prompts' or type camera motion..." />
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             )}
@@ -1362,7 +2008,22 @@ export default function DirectorStudio() {
               <div className={`${panelClass} p-6 sm:p-8 space-y-6`}>
                 <div className="flex items-center justify-between pb-3 border-b border-slate-700/50">
                   <h2 className="text-lg font-bold flex items-center gap-2"><Video className="w-5 h-5 text-[#ffcc29]" /> Step 6: Video Clips</h2>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <button
+                      onClick={async () => {
+                        if (!jobId) return;
+                        setBusy(true); setBusyMsg('Refreshing video clips from server...');
+                        try {
+                          const latest = await videoGenerationAPI.getDraft(jobId);
+                          if (latest?.draft) applyDraftState(latest.draft);
+                        } catch (_) {}
+                        finally { setBusy(false); setBusyMsg(''); }
+                      }}
+                      disabled={busy || !jobId}
+                      className="px-4 py-2 rounded-xl border border-slate-600 text-slate-300 text-xs font-semibold hover:bg-slate-800 disabled:opacity-40 flex items-center gap-1.5"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" /> Refresh Videos
+                    </button>
                     <button onClick={handleGenerateAllVideos} disabled={generatingAllVideos || scenes.length === 0} className="px-4 py-2 rounded-xl border border-[#ffcc29]/40 text-[#ffcc29] text-xs font-semibold hover:bg-[#ffcc29]/10 disabled:opacity-40 flex items-center gap-1.5">
                       <Sparkles className="w-3.5 h-3.5" /> Generate All Video Clips
                     </button>
@@ -1421,26 +2082,113 @@ export default function DirectorStudio() {
                       <option value="off">Music Only</option>
                     </select>
 
-                    <label className="block text-xs font-semibold text-slate-400 uppercase">Voice Gender</label>
-                    <select className={inputClass} value={voiceGender} onChange={(e) => setVoiceGender(e.target.value as 'male' | 'female')}>
-                      <option value="female">Female</option>
-                      <option value="male">Male</option>
-                    </select>
+                    {audioMode === 'auto' && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-400 uppercase mb-1.5">Language</label>
+                          <select className={inputClass} value={audioLanguageCode} onChange={(e) => setAudioLanguageCode(e.target.value)}>
+                            <option value="en">English</option>
+                            <option value="hi">Hindi</option>
+                            <option value="ta">Tamil</option>
+                            <option value="te">Telugu</option>
+                            <option value="kn">Kannada</option>
+                            <option value="ml">Malayalam</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-400 uppercase mb-1.5">Voice Gender</label>
+                          <select className={inputClass} value={voiceGender} onChange={(e) => setVoiceGender(e.target.value as 'male' | 'female')}>
+                            <option value="female">Female</option>
+                            <option value="male">Male</option>
+                          </select>
+                        </div>
+                      </div>
+                    )}
 
-                    <button onClick={handleGenerateAudio} className="w-full py-3 rounded-xl border border-[#ffcc29] text-[#ffcc29] font-bold text-xs hover:bg-[#ffcc29]/10">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-400 uppercase mb-1.5">Music Mood</label>
+                      <select className={inputClass} value={audioTone} onChange={(e) => setAudioTone(e.target.value)}>
+                        <option value="professional">Professional / Corporate</option>
+                        <option value="normal">Normal / Neutral</option>
+                        <option value="fun">Fun / Upbeat</option>
+                        <option value="luxury">Luxury / Premium</option>
+                        <option value="simple">Simple / Minimalist</option>
+                      </select>
+                    </div>
+
+                    {audioMode === 'auto' && activeVoiceScript && (
+                      <div className="p-3 rounded-xl border border-slate-700 bg-slate-900/60">
+                        <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-2">AI Voice Script</p>
+                        <p className="text-xs leading-relaxed text-slate-200 whitespace-pre-wrap">{activeVoiceScript}</p>
+                      </div>
+                    )}
+
+                    <button onClick={handleGenerateAudio} disabled={busy || (audioMode === 'auto' && !activeVoiceScript)} className="w-full py-3 rounded-xl border border-[#ffcc29] text-[#ffcc29] font-bold text-xs hover:bg-[#ffcc29]/10 disabled:opacity-40">
+                      {busy ? <Loader2 className="w-4 h-4 animate-spin inline mr-2" /> : null}
                       1. Generate Audio Tracks
                     </button>
                   </div>
 
                   <div className="space-y-4">
                     <label className="block text-xs font-semibold text-slate-400 uppercase">Audio Priority</label>
-                    <select className={inputClass} value={audioPriority} onChange={(e) => setAudioPriority(e.target.value as any)}>
-                      <option value="voice">Voice Priority</option>
-                      <option value="balanced">Balanced Mix</option>
-                      <option value="music">Music Priority</option>
-                    </select>
+                    <div className="grid grid-cols-3 gap-2">
+                      {(['voice', 'balanced', 'music'] as const).map((mode) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          onClick={() => {
+                            setAudioPriority(mode);
+                            if (mode === 'voice') { setVoiceVolume(1); setMusicVolume(0.25); }
+                            if (mode === 'balanced') { setVoiceVolume(0.9); setMusicVolume(0.45); }
+                            if (mode === 'music') { setVoiceVolume(0.75); setMusicVolume(0.7); }
+                          }}
+                          className={`px-3 py-3 rounded-xl border text-[11px] font-bold uppercase transition ${
+                            audioPriority === mode
+                              ? 'border-[#ffcc29] bg-[#ffcc29]/10 text-[#ffcc29]'
+                              : 'border-slate-700 bg-slate-900/50 text-slate-400 hover:border-slate-600'
+                          }`}
+                        >
+                          {mode === 'voice' ? 'Voice' : mode === 'balanced' ? 'Balanced' : 'Music'}
+                        </button>
+                      ))}
+                    </div>
 
-                    <button onClick={handleMixAudio} disabled={!generatedTracks} className="w-full py-3 rounded-xl border border-[#ffcc29] text-[#ffcc29] font-bold text-xs hover:bg-[#ffcc29]/10 disabled:opacity-40">
+                    <div className="space-y-3 p-3 rounded-xl border border-slate-700 bg-slate-900/50">
+                      <div>
+                        <div className="flex justify-between text-xs font-semibold text-slate-400 mb-2">
+                          <span>Voice Volume</span>
+                          <span>{Math.round(voiceVolume * 100)}%</span>
+                        </div>
+                        <input type="range" min={0} max={2} step={0.1} value={voiceVolume} onChange={(e) => setVoiceVolume(Number(e.target.value))} className="w-full accent-[#ffcc29]" />
+                      </div>
+                      <div>
+                        <div className="flex justify-between text-xs font-semibold text-slate-400 mb-2">
+                          <span>Music Volume</span>
+                          <span>{Math.round(musicVolume * 100)}%</span>
+                        </div>
+                        <input type="range" min={0} max={2} step={0.1} value={musicVolume} onChange={(e) => setMusicVolume(Number(e.target.value))} className="w-full accent-[#ffcc29]" />
+                      </div>
+                    </div>
+
+                    {(generatedTracks?.voiceUrl || generatedTracks?.backgroundUrl || generatedTracks?.manualUrl) && (
+                      <div className="grid grid-cols-1 gap-3">
+                        {generatedTracks?.voiceUrl && (
+                          <div className="p-3 bg-slate-900/60 border border-slate-700 rounded-xl space-y-2">
+                            <span className="text-xs font-bold text-slate-400 uppercase flex items-center gap-2"><Mic2 className="w-3.5 h-3.5" /> Raw AI Voice Track</span>
+                            <audio src={generatedTracks.voiceUrl} controls className="w-full h-8" />
+                          </div>
+                        )}
+                        {generatedTracks?.backgroundUrl && (
+                          <div className="p-3 bg-slate-900/60 border border-slate-700 rounded-xl space-y-2">
+                            <span className="text-xs font-bold text-slate-400 uppercase flex items-center gap-2"><Music2 className="w-3.5 h-3.5" /> Background Music Track</span>
+                            <audio src={generatedTracks.backgroundUrl} controls className="w-full h-8" />
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    <button onClick={handleMixAudio} disabled={busy || !generatedTracks} className="w-full py-3 rounded-xl border border-[#ffcc29] text-[#ffcc29] font-bold text-xs hover:bg-[#ffcc29]/10 disabled:opacity-40">
+                      {busy ? <Loader2 className="w-4 h-4 animate-spin inline mr-2" /> : null}
                       2. Mix Audio &amp; Apply Ducking
                     </button>
 
@@ -1456,29 +2204,60 @@ export default function DirectorStudio() {
             )}
 
             {/* ── STEP 8: Video Merge */}
-            {currentStep === 8 && (
-              <div className={`${panelClass} p-6 sm:p-8 space-y-6`}>
-                <div className="flex items-center justify-between pb-3 border-b border-slate-700/50">
-                  <h2 className="text-lg font-bold flex items-center gap-2"><Film className="w-5 h-5 text-[#ffcc29]" /> Step 8: Merge Video Clips &amp; Audio</h2>
-                  {(finalOutputUrl || finalVideoUrl) && (
-                    <button onClick={() => setCurrentStep(9)} className="px-5 py-2.5 rounded-xl bg-[#ffcc29] text-black font-bold text-xs hover:bg-[#e6b825] flex items-center gap-2">
-                      Proceed to Content &amp; Thumbnail &rarr;
+            {currentStep === 8 && (() => {
+              const readyClipUrls = collectDirectorClipUrls(scenes, draft);
+              return (
+                <div className={`${panelClass} p-6 sm:p-8 space-y-6`}>
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-700/50">
+                    <h2 className="text-lg font-bold flex items-center gap-2"><Film className="w-5 h-5 text-[#ffcc29]" /> Step 8: Merge Video Clips &amp; Audio</h2>
+                    {(finalOutputUrl || finalVideoUrl) && (
+                      <button onClick={() => setCurrentStep(9)} className="px-5 py-2.5 rounded-xl bg-[#ffcc29] text-black font-bold text-xs hover:bg-[#e6b825] flex items-center gap-2">
+                        Proceed to Content &amp; Thumbnail &rarr;
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Clip status indicator */}
+                  <div className={`flex items-center gap-3 p-4 rounded-xl border ${readyClipUrls.length > 0 ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-amber-500/30 bg-amber-500/5'}`}>
+                    <Video className={`w-5 h-5 ${readyClipUrls.length > 0 ? 'text-emerald-400' : 'text-amber-400'}`} />
+                    <div className="flex-1">
+                      {readyClipUrls.length > 0 ? (
+                        <p className="text-sm text-emerald-300 font-semibold">{readyClipUrls.length} video clip{readyClipUrls.length !== 1 ? 's' : ''} ready to merge</p>
+                      ) : (
+                        <div>
+                          <p className="text-sm text-amber-300 font-semibold">No video clips found</p>
+                          <p className="text-xs text-slate-400 mt-0.5">Please complete Step 6 to generate video clips first</p>
+                        </div>
+                      )}
+                    </div>
+                    {readyClipUrls.length === 0 && (
+                      <button onClick={() => setCurrentStep(6)} className="px-4 py-2 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-bold hover:bg-amber-500/30 transition">
+                        Go to Step 6
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap gap-3">
+                    <button onClick={handleMergeVideo} disabled={readyClipUrls.length === 0} className="px-6 py-3 rounded-xl bg-[#ffcc29] text-black font-bold text-sm hover:bg-[#e6b825] transition flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed">
+                      <Film className="w-4 h-4" /> Merge Full Video
                     </button>
+                    {finalAudioUrl && (
+                      <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-[#ffcc29]/30 bg-[#ffcc29]/5">
+                        <Mic2 className="w-4 h-4 text-[#ffcc29]" />
+                        <span className="text-xs text-[#ffcc29] font-semibold">Audio ready</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {(finalOutputUrl || finalVideoUrl) && (
+                    <div className="space-y-2">
+                      <span className="text-xs font-bold text-slate-400 uppercase">Rendered Commercial Video</span>
+                      <video src={finalOutputUrl || finalVideoUrl} controls className="w-full rounded-xl border border-slate-700 max-h-[480px]" />
+                    </div>
                   )}
                 </div>
-
-                <button onClick={handleMergeVideo} className="px-6 py-3 rounded-xl bg-[#ffcc29] text-black font-bold text-sm hover:bg-[#e6b825] transition flex items-center gap-2">
-                  Merge Full Video
-                </button>
-
-                {(finalOutputUrl || finalVideoUrl) && (
-                  <div className="space-y-2">
-                    <span className="text-xs font-bold text-slate-400 uppercase">Rendered Commercial Video</span>
-                    <video src={finalOutputUrl || finalVideoUrl} controls className="w-full rounded-xl border border-slate-700 max-h-[480px]" />
-                  </div>
-                )}
-              </div>
-            )}
+              );
+            })()}
 
             {/* ── STEP 9: Thumbnail & Content */}
             {currentStep === 9 && (
@@ -1498,7 +2277,7 @@ export default function DirectorStudio() {
                   <div>
                     <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">Thumbnail</label>
                     {thumbnailUrl ? (
-                      <img src={thumbnailUrl} alt="Thumbnail" className="w-full h-52 object-cover rounded-xl border border-slate-700" />
+                      <img src={thumbnailUrl} alt="Thumbnail" className="w-full aspect-video object-contain bg-black rounded-xl border border-slate-700" />
                     ) : (
                       <div className="h-52 rounded-xl border border-dashed border-slate-700 flex items-center justify-center text-slate-600 text-xs">No Thumbnail yet</div>
                     )}
@@ -1522,6 +2301,57 @@ export default function DirectorStudio() {
               <div className={`${panelClass} p-6 sm:p-8 space-y-6`}>
                 <div className="pb-3 border-b border-slate-700/50">
                   <h2 className="text-lg font-bold flex items-center gap-2"><Check className="w-5 h-5 text-[#ffcc29]" /> Step 10: Platform Selection &amp; Scheduling</h2>
+                </div>
+
+                {/* ── Post Preview: final video, thumbnail, caption & hashtags */}
+                <div className="rounded-2xl border border-slate-700/60 bg-slate-900/40 p-5">
+                  <h3 className="text-sm font-bold text-slate-200 mb-4 flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-[#ffcc29]" /> Post Preview
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    {/* AI video preview */}
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">AI Video</label>
+                      {(finalOutputUrl || finalVideoUrl) ? (
+                        <video
+                          src={finalOutputUrl || finalVideoUrl}
+                          controls
+                          poster={thumbnailUrl || undefined}
+                          className="w-full rounded-xl border border-slate-700 max-h-[420px] bg-black"
+                        />
+                      ) : (
+                        <div className="h-52 rounded-xl border border-dashed border-slate-700 flex items-center justify-center text-slate-600 text-xs">
+                          No video yet
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Thumbnail + caption + hashtags */}
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">Thumbnail</label>
+                        {thumbnailUrl ? (
+                          <img src={thumbnailUrl} alt="Thumbnail" className="w-full aspect-video object-contain bg-black rounded-xl border border-slate-700" />
+                        ) : (
+                          <div className="h-40 rounded-xl border border-dashed border-slate-700 flex items-center justify-center text-slate-600 text-xs">
+                            No thumbnail yet
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">Caption</label>
+                        <p className="text-xs text-slate-300 whitespace-pre-wrap bg-slate-900/60 border border-slate-700 rounded-xl p-3 min-h-[52px]">
+                          {caption || <span className="text-slate-600">No caption added</span>}
+                        </p>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase">Hashtags</label>
+                        <p className="text-xs text-[#ffcc29] whitespace-pre-wrap bg-slate-900/60 border border-slate-700 rounded-xl p-3 min-h-[40px]">
+                          {hashtagsText || <span className="text-slate-600">No hashtags added</span>}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
                 <div>

@@ -38,6 +38,51 @@ import { apiService } from './services/api';
 import { User } from './types';
 import { Loader2 } from 'lucide-react';
 
+class AppErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { error: Error | null }
+> {
+  state = { error: null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('App render failed', error, errorInfo);
+  }
+
+  private clearBrowserResumeState = () => {
+    localStorage.removeItem('director_studio_draft_v1');
+    window.location.reload();
+  };
+
+  render() {
+    if (!this.state.error) return this.props.children;
+
+    return (
+      <div className="min-h-screen bg-[#070A12] text-[#ededed] flex items-center justify-center px-4">
+        <div className="w-full max-w-lg rounded-2xl border border-slate-800 bg-[#0f1419] p-6 shadow-xl">
+          <h1 className="text-xl font-bold text-[#ffcc29]">Nebulaa could not open this page</h1>
+          <p className="mt-2 text-sm text-slate-300">
+            The browser resume copy is too large or invalid. Your created reel drafts are kept on the server; reload without the local resume copy to continue.
+          </p>
+          <pre className="mt-4 max-h-40 overflow-auto rounded-xl bg-black/40 p-3 text-xs text-slate-400">
+            {this.state.error.message}
+          </pre>
+          <button
+            type="button"
+            onClick={this.clearBrowserResumeState}
+            className="mt-5 rounded-xl bg-[#ffcc29] px-4 py-2 text-sm font-bold text-black hover:bg-[#e6b825]"
+          >
+            Reload from server drafts
+          </button>
+        </div>
+      </div>
+    );
+  }
+}
+
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -106,6 +151,7 @@ const App: React.FC = () => {
   }
 
   return (
+    <AppErrorBoundary>
     <ThemeProvider>
     <Router>
       <Routes>
@@ -222,6 +268,7 @@ const App: React.FC = () => {
       {user && user.onboardingCompleted && <CampaignReminderPopup />}
     </Router>
     </ThemeProvider>
+    </AppErrorBoundary>
   );
 };
 

@@ -13,6 +13,7 @@ const { callGemini, parseGeminiJSON, generateCampaignImageNanoBanana, extractCha
 const { getPublicBaseUrl, normalizeTone, audioFilePathForTone } = require('../utils/toneAudio');
 const { generateVideoClip, generateCharacterImageFal, generateCharacterSheetFal, applyFaceSwapFal, extractFaceEmbedding } = require('./videoService');
 const { uploadVideoFile } = require('./imageUploader');
+const { updateDraft } = require('./videoDraftStore');
 const promptBuilder = require('./promptBuilder');
 
 const STORAGE_ROOT = path.resolve(__dirname, '../storage/ai-videos');
@@ -39,7 +40,7 @@ const MAX_SCENES = 10;
 const MIN_SCENES = 1;
 const DEFAULT_DURATION_SECONDS = 60;
 const SCENE_IMAGE_CONCURRENCY = Math.max(1, Number.parseInt(process.env.AI_VIDEO_SCENE_IMAGE_CONCURRENCY || '3', 10) || 3);
-const SCENE_CLIP_CONCURRENCY = Math.max(1, Number.parseInt(process.env.AI_VIDEO_SCENE_CLIP_CONCURRENCY || '1', 10) || 1);
+const SCENE_CLIP_CONCURRENCY = Math.max(1, Number.parseInt(process.env.AI_VIDEO_SCENE_CLIP_CONCURRENCY || '4', 10) || 4);
 const MEDIA_IO_CONCURRENCY = Math.max(1, Number.parseInt(process.env.AI_VIDEO_MEDIA_IO_CONCURRENCY || '4', 10) || 4);
 
 const fetchImpl = (() => {
@@ -414,6 +415,7 @@ function normalizeAudioOptions(raw = {}) {
     audioPriority: priority,
     languageCode: String(raw?.languageCode || 'en').toLowerCase(),
     tone: normalizeTone(raw?.tone) || 'professional',
+    brandTone: String(raw?.brandTone || raw?.brandVoice || raw?.tone || 'Professional').trim() || 'Professional',
     musicSource: ['tone', 'library'].includes(String(raw?.musicSource || '').toLowerCase())
       ? String(raw.musicSource).toLowerCase()
       : String(process.env.AI_VIDEO_MUSIC_SOURCE || 'library').toLowerCase(),
@@ -1443,7 +1445,11 @@ async function generateSceneClips({
     const clipUrl = buildMediaUrl(context.baseUrl, context.jobId, ['clips', clipName]);
 
     // Cache guard 0 (BEST): Cloudinary URL already saved from prior run → reuse for free, no download needed
-    const savedCloudUrl = String(scene.clipCloudUrl || '').trim();
+    const clipUrlValue = String(scene.clipUrl || '').trim();
+    const savedCloudUrl = String(
+      scene.clipCloudUrl ||
+      (clipUrlValue && !clipUrlValue.includes('/generated-media/') ? clipUrlValue : '')
+    ).trim();
     if (savedCloudUrl && savedCloudUrl.startsWith('http')) {
       if (logger) logger(`Reusing Cloudinary-backed clip for ${scene.sceneId} (no regen, no download)`);
       const enriched = {
@@ -1455,6 +1461,7 @@ async function generateSceneClips({
       if (typeof onSceneDone === 'function') {
         onSceneDone(index, scenes.length, enriched);
       }
+      await persistPartialSceneClip({ context, enrichedScene: enriched, logger });
       return enriched;
     }
 
@@ -1473,6 +1480,7 @@ async function generateSceneClips({
       if (typeof onSceneDone === 'function') {
         onSceneDone(index, scenes.length, enriched);
       }
+      await persistPartialSceneClip({ context, enrichedScene: enriched, logger });
       return enriched;
     }
 
@@ -1502,6 +1510,7 @@ async function generateSceneClips({
           if (typeof onSceneDone === 'function') {
             onSceneDone(index, scenes.length, enriched);
           }
+          await persistPartialSceneClip({ context, enrichedScene: enriched, logger });
           return enriched;
         }
       } catch (rehydrateErr) {
@@ -1584,6 +1593,7 @@ async function generateSceneClips({
     if (typeof onSceneDone === 'function') {
       onSceneDone(index, scenes.length, enriched);
     }
+    await persistPartialSceneClip({ context, enrichedScene: enriched, logger });
 
     return enriched;
   });
@@ -1749,6 +1759,10 @@ function targetScriptName(code = 'en') {
   return scripts[toTtsLanguageCode(code)] || scripts.en;
 }
 
+function selectedVoiceGenderLabel(voiceGender = 'female') {
+  return String(voiceGender || '').toLowerCase() === 'male' ? 'Male' : 'Female';
+}
+
 function wordCount(text = '') {
   const clean = String(text || '').replace(/\s+/g, ' ').trim();
   if (!clean) return 0;
@@ -1859,11 +1873,12 @@ async function translateScriptDurationAware({
   targetDurationSeconds,
   languageCode,
   voiceGender = 'female',
+  brandTone = 'Professional',
   logger = null
 }) {
   const source = String(sourceText || '').replace(/\s+/g, ' ').trim();
   const lang = toTtsLanguageCode(languageCode);
-  if (!source || lang === 'en') {
+  if (!source) {
     return { fullScript: source, scenes: normalizeSceneTimingForTranslation(sceneData, targetDurationSeconds) };
   }
 
@@ -1875,7 +1890,7 @@ async function translateScriptDurationAware({
 
   const sceneBrief = scenes.length
     ? scenes.map((s) => {
-        const line = s.voiceLine ? `EN: ${s.voiceLine}` : '';
+        const line = s.voiceLine ? `Source: ${s.voiceLine}` : '';
         return [
           `Scene ${s.index} (${s.startSec}s-${s.endSec}s, ${s.durationSeconds}s)`,
           line
@@ -1883,68 +1898,54 @@ async function translateScriptDurationAware({
       }).join('\n\n')
     : '';
 
-  const prompt = `You translate cinematic short-video voiceovers WITHOUT summarizing.
+  const systemInstruction = `You are an expert multilingual AI voice script generator for cinematic marketing videos.
 
-Target language: ${language}
-Target script: ${script}
-Target total duration: ${safeDuration} seconds
-Target word count (approx): ${range.target} words (acceptable ${range.min}-${range.max})
-Voice style: ${String(voiceGender || 'female').toLowerCase() === 'male' ? 'deep, confident, cinematic' : 'warm, expressive, cinematic'}
+Generate the narration ONLY in the language selected by the user (English, Tamil, Telugu, Malayalam, Kannada, or Hindi). Never mix languages unless explicitly requested.
 
-Hard rules:
-- DO NOT summarize or shorten. Preserve ALL details, emotion, pacing, and CTA impact.
-- Keep the same storytelling structure and sentence richness.
-- Keep brand names, product names, prices, URLs, and technical terms unchanged when needed.
-- Return ONLY strict JSON. No markdown.
-- Output must be mostly in ${language} (avoid English filler).
-- Preserve natural pauses: use short sentences where appropriate (do not make it robotic).
-- Match scene timing: each scene narration must comfortably fill its scene duration.
+Rules:
+- Use ONLY the selected language.
+- Select a native voice and pronunciation for the chosen language.
+- Match the selected voice gender.
+- Generate the script to fit the requested video duration exactly using an average speaking speed appropriate for the selected language.
+- Never generate a script that is shorter or longer than the target duration.
+- Preserve the brand tone, emotion, and marketing intent.
+- Do not translate into another language or insert English words unless they are brand names or explicitly provided.
+- Return only the narration script.`;
 
-Return JSON exactly in this schema:
-{
-  "fullScript": "string",
-  "scenes": [
-    { "sceneId": "scene_1", "voiceLine": "string" }
-  ]
-}
+  const prompt = `Input:
+Language: ${language}
+Voice Gender: ${selectedVoiceGenderLabel(voiceGender)}
+Video Duration: ${safeDuration} seconds
+Brand Tone: ${String(brandTone || 'Professional').trim() || 'Professional'}
+Target Script: ${script}
+Target Word Count: approximately ${range.target} words (acceptable ${range.min}-${range.max}) based on ${language} speaking speed.
 
-English full voiceover:
+Source marketing intent and draft narration:
 ${source}
 
-Scene timing (English per scene when available):
-${sceneBrief || '(no per-scene lines provided; still keep full-length pacing)'}\n`;
+Scene timing context:
+${sceneBrief || '(no per-scene lines provided; still fit the total duration)'}
+
+Generate the final narration only in ${language}.`;
 
   const localized = await callGemini(prompt, {
+    systemInstruction,
     skipCache: true,
     temperature: 0.4,
     maxTokens: 2000,
     timeout: 90000
   });
 
-  let parsed;
-  try {
-    parsed = parseGeminiJSON(localized);
-  } catch (error) {
-    if (logger) logger(`Translation JSON parse failed for ${language}: ${error.message || error}`);
-    return { fullScript: source, scenes };
-  }
-
-  const fullScript = String(parsed?.fullScript || '').replace(/\s+/g, ' ').trim();
-  const outScenesRaw = Array.isArray(parsed?.scenes) ? parsed.scenes : [];
-  const byId = new Map(outScenesRaw
-    .map((s) => ({ sceneId: String(s?.sceneId || '').trim(), voiceLine: String(s?.voiceLine || '').trim() }))
-    .filter((s) => s.sceneId && s.voiceLine));
-
-  const mergedScenes = scenes.length
-    ? scenes.map((s) => ({
-        ...s,
-        voiceLine: byId.get(s.sceneId)?.voiceLine || s.voiceLine
-      }))
-    : scenes;
+  const fullScript = String(localized || '')
+    .replace(/^```(?:\w+)?/i, '')
+    .replace(/```$/i, '')
+    .replace(/^\s*(?:voiceover|narration|script|translated text)\s*:\s*/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 
   return {
     fullScript: fullScript || source,
-    scenes: mergedScenes
+    scenes
   };
 }
 
@@ -1954,11 +1955,12 @@ async function expandIfTooShort({
   languageCode,
   targetDurationSeconds,
   voiceGender = 'female',
+  brandTone = 'Professional',
   logger = null
 }) {
   const lang = toTtsLanguageCode(languageCode);
   const safeDuration = clamp(Number(targetDurationSeconds) || DEFAULT_DURATION_SECONDS, 6, 1800);
-  if (!localizedText || lang === 'en') return localizedText;
+  if (!localizedText) return localizedText;
 
   const estimated = estimateSpeechSeconds(localizedText, lang, voiceGender);
   if (estimated >= safeDuration * 0.92) return localizedText;
@@ -1967,28 +1969,37 @@ async function expandIfTooShort({
   const script = targetScriptName(lang);
   const range = targetWordRange(safeDuration, lang, voiceGender);
 
-  const prompt = `You are improving a translated cinematic voiceover to match the ORIGINAL duration and richness.
+  const systemInstruction = `You are an expert multilingual AI voice script generator for cinematic marketing videos.
 
-Target language: ${language}
-Target script: ${script}
-Target duration: ${safeDuration} seconds
-Target word count: ${range.target} words (acceptable ${range.min}-${range.max})
-Voice style: ${String(voiceGender || 'female').toLowerCase() === 'male' ? 'deep, confident, cinematic' : 'warm, expressive, cinematic'}
+Generate the narration ONLY in the language selected by the user (English, Tamil, Telugu, Malayalam, Kannada, or Hindi). Never mix languages unless explicitly requested.
 
 Rules:
-- DO NOT summarize or delete meaning.
-- Add natural connective phrasing, emotion, and descriptive beats to restore pacing.
-- Do not invent new facts not present in the English source.
-- Return only the improved translated text. No markdown, labels, or quotes.
+- Use ONLY the selected language.
+- Select a native voice and pronunciation for the chosen language.
+- Match the selected voice gender.
+- Generate the script to fit the requested video duration exactly using an average speaking speed appropriate for the selected language.
+- Never generate a script that is shorter or longer than the target duration.
+- Preserve the brand tone, emotion, and marketing intent.
+- Do not translate into another language or insert English words unless they are brand names or explicitly provided.
+- Return only the narration script.`;
 
-English source (ground truth):
+  const prompt = `Input:
+Language: ${language}
+Voice Gender: ${selectedVoiceGenderLabel(voiceGender)}
+Video Duration: ${safeDuration} seconds
+Brand Tone: ${String(brandTone || 'Professional').trim() || 'Professional'}
+Target Script: ${script}
+Target Word Count: approximately ${range.target} words (acceptable ${range.min}-${range.max}) based on ${language} speaking speed.
+
+Source marketing intent:
 ${String(sourceText || '').replace(/\\s+/g, ' ').trim()}
 
-Current translation (too short):
-${String(localizedText || '').replace(/\\s+/g, ' ').trim()}\n`;
+Current narration is too short. Rewrite it to fit the requested duration exactly, using only ${language}:
+${String(localizedText || '').replace(/\\s+/g, ' ').trim()}`;
 
   try {
     const improved = await callGemini(prompt, {
+      systemInstruction,
       skipCache: true,
       temperature: 0.45,
       maxTokens: 1800,
@@ -2380,19 +2391,19 @@ async function synthesizeVoiceTrack({
   sceneData = [],
   languageCode,
   voiceGender = 'female',
+  brandTone = 'Professional',
   targetDurationSeconds = null,
   fitToDuration = true,
   context,
   logger = null
 }) {
-  const normalizedLang = toTtsLanguageCode(languageCode);
   const safeTarget = Number.isFinite(Number(targetDurationSeconds)) ? Number(targetDurationSeconds) : null;
 
-  // Step 1: Translate with duration awareness (scene-timed) and avoid summarization.
+  // Step 1: Generate narration in the selected language with duration awareness.
   let scriptForTts = String(voiceScript || '').replace(/\s+/g, ' ').trim();
   let localizedScenes = normalizeSceneTimingForTranslation(sceneData, safeTarget || DEFAULT_DURATION_SECONDS);
 
-  if (normalizedLang !== 'en' && sourceVoiceScript) {
+  if (sourceVoiceScript) {
     try {
       const translated = await translateScriptDurationAware({
         sourceText: sourceVoiceScript,
@@ -2400,6 +2411,7 @@ async function synthesizeVoiceTrack({
         targetDurationSeconds: safeTarget || DEFAULT_DURATION_SECONDS,
         languageCode,
         voiceGender,
+        brandTone,
         logger
       });
       scriptForTts = translated.fullScript || scriptForTts;
@@ -2410,13 +2422,14 @@ async function synthesizeVoiceTrack({
   }
 
   // Step 2: If still too short, expand slightly while keeping meaning.
-  if (fitToDuration && safeTarget && normalizedLang !== 'en' && sourceVoiceScript) {
+  if (fitToDuration && safeTarget && sourceVoiceScript) {
     scriptForTts = await expandIfTooShort({
       localizedText: scriptForTts,
       sourceText: sourceVoiceScript,
       languageCode,
       targetDurationSeconds: safeTarget,
       voiceGender,
+      brandTone,
       logger
     });
   }
@@ -2795,6 +2808,7 @@ async function generateAudioTracks({
       sceneData: plan.sceneData || [],
       languageCode: audioOptions.languageCode,
       voiceGender: audioOptions.voiceGender,
+      brandTone: audioOptions.brandTone,
       targetDurationSeconds: input.durationSeconds,
       fitToDuration: audioOptions.fitVoiceToDuration,
       context,
@@ -3124,6 +3138,8 @@ function ensureSceneInputForClipStage(scene = {}, index = 0) {
   const duration = clamp(Number.parseInt(String(scene.durationSeconds || scene.duration || 4), 10), 1, 120);
   const endSec = Number.isFinite(Number(scene.endSec)) ? Number(scene.endSec) : (startSec + duration);
   const imageUrl = String(scene.imageUrl || scene.image_url || '').trim();
+  const clipUrl = String(scene.clipUrl || scene.clip_url || '').trim();
+  const clipCloudUrl = String(scene.clipCloudUrl || '').trim();
   const videoUrl = String(scene.video_url || scene.videoUrl || scene.falVideoUrl || '').trim();
   return {
     index: idx,
@@ -3136,12 +3152,81 @@ function ensureSceneInputForClipStage(scene = {}, index = 0) {
     image_url: imageUrl,
     video_url: videoUrl,
     videoUrl,
+    clipUrl,
+    clipCloudUrl,
+    falVideoUrl: String(scene.falVideoUrl || videoUrl || '').trim(),
     imagePath: String(scene.imagePath || '').trim(),
     voiceLine: String(scene.voiceLine || ''),
     onScreenText: String(scene.onScreenText || ''),
     imagePrompt: String(scene.imagePrompt || scene.image_prompt || ''),
     videoPrompt: String(scene.videoPrompt || scene.video_prompt || '')
   };
+}
+
+function hasSceneClip(scene = {}) {
+  return Boolean(String(scene.clipUrl || scene.clipCloudUrl || scene.video_url || scene.videoUrl || scene.falVideoUrl || '').trim());
+}
+
+function mergeSceneClip(existingScenes = [], enrichedScene = {}) {
+  const scenes = Array.isArray(existingScenes) ? existingScenes : [];
+  const sceneId = String(enrichedScene.sceneId || enrichedScene.id || '').trim();
+  const sceneIndex = Number.parseInt(String(enrichedScene.index || ''), 10);
+  let matched = false;
+
+  const merged = scenes.map((scene, index) => {
+    const currentId = String(scene?.sceneId || scene?.id || '').trim();
+    const currentIndex = Number.parseInt(String(scene?.index || index + 1), 10);
+    const isMatch =
+      (sceneId && currentId && sceneId === currentId) ||
+      (Number.isFinite(sceneIndex) && sceneIndex > 0 && currentIndex === sceneIndex);
+
+    if (!isMatch) return scene;
+    matched = true;
+    return { ...scene, ...enrichedScene };
+  });
+
+  return matched ? merged : [...merged, enrichedScene].sort((a, b) => Number(a?.index || 0) - Number(b?.index || 0));
+}
+
+async function persistPartialSceneClip({ context, enrichedScene, logger = null }) {
+  const jobId = String(context?.jobId || '').trim();
+  if (!jobId || !hasSceneClip(enrichedScene)) return;
+
+  try {
+    await updateDraft(jobId, null, (current) => {
+      const baseScenes =
+        (Array.isArray(current?.clips?.sceneData) && current.clips.sceneData.length ? current.clips.sceneData : null) ||
+        (Array.isArray(current?.scenes) ? current.scenes : null) ||
+        current?.scenes?.sceneData ||
+        current?.images?.sceneData ||
+        [];
+      const mergedScenes = mergeSceneClip(baseScenes, enrichedScene);
+      const clipUrls = mergedScenes.map((scene) => scene.clipUrl || scene.clipCloudUrl || scene.video_url || scene.videoUrl).filter(Boolean);
+
+      return {
+        ...current,
+        currentStep: Math.max(Number(current.currentStep || 1), 4),
+        scenes: mergedScenes,
+        images: current?.images?.sceneData?.length
+          ? {
+              ...(current.images || {}),
+              sceneData: mergeSceneClip(current.images.sceneData, enrichedScene),
+              generatedAt: current.images.generatedAt || new Date().toISOString()
+            }
+          : (current.images || null),
+        clips: {
+          ...(current.clips || {}),
+          sceneData: mergedScenes,
+          clipUrls,
+          partial: clipUrls.length < mergedScenes.length,
+          lastPartialSavedAt: new Date().toISOString()
+        }
+      };
+    });
+    if (logger) logger(`Saved completed clip for ${enrichedScene.sceneId || enrichedScene.index}; retry will reuse it.`);
+  } catch (error) {
+    if (logger) logger(`Partial clip save skipped for ${enrichedScene.sceneId || enrichedScene.index}: ${error.message}`);
+  }
 }
 
 async function runCreateVideoPipeline({
