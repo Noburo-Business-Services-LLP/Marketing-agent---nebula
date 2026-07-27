@@ -10,23 +10,21 @@ import {
   X,
   Link2,
   Sparkles,
-  Sun,
-  Moon,
   Palette,
   BarChart3,
   Package,
   Clock,
   Zap,
   ChevronDown,
-  TrendingUp,
   ImageIcon,
   PenTool,
   Layers,
   PlayCircle,
   Brain,
   CalendarDays,
-  FileText,
-  PenLine
+  Search,
+  HelpCircle,
+  Plus
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { User } from '../types';
@@ -48,9 +46,8 @@ interface LayoutProps {
   onLogout: () => void;
 }
 
-const STARTING_CREDITS = 100; // Demo trial credits
+const STARTING_CREDITS = 100;
 
-// Credit action labels & icons for display
 const ACTION_LABELS: Record<string, { label: string; icon: string }> = {
   image_generated: { label: 'Image Generation', icon: '🖼️' },
   image_edit: { label: 'Image Edit', icon: '✏️' },
@@ -60,7 +57,7 @@ const ACTION_LABELS: Record<string, { label: string; icon: string }> = {
 };
 
 const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
-  const { isDarkMode, toggleTheme } = useTheme();
+  const { isDarkMode } = useTheme();
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [trialInfo, setTrialInfo] = useState<TrialData | null>(null);
   const [showCreditPanel, setShowCreditPanel] = useState(false);
@@ -68,7 +65,13 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Fetch trial/credit info
+  // Apply the Gravity redesign shell class to <body> so the ambient
+  // radial gold glow + warm off-white text apply globally.
+  useEffect(() => {
+    document.body.classList.add('gravity-shell');
+    return () => { document.body.classList.remove('gravity-shell'); };
+  }, []);
+
   const fetchTrialInfo = async () => {
     try {
       const data = await apiService.getCredits();
@@ -82,33 +85,26 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
           costs: data.costs ?? {}
         });
       }
-    } catch (e) {
-      // Silently fail
-    }
+    } catch (e) { /* silent */ }
   };
 
   useEffect(() => {
     fetchTrialInfo();
     const interval = setInterval(fetchTrialInfo, 60000);
-
-    // Listen for real-time credit updates
     const handleCreditUpdate = (e: Event) => {
       const detail = (e as CustomEvent).detail;
       if (detail?.creditsRemaining !== undefined) {
         setTrialInfo(prev => prev ? { ...prev, creditsBalance: detail.creditsRemaining } : prev);
       }
-      // Also re-fetch full data for history update
       setTimeout(fetchTrialInfo, 500);
     };
     window.addEventListener('credits-updated', handleCreditUpdate);
-
     return () => {
       clearInterval(interval);
       window.removeEventListener('credits-updated', handleCreditUpdate);
     };
   }, []);
 
-  // Close credit panel on outside click
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (creditPanelRef.current && !creditPanelRef.current.contains(e.target as Node)) {
@@ -121,246 +117,208 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showCreditPanel]);
 
-
-
-
-
-  const navItems = [
-    { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { path: '/content-calendar', label: 'Smart Calendar', icon: CalendarDays },
-    { path: '/campaigns', label: 'Campaigns', icon: Megaphone },
-    { path: '/influencer-portal', label: 'Influencer Portal', icon: PenTool },
-    { path: '/reels', label: 'AI Reels', icon: PlayCircle },
-    { path: '/ad-campaigns', label: 'Ad Campaigns', icon: Layers },
-    { path: '/connect-socials', label: 'Connect Socials', icon: Link2 },
-    { path: '/brand-assets', label: 'Brand Assets', icon: Palette },
-    { path: '/inventory', label: 'Inventory', icon: Package },
-    { path: '/competitors', label: 'Competitors', icon: Users },
-    { path: '/analytics', label: 'Analytics & Ads', icon: BarChart3 },
-    { path: '/ai-memory', label: 'AI Memory', icon: Brain },
+  // Nav grouping — the primary group mirrors the Gravity prototype's 5
+  // top-level items; secondary group holds the extra Nebulaa features so
+  // no functionality is lost.
+  const primaryNav = [
+    { path: '/dashboard',        label: 'Home',     icon: LayoutDashboard },
+    { path: '/campaigns',        label: 'Create',   icon: Sparkles },
+    { path: '/drafts',           label: 'Approve',  icon: PenTool, badge: 'drafts' as const },
+    { path: '/content-calendar', label: 'Calendar', icon: CalendarDays },
+    { path: '/analytics',        label: 'Insights', icon: BarChart3 },
+  ];
+  const secondaryNav = [
+    { path: '/reels',             label: 'AI Reels',          icon: PlayCircle },
+    { path: '/ad-campaigns',      label: 'Ad Campaigns',      icon: Layers },
+    { path: '/influencer-portal', label: 'Influencer Portal', icon: Users },
+    { path: '/connect-socials',   label: 'Connect Socials',   icon: Link2 },
+    { path: '/brand-assets',      label: 'Brand Assets',      icon: Palette },
+    { path: '/inventory',         label: 'Inventory',         icon: Package },
+    { path: '/competitors',       label: 'Competitors',       icon: Users },
+    { path: '/ai-memory',         label: 'AI Memory',         icon: Brain },
   ];
 
   const resolveTopBarMeta = (pathname: string) => {
-    if (pathname.startsWith('/campaigns')) {
-      return {
-        title: 'Campaigns',
-        subtitle: 'Create and manage campaign posts with on-brand content.',
-        actions: [
-          { label: 'Generate Reel', path: '/reels' },
-          { label: 'Create Ad Campaign', path: '/ad-campaigns' }
-        ]
-      };
-    }
-    if (pathname.startsWith('/content-calendar')) {
-      return {
-        title: 'Smart Calendar',
-        subtitle: 'Review, approve, and automate the next 30 days of content.',
-        actions: [
-          { label: 'Create Campaign', path: '/campaigns' },
-          { label: 'Generate Reel', path: '/reels' }
-        ]
-      };
-    }
-    if (pathname.startsWith('/reels')) {
-      return {
-        title: 'AI Reels',
-        subtitle: 'Generate full AI videos from description, uploaded images, or inventory products.',
-        actions: [{ label: 'Go to Campaigns', path: '/campaigns' }]
-      };
-    }
-    if (pathname.startsWith('/influencer-portal')) {
-      return {
-        title: 'Influencer Portal',
-        subtitle: 'Manage creator invites, submissions, approvals, and analytics in one workspace.',
-        actions: []
-      };
-    }
-    if (pathname.startsWith('/ad-campaigns')) {
-      return {
-        title: 'Ad Campaigns',
-        subtitle: 'Launch paid ads from existing campaigns with platform-wise status.',
-        actions: [{ label: 'Go to Campaigns', path: '/campaigns' }]
-      };
-    }
-    if (pathname.startsWith('/connect-socials')) {
-      return { title: 'Connect Socials', subtitle: 'Manage your social media account connections.', actions: [] };
-    }
-    if (pathname.startsWith('/brand-assets')) {
-      return { title: 'Brand Assets', subtitle: 'Manage logo, colors, fonts, and brand tone.', actions: [] };
-    }
-    if (pathname.startsWith('/inventory')) {
-      return { title: 'Inventory', subtitle: 'Manage products and creative-ready catalog assets.', actions: [] };
-    }
-    if (pathname.startsWith('/analytics')) {
-      return { title: 'Analytics & Ads', subtitle: 'Review ad performance and control active ads.', actions: [] };
-    }
-    if (pathname.startsWith('/competitors')) {
-      return { title: 'Competitors', subtitle: 'Track competitor campaigns and strategic insights.', actions: [] };
-    }
-    if (pathname.startsWith('/ai-memory') || pathname.startsWith('/ai-history') || pathname.startsWith('/ai-performance')) {
-      return {
-        title: 'AI Memory',
-        subtitle: 'Review what Nebulaa has learned from prompts, campaigns, videos, products, and performance.',
-        actions: [
-          { label: 'History', path: '/ai-history' },
-          { label: 'Performance', path: '/ai-performance' }
-        ]
-      };
-    }
-    return {
-      title: 'Dashboard',
-      subtitle: 'Track campaigns, ad activity, and performance from one place.',
-      actions: [
-        { label: 'Create Campaign', path: '/campaigns' },
-        { label: 'Generate Reel', path: '/reels' },
-        { label: 'Create Ad Campaign', path: '/ad-campaigns' }
-      ]
-    };
+    if (pathname.startsWith('/campaigns')) return { title: 'Create', crumb: 'New campaign' };
+    if (pathname.startsWith('/content-calendar')) return { title: 'Calendar', crumb: '' };
+    if (pathname.startsWith('/reels')) return { title: 'AI Reels', crumb: '' };
+    if (pathname.startsWith('/influencer-portal')) return { title: 'Influencer Portal', crumb: '' };
+    if (pathname.startsWith('/ad-campaigns')) return { title: 'Ad Campaigns', crumb: '' };
+    if (pathname.startsWith('/connect-socials')) return { title: 'Connect Socials', crumb: '' };
+    if (pathname.startsWith('/brand-assets')) return { title: 'Brand Assets', crumb: '' };
+    if (pathname.startsWith('/inventory')) return { title: 'Inventory', crumb: '' };
+    if (pathname.startsWith('/analytics')) return { title: 'Insights', crumb: '' };
+    if (pathname.startsWith('/competitors')) return { title: 'Competitors', crumb: '' };
+    if (pathname.startsWith('/ai-memory') || pathname.startsWith('/ai-history') || pathname.startsWith('/ai-performance')) return { title: 'AI Memory', crumb: '' };
+    if (pathname.startsWith('/drafts')) return { title: 'Approve', crumb: '' };
+    if (pathname.startsWith('/settings')) return { title: 'Settings', crumb: '' };
+    return { title: 'Home', crumb: '' };
   };
 
   const topBarMeta = resolveTopBarMeta(location.pathname);
+  const isActive = (path: string) =>
+    location.pathname === path || (path !== '/dashboard' && location.pathname.startsWith(path));
 
   const handleLogout = () => {
     onLogout();
     navigate('/login');
   };
 
+  const businessName = user?.businessProfile?.name || (user?.email ? user.email.split('@')[0] : 'Your Brand');
+  const businessInitial = businessName.trim().charAt(0).toUpperCase() || 'B';
+  const businessHandle = user?.email
+    ? `@${user.email.split('@')[0]}`
+    : (user?.businessProfile?.name ? `@${user.businessProfile.name.toLowerCase().replace(/\s+/g, '')}` : '@brand');
+
+  const NavLink: React.FC<{
+    path: string;
+    label: string;
+    icon: React.ComponentType<{ className?: string }>;
+    badge?: 'drafts';
+  }> = ({ path, label, icon: Icon, badge }) => {
+    const active = isActive(path);
+    return (
+      <Link
+        to={path}
+        onClick={() => setSidebarOpen(false)}
+        className={`group relative flex items-center gap-3 pl-4 pr-3 h-10 rounded-lg transition-colors ${
+          active
+            ? 'bg-white/[0.06] text-[#F5F4F1]'
+            : 'text-white/60 hover:text-[#F5F4F1] hover:bg-white/[0.03]'
+        }`}
+      >
+        {active && (
+          <span className="absolute left-0 top-2 bottom-2 w-[2px] rounded-r-full bg-[#F5A623]" />
+        )}
+        <Icon className={`w-[15px] h-[15px] ${active ? 'text-[#F5A623]' : 'text-white/45 group-hover:text-white/70'}`} />
+        <span className="text-[13.5px] font-medium tracking-[-0.005em] flex-1">{label}</span>
+        {badge === 'drafts' && trialInfo && (
+          <span className="ml-auto min-w-[20px] h-[18px] px-1.5 rounded-full bg-[#F5A623] text-[#1A1208] text-[10px] font-bold flex items-center justify-center">
+            5
+          </span>
+        )}
+      </Link>
+    );
+  };
+
   return (
     <>
       <style>{`
-      @keyframes fadeSlideDown {
-        from { opacity: 0; transform: translateY(-8px); }
-        to { opacity: 1; transform: translateY(0); }
-      }
-      .hide-scrollbar {
-        -ms-overflow-style: none;
-        scrollbar-width: none;
-      }
-      .hide-scrollbar::-webkit-scrollbar {
-        display: none;
-      }
-    `}</style>
-      <div className={`flex h-screen font-sans ${isDarkMode ? 'bg-[#070A12] text-[#ededed]' : 'bg-[#ededed] text-[#070A12]'}`}>
-        {/* Mobile Sidebar Overlay */}
+        @keyframes fadeSlideDown {
+          from { opacity: 0; transform: translateY(-8px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+      `}</style>
+
+      <div className="relative z-[1] flex h-screen font-sans text-[#F5F4F1]">
+        {/* Mobile overlay */}
         {isSidebarOpen && (
           <div
-            className="fixed inset-0 bg-black/50 z-20 md:hidden"
+            className="fixed inset-0 bg-black/60 z-20 md:hidden"
             onClick={() => setSidebarOpen(false)}
           />
         )}
 
-        {/* Sidebar */}
+        {/* ================= SIDEBAR ================= */}
         <aside
-          className={`fixed inset-y-0 left-0 z-30 w-64 bg-[#ffcc29] border-r transform transition-transform duration-300 ease-in-out md:translate-x-0 md:static md:inset-auto ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
-            }`}
+          className={`fixed inset-y-0 left-0 z-30 w-[240px] bg-[#111111] border-r border-white/[0.06] transform transition-transform duration-300 ease-in-out md:translate-x-0 md:static md:inset-auto ${
+            isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}
         >
-          <div className="flex flex-col h-full min-h-0 p-6">
-            <div className="flex-1 min-h-0 overflow-y-auto hide-scrollbar">
-              <div className="flex items-center gap-3 mb-2 text-[#070A12]">
-                <img src="/assets/logo.png" alt="Nebulaa Gravity" className="w-12 h-12" />
-                <div className="flex flex-col">
-                  <span className="font-bold text-xl tracking-tight leading-tight">Nebulaa</span>
-                  <span className="font-semibold text-lg tracking-tight leading-tight">Gravity</span>
+          <div className="flex flex-col h-full min-h-0">
+            {/* Brand mark */}
+            <div className="px-6 pt-6 pb-5">
+              <div className="flex items-center gap-2.5">
+                <span className="w-[18px] h-[18px] rounded-full bg-[#F5A623] shadow-[0_0_18px_rgba(245,166,35,0.5)]" />
+                <div className="leading-tight">
+                  <div className="text-[13px] font-semibold tracking-[0.14em] text-[#F5F4F1]">GRAVITY</div>
+                  <div className="text-[9px] tracking-[0.22em] text-white/40 mt-[1px]">BY NEBULAA</div>
                 </div>
-              </div>
-              {/* Show user's business name if available */}
-              {user?.businessProfile?.name && (
-                <p className="text-xs mb-6 pl-[60px] truncate text-[#070A12]/70" title={user.businessProfile.name}>
-                  for {user.businessProfile.name}
-                </p>
-              )}
-              {!user?.businessProfile?.name && <div className="mb-6"></div>}
-
-              <nav className="space-y-1 pb-4">
-                {navItems.map((item) => {
-                  const Icon = item.icon;
-                  const isActive = location.pathname === item.path;
-                  return (
-                    <Link
-                      key={item.path}
-                      to={item.path}
-                      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors font-medium ${isActive
-                          ? 'bg-[#070A12] text-white'
-                          : 'text-[#070A12]/80 hover:bg-[#070A12]/10 hover:text-[#070A12]'
-                        }`}
-                      onClick={() => setSidebarOpen(false)}
-                    >
-                      <Icon className={`w-5 h-5 ${isActive ? 'text-white' : 'text-[#070A12]/60'}`} />
-                      <span>{item.label}</span>
-                    </Link>
-                  );
-                })}
-              </nav>
-            </div>
-            <div className="pt-3 mt-2 border-t border-[#070A12]/15">
-              <nav className="space-y-1">
-                <Link
-                  to="/settings"
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors font-medium ${location.pathname === '/settings'
-                      ? 'bg-[#070A12] text-white'
-                      : 'text-[#070A12]/80 hover:bg-[#070A12]/10 hover:text-[#070A12]'
-                    }`}
+                <button
+                  className="ml-auto md:hidden text-white/50 hover:text-white"
                   onClick={() => setSidebarOpen(false)}
                 >
-                  <Settings className={`w-5 h-5 ${location.pathname === '/settings' ? 'text-white' : 'text-[#070A12]/60'}`} />
-                  <span>Settings</span>
-                </Link>
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Account chip */}
+            <div className="px-4 mb-4">
+              <button className="w-full flex items-center gap-3 px-2.5 py-2 rounded-xl bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.06] transition-colors">
+                <span className="w-7 h-7 rounded-md bg-gradient-to-br from-[#3a2410] to-[#1a0f04] border border-white/[0.08] text-[11px] font-semibold text-[#F5A623] flex items-center justify-center">
+                  {businessInitial}
+                </span>
+                <div className="min-w-0 flex-1 text-left">
+                  <div className="text-[13px] font-semibold text-[#F5F4F1] truncate leading-tight">{businessName}</div>
+                  <div className="text-[10.5px] text-white/45 truncate leading-tight mt-[1px]">{businessHandle}</div>
+                </div>
+                <ChevronDown className="w-3.5 h-3.5 text-white/40" />
+              </button>
+            </div>
+
+            {/* Nav — scroll region */}
+            <div className="flex-1 min-h-0 overflow-y-auto hide-scrollbar px-3 pb-4">
+              <nav className="space-y-0.5">
+                {primaryNav.map((item) => (
+                  <NavLink key={item.path} {...item} />
+                ))}
+              </nav>
+              <div className="my-4 mx-1 border-t border-white/[0.06]" />
+              <div className="px-4 mb-2 gravity-label">More</div>
+              <nav className="space-y-0.5">
+                {secondaryNav.map((item) => (
+                  <NavLink key={item.path} {...item} />
+                ))}
+              </nav>
+            </div>
+
+            {/* Footer nav */}
+            <div className="p-3 border-t border-white/[0.06]">
+              <nav className="space-y-0.5">
+                <NavLink path="/settings" label="Settings" icon={Settings} />
                 <button
-                  type="button"
-                  onClick={toggleTheme}
-                  className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg transition-colors font-medium w-full text-[#070A12]/80 hover:bg-[#070A12]/10 hover:text-[#070A12]"
+                  onClick={handleLogout}
+                  className="group flex items-center gap-3 pl-4 pr-3 h-10 rounded-lg text-white/60 hover:text-[#F5F4F1] hover:bg-white/[0.03] transition-colors w-full"
                 >
-                  <span className="flex items-center gap-3">
-                    {isDarkMode ? (
-                      <Moon className="w-5 h-5 text-[#070A12]/60" />
-                    ) : (
-                      <Sun className="w-5 h-5 text-[#070A12]/60" />
-                    )}
-                    <span>Theme</span>
-                  </span>
-                  <span
-                    className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${isDarkMode ? 'bg-[#070A12]' : 'bg-[#070A12]/25'
-                      }`}
-                    aria-hidden="true"
-                  >
-                    <span
-                      className={`inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${isDarkMode ? 'translate-x-5' : 'translate-x-1'
-                        }`}
-                    />
-                  </span>
+                  <HelpCircle className="w-[15px] h-[15px] text-white/45 group-hover:text-white/70" />
+                  <span className="text-[13.5px] font-medium tracking-[-0.005em] flex-1 text-left">Help</span>
                 </button>
                 <button
                   onClick={handleLogout}
-                  className="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors font-medium w-full text-[#070A12]/80 hover:bg-[#070A12]/10 hover:text-[#070A12]"
+                  className="group flex items-center gap-3 pl-4 pr-3 h-10 rounded-lg text-white/60 hover:text-[#F5F4F1] hover:bg-white/[0.03] transition-colors w-full"
                 >
-                  <LogOut className="w-5 h-5 text-[#070A12]/60" />
-                  <span>Logout</span>
+                  <LogOut className="w-[15px] h-[15px] text-white/45 group-hover:text-white/70" />
+                  <span className="text-[13.5px] font-medium tracking-[-0.005em] flex-1 text-left">Logout</span>
                 </button>
               </nav>
             </div>
           </div>
         </aside>
 
-        {/* Main Content */}
-        <div className={`flex-1 flex flex-col min-w-0 overflow-hidden ${isDarkMode ? 'bg-[#070A12]' : 'bg-gray-100'}`}>
-          {/* Mobile Header */}
-          <header className={`md:hidden ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-[#ffcc29]'} border-b p-4 flex items-center justify-between sticky top-0 z-10`}>
+        {/* ================= MAIN COLUMN ================= */}
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          {/* Mobile top bar */}
+          <header className="md:hidden flex items-center justify-between px-4 h-14 border-b border-white/[0.06] bg-[#0A0A0A]/80 backdrop-blur">
             <button
               onClick={() => setSidebarOpen(true)}
-              className={isDarkMode ? 'text-[#ededed] hover:text-[#ffcc29]' : 'text-[#070A12]'}
+              className="text-white/80 hover:text-[#F5A623]"
             >
-              <Menu className="w-6 h-6" />
+              <Menu className="w-5 h-5" />
             </button>
-            <span className={`font-semibold text-sm ${isDarkMode ? 'text-[#ffcc29]' : 'text-[#070A12]'}`}>
-              {topBarMeta.title}
-            </span>
             <div className="flex items-center gap-2">
-              {/* Mobile credit indicator */}
+              <span className="w-3 h-3 rounded-full bg-[#F5A623]" />
+              <span className="text-[13px] font-semibold tracking-[0.14em] text-[#F5F4F1]">GRAVITY</span>
+            </div>
+            <div className="flex items-center gap-2">
               {trialInfo && (
-                <div className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium ${trialInfo.creditsBalance <= 25
+                <div className={`flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium ${
+                  trialInfo.creditsBalance <= 25
                     ? 'bg-red-500/10 text-red-400'
-                    : isDarkMode ? 'bg-slate-800 text-slate-300' : 'bg-gray-100 text-gray-600'
-                  }`}>
+                    : 'bg-white/[0.06] text-white/80'
+                }`}>
                   <Zap className="w-3 h-3" />
                   <span className="tabular-nums">{trialInfo.creditsBalance}</span>
                 </div>
@@ -369,167 +327,104 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
             </div>
           </header>
 
-          {/* Desktop Header with Credits Widget */}
-          <header className={`hidden md:flex ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-gray-200'} border-b px-8 py-3 items-center justify-between gap-4`}>
-            <div className="min-w-0">
-              <h1 className={`text-base font-semibold truncate ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                {topBarMeta.title}
-              </h1>
-              <p className={`text-xs truncate ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                {topBarMeta.subtitle}
-              </p>
+          {/* Desktop top bar */}
+          <header className="hidden md:flex items-center h-16 px-8 border-b border-white/[0.04] bg-transparent">
+            <div className="flex items-baseline gap-3 min-w-0">
+              <h1 className="text-[15px] font-semibold text-[#F5F4F1] tracking-[-0.01em]">{topBarMeta.title}</h1>
+              {topBarMeta.crumb && (
+                <>
+                  <span className="text-white/25 text-[13px]">/</span>
+                  <span className="text-[13px] text-white/50">{topBarMeta.crumb}</span>
+                </>
+              )}
             </div>
-            <div className="flex items-center gap-3 ml-auto">
-              {topBarMeta.actions?.map((action) => (
-                <Link
-                  key={`${action.path}-${action.label}`}
-                  to={action.path}
-                  className={`px-3 py-2 rounded-lg text-xs font-semibold border transition-colors ${isDarkMode
-                      ? 'border-slate-600 text-slate-200 hover:border-[#ffcc29] hover:text-[#ffcc29]'
-                      : 'border-slate-300 text-slate-700 hover:border-[#ffcc29] hover:text-[#070A12]'
-                    }`}
-                >
-                  {action.label}
-                </Link>
-              ))}
-              {/* Enterprise Credits Widget */}
+            <div className="flex items-center gap-2 ml-auto">
+              <button
+                className="w-9 h-9 rounded-lg flex items-center justify-center text-white/55 hover:text-[#F5F4F1] hover:bg-white/[0.04] transition-colors"
+                aria-label="Search"
+              >
+                <Search className="w-4 h-4" />
+              </button>
+              <div className="w-9 h-9 flex items-center justify-center">
+                <NotificationBell />
+              </div>
+
+              {/* Credits pill */}
               {trialInfo && (() => {
                 const pct = Math.max(0, Math.min(100, (trialInfo.creditsBalance / trialInfo.startingCredits) * 100));
                 const isLow = pct <= 25;
                 const isMed = pct <= 50 && pct > 25;
-                const ringColor = isLow ? '#ef4444' : isMed ? '#f59e0b' : '#22c55e';
-                const ringBg = isDarkMode ? '#1e293b' : '#e2e8f0';
-                // SVG arc math for circular indicator
-                const radius = 18;
-                const circumference = 2 * Math.PI * radius;
-                const offset = circumference - (pct / 100) * circumference;
-
+                const dotColor = isLow ? '#ef4444' : isMed ? '#F5A623' : '#4ADE80';
                 return (
                   <div className="relative" ref={creditPanelRef}>
-                    {/* Trigger Button */}
                     <button
                       onClick={() => setShowCreditPanel(!showCreditPanel)}
-                      className={`flex items-center gap-3 px-4 py-2 rounded-xl transition-all duration-200 border ${isLow
-                          ? isDarkMode ? 'border-red-500/30 bg-red-500/5 hover:bg-red-500/10' : 'border-red-200 bg-red-50 hover:bg-red-100'
-                          : isDarkMode ? 'border-slate-700 bg-[#0f1419] hover:bg-slate-800/80' : 'border-gray-200 bg-gray-50 hover:bg-gray-100'
-                        }`}
+                      className="flex items-center gap-2.5 pl-2.5 pr-3 h-9 rounded-lg border border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.06] transition-colors"
                     >
-                      {/* Circular Credit Ring */}
-                      <div className="relative w-10 h-10 flex-shrink-0">
-                        <svg className="w-10 h-10 -rotate-90" viewBox="0 0 44 44">
-                          <circle cx="22" cy="22" r={radius} fill="none" stroke={ringBg} strokeWidth="3" />
-                          <circle
-                            cx="22" cy="22" r={radius} fill="none"
-                            stroke={ringColor} strokeWidth="3" strokeLinecap="round"
-                            strokeDasharray={circumference} strokeDashoffset={offset}
-                            style={{ transition: 'stroke-dashoffset 0.6s ease' }}
-                          />
-                        </svg>
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <Zap className="w-3.5 h-3.5" style={{ color: ringColor }} />
-                        </div>
-                      </div>
-
-                      {/* Text Info */}
-                      <div className="text-left">
-                        <div className="flex items-center gap-1.5">
-                          <span className={`text-sm font-semibold tabular-nums ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                            {trialInfo.creditsBalance}
-                          </span>
-                          <span className={`text-xs ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}>credits</span>
-                        </div>
-                        <div className={`text-[11px] flex items-center gap-1 ${trialInfo.daysLeft <= 2
-                            ? 'text-red-400'
-                            : isDarkMode ? 'text-slate-500' : 'text-gray-400'
-                          }`}>
-                          <Clock className="w-3 h-3" />
-                          <span>{trialInfo.daysLeft}d remaining</span>
-                        </div>
-                      </div>
-
-                      <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${showCreditPanel ? 'rotate-180' : ''} ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`} />
+                      <span className="w-2 h-2 rounded-full" style={{ background: dotColor, boxShadow: `0 0 8px ${dotColor}` }} />
+                      <span className="text-[13px] font-semibold text-[#F5F4F1] tabular-nums">{trialInfo.creditsBalance}</span>
+                      <span className="text-[11px] text-white/45">credits</span>
+                      <ChevronDown className={`w-3.5 h-3.5 text-white/40 transition-transform ${showCreditPanel ? 'rotate-180' : ''}`} />
                     </button>
-
-                    {/* Dropdown Panel */}
                     {showCreditPanel && (
-                      <div className={`absolute top-full right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-2xl shadow-2xl border z-50 overflow-hidden ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-gray-200'
-                        }`} style={{ animation: 'fadeSlideDown 0.2s ease-out' }}>
-                        {/* Header */}
-                        <div className={`px-5 pt-5 pb-4 ${isDarkMode ? 'bg-[#0f1419]' : 'bg-gray-50'}`}>
+                      <div
+                        className="absolute top-full right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-2xl shadow-2xl border border-white/[0.08] bg-[#151515] z-50 overflow-hidden"
+                        style={{ animation: 'fadeSlideDown 0.2s ease-out' }}
+                      >
+                        <div className="px-5 pt-5 pb-4 bg-white/[0.02]">
                           <div className="flex items-center justify-between mb-3">
-                            <h3 className={`text-sm font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Usage Overview</h3>
-                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${trialInfo.daysLeft <= 2
-                                ? 'bg-red-500/10 text-red-400'
-                                : 'bg-[#ffcc29]/10 text-[#d4a800]'
-                              }`}>
-                              Free Trial
-                            </span>
+                            <h3 className="text-[13px] font-semibold text-[#F5F4F1]">Usage Overview</h3>
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium tracking-wider uppercase ${
+                              trialInfo.daysLeft <= 2 ? 'bg-red-500/10 text-red-400' : 'bg-[#F5A623]/10 text-[#F5A623]'
+                            }`}>Free Trial</span>
                           </div>
-
-                          {/* Credit Bar */}
                           <div className="space-y-2">
                             <div className="flex items-end justify-between">
                               <div>
-                                <span className={`text-2xl font-bold tabular-nums ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                                  {trialInfo.creditsBalance}
-                                </span>
-                                <span className={`text-sm ml-1 ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}>
-                                  / {trialInfo.startingCredits}
-                                </span>
+                                <span className="text-2xl font-serif-display font-semibold text-[#F5F4F1] tabular-nums">{trialInfo.creditsBalance}</span>
+                                <span className="text-sm ml-1 text-white/40">/ {trialInfo.startingCredits}</span>
                               </div>
-                              <span className={`text-xs ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}>
-                                {trialInfo.totalUsed} used
-                              </span>
+                              <span className="text-[11px] text-white/40">{trialInfo.totalUsed} used</span>
                             </div>
-                            <div className={`h-2 rounded-full overflow-hidden ${isDarkMode ? 'bg-slate-800' : 'bg-gray-200'}`}>
+                            <div className="h-1.5 rounded-full overflow-hidden bg-white/[0.06]">
                               <div
-                                className="h-full rounded-full transition-all duration-500 ease-out"
+                                className="h-full rounded-full transition-all duration-500"
                                 style={{
                                   width: `${pct}%`,
                                   background: isLow
-                                    ? 'linear-gradient(90deg, #ef4444, #dc2626)'
+                                    ? 'linear-gradient(90deg,#ef4444,#dc2626)'
                                     : isMed
-                                      ? 'linear-gradient(90deg, #f59e0b, #d97706)'
-                                      : 'linear-gradient(90deg, #22c55e, #16a34a)'
+                                      ? 'linear-gradient(90deg,#F5A623,#d97706)'
+                                      : 'linear-gradient(90deg,#4ADE80,#16a34a)'
                                 }}
                               />
                             </div>
                           </div>
                         </div>
-
-                        {/* Cost Reference */}
-                        <div className={`px-5 py-3 border-t ${isDarkMode ? 'border-slate-800' : 'border-gray-100'}`}>
-                          <p className={`text-[11px] font-medium uppercase tracking-wider mb-2 ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}>
-                            Credit Costs
-                          </p>
+                        <div className="px-5 py-3 border-t border-white/[0.06]">
+                          <p className="gravity-label mb-2">Credit Costs</p>
                           <div className="grid grid-cols-2 gap-1.5">
                             {Object.entries(trialInfo.costs || {}).filter(([, v]) => v > 0).map(([action, cost]) => (
-                              <div key={action} className={`flex items-center justify-between px-2 py-1 rounded-lg text-xs ${isDarkMode ? 'bg-slate-800/50' : 'bg-gray-50'
-                                }`}>
-                                <span className={isDarkMode ? 'text-slate-400' : 'text-gray-500'}>
+                              <div key={action} className="flex items-center justify-between px-2 py-1 rounded-lg text-[11px] bg-white/[0.03]">
+                                <span className="text-white/50">
                                   {ACTION_LABELS[action]?.icon} {ACTION_LABELS[action]?.label || action}
                                 </span>
-                                <span className={`font-medium tabular-nums ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}>
-                                  {cost}
-                                </span>
+                                <span className="font-medium tabular-nums text-[#F5F4F1]">{cost}</span>
                               </div>
                             ))}
                           </div>
                         </div>
-
-
-                        {/* Trial Timer */}
-                        <div className={`px-5 py-3 border-t ${isDarkMode ? 'border-slate-800 bg-[#0f1419]' : 'border-gray-100 bg-gray-50'}`}>
+                        <div className="px-5 py-3 border-t border-white/[0.06] bg-white/[0.02]">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                              <Clock className={`w-3.5 h-3.5 ${trialInfo.daysLeft <= 2 ? 'text-red-400' : isDarkMode ? 'text-slate-500' : 'text-gray-400'}`} />
-                              <span className={`text-xs ${trialInfo.daysLeft <= 2 ? 'text-red-400 font-medium' : isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+                              <Clock className={`w-3.5 h-3.5 ${trialInfo.daysLeft <= 2 ? 'text-red-400' : 'text-white/40'}`} />
+                              <span className={`text-[11px] ${trialInfo.daysLeft <= 2 ? 'text-red-400 font-medium' : 'text-white/50'}`}>
                                 {trialInfo.daysLeft} day{trialInfo.daysLeft !== 1 ? 's' : ''} left in trial
                               </span>
                             </div>
                             <button
                               onClick={() => navigate('/trial-expired')}
-                              className="text-xs font-medium text-[#ffcc29] hover:text-[#e6b800] transition-colors"
+                              className="text-[11px] font-semibold text-[#F5A623] hover:text-[#ffb833] transition-colors"
                             >
                               Upgrade
                             </button>
@@ -540,7 +435,18 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
                   </div>
                 );
               })()}
-              <NotificationBell />
+
+              {/* Primary CTA — Create post */}
+              <Link
+                to="/campaigns"
+                className="ml-1 flex items-center gap-2 h-9 pl-3 pr-3 rounded-lg bg-[#F5A623] hover:bg-[#ffb833] text-[#1A1208] text-[13px] font-semibold shadow-[0_4px_18px_rgba(245,166,35,0.25)] transition-colors"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Create post</span>
+                <kbd className="ml-1 hidden lg:inline-flex items-center gap-1 h-5 px-1.5 rounded bg-[#1A1208]/20 text-[10px] font-semibold text-[#1A1208]/70">
+                  ⌘N
+                </kbd>
+              </Link>
             </div>
           </header>
 

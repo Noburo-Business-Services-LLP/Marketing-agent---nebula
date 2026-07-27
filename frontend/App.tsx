@@ -8,6 +8,7 @@ import Auth from './pages/Auth';
 import Onboarding from './pages/Onboarding';
 import TrialExpired from './pages/TrialExpired';
 import Dashboard from './pages/Dashboard';
+import GravityHome from './pages/GravityHome';
 import Campaigns from './pages/Campaigns';
 import ContentCalendar from './pages/ContentCalendar';
 import ReelGenerator from './pages/ReelGenerator';
@@ -175,7 +176,8 @@ const App: React.FC = () => {
               ) : user.onboardingCompleted ? (
                 <Layout user={user} onLogout={handleLogout}>
                     <Routes>
-                    <Route path="/dashboard" element={<Dashboard />} />
+                    <Route path="/dashboard" element={<GravityHome />} />
+                    <Route path="/dashboard-classic" element={<Dashboard />} />
                     <Route path="/content-calendar" element={<ContentCalendar />} />
                     <Route path="/campaigns" element={<Campaigns />} />
                     <Route path="/reels" element={<ReelGenerator />} />
