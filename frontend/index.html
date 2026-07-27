@@ -81,6 +81,129 @@
       }
       /* Serif display utility */
       .font-serif-display { font-family: 'Playfair Display', Georgia, serif; }
+
+      /* ============================================================
+         GRAVITY OVERRIDE LAYER
+         Auto-restyles common Tailwind patterns on ALL pages when the
+         Gravity shell is active — buttons, cards, inputs, borders,
+         old yellow #ffcc29 becomes gold #F5A623, etc. Non-breaking.
+         ============================================================ */
+      body.gravity-shell {
+        --grav-gold: #F5A623;
+        --grav-gold-hover: #ffb833;
+        --grav-bg: #0A0A0A;
+        --grav-surface: #151515;
+        --grav-surface-2: #1A1A1A;
+        --grav-border: rgba(255,255,255,0.06);
+        --grav-border-strong: rgba(255,255,255,0.12);
+        --grav-text: #F5F4F1;
+        --grav-text-muted: rgba(255,255,255,0.55);
+      }
+      /* Backgrounds — legacy dark tones become Gravity black */
+      body.gravity-shell [class*="bg-[#070A12]"],
+      body.gravity-shell [class*="bg-[#0d1117]"],
+      body.gravity-shell [class*="bg-[#0f1419]"],
+      body.gravity-shell [class*="bg-slate-900"],
+      body.gravity-shell [class*="bg-slate-950"] {
+        background-color: var(--grav-bg) !important;
+      }
+      body.gravity-shell [class*="bg-[#151515]"],
+      body.gravity-shell [class*="bg-slate-800"],
+      body.gravity-shell [class*="bg-gray-800"] {
+        background-color: var(--grav-surface) !important;
+      }
+      /* Legacy yellow → Gravity gold */
+      body.gravity-shell [class*="bg-[#ffcc29]"]:not(aside) {
+        background-color: var(--grav-gold) !important;
+        color: #1A1208 !important;
+      }
+      body.gravity-shell [class*="text-[#ffcc29]"],
+      body.gravity-shell [class*="text-[#d4a800]"],
+      body.gravity-shell [class*="text-[#e6b800]"],
+      body.gravity-shell [class*="text-[#e6b825]"] {
+        color: var(--grav-gold) !important;
+      }
+      body.gravity-shell [class*="border-[#ffcc29]"] {
+        border-color: var(--grav-gold) !important;
+      }
+      body.gravity-shell [class*="hover:text-[#ffcc29]"]:hover {
+        color: var(--grav-gold) !important;
+      }
+      /* Borders — soften harsh dark borders */
+      body.gravity-shell [class*="border-slate-700"],
+      body.gravity-shell [class*="border-slate-800"],
+      body.gravity-shell [class*="border-gray-700"],
+      body.gravity-shell [class*="border-gray-800"] {
+        border-color: var(--grav-border) !important;
+      }
+      body.gravity-shell [class*="divide-slate-700"] > *,
+      body.gravity-shell [class*="divide-slate-800"] > *,
+      body.gravity-shell [class*="divide-gray-700"] > * {
+        border-color: var(--grav-border) !important;
+      }
+      /* Text — muted grays become warm off-white shades */
+      body.gravity-shell [class*="text-slate-500"],
+      body.gravity-shell [class*="text-gray-500"] { color: rgba(255,255,255,0.45) !important; }
+      body.gravity-shell [class*="text-slate-400"],
+      body.gravity-shell [class*="text-gray-400"] { color: rgba(255,255,255,0.55) !important; }
+      body.gravity-shell [class*="text-slate-300"],
+      body.gravity-shell [class*="text-gray-300"] { color: rgba(255,255,255,0.70) !important; }
+      body.gravity-shell [class*="text-slate-200"],
+      body.gravity-shell [class*="text-gray-200"] { color: rgba(255,255,255,0.85) !important; }
+      body.gravity-shell [class*="text-white"] { color: var(--grav-text) !important; }
+      /* Card / panel wrappers — soften and warm */
+      body.gravity-shell [class*="rounded-xl"][class*="border"][class*="bg-"],
+      body.gravity-shell [class*="rounded-2xl"][class*="border"][class*="bg-"] {
+        border-color: var(--grav-border) !important;
+      }
+      /* Inputs — dark neutral bg with subtle border */
+      body.gravity-shell input[type="text"],
+      body.gravity-shell input[type="email"],
+      body.gravity-shell input[type="password"],
+      body.gravity-shell input[type="url"],
+      body.gravity-shell input[type="search"],
+      body.gravity-shell input[type="number"],
+      body.gravity-shell input[type="date"],
+      body.gravity-shell input[type="time"],
+      body.gravity-shell textarea,
+      body.gravity-shell select {
+        background-color: rgba(255,255,255,0.03) !important;
+        border-color: var(--grav-border) !important;
+        color: var(--grav-text) !important;
+      }
+      body.gravity-shell input:focus,
+      body.gravity-shell textarea:focus,
+      body.gravity-shell select:focus {
+        border-color: rgba(245,166,35,0.5) !important;
+        outline: none !important;
+        box-shadow: 0 0 0 3px rgba(245,166,35,0.10) !important;
+      }
+      /* Primary action buttons (gold in old code) — Gravity gold with shadow */
+      body.gravity-shell button[class*="bg-[#ffcc29]"],
+      body.gravity-shell a[class*="bg-[#ffcc29]"] {
+        background-color: var(--grav-gold) !important;
+        color: #1A1208 !important;
+        box-shadow: 0 4px 18px rgba(245,166,35,0.20) !important;
+      }
+      body.gravity-shell button[class*="bg-[#ffcc29]"]:hover,
+      body.gravity-shell a[class*="bg-[#ffcc29]"]:hover {
+        background-color: var(--grav-gold-hover) !important;
+      }
+      /* Focus rings — gold */
+      body.gravity-shell [class*="ring-[#ffcc29]"],
+      body.gravity-shell [class*="focus:ring-[#ffcc29]"]:focus {
+        --tw-ring-color: rgba(245,166,35,0.5) !important;
+      }
+      /* Scrollbar for Gravity shell */
+      body.gravity-shell ::-webkit-scrollbar { width: 8px; height: 8px; }
+      body.gravity-shell ::-webkit-scrollbar-track { background: transparent; }
+      body.gravity-shell ::-webkit-scrollbar-thumb {
+        background: rgba(255,255,255,0.08);
+        border-radius: 4px;
+      }
+      body.gravity-shell ::-webkit-scrollbar-thumb:hover {
+        background: rgba(255,255,255,0.16);
+      }
       /* Small-caps meta label used across Gravity screens */
       .gravity-label {
         font-family: 'Inter', sans-serif;
