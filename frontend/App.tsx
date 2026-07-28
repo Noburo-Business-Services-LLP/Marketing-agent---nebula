@@ -10,6 +10,9 @@ import TrialExpired from './pages/TrialExpired';
 import Dashboard from './pages/Dashboard';
 import GravityHome from './pages/GravityHome';
 import GravityCreate from './pages/GravityCreate';
+import GravityApprove from './pages/GravityApprove';
+import GravityCalendar from './pages/GravityCalendar';
+import GravityInsights from './pages/GravityInsights';
 import Campaigns from './pages/Campaigns';
 import ContentCalendar from './pages/ContentCalendar';
 import ReelGenerator from './pages/ReelGenerator';
@@ -179,9 +182,11 @@ const App: React.FC = () => {
                     <Routes>
                     <Route path="/dashboard" element={<GravityHome />} />
                     <Route path="/dashboard-classic" element={<Dashboard />} />
-                    <Route path="/content-calendar" element={<ContentCalendar />} />
+                    <Route path="/content-calendar" element={<GravityCalendar />} />
+                    <Route path="/content-calendar-classic" element={<ContentCalendar />} />
                     <Route path="/campaigns" element={<GravityCreate />} />
                     <Route path="/campaigns-classic" element={<Campaigns />} />
+                    <Route path="/drafts" element={<GravityApprove />} />
                     <Route path="/reels" element={<ReelGenerator />} />
                     <Route path="/ad-campaigns" element={<AdCampaigns />} />
                     <Route path="/competitors" element={<Competitors />} />
@@ -189,7 +194,8 @@ const App: React.FC = () => {
                     <Route path="/connect-socials/inbox" element={<ConnectSocials />} />
                     <Route path="/brand-assets" element={<BrandAssets />} />
                     <Route path="/inventory" element={<Inventory />} />
-                    <Route path="/analytics" element={<Analytics />} />
+                    <Route path="/analytics" element={<GravityInsights />} />
+                    <Route path="/analytics-classic" element={<Analytics />} />
                     <Route path="/seo" element={<SEOAssistant />} />
                     <Route path="/seo/keywords" element={<SEOAssistant />} />
                     <Route path="/seo/metadata" element={<SEOAssistant />} />

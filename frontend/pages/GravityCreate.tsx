@@ -1,7 +1,14 @@
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, Layers, Calendar as CalendarIcon, Zap, Image as ImageIcon, Instagram, Facebook, Linkedin, ChevronRight } from 'lucide-react';
+import { Sparkles, Layers, Calendar as CalendarIcon, Zap, Image as ImageIcon, Instagram, Facebook, Linkedin, ChevronRight, Loader2 } from 'lucide-react';
 import { apiService } from '../services/api';
+
+// Direct fetch to the streaming endpoint — apiService doesn't expose SSE.
+const API_BASE = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+  ? '/api'
+  : 'http://localhost:5000/api';
+const getToken = () =>
+  (typeof window !== 'undefined' && (localStorage.getItem('token') || localStorage.getItem('authToken'))) || '';
 
 // Gravity Create — matches the prototype's Create screen exactly.
 // Two modes: Campaign (multi-post plan) and Single post.
@@ -72,16 +79,18 @@ const OptionPopover: React.FC<{
 const GravityCreate: React.FC = () => {
   const navigate = useNavigate();
   const [mode, setMode] = useState<CreateMode>('campaign');
-  const [name, setName] = useState('Monsoon menu launch');
+  const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [duration, setDuration] = useState('2 weeks');
   const [cadence, setCadence] = useState('3 posts / week');
   const [tone, setTone] = useState('Warm, unhurried');
   const [visualStyle, setVisualStyle] = useState('4:5 portrait');
-  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(['instagram', 'facebook']);
+  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(['instagram']);
   const [openPopover, setOpenPopover] = useState<null | 'duration' | 'cadence' | 'tone' | 'style'>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [progressMsg, setProgressMsg] = useState<string>('');
+  const [postsGenerated, setPostsGenerated] = useState<number>(0);
 
   const togglePlatform = (key: string) =>
     setSelectedPlatforms((prev) => prev.includes(key) ? prev.filter((p) => p !== key) : [...prev, key]);
@@ -93,31 +102,143 @@ const GravityCreate: React.FC = () => {
     return { total: weeks * perWeek, perWeek };
   }, [duration, cadence]);
 
+  // Map friendly duration/aspect labels to backend enum values used by
+  // /generate-campaign-stream.
+  const backendDuration = useMemo(() => {
+    const map: Record<string, string> = {
+      '1 week': '1week',
+      '2 weeks': '2weeks',
+      '3 weeks': '3weeks',
+      '4 weeks': '4weeks',
+    };
+    return map[duration] || '1week';
+  }, [duration]);
+
+  const backendAspect = useMemo(() => {
+    if (visualStyle.startsWith('1:1')) return '1:1';
+    if (visualStyle.startsWith('9:16')) return '9:16';
+    if (visualStyle.startsWith('16:9')) return '16:9';
+    return '4:5';
+  }, [visualStyle]);
+
+  // Single-post mode — quick create via the existing createCampaign API,
+  // then land in Approve to review + tweak the draft.
+  const handleDraftSinglePost = async () => {
+    await apiService.createCampaign({
+      name: name.trim() || 'Untitled post',
+      objective: 'engagement',
+      platforms: selectedPlatforms,
+      status: 'draft',
+      creative: {
+        type: 'image',
+        textContent: description.trim() || name.trim() || 'Untitled post',
+        imageUrls: [],
+        captions: '',
+      },
+      scheduling: { startDate: new Date().toISOString(), frequency: 'once' as any },
+      tone,
+      aiGenerated: true,
+    } as any);
+    navigate('/drafts');
+  };
+
+  // Campaign mode — real AI generation via the streaming endpoint used
+  // by the legacy Campaigns page. Streams posts as they're generated,
+  // updates progress, then lands in Approve when done.
+  const handleDraftCampaign = async () => {
+    const token = getToken();
+    if (!token) throw new Error('Please log in again.');
+
+    const body = {
+      campaignName: name.trim(),
+      campaignDescription: description.trim() || name.trim(),
+      objective: 'awareness',
+      platforms: selectedPlatforms,
+      tone: (tone.split(',')[0] || 'professional').toLowerCase(),
+      language: 'English',
+      aspectRatio: backendAspect,
+      keyMessages: selectedPlatforms
+        .map((p) => `[${p.toUpperCase()} CONTENT FORMAT]\n${description.trim()}`)
+        .join('\n\n---\n\n'),
+      duration: backendDuration,
+      startDate: new Date().toISOString().split('T')[0],
+      preferredDays: [],
+      targetAge: '18-35',
+      targetGender: 'all',
+      targetLocation: '',
+      targetInterests: '',
+      productLogo: null,
+      linkedProduct: null,
+    };
+
+    setProgressMsg('Warming up the studio…');
+    const response = await fetch(`${API_BASE}/campaigns/generate-campaign-stream`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) throw new Error(`Server responded ${response.status}`);
+    if (!response.body) throw new Error('No response body from server.');
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let currentEvent = '';
+    let complete = false;
+    let postCount = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+      for (const line of lines) {
+        if (line.startsWith('event: ')) {
+          currentEvent = line.slice(7).trim();
+        } else if (line.startsWith('data: ') && currentEvent) {
+          try {
+            const data = JSON.parse(line.slice(6));
+            if (currentEvent === 'status' || currentEvent === 'generating') {
+              setProgressMsg(data.message || 'Drafting…');
+            } else if (currentEvent === 'post') {
+              postCount += 1;
+              setPostsGenerated(postCount);
+              setProgressMsg(`Drafted ${postCount} post${postCount > 1 ? 's' : ''}…`);
+            } else if (currentEvent === 'complete') {
+              complete = true;
+            } else if (currentEvent === 'error') {
+              throw new Error(data?.message || 'Generation failed');
+            }
+          } catch (parseErr) {
+            // Ignore malformed lines
+          }
+        }
+      }
+    }
+    if (!complete && postCount === 0) {
+      throw new Error('Generation ended without any posts.');
+    }
+    navigate('/drafts');
+  };
+
   const handleDraft = async () => {
-    if (!name.trim()) { setError('Give the campaign a name.'); return; }
+    if (!name.trim()) { setError('Give it a name first.'); return; }
     if (selectedPlatforms.length === 0) { setError('Pick at least one platform.'); return; }
     setError(null);
     setSubmitting(true);
+    setPostsGenerated(0);
+    setProgressMsg('');
     try {
-      await apiService.createCampaign({
-        name: name.trim(),
-        objective: 'engagement',
-        platforms: selectedPlatforms,
-        status: 'draft',
-        creative: {
-          type: 'image',
-          textContent: description.trim() || name.trim(),
-          imageUrls: [],
-          captions: '',
-        },
-        scheduling: { startDate: new Date().toISOString(), frequency: 'once' as any },
-        // Extra metadata for the calendar/drafts flow to consume.
-        tone,
-        aiGenerated: true,
-      } as any);
-      navigate('/drafts');
+      if (mode === 'single') {
+        await handleDraftSinglePost();
+      } else {
+        await handleDraftCampaign();
+      }
     } catch (e: any) {
-      setError(e?.message || 'Failed to draft the campaign. Try again.');
+      setError(e?.message || 'Failed to draft. Try again.');
     } finally {
       setSubmitting(false);
     }
@@ -265,30 +386,41 @@ const GravityCreate: React.FC = () => {
       )}
 
       {/* Primary CTA */}
-      <div className="flex items-center justify-center gap-4 mt-6">
-        <button
-          onClick={handleDraft}
-          disabled={submitting}
-          className="flex items-center gap-2 h-12 px-8 rounded-xl bg-[#F5A623] hover:bg-[#ffb833] text-[#1A1208] text-[14.5px] font-semibold shadow-[0_10px_40px_rgba(245,166,35,0.30)] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-        >
-          {submitting ? (
-            <>
-              <Zap className="w-4 h-4 animate-pulse" />
-              Drafting...
-            </>
-          ) : (
-            <>
-              <Zap className="w-4 h-4" strokeWidth={2.5} />
-              {mode === 'campaign' ? 'Draft my campaign' : 'Draft this post'}
-            </>
-          )}
-        </button>
-        <div className="hidden md:flex items-center gap-1.5 text-[11px] text-white/40">
-          <kbd className="inline-flex items-center gap-0.5 h-6 px-1.5 rounded bg-white/[0.06] border border-white/[0.08] text-[10px] font-semibold text-white/70">
-            ⌘↵
-          </kbd>
-          <span>to launch</span>
+      <div className="flex flex-col items-center gap-3 mt-6">
+        <div className="flex items-center justify-center gap-4">
+          <button
+            onClick={handleDraft}
+            disabled={submitting}
+            className="flex items-center gap-2 h-12 px-8 rounded-xl bg-[#F5A623] hover:bg-[#ffb833] text-[#1A1208] text-[14.5px] font-semibold shadow-[0_10px_40px_rgba(245,166,35,0.30)] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {submitting ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Drafting…
+              </>
+            ) : (
+              <>
+                <Zap className="w-4 h-4" strokeWidth={2.5} />
+                {mode === 'campaign' ? 'Draft my campaign' : 'Draft this post'}
+              </>
+            )}
+          </button>
+          <div className="hidden md:flex items-center gap-1.5 text-[11px] text-white/40">
+            <kbd className="inline-flex items-center gap-0.5 h-6 px-1.5 rounded bg-white/[0.06] border border-white/[0.08] text-[10px] font-semibold text-white/70">
+              ⌘↵
+            </kbd>
+            <span>to launch</span>
+          </div>
         </div>
+        {submitting && progressMsg && (
+          <div className="text-[12.5px] text-white/60 mt-1 flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#F5A623] animate-pulse" />
+            {progressMsg}
+            {postsGenerated > 0 && (
+              <span className="text-white/40">· {postsGenerated} draft{postsGenerated !== 1 ? 's' : ''} so far</span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Escape hatch to old page */}
