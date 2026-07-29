@@ -4940,62 +4940,145 @@ Preserve the same person, face, pose, camera framing, background, visual style, 
       textLength: p.text ? p.text.length : 0
     })), null, 2));
 
-    const requestBody = {
-      contents: [{ parts }],
-      generationConfig: {
-        temperature: 0.8,
-        responseModalities: ["TEXT", "IMAGE"]
-      }
-    };
-
-    const maxRetries = (isCinematic && characterReferenceImage) ? 3 : 1;
+    const errors = [];
+    const isCharacterSheet = prompt.includes('Character Reference Sheet') || prompt.includes('character reference sheet') || prompt.includes('Reference Sheet') || prompt.includes('reference sheet') || Boolean(options.skipFaceSimilarity);
+    const maxRetries = (isCinematic && characterReferenceImage && !isCharacterSheet) ? 3 : 1;
     let attempt = 0;
     
     while (attempt < maxRetries) {
       attempt++;
-      console.log(`[NanoBanana2] Post ${postIndex + 1} - Attempt ${attempt}/${maxRetries}`);
+      console.log(`[NanoBanana2] Generating image - Attempt ${attempt}/${maxRetries}`);
       
-      const response = await fetchWithTimeout(`${apiUrl}?key=${GEMINI_API_KEY}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody)
-      }, 120000);
+      let base64Image = null;
+      let modelUsed = '';
 
-      const data = await response.json();
+      // 1. Try Vertex AI Imagen 4 Ultra
+      try {
+        console.log('[NanoBanana2] Provider: Vertex AI | Model: imagen-4.0-ultra-generate-001 | Status: Sending Request...');
+        const accessToken = await getVertexAccessToken();
+        const vertexUrl = `https://${VERTEX_LOCATION}-aiplatform.googleapis.com/v1/projects/${VERTEX_PROJECT_ID}/locations/${VERTEX_LOCATION}/publishers/google/models/imagen-4.0-ultra-generate-001:predict`;
+        const response = await fetch(vertexUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`
+          },
+          body: JSON.stringify({
+            instances: [{ prompt: finalPromptText }],
+            parameters: {
+              sampleCount: 1,
+              aspectRatio: aspectRatio === '16:9' ? '16:9' : (aspectRatio === '9:16' ? '9:16' : '1:1'),
+              safetyFilterLevel: 'block_few',
+              personGeneration: 'allow_adult'
+            }
+          })
+        });
 
-      if (!response.ok) {
-        if (attempt >= maxRetries) throw new Error(data.error?.message || 'Nano Banana 2 failed');
-        console.warn(`[NanoBanana2] API error, retrying...`, data.error?.message);
-        continue;
+        const data = await response.json();
+        console.log(`[NanoBanana2] Provider: Vertex AI | Model: imagen-4.0-ultra-generate-001 | HTTP Status: ${response.status}`);
+        
+        if (response.ok && data.predictions && data.predictions[0]?.bytesBase64Encoded) {
+          base64Image = `data:image/png;base64,${data.predictions[0].bytesBase64Encoded}`;
+          modelUsed = 'imagen-4.0-ultra-generate-001';
+          console.log('[NanoBanana2] Success using Vertex AI Imagen 4 Ultra');
+        } else {
+          const errorMsg = data.error?.message || JSON.stringify(data.error || data);
+          console.error(`[NanoBanana2] Provider: Vertex AI | Model: imagen-4.0-ultra-generate-001 | Error Body:`, errorMsg);
+          errors.push(`Vertex AI Imagen 4 Ultra (HTTP ${response.status}): ${errorMsg}`);
+        }
+      } catch (err) {
+        console.error(`[NanoBanana2] Provider: Vertex AI | Model: imagen-4.0-ultra-generate-001 | Exception:`, err.message);
+        errors.push(`Vertex AI Imagen 4 Ultra Exception: ${err.message}`);
       }
 
-      const candidates = data.candidates || [];
-      let base64Image = null;
-      let mime = 'image/png';
-      
-      for (const candidate of candidates) {
-        const responseParts = candidate.content?.parts || [];
-        for (const part of responseParts) {
-          const imgData = part.inlineData || part.inline_data;
-          if (imgData?.data) {
-            mime = imgData.mimeType || imgData.mime_type || 'image/png';
-            base64Image = `data:${mime};base64,${imgData.data}`;
-            break;
+      // 2. Try Vertex AI Imagen 3 (if Imagen 4 failed)
+      if (!base64Image) {
+        try {
+          console.log('[NanoBanana2] Provider: Vertex AI | Model: imagen-3.0-generate-001 | Status: Sending Request...');
+          const accessToken = await getVertexAccessToken();
+          const imagen3Url = `https://${VERTEX_LOCATION}-aiplatform.googleapis.com/v1/projects/${VERTEX_PROJECT_ID}/locations/${VERTEX_LOCATION}/publishers/google/models/imagen-3.0-generate-001:predict`;
+          const response = await fetch(imagen3Url, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${accessToken}`
+            },
+            body: JSON.stringify({
+              instances: [{ prompt: finalPromptText }],
+              parameters: {
+                sampleCount: 1,
+                aspectRatio: aspectRatio === '16:9' ? '16:9' : (aspectRatio === '9:16' ? '9:16' : '1:1'),
+                safetyFilterLevel: 'block_few',
+                personGeneration: 'allow_adult'
+              }
+            })
+          });
+
+          const data = await response.json();
+          console.log(`[NanoBanana2] Provider: Vertex AI | Model: imagen-3.0-generate-001 | HTTP Status: ${response.status}`);
+          
+          if (response.ok && data.predictions && data.predictions[0]?.bytesBase64Encoded) {
+            base64Image = `data:image/png;base64,${data.predictions[0].bytesBase64Encoded}`;
+            modelUsed = 'imagen-3.0-generate-001';
+            console.log('[NanoBanana2] Success using Vertex AI Imagen 3');
+          } else {
+            const errorMsg = data.error?.message || JSON.stringify(data.error || data);
+            console.error(`[NanoBanana2] Provider: Vertex AI | Model: imagen-3.0-generate-001 | Error Body:`, errorMsg);
+            errors.push(`Vertex AI Imagen 3 (HTTP ${response.status}): ${errorMsg}`);
           }
+        } catch (err) {
+          console.error(`[NanoBanana2] Provider: Vertex AI | Model: imagen-3.0-generate-001 | Exception:`, err.message);
+          errors.push(`Vertex AI Imagen 3 Exception: ${err.message}`);
         }
-        if (base64Image) break;
+      }
+
+      // 3. Try Google AI Studio Imagen 3 (if both Vertex failed)
+      if (!base64Image && GEMINI_API_KEY) {
+        try {
+          console.log('[NanoBanana2] Provider: Google AI Studio | Model: imagen-3.0-generate-002 | Status: Sending Request...');
+          const studioUrl = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:generateImages`;
+          const response = await fetch(`${studioUrl}?key=${GEMINI_API_KEY}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              prompt: finalPromptText,
+              numberOfImages: 1,
+              outputMimeType: "image/jpeg",
+              aspectRatio: aspectRatio === '16:9' ? '16:9' : (aspectRatio === '9:16' ? '9:16' : '1:1')
+            })
+          });
+
+          const data = await response.json();
+          console.log(`[NanoBanana2] Provider: Google AI Studio | Model: imagen-3.0-generate-002 | HTTP Status: ${response.status}`);
+          
+          if (response.ok && data.generatedImages && data.generatedImages[0]?.image?.imageBytes) {
+            base64Image = `data:image/jpeg;base64,${data.generatedImages[0].image.imageBytes}`;
+            modelUsed = 'imagen-3.0-generate-002';
+            console.log('[NanoBanana2] Success using Google AI Studio Imagen 3');
+          } else {
+            const errorMsg = data.error?.message || JSON.stringify(data.error || data);
+            console.error(`[NanoBanana2] Provider: Google AI Studio | Model: imagen-3.0-generate-002 | Error Body:`, errorMsg);
+            errors.push(`Google AI Studio Imagen 3 (HTTP ${response.status}): ${errorMsg}`);
+          }
+        } catch (err) {
+          console.error(`[NanoBanana2] Provider: Google AI Studio | Model: imagen-3.0-generate-002 | Exception:`, err.message);
+          errors.push(`Google AI Studio Imagen 3 Exception: ${err.message}`);
+        }
       }
 
       if (!base64Image) {
-        if (attempt >= maxRetries) throw new Error('Nano Banana 2 returned no image');
+        if (attempt >= maxRetries) {
+          const detailErrorStr = errors.length > 0 ? errors.join('; ') : 'Image generation failed on all available models.';
+          throw new Error(detailErrorStr);
+        }
         console.warn(`[NanoBanana2] No image returned, retrying...`);
         continue;
       }
 
-      console.log(`[NanoBanana2] Post ${postIndex + 1} generated image successfully on attempt ${attempt}`);
+      console.log(`[NanoBanana2] Generated image successfully via ${modelUsed} on attempt ${attempt}`);
 
       // FACE SIMILARITY CHECK
-      if (isCinematic && characterReferenceImage) {
+      if (isCinematic && characterReferenceImage && !isCharacterSheet) {
         const refImageBase64 = characterInline?.data ? `data:${characterInline.mimeType};base64,${characterInline.data}` : null;
         if (refImageBase64) {
           console.log(`[NanoBanana2] Verifying face similarity...`);
@@ -5016,55 +5099,17 @@ Preserve the same person, face, pose, camera framing, background, visual style, 
       try {
         const uploadResult = await uploadBase64Image(base64Image, 'nebula-campaign-posts');
         if (uploadResult.success && uploadResult.url) {
-          return { success: true, imageUrl: uploadResult.url, model: 'nano-banana-2' };
+          console.log(`[NanoBanana2] Final Image URL: ${uploadResult.url}`);
+          return { success: true, imageUrl: uploadResult.url, model: modelUsed };
         }
       } catch (uploadErr) {
         console.warn('Cloudinary upload failed, returning base64:', uploadErr.message);
       }
 
-      return { success: true, imageUrl: base64Image, model: 'nano-banana-2' };
+      return { success: true, imageUrl: base64Image, model: modelUsed };
     }
-
   } catch (error) {
-    console.error(`[NanoBanana2] Post ${postIndex + 1} failed:`, error.message);
-
-    try {
-      console.log('[NanoBanana2] Trying fallback gemini-2.5-flash-image...');
-      const fallbackUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent';
-      const fallbackBody = {
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.8, responseModalities: ["TEXT", "IMAGE"] }
-      };
-
-      const fbResponse = await fetchWithTimeout(`${fallbackUrl}?key=${GEMINI_API_KEY}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(fallbackBody)
-      }, 120000);
-
-      const fbData = await fbResponse.json();
-      if (fbResponse.ok) {
-        for (const candidate of (fbData.candidates || [])) {
-          for (const part of (candidate.content?.parts || [])) {
-            const imgData = part.inlineData || part.inline_data;
-            if (imgData?.data) {
-              const mime = imgData.mimeType || imgData.mime_type || 'image/png';
-              const base64Image = `data:${mime};base64,${imgData.data}`;
-              try {
-                const uploadResult = await uploadBase64Image(base64Image, 'nebula-campaign-posts');
-                if (uploadResult.success && uploadResult.url) {
-                  return { success: true, imageUrl: uploadResult.url, model: 'gemini-2.5-flash-image' };
-                }
-              } catch (_) { }
-              return { success: true, imageUrl: base64Image, model: 'gemini-2.5-flash-image' };
-            }
-          }
-        }
-      }
-    } catch (fbErr) {
-      console.error('Fallback also failed:', fbErr.message);
-    }
-
+    console.error(`[NanoBanana2] Failed to generate image completely:`, error.message);
     return { success: false, error: error.message };
   }
 }

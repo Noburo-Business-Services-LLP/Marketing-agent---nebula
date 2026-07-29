@@ -2,9 +2,11 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-const { STORAGE_ROOT } = require('./videoGenerationPipeline');
+const STORAGE_ROOT = path.resolve(__dirname, '../storage/ai-videos');
 const VideoDraft = require('../models/VideoDraft');
 const Draft = require('../models/Draft');
+const { normalizeDirectorAutosavePayload } = require('./directorDraftFields');
+const { logAutosave, logMongoSave } = require('./directorLogger');
 
 function sanitizeSegment(value, fallback = 'asset') {
   const raw = String(value || '').trim();
@@ -68,21 +70,27 @@ function draftPathForJob(jobId) {
   return path.join(dirs.root, 'draft.json');
 }
 
-async function writeDraft(draft) {
+async function writeDraft(draft, meta = {}) {
+  const nowIso = new Date().toISOString();
   const payload = {
     ...draft,
-    updatedAt: new Date().toISOString()
+    version: Number.isFinite(draft.version) ? draft.version : 0,
+    updatedAt: nowIso
   };
+  if (meta.lastModifiedBy) {
+    payload.lastModifiedBy = meta.lastModifiedBy;
+  }
 
-  // 1. Persist to MongoDB
+  // 1. Persist to MongoDB (authoritative)
   try {
     await VideoDraft.findOneAndUpdate(
       { jobId: draft.jobId },
       { $set: payload },
-      { upsert: true, new: true }
+      { upsert: true, new: true, setDefaultsOnInsert: true }
     );
+    logMongoSave({ jobId: draft.jobId, userId: draft.userId }, { version: payload.version });
   } catch (dbError) {
-    console.error('Failed to save draft to MongoDB:', dbError.message);
+    console.error('⚠️ Failed to save draft to MongoDB, falling back to disk:', dbError.message);
   }
 
   // 2. Persist to Disk (local folder backup)
@@ -289,10 +297,52 @@ async function listDraftsForUser(userId = null) {
   }
 }
 
-async function updateDraft(jobId, userId = null, updater = null) {
+async function updateDraft(jobId, userId = null, updater = null, meta = {}) {
   const existing = await loadDraftForUser(jobId, userId);
   const next = typeof updater === 'function' ? await updater(existing) : existing;
-  return writeDraft({ ...existing, ...next, jobId: existing.jobId, userId: existing.userId });
+  const version = (Number(existing.version) || 0) + 1;
+  return writeDraft({
+    ...existing,
+    ...next,
+    jobId: existing.jobId,
+    userId: existing.userId,
+    version
+  }, meta);
+}
+
+async function patchDraft(jobId, userId = null, rawPatch = {}, options = {}) {
+  const existing = await loadDraftForUser(jobId, userId);
+  const expectedVersion = options.expectedVersion;
+  if (expectedVersion !== undefined && expectedVersion !== null) {
+    const currentVersion = Number(existing.version) || 0;
+    if (Number(expectedVersion) !== currentVersion) {
+      const error = new Error(`Draft version conflict: expected ${expectedVersion}, current ${currentVersion}`);
+      error.statusCode = 409;
+      error.currentVersion = currentVersion;
+      error.draft = existing;
+      throw error;
+    }
+  }
+
+  const patch = normalizeDirectorAutosavePayload(rawPatch);
+  const version = (Number(existing.version) || 0) + 1;
+  const merged = {
+    ...existing,
+    ...patch,
+    directorStudio: {
+      ...(existing.directorStudio || {}),
+      ...(patch.directorStudio || {}),
+      ...patch
+    },
+    jobId: existing.jobId,
+    userId: existing.userId,
+    version,
+    updatedAt: new Date().toISOString()
+  };
+
+  logAutosave({ jobId, userId }, { version, fields: Object.keys(patch) });
+
+  return writeDraft(merged, { lastModifiedBy: userId });
 }
 
 async function saveDataUrlToJob({
@@ -354,9 +404,25 @@ async function createDraft({
   const draft = {
     jobId,
     userId,
+    version: 0,
     createdAt: nowIso,
     updatedAt: nowIso,
-    currentStep: 1,
+    currentStep: input.currentStep || 1,
+    businessName: input.businessName || '',
+    industry: input.industry || '',
+    targetAudience: input.targetAudience || '',
+    brandSummary: input.brandSummary || input.description || '',
+    brandTone: input.brandTone || '',
+    commercialObjective: input.commercialObjective || '',
+    storyDirection: input.storyDirection || '',
+    videoStyle: input.videoStyle || null,
+    durationSeconds: Number.parseInt(String(input.durationSeconds || 60), 10) || 60,
+    useCharacters: input.useCharacters !== undefined ? input.useCharacters : true,
+    useLogo: input.useLogo !== undefined ? input.useLogo : false,
+    selectedProductId: input.selectedProductId || input.productId || null,
+    imageDataUrl: sourceImage?.url || null,
+    completedSteps: input.completedSteps || [],
+    uiState: input.uiState || {},
     input: {
       description: String(input.description || '').trim(),
       durationSeconds: Number.parseInt(String(input.durationSeconds || 60), 10) || 60,
@@ -404,6 +470,7 @@ module.exports = {
   loadDraftForUser,
   deleteDraftForUser,
   updateDraft,
+  patchDraft,
   saveDataUrlToJob,
   createDraft
 };

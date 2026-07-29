@@ -6,9 +6,11 @@ import {
   AlertCircle, Film, User, Sparkles, ArrowRight, ArrowLeft, Package, Trash2, Plus, Music2, Eye, X
 } from 'lucide-react';
 import { videoGenerationAPI, aiDirectorAPI, inventoryAPI, draftsAPI, contentCalendarAPI } from '../services/api';
+import { pollDirectorJob, findActiveQueueJob } from '../utils/directorJobPolling';
 import { CharacterManager } from '../components/CharacterManager';
 import { useTheme, getThemeClasses } from '../context/ThemeContext';
 import { Product, Draft } from '../types';
+import { useSearchParams } from 'react-router-dom';
 
 type VideoStatusFilter = 'all' | 'draft' | 'created' | 'scheduled' | 'posted';
 type AudioMode = 'off' | 'auto' | 'upload';
@@ -62,6 +64,24 @@ function compactDirectorScene(scene: any) {
     sceneId: scene?.sceneId,
     sceneNumber: scene?.sceneNumber,
     title: scene?.title,
+    description: scene?.description,
+    environment: scene?.environment,
+    characterAction: scene?.characterAction,
+    sceneMood: scene?.sceneMood,
+    lighting: scene?.lighting,
+    weather: scene?.weather,
+    timeOfDay: scene?.timeOfDay,
+    foregroundObjects: scene?.foregroundObjects,
+    backgroundObjects: scene?.backgroundObjects,
+    cameraDirection: scene?.cameraDirection,
+    cameraMovement: scene?.cameraMovement,
+    characterExpression: scene?.characterExpression,
+    characterPose: scene?.characterPose,
+    visualStyle: scene?.visualStyle,
+    colorPalette: scene?.colorPalette,
+    shotComposition: scene?.shotComposition,
+    transition: scene?.transition,
+    audio: scene?.audio,
     action: scene?.action,
     voiceLine: scene?.voiceLine,
     durationSeconds: scene?.durationSeconds,
@@ -237,6 +257,20 @@ function directorSceneClipUrl(scene: any) {
   return String(scene?.clipUrl || scene?.generatedVideoUrl || scene?.videoUrl || scene?.video_url || scene?.falVideoUrl || '').trim();
 }
 
+function resolvePrimaryCharacterId(draft: any, characters: any[] = []) {
+  const list = characters.length ? characters : (Array.isArray(draft?.characters) ? draft.characters : []);
+  const withSheet = list.find((c) => c?.image || c?.imageUrl);
+  const lead = withSheet || list[0];
+  return (
+    draft?.identityMemoryId
+    || draft?.characterId
+    || lead?.identityMemoryId
+    || lead?.characterId
+    || lead?.id
+    || undefined
+  );
+}
+
 function collectDirectorClipUrls(...sources: any[]) {
   const urls: string[] = [];
   sources.forEach((source) => {
@@ -261,6 +295,7 @@ function collectDirectorClipUrls(...sources: any[]) {
 export default function DirectorStudio() {
   const { isDarkMode } = useTheme();
   const theme = getThemeClasses(isDarkMode);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const panelClass = `${theme.bgCard} border ${isDarkMode ? 'border-slate-800' : 'border-slate-200'} rounded-2xl shadow-xl`;
   const inputClass = `w-full rounded-xl border px-4 py-3 text-sm outline-none transition ${isDarkMode ? 'bg-slate-900 border-slate-700 text-white focus:border-[#ffcc29]' : 'bg-white border-slate-300 text-slate-900 focus:border-[#ffcc29]'
@@ -276,6 +311,9 @@ export default function DirectorStudio() {
   // Auto-save timer ref
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const storyAutoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const productionAutoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollAbortRef = useRef<AbortController | null>(null);
+  const [draftVersion, setDraftVersion] = useState(0);
   const LS_KEY = 'director_studio_draft_v1';
 
   // Active Wizard state
@@ -289,6 +327,8 @@ export default function DirectorStudio() {
   const [characters, setCharacters] = useState<any[]>([]);
   const [generatingAllImages, setGeneratingAllImages] = useState(false);
   const [generatingAllVideos, setGeneratingAllVideos] = useState(false);
+  const [completedSteps, setCompletedSteps] = useState<number[]>([]);
+  const [uiState, setUiState] = useState<Record<string, any>>({});
 
   // Step 1 Form state
   const [useCharacters, setUseCharacters] = useState(true);
@@ -349,12 +389,12 @@ export default function DirectorStudio() {
     setJobId(d.jobId || fallback.jobId || '');
     setScenes(resolveDirectorScenes(d, fallback));
     setCharacters(Array.isArray(d.characters) ? d.characters : []);
-    setBusinessName(d.businessName || fallback.businessName || '');
-    setIndustry(d.industry || fallback.industry || '');
-    setTargetAudience(d.targetAudience || fallback.targetAudience || '');
-    setBrandTone(d.brandTone || fallback.brandTone || '');
-    setCommercialObjective(d.commercialObjective || fallback.commercialObjective || '');
-    setBrandSummary(d.brandSummary || d.description || fallback.brandSummary || '');
+    setBusinessName((prev: string) => d.businessName !== undefined && d.businessName !== '' ? d.businessName : (prev || fallback.businessName || ''));
+    setIndustry((prev: string) => d.industry !== undefined && d.industry !== '' ? d.industry : (prev || fallback.industry || ''));
+    setTargetAudience((prev: string) => d.targetAudience !== undefined && d.targetAudience !== '' ? d.targetAudience : (prev || fallback.targetAudience || ''));
+    setBrandTone((prev: string) => d.brandTone !== undefined && d.brandTone !== '' ? d.brandTone : (prev || fallback.brandTone || ''));
+    setCommercialObjective((prev: string) => d.commercialObjective !== undefined && d.commercialObjective !== '' ? d.commercialObjective : (prev || fallback.commercialObjective || ''));
+    setBrandSummary((prev: string) => d.brandSummary !== undefined && d.brandSummary !== '' ? d.brandSummary : (d.description !== undefined && d.description !== '' ? d.description : (prev || fallback.brandSummary || '')));
     setVideoStyle(d.videoStyle || fallback.videoStyle || 'Cinematic Commercial');
     setDurationSeconds(d.durationSeconds || fallback.durationSeconds || 30);
     setUseLogo(d.useLogo !== undefined ? d.useLogo : (fallback.useLogo || false));
@@ -389,8 +429,91 @@ export default function DirectorStudio() {
     const sched = splitScheduledAt(d.schedule?.scheduledAt);
     setScheduleDate(sched.date || d.scheduleDate || fallback.scheduleDate || '');
     setScheduleTime(sched.time || d.scheduleTime || fallback.scheduleTime || '');
+    setCompletedSteps(d.completedSteps || fallback.completedSteps || []);
+    setUiState(d.uiState || fallback.uiState || {});
+    setDraftVersion(Number(d.version) || 0);
     setShowWizard(true);
   }, []);
+
+  const saveDraftToBackend = useCallback(async (payload: Record<string, any>) => {
+    if (!jobId) return;
+    try {
+      const res = await videoGenerationAPI.updateDraft(jobId, { ...payload, version: draftVersion });
+      if (res?.draft) {
+        setDraft(res.draft);
+        if (res.draft.version !== undefined) {
+          setDraftVersion(Number(res.draft.version) || 0);
+        }
+      } else if (res?.version !== undefined) {
+        setDraftVersion(Number(res.version) || 0);
+      }
+    } catch (e: any) {
+      if (e?.status === 409) {
+        const refreshed = await videoGenerationAPI.getDraft(jobId);
+        if (refreshed?.draft) applyDraftState(refreshed.draft);
+      } else {
+        console.warn('Director Studio autosave failed:', e?.message);
+      }
+    }
+  }, [jobId, draftVersion, applyDraftState]);
+
+  const handleQueueJobComplete = useCallback(async (result: any) => {
+    if (result?.draft) {
+      applyDraftState(result.draft);
+    } else if (jobId) {
+      const refreshed = await videoGenerationAPI.getDraft(jobId);
+      if (refreshed?.draft) applyDraftState(refreshed.draft);
+    }
+    if (Array.isArray(result?.sceneData)) setScenes(result.sceneData);
+    if (result?.audio?.tracks) setGeneratedTracks(result.audio.tracks);
+  }, [jobId, applyDraftState]);
+
+  const resumeActiveQueueJobs = useCallback(async (draftData: any, queueJobs: any[] = []) => {
+    const active = findActiveQueueJob(draftData, queueJobs);
+    if (!active?.jobId) return;
+
+    const queueJobId = String(active.jobId);
+    const step = String(active.currentStep || active.jobType || '').toLowerCase();
+
+    if (pollAbortRef.current) pollAbortRef.current.abort();
+    const controller = new AbortController();
+    pollAbortRef.current = controller;
+
+    setBusy(true);
+    setBusyMsg('Resuming background job...');
+    if (step.includes('image')) setGeneratingAllImages(true);
+    if (step.includes('clip') || step.includes('video') || step.includes('scene')) setGeneratingAllVideos(true);
+
+    try {
+      const result = await pollDirectorJob(queueJobId, {
+        signal: controller.signal,
+        onProgress: (job) => {
+          setBusyMsg(job?.currentStep ? `Processing: ${job.currentStep}` : 'Processing...');
+          if (jobId) {
+            videoGenerationAPI.getDraft(jobId).then((res) => {
+              if (res?.draft) applyDraftState(res.draft);
+            }).catch(() => {});
+          }
+        }
+      });
+      await handleQueueJobComplete(result);
+    } catch (e: any) {
+      if (e?.message !== 'Polling aborted' && e?.message !== 'Job cancelled.') {
+        console.warn('Resume job failed:', e?.message);
+        if (jobId) {
+          const refreshed = await videoGenerationAPI.getDraft(jobId);
+          if (refreshed?.draft) applyDraftState(refreshed.draft);
+        }
+      }
+    } finally {
+      setGeneratingAllImages(false);
+      setGeneratingAllVideos(false);
+      setBusy(false);
+      setBusyMsg('');
+      setImgLoadingSceneId(null);
+      setVidLoadingSceneId(null);
+    }
+  }, [jobId, applyDraftState, handleQueueJobComplete]);
 
   const fetchDrafts = async () => {
     try {
@@ -416,80 +539,148 @@ export default function DirectorStudio() {
     fetchDrafts();
   }, []);
 
+  // ── SessionStorage wizard state tracking
+  useEffect(() => {
+    if (showWizard) {
+      sessionStorage.setItem('director_studio_wizard_active', 'true');
+    } else {
+      sessionStorage.removeItem('director_studio_wizard_active');
+    }
+  }, [showWizard]);
+
   // ── AUTO-RESUME: if user had an active draft open when they refreshed/navigated away, re-open it
   useEffect(() => {
+    const qJobId = searchParams.get('jobId');
+    const wasWizardActive = sessionStorage.getItem('director_studio_wizard_active') === 'true';
+    const shouldShowWizard = Boolean(qJobId || wasWizardActive);
+
     const savedRaw = localStorage.getItem('director_studio_draft_v1');
-    if (!savedRaw) return;
+
+    if (qJobId) {
+      console.log("Loading specific draft from URL query parameter:", qJobId);
+      openVideoDraft(qJobId);
+      setSearchParams({}, { replace: true });
+      return;
+    }
+
+    if (!savedRaw) {
+      (async () => {
+        try {
+          const response = await videoGenerationAPI.getDrafts();
+          if (response?.success && Array.isArray(response?.drafts)) {
+            const uniqueDraftsMap = new Map();
+            response.drafts.forEach((d: any) => {
+              if (d?.jobId) uniqueDraftsMap.set(d.jobId, d);
+            });
+            const draftsList = Array.from(uniqueDraftsMap.values());
+            setVideoDrafts(draftsList);
+            const unfinished = draftsList
+              .filter((d: any) => ['draft', 'processing', 'queued'].includes(String(d?.status || '').toLowerCase()))
+              .sort((a: any, b: any) => new Date(b.updatedAt || b.createdAt || 0).getTime() - new Date(a.updatedAt || a.createdAt || 0).getTime());
+            if (unfinished.length > 0) {
+              if (shouldShowWizard) {
+                console.log("Auto-opening latest unfinished draft from backend:", unfinished[0].jobId);
+                openVideoDraft(unfinished[0].jobId);
+              } else {
+                console.log("Populating latest unfinished draft in background:", unfinished[0].jobId);
+                const res = await videoGenerationAPI.getDraft(unfinished[0].jobId);
+                if (res?.success && res?.draft) {
+                  applyDraftState(res.draft);
+                  setShowWizard(false); // force false
+                }
+              }
+            }
+          }
+        } catch (_) { }
+      })();
+      return;
+    }
     try {
       const saved = JSON.parse(savedRaw);
       if (!saved?.jobId) return;
-      setHydratingDraft(true);
 
-      const restoreFromSnapshot = (snapshot: any) => {
-        if (!snapshot) return;
-        setDraft(snapshot.draft || null);
-        setJobId(snapshot.jobId || '');
-        setScenes(resolveDirectorScenes(snapshot.draft || snapshot, snapshot));
-        setCharacters(Array.isArray(snapshot.characters) ? snapshot.characters : (snapshot.draft?.characters || []));
-        setBusinessName(snapshot.businessName || snapshot.draft?.businessName || '');
-        setIndustry(snapshot.industry || snapshot.draft?.industry || '');
-        setTargetAudience(snapshot.targetAudience || snapshot.draft?.targetAudience || '');
-        setBrandTone(snapshot.brandTone || snapshot.draft?.brandTone || '');
-        setCommercialObjective(snapshot.commercialObjective || snapshot.draft?.commercialObjective || '');
-        setBrandSummary(snapshot.brandSummary || snapshot.draft?.brandSummary || snapshot.draft?.description || '');
-        setVideoStyle(snapshot.videoStyle || snapshot.draft?.videoStyle || 'Cinematic Commercial');
-        setDurationSeconds(snapshot.durationSeconds || snapshot.draft?.durationSeconds || 30);
-        setUseLogo(snapshot.useLogo !== undefined ? snapshot.useLogo : (snapshot.draft?.useLogo !== undefined ? snapshot.draft.useLogo : false));
-        setUseCharacters(snapshot.useCharacters !== undefined ? snapshot.useCharacters : true);
-        setStoryDirection(snapshot.storyDirection || snapshot.draft?.storyDirection || '');
-        setSelectedProductId(snapshot.selectedProductId || snapshot.draft?.selectedProductId || '');
-        setImageDataUrl(snapshot.imageDataUrl || snapshot.draft?.imageDataUrl || '');
-        const audioConfig = snapshot.draft?.audio?.config || snapshot.audio?.config || {};
-        const audioTracks = snapshot.draft?.audio?.tracks || snapshot.audio?.tracks || null;
-        const mixedUrl = snapshot.draft?.mix?.finalAudioUrl || snapshot.mix?.finalAudioUrl || snapshot.finalAudioUrl || snapshot.draft?.finalAudioUrl || '';
-        setAudioEnabled(audioConfig.enabled !== false);
-        setAudioMode((audioConfig.mode || snapshot.audioMode || 'auto') as AudioMode);
-        setAudioPriority((audioConfig.audioPriority || snapshot.audioPriority || 'balanced') as 'voice' | 'balanced' | 'music');
-        setAudioTone(audioConfig.tone || snapshot.audioTone || 'professional');
-        setAudioLanguageCode(audioConfig.languageCode || snapshot.audioLanguageCode || 'en');
-        setVoiceGender((audioConfig.voiceGender || snapshot.voiceGender || 'female') as 'male' | 'female');
-        setVoiceVolume(Number.isFinite(Number(audioConfig.voiceVolume)) ? Number(audioConfig.voiceVolume) : (snapshot.voiceVolume || 1));
-        setMusicVolume(Number.isFinite(Number(audioConfig.musicVolume)) ? Number(audioConfig.musicVolume) : (snapshot.musicVolume || 0.24));
-        setGeneratedTracks(audioTracks);
-        setFinalAudioUrl(mixedUrl);
-        setFinalVideoUrl(snapshot.finalVideoUrl || snapshot.draft?.finalVideoUrl || '');
-        setFinalOutputUrl(snapshot.finalOutputUrl || snapshot.draft?.finalOutputUrl || '');
-        setThumbnailUrl(snapshot.thumbnailUrl || snapshot.draft?.thumbnailUrl || snapshot.draft?.content?.thumbnailUrl || snapshot.draft?.thumbnails?.url || '');
-        setCaption(snapshot.caption || snapshot.draft?.caption || snapshot.draft?.content?.caption || '');
-        const snapTags = snapshot.hashtagsText || snapshot.draft?.hashtagsText || (Array.isArray(snapshot.draft?.content?.hashtags) ? snapshot.draft.content.hashtags.join(' ') : '') || '';
-        setHashtagsText(snapTags);
-        setSelectedPlatforms(Array.isArray(snapshot.selectedPlatforms) ? snapshot.selectedPlatforms : (snapshot.draft?.selectedPlatforms || []));
-        setScheduleDate(snapshot.scheduleDate || snapshot.draft?.scheduleDate || '');
-        setScheduleTime(snapshot.scheduleTime || snapshot.draft?.scheduleTime || '');
-        setCurrentStep(normalizeWizardStep(snapshot.currentStep));
-        setShowWizard(true);
-      };
+      if (shouldShowWizard) {
+        setHydratingDraft(true);
 
-      restoreFromSnapshot(saved);
+        const restoreFromSnapshot = (snapshot: any) => {
+          if (!snapshot) return;
+          setDraft(snapshot.draft || null);
+          setJobId(snapshot.jobId || '');
+          setScenes(resolveDirectorScenes(snapshot.draft || snapshot, snapshot));
+          setCharacters(Array.isArray(snapshot.characters) ? snapshot.characters : (snapshot.draft?.characters || []));
+          setBusinessName(snapshot.businessName || snapshot.draft?.businessName || '');
+          setIndustry(snapshot.industry || snapshot.draft?.industry || '');
+          setTargetAudience(snapshot.targetAudience || snapshot.draft?.targetAudience || '');
+          setBrandTone(snapshot.brandTone || snapshot.draft?.brandTone || '');
+          setCommercialObjective(snapshot.commercialObjective || snapshot.draft?.commercialObjective || '');
+          setBrandSummary(snapshot.brandSummary || snapshot.draft?.brandSummary || snapshot.draft?.description || '');
+          setVideoStyle(snapshot.videoStyle || snapshot.draft?.videoStyle || 'Cinematic Commercial');
+          setDurationSeconds(snapshot.durationSeconds || snapshot.draft?.durationSeconds || 30);
+          setUseLogo(snapshot.useLogo !== undefined ? snapshot.useLogo : (snapshot.draft?.useLogo !== undefined ? snapshot.draft.useLogo : false));
+          setUseCharacters(snapshot.useCharacters !== undefined ? snapshot.useCharacters : true);
+          setStoryDirection(snapshot.storyDirection || snapshot.draft?.storyDirection || '');
+          setSelectedProductId(snapshot.selectedProductId || snapshot.draft?.selectedProductId || '');
+          setImageDataUrl(snapshot.imageDataUrl || snapshot.draft?.imageDataUrl || '');
+          const audioConfig = snapshot.draft?.audio?.config || snapshot.audio?.config || {};
+          const audioTracks = snapshot.draft?.audio?.tracks || snapshot.audio?.tracks || null;
+          const mixedUrl = snapshot.draft?.mix?.finalAudioUrl || snapshot.mix?.finalAudioUrl || snapshot.finalAudioUrl || snapshot.draft?.finalAudioUrl || '';
+          setAudioEnabled(audioConfig.enabled !== false);
+          setAudioMode((audioConfig.mode || snapshot.audioMode || 'auto') as AudioMode);
+          setAudioPriority((audioConfig.audioPriority || snapshot.audioPriority || 'balanced') as 'voice' | 'balanced' | 'music');
+          setAudioTone(audioConfig.tone || snapshot.audioTone || 'professional');
+          setAudioLanguageCode(audioConfig.languageCode || snapshot.audioLanguageCode || 'en');
+          setVoiceGender((audioConfig.voiceGender || snapshot.voiceGender || 'female') as 'male' | 'female');
+          setVoiceVolume(Number.isFinite(Number(audioConfig.voiceVolume)) ? Number(audioConfig.voiceVolume) : (snapshot.voiceVolume || 1));
+          setMusicVolume(Number.isFinite(Number(audioConfig.musicVolume)) ? Number(audioConfig.musicVolume) : (snapshot.musicVolume || 0.24));
+          setGeneratedTracks(audioTracks);
+          setFinalAudioUrl(mixedUrl);
+          setFinalVideoUrl(snapshot.finalVideoUrl || snapshot.draft?.finalVideoUrl || '');
+          setFinalOutputUrl(snapshot.finalOutputUrl || snapshot.draft?.finalOutputUrl || '');
+          setThumbnailUrl(snapshot.thumbnailUrl || snapshot.draft?.thumbnailUrl || snapshot.draft?.content?.thumbnailUrl || snapshot.draft?.thumbnails?.url || '');
+          setCaption(snapshot.caption || snapshot.draft?.caption || snapshot.draft?.content?.caption || '');
+          const snapTags = snapshot.hashtagsText || snapshot.draft?.hashtagsText || (Array.isArray(snapshot.draft?.content?.hashtags) ? snapshot.draft.content.hashtags.join(' ') : '') || '';
+          setHashtagsText(snapTags);
+          setSelectedPlatforms(Array.isArray(snapshot.selectedPlatforms) ? snapshot.selectedPlatforms : (snapshot.draft?.selectedPlatforms || []));
+          setScheduleDate(snapshot.scheduleDate || snapshot.draft?.scheduleDate || '');
+          setScheduleTime(snapshot.scheduleTime || snapshot.draft?.scheduleTime || '');
+          setCompletedSteps(snapshot.completedSteps || snapshot.draft?.completedSteps || []);
+          setUiState(snapshot.uiState || snapshot.draft?.uiState || {});
+          setCurrentStep(normalizeWizardStep(snapshot.currentStep));
+          setShowWizard(true);
+        };
 
-      (async () => {
-        try {
-          const res = await videoGenerationAPI.getDraft(saved.jobId);
-          if (res?.success && res?.draft) {
-            const d = res.draft;
-            applyDraftState(d, saved);
-            const savedStep = localStorage.getItem(`director_studio_step_${d.jobId}`);
-            if (savedStep) setCurrentStep(normalizeWizardStep(savedStep));
-            else if (saved.currentStep) setCurrentStep(normalizeWizardStep(saved.currentStep));
-            else if (d.currentStep) setCurrentStep(normalizeWizardStep(d.currentStep));
+        restoreFromSnapshot(saved);
+
+        (async () => {
+          try {
+            const res = await videoGenerationAPI.getDraft(saved.jobId);
+            if (res?.success && res?.draft) {
+              const d = res.draft;
+              applyDraftState(d, saved);
+              const savedStep = localStorage.getItem(`director_studio_step_${d.jobId}`);
+              if (savedStep) setCurrentStep(normalizeWizardStep(savedStep));
+              else if (saved.currentStep) setCurrentStep(normalizeWizardStep(saved.currentStep));
+              else if (d.currentStep) setCurrentStep(normalizeWizardStep(d.currentStep));
+              await resumeActiveQueueJobs(d, res.queueJobs || []);
+            }
+          } catch (_) { /* silent */ }
+          finally {
+            setHydratingDraft(false);
           }
-        } catch (_) { /* silent */ }
-        finally {
-          setHydratingDraft(false);
-        }
-      })();
+        })();
+      } else {
+        (async () => {
+          try {
+            const res = await videoGenerationAPI.getDraft(saved.jobId);
+            if (res?.success && res?.draft) {
+              applyDraftState(res.draft, saved);
+              setShowWizard(false); // force false
+            }
+          } catch (_) {}
+        })();
+      }
     } catch (_) { /* corrupt data — ignore */ }
-  }, []);
+  }, [searchParams]);
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -507,6 +698,8 @@ export default function DirectorStudio() {
     if (draft?.scenes || draft?.images?.sceneData || draft?.clips?.sceneData) setScenes(resolveDirectorScenes(draft));
     if (draft?.characters) setCharacters(draft.characters);
     if (draft?.audio?.tracks) setGeneratedTracks(draft.audio.tracks);
+    if (draft?.completedSteps) setCompletedSteps(draft.completedSteps);
+    if (draft?.uiState) setUiState(draft.uiState);
     if (draft?.audio?.config) {
       setAudioEnabled(draft.audio.config.enabled !== false);
       setAudioMode((draft.audio.config.mode || 'auto') as AudioMode);
@@ -570,7 +763,9 @@ export default function DirectorStudio() {
       },
       mix: finalAudioUrl ? { finalAudioUrl } : null,
       thumbnailUrl, caption, hashtagsText, selectedPlatforms, scheduleDate, scheduleTime,
-      currentStep
+      currentStep,
+      completedSteps,
+      uiState
     };
     const saved = safeSetLocalStorage(LS_KEY, JSON.stringify(snapshot));
     if (!saved) {
@@ -582,34 +777,32 @@ export default function DirectorStudio() {
       finalVideoUrl, finalOutputUrl, thumbnailUrl, caption, hashtagsText,
       audioEnabled, audioMode, audioPriority, audioTone, audioLanguageCode, voiceGender,
       voiceVolume, musicVolume, generatedTracks, selectedPlatforms, scheduleDate, scheduleTime,
-      currentStep, hydratingDraft]);
+      currentStep, completedSteps, uiState, hydratingDraft]);
 
   // ── DEBOUNCED AUTO-SAVE to backend whenever Step 1 fields change and jobId exists
   const scheduleBackendAutoSave = useCallback(() => {
     if (!jobId) return;
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
     autoSaveTimer.current = setTimeout(async () => {
-      try {
-        await videoGenerationAPI.updateDraft(jobId, {
-          businessName, industry, targetAudience, brandSummary, brandTone,
-          commercialObjective, videoStyle, durationSeconds, useCharacters, useLogo,
-          selectedProductId,
-          imageDataUrl: imageDataUrl && !imageDataUrl.startsWith('data:') ? imageDataUrl : undefined,
-          storyDirection, currentStep,
-          description: brandSummary || `Commercial for ${businessName || 'Brand'}`
-        });
-      } catch (_) { /* silent */ }
-    }, 1500);
+      await saveDraftToBackend({
+        businessName, industry, targetAudience, brandSummary, brandTone,
+        commercialObjective, videoStyle, durationSeconds, useCharacters, useLogo,
+        selectedProductId,
+        imageDataUrl: imageDataUrl && !imageDataUrl.startsWith('data:') ? imageDataUrl : undefined,
+        storyDirection, currentStep, completedSteps, uiState,
+        description: brandSummary || `Commercial for ${businessName || 'Brand'}`
+      });
+    }, 500);
   }, [jobId, businessName, industry, targetAudience, brandSummary, brandTone,
       commercialObjective, videoStyle, durationSeconds, useCharacters, useLogo,
-      selectedProductId, imageDataUrl, storyDirection, currentStep]);
+      selectedProductId, imageDataUrl, storyDirection, currentStep, completedSteps, uiState, saveDraftToBackend]);
 
   useEffect(() => {
     if (jobId && showWizard && !hydratingDraft) scheduleBackendAutoSave();
     return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); };
   }, [businessName, industry, targetAudience, brandSummary, brandTone,
       commercialObjective, videoStyle, durationSeconds, useCharacters, useLogo,
-      selectedProductId, imageDataUrl, storyDirection, currentStep, jobId, showWizard, hydratingDraft]);
+      selectedProductId, imageDataUrl, storyDirection, currentStep, completedSteps, uiState, jobId, showWizard, hydratingDraft]);
 
   const getBestContinueStep = () => {
     if (selectedPlatforms.length > 0 || scheduleDate || scheduleTime) return 10;
@@ -634,23 +827,65 @@ export default function DirectorStudio() {
 
   useEffect(() => {
     if (!jobId || !showWizard || hydratingDraft) return;
-    const hasStoryState = scenes.length > 0 || Boolean(draft?.productionBible) || Boolean(draft?.voiceScript);
-    if (!hasStoryState) return;
     if (storyAutoSaveTimer.current) clearTimeout(storyAutoSaveTimer.current);
     storyAutoSaveTimer.current = setTimeout(async () => {
-      try {
-        await videoGenerationAPI.updateDraft(jobId, {
-          scenes: scenes.map(compactDirectorScene),
-          characters,
-          productionBible: draft?.productionBible || {},
-          voiceScript: draft?.voiceScript || '',
-          storyDirection,
-          currentStep
-        });
-      } catch (_) { /* silent */ }
-    }, 900);
+      await saveDraftToBackend({
+        scenes: scenes.map(compactDirectorScene),
+        characters,
+        productionBible: draft?.productionBible || {},
+        voiceScript: draft?.voiceScript || '',
+        storyDirection,
+        currentStep,
+        completedSteps,
+        uiState
+      });
+    }, 500);
     return () => { if (storyAutoSaveTimer.current) clearTimeout(storyAutoSaveTimer.current); };
-  }, [jobId, showWizard, hydratingDraft, scenes, characters, draft?.productionBible, draft?.voiceScript, storyDirection, currentStep]);
+  }, [jobId, showWizard, hydratingDraft, scenes, characters, draft?.productionBible, draft?.voiceScript, storyDirection, currentStep, completedSteps, uiState, saveDraftToBackend]);
+
+  useEffect(() => {
+    if (!jobId || !showWizard || hydratingDraft) return;
+    if (productionAutoSaveTimer.current) clearTimeout(productionAutoSaveTimer.current);
+    productionAutoSaveTimer.current = setTimeout(async () => {
+      await saveDraftToBackend({
+        caption,
+        hashtags: hashtagsText.split(/\s+/).filter(Boolean),
+        thumbnailUrl,
+        selectedPlatforms,
+        scheduleDate,
+        scheduleTime,
+        audioConfig: {
+          enabled: audioEnabled,
+          mode: audioEnabled ? audioMode : 'off',
+          audioPriority,
+          tone: audioTone,
+          languageCode: audioLanguageCode,
+          voiceGender,
+          voiceVolume,
+          musicVolume
+        },
+        audio: {
+          config: {
+            enabled: audioEnabled,
+            mode: audioEnabled ? audioMode : 'off',
+            audioPriority,
+            tone: audioTone,
+            languageCode: audioLanguageCode,
+            voiceGender,
+            voiceVolume,
+            musicVolume
+          },
+          tracks: generatedTracks
+        },
+        currentStep,
+        completedSteps,
+        uiState
+      });
+    }, 500);
+    return () => { if (productionAutoSaveTimer.current) clearTimeout(productionAutoSaveTimer.current); };
+  }, [jobId, showWizard, hydratingDraft, caption, hashtagsText, thumbnailUrl, selectedPlatforms,
+      scheduleDate, scheduleTime, audioEnabled, audioMode, audioPriority, audioTone, audioLanguageCode,
+      voiceGender, voiceVolume, musicVolume, generatedTracks, currentStep, completedSteps, uiState, saveDraftToBackend]);
 
   const filteredVideoDrafts = useMemo(
     () => videoDrafts.filter((item) => statusFilter === 'all' || item.status === statusFilter),
@@ -729,6 +964,7 @@ export default function DirectorStudio() {
         } else {
           setCurrentStep(d.scenes && d.scenes.length > 0 ? 3 : 1);
         }
+        await resumeActiveQueueJobs(d, res.queueJobs || []);
       }
     } catch (e: any) {
       alert(e?.message || 'Failed to load draft');
@@ -778,12 +1014,23 @@ export default function DirectorStudio() {
 
       if (!activeJobId) {
         const draftRes = await videoGenerationAPI.createDraft({
+          businessName,
+          industry,
+          targetAudience,
+          brandTone,
+          commercialObjective,
+          brandSummary,
           description: brandSummary || `Commercial for ${businessName || 'Brand'}`,
           videoStyle,
           durationSeconds,
           imageData: imageDataUrl,
           productId: selectedProductId,
-          useLogo
+          useLogo,
+          useCharacters,
+          storyDirection,
+          currentStep: 1,
+          completedSteps,
+          uiState
         } as any);
         activeJobId = draftRes.draft.jobId;
         setDraft(draftRes.draft);
@@ -1020,6 +1267,40 @@ export default function DirectorStudio() {
     ].filter(Boolean).join('\n\n');
   };
 
+  const applyImageGenerationResult = (result: any, sceneId?: string) => {
+    if (result?.sceneData) {
+      if (sceneId) {
+        const updatedScene = result.sceneData.find((item: any) => String(item.sceneId) === String(sceneId));
+        if (updatedScene) mergeSceneRegenerationResult(sceneId, updatedScene);
+        else setScenes(result.sceneData);
+      } else {
+        setScenes(result.sceneData);
+      }
+    }
+    if (result?.draft) applyDraftState(result.draft);
+  };
+
+  const pollAndRefreshDraft = async (queueJobId: string, busyLabel: string, onScene?: boolean) => {
+    const result = await pollDirectorJob(queueJobId, {
+      onProgress: (job) => {
+        setBusyMsg(job?.metadata?.publicStep || job?.currentStep || busyLabel);
+        if (jobId) {
+          videoGenerationAPI.getDraft(jobId).then((res) => {
+            if (res?.draft) applyDraftState(res.draft);
+          }).catch(() => {});
+        }
+      }
+    });
+    if (onScene && result?.videoUrl && result?.sceneId) {
+      handleUpdateScene(result.sceneId, {
+        clipUrl: result.videoUrl,
+        videoUrl: result.videoUrl,
+        generatedVideoUrl: result.videoUrl
+      });
+    }
+    return result;
+  };
+
   const handleGenerateSceneImage = async (scene: any, instruction = '') => {
     setImgLoadingSceneId(scene.sceneId);
     const basePrompt = String(scene.imagePrompt || '').trim();
@@ -1027,29 +1308,30 @@ export default function DirectorStudio() {
     try {
       const res = await videoGenerationAPI.generateImages({
         jobId,
+        async: true,
         action: 'regenerate',
         sceneId: scene.sceneId,
+        characterId: resolvePrimaryCharacterId(draft, characters),
         prompt: finalPrompt,
         imagePrompt: finalPrompt,
         imageUrl: scene.imageUrl || scene.generatedImageUrl,
         style: videoStyle
       } as any);
-      if (res?.sceneData) {
-        const updatedScene = res.sceneData.find((item: any) => String(item.sceneId) === String(scene.sceneId));
-        if (updatedScene) {
-          mergeSceneRegenerationResult(scene.sceneId, updatedScene);
-        } else {
-          setScenes(res.sceneData);
-        }
+      if (res?.queueJobId) {
+        setBusy(true);
+        setBusyMsg('Generating scene image...');
+        const result = await pollAndRefreshDraft(res.queueJobId, 'Generating scene image...');
+        applyImageGenerationResult(result, scene.sceneId);
       } else {
-        const url = res?.images?.[scene.sceneId]?.imageUrl || res?.imageUrl || res?.draft?.scenes?.find((s: any) => s.sceneId === scene.sceneId)?.imageUrl;
-        if (url) handleUpdateScene(scene.sceneId, { generatedImageUrl: url, imageUrl: url });
+        applyImageGenerationResult(res, scene.sceneId);
       }
       handleUpdateScene(scene.sceneId, { imagePrompt: basePrompt });
     } catch (e: any) {
       alert(e?.message || 'Image generation failed');
     } finally {
       setImgLoadingSceneId(null);
+      setBusy(false);
+      setBusyMsg('');
     }
   };
 
@@ -1058,28 +1340,21 @@ export default function DirectorStudio() {
     setGeneratingAllImages(true);
     setBusy(true);
     try {
-      for (let i = 0; i < scenes.length; i++) {
-        const scene = scenes[i];
-        setBusyMsg(`AI Artist is generating image for Scene ${i + 1}/${scenes.length}: ${scene.title}...`);
-        setImgLoadingSceneId(scene.sceneId);
-        
-        const res = await videoGenerationAPI.generateImages({
-          jobId,
-          action: 'regenerate',
-          sceneId: scene.sceneId,
-          prompt: scene.imagePrompt,
-          imagePrompt: scene.imagePrompt,
-          style: videoStyle
-        } as any);
-        
-        if (res?.sceneData) {
-          setScenes(res.sceneData);
-        } else {
-          const url = res?.images?.[scene.sceneId]?.imageUrl || res?.imageUrl || res?.draft?.scenes?.find((s: any) => s.sceneId === scene.sceneId)?.imageUrl;
-          if (url) {
-            handleUpdateScene(scene.sceneId, { generatedImageUrl: url, imageUrl: url });
-          }
-        }
+      setBusyMsg(`AI Artist is generating images for ${scenes.length} scene(s)...`);
+      const res = await videoGenerationAPI.generateImages({
+        jobId,
+        async: true,
+        action: 'generateAll',
+        sceneData: scenes,
+        characterId: resolvePrimaryCharacterId(draft, characters),
+        style: videoStyle
+      } as any);
+
+      if (res?.queueJobId) {
+        const result = await pollAndRefreshDraft(res.queueJobId, 'Generating scene images...');
+        applyImageGenerationResult(result);
+      } else {
+        applyImageGenerationResult(res);
       }
     } catch (e: any) {
       alert(e?.message || 'Failed to generate all images');
@@ -1098,16 +1373,27 @@ export default function DirectorStudio() {
     try {
       const res: any = await videoGenerationAPI.createVideo({
         jobId,
+        async: true,
         sceneId: scene.sceneId,
         prompt: finalPrompt,
         imageUrl: scene.imageUrl || scene.generatedImageUrl,
         duration: scene.durationSeconds || 5
       } as any);
-      if (res?.videoUrl) {
+
+      let videoUrl = res?.videoUrl;
+      if (res?.queueJobId) {
+        setBusy(true);
+        setBusyMsg(`Animating scene ${scene.sceneNumber || ''}...`);
+        const result = await pollAndRefreshDraft(res.queueJobId, 'Generating video clip...', true);
+        videoUrl = result?.videoUrl || videoUrl;
+        if (result?.draft) applyDraftState(result.draft);
+      }
+
+      if (videoUrl) {
         const updatedScene = {
-          clipUrl: res.videoUrl,
-          videoUrl: res.videoUrl,
-          generatedVideoUrl: res.videoUrl,
+          clipUrl: videoUrl,
+          videoUrl,
+          generatedVideoUrl: videoUrl,
           videoPrompt: basePrompt
         };
         handleUpdateScene(scene.sceneId, updatedScene);
@@ -1121,13 +1407,13 @@ export default function DirectorStudio() {
                 : s
             );
             const clipUrls = nextScenes.map((s) => directorSceneClipUrl(s)).filter(Boolean);
-            videoGenerationAPI.updateDraft(jobId, {
+            saveDraftToBackend({
               scenes: nextScenes.map(compactDirectorScene),
               clips: {
                 sceneData: nextScenes.map(compactDirectorScene),
                 clipUrls
               }
-            }).catch(() => { /* silent */ });
+            });
             return nextScenes;
           });
         }
@@ -1136,6 +1422,8 @@ export default function DirectorStudio() {
       alert(e?.message || 'Video generation failed');
     } finally {
       setVidLoadingSceneId(null);
+      setBusy(false);
+      setBusyMsg('');
     }
   };
 
@@ -1171,14 +1459,22 @@ export default function DirectorStudio() {
         
         const res: any = await videoGenerationAPI.createVideo({
           jobId,
+          async: true,
           sceneId: scene.sceneId,
           prompt: scene.videoPrompt,
           imageUrl: sceneImg,
           duration: scene.durationSeconds || 5
         } as any);
         
-        if (res?.videoUrl) {
-          const updatedFields = { clipUrl: res.videoUrl, videoUrl: res.videoUrl, generatedVideoUrl: res.videoUrl };
+        let videoUrl = res?.videoUrl;
+        if (res?.queueJobId) {
+          const result = await pollAndRefreshDraft(res.queueJobId, `Animating scene ${i + 1}/${latestScenes.length}...`, true);
+          videoUrl = result?.videoUrl || videoUrl;
+          if (result?.draft) applyDraftState(result.draft);
+        }
+
+        if (videoUrl) {
+          const updatedFields = { clipUrl: videoUrl, videoUrl, generatedVideoUrl: videoUrl };
           latestScenes = latestScenes.map((s) =>
             String(s.sceneId) === String(scene.sceneId)
               ? normalizeDirectorScene({ ...s, ...updatedFields }, Number(s.sceneNumber || s.index || 1) - 1)
@@ -1192,13 +1488,13 @@ export default function DirectorStudio() {
       }
       if (jobId) {
         const clipUrls = latestScenes.map((s) => directorSceneClipUrl(s)).filter(Boolean);
-        await videoGenerationAPI.updateDraft(jobId, {
+        await saveDraftToBackend({
           scenes: latestScenes.map(compactDirectorScene),
           clips: {
             sceneData: latestScenes.map(compactDirectorScene),
             clipUrls
           }
-        }).catch(() => { /* silent */ });
+        });
         const refreshed = await videoGenerationAPI.getDraft(jobId);
         if (refreshed?.draft) applyDraftState(refreshed.draft);
       }
@@ -1245,16 +1541,25 @@ export default function DirectorStudio() {
     try {
       const res = await videoGenerationAPI.generateAudio({
         jobId,
+        async: true,
         audio: buildAudioPayload()
       });
-      const tracks = res?.audio?.tracks || res?.tracks || null;
+
+      let audioResult = res;
+      if (res?.queueJobId) {
+        audioResult = await pollAndRefreshDraft(res.queueJobId, 'Generating audio tracks...');
+      }
+
+      const tracks = audioResult?.audio?.tracks || audioResult?.tracks || null;
       if (tracks) setGeneratedTracks(tracks);
-      if (res?.audio) {
+      if (audioResult?.audio) {
         setDraft((current: any) => ({
           ...(current || {}),
-          audio: res.audio,
+          audio: audioResult.audio,
           mix: null
         }));
+      } else if (audioResult?.draft?.audio) {
+        applyDraftState(audioResult.draft);
       }
       setFinalAudioUrl('');
     } catch (e: any) {
@@ -1320,18 +1625,19 @@ export default function DirectorStudio() {
       setBusyMsg(`Merging ${clipUrls.length} video clip(s) with audio tracks...`);
       const res = await videoGenerationAPI.mergeVideo({
         jobId,
+        async: true,
         clipUrls,
         finalAudioUrl: finalAudioUrl || undefined
       });
-      if (res?.finalOutputUrl) setFinalOutputUrl(res.finalOutputUrl);
-      if (res?.finalVideoUrl) setFinalVideoUrl(res.finalVideoUrl);
-      if (!res?.finalOutputUrl && !res?.finalVideoUrl) {
-        // Async/queued merge — poll the draft to get the result
-        setBusyMsg('Video merge queued. Fetching result...');
-        const refreshed = await videoGenerationAPI.getDraft(jobId);
-        if (refreshed?.draft?.merge?.finalOutputUrl) setFinalOutputUrl(refreshed.draft.merge.finalOutputUrl);
-        if (refreshed?.draft?.merge?.finalVideoUrl) setFinalVideoUrl(refreshed.draft.merge.finalVideoUrl);
-        if (refreshed?.draft?.finalVideoUrl) setFinalVideoUrl(refreshed.draft.finalVideoUrl);
+      if (res?.queueJobId) {
+        const result = await pollAndRefreshDraft(res.queueJobId, 'Merging video...');
+        if (result?.draft) applyDraftState(result.draft);
+        if (result?.merge?.finalOutputUrl) setFinalOutputUrl(result.merge.finalOutputUrl);
+        if (result?.merge?.finalVideoUrl) setFinalVideoUrl(result.merge.finalVideoUrl);
+      } else {
+        if (res?.finalOutputUrl) setFinalOutputUrl(res.finalOutputUrl);
+        if (res?.finalVideoUrl) setFinalVideoUrl(res.finalVideoUrl);
+        if (res?.draft) applyDraftState(res.draft);
       }
     } catch (e: any) {
       alert(e?.message || 'Video merge failed');
@@ -1347,16 +1653,19 @@ export default function DirectorStudio() {
     setBusy(true);
     setBusyMsg('Generating thumbnail, caption, and hashtags...');
     try {
-      const res = await videoGenerationAPI.generateContent({ jobId });
-      const newThumb = res?.thumbnailUrl || res?.content?.thumbnailUrl || res?.draft?.thumbnailUrl || '';
+      const res = await videoGenerationAPI.generateContent({ jobId, async: true });
+      let contentResult = res;
+      if (res?.queueJobId) {
+        contentResult = await pollAndRefreshDraft(res.queueJobId, 'Generating thumbnail & caption...');
+      }
+      const newThumb = contentResult?.thumbnailUrl || contentResult?.content?.thumbnailUrl || contentResult?.draft?.thumbnailUrl || '';
       if (newThumb) setThumbnailUrl(newThumb);
-      const newCaption = res?.caption ?? res?.content?.caption ?? '';
+      const newCaption = contentResult?.caption ?? contentResult?.content?.caption ?? '';
       if (newCaption) setCaption(newCaption);
-      const rawTags = res?.hashtags ?? res?.content?.hashtags ?? '';
+      const rawTags = contentResult?.hashtags ?? contentResult?.content?.hashtags ?? '';
       const newTags = Array.isArray(rawTags) ? rawTags.join(' ') : String(rawTags || '');
       if (newTags) setHashtagsText(newTags);
-      // Keep the local draft in sync so the generated content persists on refresh.
-      if (res?.draft) setDraft(res.draft);
+      if (contentResult?.draft) applyDraftState(contentResult.draft);
     } catch (e: any) {
       alert(e?.message || 'Content generation failed');
     } finally {

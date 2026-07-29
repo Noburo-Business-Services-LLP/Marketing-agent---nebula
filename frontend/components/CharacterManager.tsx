@@ -76,6 +76,7 @@ export const CharacterManager: React.FC<CharacterManagerProps> = ({ jobId, draft
       const newChar = { 
         id: cid, 
         characterId: cid,
+        identityMemoryId: editingChar?.identityMemoryId || editingChar?.characterId || cid,
         name: editName, 
         role: editRole, 
         age: editAge,
@@ -90,13 +91,19 @@ export const CharacterManager: React.FC<CharacterManagerProps> = ({ jobId, draft
       } else {
         updatedChars.push(newChar);
       }
-      
-      await videoGenerationAPI.updateDraft(jobId, { characters: updatedChars });
+
+      const primaryCharacterId = newChar.characterId || newChar.id;
+      await videoGenerationAPI.updateDraft(jobId, {
+        characters: updatedChars,
+        characterId: primaryCharacterId,
+        identityMemoryId: newChar.identityMemoryId || primaryCharacterId
+      });
       setDraft((prev: any) => prev ? { ...prev, characters: updatedChars } : prev);
       closeEditor();
     } catch (e: any) {
       console.error("Failed to save character:", e);
-      alert("Error saving character");
+      const errMsg = e.response?.data?.message || e.message || e.error || "Unknown error";
+      alert("Error saving character: " + errMsg);
     } finally {
       setBusy(false);
     }
@@ -111,10 +118,19 @@ export const CharacterManager: React.FC<CharacterManagerProps> = ({ jobId, draft
         gender: editGender,
         hairStyle: editHair,
         appearance: editAppearance,
-        artStyle: 'Realistic / Photography'
+        artStyle: 'Realistic / Photography',
+        characterId: editingChar?.characterId || editingChar?.id || undefined
       });
       if (res?.imageUrl) {
         setEditImage(res.imageUrl);
+        if (res?.characterId) {
+          setEditingChar((prev: any) => prev ? {
+            ...prev,
+            characterId: res.characterId,
+            id: res.characterId,
+            identityMemoryId: res.characterId
+          } : prev);
+        }
       }
     } catch (e) {
       console.error(e);
@@ -140,13 +156,16 @@ export const CharacterManager: React.FC<CharacterManagerProps> = ({ jobId, draft
           gender: char.appearance?.gender || char.gender || 'Any',
           hairStyle: char.hair?.style || char.hairStr || '',
           appearance: char.appearance ? JSON.stringify(char.appearance) : char.appearanceStr || '',
-          artStyle: 'Realistic / Photography'
+          artStyle: 'Realistic / Photography',
+          characterId: cid || undefined
         });
         
         if (res?.imageUrl) {
+          const memoryId = res.characterId || cid;
           const newChar = {
-            id: cid,
-            characterId: cid,
+            id: memoryId,
+            characterId: memoryId,
+            identityMemoryId: res.characterId || memoryId,
             name: char.name || '',
             role: char.role || char.appearance?.role || 'Character',
             age: char.appearance?.ageAppearance || char.age || '25',
@@ -165,7 +184,11 @@ export const CharacterManager: React.FC<CharacterManagerProps> = ({ jobId, draft
         }
       }
       
-      await videoGenerationAPI.updateDraft(jobId, { characters: updatedChars });
+      await videoGenerationAPI.updateDraft(jobId, {
+        characters: updatedChars,
+        characterId: updatedChars.find((c) => c.image)?.characterId || updatedChars[0]?.characterId,
+        identityMemoryId: updatedChars.find((c) => c.identityMemoryId)?.identityMemoryId
+      });
       setDraft((prev: any) => prev ? { ...prev, characters: updatedChars } : prev);
       
     } catch (e: any) {

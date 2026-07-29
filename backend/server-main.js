@@ -681,33 +681,62 @@ const startServer = async () => {
   let mongoConnected = false;
   try {
     console.log('Connecting to MongoDB...');
-    let retries = 5;
+    let retries = 3;
     while (retries > 0) {
       try {
         await mongoose.connect(process.env.MONGODB_URI, {
           // Atlas/network hiccups can cause fast failures right in the middle
           // of scheduling/publishing. Give Mongoose more time to pick a server.
-          serverSelectionTimeoutMS: 30000,
-          socketTimeoutMS: 45000,
-          connectTimeoutMS: 30000,
+          serverSelectionTimeoutMS: 8000,
+          socketTimeoutMS: 15000,
+          connectTimeoutMS: 8000,
         });
         console.log('✅ MongoDB connected successfully');
         mongoConnected = true;
         break;
       } catch (err) {
         retries -= 1;
-        console.warn(`⚠️  MongoDB connection failed. Retries left: ${retries}. Waiting 5 seconds...`);
-        if (retries === 0) throw err;
-        await new Promise(res => setTimeout(res, 5000));
+        console.warn(`⚠️  MongoDB connection failed. Retries left: ${retries}.`);
+        if (retries === 0) {
+          console.warn('⚠️  Primary database connection failed. Attempting fallback to local MongoDB container...');
+          try {
+            await mongoose.connect('mongodb://mongo:27017/nebula', {
+              serverSelectionTimeoutMS: 5000,
+              socketTimeoutMS: 10000,
+            });
+            console.log('✅ Connected successfully to local fallback MongoDB container');
+            mongoConnected = true;
+          } catch (localErr) {
+            console.error('❌ Local fallback MongoDB connection failed:', localErr.message);
+            throw err;
+          }
+        } else {
+          await new Promise(res => setTimeout(res, 2000));
+        }
       }
     }
 
     // Start persistent video generation queue worker
     try {
       const { videoGenerationQueue } = require('./services/videoGenerationQueue');
+      const { logDirector } = require('./services/directorLogger');
+      logDirector('backend_restart', 'Backend started; queue worker initializing', {});
       videoGenerationQueue.startWorker();
     } catch (queueError) {
       console.warn('⚠️  Video generation queue worker failed to start:', queueError.message);
+    }
+
+    // Director Studio storage cleanup (non-blocking)
+    try {
+      const { runDirectorStorageCleanup } = require('./services/directorStorageCleanup');
+      runDirectorStorageCleanup().catch((err) => {
+        console.warn('⚠️  Director storage cleanup failed:', err.message);
+      });
+      setInterval(() => {
+        runDirectorStorageCleanup().catch(() => {});
+      }, 6 * 60 * 60 * 1000).unref?.();
+    } catch (cleanupError) {
+      console.warn('⚠️  Director storage cleanup failed to start:', cleanupError.message);
     }
 
     // Start notification scheduler for campaign reminders

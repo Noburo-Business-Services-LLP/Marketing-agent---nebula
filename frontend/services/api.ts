@@ -496,8 +496,12 @@ export const apiService = {
       if (key.startsWith('nebula_suggested_campaigns')) {
         localStorage.removeItem(key);
       }
+      if (key.startsWith('director_studio_step_')) {
+        localStorage.removeItem(key);
+      }
     });
     localStorage.removeItem('nebula_focus_platforms');
+    localStorage.removeItem('director_studio_draft_v1');
     // Clear session storage too
     sessionStorage.removeItem('nebulaa_website_analysis');
   },
@@ -3358,6 +3362,10 @@ export const videoGenerationAPI = {
     return apiCall(`/video-generation/jobs/${encodeURIComponent(jobId)}/cancel`, { method: 'POST' }, true);
   },
 
+  retryJob: async (jobId: string): Promise<any> => {
+    return apiCall(`/video-generation/jobs/${encodeURIComponent(jobId)}/retry`, { method: 'POST' }, true);
+  },
+
   createDraft: async (payload: {
     description: string;
     durationSeconds?: number;
@@ -3404,7 +3412,7 @@ export const videoGenerationAPI = {
     }, true);
   },
 
-  generateCharacterPreview: async (payload: any): Promise<{ success: boolean; imageUrl?: string; error?: string }> => {
+  generateCharacterPreview: async (payload: any): Promise<{ success: boolean; imageUrl?: string; error?: string; characterId?: string }> => {
     return apiCall('/video-generation/generateCharacterPreview', {
       method: 'POST',
       body: JSON.stringify(payload)

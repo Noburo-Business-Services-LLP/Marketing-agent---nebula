@@ -1153,9 +1153,9 @@ async function composeImageToVideoWithAudio({
     
     // Try to check if temporary files still exist
     try {
-      const imgExists = fs.existsSync(imagePath);
-      const audioExists = fs.existsSync(audioPath);
-      const outExists = fs.existsSync(outPath);
+      const imgExists = Boolean(imagePath && typeof imagePath === 'string' && fs.existsSync(imagePath));
+      const audioExists = Boolean(audioPath && typeof audioPath === 'string' && fs.existsSync(audioPath));
+      const outExists = Boolean(outPath && typeof outPath === 'string' && fs.existsSync(outPath));
       console.error(`\n📁 File Status:`);
       console.error(`   - Image exists: ${imgExists}`);
       console.error(`   - Audio exists: ${audioExists}`);

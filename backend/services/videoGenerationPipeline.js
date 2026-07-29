@@ -13,10 +13,16 @@ const { callGemini, parseGeminiJSON, generateCampaignImageNanoBanana, extractCha
 const { getPublicBaseUrl, normalizeTone, audioFilePathForTone } = require('../utils/toneAudio');
 const { generateVideoClip, generateCharacterImageFal, generateCharacterSheetFal, applyFaceSwapFal, extractFaceEmbedding } = require('./videoService');
 const { uploadVideoFile } = require('./imageUploader');
-const { updateDraft } = require('./videoDraftStore');
+const { updateDraft, STORAGE_ROOT } = require('./videoDraftStore');
 const promptBuilder = require('./promptBuilder');
+const {
+  generateSceneImageWithIdentityLock,
+  resolveCharacterMemoryForScene
+} = require('./sceneImageIdentityPipeline');
 
-const STORAGE_ROOT = path.resolve(__dirname, '../storage/ai-videos');
+function getCharacterConsistency() {
+  return require('./characterConsistency');
+}
 const VIDEO_TARGET = { width: 1080, height: 1920, fps: 30 };
 const VIDEO_ENCODE_PRESET = String(process.env.AI_VIDEO_ENCODE_PRESET || 'ultrafast');
 const VIDEO_ENCODE_CRF = String(process.env.AI_VIDEO_ENCODE_CRF || '23');
@@ -713,6 +719,9 @@ function resolveLocalGeneratedMediaPath(sourceUrl = '') {
 async function materializeSourceToFile({ source, destinationPath }) {
   const raw = String(source || '').trim();
   if (!raw) throw new Error('Missing source media');
+  if (!destinationPath || typeof destinationPath !== 'string') {
+    throw new Error('Invalid destination path');
+  }
 
   if (isDataUrl(raw)) {
     const parsed = parseDataUrl(raw);
@@ -1080,6 +1089,8 @@ async function generateSceneImages({
   ).trim();
 
   let characterSheet = input.characterSheet || null;
+  let characterMemory = null;
+  const characterConsistency = () => getCharacterConsistency();
   
   if (input.characterEnabled && input.characterImage && input.characterConsistencyStrength === 'Strict') {
     if (!characterSheet && context.jobId) {
@@ -1091,13 +1102,14 @@ async function generateSceneImages({
            characterSheet = await generateCharacterSheetFal(input.characterImage);
            if (draft) {
                draft.characterSheet = characterSheet;
-               // Wait for save below
            }
        }
        
        if (draft && !draft.characterFaceEmbedding) {
            if (logger) logger("Extracting formal Face Embedding vector for identity lock...");
-           draft.characterFaceEmbedding = await extractFaceEmbedding(input.characterImage);
+           const embedding = await extractFaceEmbedding(input.characterImage);
+           draft.characterFaceEmbedding = embedding;
+           characterMemory = await characterConsistency().createCharacterMemory(draft._id, { path: input.characterImage, metadata: { ...draft.characterSheet, characterId: draft._id } });
        }
        
        if (draft) {
@@ -1115,7 +1127,6 @@ async function generateSceneImages({
       const localPath = path.join(context.dirs.images, fileName);
       const mediaUrl = buildMediaUrl(context.baseUrl, context.jobId, ['images', fileName]);
 
-      // Cache guard: Check if the scene image is ALREADY generated in a prior attempt and exists!
       if (!input.bypassCache && scene.imageUrl && scene.imageUrl.startsWith('http') && fs.existsSync(localPath)) {
         if (logger) logger(`Reusing existing generated image for scene ${scene.sceneId}`);
         const reusedScene = {
@@ -1129,7 +1140,6 @@ async function generateSceneImages({
         continue;
       }
 
-      // First scene can use uploaded image or product image directly.
       const canUseReferenceDirectly = index === 0 && referenceImage?.localPath && !scene.imagePrompt;
 
       if (canUseReferenceDirectly) {
@@ -1185,7 +1195,6 @@ async function generateSceneImages({
     let builtImagePrompt = promptBuilder.buildSceneImagePrompt(scene, plan);
     let builtNegativePrompt = promptBuilder.buildSceneNegativePrompt(scene, plan);
 
-    // Find the character name for reference header mapping
     let characterHeader = 'No character reference';
     if (charactersList.length > 0) {
       const sceneText = `${scene.title || ''} ${scene.action || ''} ${scene.imagePrompt || ''}`.toLowerCase();
@@ -1237,130 +1246,52 @@ CRITICAL COMPOSITION RULES
       compositionRules
     ].filter(Boolean).join('\n\n');
 
-      const imageResult = await runWithRetries(
-        `image generation for ${scene.sceneId}`,
-        async () => {
-          if (logger) {
-            console.log("Scene:", index + 1);
-            console.log("Character Image Present:", !!sceneCharacterImage);
-            console.log("Previous Scene Present:", !!previousSceneImageUrl);
-            console.log("Product Image Present:", !!consistencyReference);
-          }
+    const sceneMemory = await resolveCharacterMemoryForScene({
+      draft: {
+        characters: charactersList,
+        characterImage: sceneCharacterImage || input.characterImage,
+        characterId: input.characterId
+      },
+      scene,
+      jobId: context.jobId
+    }) || characterMemory;
 
-          if (sceneCharacterImage) {
-            if (logger) console.log(`Using character reference image for scene ${scene.sceneId}...`);
-            
-            let imageData = sceneCharacterImage;
-            if (!imageData.startsWith('http') && !imageData.startsWith('data:')) {
-              let cleanBase64 = sceneCharacterImage;
-              if (cleanBase64.includes('data:image')) {
-                cleanBase64 = cleanBase64.split(',')[1];
-              }
-              imageData = `data:image/jpeg;base64,${cleanBase64}`;
-            }
-
-            console.log('\n===========================');
-            console.log('CHARACTER CONSISTENCY');
-            console.log('===========================\n');
-            console.log(`Scene: ${scene.sceneId}\n`);
-            console.log(`Strict Pipeline: true`);
-            console.log(`Character Reference: ${sceneCharacterImage.slice(0, 60)}...`);
-            console.log(`Previous Scene: ${!!previousSceneImageUrl}`);
-            console.log(`Use Logo: ${input.useLogo === true}\n`);
-            console.log(`Using Model:\nmodels/nano-banana-flash\n`);
-            console.log('===========================\n');
-
-            const nanoResult = await generateCampaignImageNanoBanana(promptWithConsistency, {
-              aspectRatio: '9:16',
-              characterReferenceImage: imageData,
-              originalCharacterImage: imageData,
-              isCinematic: true,
-              brandName: input.useLogo === true ? String(profile.name || '') : undefined,
-              industry: input.useLogo === true ? String(profile.industry || '') : undefined,
-              tone: input.useLogo === true ? String(profile.brandVoice || 'professional') : undefined,
-            });
-            
-            if (nanoResult && (nanoResult.imageUrl || typeof nanoResult === 'string')) {
-                return typeof nanoResult === 'string' ? nanoResult : nanoResult.imageUrl;
-            } else {
-                throw new Error('Nano Banana returned no image');
-            }
-          }
-
-          // Fallback to NanoBanana if no character image is provided
-          const result = await generateCampaignImageNanoBanana(promptWithConsistency, {
-            isCinematic: true,
-            aspectRatio: '9:16',
-            brandName: input.useLogo !== false ? String(profile.name || '') : undefined,
-            industry: input.useLogo !== false ? String(profile.industry || '') : undefined,
-            tone: input.useLogo !== false ? String(profile.brandVoice || 'professional') : undefined,
-            originalCharacterImage: input.characterEnabled ? input.originalCharacterImage : undefined,
-            characterReferenceImage: (input.characterEnabled && input.characterImage) ? input.characterImage : undefined,
-            previousSceneImage: previousSceneImageUrl || undefined,
-            productReferenceImage: (!(input.characterEnabled && input.characterImage) && consistencyReference) ? consistencyReference : undefined,
-            linkedProduct: product ? {
-              name: product.name,
-              description: product.description,
-              imageUrl: product.imageUrl
-            } : null,
-            preserveCharacterIdentity: input.preserveIdentity !== false,
-            characterSource: input.originalCharacterImage ? 'upload' : 'system',
-            consistencyStrength: 'strict'
-          });
-          if (!result?.success || !result?.imageUrl) {
-            throw new Error(result?.error || 'AI image generation failed');
-          }
-          return result.imageUrl;
-        },
-        2,
-        logger
-      );
-
-      let finalImageUrl = imageResult;
-
-      if (input.characterEnabled && sceneCharacterImage && input.preserveIdentity !== false) {
-        if (logger) {
-          logger(`Executing Face Swap post-processing for scene ${scene.sceneId}...`);
-          console.log("Starting FaceSwap for Scene", index + 1);
-          console.log("Source Face:", sceneCharacterImage ? "present" : "missing");
-          console.log("Target Scene:", imageResult);
-        }
-        const faceSwapTarget = sceneCharacterImage;
-        finalImageUrl = await applyFaceSwapFal(imageResult, faceSwapTarget);
-        
-        if (logger) {
-          console.log("FaceSwap Result:", finalImageUrl ? "success" : "failed");
-        }
+    const identityResult = await generateSceneImageWithIdentityLock({
+      scene,
+      prompt: promptWithConsistency,
+      rawPrompt: true,
+      characterMemory: sceneMemory,
+      jobId: context.jobId,
+      sceneId: scene.sceneId,
+      localOutputPath: localPath,
+      plan,
+      identityInstruction: characterImageContext,
+      logger,
+      brandContext: {
+        brandName: input.useLogo === true ? String(profile.name || '') : undefined,
+        industry: input.useLogo === true ? String(profile.industry || '') : undefined,
+        tone: input.useLogo === true ? String(profile.brandVoice || 'professional') : undefined
       }
+    });
 
-      if (logger) {
-        console.log("Saving Final Scene Image:", finalImageUrl);
+    const finishedScene = {
+      ...scene,
+      imageUrl: mediaUrl,
+      imagePath: localPath,
+      imageSource: 'ai_generated',
+      identityLock: {
+        similarity: identityResult.similarity,
+        attempts: identityResult.attempts,
+        faceSwapApplied: identityResult.faceSwapApplied,
+        enhanced: identityResult.enhanced,
+        identityConditioned: identityResult.identityConditioned,
+        generationEngine: identityResult.generationEngine,
+        characterMemoryId: identityResult.characterMemoryId
       }
-      await materializeSourceToFile({
-        source: finalImageUrl,
-        destinationPath: localPath
-      });
-
-      if (logger) {
-        console.log("Final Pipeline Summary");
-        console.log(JSON.stringify({
-          geminiReferenceImageAttached: !!input.characterImage || !!input.originalCharacterImage,
-          pulidExecuted: false,
-          faceSwapExecuted: !!(input.characterEnabled && input.characterImage && input.preserveIdentity !== false),
-          faceSwapSucceeded: finalImageUrl !== imageResult,
-          finalOutputUrl: finalImageUrl
-        }, null, 2));
-      }
-
-      const finishedScene = {
-        ...scene,
-        imageUrl: mediaUrl,
-        imagePath: localPath,
-        imageSource: 'ai_generated'
-      };
+    };
       
       outputScenes.push(finishedScene);
-      previousSceneImageUrl = finalImageUrl;
+      previousSceneImageUrl = identityResult.imageSource || mediaUrl;
     }
 
   return outputScenes;
@@ -1600,7 +1531,8 @@ async function generateSceneClips({
 }
 
 function buildConcatListContent(paths = []) {
-  return paths
+  return (Array.isArray(paths) ? paths : [])
+    .filter((p) => Boolean(p && typeof p === 'string'))
     .map((clipPath) => `file '${String(path.resolve(clipPath)).replace(/\\/g, '/').replace(/'/g, "'\\''")}'`)
     .join('\n');
 }
@@ -2687,15 +2619,15 @@ async function prepareBackgroundTrack({ audioOptions, context, durationSeconds =
     if (preferredTrack) {
       const lower = preferredTrack.toLowerCase();
       selectedPath =
-        candidates.find((p) => path.basename(p).toLowerCase() === lower) ||
-        candidates.find((p) => p.toLowerCase().includes(lower)) ||
+        candidates.find((p) => p && typeof p === 'string' && path.basename(p).toLowerCase() === lower) ||
+        candidates.find((p) => p && typeof p === 'string' && p.toLowerCase().includes(lower)) ||
         null;
     }
     if (!selectedPath) {
       selectedPath = stablePick(candidates, context?.jobId || '') || null;
     }
 
-    if (selectedPath) {
+    if (selectedPath && typeof selectedPath === 'string') {
       const ext = path.extname(selectedPath) || '.mp3';
       const outputName = `background_track${ext}`;
       const outputPath = path.join(context.dirs.audio, outputName);
@@ -2992,6 +2924,7 @@ async function generateSrtFile({
 }
 
 function ffmpegSubtitlePath(filePath) {
+  if (!filePath || typeof filePath !== 'string') return '';
   let resolved = path.resolve(filePath).replace(/\\/g, '/');
   if (/^[A-Za-z]:/.test(resolved)) {
     resolved = `${resolved[0]}\\:${resolved.slice(2)}`;

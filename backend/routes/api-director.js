@@ -4,6 +4,14 @@ const { protect } = require('../middleware/auth');
 const { updateDraft, toUserId, loadDraftForUser } = require('../services/videoDraftStore');
 
 const { callGemini, parseGeminiJSON } = require('../services/geminiAI');
+const {
+  buildCharacterContext,
+  buildEnhancedStorySystemPrompt,
+  normalizeEnhancedStoryResponse,
+  normalizeScene,
+  buildCharacterSheetPromptGuidance,
+  ensureCharacterSheetInPrompt
+} = require('../services/directorStoryBuilderPrompt');
 
 const router = express.Router();
 
@@ -357,54 +365,14 @@ router.post('/generate-story', protect, videoAiWriteLimiter, async (req, res) =>
     // Look up existing characters from draft if available
     const draftData = await loadDraftForUser(jobId, userId).catch(() => null);
     const existingCharacters = draftData?.characters || [];
+    const durationSeconds = Number(duration) || 30;
+    const charContext = buildCharacterContext(existingCharacters);
+    const { contextStr, identityLockRules, hasCharacterSheet, identityPhrase, imagePromptPrefix } = charContext;
 
-    const characterContextStr = existingCharacters.length > 0
-      ? existingCharacters.map((c, idx) => `Character ${idx + 1}: Name="${c.name}", Role="${c.role}", Age="${c.age || 'N/A'}", Gender="${c.gender || 'N/A'}", Appearance="${c.appearanceStr || c.appearance || 'N/A'}"`).join('\n')
-      : 'No pre-defined characters provided. Suggest suitable family/cast characters.';
-
-    const systemPrompt = `You are a MASTER AI FILM DIRECTOR producing a complete commercial production brief.
-Given the brand context and character cast below, you will:
-1. Write the Production Bible (brand analysis, emotional hook, creative direction)
-2. Use the provided cast characters in the scene breakdown where applicable.
-3. Write the full story as a numbered scene breakdown (assign specific characterIds to each scene)
-4. Write the complete voiceover script
-5. If Director Notes / Requested Changes are provided, follow them as the primary revision direction while preserving brand fit and production quality.
-
-Return strict JSON with this EXACT schema (no extra keys, no markdown):
-{
-  "productionBible": {
-    "brandAnalysis": "string",
-    "emotionalHook": "string",
-    "story": "string (narrative arc summary)",
-    "creativeDirection": "string",
-    "globalVisualStyle": "string"
-  },
-  "suggestedCharacters": [
-    {
-      "characterId": "string (e.g. CH_001)",
-      "name": "string",
-      "role": "string",
-      "importance": "string (Main | Supporting | Extra)",
-      "appearanceStr": "string"
-    }
-  ],
-  "voiceScript": "string (complete voiceover for all scenes)",
-  "scenes": [
-    {
-      "sceneId": "string (e.g. SC_001)",
-      "sceneNumber": "number",
-      "title": "string (2-5 word scene title)",
-      "action": "string (what happens — written like a script action line, 1-2 sentences)",
-      "emotion": "string (the dominant emotion of this scene)",
-      "location": "string (where this takes place)",
-      "wardrobe": "string (what the main character wears in this scene)",
-      "cameraStyle": "string (e.g. Slow dolly in, Close-up, Wide establishing shot)",
-      "characterIds": ["string (must match characterId or character names)"],
-      "durationSeconds": "number",
-      "voiceLine": "string (the voiceover line for this specific scene)"
-    }
-  ]
-}`;
+    const systemPrompt = buildEnhancedStorySystemPrompt({
+      durationSeconds,
+      videoStyle: videoStyle || 'Cinematic Commercial'
+    });
 
     const promptText = `
 Business Name: ${businessName || 'N/A'}
@@ -413,21 +381,29 @@ Brand Summary: ${brandSummary || 'N/A'}
 Target Audience: ${targetAudience || 'N/A'}
 Brand Tone: ${brandTone || 'N/A'}
 Commercial Objective: ${commercialObjective || 'N/A'}
-Duration: ${duration || 30} seconds
+Duration: ${durationSeconds} seconds
 Video Style: ${videoStyle || 'Cinematic Commercial'}
 Director Notes / Requested Changes: ${storyDirection || 'N/A'}
+Character Sheet Uploaded: ${hasCharacterSheet ? 'YES — use as permanent identity reference in every imagePrompt and videoPrompt' : 'NO — lock identity from cast descriptions'}
 
-Approved Cast Characters:
-${characterContextStr}
+Approved Cast Characters (use these EXACT identities in every prompt):
+${contextStr}
+
+${identityLockRules}
+
+EXAMPLE imagePrompt opening when Character Sheet exists:
+"${imagePromptPrefix || 'The same character'} wearing [scene wardrobe] [action in environment]. [lighting, weather, timeOfDay]. [camera angle, lens, shotComposition]. [visualStyle, colorPalette]. Ultra realistic, photorealistic, 8K, highly detailed, cinematic."
+${identityPhrase ? `\nRequired identity lock phrase: "${identityPhrase}"` : ''}
 `.trim();
 
     const rawResponse = await callGemini(promptText, { systemInstruction: systemPrompt, responseMimeType: 'application/json' });
     const parsed = parseGeminiJSON(rawResponse);
+    const normalized = normalizeEnhancedStoryResponse(parsed, { durationSeconds, existingCharacters });
 
     // Merge AI suggestions with existing user-created/edited characters
     let mergedCharacters = [...existingCharacters];
 
-    const aiSuggestedCharacters = (parsed.suggestedCharacters || []).map(c => ({
+    const aiSuggestedCharacters = (normalized.suggestedCharacters || []).map(c => ({
       ...c,
       id: c.characterId,
       status: 'Pending Setup'
@@ -450,11 +426,12 @@ ${characterContextStr}
       description: brandSummary || promptText,
       brandSummary: brandSummary || promptText,
       storyDirection: storyDirection || current.storyDirection || '',
-      durationSeconds: duration || 30,
+      durationSeconds,
       videoStyle: videoStyle || 'Cinematic Commercial',
-      productionBible: parsed.productionBible || {},
-      voiceScript: parsed.voiceScript || '',
-      scenes: parsed.scenes || [],
+      storyTitle: normalized.title || '',
+      productionBible: normalized.productionBible || {},
+      voiceScript: normalized.voiceScript || '',
+      scenes: normalized.scenes || [],
       characters: (current?.characters && current.characters.length > 0) ? current.characters : mergedCharacters
     }));
 
@@ -477,45 +454,50 @@ router.post('/edit-scene', protect, videoAiWriteLimiter, async (req, res) => {
       return res.status(400).json({ success: false, message: 'jobId, sceneId, and userDirection are required' });
     }
 
-    const characterContext = (characters || []).map(c => `- ID: ${c.id || c.characterId}, Name: ${c.name}, Role: ${c.role}`).join('\n');
+    const cast = characters || [];
+    const charContext = buildCharacterContext(cast);
+    const characterContext = cast.map((c, idx) => {
+      const cid = c.id || c.characterId || `CH_${idx + 1}`;
+      return `- ID: ${cid}, Name: ${c.name}, Role: ${c.role}, Sheet: ${c.image ? 'UPLOADED' : 'pending'}, Appearance: ${c.appearanceStr || 'N/A'}`;
+    }).join('\n');
 
-    const systemPrompt = `You are a MASTER FILM DIRECTOR. A user wants to revise exactly one scene in a commercial.
-Rewrite ONLY the specified scene based on the user's direction. Keep the same sceneId and sceneNumber.
-Do not change any other scenes.
+    const systemPrompt = `You are an expert AI Film Director, Screenwriter, Cinematographer, and Prompt Engineer.
+Rewrite ONLY the specified scene based on the user's direction. Keep sceneId and sceneNumber unchanged.
 
-Return strict JSON with this EXACT schema:
-{
-  "scene": {
-    "sceneId": "string",
-    "sceneNumber": "number",
-    "title": "string",
-    "action": "string",
-    "emotion": "string",
-    "location": "string",
-    "wardrobe": "string",
-    "cameraStyle": "string",
-    "characterIds": ["string"],
-    "durationSeconds": "number",
-    "voiceLine": "string"
-  }
-}`;
+Fill ALL structured visual fields and regenerate identity-aware imagePrompt and videoPrompt.
+
+Required scene fields:
+description, environment, characterAction, sceneMood, lighting, weather, timeOfDay,
+foregroundObjects, backgroundObjects, cameraDirection, cameraMovement, characterExpression,
+characterPose, visualStyle, colorPalette, shotComposition, imagePrompt, videoPrompt,
+audio, transition, voiceLine, emotion, location, wardrobe, durationSeconds
+
+IMAGE PROMPT must open with Character Sheet identity reference and include: face consistency, clothing, hairstyle, expression, pose, environment, objects, lighting, camera angle, lens, composition, quality tags (ultra realistic, photorealistic, 8K, cinematic).
+
+VIDEO PROMPT must include: Character Sheet identity, character movement, camera movement, object movement, environmental motion, facial animation, transition cue.
+
+Return strict JSON: { "scene": { ...all fields above... } }`;
 
     const promptText = `
 Production Bible:
 - Brand Analysis: ${productionBible?.brandAnalysis || 'N/A'}
 - Creative Direction: ${productionBible?.creativeDirection || 'N/A'}
 - Global Visual Style: ${productionBible?.globalVisualStyle || 'N/A'}
+- Mood: ${productionBible?.mood || 'N/A'}
+- Lighting Style: ${productionBible?.lightingStyle || 'N/A'}
+
+Character Sheet Identity Lock:
+${charContext.identityLockRules}
 
 Available Characters:
 ${characterContext || 'N/A'}
+${charContext.identityPhrase ? `\nRequired identity phrase: "${charContext.identityPhrase}"` : ''}
 
 Current Scene (${sceneId}):
 ${JSON.stringify(currentScene, null, 2)}
 
-User's Direction for this scene:
+User's Direction:
 "${userDirection}"
-
-Rewrite only this scene following the user's direction, staying consistent with the overall production bible.
 `.trim();
 
     const rawResponse = await callGemini(promptText, { systemInstruction: systemPrompt, responseMimeType: 'application/json' });
@@ -526,16 +508,22 @@ Rewrite only this scene following the user's direction, staying consistent with 
       return res.status(500).json({ success: false, message: 'AI did not return a valid scene' });
     }
 
+    const normalizedScene = normalizeScene(
+      { ...currentScene, ...rewrittenScene, sceneId },
+      Number(currentScene?.sceneNumber || 1) - 1,
+      { existingCharacters: cast, sheetGuidance: buildCharacterSheetPromptGuidance(cast) }
+    );
+
     // Update just this one scene in the draft
     const updated = await updateDraft(jobId, userId, (current) => {
       const existingScenes = current.scenes || [];
       const updatedScenes = existingScenes.map(s =>
-        (s.sceneId === sceneId) ? { ...rewrittenScene, sceneId } : s
+        (s.sceneId === sceneId) ? { ...s, ...normalizedScene, sceneId } : s
       );
       return { ...current, scenes: updatedScenes };
     });
 
-    return res.json({ success: true, draft: updated, rewrittenScene });
+    return res.json({ success: true, draft: updated, rewrittenScene: normalizedScene });
   } catch (error) {
     return responseError(res, error, 'Failed to edit scene');
   }
@@ -555,45 +543,59 @@ router.post('/build-prompts-for-scene', protect, videoAiWriteLimiter, async (req
       return res.status(400).json({ success: false, message: 'jobId, sceneId, and scene are required' });
     }
 
-    // Get only the characters referenced in this scene
-    const sceneCharacters = (characters || []).filter(c =>
+    const cast = (characters || []).filter(c =>
       (scene.characterIds || []).includes(c.id || c.characterId)
     );
-    const characterContext = sceneCharacters.map(c =>
-      `- ${c.id || c.characterId}: ${c.name}, ${c.role}. Appearance: ${c.appearanceStr || c.appearance || 'N/A'}`
-    ).join('\n');
+    const useCast = cast.length ? cast : (characters || []);
+    const charContext = buildCharacterContext(useCast);
+    const sheetGuidance = buildCharacterSheetPromptGuidance(useCast);
+    const characterContext = useCast.map((c, idx) => {
+      const cid = c.id || c.characterId || `CH_${idx + 1}`;
+      return `- ${cid}: ${c.name}, ${c.role}. Sheet: ${c.image ? 'UPLOADED' : 'pending'}. Appearance: ${c.appearanceStr || c.appearance || 'N/A'}`;
+    }).join('\n');
 
-    const systemPrompt = `You are a MASTER CINEMATOGRAPHER AND MOTION DESIGNER. Generate both an image prompt and a video motion prompt for a single commercial scene.
+    const systemPrompt = `You are an expert AI Film Director, Cinematographer, and Prompt Engineer.
+Generate identity-aware imagePrompt and videoPrompt using ALL structured scene metadata.
 
-CRITICAL REQUIREMENT:
-The generated image prompt and video prompt must be structured as a single continuous 9:16 vertical commercial frame.
-Specifically enforce these rules:
-- Single cinematic shot.
-- Full-screen composition only.
-- One camera angle only.
-- One frame only.
-- Strictly NO split screen, collage, storyboard, grid layout, multiple views, diptych, triptych, picture-in-picture, contact sheet, or multi-panel.
-- The video prompt must describe one continuous movement, avoiding transitions, cuts, sequence of shots, or montages.
+IMAGE PROMPT must include: Character Sheet identity reference, face consistency, clothing, hairstyle, expression, pose, environment, buildings, foreground/background objects, lighting, weather, time of day, camera angle, lens, shot composition, visual style, color palette, quality tags (ultra realistic, photorealistic, 8K, cinematic).
 
-Return strict JSON:
-{
-  "imagePrompt": "string (ultra-detailed Midjourney/Flux style prompt for a still frame of this scene, include character descriptions, lighting, camera angle, mood, style)",
-  "videoPrompt": "string (RunwayML/Kling style motion prompt — describe exact camera movement, subject motion, timing, transitions)"
-}`;
+VIDEO PROMPT must include: Character Sheet identity, character movement, camera movement (${scene.cameraMovement || 'specify'}), object movement, environmental motion (wind, rain, smoke, dust), facial animation, foreground/background motion, transition cue.
+
+Never write generic prompts. Open with Character Sheet identity phrase.
+Portrait 9:16 single frame. No storyboard/collage/multi-panel.
+
+Return strict JSON: { "imagePrompt": "string", "videoPrompt": "string" }`;
 
     const promptText = `
 Global Visual Style: ${productionBible?.globalVisualStyle || 'Cinematic Commercial'}
 Creative Direction: ${productionBible?.creativeDirection || 'N/A'}
+Lighting Style: ${productionBible?.lightingStyle || 'N/A'}
 
-Scene Details:
+${charContext.identityLockRules}
+${sheetGuidance.identityPhrase ? `Required identity phrase: "${sheetGuidance.identityPhrase}"` : ''}
+
+Scene Metadata:
 - Scene: ${scene.sceneId} — ${scene.title}
-- Action: ${scene.action}
-- Emotion: ${scene.emotion}
-- Location: ${scene.location}
-- Wardrobe: ${scene.wardrobe}
-- Camera Style: ${scene.cameraStyle}
-- Voice Line: ${scene.voiceLine}
-- Duration: ${scene.durationSeconds}s
+- Description: ${scene.description || scene.action || 'N/A'}
+- Environment: ${scene.environment || scene.location || 'N/A'}
+- Character Action: ${scene.characterAction || 'N/A'}
+- Scene Mood: ${scene.sceneMood || scene.emotion || 'N/A'}
+- Lighting: ${scene.lighting || 'N/A'}
+- Weather: ${scene.weather || 'N/A'}
+- Time of Day: ${scene.timeOfDay || 'N/A'}
+- Foreground Objects: ${scene.foregroundObjects || 'N/A'}
+- Background Objects: ${scene.backgroundObjects || 'N/A'}
+- Camera Direction: ${scene.cameraDirection || scene.cameraStyle || 'N/A'}
+- Camera Movement: ${scene.cameraMovement || 'N/A'}
+- Character Expression: ${scene.characterExpression || 'N/A'}
+- Character Pose: ${scene.characterPose || 'N/A'}
+- Visual Style: ${scene.visualStyle || productionBible?.globalVisualStyle || 'N/A'}
+- Color Palette: ${scene.colorPalette || 'N/A'}
+- Shot Composition: ${scene.shotComposition || 'N/A'}
+- Wardrobe: ${scene.wardrobe || 'N/A'}
+- Transition: ${scene.transition || 'N/A'}
+- Existing Image Prompt: ${scene.imagePrompt || 'None'}
+- Existing Video Prompt: ${scene.videoPrompt || 'None'}
 
 Characters in this scene:
 ${characterContext || 'No specific characters'}
@@ -602,6 +604,17 @@ ${characterContext || 'No specific characters'}
     const rawResponse = await callGemini(promptText, { systemInstruction: systemPrompt, responseMimeType: 'application/json' });
     const parsed = parseGeminiJSON(rawResponse);
 
+    const imagePrompt = ensureCharacterSheetInPrompt(
+      parsed.imagePrompt || scene.imagePrompt,
+      sheetGuidance.identityPhrase,
+      sheetGuidance.imagePromptPrefix
+    );
+    const videoPrompt = ensureCharacterSheetInPrompt(
+      parsed.videoPrompt || scene.videoPrompt,
+      sheetGuidance.identityPhrase,
+      sheetGuidance.videoPromptPrefix
+    );
+
     // Update just this scene's prompts in the draft
     const updated = await updateDraft(jobId, userId, (current) => {
       const existingScenes = current.scenes || [];
@@ -609,8 +622,8 @@ ${characterContext || 'No specific characters'}
         if (s.sceneId === sceneId) {
           return {
             ...s,
-            imagePrompt: parsed.imagePrompt || s.imagePrompt,
-            videoPrompt: parsed.videoPrompt || s.videoPrompt
+            imagePrompt,
+            videoPrompt
           };
         }
         return s;
@@ -621,8 +634,8 @@ ${characterContext || 'No specific characters'}
     return res.json({
       success: true,
       draft: updated,
-      imagePrompt: parsed.imagePrompt,
-      videoPrompt: parsed.videoPrompt
+      imagePrompt,
+      videoPrompt
     });
   } catch (error) {
     return responseError(res, error, 'Failed to build prompts for scene');

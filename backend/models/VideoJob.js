@@ -24,7 +24,11 @@ const videoJobSchema = new mongoose.Schema(
     },
     logs: { type: [String], default: [] },
     attempts: { type: Number, default: 0 },
-    metadata: { type: mongoose.Schema.Types.Mixed, default: {} }
+    metadata: { type: mongoose.Schema.Types.Mixed, default: {} },
+    draftId: { type: String, default: null, index: true },
+    sceneId: { type: String, default: null, index: true },
+    characterId: { type: String, default: null, index: true },
+    identityMemoryId: { type: String, default: null, index: true }
   },
   { collection: 'video_jobs', timestamps: true }
 );
