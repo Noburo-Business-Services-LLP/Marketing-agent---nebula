@@ -188,7 +188,7 @@ class PersistentVideoGenerationQueue {
    * Periodically scans for processing jobs that have hung or crashed (no updates for 5 minutes)
    */
   async recoverStaleJobs() {
-    const STALE_TIMEOUT_MS = Number(process.env.VIDEO_JOB_STALE_TIMEOUT_MS) || (5 * 60 * 1000); // Default 5 minutes
+    const STALE_TIMEOUT_MS = Number(process.env.VIDEO_JOB_STALE_TIMEOUT_MS) || (3 * 60 * 1000); // Default 3 minutes
     const threshold = new Date(Date.now() - STALE_TIMEOUT_MS);
 
     try {

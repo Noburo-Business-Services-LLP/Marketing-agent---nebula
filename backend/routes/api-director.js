@@ -23,12 +23,12 @@ const responseError = (res, error, defaultMessage = 'An error occurred') => {
 
 // Rate limiter for AI heavy endpoints
 const videoAiWriteLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
+  windowMs: 1 * 60 * 1000,
+  max: 1000,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many AI generation requests, please try again later.' },
-  keyGenerator: (req) => String(req.user?._id || req.user?.id)
+  keyGenerator: (req) => String(req.user?._id || req.user?.id || req.ip || 'anon')
 });
 
 /**
@@ -365,7 +365,9 @@ router.post('/generate-story', protect, videoAiWriteLimiter, async (req, res) =>
     // Look up existing characters from draft if available
     const draftData = await loadDraftForUser(jobId, userId).catch(() => null);
     const existingCharacters = draftData?.characters || [];
-    const durationSeconds = Number(duration) || 30;
+    const rawDuration = duration || draftData?.durationSeconds || 30;
+    const durationMatch = String(rawDuration).match(/(\d+)/);
+    const durationSeconds = durationMatch ? Number(durationMatch[1]) : 30;
     const charContext = buildCharacterContext(existingCharacters);
     const { contextStr, identityLockRules, hasCharacterSheet, identityPhrase, imagePromptPrefix } = charContext;
 
@@ -396,9 +398,14 @@ EXAMPLE imagePrompt opening when Character Sheet exists:
 ${identityPhrase ? `\nRequired identity lock phrase: "${identityPhrase}"` : ''}
 `.trim();
 
-    const rawResponse = await callGemini(promptText, { systemInstruction: systemPrompt, responseMimeType: 'application/json' });
+    const rawResponse = await callGemini(promptText, { systemInstruction: systemPrompt, responseMimeType: 'application/json', skipCache: true });
     const parsed = parseGeminiJSON(rawResponse);
     const normalized = normalizeEnhancedStoryResponse(parsed, { durationSeconds, existingCharacters });
+
+    console.log(`[AI Director Story Pipeline] Generated ${normalized.scenes?.length || 0} scenes for duration ${durationSeconds}s`);
+    normalized.scenes?.forEach((sc, i) => {
+      console.log(`  Scene #${i + 1} (${sc.sceneId}): Title="${sc.title}" | Obj="${sc.businessObjective || 'N/A'}" | Action="${(sc.characterAction || sc.description || '').slice(0, 50)}..."`);
+    });
 
     // Merge AI suggestions with existing user-created/edited characters
     let mergedCharacters = [...existingCharacters];
@@ -601,25 +608,45 @@ Characters in this scene:
 ${characterContext || 'No specific characters'}
 `.trim();
 
-    const rawResponse = await callGemini(promptText, { systemInstruction: systemPrompt, responseMimeType: 'application/json' });
+    console.log(`[AI Director Prompt Pipeline] Building prompts for Scene ID: ${sceneId}`);
+    console.log(`  Input Scene Metadata: Title="${scene.title}" | Action="${(scene.characterAction || scene.action || scene.description || '').slice(0, 60)}..."`);
+
+    const rawResponse = await callGemini(promptText, { systemInstruction: systemPrompt, responseMimeType: 'application/json', skipCache: true });
     const parsed = parseGeminiJSON(rawResponse);
 
+    let rawImgPrompt = parsed.imagePrompt || scene.imagePrompt;
+    if (!rawImgPrompt || !String(rawImgPrompt).trim()) {
+      const sceneActionText = String(scene.action || scene.description || scene.title || 'commercial scene action').trim();
+      rawImgPrompt = `${sceneActionText}. Bright natural daylight, high-key commercial studio lighting. Medium shot, eye-level, 50mm lens. Cinematic Commercial visual style. Ultra realistic, photorealistic, 8K, highly detailed.`;
+    }
+
+    let rawVidPrompt = parsed.videoPrompt || scene.videoPrompt;
+    if (!rawVidPrompt || !String(rawVidPrompt).trim()) {
+      const sceneActionText = String(scene.action || scene.description || scene.title || 'commercial scene action').trim();
+      rawVidPrompt = `${sceneActionText}. Slow steady push-in tracking shot, smooth cinematic camera motion. Crisp daylight commercial lighting.`;
+    }
+
     const imagePrompt = ensureCharacterSheetInPrompt(
-      parsed.imagePrompt || scene.imagePrompt,
+      rawImgPrompt,
       sheetGuidance.identityPhrase,
       sheetGuidance.imagePromptPrefix
     );
     const videoPrompt = ensureCharacterSheetInPrompt(
-      parsed.videoPrompt || scene.videoPrompt,
+      rawVidPrompt,
       sheetGuidance.identityPhrase,
       sheetGuidance.videoPromptPrefix
     );
+
+    console.log(`  Constructed Image Prompt (${imagePrompt.length} chars): "${imagePrompt.slice(0, 80)}..."`);
+    console.log(`  Constructed Video Prompt (${videoPrompt.length} chars): "${videoPrompt.slice(0, 80)}..."`);
 
     // Update just this scene's prompts in the draft
     const updated = await updateDraft(jobId, userId, (current) => {
       const existingScenes = current.scenes || [];
       const updatedScenes = existingScenes.map(s => {
-        if (s.sceneId === sceneId) {
+        const sid = String(s.sceneId || s.id || s.sceneNumber || '').toLowerCase();
+        const targetId = String(sceneId || '').toLowerCase();
+        if (sid === targetId || sid.endsWith(targetId) || targetId.endsWith(sid)) {
           return {
             ...s,
             imagePrompt,
@@ -630,6 +657,8 @@ ${characterContext || 'No specific characters'}
       });
       return { ...current, scenes: updatedScenes };
     });
+
+    console.log(`[Draft Persistence] Scene: ${sceneId} | Saved imagePromptLength=${imagePrompt.length}, videoPromptLength=${videoPrompt.length} | Mongo Update SUCCESS`);
 
     return res.json({
       success: true,

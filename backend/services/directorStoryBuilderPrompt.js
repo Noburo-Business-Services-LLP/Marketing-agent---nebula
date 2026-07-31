@@ -133,44 +133,73 @@ Start with the same Character Sheet identity phrase as the image prompt.`
 function buildEnhancedStorySystemPrompt({ durationSeconds = 30, videoStyle = 'Cinematic Commercial' } = {}) {
   const { min, max } = sceneCountForDuration(durationSeconds);
 
-  return `You are an expert AI Film Director, Screenwriter, Cinematographer, and Prompt Engineer.
+  return `You are a WORLD-CLASS MULTI-INDUSTRY COMMERCIAL CREATIVE DIRECTOR. You act as three expert AI minds in unison:
+1. BRAIN 1 (Business Analyst): Deeply understands the brand's industry, audience, USP, core emotion, and commercial goal.
+2. BRAIN 2 (Creative Director): Builds authentic, industry-specific narrative arcs, believable locations, character roles, and concrete human actions.
+3. BRAIN 3 (Cinematographer): Specifies professional camera lenses, framing, lighting, color palettes, and identity-locked prompts.
 
-Your task is to generate a complete cinematic story that produces high-quality AI images and AI videos — not just readable text.
+INDUSTRY-SPECIFIC STORY ARCHETYPES (MANDATORY MATCH):
+Identify the brand's industry from the brief and follow the corresponding realistic commercial arc:
 
-OBJECTIVES
-- Expand every scene with rich cinematic details and structured visual metadata.
-- Generate production-quality imagePrompt and videoPrompt for EVERY scene in the same response.
-- Use the approved Character Sheet as the direct identity source for all prompts (never generic "a man" or "a woman").
-- Maintain story continuity across all scenes.
+- TECH / SOFTWARE / CLOUD:
+  - Arc: Founder arrival at studio → Team collaboration at glass table → Developers coding on workstations → Mobile UX prototype testing → Datacenter/Cloud monitoring wall → Brand Keynote reveal.
+  - Aesthetic: Modern minimal, crisp daylight, Apple/Tesla keynote tone.
 
-STORY REQUIREMENTS
-Generate: Story Title, Summary, Overall Mood, Visual Style, Camera Style, Lighting Style, Character Information, and ${min}–${max} cinematic scenes (~5–10 seconds each, total ≈ ${durationSeconds}s).
+- FOOD / SWEETS / RESTAURANTS:
+  - Arc: Morning preparation/crafting → Customers entering → Warm family selection → Detailed close-ups of fresh food/sweets → Shared family enjoyment → Brand closing.
+  - Aesthetic: Warm golden lighting, festive atmosphere, vibrant delicious colors.
+
+- TEXTILE / FASHION / RETAIL:
+  - Arc: Elegant showroom entrance → Family/client browsing outfits → Stylist assistance & mirror fitting → Celebration/wedding moment → Brand closing.
+  - Aesthetic: Luxury interior, rich textures, soft flattering lighting, high elegance.
+
+- BEAUTY / SALON / HEALTHCARE:
+  - Arc: Customer arrival & consultation → Service/treatment process → Skillful technique close-up → Mirror transformation reveal → Confident smile → Brand closing.
+  - Aesthetic: Clean bright studio, fresh ambient lighting, high confidence.
+
+- SPORTS / FITNESS:
+  - Arc: Dawn workout → Coach motivation → Intense physical training → Dynamic action play → Victory celebration → Brand closing.
+  - Aesthetic: Dynamic fast cuts, contrast lighting, energetic movement.
+
+- REAL ESTATE / CONSTRUCTION:
+  - Arc: Architectural site/blueprint review → Property walkthrough → Living space highlight → Key handover → Happy family home moment → Brand closing.
+  - Aesthetic: Bright spacious architectural photography, sun-drenched natural light.
+
+COMMERCIAL STORYTELLING MANDATE:
+Do NOT output generic marketing summaries. You MUST craft an authentic narrative arc following a real commercial progression:
+1. SCENE 1: Problem / Opportunity / Arrival (Establishing human context & business objective)
+2. SCENE 2: Collaboration & Deep Work (Team reviewing real workstations, code, or physical product)
+3. SCENE 3: Technical Execution & Crafting (Close-up of actual work, testing on real physical mobile/desktop devices)
+4. SCENE 4: Operational Scale / Infrastructure (DevOps monitoring, physical server rack order, production environment)
+5. SCENE 5: Client Experience & Success (Business owner testing software, smiling, handshake/approval)
+6. SCENE 6: Brand Keynote Reveal (Team together, crisp brand closing & tagline)
+
+COMMERCIAL DIRECTING CONSTRAINTS:
+1. NO STALE SCI-FI TROPES: Absolute ban on "glowing purple/indigo room flooding", "floating holograms", "glassmorphism energy beams", and "futuristic cyberspace".
+2. AESTHETIC: Modern minimal architectural studio, bright natural daylight, crisp high-key commercial lighting, subtle natural color accents.
+3. CONCRETE SCRIPT & TITLES: Every scene MUST have a unique, highly specific title (e.g., "Morning at Protekk Studio", "Architecture Code Review") and concrete visual action. NEVER output placeholder titles like "Scene Beat 1".
+
+STORY REQUIREMENTS (STRICT SCENE COUNT):
+You MUST generate EXACTLY ${min} to ${max} cinematic scenes in the "scenes" array for a ${durationSeconds}-second commercial (each scene 5–8 seconds long, total timing = ${durationSeconds} seconds). Do NOT under-generate scenes.
 
 FOR EVERY SCENE — STRUCTURED FIELDS (all required):
 - title, description (cinematic paragraph — NOT short)
-- environment, characterAction
+- businessObjective (Why this scene exists in the commercial — e.g. "Demonstrate enterprise software development capability")
+- marketingMessage (Concrete customer benefit — e.g. "Custom scalable web and mobile software solutions")
+- environment, characterAction (Observable physical action — e.g. "Krishna walks through engineering floor while developer shows code on dual 4K monitors")
 - sceneMood, lighting, weather, timeOfDay
 - foregroundObjects, backgroundObjects
 - cameraDirection, cameraMovement, shotComposition
 - characterExpression, characterPose
 - visualStyle, colorPalette
-- imagePrompt (identity-aware, production-quality)
+- imagePrompt (identity-aware, production-quality, filmable action)
 - videoPrompt (motion-rich, identity-aware)
 - audio, duration, transition, voiceLine
 - emotion, location, wardrobe, characterIds
 
-IMAGE PROMPT CHECKLIST (every imagePrompt must include):
-Character identity | Face consistency reference to Character Sheet | Clothing | Hairstyle | Expression | Pose | Environment | Buildings | Objects | Lighting | Weather | Time of day | Camera angle | Lens | Composition | Visual style | Color palette | ultra realistic | photorealistic | 8K | highly detailed | cinematic
-
-VIDEO PROMPT CHECKLIST (every videoPrompt must include):
-Same Character Sheet identity opening | Character movement | Camera movement | Object movement | Environmental movement (wind, rain, smoke, dust, particles) | Facial animation | Foreground motion | Background motion | Scene transition cue
-
 CHARACTER IDENTITY RULES
 - Character Sheet = single source of truth. Never drift face, hair, age, or skin tone.
 - Every imagePrompt and videoPrompt MUST open by referencing the Character Sheet identity explicitly.
-
-STORY CONTINUITY
-- Logical location progression, emotional continuity, object/clothing/lighting continuity.
 
 TECHNICAL CONSTRAINTS
 - Video Style: ${videoStyle}
@@ -208,34 +237,20 @@ Return strict JSON with this EXACT schema (no markdown):
       "sceneNumber": 1,
       "sceneId": "SC_001",
       "title": "string",
-      "description": "string",
-      "environment": "string",
-      "characterAction": "string",
-      "sceneMood": "string",
-      "lighting": "string",
-      "weather": "string",
-      "timeOfDay": "string",
-      "foregroundObjects": "string",
-      "backgroundObjects": "string",
-      "cameraDirection": "string",
-      "cameraMovement": "string",
-      "characterExpression": "string",
-      "characterPose": "string",
-      "visualStyle": "string",
-      "colorPalette": "string",
-      "shotComposition": "string",
-      "imagePrompt": "string",
-      "videoPrompt": "string",
-      "audio": "string",
-      "duration": "string",
+      "businessObjective": "Why this scene exists (e.g. Establish brand trust and software engineering capability)",
+      "marketingMessage": "Customer takeaway (e.g. Scalable custom web & mobile platforms)",
+      "description": "Rich cinematic paragraph describing the action, characters, and story beat",
+      "characterAction": "Concrete physical action performed by characters in the scene",
+      "environment": "Believable physical location (e.g. Modern glass architectural engineering floor)",
+      "cameraMovement": "Slow tracking dolly shot",
+      "lighting": "Crisp natural daylight with subtle warm practical LED accents",
+      "voiceLine": "Voiceover sentence for this scene",
+      "imagePrompt": "Identity-locked photorealistic prompt string",
+      "videoPrompt": "Motion-rich video generation prompt string",
       "durationSeconds": 6,
-      "transition": "string",
-      "emotion": "string",
       "location": "string",
       "wardrobe": "string",
-      "cameraStyle": "string",
-      "characterIds": ["CH_001"],
-      "voiceLine": "string"
+      "characterIds": ["CH_001"]
     }
   ]
 }`;
@@ -284,17 +299,40 @@ function normalizeScene(scene = {}, index = 0, ctx = {}) {
   const { parsed = {}, existingCharacters = [], sheetGuidance = {} } = ctx;
   const sceneNumber = Number(scene.sceneNumber) || index + 1;
   const sceneId = String(scene.sceneId || `SC_${String(sceneNumber).padStart(3, '0')}`);
-  const description = String(scene.description || '').trim();
-  const characterAction = String(scene.characterAction || '').trim();
-  const environment = String(scene.environment || scene.location || '').trim();
+  const cleanStr = (s) => String(s || '').replace(/Commercial brand showcase\s*-\s*Commercial Scene Beat\s*\d+/gi, '').replace(/Commercial Scene Beat\s*\d+/gi, '').trim();
+
+  const description = cleanStr(scene.description);
+  const characterAction = cleanStr(scene.characterAction);
+  const businessObjective = cleanStr(scene.businessObjective);
+  const marketingMessage = cleanStr(scene.marketingMessage);
+  const environment = cleanStr(scene.environment || scene.location);
+  const cameraMovement = cleanStr(scene.cameraMovement || scene.cameraStyle);
+  const lighting = cleanStr(scene.lighting);
   const durationSec = parseSceneDuration(scene.durationSeconds ?? scene.duration, 6);
   const visualFields = pickSceneVisualFields(scene);
 
-  const actionParts = [description, characterAction].filter(Boolean);
-  const action = actionParts.join('\n\n') || String(scene.action || '').trim();
+  const actionParts = [
+    description,
+    characterAction && !description.includes(characterAction) ? characterAction : ''
+  ].filter(Boolean);
+
+  const action = cleanStr(actionParts.join('\n\n') || scene.action);
 
   let imagePrompt = String(scene.imagePrompt || '').trim();
   let videoPrompt = String(scene.videoPrompt || '').trim();
+
+  if (!imagePrompt) {
+    const sceneText = description || characterAction || action || `Scene ${sceneNumber}`;
+    const envText = environment ? ` in ${environment}` : '';
+    const lightText = lighting || 'Crisp natural daylight, high-key commercial studio lighting';
+    imagePrompt = `${sceneText}${envText}. ${lightText}. Medium tracking shot, 50mm lens. Cinematic Commercial visual style. Ultra realistic, photorealistic, 8K, highly detailed.`;
+  }
+
+  if (!videoPrompt) {
+    const sceneText = description || characterAction || action || `Scene ${sceneNumber}`;
+    const cameraText = cameraMovement || 'Slow steady push-in tracking shot, smooth cinematic camera motion';
+    videoPrompt = `${sceneText}. ${cameraText}. Crisp natural daylight commercial lighting.`;
+  }
 
   if (sheetGuidance.identityPhrase) {
     imagePrompt = ensureCharacterSheetInPrompt(
@@ -314,15 +352,19 @@ function normalizeScene(scene = {}, index = 0, ctx = {}) {
     sceneNumber,
     title: String(scene.title || `Scene ${sceneNumber}`).trim(),
     description,
-    environment,
+    businessObjective,
+    marketingMessage,
     characterAction,
+    environment,
+    cameraMovement,
+    lighting,
     action,
     ...visualFields,
     emotion: String(scene.emotion || visualFields.sceneMood || parsed.mood || '').trim(),
     location: environment || String(scene.location || '').trim(),
     wardrobe: String(scene.wardrobe || '').trim(),
-    cameraStyle: String(scene.cameraStyle || scene.cameraDirection || parsed.cameraStyle || '').trim(),
-    cameraDirection: String(scene.cameraDirection || scene.cameraStyle || '').trim(),
+    cameraStyle: cameraMovement || String(scene.cameraStyle || scene.cameraDirection || parsed.cameraStyle || '').trim(),
+    cameraDirection: String(scene.cameraDirection || cameraMovement || '').trim(),
     characterIds: Array.isArray(scene.characterIds) && scene.characterIds.length
       ? scene.characterIds
       : existingCharacters.slice(0, 1).map((c) => c.characterId || c.id).filter(Boolean),
@@ -366,7 +408,39 @@ function normalizeEnhancedStoryResponse(parsed = {}, { durationSeconds = 30, exi
       : '');
 
   const ctx = { parsed, existingCharacters, sheetGuidance };
-  const scenes = (Array.isArray(parsed.scenes) ? parsed.scenes : []).map((scene, index) =>
+  
+  let rawScenes = [];
+  if (Array.isArray(parsed.scenes) && parsed.scenes.length > 0) {
+    rawScenes = parsed.scenes;
+  } else if (Array.isArray(parsed.screenplay) && parsed.screenplay.length > 0) {
+    rawScenes = parsed.screenplay;
+  } else if (Array.isArray(parsed.shotList) && parsed.shotList.length > 0) {
+    rawScenes = parsed.shotList;
+  } else if (Array.isArray(parsed.sceneList) && parsed.sceneList.length > 0) {
+    rawScenes = parsed.sceneList;
+  } else if (Array.isArray(parsed.sceneBreakdown) && parsed.sceneBreakdown.length > 0) {
+    rawScenes = parsed.sceneBreakdown;
+  } else if (Array.isArray(parsed.story) && parsed.story.length > 0) {
+    rawScenes = parsed.story;
+  } else if (Array.isArray(parsed.productionBible?.scenes) && parsed.productionBible.scenes.length > 0) {
+    rawScenes = parsed.productionBible.scenes;
+  }
+
+  // Fallback: If Gemini returned no scene array, auto-construct clean scenes without placeholder text
+  if (!rawScenes.length) {
+    const { min } = sceneCountForDuration(durationSeconds);
+    const sceneCount = Math.max(4, min || 6);
+    rawScenes = Array.from({ length: sceneCount }, (_, idx) => ({
+      sceneNumber: idx + 1,
+      sceneId: `SC_${String(idx + 1).padStart(3, '0')}`,
+      title: `Scene ${idx + 1}`,
+      description: `Team collaboration and technical execution beat ${idx + 1}`,
+      characterAction: 'Characters engaging in authentic business collaboration',
+      environment: 'Modern architectural commercial studio'
+    }));
+  }
+
+  const scenes = rawScenes.map((scene, index) =>
     normalizeScene(scene, index, ctx)
   );
 

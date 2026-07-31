@@ -1479,7 +1479,19 @@ async function generateSceneClips({
         clipPath,
         clipUrl: cloudUrl || clipUrl,
         clipCloudUrl: cloudUrl || null,
-        falVideoUrl: falScene.video_url
+        falVideoUrl: falScene.video_url,
+        videoMetadata: {
+          draftId: context.jobId,
+          sceneId: scene.sceneId || scene.index,
+          videoUrl: cloudUrl || falScene.video_url,
+          provider: 'Fal.ai',
+          model: falScene.fal?.model || process.env.FAL_IMAGE_TO_VIDEO_MODEL || 'fal-ai/kling-video/v1/standard/image-to-video',
+          duration: scene.durationSeconds || 6,
+          resolution: process.env.FAL_VIDEO_RESOLUTION || '1080p',
+          aspectRatio: '9:16',
+          generatedAt: new Date().toISOString(),
+          workflowVersion: '2.0'
+        }
       };
     } catch (error) {
       const isFallbackAllowed = process.env.NODE_ENV === 'development' || 
@@ -1997,7 +2009,7 @@ function googleCloudTtsVoice(languageCode = 'en', voiceGender = 'female') {
       female: 'ml-IN-Wavenet-A'
     }
   };
-  const voice = voices[locale] || voices['en-in'];
+  const voice = voices[locale] || voices['en-us'];
   return {
     languageCode: voice.languageCode,
     name: voice[gender],
@@ -2021,6 +2033,7 @@ function voiceCacheHash(value = '') {
 
 function isMatchingVoiceCache(cache, expected = {}) {
   if (!cache?.path || !fs.existsSync(cache.path)) return false;
+  if (expected.voiceId && String(cache.voiceId || '') !== String(expected.voiceId || '')) return false;
   return (
     String(cache.voiceGender || '').toLowerCase() === String(expected.voiceGender || '').toLowerCase() &&
     String(cache.languageCode || '').toLowerCase() === String(expected.languageCode || '').toLowerCase() &&
@@ -2065,6 +2078,8 @@ function speakingRateForTts({
 
 function edgeTtsRateString(rate = 1) {
   // edge-tts expects "+10%" / "-10%"
+  // IMPORTANT: negative values like "-7%" are misinterpreted by argparse as flags.
+  // We return the value in a format safe for CLI args.
   const pct = Math.round((Number(rate) - 1) * 100);
   if (!Number.isFinite(pct) || pct === 0) return '+0%';
   return `${pct > 0 ? '+' : ''}${pct}%`;
@@ -2086,7 +2101,15 @@ function getEdgeVoice(languageCode = 'en', voiceGender = 'female') {
   const configuredOverride = locale.startsWith('en-')
     ? (gender === 'male' ? EDGE_TTS_MALE_VOICE : EDGE_TTS_FEMALE_VOICE)
     : '';
-  return configuredOverride || voices[locale]?.[gender] || voices['en-in'][gender];
+  const selectedVoice = configuredOverride || voices[locale]?.[gender] || voices['en-us'][gender];
+  console.log(`=================================`);
+  console.log(`[Edge TTS Voice Selection]`);
+  console.log(`Language Input: "${languageCode}"`);
+  console.log(`Gender Input: "${voiceGender}"`);
+  console.log(`Resolved Locale: "${locale}"`);
+  console.log(`Selected Voice ID: "${selectedVoice}"`);
+  console.log(`=================================`);
+  return selectedVoice;
 }
 
 async function getGoogleTtsAccessToken() {
@@ -2177,27 +2200,56 @@ async function synthesizeEdgeTts({
   if (!EDGE_TTS_ENABLED) return false;
   const voice = getEdgeVoice(languageCode, voiceGender);
   const rate = edgeTtsRateString(speakingRate);
+
+  // Delete stale output file before synthesis attempt
+  await fs.promises.rm(outputPath, { force: true }).catch(() => {});
+
+  console.log("=================================");
+  console.log("[EDGE TTS PRE-SYNTHESIS INVOCATION]");
+  console.log("Language Input:", languageCode);
+  console.log("Voice Gender Input:", voiceGender);
+  console.log("Exact Voice Argument Passed:", voice);
+  console.log("Speaking Rate Argument:", rate);
+  console.log("Output File Path:", outputPath);
+  console.log("=================================");
   const attempts = [
     {
+      command: 'python3',
+      args: ['-m', 'edge_tts', '--voice', voice, `--rate=${rate}`, '--text', text, '--write-media', outputPath]
+    },
+    {
       command: 'python',
-      args: ['-m', 'edge_tts', '--voice', voice, '--rate', rate, '--text', text, '--write-media', outputPath]
+      args: ['-m', 'edge_tts', '--voice', voice, `--rate=${rate}`, '--text', text, '--write-media', outputPath]
     },
     {
       command: 'py',
-      args: ['-m', 'edge_tts', '--voice', voice, '--rate', rate, '--text', text, '--write-media', outputPath]
+      args: ['-m', 'edge_tts', '--voice', voice, `--rate=${rate}`, '--text', text, '--write-media', outputPath]
     },
     {
       command: 'edge-tts',
-      args: ['--voice', voice, '--rate', rate, '--text', text, '--write-media', outputPath]
+      args: ['--voice', voice, `--rate=${rate}`, '--text', text, '--write-media', outputPath]
     }
   ];
 
   for (const attempt of attempts) {
     try {
+      console.log(`[Edge TTS Attempt] Executing: ${attempt.command} ${attempt.args.join(' ')}`);
       await runProcess(attempt.command, attempt.args);
       const stat = await fs.promises.stat(outputPath);
-      if (stat.size > 1200) return true;
-    } catch (error) {
+      if (stat.size > 1200) {
+        const durationSec = await getAudioDurationSecondsFromFile(outputPath).catch(() => 0);
+        const sizeMb = (stat.size / 1024 / 1024).toFixed(2);
+      if (logger) logger(`[TTS Provider] Provider: Edge Neural (${attempt.command}), Voice: ${voice}`);
+      console.log("=================================");
+      console.log("[TTS PROVIDER COMPLETED]");
+      console.log("Provider: Edge Neural");
+      console.log("Voice ID:", voice);
+      console.log("Generated File:", path.basename(outputPath));
+      console.log("=================================");
+      return true;
+    }
+  } catch (error) {
+      console.error(`[Edge TTS Attempt Error] (${attempt.command}):`, error?.message || error);
       if (logger) logger(`Edge TTS ${voice} via ${attempt.command} failed: ${error.message || error}`);
     }
   }
@@ -2259,7 +2311,55 @@ async function synthesizeNeuralTts({
 }) {
   const normalizedGender = String(voiceGender || 'female').toLowerCase() === 'male' ? 'male' : 'female';
   const normalizedLocale = toTtsLocaleCode(languageCode);
-  const preferGoogleMale = normalizedGender === 'male' && /^(en-in|hi-in|ta-in|te-in|kn-in|ml-in)$/.test(normalizedLocale);
+
+  console.log("=================================");
+  console.log("🔍 [synthesizeNeuralTts Input]");
+  console.log("  Input Language Code:", languageCode);
+  console.log("  Normalized Locale:", normalizedLocale);
+  console.log("  Raw Voice Gender:", voiceGender);
+  console.log("  voiceGender Type:", typeof voiceGender);
+  console.log("  voiceGender === 'male':", voiceGender === 'male');
+  console.log("  Normalized Voice Gender:", normalizedGender);
+  console.log("=================================");
+
+  const tryElevenLabs = async () => {
+    try {
+      const ok = await synthesizeElevenLabsTts({
+        text,
+        languageCode,
+        voiceGender: normalizedGender,
+        outputPath
+      });
+      if (ok) {
+        console.log("[TTS PROVIDER COMPLETED] ElevenLabs Used");
+        if (logger) logger(`[TTS Provider] Synthesized voice using ElevenLabs`);
+        return { ok: true, provider: 'elevenlabs', voiceId: ELEVENLABS_MALE_VOICE_ID || 'eleven-studio' };
+      }
+    } catch (error) {
+      if (logger) logger(`ElevenLabs voice failed: ${error.message || error}`);
+    }
+    return false;
+  };
+
+  const tryEdge = async () => {
+    try {
+      const ok = await synthesizeEdgeTts({
+        text,
+        languageCode,
+        voiceGender: normalizedGender,
+        outputPath,
+        speakingRate,
+        logger
+      });
+      if (ok) {
+        console.log("[TTS PROVIDER COMPLETED] Edge TTS Used");
+        return { ok: true, provider: 'edge', voiceId: getEdgeVoice(languageCode, normalizedGender) };
+      }
+    } catch (error) {
+      if (logger) logger(`Edge TTS failed: ${error.message || error}`);
+    }
+    return false;
+  };
 
   const tryGoogle = async () => {
     try {
@@ -2271,8 +2371,10 @@ async function synthesizeNeuralTts({
         speakingRate
       });
       if (ok) {
-        if (logger) logger(`Google Cloud TTS ${googleCloudTtsVoice(languageCode, normalizedGender).name} succeeded`);
-        return true;
+        console.log("[TTS PROVIDER COMPLETED] Google Cloud TTS Used");
+        if (logger) logger(`Google Cloud TTS succeeded`);
+        const v = googleCloudTtsVoice(languageCode, normalizedGender);
+        return { ok: true, provider: 'google-cloud', voiceId: v.name };
       }
     } catch (error) {
       if (logger) logger(`Google Cloud TTS failed: ${error.message || error}`);
@@ -2280,40 +2382,30 @@ async function synthesizeNeuralTts({
     return false;
   };
 
-  const tryEdge = async () => {
-    try {
-      return await synthesizeEdgeTts({
-        text,
-        languageCode,
-        voiceGender: normalizedGender,
-        outputPath,
-        speakingRate,
-        logger
-      });
-    } catch (error) {
-      if (logger) logger(`Edge TTS failed: ${error.message || error}`);
-    }
-    return false;
+  const providers = {
+    elevenlabs: tryElevenLabs,
+    google: tryGoogle,
+    edge: tryEdge
   };
 
-  const tryElevenLabs = async () => {
-    try {
-      return await synthesizeElevenLabsTts({
-        text,
-        languageCode,
-        voiceGender: normalizedGender,
-        outputPath
-      });
-    } catch (error) {
-      if (logger) logger(`ElevenLabs male voice failed: ${error.message || error}`);
-    }
-    return false;
-  };
+  const priorityOrder = String(process.env.TTS_PROVIDER_PRIORITY || 'google,elevenlabs,edge')
+    .toLowerCase()
+    .split(',')
+    .map((p) => p.trim());
 
-  if (preferGoogleMale && await tryGoogle()) return true;
-  if (await tryEdge()) return true;
-  if (normalizedGender === 'male' && await tryElevenLabs()) return true;
-  if (!preferGoogleMale && await tryGoogle()) return true;
+  for (const name of priorityOrder) {
+    const fn = providers[name];
+    if (fn) {
+      console.log(`📡 [TTS Provider Attempt] Trying provider: ${name}`);
+      const res = await fn();
+      if (res && res.ok) {
+        console.log(`✅ [TTS Provider SUCCESS] Provider '${name}' synthesized audio successfully with voice '${res.voiceId}'`);
+        return res;
+      }
+      console.log(`⚠️ [TTS Provider FAILED] Provider '${name}' failed or returned false. Trying next fallback...`);
+    }
+  }
+
   return false;
 }
 
@@ -2388,6 +2480,7 @@ async function synthesizeVoiceTrack({
   const finalVoicePath = path.join(context.dirs.audio, finalVoiceFileName);
   const voiceMetadata = {
     voiceGender: normalizedGender,
+    voiceId: getEdgeVoice(languageCode, normalizedGender),
     languageCode: toTtsLocaleCode(languageCode),
     sourceScriptHash: voiceCacheHash(sourceVoiceScript || voiceScript || scriptForTts),
     durationSeconds: Number(safeTarget || 0),
@@ -2396,10 +2489,29 @@ async function synthesizeVoiceTrack({
 
   const maybeStretchToTarget = async () => {
     if (!fitToDuration || !safeTarget) return;
-    const actual = await getAudioDurationSecondsFromFile(finalVoicePath);
+    let actual = await getAudioDurationSecondsFromFile(finalVoicePath);
     if (!Number.isFinite(actual) || actual <= 0) return;
     
-    // Negligible time differences (less than 0.2s) do not require modification
+    // If the generated narration is too short (e.g. 16s for a 60s video), loop narration to reach target duration
+    if (actual < safeTarget * 0.75) {
+      const loopCount = Math.ceil(safeTarget / actual);
+      const loopedPath = path.join(context.dirs.audio, `voice_track_${normalizedGender}_looped.mp3`);
+      console.log(`[Voice Duration Sync] Narration is ${actual.toFixed(1)}s, target is ${safeTarget}s. Looping ${loopCount}x`);
+      await runFfmpeg([
+        '-y',
+        '-stream_loop', String(loopCount - 1),
+        '-i', finalVoicePath,
+        '-vn',
+        '-t', String(safeTarget),
+        '-c:a', 'libmp3lame',
+        '-q:a', '2',
+        loopedPath
+      ]);
+      await fs.promises.copyFile(loopedPath, finalVoicePath);
+      await fs.promises.unlink(loopedPath).catch(() => {});
+      actual = await getAudioDurationSecondsFromFile(finalVoicePath);
+    }
+
     if (Math.abs(actual - safeTarget) < 0.2) return;
 
     const ratio = actual / safeTarget;
@@ -2420,6 +2532,7 @@ async function synthesizeVoiceTrack({
       ]);
 
       await fs.promises.copyFile(stretchedPath, finalVoicePath);
+      await fs.promises.unlink(stretchedPath).catch(() => {});
     } else {
       // If way out of bounds, trim precisely to safeTarget
       const stretchedPath = path.join(context.dirs.audio, `voice_track_${normalizedGender}_stretched.mp3`);
@@ -2434,15 +2547,19 @@ async function synthesizeVoiceTrack({
         stretchedPath
       ]);
       await fs.promises.copyFile(stretchedPath, finalVoicePath);
+      await fs.promises.unlink(stretchedPath).catch(() => {});
     }
   };
+
+  // Force purge any old voice track before fresh synthesis
+  await fs.promises.rm(finalVoicePath, { force: true }).catch(() => {});
 
   // Try single pass synthesis for ultra fast TTS performance
   let singlePassSuccess = false;
   try {
     if (logger) logger(`Attempting single-pass TTS synthesis for entire script (${scriptForTts.length} chars)`);
 
-    const ok = await synthesizeNeuralTts({
+    const synthesisResult = await synthesizeNeuralTts({
       text: scriptForTts,
       languageCode,
       voiceGender: normalizedGender,
@@ -2451,9 +2568,9 @@ async function synthesizeVoiceTrack({
       logger
     });
 
-    if (ok && fs.existsSync(finalVoicePath)) {
+    if (synthesisResult && synthesisResult.ok && fs.existsSync(finalVoicePath)) {
       const stat = await fs.promises.stat(finalVoicePath);
-      if (stat.size > 2000) {
+      if (stat.size > 500) {
         singlePassSuccess = true;
         if (logger) logger(`✅ Single-pass TTS synthesis succeeded (size = ${stat.size} bytes)`);
         await maybeStretchToTarget();
@@ -2462,7 +2579,9 @@ async function synthesizeVoiceTrack({
           url: publicAudioUrl(context, finalVoiceFileName),
           script: scriptForTts,
           sceneData: localizedScenes,
-          ...voiceMetadata
+          ...voiceMetadata,
+          voiceProvider: synthesisResult.provider || voiceMetadata.voiceProvider,
+          voiceId: synthesisResult.voiceId || voiceMetadata.voiceId
         };
       }
     }
@@ -2486,31 +2605,10 @@ async function synthesizeVoiceTrack({
       speakingRate,
       logger: logger ? (line) => logger(`Voice chunk ${index + 1}: ${line}`) : null
     });
-    if (neuralOk) return outPath;
-
-    try {
-      const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${encodeURIComponent(ttsLocale)}&q=${encodeURIComponent(text)}`;
-      const response = await fetchImpl(ttsUrl, {
-        method: 'GET',
-        headers: {
-          'User-Agent': 'Mozilla/5.0',
-          Referer: 'https://translate.google.com/'
-        }
-      });
-      if (!response.ok) {
-        throw new Error(`TTS HTTP ${response.status}`);
-      }
-      const arrayBuffer = typeof response.arrayBuffer === 'function'
-        ? await response.arrayBuffer()
-        : await response.buffer();
-      await fs.promises.writeFile(outPath, Buffer.from(arrayBuffer));
+    if (neuralOk && fs.existsSync(outPath)) {
       const stat = await fs.promises.stat(outPath);
-      if (stat.size < 1200) throw new Error('TTS chunk too small');
-      return outPath;
-    } catch (error) {
-      if (logger) logger(`Voice chunk ${index + 1} failed: ${error.message || error}`);
+      if (stat.size >= 500) return outPath;
     }
-
     return null;
   });
 
@@ -2710,6 +2808,7 @@ async function generateAudioTracks({
   const requestedSourceVoiceScript = plan.sourceVoiceScript || plan.voiceScript || input.description;
   const expectedVoiceCache = {
     voiceGender: audioOptions.voiceGender,
+    voiceId: getEdgeVoice(audioOptions.languageCode, audioOptions.voiceGender),
     languageCode: toTtsLocaleCode(audioOptions.languageCode),
     sourceScriptHash: voiceCacheHash(requestedSourceVoiceScript || requestedVoiceScript),
     durationSeconds: Number(input.durationSeconds || 0)
@@ -2734,6 +2833,14 @@ async function generateAudioTracks({
   }
 
   if (audioOptions.mode === 'auto' && !voice) {
+    if (logger) logger(`[TTS Generation Starting] Voice Gender: ${audioOptions.voiceGender}, Language: ${audioOptions.languageCode}`);
+    console.log("=================================");
+    console.log("[TTS Generation Starting]");
+    console.log("Gender:", audioOptions.voiceGender);
+    console.log("Language:", audioOptions.languageCode);
+    console.log("Script Length:", requestedVoiceScript ? requestedVoiceScript.length : 0);
+    console.log("=================================");
+
     voice = await synthesizeVoiceTrack({
       voiceScript: requestedVoiceScript,
       sourceVoiceScript: requestedSourceVoiceScript,
@@ -2746,6 +2853,15 @@ async function generateAudioTracks({
       context,
       logger
     });
+
+    console.log("=================================");
+    console.log("[TTS Generation Result]");
+    console.log("Voice Object Returned:", !!voice);
+    console.log("Voice File Path:", voice?.path || 'N/A');
+    console.log("Voice File Exists:", voice?.path ? fs.existsSync(voice.path) : false);
+    console.log("Background Track Path:", background?.path || 'N/A');
+    console.log("Background File Exists:", background?.path ? fs.existsSync(background.path) : false);
+    console.log("=================================");
 
     // Update local cache records
     if (audioOptions.voiceGender === 'male') {
@@ -2885,7 +3001,8 @@ async function mergeAudioTracks({
   );
 
   await runFfmpeg(args);
-  return { path: outputPath, url: outputUrl };
+  const cacheBustUrl = `${outputUrl.split('?')[0]}?t=${Date.now()}`;
+  return { path: outputPath, url: cacheBustUrl };
 }
 
 function toSrtTimestamp(seconds) {
@@ -3029,31 +3146,314 @@ async function generateThumbnail({
   const outputPath = path.join(context.dirs.final, outputName);
   const outputUrl = buildMediaUrl(context.baseUrl, context.jobId, ['final', outputName]);
 
-  // Try AI thumbnail first.
+  // Construct context-rich thumbnail generation prompt dynamically using Gemini with JSON structure
+  let dynamicPromptText = plan?.thumbnailPrompt || input.description || '';
+  let selectedSceneIndex = 0;
+
   try {
-    const result = await generateCampaignImageNanoBanana(plan.thumbnailPrompt || input.description, {
-      aspectRatio: '16:9',
-      linkedProduct: product ? {
-        name: product.name,
-        description: product.description,
-        imageUrl: product.imageUrl
-      } : null,
-      productReferenceImage: input.imageData || input.imageUrl || product?.imageUrl || null,
-      tone: 'professional'
-    });
-    if (result?.success && result?.imageUrl) {
-      await materializeSourceToFile({ source: result.imageUrl, destinationPath: outputPath });
-      return { path: outputPath, url: outputUrl };
+    if (logger) logger('Building structured context-rich thumbnail prompt and performing scene scoring via Gemini...');
+    
+    // Extract metadata details
+    const characterDetail = input.characterEnabled && input.characterName
+      ? `Main Character: ${input.characterName} (${input.characterRole || ''}, ${input.characterGender || ''}, ${input.characterAge || ''}, ${input.characterRace || ''}, Hair: ${input.characterHairStyle || ''}, Appearance: ${input.characterAppearance || ''})`
+      : 'No recurring characters present.';
+
+    const productDetail = product
+      ? `Product Name: ${product.name}\nProduct Description: ${product.description}`
+      : 'No specific physical product details.';
+
+    const visualStyle = plan?.globalVisualStyle || 'Cinematic advertising photography style';
+
+    const scenesSummary = Array.isArray(sceneData)
+      ? sceneData.map((s, idx) => `Scene Index: ${idx}\nScene Title: ${s.title || ''}\nVisual Description: ${s.imagePrompt || ''}\nDialogue: ${s.voiceLine || ''}`).join('\n\n')
+      : 'No scene layout summary.';
+
+    // Resolve Industry Presets
+    const industryLower = String(input.industry || '').toLowerCase();
+    let industryPresetRules = '';
+    if (industryLower.includes('software') || industryLower.includes('saas') || industryLower.includes('tech')) {
+      industryPresetRules = 'SaaS/AI Preset: Enforce clean digital UI dashboard mockup details, glassmorphism panel styling, crisp typography space, vibrant technology accents, and premium modern workspace lighting.';
+    } else if (industryLower.includes('real') || industryLower.includes('property') || industryLower.includes('estate') || industryLower.includes('home')) {
+      industryPresetRules = 'Real Estate Preset: Bright architectural lighting, photorealistic interior/exterior framing, luxury home spacing, and clean landscape contrast.';
+    } else if (industryLower.includes('restaurant') || industryLower.includes('food') || industryLower.includes('cafe') || industryLower.includes('dining')) {
+      industryPresetRules = 'Restaurant/Food Preset: Warm lighting highlights, vibrant close-up food photography, high-contrast dish texture, and welcoming premium restaurant dining vibe.';
+    } else if (industryLower.includes('health') || industryLower.includes('doctor') || industryLower.includes('medical') || industryLower.includes('clinic')) {
+      industryPresetRules = 'Healthcare Preset: Clean clinical lighting, trustworthy premium environment, soft light tones, and clear focal medical subjects.';
+    } else if (industryLower.includes('car') || industryLower.includes('auto') || industryLower.includes('vehicle')) {
+      industryPresetRules = 'Automotive Preset: Dramatic reflections, high-contrast dynamic lighting, sleek vehicle body contours, and modern professional commercial atmosphere.';
+    } else {
+      industryPresetRules = 'Luxury/Brand Preset: Clean minimalist composition, premium high-fashion texture details, rich lighting shadows, and modern visual design hierarchy.';
     }
-  } catch (error) {
-    if (logger) logger(`AI thumbnail generation failed: ${error.message || error}`);
+
+    const promptContext = `You are an expert YouTube thumbnail designer and cinematic visual storyteller.
+Your task is to analyze the storyboard scenes, score them based on visual impact (emotional intensity, product visibility, character prominence, motion/action, framing, and contrast), select the strongest scene, and generate a descriptive DALL-E/Midjourney image prompt for a premium 16:9 thumbnail.
+
+Here is the exact video context:
+- Video Description: ${input.description}
+- Visual Style: ${visualStyle}
+- ${characterDetail}
+- ${productDetail}
+- Scenes Storyboard:
+${scenesSummary}
+
+Follow these strict design principles:
+1. SCENE SCORING: Evaluate the visual impact of each scene. Select the scene with the highest visual potential to make a clickable thumbnail.
+2. CHARACTER CONSISTENCY: If the storyboard contains the same character across multiple scenes, reuse the exact same character identity. Do not create a different face, hairstyle, age, ethnicity, clothing, or body type unless the storyboard explicitly changes them.
+3. PRODUCT-FIRST: For videos without recurring human characters, prioritize prominent product UI (for SaaS), a signature dish (for restaurant), a featured property (for real estate), or equipment/vehicles. Avoid generic backgrounds.
+4. COMPOSITION: Keep composition simple, bold, and modern, leaving clean space for headline text. Specify cinematic lighting and contrast.
+5. STRICT DO NOT HALLUCINATE RULE: If a recurring character, product, logo, UI, vehicle, building, or object already exists in the generated scenes, reuse it. Do not invent a different subject or replace it with a generic futuristic illustration.
+6. THUMBNAIL QUALITY STANDARDS:
+   - PREMIUM QUALITY: Crisp, sharp details, photorealistic lighting, cinematic composition. No blurry, noisy, or low-detail regions.
+   - PRESET RULES: ${industryPresetRules}
+   - NEGATIVE CONSTRAINTS: No generic AI concept drawings, no distorted hands, no duplicate people, no watermarks, no low-resolution visual elements.
+
+Return a strict JSON response matching the following format:
+{
+  "selectedSceneIndex": 1,
+  "visualImpactScores": {
+    "scene_index_0": 6,
+    "scene_index_1": 9,
+    "scene_index_2": 7
+  },
+  "primarySubject": "Founder looking confident",
+  "secondarySubject": "AI Dashboard",
+  "background": "Modern technology office",
+  "cameraAngle": "Close-up",
+  "lighting": "Cinematic purple rim lighting",
+  "headlinePlacement": "Top center",
+  "thumbnailPrompt": "A descriptive prompt combining all visual details...",
+  "qualityScoreChecklist": {
+    "qualityScore": 95,
+    "sharpness": 95,
+    "characterConsistency": 98,
+    "productConsistency": 95,
+    "brandConsistency": 97
+  }
+}`;
+
+    const rawResponse = await callGemini(promptContext, { skipCache: true, responseMimeType: 'application/json' });
+    const parsed = parseGeminiJSON(rawResponse);
+    
+    // Strict quality validation checklist layer
+    const isValid = parsed
+      && typeof parsed.thumbnailPrompt === 'string' && parsed.thumbnailPrompt.trim().length > 10
+      && Number.isInteger(parsed.selectedSceneIndex)
+      && parsed.selectedSceneIndex >= 0
+      && parsed.primarySubject
+      && parsed.lighting
+      && parsed.cameraAngle;
+
+    if (isValid) {
+      dynamicPromptText = parsed.thumbnailPrompt;
+      selectedSceneIndex = parsed.selectedSceneIndex;
+      
+      // Fallback verification: Check if the selected scene index actually has a generated image URL
+      const targetScene = Array.isArray(sceneData) ? sceneData[selectedSceneIndex] : null;
+      const targetSceneHasImage = Boolean(targetScene?.imageUrl || targetScene?.imagePath);
+      
+      if (!targetSceneHasImage && Array.isArray(sceneData)) {
+        if (logger) logger(`⚠️ Scored Scene ${selectedSceneIndex} is missing a generated image. Finding next best scored scene with visual content...`);
+        
+        // Find next highest scored scene index that actually contains a generated image
+        const sortedIndices = Object.entries(parsed.visualImpactScores || {})
+          .map(([key, score]) => ({
+            index: parseInt(key.replace('scene_index_', ''), 10),
+            score: Number(score)
+          }))
+          .filter(item => !isNaN(item.index) && item.index >= 0 && item.index < sceneData.length)
+          .sort((a, b) => b.score - a.score);
+          
+        const bestVisuallyValid = sortedIndices.find(item => {
+          const s = sceneData[item.index];
+          return Boolean(s?.imageUrl || s?.imagePath);
+        });
+        
+        if (bestVisuallyValid !== undefined) {
+          selectedSceneIndex = bestVisuallyValid.index;
+          if (logger) logger(`✅ Corrected selectedSceneIndex to ${selectedSceneIndex} based on visual availability (score: ${bestVisuallyValid.score}).`);
+        }
+      }
+      
+      if (logger) {
+        logger(`✅ Structured prompt validated: Scene ${selectedSceneIndex} selected. Impact scores: ${JSON.stringify(parsed.visualImpactScores)}`);
+        logger(`Generated dynamic structured thumbnail prompt: "${dynamicPromptText}"`);
+      }
+    } else {
+      if (logger) logger('⚠️ Structured prompt failed validation checklist. Falling back to default script description.');
+    }
+  } catch (promptError) {
+    if (logger) logger(`Failed to generate dynamic thumbnail prompt: ${promptError.message}. Using fallback.`);
   }
 
-  // Fallback to first scene image.
-  const firstScene = Array.isArray(sceneData) && sceneData.length > 0 ? sceneData[0] : null;
-  if (firstScene?.imagePath) {
-    await fs.promises.copyFile(firstScene.imagePath, outputPath);
-    return { path: outputPath, url: outputUrl };
+  const startTime = Date.now();
+  let fallbackUsed = false;
+  let reviewMetadata = null;
+  const chosenScene = Array.isArray(sceneData) && sceneData.length > selectedSceneIndex ? sceneData[selectedSceneIndex] : (Array.isArray(sceneData) && sceneData.length > 0 ? sceneData[0] : null);
+  const sceneVisualRef = chosenScene?.imageUrl || chosenScene?.imageUrl || null;
+  const isImageToImage = Boolean(sceneVisualRef);
+
+  // Helper loop to allow up to 2 generation attempts
+  for (let attemptNum = 1; attemptNum <= 2; attemptNum++) {
+    try {
+      if (logger) {
+        logger(`[THUMBNAIL PIPELINE STARTING - ATTEMPT ${attemptNum}/2]
+- Selected Scene Index: ${selectedSceneIndex}
+- Reference Image Available: ${isImageToImage ? 'YES' : 'NO'}
+- Reference Image URL: ${sceneVisualRef || 'N/A'}
+- Image-to-Image Mode: ${isImageToImage ? 'YES' : 'NO'}
+- Character Preservation Enabled: ${input.characterEnabled ? 'YES' : 'NO'}`);
+      }
+
+      const result = await generateCampaignImageNanoBanana(dynamicPromptText, {
+        aspectRatio: '16:9',
+        linkedProduct: product ? {
+          name: product.name,
+          description: product.description,
+          imageUrl: product.imageUrl
+        } : null,
+        productReferenceImage: input.imageData || input.imageUrl || product?.imageUrl || null,
+        characterReferenceImage: input.characterEnabled ? sceneVisualRef : null,
+        previousSceneImage: sceneVisualRef,
+        preserveCharacterIdentity: input.characterEnabled,
+        tone: 'professional'
+      });
+
+      if (result?.success && result?.imageUrl) {
+        await materializeSourceToFile({ source: result.imageUrl, destinationPath: outputPath });
+        
+        // PASS 2: AI Visual Quality Reviewer
+        try {
+          if (logger) logger(`Starting Pass 2: Multimodal AI Visual Quality Review on generated thumbnail (Attempt ${attemptNum})...`);
+          
+          // Read file content locally to prepare base64 for multimodal callGemini
+          const generatedImageBuffer = await fs.promises.readFile(outputPath);
+          const generatedImageBase64 = generatedImageBuffer.toString('base64');
+          
+          const reviewPrompt = `You are a strict, senior creative director performing a Pass 2 visual review on a generated 16:9 video thumbnail image.
+Analyze the image for composition, marketing appeal, character/product preservation consistency, and common AI generation failures.
+
+Strict Quality Gates:
+- overallScore: Minimum 90/100
+- correctness scores (characterConsistency, productConsistency, brandConsistency): Minimum 95/100 (If applicable)
+- quality scores (sharpness, composition, clickability): Minimum 90/100
+
+Failure Checklist:
+Detect any instances of:
+- Holographic/abstract concepts replacing human character,
+- Duplicate people or warped limbs,
+- Distorted hands or faces,
+- Unreadable dashboard text or fake UI placeholders.
+
+Return a strict JSON response matching the following schema:
+{
+  "correctness": {
+    "characterConsistency": 96,
+    "productConsistency": 95,
+    "brandConsistency": 97,
+    "hallucinationDetected": false
+  },
+  "quality": {
+    "sharpness": 95,
+    "composition": 93,
+    "lighting": 92,
+    "clickability": 94
+  },
+  "overallScore": 92,
+  "recommendation": "PASS"
+}`;
+
+          const reviewResponse = await callGemini(reviewPrompt, {
+            skipCache: true,
+            responseMimeType: 'application/json',
+            inlineImage: {
+              mimeType: 'image/jpeg',
+              data: generatedImageBase64
+            }
+          });
+          const review = parseGeminiJSON(reviewResponse);
+          
+          if (review) {
+            reviewMetadata = {
+              overallScore: review.overallScore || 0,
+              recommendation: review.recommendation || 'FAIL',
+              fallbackUsed: false,
+              reviewModel: 'Gemini-Multimodal',
+              reviewVersion: '2026.07',
+              details: review
+            };
+
+            const correctnessValid = review.correctness
+              ? (!review.correctness.hallucinationDetected &&
+                 (review.correctness.characterConsistency === undefined || review.correctness.characterConsistency >= 95) &&
+                 (review.correctness.productConsistency === undefined || review.correctness.productConsistency >= 95) &&
+                 (review.correctness.brandConsistency === undefined || review.correctness.brandConsistency >= 95))
+              : true;
+
+            const qualityValid = review.quality
+              ? ((review.quality.sharpness === undefined || review.quality.sharpness >= 90) &&
+                 (review.quality.composition === undefined || review.quality.composition >= 90) &&
+                 (review.quality.clickability === undefined || review.quality.clickability >= 90))
+              : true;
+
+            const passGates = (review.overallScore >= 90) && 
+                              correctnessValid && 
+                              qualityValid && 
+                              (review.recommendation === 'PASS');
+                              
+            if (logger) logger(`[THUMBNAIL REVIEW RESULT ATTEMPT ${attemptNum}]: ${JSON.stringify(review)}`);
+            
+            if (!passGates) {
+              if (logger) logger(`❌ Generated thumbnail failed Pass 2 quality/correctness gates. Recommendation: ${review.recommendation || 'FAIL'}.`);
+              throw new Error('Failed visual quality review gates.');
+            }
+            
+            // If passed, exit loop and return
+            if (logger) {
+              logger(`[THUMBNAIL PIPELINE SUCCESS]
+- Selected Scene: ${selectedSceneIndex}
+- Reference Image: ${sceneVisualRef || 'none'}
+- Image-to-Image Mode: ${isImageToImage ? 'YES' : 'NO'}
+- Fallback Used: NO
+- Generation Time: ${((Date.now() - startTime) / 1000).toFixed(2)}s`);
+            }
+            return { path: outputPath, url: outputUrl, reviewMetadata };
+          }
+        } catch (reviewError) {
+          if (logger) logger(`⚠️ Quality check failed on attempt ${attemptNum}: ${reviewError.message || reviewError}`);
+          if (attemptNum === 1) {
+            if (logger) logger('🔄 Attempting one-time thumbnail regeneration before falling back...');
+            continue; // Next iteration of loop (attempt 2)
+          }
+          throw reviewError; // Max attempts reached, bubble to trigger scene fallback
+        }
+      }
+    } catch (error) {
+      if (logger) logger(`AI thumbnail generation/review failed (Attempt ${attemptNum}/2): ${error.message || error}`);
+      if (attemptNum === 1) {
+        if (logger) logger('🔄 Attempting one-time thumbnail regeneration before falling back...');
+        continue;
+      }
+    }
+  }
+
+  // Fallback: Copy-scale the highest-scored scene image directly so it is guaranteed to match the video.
+  if (chosenScene?.imagePath) {
+    fallbackUsed = true;
+    reviewMetadata = {
+      overallScore: 0,
+      recommendation: 'FAIL',
+      fallbackUsed: true,
+      reviewModel: 'Fallback-Selector',
+      reviewVersion: '2026.07'
+    };
+    if (logger) {
+      logger(`[THUMBNAIL PIPELINE FALLBACK ACTIVATED]
+- Copying Scene ${selectedSceneIndex} image (${chosenScene.imagePath}) directly as final thumbnail.
+- Fallback Used: YES
+- Total Time: ${((Date.now() - startTime) / 1000).toFixed(2)}s`);
+    }
+    await fs.promises.copyFile(chosenScene.imagePath, outputPath);
+    return { path: outputPath, url: outputUrl, reviewMetadata };
   }
 
   return null;
@@ -3360,7 +3760,8 @@ async function runCreateVideoPipeline({
       finalOutput: finalOutput.url,
       subtitle: subtitles?.url || null,
       thumbnail: thumbnail?.url || null
-    }
+    },
+    thumbnailReview: thumbnail?.reviewMetadata || null
   };
 
   await saveManifest({ context, data: responsePayload });
@@ -3526,6 +3927,10 @@ async function runGenerateAudio({
     localizedVoiceScript: audioTracks.tracks?.voice?.script || null,
     localizedSceneData: audioTracks.tracks?.voice?.sceneData || null,
     tracks: {
+      manual: audioTracks.tracks?.manual || null,
+      voice: audioTracks.tracks?.voice || null,
+      background: audioTracks.tracks?.background || null,
+      soundEffects: audioTracks.tracks?.soundEffects || [],
       manualUrl: audioTracks.tracks?.manual?.url || null,
       voiceUrl: audioTracks.tracks?.voice?.url || null,
       backgroundUrl: audioTracks.tracks?.background?.url || null,

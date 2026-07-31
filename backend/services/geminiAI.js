@@ -80,12 +80,11 @@ setInterval(() => {
   }
 }, 10 * 60 * 1000);
 
-function getCacheKey(prompt) {
-  // Use a proper hash of the full prompt to avoid cache collisions
-  // Previously used first 100 chars which caused identical campaigns for similar prompts
+function getCacheKey(prompt, options = {}) {
+  const fullText = (prompt || '') + '||' + (options.systemInstruction || '');
   let hash = 0;
-  for (let i = 0; i < prompt.length; i++) {
-    const char = prompt.charCodeAt(i);
+  for (let i = 0; i < fullText.length; i++) {
+    const char = fullText.charCodeAt(i);
     hash = ((hash << 5) - hash) + char;
     hash = hash & hash; // Convert to 32bit integer
   }
@@ -136,7 +135,7 @@ async function callGemini(prompt, options = {}) {
 
   // Check cache first (unless explicitly disabled)
   if (!options.skipCache) {
-    const cacheKey = getCacheKey(prompt);
+    const cacheKey = getCacheKey(prompt, options);
     const cached = responseCache.get(cacheKey);
     if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
       console.log('⚡ Using cached Gemini response (instant)');
@@ -167,7 +166,15 @@ async function callGemini(prompt, options = {}) {
 
         const reqBody = {
           contents: [{
-            parts: [{ text: prompt }]
+            parts: [
+              ...(options.inlineImage ? [{
+                inlineData: {
+                  mimeType: options.inlineImage.mimeType || 'image/png',
+                  data: options.inlineImage.data
+                }
+              }] : []),
+              { text: prompt }
+            ]
           }],
           generationConfig: {
             temperature: options.temperature || 0.7,
@@ -196,9 +203,9 @@ async function callGemini(prompt, options = {}) {
         if (!response.ok) {
           console.error(`Gemini API error (${model}):`, data.error?.message || data);
           // If rate limited, wait and retry with exponential backoff
-          if (data.error?.code === 429 || data.error?.code === 503) {
+          if (response.status === 429 || response.status === 503 || data.error?.code === 429 || data.error?.code === 503) {
             const backoffMs = Math.min(1000 * Math.pow(2, attempt), 8000); // 1s, 2s, 4s, max 8s
-            console.log(`Rate limited on ${model}, waiting ${backoffMs}ms before retry ${attempt + 1}/${maxRetries}...`);
+            console.log(`Rate limited (${response.status}) on ${model}, waiting ${backoffMs}ms before retry ${attempt + 1}/${maxRetries}...`);
             await sleep(backoffMs);
             continue; // Retry same model
           }
@@ -255,17 +262,19 @@ async function callGemini(prompt, options = {}) {
  * Parse JSON from Gemini response (handles markdown code blocks and truncated JSON)
  */
 function parseGeminiJSON(text) {
-  let cleaned = text.trim();
-  // Remove markdown code blocks
-  if (cleaned.startsWith('```json')) {
-    cleaned = cleaned.slice(7);
-  } else if (cleaned.startsWith('```')) {
-    cleaned = cleaned.slice(3);
+  let cleaned = String(text || '').trim();
+
+  // Extract JSON block using regex if wrapped in markdown code blocks anywhere in text
+  const codeBlockMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)(?:```|$)/i);
+  if (codeBlockMatch && codeBlockMatch[1]) {
+    cleaned = codeBlockMatch[1].trim();
+  } else {
+    const firstBrace = cleaned.indexOf('{');
+    const lastBrace = cleaned.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      cleaned = cleaned.slice(firstBrace, lastBrace + 1).trim();
+    }
   }
-  if (cleaned.endsWith('```')) {
-    cleaned = cleaned.slice(0, -3);
-  }
-  cleaned = cleaned.trim();
 
   try {
     return JSON.parse(cleaned);

@@ -33,7 +33,8 @@ module.exports = {
   INSIGHTFACE_ENABLED: readBool('INSIGHTFACE_ENABLED', true),
   // When a Character Sheet exists, use ComfyUI identity conditioning automatically.
   AUTO_COMFYUI_FOR_IDENTITY: readBool('AUTO_COMFYUI_FOR_IDENTITY', true),
-  // Gemini cannot identity-condition; keep false to require ComfyUI for character scenes.
+  // Strict face matching mode: Require ComfyUI for character scene identity conditioning.
+  // Set ALLOW_GEMINI_FALLBACK_WITHOUT_IDENTITY=true ONLY if cloud image fallback without PuLID identity is explicitly desired.
   ALLOW_GEMINI_FALLBACK_WITHOUT_IDENTITY: readBool('ALLOW_GEMINI_FALLBACK_WITHOUT_IDENTITY', false),
   COMFYUI_TIMEOUT_MS: Math.max(30000, readInt('COMFYUI_TIMEOUT_MS', 180000)),
   PULID_WEIGHT: readNumber('PULID_WEIGHT', 1.0)

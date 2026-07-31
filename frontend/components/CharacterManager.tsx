@@ -220,20 +220,23 @@ export const CharacterManager: React.FC<CharacterManagerProps> = ({ jobId, draft
   });
   const allCharacters = Array.from(charMap.values());
 
-  const panelClass = "bg-white dark:bg-[#121212] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm";
+  const panelClass = "bg-white dark:bg-[#121212] rounded-2xl border border-slate-200 dark:border-[#ffcc29]/20 shadow-lg shadow-black/5";
   const inputClass = `w-full px-4 py-2 rounded-xl border ${theme.border} bg-white dark:bg-black ${theme.text} focus:outline-none focus:ring-2 focus:ring-[#ffcc29]/50 transition-shadow`;
 
   return (
     <div className={`p-6 space-y-6 ${panelClass}`}>
       <div className="flex items-center justify-between mb-4">
-        <h2 className={`text-xl font-bold ${theme.text}`}>Character Manager</h2>
+        <h2 className={`text-xl font-bold flex items-center gap-2 ${theme.text}`}>
+          <span className="w-2.5 h-6 bg-[#ffcc29] rounded-full inline-block"></span>
+          Character Manager
+        </h2>
         <div className="flex gap-3">
           {allCharacters.filter((c: any) => !c.image).length > 0 && (
-            <button onClick={autoGeneratePending} disabled={busy} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-medium rounded-xl transition shadow-sm">
+            <button onClick={autoGeneratePending} disabled={busy} className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-[#ffcc29] to-amber-500 hover:from-[#e6b825] hover:to-amber-600 text-black font-bold rounded-xl transition shadow-md shadow-[#ffcc29]/20 active:scale-95 disabled:opacity-50">
               {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />} Auto-Generate Pending
             </button>
           )}
-          <button onClick={() => openEditor()} className="flex items-center gap-2 px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white font-medium rounded-xl transition">
+          <button onClick={() => openEditor()} className="flex items-center gap-2 px-4 py-2.5 bg-[#ffcc29] hover:bg-[#e6b825] text-black font-bold rounded-xl transition shadow-md shadow-[#ffcc29]/20 active:scale-95">
             <Plus className="w-4 h-4" /> Add Character
           </button>
         </div>
@@ -241,45 +244,76 @@ export const CharacterManager: React.FC<CharacterManagerProps> = ({ jobId, draft
 
       {!editingChar ? (
         <>
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-[#ffcc29]/20 bg-slate-50/50 dark:bg-slate-900/40 backdrop-blur-sm">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className={`border-b ${theme.border}`}>
-                  <th className={`p-3 ${theme.textMuted}`}>Image</th>
-                  <th className={`p-3 ${theme.textMuted}`}>Name</th>
-                  <th className={`p-3 ${theme.textMuted}`}>Role</th>
-                  <th className={`p-3 ${theme.textMuted}`}>Status</th>
-                  <th className={`p-3 text-right ${theme.textMuted}`}>Actions</th>
+                <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-100/80 dark:bg-slate-800/60 text-xs font-bold uppercase tracking-wider">
+                  <th className={`p-4 ${theme.textMuted}`}>Image</th>
+                  <th className={`p-4 ${theme.textMuted}`}>Name</th>
+                  <th className={`p-4 ${theme.textMuted}`}>Role</th>
+                  <th className={`p-4 ${theme.textMuted}`}>Status</th>
+                  <th className={`p-4 text-right ${theme.textMuted}`}>Actions</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-slate-200/80 dark:divide-slate-800/80">
                 {allCharacters.map((char: any) => (
-                  <tr key={char.id} className={`border-b ${theme.border} hover:bg-slate-50 dark:hover:bg-slate-900/50`}>
-                    <td className="p-3">
+                  <tr key={char.id} className="group hover:bg-white dark:hover:bg-slate-800/60 transition-colors duration-150">
+                    <td className="p-4">
                       {char.image ? (
-                        <img src={char.image} className="w-16 h-16 rounded-xl object-cover border cursor-pointer hover:opacity-80 transition" alt={char.name} onClick={() => setPreviewImage(char.image)} />
+                        <div className="relative group/img inline-block">
+                          <img 
+                            src={char.image} 
+                            className="w-14 h-14 rounded-xl object-cover border-2 border-slate-200 dark:border-slate-700/80 cursor-pointer shadow-sm group-hover/img:scale-105 group-hover/img:border-[#ffcc29] group-hover/img:shadow-md group-hover/img:shadow-[#ffcc29]/20 transition-all duration-200" 
+                            alt={char.name} 
+                            onClick={() => setPreviewImage(char.image)} 
+                          />
+                        </div>
                       ) : (
-                        <div className={`w-16 h-16 rounded-xl border flex items-center justify-center ${theme.border} bg-slate-100 dark:bg-slate-800`}>
-                          <span className="text-xs text-slate-400">None</span>
+                        <div className={`w-14 h-14 rounded-xl border-2 border-dashed flex items-center justify-center ${theme.border} bg-slate-100 dark:bg-slate-800/80`}>
+                          <span className="text-[11px] font-medium text-slate-400">No Image</span>
                         </div>
                       )}
                     </td>
-                    <td className={`p-3 font-semibold ${theme.text}`}>{char.name || 'Unnamed'}</td>
-                    <td className={`p-3 ${theme.text}`}>{char.role || char.appearance?.role || 'Character'}</td>
-                    <td className={`p-3`}>
+                    <td className="p-4">
+                      <span className={`font-bold text-base ${theme.text} block`}>{char.name || 'Unnamed'}</span>
+                    </td>
+                    <td className="p-4">
+                      <span className="inline-flex items-center px-3 py-1 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700/80 shadow-xs">
+                        {char.role || char.appearance?.role || 'Character'}
+                      </span>
+                    </td>
+                    <td className="p-4">
                       {char.image ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400">✓ Ready</span>
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                          Ready
+                        </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-700/60 text-slate-400">No Reference</span>
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                          <span className="w-2 h-2 rounded-full bg-amber-500" />
+                          No Reference
+                        </span>
                       )}
                     </td>
-                    <td className="p-3">
-                      <div className="flex items-center justify-end gap-2">
-                        <button onClick={() => openEditor(char)} disabled={busy} className="p-2 text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-950 rounded-lg transition">
-                          <Edit className="w-4 h-4" />
+                    <td className="p-4">
+                      <div className="flex items-center justify-end gap-2.5">
+                        <button 
+                          onClick={() => openEditor(char)} 
+                          disabled={busy} 
+                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-amber-700 dark:text-[#ffcc29] bg-[#ffcc29]/10 hover:bg-[#ffcc29]/25 border border-[#ffcc29]/40 hover:border-[#ffcc29]/70 rounded-xl transition-all duration-150 shadow-xs active:scale-95 disabled:opacity-50"
+                          title="Edit Character"
+                        >
+                          <Edit className="w-3.5 h-3.5 text-[#ffcc29]" />
+                          <span>Edit</span>
                         </button>
-                        <button onClick={() => deleteCharacter(char.id)} disabled={busy} className="p-2 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950 rounded-lg transition">
-                          <Trash2 className="w-4 h-4" />
+                        <button 
+                          onClick={() => deleteCharacter(char.id)} 
+                          disabled={busy} 
+                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-rose-600 dark:text-rose-400 bg-rose-500/10 hover:bg-rose-500/25 border border-rose-500/30 hover:border-rose-500/60 rounded-xl transition-all duration-150 shadow-xs active:scale-95 disabled:opacity-50"
+                          title="Delete Character"
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                          <span>Delete</span>
                         </button>
                       </div>
                     </td>
@@ -287,7 +321,9 @@ export const CharacterManager: React.FC<CharacterManagerProps> = ({ jobId, draft
                 ))}
                 {allCharacters.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="p-6 text-center text-slate-500">No characters yet. The AI Director will suggest characters automatically after you generate the story, or click 'Add Character' to create one manually.</td>
+                    <td colSpan={5} className="p-8 text-center text-slate-500">
+                      No characters yet. The AI Director will suggest characters automatically after you generate the story, or click 'Add Character' to create one manually.
+                    </td>
                   </tr>
                 )}
               </tbody>
@@ -296,7 +332,7 @@ export const CharacterManager: React.FC<CharacterManagerProps> = ({ jobId, draft
 
           {/* Approve All button */}
           {allCharacters.length > 0 && onApproveAll && (
-            <div className="flex justify-end pt-4 border-t border-slate-800">
+            <div className="flex justify-end pt-4 border-t border-slate-200 dark:border-slate-800">
               <button
                 onClick={onApproveAll}
                 disabled={busy}
@@ -311,7 +347,9 @@ export const CharacterManager: React.FC<CharacterManagerProps> = ({ jobId, draft
       ) : (
         <div className="space-y-6">
           <div className="flex justify-between items-center border-b pb-4 dark:border-slate-800">
-            <h3 className={`font-bold text-lg ${theme.text}`}>{editingChar.isNew ? 'Create Character' : 'Edit Character'} ({editingChar.characterId || editingChar.id})</h3>
+            <h3 className={`font-bold text-lg ${theme.text}`}>
+              {editingChar.isNew ? 'Create Character' : `Edit Character ${editName ? `(${editName})` : ''}`}
+            </h3>
             <button onClick={closeEditor} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition"><X className="w-5 h-5" /></button>
           </div>
           

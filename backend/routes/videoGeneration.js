@@ -482,8 +482,8 @@ videoGenerationQueue.registerHandler('merge_video', async (payload, { update, lo
 
 // Keep heavy AI generation protected, but allow frequent job polling.
 const videoAiWriteLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
+  windowMs: 1 * 60 * 1000,
+  max: 1000,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many AI generation requests, please try again later.' },
@@ -1440,7 +1440,7 @@ router.post('/createDraft', protect, checkTrial, videoAiWriteLimiter, async (req
   }
 });
 
-router.post('/generateCharacterPreview', protect, checkTrial, videoAiWriteLimiter, async (req, res) => {
+router.post('/generateCharacterPreview', protect, checkTrial, async (req, res) => {
   try {
     const { name, age, gender, hairStyle, beard, race, role, personality, videoStyle, brandName, artStyle, appearance, characterImageBase64, characterId: requestedCharacterId } = req.body;
     
@@ -1610,19 +1610,27 @@ ${personSuffix}`;
 
     console.log('[CharacterSheet] ✅ Composed character sheet uploaded:', composedSheetUrl);
     const finalImageUrl = composedSheetUrl;
-
+    const frontPortraitUrl = panelImages[2]?.url || panelImages[0]?.url || finalImageUrl;
 
     // --- Create Character Memory ---
     const characterId = String(requestedCharacterId || '').trim() || uuidv4();
     await ensureCharacterMemoryFromSource({
       characterId,
-      imageSource: finalImageUrl,
+      imageSource: frontPortraitUrl,
       metadata: {
         characterId,
         name,
         gender,
         age,
         language: 'en',
+        sheetUrl: finalImageUrl,
+        frontPortraitUrl,
+        referenceImageType: 'front_portrait',
+        referenceImageUrl: frontPortraitUrl,
+        embeddingVersion: 'v2',
+        identityModel: 'InsightFace',
+        embeddingCreatedAt: new Date().toISOString(),
+        sourceCharacterSheet: finalImageUrl,
         source: 'generateCharacterPreview'
       }
     });
@@ -2179,6 +2187,64 @@ router.post('/generateClips', protect, checkTrial, videoAiWriteLimiter, async (r
   }
 });
 
+router.post('/test-edge-tts', async (req, res) => {
+  const { text = "This is a male voice test.", voice = "hi-IN-MadhurNeural" } = req.body || {};
+  const tmpPath = path.join(require('os').tmpdir(), `test_tts_${Date.now()}.mp3`);
+  
+  console.log("=================================");
+  console.log("[STANDALONE TEST EDGE TTS REQUEST]");
+  console.log("Requested Voice ID:", voice);
+  console.log("Text Input:", text);
+  console.log("Output Path:", tmpPath);
+  console.log("=================================");
+
+  try {
+    const { spawnSync } = require('child_process');
+    const attempts = [
+      { command: 'python', args: ['-m', 'edge_tts', '--voice', voice, '--text', text, '--write-media', tmpPath] },
+      { command: 'py', args: ['-m', 'edge_tts', '--voice', voice, '--text', text, '--write-media', tmpPath] },
+      { command: 'edge-tts', args: ['--voice', voice, '--text', text, '--write-media', tmpPath] }
+    ];
+
+    let success = false;
+    let usedAttempt = null;
+    let lastError = '';
+    for (const attempt of attempts) {
+      console.log(`Executing Standalone Test: ${attempt.command} ${attempt.args.join(' ')}`);
+      const proc = spawnSync(attempt.command, attempt.args, { encoding: 'utf-8' });
+      console.log(`Process Output (stdout): "${proc.stdout || ''}"`);
+      console.log(`Process Output (stderr): "${proc.stderr || ''}"`);
+      console.log(`Process Exit Code: ${proc.status}`);
+      if (proc.stderr) lastError = proc.stderr;
+
+      if (fs.existsSync(tmpPath)) {
+        const stat = fs.statSync(tmpPath);
+        if (stat.size > 1200) {
+          success = true;
+          usedAttempt = attempt;
+          break;
+        }
+      }
+    }
+
+    if (!success) {
+      return res.status(500).json({
+        success: false,
+        message: 'Standalone Edge TTS execution failed on host machine. Ensure Python package edge-tts is installed.',
+        requestedVoice: voice,
+        lastError
+      });
+    }
+
+    const buffer = fs.readFileSync(tmpPath);
+    res.setHeader('Content-Type', 'audio/mpeg');
+    res.setHeader('Content-Disposition', `inline; filename="test_${voice}.mp3"`);
+    res.send(buffer);
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 router.post('/generateAudio', protect, checkTrial, videoAiWriteLimiter, async (req, res) => {
   try {
     const { jobId, audio = {} } = req.body || {};
@@ -2209,14 +2275,21 @@ router.post('/generateAudio', protect, checkTrial, videoAiWriteLimiter, async (r
       }));
     }
 
+    const rawGender = String(audio?.voiceGender || audio?.config?.voiceGender || draft?.audioConfig?.voiceGender || draft?.voiceGender || 'female').toLowerCase();
+    const resolvedGender = rawGender === 'male' ? 'male' : 'female';
+    const rawLang = String(audio?.languageCode || audio?.config?.languageCode || draft?.audioConfig?.languageCode || draft?.audioLanguageCode || requestedLanguageCode || 'en').toLowerCase();
+
+    console.log("=== Incoming Audio Payload ===");
+    console.log(req.body.audio);
+
     const audioConfig = {
       enabled: audio?.enabled !== false,
       mode: String(audio?.mode || 'auto').toLowerCase(),
-      languageCode: requestedLanguageCode,
+      languageCode: rawLang,
       tone: String(audio?.tone || 'professional').toLowerCase(),
       musicSource: String(audio?.musicSource || process.env.AI_VIDEO_MUSIC_SOURCE || 'library').toLowerCase(),
       musicTrack: typeof audio?.musicTrack === 'string' ? audio.musicTrack : '',
-      voiceGender: String(audio?.voiceGender || 'female').toLowerCase(),
+      voiceGender: resolvedGender,
       voiceVolume: Number.isFinite(Number(audio?.voiceVolume)) ? Number(audio.voiceVolume) : 1,
       musicVolume: Number.isFinite(Number(audio?.musicVolume)) ? Number(audio.musicVolume) : 0.24,
       sourceVoiceScript,
@@ -2227,7 +2300,9 @@ router.post('/generateAudio', protect, checkTrial, videoAiWriteLimiter, async (r
       manualAudioUrl: typeof audio?.manualAudioUrl === 'string' ? audio.manualAudioUrl : '',
       soundEffectUrls: Array.isArray(audio?.soundEffectUrls) ? audio.soundEffectUrls : []
     };
-    audioConfig.voiceGender = audioConfig.voiceGender === 'male' ? 'male' : 'female';
+
+    console.log("=== Normalized Audio Options ===");
+    console.log(audioConfig);
 
     const shouldQueue =
       req.body?.async === true ||
@@ -2294,10 +2369,27 @@ router.post('/generateAudio', protect, checkTrial, videoAiWriteLimiter, async (r
       baseUrl: reqBaseUrl(req)
     });
 
+    console.log("=== Final Audio Tracks ===");
+    console.log(generated?.tracks);
+
+    console.log("=== Response Tracks Verification ===");
+    console.log({
+      voice: generated?.tracks?.voice,
+      background: generated?.tracks?.background
+    });
+
     const updated = await updateDraft(jobId, userId, (current) => ({
       ...current,
       currentStep: Math.max(Number(current.currentStep || 1), 5),
       finalVideoUrl: null,
+      audioConfig: {
+        ...(current?.audioConfig || {}),
+        ...audioConfig,
+        localizedVoiceScript: generated?.localizedVoiceScript || null,
+        localizedSceneData: generated?.localizedSceneData || null
+      },
+      audioLanguageCode: audioConfig.languageCode,
+      voiceGender: audioConfig.voiceGender,
       audio: {
         config: {
           ...audioConfig,
@@ -2345,6 +2437,47 @@ router.post('/generateAudio', protect, checkTrial, videoAiWriteLimiter, async (r
   }
 });
 
+router.get('/debug-voices', protect, async (req, res) => {
+  try {
+    const testText = "In a world of constant evolution, innovation is the foundation of progress. Partner with Protekk, and unlock your potential.";
+    const sampleVoices = [
+      { id: 'en-US-ChristopherNeural', label: 'Christopher (US Deep Male)' },
+      { id: 'en-US-AndrewNeural', label: 'Andrew (US Warm Male)' },
+      { id: 'en-US-RogerNeural', label: 'Roger (US Formal Male)' },
+      { id: 'en-GB-RyanNeural', label: 'Ryan (UK Male)' },
+      { id: 'hi-IN-MadhurNeural', label: 'Madhur (Hindi Male)' },
+      { id: 'en-US-JennyNeural', label: 'Jenny (US Female Reference)' }
+    ];
+
+    const results = [];
+    const tempDir = path.join(__dirname, '../public/debug-voices');
+    await fs.promises.mkdir(tempDir, { recursive: true });
+
+    for (const voice of sampleVoices) {
+      const fileName = `sample_${voice.id}.mp3`;
+      const filePath = path.join(tempDir, fileName);
+      await runProcess('python3', [
+        '-m', 'edge_tts',
+        '--voice', voice.id,
+        '--text', testText,
+        '--write-media', filePath
+      ]).catch(() => null);
+
+      if (fs.existsSync(filePath)) {
+        results.push({
+          voiceId: voice.id,
+          label: voice.label,
+          url: `/debug-voices/${fileName}`
+        });
+      }
+    }
+
+    return res.json({ success: true, samples: results });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 router.post('/mixAudio', protect, checkTrial, videoAiWriteLimiter, async (req, res) => {
   try {
     const { jobId, tracks = {}, durationSeconds } = req.body || {};
@@ -2369,19 +2502,37 @@ router.post('/mixAudio', protect, checkTrial, videoAiWriteLimiter, async (req, r
           backgroundUrl: mergedTracks?.backgroundUrl || ''
         },
         soundEffectUrls: Array.isArray(mergedTracks?.soundEffectUrls) ? mergedTracks.soundEffectUrls : [],
-        audio: draft?.audio?.config || {}
+        audio: {
+          ...(draft?.audio?.config || {}),
+          ...(req.body?.audio || {}),
+          voiceVolume: req.body?.voiceVolume !== undefined ? Number(req.body.voiceVolume) : (draft?.audio?.config?.voiceVolume),
+          musicVolume: req.body?.musicVolume !== undefined ? Number(req.body.musicVolume) : (draft?.audio?.config?.musicVolume)
+        }
       },
       baseUrl: reqBaseUrl(req)
     });
 
-    const updated = await updateDraft(jobId, userId, (current) => ({
-      ...current,
-      currentStep: Math.max(Number(current.currentStep || 1), 6),
-      mix: {
-        finalAudioUrl: mixed?.finalAudioUrl || null,
-        mixedAt: new Date().toISOString()
-      }
-    }));
+    const updated = await updateDraft(jobId, userId, (current) => {
+      const canonicalConfig = {
+        ...(current?.audio?.config || {}),
+        ...(current?.audioConfig || {}),
+        voiceVolume: req.body?.voiceVolume !== undefined ? Number(req.body.voiceVolume) : (current?.audio?.config?.voiceVolume),
+        musicVolume: req.body?.musicVolume !== undefined ? Number(req.body.musicVolume) : (current?.audio?.config?.musicVolume)
+      };
+      return {
+        ...current,
+        currentStep: Math.max(Number(current.currentStep || 1), 6),
+        audioConfig: canonicalConfig,
+        audio: {
+          ...(current?.audio || {}),
+          config: canonicalConfig
+        },
+        mix: {
+          finalAudioUrl: mixed?.finalAudioUrl || null,
+          mixedAt: new Date().toISOString()
+        }
+      };
+    });
 
     return res.json({
       success: true,

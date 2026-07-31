@@ -86,7 +86,6 @@ function isLocalhostUrl(url = '') {
 }
 
 async function getFalClient() {
-  console.log("Fal key exists:", !!process.env.FAL_KEY);
   const apiKey = String(process.env.FAL_KEY || '').trim();
   if (!apiKey) {
     throw new Error('FAL_KEY environment variable is required for Fal.ai video clip generation');
@@ -105,27 +104,108 @@ async function getFalClient() {
   return falClientPromise;
 }
 
-async function uploadSceneImageIfNeeded({ fal, scene, imageUrl }) {
-  const imagePath = String(scene.imagePath || scene.image_path || '').trim();
-  if (!imagePath) return imageUrl;
-  if (imageUrl && !isLocalhostUrl(imageUrl)) return imageUrl;
-  if (!fal.storage?.upload) {
-    throw new Error(
-      'Cannot upload scene image to Fal.ai storage. ' +
-      'This usually happens when `@fal-ai/serverless-client` is missing storage support. ' +
-      'Upgrade the dependency and/or provide a publicly accessible image URL.'
-    );
+const { uploadBase64Image } = require('./imageUploader');function getSceneImageUrl(scene = {}) {
+  return String(
+    scene.image_url ||
+    scene.imageUrl ||
+    scene.generatedImageUrl ||
+    scene.image ||
+    ''
+  ).trim();
+}
+
+function resolveDiskPathFromUrl(imageUrl) {
+  if (!imageUrl || typeof imageUrl !== 'string') return null;
+  const cleanUrl = imageUrl.split('?')[0];
+
+  let subPath = '';
+  if (cleanUrl.includes('/generated-media/')) {
+    subPath = cleanUrl.substring(cleanUrl.indexOf('/generated-media/') + '/generated-media/'.length);
+  } else if (cleanUrl.includes('/storage/ai-videos/')) {
+    subPath = cleanUrl.substring(cleanUrl.indexOf('/storage/ai-videos/') + '/storage/ai-videos/'.length);
+  } else if (cleanUrl.includes('/uploads/')) {
+    subPath = cleanUrl.substring(cleanUrl.indexOf('/uploads/') + '/uploads/'.length);
   }
 
-  const buffer = await fs.promises.readFile(imagePath);
-  const fileName = path.basename(imagePath) || 'scene.jpg';
-  const BlobImpl = globalThis.Blob || BufferBlob;
-  if (!BlobImpl) {
-    throw new Error('Node.js Blob is not available. Upgrade Node.js to v18+ to upload images to Fal.ai.');
+  if (subPath) {
+    const pathsToTry = [
+      path.join(process.cwd(), 'storage', 'ai-videos', subPath),
+      path.join(process.cwd(), 'backend', 'storage', 'ai-videos', subPath),
+      path.join(__dirname, '..', 'storage', 'ai-videos', subPath),
+      path.join(__dirname, '..', '..', 'storage', 'ai-videos', subPath),
+      path.join(process.cwd(), 'uploads', subPath),
+      path.join(process.cwd(), 'backend', 'uploads', subPath),
+      path.join(process.cwd(), 'generated-media', subPath),
+      path.join(process.cwd(), 'backend', 'generated-media', subPath)
+    ];
+    for (const p of pathsToTry) {
+      if (fs.existsSync(p)) {
+        console.log(`[Fal.ai Image Upload] Resolved local disk image path: ${p}`);
+        return p;
+      }
+    }
   }
-  const blob = new BlobImpl([buffer], { type: getMimeType(imagePath) });
-  blob.name = fileName;
-  return fal.storage.upload(blob);
+  return null;
+}
+
+async function uploadSceneImageIfNeeded({ fal, scene = {}, imageUrl }) {
+  let url = String(imageUrl || getSceneImageUrl(scene)).trim();
+
+  // If already a valid remote HTTPS URL, return as is
+  if (url && url.startsWith('https://') && !isLocalhostUrl(url)) {
+    return url;
+  }
+
+  let imagePath = String(scene.imagePath || scene.image_path || '').trim();
+  if (!imagePath || !fs.existsSync(imagePath)) {
+    imagePath = resolveDiskPathFromUrl(url) || imagePath;
+  }
+
+  // Option 1: Upload local image to Cloudinary (returns public https:// URL)
+  if (imagePath && fs.existsSync(imagePath)) {
+    try {
+      const buffer = await fs.promises.readFile(imagePath);
+      const base64 = `data:image/png;base64,${buffer.toString('base64')}`;
+      const uploadRes = await uploadBase64Image(base64, 'nebula-scene-images');
+      if (uploadRes?.url && uploadRes.url.startsWith('https://')) {
+        console.log(`[Fal.ai Image Upload] ✅ Uploaded scene image to Cloudinary: ${uploadRes.url}`);
+        return uploadRes.url;
+      }
+    } catch (err) {
+      console.warn(`[Fal.ai Image Upload] Cloudinary upload attempt failed: ${err.message}. Trying Fal storage...`);
+    }
+  }
+
+  // Option 2: Upload local image to Fal.ai storage directly
+  if (imagePath && fs.existsSync(imagePath) && fal?.storage?.upload) {
+    try {
+      const buffer = await fs.promises.readFile(imagePath);
+      const fileName = path.basename(imagePath) || 'scene.png';
+      const BlobImpl = globalThis.Blob || BufferBlob;
+      if (BlobImpl) {
+        const blob = new BlobImpl([buffer], { type: getMimeType(imagePath) });
+        blob.name = fileName;
+        const falUrl = await fal.storage.upload(blob);
+        if (falUrl && String(falUrl).startsWith('https://')) {
+          console.log(`[Fal.ai Image Upload] ✅ Uploaded scene image to Fal storage: ${falUrl}`);
+          return falUrl;
+        }
+      }
+    } catch (err) {
+      console.warn(`[Fal.ai Image Upload] Fal storage upload failed: ${err.message}`);
+    }
+  }
+
+  // Option 3: Replace localhost host with PUBLIC_URL / SERVER_URL if configured
+  const publicBase = String(process.env.PUBLIC_URL || process.env.SERVER_URL || process.env.BASE_URL || '').trim();
+  if (publicBase && publicBase.startsWith('https://')) {
+    const relativePath = url.replace(/^https?:\/\/[^\/]+/, '');
+    const ngrokUrl = `${publicBase.replace(/\/$/, '')}${relativePath}`;
+    console.log(`[Fal.ai Image Upload] Transformed localhost URL using PUBLIC_URL: ${ngrokUrl}`);
+    return ngrokUrl;
+  }
+
+  return url;
 }
 
 function extractVideoUrl(result) {
@@ -192,14 +272,64 @@ function mapFalError(error, model) {
   return error;
 }
 
+const axios = require('axios');
+
+async function verifyPublicImageReachable(url) {
+  if (!url || typeof url !== 'string' || !url.startsWith('https://')) {
+    return { ok: false, status: 0, contentType: 'none', contentLength: 0, reason: 'URL must be a public https:// string' };
+  }
+  try {
+    const res = await axios.head(url, { timeout: 8000 });
+    const status = res.status;
+    const contentType = String(res.headers['content-type'] || 'image/png');
+    const contentLength = Number(res.headers['content-length'] || 0);
+    const ok = status >= 200 && status < 400;
+    return { ok, status, contentType, contentLength, reason: ok ? 'SUCCESS' : `Invalid HTTP status: ${status}` };
+  } catch (err) {
+    try {
+      const getRes = await axios.get(url, { headers: { Range: 'bytes=0-1024' }, timeout: 8000 });
+      const status = getRes.status;
+      const contentType = String(getRes.headers['content-type'] || 'image/png');
+      const ok = status >= 200 && status < 400;
+      return { ok, status, contentType, contentLength: 0, reason: ok ? 'SUCCESS' : `GET status: ${status}` };
+    } catch (getErr) {
+      return { ok: false, status: 0, contentType: 'none', contentLength: 0, reason: getErr.message };
+    }
+  }
+}
+
 async function generateVideoClip(scene = {}) {
   const fal = await getFalClient();
   const prompt = getScenePrompt(scene);
+  const rawSceneImgUrl = getSceneImageUrl(scene);
+
+  console.log("===============================");
+  console.log("[Fal.ai Video Pipeline] Original Scene Image URL:", rawSceneImgUrl);
+
   const imageUrl = await uploadSceneImageIfNeeded({
     fal,
     scene,
-    imageUrl: getSceneImageUrl(scene)
+    imageUrl: rawSceneImgUrl
   });
+
+  console.log("[Fal.ai Video Pipeline] Converted Image URL:", imageUrl);
+  console.log("[Fal.ai Video Pipeline] Valid Public HTTPS:", String(imageUrl || '').startsWith('https://'));
+
+  if (imageUrl && imageUrl.startsWith("https://")) {
+    const check = await verifyPublicImageReachable(imageUrl);
+    console.log(`[Fal.ai Upload Verification]
+  Image Upload: ${check.ok ? 'SUCCESS' : 'FAILED'}
+  Public URL: ${imageUrl}
+  HTTP Status: ${check.status || 200} OK
+  Content-Type: ${check.contentType}
+  Content-Length: ${check.contentLength ? (check.contentLength / 1024 / 1024).toFixed(2) + ' MB' : 'N/A'}
+  Reason: ${check.reason}`);
+
+    if (!check.ok) {
+      throw new Error(`Public image asset verification failed for ${imageUrl}: ${check.reason}. Pipeline stopped before calling Fal.ai to protect credit balance.`);
+    }
+  }
+  console.log("===============================");
 
   if (imageUrl && !imageUrl.startsWith("https://")) {
     throw new Error(`Invalid public image URL for Fal.ai: ${imageUrl}. Must be a public HTTPS URL.`);

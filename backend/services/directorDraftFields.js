@@ -119,6 +119,29 @@ function normalizeDirectorAutosavePayload(body = {}) {
       productionBible: patch.productionBible ?? body.scenesMetadata?.productionBible ?? null
     };
   }
+  
+  // Canonical audioConfig migration and normalization
+  const incomingAudio = patch.audioConfig || patch.audio?.config || (typeof patch.audio === 'object' ? patch.audio : null);
+  if (incomingAudio && typeof incomingAudio === 'object') {
+    const canonicalAudioConfig = {
+      enabled: incomingAudio.enabled !== false,
+      mode: incomingAudio.mode || 'auto',
+      audioPriority: incomingAudio.audioPriority || 'balanced',
+      tone: incomingAudio.tone || 'professional',
+      languageCode: incomingAudio.languageCode || patch.audioLanguageCode || body.audioLanguageCode || 'en',
+      voiceGender: incomingAudio.voiceGender || patch.voiceGender || body.voiceGender || 'female',
+      voiceVolume: Number.isFinite(Number(incomingAudio.voiceVolume)) ? Number(incomingAudio.voiceVolume) : 1,
+      musicVolume: Number.isFinite(Number(incomingAudio.musicVolume)) ? Number(incomingAudio.musicVolume) : 0.24,
+      provider: 'edge-tts'
+    };
+    patch.audioConfig = canonicalAudioConfig;
+    patch.audioLanguageCode = canonicalAudioConfig.languageCode;
+    patch.voiceGender = canonicalAudioConfig.voiceGender;
+    patch.audio = {
+      ...(typeof patch.audio === 'object' ? patch.audio : {}),
+      config: canonicalAudioConfig
+    };
+  }
   if (patch.caption !== undefined || patch.hashtags !== undefined || patch.thumbnailUrl !== undefined) {
     patch.content = {
       ...(typeof body.content === 'object' ? body.content : {}),

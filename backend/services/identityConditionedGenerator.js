@@ -7,7 +7,8 @@ const comfyUI = require('./comfyUIClient');
 const DEFAULT_NEGATIVE = [
   'different person',
   'wrong face',
-  'face swap artifact',
+  'face drift',
+  'reconstructed face',
   'multiple faces',
   'duplicate people',
   'storyboard',
@@ -16,7 +17,21 @@ const DEFAULT_NEGATIVE = [
   'text',
   'watermark',
   'low quality',
-  'blurry face'
+  'blurry face',
+  'dark background',
+  'underexposed shadows',
+  'black silhouette backdrop',
+  'hologram overlay',
+  'overuse of glowing UI',
+  'flat lighting',
+  'generic AI artwork',
+  'digital poster',
+  'sci-fi energy beams',
+  'space nebula',
+  'glowing blue particles',
+  'fantasy portal',
+  'futuristic cyberspace',
+  'holographic screen'
 ].join(', ');
 
 function buildSceneGenerationPrompt({
@@ -30,32 +45,63 @@ function buildSceneGenerationPrompt({
   if (rawPrompt) return String(prompt || '').trim();
 
   const scenePrompt = String(prompt || scene.imagePrompt || scene.action || '').trim();
-  const camera = scene.cameraStyle || scene.camera || 'Cinematic framing';
-  const pose = scene.action || scene.pose || 'Natural pose';
-  const environment = scene.location || scene.environment || 'Commercial environment';
-  const lighting = scene.lighting || scene.lightingStyle || 'Professional cinematic lighting';
+  const camera = scene.cameraStyle || scene.camera || 'ARRI Alexa 35, 85mm cinema lens, f/1.8 shallow depth of field';
+  const pose = scene.action || scene.pose || 'Natural commercial gesture with focused, authentic expression';
+  const environment = scene.location || scene.environment || 'Vibrant architectural tech office / studio space with natural lighting';
+  const lighting = scene.lighting || scene.lightingStyle || 'Bright professional studio lighting, clear high-key illumination, natural daylight';
   const wardrobe = scene.wardrobe || '';
 
-  const identityBlock = identityPackage
+  const identitySection = identityPackage
     ? [
-      'Use the exact same person from the Character Sheet reference image.',
-      'Preserve face geometry, skin tone, age, ethnicity, and facial hair.',
-      'Only change clothing, pose, expression, camera angle, environment, and lighting as described.',
-      identityInstruction
-    ].filter(Boolean).join(' ')
+        '[IDENTITY]',
+        '- Use ONLY the uploaded Character Sheet reference image',
+        '- Preserve exact identity without altering facial structure',
+        '- Reference image has absolute priority over text description',
+        identityInstruction ? `- Note: ${identityInstruction}` : ''
+      ].filter(Boolean).join('\n')
     : '';
 
-  return [
-    identityBlock,
-    scenePrompt,
-    `Camera: ${camera}`,
-    `Pose: ${pose}`,
-    `Environment: ${environment}`,
-    `Lighting: ${lighting}`,
-    wardrobe ? `Wardrobe: ${wardrobe}` : '',
-    plan?.globalVisualStyle ? `Style: ${plan.globalVisualStyle}` : '',
-    'Single 9:16 cinematic frame. No collage. No storyboard. No text.'
+  const sceneSection = [
+    '[SCENE]',
+    `- Action & Story Moment: ${scenePrompt}`,
+    `- Expression & Gesture: ${pose}`,
+    `- Location & Set: ${environment}`,
+    wardrobe ? `- Wardrobe: ${wardrobe}` : ''
   ].filter(Boolean).join('\n');
+
+  const cameraSection = [
+    '[CAMERA]',
+    `- Lens & Camera: ${camera}`,
+    '- Framing: 9:16 vertical commercial framing'
+  ].join('\n');
+
+  const lightingSection = [
+    '[LIGHTING]',
+    `- Illumination: ${lighting}`,
+    '- Ambience: Well-lit environment, soft natural shadows, authentic skin texture'
+  ].join('\n');
+
+  const styleSection = [
+    '[STYLE]',
+    '- Color Science: Clean commercial color grade, vibrant natural tones, bright photorealism',
+    plan?.globalVisualStyle ? `- Grade Note: ${plan.globalVisualStyle}` : ''
+  ].filter(Boolean).join('\n');
+
+  const directorNotesSection = [
+    '[DIRECTOR NOTES]',
+    '- Commercial Aesthetic: Apple Keynote launch film, OpenAI announcement, Tesla AI presentation',
+    '- Human Performance: Natural human emotion, authentic business interaction',
+    '- Realism: Real physical studio photography, zero AI-generated appearance, bright clear background'
+  ].join('\n');
+
+  return [
+    identitySection,
+    sceneSection,
+    cameraSection,
+    lightingSection,
+    styleSection,
+    directorNotesSection
+  ].filter(Boolean).join('\n\n');
 }
 
 async function writeGenerationProof(identityPackage, proof, logger = null) {
@@ -224,6 +270,22 @@ async function generateIdentityConditionedSceneImage({
     rawPrompt
   });
 
+  const charId = identityPackage?.characterId || identityPackage?.id || 'None';
+  const memId = identityPackage?.identityMemoryId || identityPackage?.characterId || 'None';
+  const refStatus = identityPackage?.referencePath || identityPackage?.referenceDataUrl ? 'Loaded ✅' : 'None ❌';
+
+  console.log('\n====================================================');
+  console.log('[IdentityGen] 🔍 SCENE GENERATION IDENTITY LOCK VERIFICATION:');
+  console.log(`[IdentityGen] Character ID: ${charId}`);
+  console.log(`[IdentityGen] Identity Memory ID: ${memId}`);
+  console.log(`[IdentityGen] Reference Image Status: ${refStatus}`);
+  console.log(`[IdentityGen] Target Engine: ${config.IMAGE_ENGINE === 'comfyui' || config.AUTO_COMFYUI_FOR_IDENTITY ? 'ComfyUI (PuLID/IPAdapter)' : 'Cloud AI'}`);
+  console.log('====================================================\n');
+
+  if (logger) {
+    logger(`[IdentityGen] Scene Gen Verification -> CharID: ${charId} | MemID: ${memId} | Reference: ${refStatus}`);
+  }
+
   // No Character Sheet → Gemini is fine.
   if (!identityPackage) {
     return generateWithGeminiReference({
@@ -243,14 +305,46 @@ async function generateIdentityConditionedSceneImage({
   }
 
   if (shouldUseComfyUI) {
-    return generateWithComfyUIIdentity({
-      prompt: effectivePrompt,
-      negativePrompt: DEFAULT_NEGATIVE,
-      identityPackage,
-      scene,
-      seed,
-      logger
-    });
+    try {
+      return await generateWithComfyUIIdentity({
+        prompt: effectivePrompt,
+        negativePrompt: DEFAULT_NEGATIVE,
+        identityPackage,
+        scene,
+        seed,
+        logger
+      });
+    } catch (comfyErr) {
+      if (config.ALLOW_GEMINI_FALLBACK_WITHOUT_IDENTITY) {
+        if (logger) {
+          logger(`[IdentityGen] ComfyUI unavailable (${comfyErr.message}) — falling back to Cloud AI generation`);
+        }
+        console.warn(`[IdentityGen] ComfyUI error (${comfyErr.message}). Falling back to Cloud AI.`);
+        const { generateCampaignImageNanoBanana } = require('./geminiAI');
+        const result = await generateCampaignImageNanoBanana(effectivePrompt, {
+          aspectRatio: '9:16',
+          characterReferenceImage: identityPackage.referenceDataUrl,
+          originalCharacterImage: identityPackage.referenceDataUrl,
+          isCinematic: true,
+          tone: brandContext.tone || 'professional',
+          brandName: brandContext.brandName,
+          industry: brandContext.industry,
+          preserveCharacterIdentity: true,
+          consistencyStrength: 'strict'
+        });
+        const imageSource = typeof result === 'string' ? result : result?.imageUrl;
+        if (!imageSource) throw new Error(result?.error || 'Cloud AI fallback image generation failed');
+        return {
+          imageSource,
+          engine: 'gemini-fallback',
+          identityConditioned: false,
+          geminiUsed: true
+        };
+      }
+      throw new Error(
+        `Identity-preserving scene generation is unavailable because ComfyUI is offline or unreachable at ${config.COMFYUI_URL}. Please ensure ComfyUI (with PuLID/IPAdapter models) is running to maintain identical face matching across scenes.`
+      );
+    }
   }
 
   // Explicit escape hatch only.
@@ -280,7 +374,7 @@ async function generateIdentityConditionedSceneImage({
     };
   }
 
-  throw new Error('Character identity generation requires ComfyUI PuLID/IPAdapter.');
+  throw new Error('Character identity generation requires ComfyUI PuLID/IPAdapter or Cloud AI fallback.');
 }
 
 module.exports = {

@@ -286,11 +286,11 @@ async function resolveCharacterMemoryForScene({
 
   const explicitIds = [
     characterId,
-    draft?.characterId,
-    draft?.identityMemoryId,
     matchedChar?.identityMemoryId,
     matchedChar?.characterId,
-    matchedChar?.id
+    matchedChar?.id,
+    draft?.characterId,
+    draft?.identityMemoryId
   ].filter(Boolean);
 
   for (const id of explicitIds) {
