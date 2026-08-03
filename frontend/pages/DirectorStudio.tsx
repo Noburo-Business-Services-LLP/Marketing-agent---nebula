@@ -220,16 +220,27 @@ function normalizeDirectorScene(scene: any, index: number) {
 }
 
 function resolveDirectorScenes(source: any, fallback: any = {}) {
+  const normalizeLayer = (val: any) => {
+    if (Array.isArray(val)) return val;
+    if (val && typeof val === 'object') {
+      const keys = Object.keys(val).filter(k => /^\d+$/.test(k));
+      if (keys.length > 0) {
+        return keys.sort((a, b) => Number(a) - Number(b)).map(k => val[k]);
+      }
+    }
+    return null;
+  };
+
   const layers = [
-    source?.scenes,
-    source?.images?.sceneData,
-    source?.clips?.sceneData,
-    source?.scenes?.sceneData,
-    fallback?.scenes,
-    fallback?.draft?.scenes,
-    fallback?.draft?.images?.sceneData,
-    fallback?.draft?.clips?.sceneData
-  ].filter(Array.isArray);
+    normalizeLayer(fallback?.draft?.clips?.sceneData),
+    normalizeLayer(fallback?.draft?.images?.sceneData),
+    normalizeLayer(source?.clips?.sceneData),
+    normalizeLayer(source?.images?.sceneData),
+    normalizeLayer(fallback?.draft?.scenes),
+    normalizeLayer(fallback?.scenes),
+    normalizeLayer(source?.scenes?.sceneData),
+    normalizeLayer(source?.scenes)
+  ].filter(Boolean) as any[][];
 
   if (!layers.length) return [];
 
@@ -379,7 +390,6 @@ export default function DirectorStudio() {
     instruction: string;
   } | null>(null);
 
-  const [showAudioEditor, setShowAudioEditor] = useState(false);
 
   const [customAudioData, setCustomAudioData] = useState<string>('');
   const [customAudioName, setCustomAudioName] = useState<string>('');
@@ -442,8 +452,10 @@ export default function DirectorStudio() {
     setSelectedProductId(d.selectedProductId || d.productId || fallback.selectedProductId || '');
     setImageDataUrl(d.imageDataUrl || fallback.imageDataUrl || '');
     setFinalAudioUrl(d.finalAudioUrl || fallback.finalAudioUrl || '');
-    setFinalVideoUrl(d.finalVideoUrl || fallback.finalVideoUrl || '');
-    setFinalOutputUrl(d.finalOutputUrl || fallback.finalOutputUrl || '');
+    const rawVideoUrl = d.finalVideoUrl || fallback.finalVideoUrl || '';
+    const rawOutputUrl = d.finalOutputUrl || fallback.finalOutputUrl || '';
+    setFinalVideoUrl(rawVideoUrl ? `${rawVideoUrl.split('?')[0]}?t=${Date.now()}` : '');
+    setFinalOutputUrl(rawOutputUrl ? `${rawOutputUrl.split('?')[0]}?t=${Date.now()}` : '');
     setThumbnailUrl(d.thumbnailUrl || d.content?.thumbnailUrl || d.thumbnails?.url || fallback.thumbnailUrl || '');
     setCaption(d.caption || d.content?.caption || fallback.caption || '');
     const dTags = d.hashtagsText || (Array.isArray(d.content?.hashtags) ? d.content.hashtags.join(' ') : '') || fallback.hashtagsText || '';
@@ -1196,6 +1208,27 @@ export default function DirectorStudio() {
     await handleGenerateStoryWithJobId(jobId);
   };
 
+  const handleContinueExistingWorkflow = async () => {
+    if (!jobId) return;
+    setBusy(true);
+    setBusyMsg('Loading existing project data...');
+    try {
+      const nextCompletedSteps = Array.from(new Set([...completedSteps, 1, 2]));
+      await videoGenerationAPI.updateDraft(jobId, {
+        currentStep: 3,
+        completedSteps: nextCompletedSteps
+      });
+      setCompletedSteps(nextCompletedSteps);
+      setCurrentStep(3);
+      fetchDrafts();
+    } catch (e: any) {
+      alert(e?.message || 'Failed to update draft step');
+    } finally {
+      setBusy(false);
+      setBusyMsg('');
+    }
+  };
+
   const handleUpdateScene = (sceneId: string, updates: any) => {
     setScenes(prev => prev.map((s) => String(s.sceneId) === String(sceneId) ? normalizeDirectorScene({ ...s, ...updates }, Number(s.sceneNumber || s.index || 1) - 1) : s));
   };
@@ -1749,7 +1782,6 @@ export default function DirectorStudio() {
           }
           if (mergeRes?.draft) applyDraftState(mergeRes.draft);
         }
-        setShowAudioEditor(false);
         alert("✅ Audio adjustments remixed and video preview updated successfully!");
       }
     } catch (e: any) {
@@ -1796,11 +1828,11 @@ export default function DirectorStudio() {
       if (res?.queueJobId) {
         const result = await pollAndRefreshDraft(res.queueJobId, 'Merging video...');
         if (result?.draft) applyDraftState(result.draft);
-        if (result?.merge?.finalOutputUrl) setFinalOutputUrl(result.merge.finalOutputUrl);
-        if (result?.merge?.finalVideoUrl) setFinalVideoUrl(result.merge.finalVideoUrl);
+        if (result?.merge?.finalOutputUrl) setFinalOutputUrl(`${result.merge.finalOutputUrl.split('?')[0]}?t=${Date.now()}`);
+        if (result?.merge?.finalVideoUrl) setFinalVideoUrl(`${result.merge.finalVideoUrl.split('?')[0]}?t=${Date.now()}`);
       } else {
-        if (res?.finalOutputUrl) setFinalOutputUrl(res.finalOutputUrl);
-        if (res?.finalVideoUrl) setFinalVideoUrl(res.finalVideoUrl);
+        if (res?.finalOutputUrl) setFinalOutputUrl(`${res.finalOutputUrl.split('?')[0]}?t=${Date.now()}`);
+        if (res?.finalVideoUrl) setFinalVideoUrl(`${res.finalVideoUrl.split('?')[0]}?t=${Date.now()}`);
         if (res?.draft) applyDraftState(res.draft);
       }
     } catch (e: any) {
@@ -2184,6 +2216,16 @@ export default function DirectorStudio() {
                     <p className="text-xs text-slate-400 mt-1">Setup character reference photos and details or proceed to story breakdown.</p>
                   </div>
                 </div>
+
+                <div className="flex justify-end">
+                  <button
+                    onClick={handleContinueExistingWorkflow}
+                    className="px-5 py-2.5 rounded-xl bg-[#ffcc29] text-black font-bold text-xs hover:bg-[#e6b825] transition flex items-center gap-2 shadow-md"
+                  >
+                    📂 Continue Existing Workflow
+                  </button>
+                </div>
+
                 <CharacterManager
                   jobId={jobId}
                   draft={draft}
@@ -2921,87 +2963,6 @@ export default function DirectorStudio() {
                     </div>
                   </div>
 
-                  {/* Dynamic Audio Adjustments Collapsible Container */}
-                  {generatedTracks && (
-                    <div className="mt-5 p-4 rounded-xl border border-slate-750 bg-slate-900/60 space-y-4">
-                      {!showAudioEditor ? (
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                          <div className="space-y-1">
-                            <span className="text-xs font-bold text-slate-200 uppercase tracking-wide block">🎵 Audio Volume Balances</span>
-                            <span className="text-[11px] text-slate-400 block font-mono">
-                              Voice: <strong className="text-[#ffcc29]">{Math.round(voiceVolume * 100)}%</strong> | Music: <strong className="text-[#ffcc29]">{Math.round(musicVolume * 100)}%</strong>
-                            </span>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => setShowAudioEditor(true)}
-                            className="px-4 py-2 rounded-xl border border-slate-650 hover:bg-slate-800 text-slate-200 text-xs font-bold transition flex items-center gap-1.5"
-                          >
-                            ✏️ Edit Audio Mix
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="space-y-4">
-                          <div className="flex items-center justify-between border-b border-slate-700/50 pb-2">
-                            <h4 className="text-xs font-bold text-slate-200 uppercase flex items-center gap-1.5">
-                              <span>🎚️</span> Remix Audio Levels
-                            </h4>
-                            <span className="text-[10px] text-slate-400 font-mono">Instant Merging Preview</span>
-                          </div>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                              <div className="flex justify-between text-xs font-semibold text-slate-400 mb-1.5">
-                                <span>Voice Volume</span>
-                                <span className="text-[#ffcc29] font-bold">{Math.round(voiceVolume * 100)}%</span>
-                              </div>
-                              <input
-                                type="range"
-                                min={0}
-                                max={2}
-                                step={0.1}
-                                value={voiceVolume}
-                                onChange={(e) => setVoiceVolume(Number(e.target.value))}
-                                className="w-full accent-[#ffcc29]"
-                              />
-                            </div>
-                            <div>
-                              <div className="flex justify-between text-xs font-semibold text-slate-400 mb-1.5">
-                                <span>Music Volume</span>
-                                <span className="text-[#ffcc29] font-bold">{Math.round(musicVolume * 100)}%</span>
-                              </div>
-                              <input
-                                type="range"
-                                min={0}
-                                max={2}
-                                step={0.1}
-                                value={musicVolume}
-                                onChange={(e) => setMusicVolume(Number(e.target.value))}
-                                className="w-full accent-[#ffcc29]"
-                              />
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-3 pt-2">
-                            <button
-                              onClick={handleMixAudio}
-                              disabled={busy}
-                              className="flex-1 py-2.5 rounded-xl bg-[#ffcc29] text-black font-bold text-xs hover:bg-[#e6b825] transition shadow"
-                            >
-                              {busy ? <Loader2 className="w-4 h-4 animate-spin inline mr-2" /> : null}
-                              💾 Save &amp; Remix Preview
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setShowAudioEditor(false)}
-                              disabled={busy}
-                              className="px-4 py-2.5 rounded-xl border border-slate-700 text-slate-400 text-xs font-bold hover:bg-slate-800 hover:text-white transition"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
                 </div>
 
                 <div>

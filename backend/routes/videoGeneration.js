@@ -391,11 +391,13 @@ videoGenerationQueue.registerHandler('merge_video', async (payload, { update, lo
       ? translatedSceneData
       : (draft?.clips?.sceneData || draft?.images?.sceneData || (Array.isArray(draft?.scenes) ? draft.scenes : null) || draft?.scenes?.sceneData || []);
 
+  const audioUrlToUse = await ensureAudioMixUrl(jobId, userId, finalAudioUrl, draft, baseUrl, log);
+
   const merged = await runMergeVideo({
     payload: {
       jobId,
       clipUrls: effectiveClipUrls,
-      finalAudioUrl: finalAudioUrl || draft?.mix?.finalAudioUrl || null,
+      finalAudioUrl: audioUrlToUse,
       subtitles: { enabled: subtitles?.enabled === true },
       sceneData: sceneDataForSubtitles,
       durationSeconds: draft?.input?.durationSeconds || null
@@ -2265,13 +2267,10 @@ router.post('/generateAudio', protect, checkTrial, videoAiWriteLimiter, async (r
       (Array.isArray(draft?.scenes?.scenes) && draft.scenes.scenes.length ? draft.scenes.scenes : null) ||
       [];
 
-    if (!String(draft?.scenes?.voiceScript || '').trim() && sourceVoiceScript) {
+    if (!String(draft?.voiceScript || '').trim() && sourceVoiceScript) {
       await updateDraft(jobId, userId, (current) => ({
         ...current,
-        scenes: {
-          ...(current.scenes || {}),
-          voiceScript: sourceVoiceScript
-        }
+        voiceScript: sourceVoiceScript
       }));
     }
 
@@ -2545,6 +2544,57 @@ router.post('/mixAudio', protect, checkTrial, videoAiWriteLimiter, async (req, r
   }
 });
 
+async function ensureAudioMixUrl(jobId, userId, finalAudioUrl, draft, baseUrl, logFn = console.log) {
+  let audioUrlToUse = finalAudioUrl || draft?.mix?.finalAudioUrl || null;
+  const rawTracks = draft?.audio?.tracks || draft?.audioConfig?.tracks || null;
+  const hasRawVoice = rawTracks?.voiceUrl || rawTracks?.voice?.url || rawTracks?.manualUrl || rawTracks?.manual?.url;
+  const hasRawBackground = rawTracks?.backgroundUrl || rawTracks?.background?.url;
+
+  if (!audioUrlToUse && (hasRawVoice || hasRawBackground)) {
+    logFn('No pre-mixed audio track found. Auto-generating a default mix from individual tracks...');
+    try {
+      const mixResult = await runMergeAudio({
+        payload: {
+          jobId,
+          durationSeconds: draft?.input?.durationSeconds || draft?.durationSeconds || 60,
+          tracks: {
+            manualUrl: rawTracks?.manualUrl || rawTracks?.manual?.url || '',
+            voiceUrl: rawTracks?.voiceUrl || rawTracks?.voice?.url || '',
+            backgroundUrl: rawTracks?.backgroundUrl || rawTracks?.background?.url || ''
+          },
+          soundEffectUrls: Array.isArray(rawTracks?.soundEffectUrls) ? rawTracks.soundEffectUrls : [],
+          audio: {
+            enabled: true,
+            mode: draft?.audio?.config?.mode || draft?.audioConfig?.mode || 'auto',
+            audioPriority: draft?.audio?.config?.audioPriority || draft?.audioConfig?.audioPriority || 'balanced',
+            tone: draft?.audio?.config?.tone || draft?.audioConfig?.tone || 'professional',
+            languageCode: draft?.audio?.config?.languageCode || draft?.audioConfig?.languageCode || 'en',
+            voiceGender: draft?.audio?.config?.voiceGender || draft?.audioConfig?.voiceGender || 'female',
+            voiceVolume: draft?.audio?.config?.voiceVolume !== undefined ? Number(draft.audio.config.voiceVolume) : (draft?.audioConfig?.voiceVolume !== undefined ? Number(draft.audioConfig.voiceVolume) : 1.0),
+            musicVolume: draft?.audio?.config?.musicVolume !== undefined ? Number(draft.audio.config.musicVolume) : (draft?.audioConfig?.musicVolume !== undefined ? Number(draft.audioConfig.musicVolume) : 0.24)
+          }
+        },
+        baseUrl
+      });
+
+      if (mixResult?.finalAudioUrl) {
+        audioUrlToUse = mixResult.finalAudioUrl;
+        logFn(`Auto-generated audio mix URL successfully: ${audioUrlToUse}`);
+        await updateDraft(jobId, userId, (current) => ({
+          ...current,
+          mix: {
+            finalAudioUrl: mixResult.finalAudioUrl,
+            mixedAt: new Date().toISOString()
+          }
+        }));
+      }
+    } catch (err) {
+      logFn(`⚠️ Auto-generating audio mix failed: ${err.message}`);
+    }
+  }
+  return audioUrlToUse;
+}
+
 router.post('/mergeVideo', protect, checkTrial, videoAiWriteLimiter, async (req, res) => {
   try {
     const { jobId, clipUrls, finalAudioUrl, subtitles = { enabled: false } } = req.body || {};
@@ -2617,11 +2667,13 @@ router.post('/mergeVideo', protect, checkTrial, videoAiWriteLimiter, async (req,
       });
     }
 
+    const audioUrlToUse = await ensureAudioMixUrl(jobId, userId, finalAudioUrl, draft, reqBaseUrl(req), console.log);
+
     const merged = await runMergeVideo({
       payload: {
         jobId,
         clipUrls: effectiveClipUrls,
-        finalAudioUrl: finalAudioUrl || draft?.mix?.finalAudioUrl || null,
+        finalAudioUrl: audioUrlToUse,
         subtitles: { enabled: subtitles?.enabled === true },
         durationSeconds: draft?.input?.durationSeconds || null,
         sceneData: (

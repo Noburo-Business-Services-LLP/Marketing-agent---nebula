@@ -423,24 +423,44 @@ ${identityPhrase ? `\nRequired identity lock phrase: "${identityPhrase}"` : ''}
       }
     });
 
-    const updated = await updateDraft(jobId, userId, (current) => ({
-      ...current,
-      businessName,
-      industry,
-      targetAudience,
-      brandTone,
-      commercialObjective,
-      description: brandSummary || promptText,
-      brandSummary: brandSummary || promptText,
-      storyDirection: storyDirection || current.storyDirection || '',
-      durationSeconds,
-      videoStyle: videoStyle || 'Cinematic Commercial',
-      storyTitle: normalized.title || '',
-      productionBible: normalized.productionBible || {},
-      voiceScript: normalized.voiceScript || '',
-      scenes: normalized.scenes || [],
-      characters: (current?.characters && current.characters.length > 0) ? current.characters : mergedCharacters
-    }));
+    const updated = await updateDraft(jobId, userId, (current) => {
+      const resolvedCharacters = (current?.characters && current.characters.length > 0) ? current.characters : mergedCharacters;
+      const snapshot = {
+        scenes: normalized.scenes || [],
+        voiceScript: normalized.voiceScript || '',
+        productionBible: normalized.productionBible || {},
+        characters: resolvedCharacters,
+        storyTitle: normalized.title || '',
+        businessName,
+        industry,
+        targetAudience,
+        brandTone,
+        commercialObjective,
+        videoStyle: videoStyle || 'Cinematic Commercial',
+        durationSeconds
+      };
+
+      return {
+        ...current,
+        businessName,
+        industry,
+        targetAudience,
+        brandTone,
+        commercialObjective,
+        description: brandSummary || promptText,
+        brandSummary: brandSummary || promptText,
+        storyDirection: storyDirection || current.storyDirection || '',
+        durationSeconds,
+        videoStyle: videoStyle || 'Cinematic Commercial',
+        storyTitle: normalized.title || '',
+        productionBible: normalized.productionBible || {},
+        voiceScript: normalized.voiceScript || '',
+        scenes: normalized.scenes || [],
+        characters: resolvedCharacters,
+        storyLocked: true,
+        storySnapshot: snapshot
+      };
+    });
 
     return res.json({ success: true, draft: updated });
   } catch (error) {
@@ -527,7 +547,19 @@ User's Direction:
       const updatedScenes = existingScenes.map(s =>
         (s.sceneId === sceneId) ? { ...s, ...normalizedScene, sceneId } : s
       );
-      return { ...current, scenes: updatedScenes };
+
+      const updatedSnapshot = current.storySnapshot ? {
+        ...current.storySnapshot,
+        scenes: (current.storySnapshot.scenes || []).map(s =>
+          (s.sceneId === sceneId) ? { ...s, ...normalizedScene, sceneId } : s
+        )
+      } : null;
+
+      return {
+        ...current,
+        scenes: updatedScenes,
+        ...(updatedSnapshot ? { storySnapshot: updatedSnapshot } : {})
+      };
     });
 
     return res.json({ success: true, draft: updated, rewrittenScene: normalizedScene });
