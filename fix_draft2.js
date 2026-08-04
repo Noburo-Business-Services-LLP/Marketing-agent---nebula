@@ -1,0 +1,1 @@
+const fs = require('fs'); let code = fs.readFileSync('backend/routes/videoGeneration.js', 'utf8'); code = code.replace(/characterConsistencyStrength \\|\\| 'Strict'/g, 'characterConsistencyStrength || \\'Strict\\',\n        location: req.body.location || current?.location || \\'\\''); fs.writeFileSync('backend/routes/videoGeneration.js', code);

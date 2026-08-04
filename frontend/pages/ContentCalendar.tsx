@@ -295,9 +295,23 @@ const ContentCalendar: React.FC = () => {
       {activeDetailTab === 'drafts' && (
         <div className="space-y-6 mt-4">
           <div className="flex items-center justify-between border-b pb-4 border-slate-800">
-            <div>
-              <h2 className={`text-xl font-bold ${theme.text}`}>Week {getActiveWeekNumber()} Drafts</h2>
-              <p className={`text-xs ${theme.textMuted} mt-1`}>Review the drafts generated from your weekly content calendar.</p>
+            <div className="flex items-center gap-4">
+              <div>
+                <h2 className={`text-xl font-bold ${theme.text}`}>Week {getActiveWeekNumber()} Drafts</h2>
+                <p className={`text-xs ${theme.textMuted} mt-1`}>Review the drafts generated from your weekly content calendar.</p>
+              </div>
+              <button
+                  onClick={() => loadWeeklyDrafts()}
+                  disabled={loadingWeeklyDrafts}
+                  className={`p-2 rounded-full transition-colors ${
+                      isDarkMode
+                          ? 'hover:bg-slate-700/50'
+                          : 'hover:bg-slate-200'
+                  }`}
+                  title="Refresh drafts"
+              >
+                  <RefreshCw className={`w-4 h-4 ${loadingWeeklyDrafts ? 'animate-spin' : ''}`} />
+              </button>
             </div>
           </div>
         {loadingWeeklyDrafts ? (
@@ -356,6 +370,26 @@ const ContentCalendar: React.FC = () => {
                     <p className="text-xs text-slate-400 line-clamp-3 mt-2 leading-relaxed">
                       {item.caption || <span className="italic text-slate-650">No caption defined</span>}
                     </p>
+                    {item.scheduledDate && (
+                      <div className="text-xs mt-3">
+                        <span className="font-semibold text-slate-300">Scheduled for: </span>
+                        <span className="text-slate-400">{new Date(item.scheduledDate).toLocaleString()}</span>
+                      </div>
+                    )}
+                    <div className="flex flex-wrap gap-2 mt-3">
+                      {item.platforms?.map(p => (
+                        <span key={p} className="px-2 py-1 text-[10px] font-semibold bg-slate-700 text-slate-300 rounded-full">
+                          {p}
+                        </span>
+                      ))}
+                    </div>
+                    <div className="flex flex-wrap gap-1 mt-3">
+                      {item.hashtags?.map(h => (
+                        <span key={h} className="text-xs text-blue-400">
+                          #{h}
+                        </span>
+                      ))}
+                    </div>
                   </div>
                   <div className="pt-3 border-t border-slate-800/60 flex items-center justify-between text-xs text-[#ffcc29]">
                     {item.status === 'failed' ? (

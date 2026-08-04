@@ -14,6 +14,20 @@
  */
 
 const styleDefinitions = {
+  'Ads': {
+    name: 'Ads',
+    cameraStyle: 'dynamic, high-energy, fast-paced, high-quality commercial look',
+    characterMovement: 'energetic, expressive, engaging directly with the viewer',
+    audioTone: 'upbeat, enthusiastic, persuasive, clear and catchy',
+    colorGrade: 'bright, vibrant, high-contrast, modern advertisement look',
+    pacing: 'fast-paced, quick cuts, high retention edits',
+    cameraAngles: 'dynamic angles, product focus, tight close-ups for emphasis',
+    prompt: `Create a high-performing advertisement scene with:
+    - High-energy, engaging visuals designed to capture attention
+    - Clear focus on the value proposition or product
+    - Bright, vibrant lighting with high contrast
+    - Professional, modern commercial aesthetic`
+  },
   'Cinematic Commercial': {
     name: 'Cinematic Commercial',
     cameraStyle: 'cinematic 4K, film-grade color grading, dramatic lighting, shallow depth of field',

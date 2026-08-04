@@ -282,32 +282,27 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 20000) {
   }
 }
 
-async function tryGenerateLocalizedVoiceoverAudio({ voiceoverScript, languageCode }) {
+async function tryGenerateLocalizedVoiceoverAudio({ voiceoverScript, languageCode, voiceGender = 'female' }) {
   try {
     const ttsText = normalizeVoiceoverText(voiceoverScript);
     if (!ttsText) return null;
 
-    const tl = buildTtsLanguageCode(languageCode);
-    const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(ttsText)}&tl=${encodeURIComponent(tl)}&client=tw-ob`;
-    const response = await fetchWithTimeout(
-      ttsUrl,
-      {
-        method: 'GET',
-        headers: {
-          'User-Agent': 'Mozilla/5.0',
-          Referer: 'https://translate.google.com/'
-        }
-      },
-      20000
-    );
+    const tmpPath = path.join(require('os').tmpdir(), `reel_voice_${Date.now()}.mp3`);
+    const { synthesizeNeuralTts } = require('./videoGenerationPipeline');
+    const ok = await synthesizeNeuralTts({
+      text: ttsText,
+      languageCode: languageCode || 'en',
+      voiceGender: voiceGender || 'female',
+      outputPath: tmpPath
+    });
 
-    if (!response.ok) return null;
-    const arrayBuffer = await response.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    if (!buffer || buffer.length < 1500) return null;
+    if (!ok || !fs.existsSync(tmpPath)) return null;
+    const buffer = await fs.promises.readFile(tmpPath);
+    if (!buffer || buffer.length < 1200) return null;
 
     const base64Audio = `data:audio/mpeg;base64,${buffer.toString('base64')}`;
     const upload = await uploadBase64Audio(base64Audio, 'nebula-ai-reels/voiceovers');
+    try { await fs.promises.unlink(tmpPath); } catch (_) {}
     if (!upload?.success || !upload?.url) return null;
     return upload.url;
   } catch (_error) {

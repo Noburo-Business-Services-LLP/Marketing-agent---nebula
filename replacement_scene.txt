@@ -1,0 +1,37 @@
+                        <div className="flex gap-4">
+                          <div className="flex-1 space-y-2">
+                            <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Characters in Scene</label>
+                            <div className="flex flex-wrap gap-2">
+                              {(draft?.characters || []).map((char: any) => {
+                                const isSelected = (scene.characterIds || []).includes(char.id || char.characterId);
+                                return (
+                                  <label key={char.id || char.characterId} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border cursor-pointer transition-colors ${isSelected ? 'bg-indigo-50 border-indigo-200 dark:bg-indigo-900/30 dark:border-indigo-800' : 'bg-white border-slate-200 dark:bg-slate-800 dark:border-slate-700'}`}>
+                                    <input
+                                      type="checkbox"
+                                      className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600"
+                                      checked={isSelected}
+                                      onChange={(e) => {
+                                        const charId = char.id || char.characterId;
+                                        setScenes((prev) => prev.map((item, i) => {
+                                          if (i !== idx) return item;
+                                          const currentIds = item.characterIds || [];
+                                          const newIds = e.target.checked 
+                                            ? [...currentIds, charId] 
+                                            : currentIds.filter(id => id !== charId);
+                                          return { ...item, characterIds: newIds };
+                                        }));
+                                      }}
+                                      disabled={isRegen}
+                                    />
+                                    <span className={`text-sm font-medium ${isSelected ? 'text-indigo-700 dark:text-indigo-300' : theme.text}`}>{char.name}</span>
+                                  </label>
+                                );
+                              })}
+                              {(!draft?.characters || draft.characters.length === 0) && (
+                                <span className={`text-sm italic ${theme.textMuted}`}>No characters available. Add them in Step 2.</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div>

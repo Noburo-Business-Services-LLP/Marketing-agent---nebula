@@ -1,0 +1,94 @@
+{
+  "10": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "{{REFERENCE_IMAGE}}"
+    },
+    "_meta": {
+      "title": "Character Sheet Reference",
+      "role": "reference"
+    }
+  },
+  "11": {
+    "class_type": "IPAdapterUnifiedLoader",
+    "inputs": {
+      "preset": "PLUS (high strength)",
+      "model": ["20", 0]
+    },
+    "_meta": { "title": "Load IPAdapter" }
+  },
+  "12": {
+    "class_type": "IPAdapter",
+    "inputs": {
+      "model": ["11", 0],
+      "ipadapter": ["11", 1],
+      "image": ["10", 0],
+      "weight": 0.85,
+      "start_at": 0.0,
+      "end_at": 1.0,
+      "weight_type": "standard"
+    },
+    "_meta": { "title": "Apply Character Identity (IPAdapter)" }
+  },
+  "20": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": {
+      "ckpt_name": "flux1-dev.safetensors"
+    },
+    "_meta": { "title": "Load Checkpoint" }
+  },
+  "30": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "{{PROMPT}}",
+      "clip": ["20", 1]
+    },
+    "_meta": { "title": "Scene Prompt", "role": "positive" }
+  },
+  "31": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "{{NEGATIVE_PROMPT}}",
+      "clip": ["20", 1]
+    },
+    "_meta": { "title": "Negative Prompt", "role": "negative" }
+  },
+  "40": {
+    "class_type": "EmptyLatentImage",
+    "inputs": {
+      "width": 768,
+      "height": 1344,
+      "batch_size": 1
+    }
+  },
+  "41": {
+    "class_type": "KSampler",
+    "inputs": {
+      "seed": "{{SEED}}",
+      "steps": 28,
+      "cfg": 7,
+      "sampler_name": "euler",
+      "scheduler": "normal",
+      "denoise": 1,
+      "model": ["12", 0],
+      "positive": ["30", 0],
+      "negative": ["31", 0],
+      "latent_image": ["40", 0]
+    },
+    "_meta": { "title": "Identity-Conditioned Sampler" }
+  },
+  "42": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": ["41", 0],
+      "vae": ["20", 2]
+    }
+  },
+  "43": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "filename_prefix": "scene_identity_ipadapter",
+      "images": ["42", 0]
+    }
+  }
+}

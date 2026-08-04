@@ -2,9 +2,11 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-const { STORAGE_ROOT } = require('./videoGenerationPipeline');
+const STORAGE_ROOT = path.resolve(__dirname, '../storage/ai-videos');
 const VideoDraft = require('../models/VideoDraft');
 const Draft = require('../models/Draft');
+const { normalizeDirectorAutosavePayload } = require('./directorDraftFields');
+const { logAutosave, logMongoSave } = require('./directorLogger');
 
 function sanitizeSegment(value, fallback = 'asset') {
   const raw = String(value || '').trim();
@@ -68,21 +70,84 @@ function draftPathForJob(jobId) {
   return path.join(dirs.root, 'draft.json');
 }
 
-async function writeDraft(draft) {
-  const payload = {
-    ...draft,
-    updatedAt: new Date().toISOString()
-  };
+function enforceSceneIntegrity(draft) {
+  if (!draft || !draft.storySnapshot) return draft;
+  const snapshot = draft.storySnapshot;
 
-  // 1. Persist to MongoDB
+  // 1. Restore top-level immutable fields if missing or empty
+  if (snapshot.productionBible && (!draft.productionBible || Object.keys(draft.productionBible).length === 0)) {
+    draft.productionBible = snapshot.productionBible;
+  }
+  if (snapshot.voiceScript && !draft.voiceScript) {
+    draft.voiceScript = snapshot.voiceScript;
+  }
+  if (snapshot.storyTitle && !draft.storyTitle) {
+    draft.storyTitle = snapshot.storyTitle;
+  }
+
+  // 2. Scene integrity check
+  const snapScenes = Array.isArray(snapshot.scenes) ? snapshot.scenes : [];
+  let scenes = draft.scenes;
+
+  // Normalize current scenes if it was saved as an index-keyed object (bug recovery)
+  if (scenes && typeof scenes === 'object' && !Array.isArray(scenes)) {
+    const keys = Object.keys(scenes).filter(k => /^\d+$/.test(k));
+    if (keys.length > 0) {
+      scenes = keys.sort((a, b) => Number(a) - Number(b)).map(k => scenes[k]);
+    }
+  }
+
+  if (!Array.isArray(scenes) || scenes.length !== snapScenes.length) {
+    console.log(`[Scene Integrity Check] Restoring scenes array from storySnapshot (count discrepancy).`);
+    draft.scenes = JSON.parse(JSON.stringify(snapScenes));
+    return draft;
+  }
+
+  // Verify and restore screenplay fields on every scene
+  const restoredScenes = scenes.map((scene, idx) => {
+    const snapScene = snapScenes[idx];
+    if (!snapScene) return scene;
+
+    const updatedScene = { ...scene };
+
+    // Fields to protect: title, action, description, voiceLine, audio, businessObjective, marketingMessage
+    const fieldsToVerify = ['title', 'action', 'description', 'voiceLine', 'audio', 'businessObjective', 'marketingMessage'];
+    fieldsToVerify.forEach(field => {
+      // If the field is missing or empty or different in the updated scene, restore from the snapshot
+      if (snapScene[field] && updatedScene[field] !== snapScene[field]) {
+        updatedScene[field] = snapScene[field];
+      }
+    });
+
+    return updatedScene;
+  });
+
+  draft.scenes = restoredScenes;
+  return draft;
+}
+
+async function writeDraft(draft, meta = {}) {
+  const protectedDraft = enforceSceneIntegrity(draft);
+  const nowIso = new Date().toISOString();
+  const payload = {
+    ...protectedDraft,
+    version: Number.isFinite(protectedDraft.version) ? protectedDraft.version : 0,
+    updatedAt: nowIso
+  };
+  if (meta.lastModifiedBy) {
+    payload.lastModifiedBy = meta.lastModifiedBy;
+  }
+
+  // 1. Persist to MongoDB (authoritative)
   try {
     await VideoDraft.findOneAndUpdate(
-      { jobId: draft.jobId },
-      payload,
-      { upsert: true, new: true }
+      { jobId: protectedDraft.jobId },
+      { $set: payload },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
     );
+    logMongoSave({ jobId: protectedDraft.jobId, userId: protectedDraft.userId }, { version: payload.version });
   } catch (dbError) {
-    console.error('⚠️ Failed to save draft to MongoDB:', dbError.message);
+    console.error('⚠️ Failed to save draft to MongoDB, falling back to disk:', dbError.message);
   }
 
   // 2. Persist to Disk (local folder backup)
@@ -138,6 +203,17 @@ async function writeDraft(draft) {
   return payload;
 }
 
+function normalizeDraftScenes(draft) {
+  if (!draft) return draft;
+  if (draft.scenes && typeof draft.scenes === 'object' && !Array.isArray(draft.scenes)) {
+    const keys = Object.keys(draft.scenes).filter(k => /^\d+$/.test(k));
+    if (keys.length > 0) {
+      draft.scenes = keys.sort((a, b) => Number(a) - Number(b)).map(k => draft.scenes[k]);
+    }
+  }
+  return draft;
+}
+
 async function readDraft(jobId) {
   let dbDraft = null;
   let diskDraft = null;
@@ -158,24 +234,27 @@ async function readDraft(jobId) {
     // ignore (disk draft might not exist in some environments)
   }
 
-  if (dbDraft && !diskDraft) return dbDraft;
-  if (!dbDraft && diskDraft) return diskDraft;
-  if (!dbDraft && !diskDraft) {
+  let resolved = null;
+  if (dbDraft && !diskDraft) resolved = dbDraft;
+  else if (!dbDraft && diskDraft) resolved = diskDraft;
+  else if (!dbDraft && !diskDraft) {
     const error = new Error('Draft not found');
     error.statusCode = 404;
     throw error;
+  } else {
+    const dbUpdatedAt = new Date(String(dbDraft.updatedAt || dbDraft.updated_at || dbDraft.createdAt || 0)).getTime();
+    const diskUpdatedAt = new Date(String(diskDraft.updatedAt || diskDraft.updated_at || diskDraft.createdAt || 0)).getTime();
+
+    // Prefer the most recently updated draft.
+    if (Number.isFinite(diskUpdatedAt) && Number.isFinite(dbUpdatedAt)) {
+      resolved = diskUpdatedAt >= dbUpdatedAt ? diskDraft : dbDraft;
+    } else {
+      // If timestamps are missing/unparseable on either side, prefer disk (written on every updateDraft call).
+      resolved = diskDraft || dbDraft;
+    }
   }
 
-  const dbUpdatedAt = new Date(String(dbDraft.updatedAt || dbDraft.updated_at || dbDraft.createdAt || 0)).getTime();
-  const diskUpdatedAt = new Date(String(diskDraft.updatedAt || diskDraft.updated_at || diskDraft.createdAt || 0)).getTime();
-
-  // Prefer the most recently updated draft.
-  if (Number.isFinite(diskUpdatedAt) && Number.isFinite(dbUpdatedAt)) {
-    return diskUpdatedAt >= dbUpdatedAt ? diskDraft : dbDraft;
-  }
-
-  // If timestamps are missing/unparseable on either side, prefer disk (written on every updateDraft call).
-  return diskDraft || dbDraft;
+  return enforceSceneIntegrity(normalizeDraftScenes(resolved));
 }
 
 async function loadDraftForUser(jobId, userId = null) {
@@ -239,6 +318,8 @@ async function listDraftsForUser(userId = null) {
         sceneCount: draft?.input?.sceneCount || draft?.scenes?.sceneData?.length || null,
         finalVideoUrl: draft?.merge?.finalOutputUrl || draft?.merge?.finalVideoUrl || null,
         thumbnailUrl: draft?.content?.thumbnailUrl || draft?.images?.sceneData?.[0]?.imageUrl || null,
+        caption: draft?.content?.caption || '',
+        hashtags: Array.isArray(draft?.content?.hashtags) ? draft.content.hashtags : [],
         scheduledAt: draft?.schedule?.scheduledAt || null,
         platforms: draft?.platform?.selectedPlatforms || [],
         createdAt: draft.createdAt,
@@ -269,6 +350,8 @@ async function listDraftsForUser(userId = null) {
           sceneCount: draft?.input?.sceneCount || draft?.scenes?.sceneData?.length || null,
           finalVideoUrl: draft?.merge?.finalOutputUrl || draft?.merge?.finalVideoUrl || null,
           thumbnailUrl: draft?.content?.thumbnailUrl || draft?.images?.sceneData?.[0]?.imageUrl || null,
+          caption: draft?.content?.caption || '',
+          hashtags: Array.isArray(draft?.content?.hashtags) ? draft.content.hashtags : [],
           scheduledAt: draft?.schedule?.scheduledAt || null,
           platforms: draft?.platform?.selectedPlatforms || [],
           createdAt: draft.createdAt,
@@ -285,10 +368,95 @@ async function listDraftsForUser(userId = null) {
   }
 }
 
-async function updateDraft(jobId, userId = null, updater = null) {
+async function updateDraft(jobId, userId = null, updater = null, meta = {}) {
   const existing = await loadDraftForUser(jobId, userId);
   const next = typeof updater === 'function' ? await updater(existing) : existing;
-  return writeDraft({ ...existing, ...next, jobId: existing.jobId, userId: existing.userId });
+  const version = (Number(existing.version) || 0) + 1;
+  return writeDraft({
+    ...existing,
+    ...next,
+    jobId: existing.jobId,
+    userId: existing.userId,
+    version
+  }, meta);
+}
+
+function safeMerge(existingVal, patchVal) {
+  if (existingVal && typeof existingVal === 'object' && patchVal && typeof patchVal === 'object' && !Array.isArray(existingVal) && !Array.isArray(patchVal)) {
+    return { ...existingVal, ...patchVal };
+  }
+  return patchVal !== undefined ? patchVal : existingVal;
+}
+
+async function patchDraft(jobId, userId = null, rawPatch = {}, options = {}) {
+  const existing = await loadDraftForUser(jobId, userId);
+  const expectedVersion = options.expectedVersion;
+  if (expectedVersion !== undefined && expectedVersion !== null) {
+    const currentVersion = Number(existing.version) || 0;
+    if (Number(expectedVersion) !== currentVersion) {
+      const error = new Error(`Draft version conflict: expected ${expectedVersion}, current ${currentVersion}`);
+      error.statusCode = 409;
+      error.currentVersion = currentVersion;
+      error.draft = existing;
+      throw error;
+    }
+  }
+
+  const patch = normalizeDirectorAutosavePayload(rawPatch);
+  const version = (Number(existing.version) || 0) + 1;
+
+  // Safe nested merge for objects to prevent partial updates from deleting data
+  const keysToMerge = ['audio', 'images', 'clips', 'jobs', 'mix', 'merge', 'input', 'prompt', 'audioConfig', 'publishSettings', 'schedule'];
+  const mergedPatch = { ...patch };
+  keysToMerge.forEach(key => {
+    if (existing[key] !== undefined && patch[key] !== undefined) {
+      mergedPatch[key] = safeMerge(existing[key], patch[key]);
+    }
+  });
+
+  const merged = {
+    ...existing,
+    ...mergedPatch,
+    directorStudio: {
+      ...(existing.directorStudio || {}),
+      ...(mergedPatch.directorStudio || {}),
+      ...mergedPatch
+    },
+    jobId: existing.jobId,
+    userId: existing.userId,
+    version,
+    updatedAt: new Date().toISOString()
+  };
+
+  if (patch.storySnapshot) {
+    // Keep as is
+  } else if (merged.storySnapshot) {
+    if (patch.scenes) {
+      let scenesArr = patch.scenes;
+      if (scenesArr && typeof scenesArr === 'object' && !Array.isArray(scenesArr)) {
+        const keys = Object.keys(scenesArr).filter(k => /^\d+$/.test(k));
+        if (keys.length > 0) {
+          scenesArr = keys.sort((a, b) => Number(a) - Number(b)).map(k => scenesArr[k]);
+        }
+      }
+      if (Array.isArray(scenesArr)) {
+        merged.storySnapshot.scenes = JSON.parse(JSON.stringify(scenesArr));
+      }
+    }
+    if (patch.voiceScript !== undefined) {
+      merged.storySnapshot.voiceScript = patch.voiceScript;
+    }
+    if (patch.productionBible !== undefined) {
+      merged.storySnapshot.productionBible = JSON.parse(JSON.stringify(patch.productionBible));
+    }
+    if (patch.storyTitle !== undefined) {
+      merged.storySnapshot.storyTitle = patch.storyTitle;
+    }
+  }
+
+  logAutosave({ jobId, userId }, { version, fields: Object.keys(patch) });
+
+  return writeDraft(merged, { lastModifiedBy: userId });
 }
 
 async function saveDataUrlToJob({
@@ -350,9 +518,25 @@ async function createDraft({
   const draft = {
     jobId,
     userId,
+    version: 0,
     createdAt: nowIso,
     updatedAt: nowIso,
-    currentStep: 1,
+    currentStep: input.currentStep || 1,
+    businessName: input.businessName || '',
+    industry: input.industry || '',
+    targetAudience: input.targetAudience || '',
+    brandSummary: input.brandSummary || input.description || '',
+    brandTone: input.brandTone || '',
+    commercialObjective: input.commercialObjective || '',
+    storyDirection: input.storyDirection || '',
+    videoStyle: input.videoStyle || null,
+    durationSeconds: Number.parseInt(String(input.durationSeconds || 60), 10) || 60,
+    useCharacters: input.useCharacters !== undefined ? input.useCharacters : true,
+    useLogo: input.useLogo !== undefined ? input.useLogo : false,
+    selectedProductId: input.selectedProductId || input.productId || null,
+    imageDataUrl: sourceImage?.url || null,
+    completedSteps: input.completedSteps || [],
+    uiState: input.uiState || {},
     input: {
       description: String(input.description || '').trim(),
       durationSeconds: Number.parseInt(String(input.durationSeconds || 60), 10) || 60,
@@ -400,6 +584,7 @@ module.exports = {
   loadDraftForUser,
   deleteDraftForUser,
   updateDraft,
+  patchDraft,
   saveDataUrlToJob,
   createDraft
 };

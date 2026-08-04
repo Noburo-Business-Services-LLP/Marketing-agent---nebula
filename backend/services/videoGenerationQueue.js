@@ -188,7 +188,7 @@ class PersistentVideoGenerationQueue {
    * Periodically scans for processing jobs that have hung or crashed (no updates for 5 minutes)
    */
   async recoverStaleJobs() {
-    const STALE_TIMEOUT_MS = Number(process.env.VIDEO_JOB_STALE_TIMEOUT_MS) || (5 * 60 * 1000); // Default 5 minutes
+    const STALE_TIMEOUT_MS = Number(process.env.VIDEO_JOB_STALE_TIMEOUT_MS) || (3 * 60 * 1000); // Default 3 minutes
     const threshold = new Date(Date.now() - STALE_TIMEOUT_MS);
 
     try {
@@ -289,6 +289,10 @@ class PersistentVideoGenerationQueue {
     }
 
     const jobId = crypto.randomUUID();
+    const draftId = payload.jobId || payload.draftId || null;
+    const sceneId = payload.sceneId || null;
+    const characterId = payload.characterId || null;
+    const identityMemoryId = payload.identityMemoryId || null;
 
     const job = await VideoJob.create({
       jobId,
@@ -298,7 +302,11 @@ class PersistentVideoGenerationQueue {
       currentStep: 'queued',
       payload,
       attempts: 0,
-      metadata: { jobType }
+      metadata: { jobType },
+      draftId,
+      sceneId,
+      characterId,
+      identityMemoryId
     });
 
     // Proactively trigger the drain loop
@@ -594,6 +602,15 @@ class PersistentVideoGenerationQueue {
 
   _publicView(job) {
     if (!job) return null;
+    const result = job.result || {};
+    const completedAssets =
+      result.sceneData ||
+      result.clipUrls ||
+      result.draft ||
+      result.videoUrl ||
+      result.audio ||
+      job.metadata?.completedAssets ||
+      null;
     return {
       jobId: job.jobId,
       userId: job.userId,
@@ -605,6 +622,8 @@ class PersistentVideoGenerationQueue {
       startedAt: job.startedAt,
       completedAt: job.completedAt,
       result: job.result,
+      completedAssets,
+      estimatedTime: estimateRemainingSeconds(job),
       error: job.status === 'failed'
         ? { message: publicErrorMessage(job), stack: null }
         : null,
@@ -615,6 +634,29 @@ class PersistentVideoGenerationQueue {
         estimatedCompletionSeconds: estimateRemainingSeconds(job)
       }
     };
+  }
+
+  async retryJob(jobId, userId = null) {
+    const query = { jobId: String(jobId || '') };
+    if (userId) query.userId = userId;
+    const job = await VideoJob.findOne(query);
+    if (!job) throw new Error('Job not found');
+    if (!['failed', 'cancelled'].includes(job.status)) {
+      throw new Error('Only failed or cancelled jobs can be retried');
+    }
+    job.status = 'queued';
+    job.progress = 0;
+    job.currentStep = 'queued';
+    job.error = null;
+    job.attempts = (Number(job.attempts) || 0) + 1;
+    job.startedAt = null;
+    job.completedAt = null;
+    await job.save();
+    await this._pushLog(jobId, 'Job manually re-queued for retry.');
+    this._drainQueue().catch((err) => {
+      console.error('⚠️ Persistent Queue drain trigger error:', err.message);
+    });
+    return this._publicView(job.toObject());
   }
 }
 

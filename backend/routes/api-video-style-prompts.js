@@ -56,6 +56,7 @@ router.post('/generateVideoStylePrompts', async (req, res) => {
       description,
       videoStyle,
       characterName,
+      characters,
       sceneCount = 5,
       productName = null,
       duration = 30
@@ -74,10 +75,18 @@ router.post('/generateVideoStylePrompts', async (req, res) => {
       });
     }
 
+    // Format rich character context
+    let richCharacterContext = characterName || 'Character';
+    if (Array.isArray(characters) && characters.length > 0) {
+      richCharacterContext = characters.map(c => 
+        `${c.name || 'Character'} (Role: ${c.role || 'Primary'}) - ${c.appearanceStr || 'Standard appearance'}`
+      ).join(' AND ');
+    }
+
     console.log('\n🎬 ===================== GENERATE VIDEO STYLE PROMPTS =====================');
     console.log(`📝 Description: ${description}`);
     console.log(`🎨 Video Style: ${videoStyle}`);
-    console.log(`👤 Character: ${characterName}`);
+    console.log(`👤 Character: ${richCharacterContext}`);
     console.log(`🎬 Scene Count: ${sceneCount}`);
     console.log(`⏱️  Total Duration: ${duration}s`);
     if (productName) console.log(`📦 Product: ${productName}`);
@@ -90,7 +99,7 @@ router.post('/generateVideoStylePrompts', async (req, res) => {
     const overallPrompts = generateStyledPrompts(
       description,
       videoStyle,
-      characterName,
+      richCharacterContext,
       productName
     );
     const combinedPromptText = `${overallPrompts.videoPrompt}\n\nAudio:\n${overallPrompts.audioPrompt}`;
@@ -99,7 +108,7 @@ router.post('/generateVideoStylePrompts', async (req, res) => {
     const generatedScenes = generateScenePrompts(
       description,
       videoStyle,
-      characterName,
+      richCharacterContext,
       sceneCount,
       productName
     );

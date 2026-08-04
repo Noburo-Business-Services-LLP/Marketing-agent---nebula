@@ -7,6 +7,7 @@ const { GoogleAuth } = require('google-auth-library');
 const { uploadBase64Image } = require('./imageUploader');
 const fs = require('fs/promises');
 const path = require('path');
+const { compareFaces } = require('./faceVerification');
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 // Cheap + reliable: Flash Lite primary, Flash as fallback
@@ -79,12 +80,11 @@ setInterval(() => {
   }
 }, 10 * 60 * 1000);
 
-function getCacheKey(prompt) {
-  // Use a proper hash of the full prompt to avoid cache collisions
-  // Previously used first 100 chars which caused identical campaigns for similar prompts
+function getCacheKey(prompt, options = {}) {
+  const fullText = (prompt || '') + '||' + (options.systemInstruction || '');
   let hash = 0;
-  for (let i = 0; i < prompt.length; i++) {
-    const char = prompt.charCodeAt(i);
+  for (let i = 0; i < fullText.length; i++) {
+    const char = fullText.charCodeAt(i);
     hash = ((hash << 5) - hash) + char;
     hash = hash & hash; // Convert to 32bit integer
   }
@@ -135,7 +135,7 @@ async function callGemini(prompt, options = {}) {
 
   // Check cache first (unless explicitly disabled)
   if (!options.skipCache) {
-    const cacheKey = getCacheKey(prompt);
+    const cacheKey = getCacheKey(prompt, options);
     const cached = responseCache.get(cacheKey);
     if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
       console.log('⚡ Using cached Gemini response (instant)');
@@ -164,21 +164,38 @@ async function callGemini(prompt, options = {}) {
         }
         lastApiCall = Date.now();
 
+        const reqBody = {
+          contents: [{
+            parts: [
+              ...(options.inlineImage ? [{
+                inlineData: {
+                  mimeType: options.inlineImage.mimeType || 'image/png',
+                  data: options.inlineImage.data
+                }
+              }] : []),
+              { text: prompt }
+            ]
+          }],
+          generationConfig: {
+            temperature: options.temperature || 0.7,
+            maxOutputTokens: options.maxTokens || 8192, // Increased default for longer responses
+            topP: 0.9,
+            ...(options.responseMimeType ? { responseMimeType: options.responseMimeType } : {})
+          }
+        };
+
+        if (options.systemInstruction) {
+          reqBody.systemInstruction = {
+            parts: [{ text: options.systemInstruction }]
+          };
+        }
+
         const response = await fetchWithTimeout(`${apiUrl}?key=${GEMINI_API_KEY}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({
-            contents: [{
-              parts: [{ text: prompt }]
-            }],
-            generationConfig: {
-              temperature: options.temperature || 0.7,
-              maxOutputTokens: options.maxTokens || 8192, // Increased default for longer responses
-              topP: 0.9
-            }
-          })
+          body: JSON.stringify(reqBody)
         }, timeout);
 
         const data = await response.json();
@@ -186,9 +203,9 @@ async function callGemini(prompt, options = {}) {
         if (!response.ok) {
           console.error(`Gemini API error (${model}):`, data.error?.message || data);
           // If rate limited, wait and retry with exponential backoff
-          if (data.error?.code === 429 || data.error?.code === 503) {
+          if (response.status === 429 || response.status === 503 || data.error?.code === 429 || data.error?.code === 503) {
             const backoffMs = Math.min(1000 * Math.pow(2, attempt), 8000); // 1s, 2s, 4s, max 8s
-            console.log(`Rate limited on ${model}, waiting ${backoffMs}ms before retry ${attempt + 1}/${maxRetries}...`);
+            console.log(`Rate limited (${response.status}) on ${model}, waiting ${backoffMs}ms before retry ${attempt + 1}/${maxRetries}...`);
             await sleep(backoffMs);
             continue; // Retry same model
           }
@@ -207,8 +224,19 @@ async function callGemini(prompt, options = {}) {
 
         // Cache successful response
         if (!options.skipCache) {
-          const cacheKey = getCacheKey(prompt);
-          responseCache.set(cacheKey, { response: text, timestamp: Date.now() });
+          let shouldCache = true;
+          if (options.responseMimeType === 'application/json') {
+            try {
+              parseGeminiJSON(text);
+            } catch (jsonErr) {
+              shouldCache = false;
+              console.log('⚠️ Gemini response is not valid JSON, skipping cache.');
+            }
+          }
+          if (shouldCache) {
+            const cacheKey = getCacheKey(prompt);
+            responseCache.set(cacheKey, { response: text, timestamp: Date.now() });
+          }
         }
 
         const duration = Date.now() - startTime;
@@ -234,17 +262,19 @@ async function callGemini(prompt, options = {}) {
  * Parse JSON from Gemini response (handles markdown code blocks and truncated JSON)
  */
 function parseGeminiJSON(text) {
-  let cleaned = text.trim();
-  // Remove markdown code blocks
-  if (cleaned.startsWith('```json')) {
-    cleaned = cleaned.slice(7);
-  } else if (cleaned.startsWith('```')) {
-    cleaned = cleaned.slice(3);
+  let cleaned = String(text || '').trim();
+
+  // Extract JSON block using regex if wrapped in markdown code blocks anywhere in text
+  const codeBlockMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)(?:```|$)/i);
+  if (codeBlockMatch && codeBlockMatch[1]) {
+    cleaned = codeBlockMatch[1].trim();
+  } else {
+    const firstBrace = cleaned.indexOf('{');
+    const lastBrace = cleaned.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      cleaned = cleaned.slice(firstBrace, lastBrace + 1).trim();
+    }
   }
-  if (cleaned.endsWith('```')) {
-    cleaned = cleaned.slice(0, -3);
-  }
-  cleaned = cleaned.trim();
 
   try {
     return JSON.parse(cleaned);
@@ -4675,49 +4705,33 @@ async function generateCampaignImageNanoBanana(imageDescription, options = {}) {
   let prompt = '';
   
   if (isCinematic && characterReferenceImage) {
-    prompt = `SYSTEM ROLE:
-You are an image editing model, not an image generation model.
+    prompt = `================================================
 
-The uploaded character image is the exact person that must appear in every generated scene.
+TASK
 
-This image is NOT a reference image.
-This image is NOT inspiration.
-This image is NOT a style guide.
+Transform the uploaded Character Sheet into the following scene.
 
-This image contains the exact character identity that must be preserved.
+Do not create another character.
 
-TASK:
-Take the exact person from the uploaded character image and place them into the requested scene.
+================================================
 
-IDENTITY RULES:
-- Preserve the exact face.
-- Preserve the exact facial structure.
-- Preserve the exact jawline.
-- Preserve the exact eyes.
-- Preserve the exact nose shape.
-- Preserve the exact skin tone.
-- Preserve the exact hairstyle.
-- Preserve the exact beard and facial hair.
-- Preserve the exact age appearance.
-- Preserve the exact ethnicity.
+REFERENCE
 
-CONTINUITY RULES:
-- This is the same person in every scene.
-- Do not create a new person.
-- Do not modify the person's identity.
-- Only change the environment, background, pose, clothing if requested, and camera angle.
-- Maintain continuity across all scenes.
+Uploaded Character Sheet
 
-PRIORITY ORDER:
-1. Character identity preservation.
-2. Scene correctness.
-3. Cinematic quality.
+================================================
 
-If identity conflicts with aesthetics, preserve identity.
+SCENE
 
-SCENE:
 ${imageDescription}
-ASPECT RATIO: ${aspectRatio}`;
+
+================================================
+
+RULE
+
+Everything not explicitly requested to change must remain identical to the uploaded Character Sheet.
+
+================================================`;
   } else if (isCinematic) {
     prompt = `ROLE: You are an elite cinematic video director.
 OBJECTIVE: Generate a single photorealistic, cinematic video frame exactly as described.
@@ -4780,48 +4794,27 @@ ${totalPosts > 1 ? `15. SERIES CONSISTENCY: This is part of a ${totalPosts}-post
   ) {
     prompt += `
 
-STRICT IMAGE TRANSFORMATION TASK
+================================================
 
-The uploaded image contains the exact person that must appear in the final image.
+TASK
 
-This is NOT a character reference.
-This is NOT inspiration.
-This is NOT a style guide.
+Transform the uploaded Character Sheet into the following scene.
 
-This is the exact person that must remain unchanged.
+Do not create another character.
 
-Your task is to edit the existing person into the requested environment while preserving identity completely.
+================================================
 
-IDENTITY LOCK REQUIREMENTS:
-- Preserve the exact face.
-- Preserve the exact facial proportions.
-- Preserve the exact jawline.
-- Preserve the exact nose shape.
-- Preserve the exact eye shape and spacing.
-- Preserve the exact eyebrow shape.
-- Preserve the exact lips and smile geometry.
-- Preserve the exact beard style and density.
-- Preserve the exact hairstyle and hairline.
-- Preserve the exact skin tone.
-- Preserve the exact age appearance.
-- Preserve the exact ethnicity.
+REFERENCE
 
-ONLY ALLOWED TO CHANGE:
-- background
-- environment
-- camera position
-- body pose
-- clothing if explicitly requested
+Uploaded Character Sheet
 
-FORBIDDEN:
-- creating a new person
-- changing facial structure
-- changing ethnicity
-- changing age
-- changing beard
-- changing hairstyle
+================================================
 
-Treat this as an image editing task where the original person must remain identical.`;
+RULE
+
+Everything not explicitly requested to change must remain identical to the uploaded Character Sheet.
+
+================================================`;
   }
 
   try {
@@ -4903,9 +4896,9 @@ Do not create another person. Preserve identity perfectly.`);
         }
       });
       referenceNotes.push(`Image ${parts.length} is the PREVIOUS SCENE IMAGE.
-Take the exact person and visual style from this uploaded image.
-Edit this exact image into the new requested scene.
-Keep the identical face, clothing, and character identity. Do not create a new person.`);
+Use this exact image as the base for a targeted edit.
+Apply only the explicitly requested changes.
+Preserve the same person, face, pose, camera framing, background, visual style, and all unrequested clothing details. Do not create a new person or a new composition.`);
     }
 
     if (productInline?.data) {
@@ -4928,11 +4921,25 @@ Keep the identical face, clothing, and character identity. Do not create a new p
       referenceNotes.push(`Image ${parts.length} is the exact uploaded brand logo. Use it exactly as-is. Do not recreate or recolor it.`);
     }
 
+    let finalPromptText = prompt;
     if (referenceNotes.length > 0) {
-      parts.push({ text: `${referenceNotes.join('\n\n')}\n\n${prompt}` });
+      finalPromptText = `${referenceNotes.join('\n\n')}\n\n${prompt}`;
+      parts.push({ text: finalPromptText });
     } else {
       parts.push({ text: prompt });
     }
+
+    const imagesSent = parts.filter(p => p.inlineData).length;
+
+    console.log('\n==========================');
+    console.log('REQUEST SUMMARY');
+    console.log('==========================\n');
+    console.log(`Character Sheet: ${!!characterInline?.data || !!originalCharacterInline?.data ? 'YES' : 'NO'}`);
+    console.log(`Previous Scene: ${!!previousSceneInline?.data ? 'YES' : 'NO'}`);
+    console.log(`Product Image: ${!!productInline?.data ? 'YES' : 'NO'}\n`);
+    console.log(`Images Sent: ${imagesSent}\n`);
+    console.log(`Prompt:\n${finalPromptText}\n`);
+    console.log('==========================\n');
 
     console.log("Gemini input parts:");
     console.log(JSON.stringify(parts.map((p, index) => ({
@@ -4942,92 +4949,176 @@ Keep the identical face, clothing, and character identity. Do not create a new p
       textLength: p.text ? p.text.length : 0
     })), null, 2));
 
-    const requestBody = {
-      contents: [{ parts }],
-      generationConfig: {
-        temperature: 0.8,
-        responseModalities: ["TEXT", "IMAGE"]
-      }
-    };
+    const errors = [];
+    const isCharacterSheet = prompt.includes('Character Reference Sheet') || prompt.includes('character reference sheet') || prompt.includes('Reference Sheet') || prompt.includes('reference sheet') || Boolean(options.skipFaceSimilarity);
+    const maxRetries = (isCinematic && characterReferenceImage && !isCharacterSheet) ? 3 : 1;
+    let attempt = 0;
+    
+    while (attempt < maxRetries) {
+      attempt++;
+      console.log(`[NanoBanana2] Generating image - Attempt ${attempt}/${maxRetries}`);
+      
+      let base64Image = null;
+      let modelUsed = '';
 
-    const response = await fetchWithTimeout(`${apiUrl}?key=${GEMINI_API_KEY}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(requestBody)
-    }, 120000);
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.error?.message || 'Nano Banana 2 failed');
-    }
-
-    const candidates = data.candidates || [];
-    for (const candidate of candidates) {
-      const responseParts = candidate.content?.parts || [];
-      for (const part of responseParts) {
-        const imgData = part.inlineData || part.inline_data;
-        if (imgData?.data) {
-          const mime = imgData.mimeType || imgData.mime_type || 'image/png';
-          console.log(`[NanoBanana2] Post ${postIndex + 1} generated successfully`);
-
-          const base64Image = `data:${mime};base64,${imgData.data}`;
-          try {
-            const uploadResult = await uploadBase64Image(base64Image, 'nebula-campaign-posts');
-            if (uploadResult.success && uploadResult.url) {
-              return { success: true, imageUrl: uploadResult.url, model: 'nano-banana-2' };
+      // 1. Try Vertex AI Imagen 4 Ultra
+      try {
+        console.log('[NanoBanana2] Provider: Vertex AI | Model: imagen-4.0-ultra-generate-001 | Status: Sending Request...');
+        const accessToken = await getVertexAccessToken();
+        const vertexUrl = `https://${VERTEX_LOCATION}-aiplatform.googleapis.com/v1/projects/${VERTEX_PROJECT_ID}/locations/${VERTEX_LOCATION}/publishers/google/models/imagen-4.0-ultra-generate-001:predict`;
+        const response = await fetch(vertexUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`
+          },
+          body: JSON.stringify({
+            instances: [{ prompt: finalPromptText }],
+            parameters: {
+              sampleCount: 1,
+              aspectRatio: aspectRatio === '16:9' ? '16:9' : (aspectRatio === '9:16' ? '9:16' : '1:1'),
+              safetyFilterLevel: 'block_few',
+              personGeneration: 'allow_adult'
             }
-          } catch (uploadErr) {
-            console.warn('Cloudinary upload failed, returning base64:', uploadErr.message);
-          }
+          })
+        });
 
-          return { success: true, imageUrl: base64Image, model: 'nano-banana-2' };
+        const data = await response.json();
+        console.log(`[NanoBanana2] Provider: Vertex AI | Model: imagen-4.0-ultra-generate-001 | HTTP Status: ${response.status}`);
+        
+        if (response.ok && data.predictions && data.predictions[0]?.bytesBase64Encoded) {
+          base64Image = `data:image/png;base64,${data.predictions[0].bytesBase64Encoded}`;
+          modelUsed = 'imagen-4.0-ultra-generate-001';
+          console.log('[NanoBanana2] Success using Vertex AI Imagen 4 Ultra');
+        } else {
+          const errorMsg = data.error?.message || JSON.stringify(data.error || data);
+          console.error(`[NanoBanana2] Provider: Vertex AI | Model: imagen-4.0-ultra-generate-001 | Error Body:`, errorMsg);
+          errors.push(`Vertex AI Imagen 4 Ultra (HTTP ${response.status}): ${errorMsg}`);
+        }
+      } catch (err) {
+        console.error(`[NanoBanana2] Provider: Vertex AI | Model: imagen-4.0-ultra-generate-001 | Exception:`, err.message);
+        errors.push(`Vertex AI Imagen 4 Ultra Exception: ${err.message}`);
+      }
+
+      // 2. Try Vertex AI Imagen 3 (if Imagen 4 failed)
+      if (!base64Image) {
+        try {
+          console.log('[NanoBanana2] Provider: Vertex AI | Model: imagen-3.0-generate-001 | Status: Sending Request...');
+          const accessToken = await getVertexAccessToken();
+          const imagen3Url = `https://${VERTEX_LOCATION}-aiplatform.googleapis.com/v1/projects/${VERTEX_PROJECT_ID}/locations/${VERTEX_LOCATION}/publishers/google/models/imagen-3.0-generate-001:predict`;
+          const response = await fetch(imagen3Url, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${accessToken}`
+            },
+            body: JSON.stringify({
+              instances: [{ prompt: finalPromptText }],
+              parameters: {
+                sampleCount: 1,
+                aspectRatio: aspectRatio === '16:9' ? '16:9' : (aspectRatio === '9:16' ? '9:16' : '1:1'),
+                safetyFilterLevel: 'block_few',
+                personGeneration: 'allow_adult'
+              }
+            })
+          });
+
+          const data = await response.json();
+          console.log(`[NanoBanana2] Provider: Vertex AI | Model: imagen-3.0-generate-001 | HTTP Status: ${response.status}`);
+          
+          if (response.ok && data.predictions && data.predictions[0]?.bytesBase64Encoded) {
+            base64Image = `data:image/png;base64,${data.predictions[0].bytesBase64Encoded}`;
+            modelUsed = 'imagen-3.0-generate-001';
+            console.log('[NanoBanana2] Success using Vertex AI Imagen 3');
+          } else {
+            const errorMsg = data.error?.message || JSON.stringify(data.error || data);
+            console.error(`[NanoBanana2] Provider: Vertex AI | Model: imagen-3.0-generate-001 | Error Body:`, errorMsg);
+            errors.push(`Vertex AI Imagen 3 (HTTP ${response.status}): ${errorMsg}`);
+          }
+        } catch (err) {
+          console.error(`[NanoBanana2] Provider: Vertex AI | Model: imagen-3.0-generate-001 | Exception:`, err.message);
+          errors.push(`Vertex AI Imagen 3 Exception: ${err.message}`);
         }
       }
+
+      // 3. Try Google AI Studio Imagen 3 (if both Vertex failed)
+      if (!base64Image && GEMINI_API_KEY) {
+        try {
+          console.log('[NanoBanana2] Provider: Google AI Studio | Model: imagen-3.0-generate-002 | Status: Sending Request...');
+          const studioUrl = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:generateImages`;
+          const response = await fetch(`${studioUrl}?key=${GEMINI_API_KEY}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              prompt: finalPromptText,
+              numberOfImages: 1,
+              outputMimeType: "image/jpeg",
+              aspectRatio: aspectRatio === '16:9' ? '16:9' : (aspectRatio === '9:16' ? '9:16' : '1:1')
+            })
+          });
+
+          const data = await response.json();
+          console.log(`[NanoBanana2] Provider: Google AI Studio | Model: imagen-3.0-generate-002 | HTTP Status: ${response.status}`);
+          
+          if (response.ok && data.generatedImages && data.generatedImages[0]?.image?.imageBytes) {
+            base64Image = `data:image/jpeg;base64,${data.generatedImages[0].image.imageBytes}`;
+            modelUsed = 'imagen-3.0-generate-002';
+            console.log('[NanoBanana2] Success using Google AI Studio Imagen 3');
+          } else {
+            const errorMsg = data.error?.message || JSON.stringify(data.error || data);
+            console.error(`[NanoBanana2] Provider: Google AI Studio | Model: imagen-3.0-generate-002 | Error Body:`, errorMsg);
+            errors.push(`Google AI Studio Imagen 3 (HTTP ${response.status}): ${errorMsg}`);
+          }
+        } catch (err) {
+          console.error(`[NanoBanana2] Provider: Google AI Studio | Model: imagen-3.0-generate-002 | Exception:`, err.message);
+          errors.push(`Google AI Studio Imagen 3 Exception: ${err.message}`);
+        }
+      }
+
+      if (!base64Image) {
+        if (attempt >= maxRetries) {
+          const detailErrorStr = errors.length > 0 ? errors.join('; ') : 'Image generation failed on all available models.';
+          throw new Error(detailErrorStr);
+        }
+        console.warn(`[NanoBanana2] No image returned, retrying...`);
+        continue;
+      }
+
+      console.log(`[NanoBanana2] Generated image successfully via ${modelUsed} on attempt ${attempt}`);
+
+      // FACE SIMILARITY CHECK
+      if (isCinematic && characterReferenceImage && !isCharacterSheet) {
+        const refImageBase64 = characterInline?.data ? `data:${characterInline.mimeType};base64,${characterInline.data}` : null;
+        if (refImageBase64) {
+          console.log(`[NanoBanana2] Verifying face similarity...`);
+          const similarity = await compareFaces(refImageBase64, base64Image);
+          if (similarity < 0.80) { // Using 0.80 as threshold (Distance > 0.2)
+            console.warn(`[NanoBanana2] Face similarity too low (${(similarity * 100).toFixed(1)}%). Re-generating...`);
+            if (attempt >= maxRetries) {
+              console.warn(`[NanoBanana2] Max retries reached. Accepting suboptimal image.`);
+            } else {
+              continue; // Retry generation
+            }
+          } else {
+            console.log(`[NanoBanana2] Face similarity acceptable (${(similarity * 100).toFixed(1)}%).`);
+          }
+        }
+      }
+
+      try {
+        const uploadResult = await uploadBase64Image(base64Image, 'nebula-campaign-posts');
+        if (uploadResult.success && uploadResult.url) {
+          console.log(`[NanoBanana2] Final Image URL: ${uploadResult.url}`);
+          return { success: true, imageUrl: uploadResult.url, model: modelUsed };
+        }
+      } catch (uploadErr) {
+        console.warn('Cloudinary upload failed, returning base64:', uploadErr.message);
+      }
+
+      return { success: true, imageUrl: base64Image, model: modelUsed };
     }
-
-    throw new Error('Nano Banana 2 returned no image');
-
   } catch (error) {
-    console.error(`[NanoBanana2] Post ${postIndex + 1} failed:`, error.message);
-
-    try {
-      console.log('[NanoBanana2] Trying fallback gemini-2.5-flash-image...');
-      const fallbackUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent';
-      const fallbackBody = {
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.8, responseModalities: ["TEXT", "IMAGE"] }
-      };
-
-      const fbResponse = await fetchWithTimeout(`${fallbackUrl}?key=${GEMINI_API_KEY}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(fallbackBody)
-      }, 120000);
-
-      const fbData = await fbResponse.json();
-      if (fbResponse.ok) {
-        for (const candidate of (fbData.candidates || [])) {
-          for (const part of (candidate.content?.parts || [])) {
-            const imgData = part.inlineData || part.inline_data;
-            if (imgData?.data) {
-              const mime = imgData.mimeType || imgData.mime_type || 'image/png';
-              const base64Image = `data:${mime};base64,${imgData.data}`;
-              try {
-                const uploadResult = await uploadBase64Image(base64Image, 'nebula-campaign-posts');
-                if (uploadResult.success && uploadResult.url) {
-                  return { success: true, imageUrl: uploadResult.url, model: 'gemini-2.5-flash-image' };
-                }
-              } catch (_) { }
-              return { success: true, imageUrl: base64Image, model: 'gemini-2.5-flash-image' };
-            }
-          }
-        }
-      }
-    } catch (fbErr) {
-      console.error('Fallback also failed:', fbErr.message);
-    }
-
+    console.error(`[NanoBanana2] Failed to generate image completely:`, error.message);
     return { success: false, error: error.message };
   }
 }

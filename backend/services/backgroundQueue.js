@@ -59,11 +59,11 @@ Return ONLY a JSON object (no markdown, no backticks, no code blocks):
 }`;
 
     const llmResponse = await callGemini(prompt);
-    let parsed = { caption: item.headline, hashtags: [], imagePrompt: item.creativeConcept };
-    try {
-      parsed = parseGeminiJSON(llmResponse);
-    } catch (e) {
-      console.error('[BackgroundQueue] Failed to parse JSON from Gemini response, using fallback text');
+    let parsed = parseGeminiJSON(llmResponse);
+    if (parsed.error) {
+        console.error(`[BackgroundQueue] Failed to parse JSON from Gemini response: ${parsed.error}. Raw: ${parsed.raw}`);
+        // Use fallback text
+        parsed = { caption: item.headline, hashtags: [], imagePrompt: item.creativeConcept };
     }
 
     draft.generationProgress = { step: 'Generating Image', progress: 50 };
@@ -213,6 +213,34 @@ async function processDraftImageGenerationJob(job) {
     const user = await User.findById(draft.userId);
     const bp = user?.businessProfile || {};
 
+    if (!draft.caption || draft.caption.trim() === '') {
+        console.log(`[BackgroundQueue] Generating text content for Draft ${draftId}`);
+        const textGenPrompt = `You are an expert Social Media Copywriter and Brand Strategist.
+Based on the following topic, generate a social media post.
+Topic/Prompt: "${draft.imagePrompt}"
+Business Name: ${user.companyName || ''}
+Niche: ${bp.industry || ''}
+Tone: ${bp.tone || 'professional'}
+
+Return ONLY a JSON object (no markdown, no backticks, no code blocks):
+{
+  "caption": "Your highly engaging caption for the post.",
+  "hashtags": ["relevant", "hashtags", "for", "the", "post"]
+}`;
+
+        const llmResponse = await callGemini(textGenPrompt);
+        let parsedText = {};
+        try {
+            parsedText = parseGeminiJSON(llmResponse);
+        } catch (e) {
+            console.error('[BackgroundQueue] Failed to parse JSON from Gemini response for text, using fallback.');
+            parsedText = { caption: draft.imagePrompt, hashtags: [] };
+        }
+        
+        draft.caption = parsedText.caption || draft.imagePrompt;
+        draft.hashtags = parsedText.hashtags || [];
+    }
+
     const timeoutPromise = new Promise((_, reject) =>
       setTimeout(() => reject(new Error('Image generation timed out after 60s')), 60000)
     );
@@ -238,7 +266,10 @@ async function processDraftImageGenerationJob(job) {
       if (!draft.creative) draft.creative = {};
       draft.creative = {
         ...draft.creative,
-        imageUrls: [finalImageUrl]
+        textContent: draft.caption,
+        captions: draft.caption,
+        imageUrls: [finalImageUrl],
+        hashtags: draft.hashtags
       };
       draft.markModified('creative');
       

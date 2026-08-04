@@ -23,6 +23,7 @@ import { useSmartCalendarAutoFill } from '../hooks/useSmartCalendarAutoFill';
 import { getThemeClasses, useTheme } from '../context/ThemeContext';
 import { contentCalendarAPI, inventoryAPI, videoGenerationAPI, draftsAPI } from '../services/api';
 import { Product, Draft } from '../types';
+import { CharacterManager } from '../components/CharacterManager';
 import { useLocation, useSearchParams } from 'react-router-dom';
 
 type AudioMode = 'off' | 'auto' | 'upload';
@@ -34,12 +35,10 @@ const WIZARD_STEPS = [
   'Prompt + Scenes',
   'Scene Images',
   'Video Clips',
-  'Audio Config',
-  'Audio Mix',
+  'Audio Config & Mix',
   'Video Merge',
   'Thumbnail + Content',
-  'Platform Select',
-  'Scheduling',
+  'Platform Select & Scheduling',
   'Final Output'
 ];
 
@@ -119,6 +118,8 @@ const ReelGenerator: React.FC = () => {
   const [inputImageName, setInputImageName] = useState('');
 
   const [characterEnabled, setCharacterEnabled] = useState(false);
+  const [preserveCharacter, setPreserveCharacter] = useState(false);
+  const [includeBrandLogo, setIncludeBrandLogo] = useState(false);
   const [characterSource, setCharacterSource] = useState<'upload' | 'generate'>('generate');
   const [generatingCharacter, setGeneratingCharacter] = useState(false);
   const [characterApproved, setCharacterApproved] = useState(false);
@@ -143,9 +144,14 @@ const ReelGenerator: React.FC = () => {
 
   const [promptText, setPromptText] = useState('');
   const [scenes, setScenes] = useState<any[]>([]);
+  const [promptImprovementSceneIndex, setPromptImprovementSceneIndex] = useState(0);
+  const [promptImprovementType, setPromptImprovementType] = useState<'image' | 'video'>('image');
+  const [promptImprovementRequest, setPromptImprovementRequest] = useState('');
+  const [improvingPrompt, setImprovingPrompt] = useState(false);
 
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [audioMode, setAudioMode] = useState<AudioMode>('auto');
+  const [audioPriority, setAudioPriority] = useState<'voice' | 'balanced' | 'music'>('balanced');
   const [audioTone, setAudioTone] = useState('professional');
   const [audioLanguageCode, setAudioLanguageCode] = useState('en');
   // TEMP (testing): allow selecting server music library by duration bucket.
@@ -232,6 +238,16 @@ const ReelGenerator: React.FC = () => {
   useEffect(() => {
     loadVideoDrafts();
   }, []);
+
+  useEffect(() => {
+    if (!scenes.length) {
+      setPromptImprovementSceneIndex(0);
+      return;
+    }
+    if (promptImprovementSceneIndex >= scenes.length) {
+      setPromptImprovementSceneIndex(scenes.length - 1);
+    }
+  }, [scenes.length, promptImprovementSceneIndex]);
 
   useEffect(() => {
     try {
@@ -459,9 +475,9 @@ setCharacterAge(nextDraft?.characterAge || '');
     if (nextDraft?.mix?.finalAudioUrl) setFinalAudioUrl(nextDraft.mix.finalAudioUrl);
     if (nextDraft?.merge?.finalVideoUrl) setFinalVideoUrl(nextDraft.merge.finalVideoUrl);
     if (nextDraft?.merge?.finalOutputUrl) setFinalOutputUrl(nextDraft.merge.finalOutputUrl);
-    if (nextDraft?.content?.thumbnailUrl) setThumbnailUrl(nextDraft.content.thumbnailUrl);
-    if (nextDraft?.content?.caption) setCaption(nextDraft.content.caption);
-    if (Array.isArray(nextDraft?.content?.hashtags)) setHashtagsText(nextDraft.content.hashtags.join(' '));
+    if (nextDraft?.content?.thumbnailUrl || nextDraft?.content?.caption || Array.isArray(nextDraft?.content?.hashtags)) {
+      applyGeneratedContent(nextDraft.content, nextDraft);
+    }
     if (Array.isArray(nextDraft?.platform?.selectedPlatforms)) setSelectedPlatforms(nextDraft.platform.selectedPlatforms);
     if (nextDraft?.schedule?.scheduledAt) {
       const dateObj = new Date(nextDraft.schedule.scheduledAt);
@@ -522,6 +538,13 @@ setCharacterAge(nextDraft?.characterAge || '');
       setDraft(result?.draft || nextDraft);
       await loadVideoDrafts();
     })) return;
+
+    if (resumeJob(draftJobs.content, 'content', async (result) => {
+      const content = result?.content || result?.draft?.content || {};
+      applyGeneratedContent(content, result?.draft || nextDraft);
+      setDraft(result?.draft || nextDraft);
+      await loadVideoDrafts();
+    })) return;
   };
 
   useEffect(() => {
@@ -544,6 +567,18 @@ setCharacterAge(nextDraft?.characterAge || '');
     } finally {
       setBusy(false);
     }
+  };
+
+  const applyGeneratedContent = (content: any = {}, sourceDraft: any = draft) => {
+    const fallbackCaption = String(sourceDraft?.input?.description || description || '').trim();
+    const tags = Array.isArray(content?.hashtags)
+      ? content.hashtags
+      : String(content?.hashtags || '').split(/\s+/).filter(Boolean);
+    const draftTags = Array.isArray(sourceDraft?.content?.hashtags) ? sourceDraft.content.hashtags : [];
+
+    setThumbnailUrl(content?.thumbnailUrl || sourceDraft?.content?.thumbnailUrl || '');
+    setCaption(String(content?.caption || sourceDraft?.content?.caption || fallbackCaption || '').trim());
+    setHashtagsText(tags.length ? tags.join(' ') : draftTags.join(' '));
   };
 
   const onInputImage = async (file?: File | null) => {
@@ -613,6 +648,7 @@ setCharacterAge(nextDraft?.characterAge || '');
   const buildAudioPayload = (overrides: Record<string, any> = {}) => ({
     enabled: audioEnabled,
     mode: audioEnabled ? audioMode : 'off',
+    audioPriority,
     languageCode: audioLanguageCode,
     tone: audioTone,
     musicSource,
@@ -649,7 +685,14 @@ setCharacterAge(nextDraft?.characterAge || '');
   };
 
   const step1Next = async () => withBusy(async () => {
-    await ensureDraftForAudioTest();
+    const activeJobId = await ensureDraftForAudioTest();
+    if (!activeJobId) throw new Error('Draft missing');
+    
+    if (!draft?.scenes || draft.scenes.length === 0) {
+      const sceneResponse = await videoGenerationAPI.generateScenes({ jobId: activeJobId });
+      setScenes(sceneResponse?.sceneData || []);
+      setDraft(sceneResponse?.draft || draft);
+    }
     setStep(2);
   });
 
@@ -709,7 +752,8 @@ setCharacterAge(nextDraft?.characterAge || '');
       videoStyle,
       preserveIdentity,
       characterUsage,
-      characterConsistencyStrength
+      characterConsistencyStrength,
+      useLogo
     };
 
     const response = await videoGenerationAPI.createVideo(payload);
@@ -818,6 +862,42 @@ setCharacterAge(nextDraft?.characterAge || '');
     setDraft(sceneResponse?.draft || draft);
     setStep(4);
   });
+
+  const improveSelectedPrompt = async () => {
+    if (!jobId) { setError('Draft missing'); return; }
+    if (!scenes.length) { setError('Generate scenes before improving a prompt.'); return; }
+
+    const safeIndex = Math.min(Math.max(promptImprovementSceneIndex, 0), scenes.length - 1);
+    const selectedScene = scenes[safeIndex];
+    const request = promptImprovementRequest.trim();
+    if (!request) { setError('Describe what you want to improve.'); return; }
+
+    setImprovingPrompt(true);
+    setError('');
+    try {
+      const response = await videoGenerationAPI.improvePrompt({
+        jobId,
+        sceneId: selectedScene?.sceneId,
+        sceneIndex: safeIndex,
+        promptType: promptImprovementType,
+        userDescription: request,
+        sceneData: scenes
+      });
+
+      if (!response?.success) {
+        throw new Error(response?.message || 'Prompt improvement failed');
+      }
+
+      setScenes(response.sceneData || scenes);
+      setDraft(response.draft || draft);
+      setPromptImprovementRequest('');
+      setSuccessMessage(`Scene ${safeIndex + 1} ${promptImprovementType === 'image' ? 'image' : 'video'} prompt improved.`);
+    } catch (e: any) {
+      setError(e?.message || 'Prompt improvement failed');
+    } finally {
+      setImprovingPrompt(false);
+    }
+  };
 
   const generateSceneImages = async () => withBusy(async () => {
     if (!jobId) throw new Error('Draft missing');
@@ -977,7 +1057,7 @@ setCharacterAge(nextDraft?.characterAge || '');
       await pollJob(queueJobId, async (result) => {
         setGeneratedTracks(result?.audio?.tracks || null);
         setDraft(result?.draft || draft);
-        setStep(7);
+        /* stay on step 6 */
       });
       return;
     }
@@ -985,7 +1065,7 @@ setCharacterAge(nextDraft?.characterAge || '');
     if (!response?.success) throw new Error(response?.message || 'Audio generation failed');
     setGeneratedTracks(response?.audio?.tracks || null);
     setDraft(response?.draft || draft);
-    setStep(7);
+    /* stay on step 6 */
   });
 
   const mixAudio = async () => withBusy(async () => {
@@ -1043,12 +1123,23 @@ setCharacterAge(nextDraft?.characterAge || '');
       jobId,
       selectedPlatforms
     });
+
+    const queueJobId = response?.queueJobId;
+    if (queueJobId) {
+      await pollJob(queueJobId, async (result) => {
+        const content = result?.content || result?.draft?.content || {};
+        applyGeneratedContent(content, result?.draft || draft);
+        setDraft(result?.draft || draft);
+        await loadVideoDrafts();
+      });
+      return;
+    }
+
     if (!response?.success) throw new Error(response?.message || 'Content generation failed');
     const content = response?.content || {};
-    setThumbnailUrl(content.thumbnailUrl || '');
-    setCaption(content.caption || '');
-    setHashtagsText(Array.isArray(content.hashtags) ? content.hashtags.join(' ') : '');
+    applyGeneratedContent(content, response?.draft || draft);
     setDraft(response?.draft || draft);
+    await loadVideoDrafts();
   });
 
   const schedulePost = async (publishNow = false) => withBusy(async () => {
@@ -1074,7 +1165,7 @@ setCharacterAge(nextDraft?.characterAge || '');
     setSuccessMessage(response?.message || (publishNow ? 'Post queued for immediate publish.' : 'Post scheduled successfully.'));
     setStatusFilter(publishNow ? 'posted' : 'scheduled');
     // Keep wizard open and land on Final Output so user can see the rendered video
-    setStep(12);
+    setStep(10);
   });
 
   const togglePlatform = (platform: string) => {
@@ -1096,6 +1187,10 @@ setCharacterAge(nextDraft?.characterAge || '');
       setInputImageName('');
       setPromptText('');
       setScenes([]);
+      setPromptImprovementSceneIndex(0);
+      setPromptImprovementType('image');
+      setPromptImprovementRequest('');
+      setImprovingPrompt(false);
       setGeneratedTracks(null);
       setFinalAudioUrl('');
       setFinalVideoUrl('');
@@ -1380,6 +1475,12 @@ setCharacterAge(nextDraft?.characterAge || '');
                       {item.scheduledAt && (
                         <p className={`text-xs ${theme.textSecondary}`}>Scheduled for {new Date(item.scheduledAt).toLocaleString()}</p>
                       )}
+                      {item.caption && (
+                        <p className={`text-xs ${theme.textSecondary} line-clamp-2`}>{item.caption}</p>
+                      )}
+                      {Array.isArray(item.hashtags) && item.hashtags.length > 0 && (
+                        <p className="text-xs text-[#ffcc29] line-clamp-1">{item.hashtags.join(' ')}</p>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -1403,7 +1504,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                   const active = stepNo === step;
                   const done = stepNo < step;
                   // Step 11 (Final Output) is also reachable any time the final video has been rendered
-                  const finalReady = stepNo === 11 && !!(finalOutputUrl || finalVideoUrl);
+                  const finalReady = stepNo === 10 && !!(finalOutputUrl || finalVideoUrl);
                   const clickable = done || finalReady;
                   return (
                     <button
@@ -1606,305 +1707,63 @@ setCharacterAge(nextDraft?.characterAge || '');
               </div>
             )}
 
-            {step === 2 && (
-            <div className={`p-6 space-y-6 ${panelClass}`}>
-              <div className="flex items-center justify-between mb-4">
-                <h2 className={`text-xl font-bold ${theme.text}`}>Character & Video Style Configuration</h2>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="flex items-center justify-between p-4 rounded-xl border border-slate-200 dark:border-slate-800">
-                  <span className={theme.text}>Use Character in Video</span>
-                  <button
-                    onClick={() => setCharacterEnabled(!characterEnabled)}
-                    className={`flex-shrink-0 transition-colors ${characterEnabled ? 'text-[#ffcc29]' : theme.textMuted}`}
-                  >
-                    {characterEnabled ? <ToggleRight className="w-8 h-8" /> : <ToggleLeft className="w-8 h-8" />}
-                  </button>
+                      {step === 2 && (
+            <div className={`${panelClass} p-6 space-y-8`}>
+              <h2 className={`font-bold text-xl ${theme.text}`}>Step 2: Character & Video Style Configuration</h2>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-4">
+                  <h3 className={`text-sm font-semibold uppercase tracking-wider ${theme.textMuted}`}>General Settings</h3>
+                  <label className={`flex items-center gap-3 cursor-pointer ${theme.text}`}>
+                    <input type="checkbox" className="w-5 h-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600" checked={characterEnabled} onChange={e => setCharacterEnabled(e.target.checked)} />
+                    <span className="font-medium">Use Character in Video</span>
+                  </label>
+                  <label className={`flex items-center gap-3 cursor-pointer ${theme.text}`}>
+                    <input type="checkbox" className="w-5 h-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600" checked={preserveCharacter} onChange={e => setPreserveCharacter(e.target.checked)} />
+                    <span className="font-medium">Preserve Character Identity</span>
+                  </label>
+                  <label className={`flex items-center gap-3 cursor-pointer ${theme.text}`}>
+                    <input type="checkbox" className="w-5 h-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600" checked={includeBrandLogo} onChange={e => setIncludeBrandLogo(e.target.checked)} />
+                    <span className="font-medium">Include Brand Logo</span>
+                  </label>
                 </div>
-                <div className="flex items-center justify-between p-4 rounded-xl border border-slate-200 dark:border-slate-800">
-                  <span className={theme.text}>Preserve Character Identity</span>
-                  <button
-                    onClick={() => setPreserveIdentity(!preserveIdentity)}
-                    className={`flex-shrink-0 transition-colors ${preserveIdentity ? 'text-[#ffcc29]' : theme.textMuted}`}
-                    disabled={!characterEnabled}
-                  >
-                    {preserveIdentity ? <ToggleRight className="w-8 h-8" /> : <ToggleLeft className="w-8 h-8" />}
-                  </button>
-                </div>
-                <div className="flex items-center justify-between p-4 rounded-xl border border-slate-200 dark:border-slate-800">
-                  <span className={theme.text}>Include Brand Logo</span>
-                  <button
-                    onClick={() => setUseLogo(!useLogo)}
-                    className={`flex-shrink-0 transition-colors ${useLogo ? 'text-[#ffcc29]' : theme.textMuted}`}
-                  >
-                    {useLogo ? <ToggleRight className="w-8 h-8" /> : <ToggleLeft className="w-8 h-8" />}
-                  </button>
+
+                <div className="space-y-4">
+                  <h3 className={`text-sm font-semibold uppercase tracking-wider ${theme.textMuted}`}>Video Style</h3>
+                  <select value={videoStyle} onChange={e => setVideoStyle(e.target.value)} className={`${inputClass} mt-2 w-full`}>
+                    <option value="Storytelling">Storytelling</option>
+                    <option value="Cinematic Commercial">Cinematic Commercial</option>
+                    <option value="Product Showcase">Product Showcase</option>
+                    <option value="UGC / TikTok">UGC / TikTok</option>
+                    <option value="Ads">Ads</option>
+                  </select>
                 </div>
               </div>
 
               {characterEnabled && (
-                <div className="space-y-4 mt-4">
-                  <div>
-                    <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Character Name</label>
-                    <input type="text" className={inputClass} value={characterName} onChange={(e) => setCharacterName(e.target.value)} placeholder="e.g. Sarah" />
-                  </div>
-
-                  <div className="mt-4 p-4 rounded-xl border border-slate-200 dark:border-slate-800 space-y-4">
-                    <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Character Source</label>
-                    <div className="flex items-center gap-4">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input type="radio" checked={characterSource === 'generate'} onChange={() => setCharacterSource('generate')} />
-                        <span className={theme.text}>Generate AI Character</span>
-                      </label>
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input type="radio" checked={characterSource === 'upload'} onChange={() => setCharacterSource('upload')} />
-                        <span className={theme.text}>Upload Image</span>
-                      </label>
-                    </div>
-
-                    {characterSource === 'upload' ? (
-                      <div>
-                        <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Upload Character Image</label>
-                        <input 
-                          type="file" 
-                          accept="image/*"
-                          onChange={async (e) => {
-                            const file = e.target.files?.[0];
-                            if (file) {
-                              const base64 = await fileToDataUrl(file);
-                              if (base64) {
-                                setCharacterImage(base64);
-                                setOriginalCharacterImage(base64);
-                                setCharacterApproved(true);
-                              }
-                            }
-                          }}
-                          className={inputClass}
-                        />
-                        {characterImage && (
-                          <div className="mt-2 relative inline-block">
-                            <img src={characterImage} alt="Character Reference" className="h-24 w-24 object-cover rounded-lg" />
-                            <button onClick={() => { setCharacterImage(''); setCharacterApproved(false); }} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1"><XCircle className="w-4 h-4" /></button>
-                          </div>
-                        )}
-
-                        {originalCharacterImage && (
-                          <div className="mt-4 p-4 border rounded-xl border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/20 text-center space-y-3">
-                            <h3 className={`font-bold ${theme.text}`}>Master Character Sheet</h3>
-                            <p className={`text-sm ${theme.textMuted}`}>Generate a 360° character sheet to improve consistency across all scenes.</p>
-                            
-                            {characterImage !== originalCharacterImage && characterImage && (
-                              <div className="relative group cursor-pointer" onClick={() => setPreviewImageModal(characterImage)}>
-                                <img src={characterImage} alt="Master Sheet" className="h-48 w-full object-contain rounded-xl mx-auto shadow-md transition-transform group-hover:scale-[1.02]" />
-                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl flex items-center justify-center">
-                                  <span className="text-white font-medium bg-black/50 px-3 py-1 rounded-lg flex items-center"><Search className="w-4 h-4 mr-2" /> Click to Preview</span>
-                                </div>
-                              </div>
-                            )}
-
-                            {!characterApproved || characterImage === originalCharacterImage ? (
-                              <div className="flex justify-center gap-3 mt-2">
-                                <button onClick={handleGenerateCharacterPreview} disabled={generatingCharacter} className="px-4 py-2 bg-indigo-500 text-white font-semibold rounded-xl hover:bg-indigo-600 transition disabled:opacity-50">
-                                  {generatingCharacter ? <Loader2 className="w-4 h-4 animate-spin inline mr-2" /> : <Sparkles className="w-4 h-4 inline mr-2" />}
-                                  Generate Master Sheet
-                                </button>
-                                {characterImage !== originalCharacterImage && characterImage && (
-                                    <button onClick={() => setCharacterApproved(true)} className="px-3 py-2 bg-emerald-500 text-white rounded-lg text-sm font-medium hover:bg-emerald-600 transition">
-                                      Approve
-                                    </button>
-                                )}
-                              </div>
-                            ) : (
-                              <div className="text-emerald-500 font-bold text-sm">✓ Character Sheet Approved</div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Age</label>
-                            <input type="text" className={inputClass} value={characterAge} onChange={(e) => setCharacterAge(e.target.value)} placeholder="e.g. 28" />
-                          </div>
-                          <div>
-                            <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Gender</label>
-                            <select className={inputClass} value={characterGender} onChange={(e) => setCharacterGender(e.target.value)}>
-                              <option value="">Select Gender</option>
-                              <option value="Male">Male</option>
-                              <option value="Female">Female</option>
-                              <option value="Other">Other</option>
-                            </select>
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Ethnicity / Race</label>
-                            <select className={inputClass} value={characterRace} onChange={(e) => setCharacterRace(e.target.value)}>
-                              <option value="">Select Ethnicity (Optional)</option>
-                              <option value="Indian">Indian</option>
-                              <option value="South Indian">South Indian</option>
-                              <option value="Asian">Asian</option>
-                              <option value="American">American</option>
-                              <option value="European">European</option>
-                              <option value="Arab">Arab</option>
-                              <option value="Japanese">Japanese</option>
-                              <option value="Mexican">Mexican</option>
-                              <option value="African">African</option>
-                              <option value="Latino">Latino</option>
-                              <option value="Mixed">Mixed</option>
-                            </select>
-                          </div>
-                          {characterGender !== 'Female' && (
-                            <div>
-                              <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Facial Hair / Beard</label>
-                              <select className={inputClass} value={characterBeard} onChange={(e) => setCharacterBeard(e.target.value)}>
-                                <option value="">Clean Shaven (No Beard)</option>
-                                <option value="Stubble">Stubble</option>
-                                <option value="Short Beard">Short Beard</option>
-                                <option value="Full Beard">Full Beard</option>
-                                <option value="Goatee">Goatee</option>
-                                <option value="Mustache Only">Mustache Only</option>
-                              </select>
-                            </div>
-                          )}
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Role</label>
-                            <input type="text" className={inputClass} value={characterRole} onChange={(e) => setCharacterRole(e.target.value)} placeholder="e.g. Startup Founder" />
-                          </div>
-                          <div>
-                            <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Personality</label>
-                            <select className={inputClass} value={characterPersonality} onChange={(e) => setCharacterPersonality(e.target.value)}>
-                              <option value="">Select Personality</option>
-                              <option value="Professional">Professional</option>
-                              <option value="Casual">Casual</option>
-                              <option value="Energetic">Energetic</option>
-                              <option value="Calm">Calm</option>
-                              <option value="Confident">Confident</option>
-                              <option value="Friendly">Friendly</option>
-                              <option value="Serious">Serious</option>
-                              <option value="Funny">Funny</option>
-                            </select>
-                          </div>
-                        </div>
-                        <div>
-                          <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Appearance / Clothing</label>
-                          <input type="text" className={inputClass} value={characterAppearance} onChange={(e) => setCharacterAppearance(e.target.value)} placeholder="e.g. Modern business woman, Premium formal outfit" />
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Hair Style & Color</label>
-                            <input type="text" className={inputClass} value={characterHairStyle} onChange={(e) => setCharacterHairStyle(e.target.value)} placeholder="e.g. Long straight black hair" />
-                          </div>
-                          <div>
-                            <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Format / Art Style</label>
-                            <select className={inputClass} value={characterArtStyle} onChange={(e) => setCharacterArtStyle(e.target.value)}>
-                              <option value="Realistic / Photography">Real Person / Realistic</option>
-                              <option value="Anime / Manga">Anime</option>
-                              <option value="3D Animation / Cartoon">3D Animation / Cartoon Character</option>
-                              <option value="Vector Illustration">Vector Illustration</option>
-                            </select>
-                          </div>
-                        </div>
-                        <button
-                          onClick={handleGenerateCharacterPreview}
-                          disabled={generatingCharacter}
-                          className="px-4 py-2 bg-indigo-500 text-white font-semibold rounded-xl hover:bg-indigo-600 transition disabled:opacity-50"
-                        >
-                          {generatingCharacter ? <Loader2 className="w-4 h-4 animate-spin inline mr-2" /> : <Sparkles className="w-4 h-4 inline mr-2" />}
-                          Generate Character Preview
-                        </button>
-                        
-                        {characterImage && (
-                          <div className="p-4 border rounded-xl border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/20 text-center space-y-3">
-                            <h3 className={`font-bold ${theme.text}`}>Generated Character</h3>
-                            
-                            <div className="relative group cursor-pointer" onClick={() => setPreviewImageModal(characterImage)}>
-                              <img src={characterImage} alt="Generated Character Preview" className="h-48 w-full object-contain rounded-xl mx-auto shadow-md transition-transform group-hover:scale-[1.02]" />
-                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl flex items-center justify-center">
-                                <span className="text-white font-medium bg-black/50 px-3 py-1 rounded-lg flex items-center"><Search className="w-4 h-4 mr-2" /> Click to Preview</span>
-                              </div>
-                            </div>
-                            
-                            {!characterApproved ? (
-                              <div className="flex justify-center gap-3 mt-2">
-                                <button onClick={handleGenerateCharacterPreview} disabled={generatingCharacter} className="px-3 py-1.5 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-800 transition">
-                                  Regenerate
-                                </button>
-                                <button onClick={() => setCharacterApproved(true)} className="px-3 py-1.5 bg-emerald-500 text-white rounded-lg text-sm font-medium hover:bg-emerald-600 transition">
-                                  Approve Character
-                                </button>
-                              </div>
-                            ) : (
-                              <div className="text-emerald-500 font-bold text-sm">✓ Character Approved</div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-4 mt-4">
-                    <div>
-                      <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Character Usage</label>
-                      <select className={inputClass} value={characterUsage} onChange={(e) => setCharacterUsage(e.target.value)}>
-                        <option value="Main Character in all scenes">Main Character in all scenes</option>
-                        <option value="Character only in selected scenes">Character only in selected scenes</option>
-                        <option value="Background character only">Background character only</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Character Consistency Strength</label>
-                      <select className={inputClass} value={characterConsistencyStrength} onChange={(e) => setCharacterConsistencyStrength(e.target.value)}>
-                        <option value="Low">Low</option>
-                        <option value="Medium">Medium</option>
-                        <option value="High">High</option>
-                        <option value="Strict">Strict</option>
-                      </select>
-                    </div>
-                  </div>
-                  
+                <div className="border-t dark:border-slate-800 pt-8 mt-8">
+                  <CharacterManager
+                    jobId={jobId!}
+                    draft={draft}
+                    setDraft={setDraft}
+                    setStep={setStep}
+                    busy={busy}
+                    setBusy={setBusy}
+                  />
                 </div>
               )}
 
-              <div className="mt-6">
-                <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Video Style</label>
-                <select className={inputClass} value={videoStyle} onChange={(e) => {
-                  const style = e.target.value;
-                  setVideoStyle(style);
-                  if (style === 'Storytelling' && characterConsistencyStrength !== 'Strict') {
-                    setCharacterConsistencyStrength('Strict');
-                  }
-                }}>
-                  <option value="Cinematic Commercial">Cinematic Commercial</option>
-                  <option value="Storytelling">Storytelling</option>
-                  <option value="Product Advertisement">Product Advertisement</option>
-                  <option value="Daily Life Vlog">Daily Life Vlog</option>
-                  <option value="Documentary">Documentary</option>
-                  <option value="Educational">Educational</option>
-                  <option value="Motivational">Motivational</option>
-                  <option value="Corporate Presentation">Corporate Presentation</option>
-                  <option value="Testimonial">Testimonial</option>
-                  <option value="Product Showcase">Product Showcase</option>
-                  <option value="News Update">News Update</option>
-                  <option value="Social Media Reel">Social Media Reel</option>
-                  <option value="Luxury Advertisement">Luxury Advertisement</option>
-                </select>
-              </div>
-
-              <div className="flex justify-end pt-4 border-t border-slate-200 dark:border-slate-800">
-                <button
-                  onClick={step2Next}
-                  disabled={busy || (characterEnabled && !characterApproved && characterSource === 'generate')}
-                  className="px-6 py-2.5 bg-[#ffcc29] text-black font-semibold rounded-xl hover:bg-[#e6b825] transition disabled:opacity-50"
-                >
-                  {characterEnabled && !characterApproved && characterSource === 'generate' ? 'Approve Character to Continue' : 'Save & Next (Prompt + Scenes)'}
+              <div className="flex gap-3 justify-end mt-8 border-t dark:border-slate-800 pt-6">
+                <button onClick={() => setStep(1)} disabled={busy} className="px-6 py-2 rounded-xl font-medium border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                  Back
+                </button>
+                <button onClick={() => setStep(3)} disabled={busy} className="px-6 py-2 rounded-xl font-medium bg-[#ffcc29] text-black hover:bg-[#e6b825] transition-colors">
+                  Next: Screenplay
                 </button>
               </div>
             </div>
           )}
+
 
           {step === 3 && (
               <div className={`${panelClass} p-6 space-y-4`}>
@@ -1921,6 +1780,83 @@ setCharacterAge(nextDraft?.characterAge || '');
                 <div>
                   <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Generated Prompt (Editable)</label>
                   <textarea value={promptText} onChange={(e) => setPromptText(e.target.value)} className={`${inputClass} mt-2 min-h-[100px]`} />
+                </div>
+
+                <div className={`border-t ${isDarkMode ? 'border-slate-800' : 'border-slate-200'} pt-4 space-y-4`}>
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-[#ffcc29]" />
+                    <p className={`text-sm font-semibold ${theme.text}`}>Prompt Improvement</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Scene</label>
+                      <select
+                        value={promptImprovementSceneIndex}
+                        onChange={(e) => setPromptImprovementSceneIndex(Number(e.target.value) || 0)}
+                        className={`${inputClass} mt-2`}
+                        disabled={!scenes.length || improvingPrompt}
+                      >
+                        {scenes.length ? scenes.map((scene, idx) => (
+                          <option key={scene.sceneId || idx} value={idx}>
+                            Scene {idx + 1}{scene.title ? ` - ${scene.title}` : ''}
+                          </option>
+                        )) : <option value={0}>No scenes available</option>}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Prompt Type</label>
+                      <div className="mt-2 flex flex-wrap gap-3">
+                        <label className={`flex items-center gap-2 text-sm font-medium ${theme.text}`}>
+                          <input
+                            type="radio"
+                            name="promptImprovementType"
+                            value="image"
+                            checked={promptImprovementType === 'image'}
+                            onChange={() => setPromptImprovementType('image')}
+                            disabled={improvingPrompt}
+                          />
+                          Image Prompt
+                        </label>
+                        <label className={`flex items-center gap-2 text-sm font-medium ${theme.text}`}>
+                          <input
+                            type="radio"
+                            name="promptImprovementType"
+                            value="video"
+                            checked={promptImprovementType === 'video'}
+                            onChange={() => setPromptImprovementType('video')}
+                            disabled={improvingPrompt}
+                          />
+                          Video Prompt
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Describe what you want to improve</label>
+                    <textarea
+                      value={promptImprovementRequest}
+                      onChange={(e) => setPromptImprovementRequest(e.target.value)}
+                      className={`${inputClass} mt-2 min-h-[120px]`}
+                      placeholder="Make the saree royal blue. Add warm sunset lighting. Keep everything else the same."
+                      disabled={improvingPrompt}
+                    />
+                  </div>
+
+                  <button
+                    onClick={improveSelectedPrompt}
+                    disabled={improvingPrompt || !scenes.length || !promptImprovementRequest.trim()}
+                    className={`px-4 py-2 rounded-xl font-semibold inline-flex items-center gap-2 transition-colors ${
+                      improvingPrompt || !scenes.length || !promptImprovementRequest.trim()
+                        ? 'bg-slate-700/60 text-slate-400 cursor-not-allowed'
+                        : 'bg-[#ffcc29] text-black hover:bg-[#e6b825]'
+                    }`}
+                  >
+                    {improvingPrompt ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                    {improvingPrompt ? 'Improving Prompt' : 'Improve Prompt'}
+                  </button>
                 </div>
 
                 <div className="space-y-3">
@@ -1950,6 +1886,40 @@ setCharacterAge(nextDraft?.characterAge || '');
                           <div className="w-1/3">
                             <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Duration (sec)</label>
                             <input type="number" min={1} value={scene.durationSeconds || 1} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, durationSeconds: Number(e.target.value) || 1 } : item))} className={`${inputClass} mt-1`} disabled={isRegen} />
+                          </div>
+                        </div>
+
+                        <div className="mt-3 space-y-2">
+                          <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Characters in Scene</label>
+                          <div className="flex flex-wrap gap-2">
+                            {(draft?.characters || []).map((char: any) => {
+                              const isSelected = (scene.characterIds || []).includes(char.id || char.characterId);
+                              return (
+                                <label key={char.id || char.characterId} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border cursor-pointer transition-colors ${isSelected ? 'bg-indigo-50 border-indigo-200 dark:bg-indigo-900/30 dark:border-indigo-800' : 'bg-white border-slate-200 dark:bg-slate-800 dark:border-slate-700'}`}>
+                                  <input
+                                    type="checkbox"
+                                    className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600"
+                                    checked={isSelected}
+                                    onChange={(e) => {
+                                      const charId = char.id || char.characterId;
+                                      setScenes((prev) => prev.map((item, i) => {
+                                        if (i !== idx) return item;
+                                        const currentIds = item.characterIds || [];
+                                        const newIds = e.target.checked 
+                                          ? [...currentIds, charId] 
+                                          : currentIds.filter(id => id !== charId);
+                                        return { ...item, characterIds: newIds };
+                                      }));
+                                    }}
+                                    disabled={isRegen}
+                                  />
+                                  <span className={`text-sm font-medium ${isSelected ? 'text-indigo-700 dark:text-indigo-300' : theme.text}`}>{char.name || char.id}</span>
+                                </label>
+                              );
+                            })}
+                            {(!draft?.characters || draft.characters.length === 0) && (
+                              <span className={`text-sm italic ${theme.textMuted}`}>No characters available. Add them in Step 2.</span>
+                            )}
                           </div>
                         </div>
 
@@ -2075,158 +2045,220 @@ setCharacterAge(nextDraft?.characterAge || '');
             )}
 
             {step === 6 && (
-              <div className={`${panelClass} p-6 space-y-4`}>
-                <h2 className={`font-bold text-lg ${theme.text}`}>Step 5: Audio Configuration</h2>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Audio</label>
-                    <button type="button" onClick={() => setAudioEnabled((v) => !v)} className={`${inputClass} mt-2 text-left`}>
-                      {audioEnabled ? 'ON' : 'OFF'}
-                    </button>
-                  </div>
-                  <div>
-                    <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Voice Mode</label>
-                    <select value={audioMode} onChange={(e) => setAudioMode(e.target.value as AudioMode)} className={`${inputClass} mt-2`} disabled={!audioEnabled}>
-                      <option value="auto">TTS</option>
-                      <option value="upload">Upload Voice</option>
-                      <option value="off">No Voice</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Music</label>
-                    <select value={audioTone} onChange={(e) => setAudioTone(e.target.value)} className={`${inputClass} mt-2`} disabled={!audioEnabled}>
-                      <option value="professional">Professional</option>
-                      <option value="normal">Normal</option>
-                      <option value="fun">Fun</option>
-                      <option value="luxury">Luxury</option>
-                      <option value="simple">Simple</option>
-                    </select>
-                  </div>
+              <div className={`${panelClass} p-6 space-y-6`}>
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                  <h2 className={`font-bold text-xl ${theme.text}`}>Step 5: Audio Config & Mix</h2>
                 </div>
 
-                {audioEnabled && (
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div>
-                      <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Language</label>
-                      <select value={audioLanguageCode} onChange={(e) => setAudioLanguageCode(e.target.value)} className={`${inputClass} mt-2`}>
-                        <option value="en">English</option>
-                        <option value="hi">Hindi</option>
-                        <option value="ta">Tamil</option>
-                        <option value="te">Telugu</option>
-                        <option value="kn">Kannada</option>
-                        <option value="ml">Malayalam</option>
-                      </select>
+                <div className="space-y-6">
+                    {/* Audio Priority Mode */}
+                    <div className={`${isDarkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-slate-50 border-slate-200'} border rounded-2xl p-5`}>
+                      <div className="mb-4">
+                        <h3 className={`font-bold text-sm uppercase tracking-wider ${theme.text}`}>Audio Priority (Mixing Mode)</h3>
+                        <p className={`text-xs mt-1 ${theme.textSecondary}`}>Choose how the background music should behave when the AI voice is speaking.</p>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        {['voice', 'balanced', 'music'].map(mode => (
+                          <button
+                            key={mode}
+                            onClick={() => {
+                              setAudioPriority(mode as any);
+                              if (mode === 'voice') { setVoiceVolume(1.0); setMusicVolume(0.25); }
+                              if (mode === 'balanced') { setVoiceVolume(0.9); setMusicVolume(0.45); }
+                              if (mode === 'music') { setVoiceVolume(0.75); setMusicVolume(0.70); }
+                            }}
+                            className={`px-4 py-4 rounded-xl border text-sm flex flex-col items-center gap-1.5 transition-all ${
+                              audioPriority === mode 
+                                ? 'bg-[#ffcc29]/10 border-[#ffcc29] text-[#ffcc29] shadow-[0_0_15px_rgba(255,204,41,0.15)]' 
+                                : isDarkMode ? 'bg-slate-800/50 border-slate-700/50 text-slate-400 hover:border-slate-600' : 'bg-white border-slate-300 text-slate-600'
+                            }`}
+                          >
+                            <span className="font-bold tracking-wide uppercase text-xs">{mode === 'voice' ? '🎤 Voice Priority' : mode === 'balanced' ? '⚖️ Balanced Mix' : '🎵 Music Priority'}</span>
+                            <span className="text-[10px] opacity-70 font-medium">
+                              {mode === 'voice' ? 'Loud voice, heavy music ducking' : mode === 'balanced' ? 'Equal blend, standard ducking' : 'Loud music, light ducking'}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                    <div>
-                      <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Music Source (Test)</label>
-                      <select
-                        value={musicSource}
-                        onChange={(e) => setMusicSource(e.target.value as 'tone' | 'library')}
-                        className={`${inputClass} mt-2`}
-                      >
-                        <option value="library">Library (by duration)</option>
-                        <option value="tone">Tone Pack (default)</option>
-                      </select>
-                      <p className={`text-[11px] mt-1 ${theme.textSecondary}`}>
-                        Uses backend `music/{durationSeconds}s` when Library is selected.
-                      </p>
-                    </div>
-                    <div>
-                      <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Voice</label>
-                      <select value={voiceGender} onChange={(e) => setVoiceGender(e.target.value as 'male' | 'female')} className={`${inputClass} mt-2`}>
-                        <option value="female">Female</option>
-                        <option value="male">Male</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Voice Volume</label>
-                      <input type="range" min={0} max={2} step={0.1} value={voiceVolume} onChange={(e) => setVoiceVolume(Number(e.target.value))} className="mt-3 w-full" />
-                    </div>
-                    <div>
-                      <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Music Volume</label>
-                      <input type="range" min={0} max={2} step={0.1} value={musicVolume} onChange={(e) => setMusicVolume(Number(e.target.value))} className="mt-3 w-full" />
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                      {/* Voice Settings */}
+                      <div className={`${isDarkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-slate-50 border-slate-200'} border rounded-2xl p-5 space-y-5`}>
+                        <div className="flex items-center justify-between border-b border-slate-800/50 pb-3">
+                          <h3 className={`font-bold text-sm uppercase tracking-wider ${theme.text}`}>Voice Settings</h3>
+                        </div>
+                        
+                        <div>
+                          <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Voice Source</label>
+                          <select value={audioMode} onChange={(e) => setAudioMode(e.target.value as AudioMode)} className={`${inputClass} mt-1.5 w-full`}>
+                            <option value="auto">AI Text-to-Speech (Recommended)</option>
+                            <option value="upload">Upload Custom Voice</option>
+                            <option value="off">No Voice (Music Only)</option>
+                          </select>
+                        </div>
+
+                        {audioMode === 'auto' && (
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Language</label>
+                              <select value={audioLanguageCode} onChange={(e) => setAudioLanguageCode(e.target.value)} className={`${inputClass} mt-1.5 w-full`}>
+                                <option value="en">English</option>
+                                <option value="hi">Hindi</option>
+                                <option value="ta">Tamil</option>
+                                <option value="te">Telugu</option>
+                                <option value="kn">Kannada</option>
+                                <option value="ml">Malayalam</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Gender</label>
+                              <select value={voiceGender} onChange={(e) => setVoiceGender(e.target.value as 'male' | 'female')} className={`${inputClass} mt-1.5 w-full`}>
+                                <option value="female">Female</option>
+                                <option value="male">Male</option>
+                              </select>
+                            </div>
+                          </div>
+                        )}
+
+                        {audioMode === 'upload' && (
+                          <div className="space-y-3 p-3 bg-slate-950/30 rounded-xl border border-slate-800/50">
+                            <input type="file" accept="audio/*" onChange={(e) => onManualVoiceUpload(e.target.files?.[0])} className="text-xs w-full text-slate-300" />
+                            <div className="flex gap-2 pt-2">
+                              {!isRecording ? (
+                                <button onClick={startVoiceRecording} className="px-3 py-2 rounded-lg border border-slate-600 bg-slate-800 text-slate-200 text-xs w-full font-semibold transition-colors hover:bg-slate-700">
+                                  <Mic className="w-3.5 h-3.5 inline mr-1" /> Record Audio
+                                </button>
+                              ) : (
+                                <button onClick={stopVoiceRecording} className="px-3 py-2 rounded-lg border border-red-500/50 bg-red-500/10 text-red-400 text-xs w-full animate-pulse font-semibold">
+                                  Stop Recording
+                                </button>
+                              )}
+                            </div>
+                            {manualVoiceName && <p className={`text-[10px] font-medium text-emerald-400 break-all`}>{manualVoiceName}</p>}
+                          </div>
+                        )}
+
+                        {audioMode !== 'off' && (
+                           <div className="pt-2">
+                             <div className="flex justify-between items-end mb-2">
+                               <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Voice Volume Level</label>
+                               <span className={`text-xs font-bold px-2 py-0.5 bg-slate-800 rounded text-slate-300`}>{Math.round(voiceVolume * 100)}%</span>
+                             </div>
+                             <input type="range" min={0} max={2} step={0.1} value={voiceVolume} onChange={(e) => { setVoiceVolume(Number(e.target.value)); setAudioPriority('' as any); }} className="w-full accent-[#ffcc29]" />
+                           </div>
+                        )}
+                      </div>
+
+                      {/* Music Settings */}
+                      <div className={`${isDarkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-slate-50 border-slate-200'} border rounded-2xl p-5 space-y-5`}>
+                        <div className="flex items-center justify-between border-b border-slate-800/50 pb-3">
+                          <h3 className={`font-bold text-sm uppercase tracking-wider ${theme.text}`}>Background Music</h3>
+                        </div>
+                        
+                        <div>
+                          <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Music Track Selection</label>
+                          <select value={musicSource} onChange={(e) => setMusicSource(e.target.value as 'tone' | 'library')} className={`${inputClass} mt-1.5 w-full`}>
+                            <option value="tone">AI Smart Tone (Auto-select)</option>
+                            <option value="library">Manual Library Search</option>
+                          </select>
+                        </div>
+
+                        {musicSource === 'tone' ? (
+                          <div>
+                            <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Video Mood / Tone</label>
+                            <select value={audioTone} onChange={(e) => setAudioTone(e.target.value)} className={`${inputClass} mt-1.5 w-full`}>
+                              <option value="professional">Professional / Corporate</option>
+                              <option value="normal">Normal / Neutral</option>
+                              <option value="fun">Fun / Upbeat</option>
+                              <option value="luxury">Luxury / Premium</option>
+                              <option value="simple">Simple / Minimalist</option>
+                            </select>
+                          </div>
+                        ) : (
+                          <div>
+                            <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Custom Track Name</label>
+                            <input value={musicTrack} onChange={(e) => setMusicTrack(e.target.value)} placeholder="Leave empty for auto-pick" className={`${inputClass} mt-1.5 w-full`} />
+                          </div>
+                        )}
+
+                        <div className="pt-2">
+                          <div className="flex justify-between items-end mb-2">
+                            <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Music Volume Level</label>
+                            <span className={`text-xs font-bold px-2 py-0.5 bg-slate-800 rounded text-slate-300`}>{Math.round(musicVolume * 100)}%</span>
+                          </div>
+                          <input type="range" min={0} max={2} step={0.1} value={musicVolume} onChange={(e) => { setMusicVolume(Number(e.target.value)); setAudioPriority('' as any); }} className="w-full accent-[#ffcc29]" />
+                        </div>
+                      </div>
                     </div>
                   </div>
-                )}
 
-                {audioEnabled && musicSource === 'library' && (
-                  <div className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3`}>
-                    <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Music Track (Optional)</label>
-                    <input
-                      value={musicTrack}
-                      onChange={(e) => setMusicTrack(e.target.value)}
-                      placeholder="e.g. sonican-tropical-30-seconds-514742.mp3"
-                      className={`${inputClass} mt-2 w-full`}
-                    />
-                    <p className={`text-[11px] mt-1 ${theme.textSecondary}`}>
-                      Leave empty to auto-pick a track for this video duration.
-                    </p>
-                  </div>
-                )}
-
-                {audioEnabled && audioMode === 'upload' && (
-                  <div className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3 space-y-3`}>
-                    <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Upload Voice / Record Voice</label>
-                    <input type="file" accept="audio/*" onChange={(e) => onManualVoiceUpload(e.target.files?.[0])} className="text-sm" />
-                    <div className="flex gap-2">
-                      {!isRecording ? (
-                        <button onClick={startVoiceRecording} className="px-3 py-2 rounded-lg border border-slate-500 text-slate-200 text-sm">
-                          <Mic className="w-4 h-4 inline mr-1" /> Start Recording
-                        </button>
-                      ) : (
-                        <button onClick={stopVoiceRecording} className="px-3 py-2 rounded-lg border border-red-500 text-red-300 text-sm">
-                          Stop Recording
-                        </button>
-                      )}
-                    </div>
-                    {manualVoiceName && <p className={`text-xs ${theme.textSecondary}`}>{manualVoiceName}</p>}
-                  </div>
-                )}
-
-                <div className="flex flex-wrap gap-3">
-                  <button onClick={generateAudioPreview} disabled={!canAudioPreview} className="px-4 py-2 rounded-xl border border-[#ffcc29] text-[#ffcc29] font-semibold disabled:opacity-60">
-                    {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Generate Audio Preview'}
-                  </button>
-                  <button onClick={mixAudio} disabled={busy || !generatedTracks} className="px-4 py-2 rounded-xl border border-slate-500 text-slate-300 font-semibold disabled:opacity-60">
-                    Mix Preview
-                  </button>
-                  <button onClick={generateAudioTracks} disabled={!canStep5Next} className={primaryButtonClass(!canStep5Next)}>
-                    {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Next'}
+                {/* 1. Generate Audio Action */}
+                <div className="pt-6 border-t border-slate-800/50">
+                  <button onClick={generateAudioPreview} disabled={!canAudioPreview} className="px-6 py-3 w-full md:w-auto rounded-xl border border-[#ffcc29] text-[#ffcc29] font-bold text-sm transition-all hover:bg-[#ffcc29]/10 disabled:opacity-50">
+                    {busy ? <Loader2 className="w-4 h-4 animate-spin inline mr-2" /> : '1. Generate Audio'}
                   </button>
                 </div>
 
-                {(generatedTracks?.voiceUrl || generatedTracks?.backgroundUrl || generatedTracks?.manualUrl || finalAudioUrl) && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {/* 2. Raw Previews */}
+                {(generatedTracks?.voiceUrl || generatedTracks?.backgroundUrl || generatedTracks?.manualUrl) && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                     {activeAudioScript && (
-                      <div className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3 md:col-span-2`}>
-                        <p className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Voice Script</p>
-                        <p className={`text-sm mt-2 leading-relaxed whitespace-pre-wrap ${theme.text}`}>{activeAudioScript}</p>
+                      <div className={`${isDarkMode ? 'bg-slate-900/40 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-4 md:col-span-2 shadow-inner`}>
+                        <p className={`text-[11px] font-bold uppercase tracking-wider ${theme.textMuted} mb-2 flex items-center gap-1.5`}>
+                          <span className="w-2 h-2 rounded-full bg-[#ffcc29] inline-block"></span> AI Voice Script
+                        </p>
+                        <p className={`text-sm leading-relaxed whitespace-pre-wrap ${theme.text}`}>{activeAudioScript}</p>
                       </div>
                     )}
+                    
                     {generatedTracks?.voiceUrl && (
-                      <div className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3`}>
-                        <p className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Voice Preview</p>
-                        <audio controls src={generatedTracks.voiceUrl} className="w-full mt-2" />
-                      </div>
-                    )}
-                    {generatedTracks?.backgroundUrl && (
-                      <div className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3`}>
-                        <p className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Music Preview</p>
-                        <audio controls src={generatedTracks.backgroundUrl} className="w-full mt-2" />
+                      <div className={`${isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-4`}>
+                        <p className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted} mb-3`}>Raw Voice Track</p>
+                        <audio controls src={generatedTracks.voiceUrl} className="w-full h-8" />
                       </div>
                     )}
                     {generatedTracks?.manualUrl && (
-                      <div className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3`}>
-                        <p className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Manual Voice Preview</p>
-                        <audio controls src={generatedTracks.manualUrl} className="w-full mt-2" />
+                      <div className={`${isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-4`}>
+                        <p className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted} mb-3`}>Raw Uploaded Voice</p>
+                        <audio controls src={generatedTracks.manualUrl} className="w-full h-8" />
                       </div>
                     )}
-                    {finalAudioUrl && (
-                      <div className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3`}>
-                        <p className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Mixed Preview</p>
-                        <audio controls src={finalAudioUrl} className="w-full mt-2" />
+                    {generatedTracks?.backgroundUrl && (
+                      <div className={`${isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-4`}>
+                        <p className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted} mb-3`}>Raw Music Track</p>
+                        <audio controls src={generatedTracks.backgroundUrl} className="w-full h-8" />
                       </div>
                     )}
+                  </div>
+                )}
+
+                {/* 3. Mix Action */}
+                {(generatedTracks?.voiceUrl || generatedTracks?.backgroundUrl || generatedTracks?.manualUrl) && (
+                  <div className="pt-6 border-t border-slate-800/50 mt-6">
+                    <button onClick={mixAudio} disabled={busy || !generatedTracks} className="px-6 py-3 w-full md:w-auto rounded-xl border border-[#ffcc29] text-[#ffcc29] font-bold text-sm transition-all hover:bg-[#ffcc29]/10 disabled:opacity-50">
+                      2. Mix Preview (Apply Ducking)
+                    </button>
+                  </div>
+                )}
+
+                {/* 4. Final Mixed Preview */}
+                {finalAudioUrl && (
+                  <div className={`${isDarkMode ? 'bg-[#ffcc29]/10 border-[#ffcc29]/30' : 'bg-[#ffcc29]/5 border-[#ffcc29]/20'} border rounded-xl p-5 mt-4 shadow-lg`}>
+                    <div className="flex justify-between items-center mb-4">
+                      <p className={`text-sm font-bold uppercase tracking-wide ${isDarkMode ? 'text-[#ffcc29]' : 'text-yellow-700'}`}>🚀 Final Mixed Output (With Ducking)</p>
+                    </div>
+                    <audio controls src={finalAudioUrl} className="w-full h-10" />
+                  </div>
+                )}
+
+                {/* 5. Next Step Action */}
+                {finalAudioUrl && (
+                  <div className="pt-6 border-t border-slate-800/50 mt-6 flex justify-end">
+                    <button onClick={() => setStep(7)} disabled={!canStep5Next} className={`px-8 py-3 rounded-xl font-bold text-sm transition-all shadow-lg ${canStep5Next ? 'bg-[#ffcc29] text-black hover:bg-[#e6b825] shadow-[#ffcc29]/20' : 'bg-slate-800 text-slate-500'}`}>
+                      Next Step →
+                    </button>
                   </div>
                 )}
               </div>
@@ -2234,57 +2266,12 @@ setCharacterAge(nextDraft?.characterAge || '');
 
             {step === 7 && (
               <div className={`${panelClass} p-6 space-y-4`}>
-                <h2 className={`font-bold text-lg ${theme.text}`}>Step 6: Audio Mixing Preview</h2>
-                {activeAudioScript && (
-                  <div className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3`}>
-                    <p className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Voice Script</p>
-                    <p className={`text-sm mt-2 leading-relaxed whitespace-pre-wrap ${theme.text}`}>{activeAudioScript}</p>
-                  </div>
-                )}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {generatedTracks?.voiceUrl && (
-                    <div className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3`}>
-                      <p className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Voice Preview</p>
-                      <audio controls src={generatedTracks.voiceUrl} className="w-full mt-2" />
-                    </div>
-                  )}
-                  {generatedTracks?.backgroundUrl && (
-                    <div className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3`}>
-                      <p className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Music Preview</p>
-                      <audio controls src={generatedTracks.backgroundUrl} className="w-full mt-2" />
-                    </div>
-                  )}
-                  {generatedTracks?.manualUrl && (
-                    <div className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3`}>
-                      <p className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Manual Voice Preview</p>
-                      <audio controls src={generatedTracks.manualUrl} className="w-full mt-2" />
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                  <button onClick={mixAudio} disabled={busy} className="px-5 py-3 rounded-xl border border-[#ffcc29] text-[#ffcc29] font-semibold disabled:opacity-60">
-                    {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Mix Audio'}
-                  </button>
-                  <button onClick={() => setStep(8)} disabled={!canStep6Next} className={primaryButtonClass(!canStep6Next)}>Next</button>
-                </div>
-                {finalAudioUrl && (
-                  <div className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3`}>
-                    <p className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>final_audio.mp3</p>
-                    <audio controls src={finalAudioUrl} className="w-full mt-2" />
-                  </div>
-                )}
-              </div>
-            )}
-
-            {step === 8 && (
-              <div className={`${panelClass} p-6 space-y-4`}>
                 <h2 className={`font-bold text-lg ${theme.text}`}>Step 7: Video + Audio Merge</h2>
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <button onClick={mergeVideo} disabled={busy} className="px-5 py-3 rounded-xl border border-[#ffcc29] text-[#ffcc29] font-semibold disabled:opacity-60">
                     {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Merge Video + Audio'}
                   </button>
-                  <button onClick={() => setStep(9)} disabled={!canStep7Next} className={primaryButtonClass(!canStep7Next)}>Next</button>
+                  <button onClick={() => setStep(8)} disabled={!canStep7Next} className={primaryButtonClass(!canStep7Next)}>Next</button>
                 </div>
                 {(finalOutputUrl || finalVideoUrl) && (
                   <div>
@@ -2295,7 +2282,7 @@ setCharacterAge(nextDraft?.characterAge || '');
               </div>
             )}
 
-            {step === 9 && (
+            {step === 8 && (
               <div className={`${panelClass} p-6 space-y-4`}>
                 <h2 className={`font-bold text-lg ${theme.text}`}>Step 8: Thumbnail + Content Generation</h2>
                 <button onClick={generateContent} disabled={busy} className="px-4 py-2 rounded-xl border border-[#ffcc29] text-[#ffcc29] font-semibold">
@@ -2323,13 +2310,13 @@ setCharacterAge(nextDraft?.characterAge || '');
                     </div>
                   </div>
                 </div>
-                <button onClick={() => setStep(10)} disabled={!canStep8Next} className={primaryButtonClass(!canStep8Next)}>Next</button>
+                <button onClick={() => setStep(9)} disabled={!canStep8Next} className={primaryButtonClass(!canStep8Next)}>Next</button>
               </div>
             )}
 
-            {step === 10 && (
+            {step === 9 && (
               <div className={`${panelClass} p-6 space-y-4`}>
-                <h2 className={`font-bold text-lg ${theme.text}`}>Step 9: Platform Selection</h2>
+                <h2 className={`font-bold text-lg ${theme.text}`}>Step 9: Platform Selection & Scheduling</h2>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   {['instagram', 'facebook', 'linkedin', 'youtube'].map((platform) => {
                     const active = selectedPlatforms.includes(platform);
@@ -2349,13 +2336,8 @@ setCharacterAge(nextDraft?.characterAge || '');
                     );
                   })}
                 </div>
-                <button onClick={() => setStep(11)} disabled={!canStep9Next} className={primaryButtonClass(!canStep9Next)}>Next</button>
-              </div>
-            )}
-
-            {step === 11 && (
-              <div className={`${panelClass} p-6 space-y-4`}>
-                <h2 className={`font-bold text-lg ${theme.text}`}>Step 10: Scheduling</h2>
+                
+                <h2 className={`font-bold text-lg mt-6 pt-4 border-t ${isDarkMode ? 'border-slate-800' : 'border-slate-200'} ${theme.text}`}>Scheduling</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Date</label>
@@ -2377,7 +2359,7 @@ setCharacterAge(nextDraft?.characterAge || '');
               </div>
             )}
 
-            {step === 12 && (
+            {step === 10 && (
               <div className={`${panelClass} p-6 space-y-4`}>
                 <h2 className={`font-bold text-lg ${theme.text}`}>Final Step: Output</h2>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

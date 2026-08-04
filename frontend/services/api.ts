@@ -496,8 +496,12 @@ export const apiService = {
       if (key.startsWith('nebula_suggested_campaigns')) {
         localStorage.removeItem(key);
       }
+      if (key.startsWith('director_studio_step_')) {
+        localStorage.removeItem(key);
+      }
     });
     localStorage.removeItem('nebula_focus_platforms');
+    localStorage.removeItem('director_studio_draft_v1');
     // Clear session storage too
     sessionStorage.removeItem('nebulaa_website_analysis');
   },
@@ -3358,6 +3362,10 @@ export const videoGenerationAPI = {
     return apiCall(`/video-generation/jobs/${encodeURIComponent(jobId)}/cancel`, { method: 'POST' }, true);
   },
 
+  retryJob: async (jobId: string): Promise<any> => {
+    return apiCall(`/video-generation/jobs/${encodeURIComponent(jobId)}/retry`, { method: 'POST' }, true);
+  },
+
   createDraft: async (payload: {
     description: string;
     durationSeconds?: number;
@@ -3366,6 +3374,7 @@ export const videoGenerationAPI = {
     imageUrl?: string;
     productId?: string;
     product?: any;
+    videoStyle?: string;
   }): Promise<any> => {
     return apiCall('/video-generation/createDraft', {
       method: 'POST',
@@ -3403,7 +3412,7 @@ export const videoGenerationAPI = {
     }, true);
   },
 
-  generateCharacterPreview: async (payload: any): Promise<{ success: boolean; imageUrl?: string; error?: string }> => {
+  generateCharacterPreview: async (payload: any): Promise<{ success: boolean; imageUrl?: string; error?: string; characterId?: string }> => {
     return apiCall('/video-generation/generateCharacterPreview', {
       method: 'POST',
       body: JSON.stringify(payload)
@@ -3412,6 +3421,20 @@ export const videoGenerationAPI = {
 
   generateScenes: async (payload: any): Promise<any> => {
     return apiCall('/video-generation/generateScenes', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }, true);
+  },
+
+  improvePrompt: async (payload: {
+    jobId: string;
+    sceneId?: string;
+    sceneIndex?: number;
+    promptType: 'image' | 'video';
+    userDescription: string;
+    sceneData?: any[];
+  }): Promise<any> => {
+    return apiCall('/video-generation/improvePrompt', {
       method: 'POST',
       body: JSON.stringify(payload)
     }, true);
@@ -3477,9 +3500,12 @@ export const videoGenerationAPI = {
     selectedPlatforms?: string[];
     async?: boolean;
   }): Promise<any> => {
+    // Run synchronously by default so the response carries the generated
+    // thumbnailUrl (there is no client-side polling for this step). Callers can
+    // still opt into the background queue by passing async: true explicitly.
     return apiCall('/video-generation/generateContent', {
       method: 'POST',
-      body: JSON.stringify({ ...payload, async: true })
+      body: JSON.stringify(payload)
     }, true);
   },
 
@@ -4042,3 +4068,130 @@ export const draftsAPI = {
   }
 };
 
+
+
+// ================================
+// AI Director API
+// ================================
+export const aiDirectorAPI = {
+  analyzeBrand: async (payload: {
+    jobId: string;
+    businessName?: string;
+    industry?: string;
+    brandSummary?: string;
+    targetAudience?: string;
+    brandTone?: string;
+    commercialObjective?: string;
+    duration?: number;
+    videoStyle?: string;
+    storyDirection?: string;
+  }): Promise<any> => {
+    return apiCall('/director/analyze-brand', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }, true);
+  },
+
+  planCharacters: async (payload: {
+    jobId: string;
+    productionBible: any;
+  }): Promise<any> => {
+    return apiCall('/director/plan-characters', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }, true);
+  },
+
+  generateScreenplay: async (payload: {
+    jobId: string;
+    productionBible: any;
+    characters: any[];
+    duration?: number;
+  }): Promise<any> => {
+    return apiCall('/director/generate-screenplay', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }, true);
+  },
+
+  buildImagePrompts: async (payload: {
+    jobId: string;
+    screenplay: any[];
+    characters: any[];
+    productionBible: any;
+  }): Promise<any> => {
+    return apiCall('/director/build-image-prompts', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }, true);
+  },
+
+  buildVideoPrompts: async (payload: {
+    jobId: string;
+    screenplay: any[];
+  }): Promise<any> => {
+    return apiCall('/director/build-video-prompts', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }, true);
+  },
+
+  generateStory: async (payload: {
+    jobId: string;
+    businessName?: string;
+    industry?: string;
+    brandSummary?: string;
+    targetAudience?: string;
+    brandTone?: string;
+    commercialObjective?: string;
+    duration?: number;
+    videoStyle?: string;
+    storyDirection?: string;
+  }): Promise<any> => {
+    return apiCall('/director/generate-story', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }, true);
+  },
+
+  editScene: async (payload: {
+    jobId: string;
+    sceneId: string;
+    userDirection: string;
+    currentScene: any;
+    productionBible: any;
+    characters: any[];
+  }): Promise<any> => {
+    return apiCall('/director/edit-scene', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }, true);
+  },
+
+  buildPromptsForScene: async (payload: {
+    jobId: string;
+    sceneId: string;
+    scene: any;
+    characters: any[];
+    productionBible: any;
+  }): Promise<any> => {
+    return apiCall('/director/build-prompts-for-scene', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }, true);
+  },
+
+  improvePrompt: async (payload: {
+    jobId: string;
+    sceneId: string;
+    scene: any;
+    promptType: 'image' | 'video';
+    existingPrompt: string;
+    userRequest: string;
+  }): Promise<any> => {
+    return apiCall('/director/improve-prompt', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }, true);
+  }
+};

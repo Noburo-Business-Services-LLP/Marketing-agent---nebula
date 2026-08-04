@@ -13,8 +13,16 @@ const { callGemini, parseGeminiJSON, generateCampaignImageNanoBanana, extractCha
 const { getPublicBaseUrl, normalizeTone, audioFilePathForTone } = require('../utils/toneAudio');
 const { generateVideoClip, generateCharacterImageFal, generateCharacterSheetFal, applyFaceSwapFal, extractFaceEmbedding } = require('./videoService');
 const { uploadVideoFile } = require('./imageUploader');
+const { updateDraft, STORAGE_ROOT } = require('./videoDraftStore');
+const promptBuilder = require('./promptBuilder');
+const {
+  generateSceneImageWithIdentityLock,
+  resolveCharacterMemoryForScene
+} = require('./sceneImageIdentityPipeline');
 
-const STORAGE_ROOT = path.resolve(__dirname, '../storage/ai-videos');
+function getCharacterConsistency() {
+  return require('./characterConsistency');
+}
 const VIDEO_TARGET = { width: 1080, height: 1920, fps: 30 };
 const VIDEO_ENCODE_PRESET = String(process.env.AI_VIDEO_ENCODE_PRESET || 'ultrafast');
 const VIDEO_ENCODE_CRF = String(process.env.AI_VIDEO_ENCODE_CRF || '23');
@@ -38,7 +46,7 @@ const MAX_SCENES = 10;
 const MIN_SCENES = 1;
 const DEFAULT_DURATION_SECONDS = 60;
 const SCENE_IMAGE_CONCURRENCY = Math.max(1, Number.parseInt(process.env.AI_VIDEO_SCENE_IMAGE_CONCURRENCY || '3', 10) || 3);
-const SCENE_CLIP_CONCURRENCY = Math.max(1, Number.parseInt(process.env.AI_VIDEO_SCENE_CLIP_CONCURRENCY || '1', 10) || 1);
+const SCENE_CLIP_CONCURRENCY = Math.max(1, Number.parseInt(process.env.AI_VIDEO_SCENE_CLIP_CONCURRENCY || '4', 10) || 4);
 const MEDIA_IO_CONCURRENCY = Math.max(1, Number.parseInt(process.env.AI_VIDEO_MEDIA_IO_CONCURRENCY || '4', 10) || 4);
 
 const fetchImpl = (() => {
@@ -388,11 +396,32 @@ function normalizeAudioOptions(raw = {}) {
     mode = enabled ? 'auto' : 'off';
   }
 
+  const priority = String(raw?.audioPriority || 'balanced').toLowerCase();
+  let voiceVolume = Number.isFinite(Number(raw?.voiceVolume)) ? Number(raw.voiceVolume) : undefined;
+  let musicVolume = Number.isFinite(Number(raw?.musicVolume)) ? Number(raw.musicVolume) : undefined;
+  let duckingFactor = 0.5;
+
+  if (priority === 'voice') {
+    if (voiceVolume === undefined) voiceVolume = 1.0;
+    if (musicVolume === undefined) musicVolume = 0.25;
+    duckingFactor = 0.3;
+  } else if (priority === 'music') {
+    if (voiceVolume === undefined) voiceVolume = 0.75;
+    if (musicVolume === undefined) musicVolume = 0.70;
+    duckingFactor = 0.6;
+  } else {
+    if (voiceVolume === undefined) voiceVolume = 0.90;
+    if (musicVolume === undefined) musicVolume = 0.45;
+    duckingFactor = 0.5;
+  }
+
   return {
     enabled: mode !== 'off',
     mode,
+    audioPriority: priority,
     languageCode: String(raw?.languageCode || 'en').toLowerCase(),
     tone: normalizeTone(raw?.tone) || 'professional',
+    brandTone: String(raw?.brandTone || raw?.brandVoice || raw?.tone || 'Professional').trim() || 'Professional',
     musicSource: ['tone', 'library'].includes(String(raw?.musicSource || '').toLowerCase())
       ? String(raw.musicSource).toLowerCase()
       : String(process.env.AI_VIDEO_MUSIC_SOURCE || 'library').toLowerCase(),
@@ -400,8 +429,9 @@ function normalizeAudioOptions(raw = {}) {
     voiceGender: ['male', 'female'].includes(String(raw?.voiceGender || '').toLowerCase())
       ? String(raw.voiceGender).toLowerCase()
       : 'female',
-    voiceVolume: Number.isFinite(Number(raw?.voiceVolume)) ? Number(raw.voiceVolume) : 1,
-    musicVolume: Number.isFinite(Number(raw?.musicVolume)) ? Number(raw.musicVolume) : 0.24,
+    voiceVolume,
+    musicVolume,
+    duckingFactor,
     fitVoiceToDuration: raw?.fitVoiceToDuration !== false,
     manualAudioData: typeof raw?.manualAudioData === 'string' ? raw.manualAudioData : '',
     manualAudioUrl: typeof raw?.manualAudioUrl === 'string' ? raw.manualAudioUrl.trim() : '',
@@ -527,7 +557,6 @@ function buildFallbackSceneSkeleton({
     cursor = endSec;
 
     const chunk = chunks[idx] || chunks[chunks.length - 1] || description;
-    const productLine = productName ? `Feature ${productName} naturally in the frame.` : 'Focus on a clear visual story.';
 
     return {
       index: idx + 1,
@@ -536,10 +565,18 @@ function buildFallbackSceneSkeleton({
       durationSeconds: duration,
       startSec,
       endSec,
-      imagePrompt: `${chunk}. ${productLine} Keep composition vertical 9:16 and premium.`,
-      videoPrompt: `${chunk}. Add subtle stable camera motion (slow push-in, pan, reveal). Keep details sharp and avoid warped objects, flicker, pixelation, and noisy artifacts.`,
-      voiceLine: chunk,
-      onScreenText: chunk.slice(0, 90)
+      imagePrompt: String(chunk || description).trim(),
+      videoPrompt: String(chunk || description).trim(),
+      voiceLine: String(chunk || '').trim(),
+      onScreenText: String(chunk || '').trim(),
+      purpose: 'Establish Scene',
+      emotion: 'Neutral',
+      camera: 'Wide shot',
+      lighting: 'Natural',
+      locationId: '',
+      characterIds: [],
+      wardrobeIds: [],
+      action: String(chunk || description).trim()
     };
   });
 }
@@ -605,16 +642,23 @@ function normalizeCreateInput(payload = {}, options = {}) {
     subtitles,
     characterEnabled: !!payload.characterEnabled,
     characterImage: String(payload.characterImage || '').trim(),
+    characterImageBase64: String(payload.characterImageBase64 || '').trim(),
+    originalCharacterImage: String(payload.originalCharacterImage || '').trim(),
     characterName: String(payload.characterName || '').trim(),
     characterAge: String(payload.characterAge || '').trim(),
     characterGender: String(payload.characterGender || '').trim(),
     characterRole: String(payload.characterRole || '').trim(),
     characterPersonality: String(payload.characterPersonality || '').trim(),
     characterAppearance: String(payload.characterAppearance || '').trim(),
+    characterRace: String(payload.characterRace || '').trim(),
+    characterBeard: String(payload.characterBeard || '').trim(),
+    characterArtStyle: String(payload.characterArtStyle || '').trim(),
     characterHairStyle: String(payload.characterHairStyle || '').trim(),
     characterHairColor: String(payload.characterHairColor || '').trim(),
     characterClothing: String(payload.characterClothing || '').trim(),
     videoStyle: String(payload.videoStyle || '').trim(),
+    location: String(payload.location || '').trim(),
+    useLogo: payload.useLogo !== false,
     preserveIdentity: payload.preserveIdentity !== false,
     characterUsage: String(payload.characterUsage || 'Main Character in all scenes').trim(),
     characterConsistencyStrength: String(payload.characterConsistencyStrength || 'Strict').trim()
@@ -635,6 +679,7 @@ function createJobContext({ baseUrl, providedJobId = null, input = {} }) {
   return {
     jobId,
     baseUrl: String(baseUrl || '').replace(/\/+$/, ''),
+    input,
     dirs
   };
 }
@@ -674,6 +719,9 @@ function resolveLocalGeneratedMediaPath(sourceUrl = '') {
 async function materializeSourceToFile({ source, destinationPath }) {
   const raw = String(source || '').trim();
   if (!raw) throw new Error('Missing source media');
+  if (!destinationPath || typeof destinationPath !== 'string') {
+    throw new Error('Invalid destination path');
+  }
 
   if (isDataUrl(raw)) {
     const parsed = parseDataUrl(raw);
@@ -731,81 +779,24 @@ async function generateScenesPlan({
     product
   });
 
-  let characterContext = '';
-  let extractedTraitsStr = '';
-  if (input.characterEnabled && input.characterImage) {
-    if (logger) logger("Extracting visual traits from character image...");
-    try {
-      const traits = await extractCharacterVisualTraits(input.characterImage);
-      if (traits) {
-        extractedTraitsStr = `\nEXTRACTED VISUAL TRAITS (MUST BE PRESERVED IN EVERY SCENE):\n- Hair Style: ${traits.hairStyle || 'N/A'}\n- Facial Hair: ${traits.facialHair || 'N/A'}\n- Clothing: ${traits.clothing || 'N/A'}\n- Ethnicity: ${traits.ethnicity || 'N/A'}\n- Age Appearance: ${traits.ageAppearance || 'N/A'}\n- Accessories: ${traits.accessories || 'none'}\n`;
-        if (logger) logger("Traits successfully extracted and injected.");
-      }
-    } catch (err) {
-      if (logger) logger(`Warning: Failed to extract character traits: ${err.message}`);
-    }
-  }
-  if (input.characterEnabled) {
-    const isStrict = input.characterConsistencyStrength === 'Strict';
-    const mainInAll = input.characterUsage === 'Main Character In All Scenes';
-
-    let strictRules = '';
-    if (isStrict) {
-      strictRules = `
-STRICT CHARACTER RULES:
-- Never change face.
-- Never change hairstyle.
-- Never change beard.
-- Never change age.
-- Never change body type.
-- Never generate another person.
-- Never remove the character from the scene.
-- Maintain identical identity in every scene.
-- Maintain identical identity in every generated image.
-- Maintain identical identity in every generated video clip.`;
-    }
-
-    let usageRules = `\n- Character Usage Strategy: ${input.characterUsage}`;
-    if (mainInAll) {
-      usageRules += `
-- The main character MUST appear visibly in every scene.
-- Do not create: product-only shots, abstract graphics, UI screens, empty environments.
-- The story must revolve around this character.`;
-    } else {
-      usageRules += '\n- IMPORTANT: Do not include the character in every scene. Mix character scenes with b-roll, establishing shots, and product closeups without people.';
-    }
-
-    characterContext = `
-MAIN CHARACTER DETAILS:
-- Name: ${input.characterName || 'N/A'}
-- Age: ${input.characterAge || 'N/A'}
-- Gender: ${input.characterGender || 'N/A'}
-- Role: ${input.characterRole || 'N/A'}
-- Personality: ${input.characterPersonality || 'N/A'}
-- Appearance: ${input.characterAppearance || 'N/A'}
-- Hair Style: ${input.characterHairStyle || 'N/A'}
-- Hair Color: ${input.characterHairColor || 'N/A'}
-- Clothing: ${input.characterClothing || 'N/A'}
-- Reference Image Provided: ${input.characterImage ? 'Yes' : 'No'}
-${extractedTraitsStr}
-CRITICAL CHARACTER RULES:
-- Use the exact same character identity across all scenes.
-- Preserve exact identity.
-- Maintain identical face structure, eyes, nose, hairstyle, skin tone, and body type.
-- Do not generate different people in different scenes.
-- If a reference image is provided, preserve facial identity exactly.
-- Clothing and environment may change but the character identity must remain unchanged.
-${strictRules}
-${usageRules}`;
-  }
-  
-  let videoStyleContext = '';
+  let characterContext = `
+  CASTING & CHARACTER RULES:
+  - Generate a full CAST of characters required for this story (e.g. Bride, Mother, Father, Salesman, Hero, Villain, etc.).
+  - Do NOT restrict yourself to a single character unless the story explicitly calls for only one person.
+  - In the characterBible, define each character's appearance, role, and ID.
+  - In the scenes array, use the \`characterIds\` array to explicitly state which characters appear in that specific scene.
+  - Maintain identical identities for characters across scenes.
+  `;
+    let videoStyleContext = '';
   if (input.videoStyle) {
     videoStyleContext = `\nVideo Style: ${input.videoStyle}`;
     if (input.videoStyle === 'Storytelling') {
       videoStyleContext += `
 - The storyboard must follow a story progression: Beginning, Challenge, Learning, Growth, Achievement, Success.
 - The same character must appear throughout the story.`;
+    } else if (input.videoStyle === 'Ads') {
+      videoStyleContext += `
+- The storyboard must focus entirely on grabbing attention, clear value proposition, and a strong call to action in a fast-paced format.`;
     } else if (input.videoStyle === 'Cinematic Commercial') {
       videoStyleContext += `
 - Use: cinematic camera movement, premium lighting, shallow depth of field, commercial composition, smooth transitions.`;
@@ -815,31 +806,108 @@ ${usageRules}`;
     }
   }
 
-  const systemPrompt = `You are a storyboard planner for short vertical AI videos.${videoStyleContext}${characterContext}
-Return strict JSON with this schema:
+  const systemPrompt = `You are a MASTER AI CREATIVE DIRECTOR producing a "Production Bible" and Cinematic Screenplay for a highly professional ad campaign.${videoStyleContext}${characterContext}
+
+Your responsibility is to convert the user's simple business idea into a deeply structured PRODUCTION BIBLE and a compelling STORY driven by human emotion and cinematic flow. Do NOT generate generic "professional settings" or "content delivery" scenes. A real commercial starts with a story arc.
+
+Return strict JSON with this exact schema:
 {
   "globalVisualStyle": "string",
   "thumbnailPrompt": "string",
   "voiceScript": "string",
+  "productionBible": {
+    "voiceoverStyle": "string (e.g. FIRST_PERSON, THIRD_PERSON, BRAND_NARRATOR, DIALOGUE, POETIC)",
+    "characterBible": [
+      {
+        "characterId": "CH_001",
+        "name": "string",
+        "appearance": {
+          "faceShape": "string",
+          "forehead": "string",
+          "eyebrows": "string",
+          "eyes": "string",
+          "nose": "string",
+          "lips": "string",
+          "jawline": "string",
+          "cheekbones": "string",
+          "skinTexture": "string",
+          "skinTone": "string"
+        },
+        "hair": {
+          "style": "string",
+          "length": "string",
+          "flowers": "string",
+          "parting": "string"
+        }
+      }
+    ],
+    "wardrobeBible": [
+      {
+        "wardrobeId": "WD_001",
+        "type": "string",
+        "primaryColor": "string",
+        "secondaryColor": "string",
+        "border": { "width": "string", "design": "string" },
+        "pallu": { "style": "string" },
+        "bodyPattern": "string",
+        "fabric": "string",
+        "blouse": { "color": "string", "sleeves": "string" },
+        "continuityRule": "string"
+      }
+    ],
+    "locationBible": [
+      {
+        "locationId": "LOC_001",
+        "name": "string",
+        "summary": "string",
+        "architecture": "string (Highly detailed flooring, walls, pillars, furniture)",
+        "lighting": "string (Time of day, light sources)",
+        "colors": ["string"],
+        "restrictions": ["string (e.g. No modern furniture, no electronics)"]
+      }
+    ]
+  },
   "scenes": [
     {
-      "title": "string",
-      "imagePrompt": "string",
-      "videoPrompt": "string",
+      "scene": "number (e.g. 1)",
+      "title": "string (e.g. Morning Memories)",
+      "purpose": "string",
+      "locationId": "string (Must reference locationBible)",
+      "characterIds": ["string (Must reference characterBible)"],
+      "wardrobeIds": ["string (Must reference wardrobeBible)"],
+      "emotion": "string (e.g. Nostalgia)",
+      "camera": "string (e.g. Wide Establishing Shot, Slow Dolly)",
+      "lighting": "string (e.g. Golden Morning, Warm cinematic)",
+      "duration": "number",
+      "action": "string (Detailed action, e.g. Mother opens an old wooden trunk...)",
       "voiceLine": "string",
-      "onScreenText": "string"
+      "onScreenText": "string",
+      "imagePrompt": "string (A highly detailed Midjourney-style image prompt describing the still visual, lighting, character, and composition)",
+      "videoPrompt": "string (A detailed RunwayML/Kling-style motion prompt describing the exact camera movement, subject action, and physics)"
     }
   ]
 }
 
 Rules:
-- Priority Order (Highest to Lowest): Character Identity Rules, Character Reference Image, Character Usage Rules, Video Style Rules, User Description, Product Information, AI Creativity. Never violate a higher priority rule to satisfy a lower priority rule.
-- Output between ${MIN_SCENES} and ${MAX_SCENES} scenes.
-- You MUST return exactly ${sceneCount} scenes.
-- Keep all scene prompts visually consistent.
-- Every scene must be suitable for 9:16 vertical video.
-- "voiceScript" must be a coherent narration for the full video.
-- Keep on-screen text short and clear.
+- Priority Order (Highest to Lowest): Character Identity Rules, Character Usage Rules, Video Style Rules, User Description, Product Information, AI Creativity.
+- Output between ${MIN_SCENES} and ${MAX_SCENES} scenes. You MUST return exactly ${sceneCount} scenes.
+- Think like a Hollywood Director: EVERY scene must have a clear purpose, a specific location, an emotional core, and cinematic camera/lighting instructions.
+- Avoid generic filler scenes like "woman sitting at a desk looking at a tablet" unless the product is a software tool. If the product is a luxury saree, show the tradition, the fabric, the draping, the wedding hall.
+- "action" must clearly describe what is happening in the scene.
+
+VOICEOVER RULES:
+- Choose an appropriate "voiceoverStyle" (e.g., FIRST_PERSON, THIRD_PERSON, BRAND_NARRATOR). For emotional/bridal ads, default to FIRST_PERSON.
+- Never mention scene numbers.
+- Never output "(Scene 1)", "(Scene 2)", etc.
+- Never describe the screenplay.
+- Never say "Here is [Character Name]..."
+- Never introduce the character to the audience.
+- If First Person mode is applicable, the main character speaks in her own voice.
+- Write natural spoken words, not literary narration.
+- Keep the flow continuous across the entire advertisement.
+- The voiceover should feel like genuine emotions rather than explaining what the viewer is seeing.
+- End with a short brand tagline and call-to-action.
+
 - Do not include markdown.`;
 
   const userPrompt = [
@@ -848,6 +916,20 @@ Rules:
     `Preferred scene count: ${sceneCount}`,
     input.styleHint ? `Style hint: ${input.styleHint}` : '',
     input.voiceHint ? `Voice hint: ${input.voiceHint}` : '',
+    input.location ? `Location setting requirement: ${input.location}` : '',
+    input.characterEnabled ? `Character identity enabled: yes` : '',
+    input.characterName ? `Main character name: ${input.characterName}` : '',
+    input.characterRole ? `Main character role: ${input.characterRole}` : '',
+    input.characterAge ? `Main character age: ${input.characterAge}` : '',
+    input.characterGender ? `Main character gender: ${input.characterGender}` : '',
+    input.characterRace ? `Main character race/ethnicity: ${input.characterRace}` : '',
+    input.characterBeard ? `Main character beard/facial hair: ${input.characterBeard}` : '',
+    input.characterHairStyle ? `Main character hair style: ${input.characterHairStyle}` : '',
+    input.characterAppearance ? `Main character appearance/clothing: ${input.characterAppearance}` : '',
+    input.characterPersonality ? `Main character personality: ${input.characterPersonality}` : '',
+    input.characterEnabled && input.preserveIdentity !== false ? 'Identity rule: preserve the same character identity across all scenes.' : '',
+    input.characterUsage ? `Character usage rule: ${input.characterUsage}` : '',
+    input.characterConsistencyStrength ? `Character consistency strength: ${input.characterConsistencyStrength}` : '',
     product?.name ? `Product name: ${product.name}` : '',
     product?.description ? `Product description: ${product.description}` : '',
     profile?.name ? `Brand: ${profile.name}` : '',
@@ -867,12 +949,13 @@ Rules:
         const result = await callGemini(callPrompt, {
           skipCache: true,
           temperature: 0.65,
-          maxTokens: 2500,
+          maxTokens: 8192,
           timeout: 120000
         });
         
         // Validation Layer
-        if (input.characterEnabled && input.characterUsage === 'Main Character In All Scenes') {
+        const mainCharacterEveryScene = String(input.characterUsage || '').toLowerCase() === 'main character in all scenes';
+        if (input.characterEnabled && mainCharacterEveryScene) {
           const parsed = parseGeminiJSON(result);
           const scenes = Array.isArray(parsed?.scenes) ? parsed.scenes : [];
           const charRef = (input.characterName || '').toLowerCase();
@@ -915,8 +998,14 @@ Rules:
         durationSeconds: duration,
         startSec,
         endSec,
-        imagePrompt: String(source?.imagePrompt || fallbackScenes[index]?.imagePrompt || input.description).trim(),
-        videoPrompt: String(source?.videoPrompt || fallbackScenes[index]?.videoPrompt || input.description).trim(),
+        purpose: String(source?.purpose || '').trim(),
+        locationId: String(source?.locationId || '').trim(),
+        characterIds: Array.isArray(source?.characterIds) ? source.characterIds : [],
+        wardrobeIds: Array.isArray(source?.wardrobeIds) ? source.wardrobeIds : [],
+        emotion: String(source?.emotion || '').trim(),
+        camera: String(source?.camera || '').trim(),
+        lighting: String(source?.lighting || '').trim(),
+        action: String(source?.action || '').trim(),
         voiceLine: String(source?.voiceLine || source?.onScreenText || fallbackScenes[index]?.voiceLine || '').trim(),
         onScreenText: String(source?.onScreenText || source?.voiceLine || '').trim()
       };
@@ -935,6 +1024,7 @@ Rules:
       globalVisualStyle,
       thumbnailPrompt,
       voiceScript,
+      productionBible: parsed?.productionBible || null,
       scenes: normalizedScenes
     };
   } catch (error) {
@@ -999,6 +1089,8 @@ async function generateSceneImages({
   ).trim();
 
   let characterSheet = input.characterSheet || null;
+  let characterMemory = null;
+  const characterConsistency = () => getCharacterConsistency();
   
   if (input.characterEnabled && input.characterImage && input.characterConsistencyStrength === 'Strict') {
     if (!characterSheet && context.jobId) {
@@ -1010,13 +1102,14 @@ async function generateSceneImages({
            characterSheet = await generateCharacterSheetFal(input.characterImage);
            if (draft) {
                draft.characterSheet = characterSheet;
-               // Wait for save below
            }
        }
        
        if (draft && !draft.characterFaceEmbedding) {
            if (logger) logger("Extracting formal Face Embedding vector for identity lock...");
-           draft.characterFaceEmbedding = await extractFaceEmbedding(input.characterImage);
+           const embedding = await extractFaceEmbedding(input.characterImage);
+           draft.characterFaceEmbedding = embedding;
+           characterMemory = await characterConsistency().createCharacterMemory(draft._id, { path: input.characterImage, metadata: { ...draft.characterSheet, characterId: draft._id } });
        }
        
        if (draft) {
@@ -1034,8 +1127,7 @@ async function generateSceneImages({
       const localPath = path.join(context.dirs.images, fileName);
       const mediaUrl = buildMediaUrl(context.baseUrl, context.jobId, ['images', fileName]);
 
-      // Cache guard: Check if the scene image is ALREADY generated in a prior attempt and exists!
-      if (scene.imageUrl && scene.imageUrl.startsWith('http') && fs.existsSync(localPath)) {
+      if (!input.bypassCache && scene.imageUrl && scene.imageUrl.startsWith('http') && fs.existsSync(localPath)) {
         if (logger) logger(`Reusing existing generated image for scene ${scene.sceneId}`);
         const reusedScene = {
           ...scene,
@@ -1048,8 +1140,7 @@ async function generateSceneImages({
         continue;
       }
 
-      // First scene can use uploaded image or product image directly.
-      const canUseReferenceDirectly = index === 0 && referenceImage?.localPath;
+      const canUseReferenceDirectly = index === 0 && referenceImage?.localPath && !scene.imagePrompt;
 
       if (canUseReferenceDirectly) {
       await fs.promises.copyFile(referenceImage.localPath, localPath);
@@ -1063,163 +1154,144 @@ async function generateSceneImages({
         continue;
       }
 
-    let characterImageContext = '';
-    if (input.characterEnabled && input.preserveIdentity !== false) {
-      const isStrict = input.characterConsistencyStrength === 'Strict';
-      
-      const demographics = [
-        input.characterRace ? `${input.characterRace} ethnicity` : '',
-        input.characterAge ? `${input.characterAge} years old` : '',
-        input.characterGender ? input.characterGender : '',
-        input.characterBeard && input.characterBeard !== 'Clean Shaven (No Beard)' ? `with ${input.characterBeard}` : (input.characterBeard === 'Clean Shaven (No Beard)' ? 'completely clean shaven, absolutely no facial hair' : '')
-      ].filter(Boolean).join(', ');
+    const charactersList = Array.isArray(input.characters) ? input.characters : (Array.isArray(plan?.characters) ? plan.characters : []);
+    let sceneCharacterImage = input.characterImageBase64 || input.characterImage || input.originalCharacterImage;
 
-      const demographicString = demographics ? `The character is a ${demographics}.` : '';
-
-      if (isStrict) {
-        characterImageContext = `CRITICAL INSTRUCTION: You MUST exactly recreate the face and identity of the person in the reference image. ${demographicString} DO NOT change their facial structure, skin tone, or demographic. DO NOT hallucinate a different person. Match the reference image 100%. Keep same hairstyle. Maintain same age.`;
-      } else {
-        characterImageContext = `Maintain general character identity across scenes based on the reference image. ${demographicString}`;
+    if (charactersList.length > 0) {
+      const sceneText = `${scene.title || ''} ${scene.action || ''} ${scene.imagePrompt || ''}`.toLowerCase();
+      const matched = charactersList.find(c => c.name && sceneText.includes(String(c.name).toLowerCase()));
+      if (matched && (matched.imageUrl || matched.image)) {
+        sceneCharacterImage = matched.imageUrl || matched.image;
       }
     }
 
+    let characterImageContext = '';
+    
+    if (input.characterEnabled && input.preserveIdentity !== false) {
+      if (!sceneCharacterImage) {
+        const isStrict = input.characterConsistencyStrength === 'Strict';
+        
+        const demographics = [
+          input.characterRace ? `${input.characterRace} ethnicity` : '',
+          input.characterAge ? `${input.characterAge} years old` : '',
+          input.characterGender ? input.characterGender : '',
+          input.characterHairStyle ? `with ${input.characterHairStyle} hair` : '',
+          input.characterAppearance ? `wearing ${input.characterAppearance}` : '',
+          input.characterBeard && input.characterBeard !== 'Clean Shaven (No Beard)' ? `with ${input.characterBeard}` : (input.characterBeard === 'Clean Shaven (No Beard)' ? 'completely clean shaven, absolutely no facial hair' : '')
+        ].filter(Boolean).join(', ');
+
+        const demographicString = demographics ? `The character is a ${demographics}.` : '';
+
+        if (isStrict) {
+          characterImageContext = `CRITICAL INSTRUCTION: You MUST exactly recreate the face and identity of the person in the reference image. ${demographicString} DO NOT change their facial structure, skin tone, or demographic. DO NOT hallucinate a different person. Match the reference image 100%. Keep same hairstyle. Maintain same age.`;
+        } else {
+          characterImageContext = `Maintain general character identity across scenes based on the reference image. ${demographicString}`;
+        }
+      } else {
+        characterImageContext = '';
+      }
+    }
+
+    let builtImagePrompt = promptBuilder.buildSceneImagePrompt(scene, plan);
+    let builtNegativePrompt = promptBuilder.buildSceneNegativePrompt(scene, plan);
+
+    let characterHeader = 'No character reference';
+    if (charactersList.length > 0) {
+      const sceneText = `${scene.title || ''} ${scene.action || ''} ${scene.imagePrompt || ''}`.toLowerCase();
+      const matched = charactersList.find(c => c.name && sceneText.includes(String(c.name).toLowerCase()));
+      if (matched) {
+        characterHeader = `${matched.name} (Reference Image)`;
+      }
+    }
+
+    const compositionRules = `
+CRITICAL COMPOSITION RULES
+- Generate EXACTLY ONE cinematic frame.
+- This image represents ONLY ONE scene.
+- One clear main subject only.
+- One outfit, one pose, one facial expression.
+- Do NOT create multiple frames.
+- Do NOT create a storyboard.
+- Do NOT create a collage.
+- Do NOT split the image.
+- Do NOT create top and bottom layouts.
+- Do NOT create left and right layouts.
+- Do NOT create multiple camera angles.
+- Do NOT create comic panels.
+- Do NOT create contact sheets.
+- Do NOT show before/after.
+- Do NOT show sequences.
+- Do NOT include duplicate people, alternate poses, multiple people, family, or crowd.
+- Only ONE camera.
+- Only ONE moment.
+- Only ONE composition.
+- The entire 9:16 canvas must be occupied by a single cinematic shot.
+- The output must look like a frame captured from a Hollywood commercial.
+- No text.
+- No borders.
+- No panels.
+- No grids.
+- No split screen.
+- No montage.
+`.trim();
+
     const promptWithConsistency = [
-      characterImageContext,
-      scene.imagePrompt,
-      `Consistency style: ${plan.globalVisualStyle}`,
-      input.preserveIdentity !== false ? 'Keep same lead subject identity, lighting logic, and palette continuity with earlier scenes.' : ''
+      `Character Reference:\n${characterHeader}`,
+      `Scene Story:\n${scene.action || 'No action specified'}`,
+      `Scene Image Prompt:\n${builtImagePrompt}`,
+      characterImageContext ? `Identity Instruction:\n${characterImageContext}` : '',
+      builtNegativePrompt ? `STRICT NEGATIVE CONSTRAINTS (AVOID THESE):\n${builtNegativePrompt}` : '',
+      `Consistency style:\n${plan.globalVisualStyle}`,
+      input.preserveIdentity !== false && !sceneCharacterImage ? 'Keep same lead subject identity, lighting logic, and palette continuity with earlier scenes.' : '',
+      compositionRules
     ].filter(Boolean).join('\n\n');
 
-      const imageResult = await runWithRetries(
-        `image generation for ${scene.sceneId}`,
-        async () => {
-          if (logger) {
-            console.log("Scene:", index + 1);
-            console.log("Character Image Present:", !!input.characterImageBase64);
-            console.log("Canonical Character Present:", !!input.characterImage);
-            console.log("Previous Scene Present:", !!previousSceneImageUrl);
-            console.log("Product Image Present:", !!consistencyReference);
-          }
+    const sceneMemory = await resolveCharacterMemoryForScene({
+      draft: {
+        characters: charactersList,
+        characterImage: sceneCharacterImage || input.characterImage,
+        characterId: input.characterId
+      },
+      scene,
+      jobId: context.jobId
+    }) || characterMemory;
 
-          if (input.characterImageBase64) {
-            if (logger) console.log("Using gemini-3.1-flash-image for character consistency...");
-            
-            // Extract base64 properly
-            let base64Data = input.characterImageBase64;
-            let mimeType = 'image/jpeg';
-            if (base64Data.startsWith('data:')) {
-              const matches = base64Data.match(/^data:(.+);base64,(.*)$/);
-              if (matches && matches.length === 3) {
-                mimeType = matches[1];
-                base64Data = matches[2];
-              }
-            }
-
-            const fixedSeed = context.jobId ? Math.abs(context.jobId.split('').reduce((hash, char) => ((hash << 5) - hash) + char.charCodeAt(0), 0)) % 100000 : 42;
-            
-            let cleanBase64 = input.characterImageBase64;
-            if (cleanBase64.includes('data:image')) {
-              cleanBase64 = cleanBase64.split(',')[1];
-            }
-
-            console.log('\n🎭 ==================== CHARACTER CONSISTENCY (NANO BANANA) ====================');
-            console.log(`📸 Character: ${input.characterName || 'Unknown'}`);
-            console.log(`🎬 Scene: ${promptWithConsistency}`);
-            console.log(`🎨 Style: ${input.videoStyle || 'Cinematic'}`);
-            console.log(`🔧 API: Gemini Nano Banana`);
-            console.log('=========================================================================\n');
-            
-            const imageData = `data:image/jpeg;base64,${cleanBase64}`;
-
-            const nanoResult = await generateCampaignImageNanoBanana(promptWithConsistency, {
-              aspectRatio: '16:9', // default for video
-              characterReferenceImage: imageData,
-              isCinematic: true,
-              brandName: input.useLogo !== false ? String(profile.name || '') : undefined,
-              industry: input.useLogo !== false ? String(profile.industry || '') : undefined,
-              tone: input.useLogo !== false ? String(profile.brandVoice || 'professional') : undefined,
-            });
-            
-            if (nanoResult && (nanoResult.imageUrl || typeof nanoResult === 'string')) {
-                return typeof nanoResult === 'string' ? nanoResult : nanoResult.imageUrl;
-            } else {
-                throw new Error('Nano Banana returned no image');
-            }
-          }
-
-          // Fallback to NanoBanana if no character image is provided
-          const result = await generateCampaignImageNanoBanana(promptWithConsistency, {
-            aspectRatio: '9:16',
-            brandName: input.useLogo !== false ? String(profile.name || '') : undefined,
-            industry: input.useLogo !== false ? String(profile.industry || '') : undefined,
-            tone: input.useLogo !== false ? String(profile.brandVoice || 'professional') : undefined,
-            originalCharacterImage: input.characterEnabled ? input.originalCharacterImage : undefined,
-            characterReferenceImage: (input.characterEnabled && input.characterImage) ? input.characterImage : undefined,
-            previousSceneImage: previousSceneImageUrl || undefined,
-            productReferenceImage: (!(input.characterEnabled && input.characterImage) && consistencyReference) ? consistencyReference : undefined,
-            linkedProduct: product ? {
-              name: product.name,
-              description: product.description,
-              imageUrl: product.imageUrl
-            } : null,
-            preserveCharacterIdentity: input.preserveIdentity !== false,
-            characterSource: input.originalCharacterImage ? 'upload' : 'system',
-            consistencyStrength: 'strict'
-          });
-          if (!result?.success || !result?.imageUrl) {
-            throw new Error(result?.error || 'AI image generation failed');
-          }
-          return result.imageUrl;
-        },
-        2,
-        logger
-      );
-
-      let finalImageUrl = imageResult;
-
-      if (input.characterEnabled && input.characterImage && input.preserveIdentity !== false) {
-        if (logger) {
-          logger(`Executing Face Swap post-processing for scene ${scene.sceneId}...`);
-          console.log("Starting FaceSwap for Scene", index + 1);
-          console.log("Source Face:", input.originalCharacterImage ? "present" : "missing");
-          console.log("Target Scene:", imageResult);
-        }
-        const faceSwapTarget = input.originalCharacterImage || input.characterImage;
-        finalImageUrl = await applyFaceSwapFal(imageResult, faceSwapTarget);
-        
-        if (logger) {
-          console.log("FaceSwap Result:", finalImageUrl ? "success" : "failed");
-        }
+    const identityResult = await generateSceneImageWithIdentityLock({
+      scene,
+      prompt: promptWithConsistency,
+      rawPrompt: true,
+      characterMemory: sceneMemory,
+      jobId: context.jobId,
+      sceneId: scene.sceneId,
+      localOutputPath: localPath,
+      plan,
+      identityInstruction: characterImageContext,
+      logger,
+      brandContext: {
+        brandName: input.useLogo === true ? String(profile.name || '') : undefined,
+        industry: input.useLogo === true ? String(profile.industry || '') : undefined,
+        tone: input.useLogo === true ? String(profile.brandVoice || 'professional') : undefined
       }
+    });
 
-      if (logger) {
-        console.log("Saving Final Scene Image:", finalImageUrl);
+    const finishedScene = {
+      ...scene,
+      imageUrl: mediaUrl,
+      imagePath: localPath,
+      imageSource: 'ai_generated',
+      identityLock: {
+        similarity: identityResult.similarity,
+        attempts: identityResult.attempts,
+        faceSwapApplied: identityResult.faceSwapApplied,
+        enhanced: identityResult.enhanced,
+        identityConditioned: identityResult.identityConditioned,
+        generationEngine: identityResult.generationEngine,
+        characterMemoryId: identityResult.characterMemoryId
       }
-      await materializeSourceToFile({
-        source: finalImageUrl,
-        destinationPath: localPath
-      });
-
-      if (logger) {
-        console.log("Final Pipeline Summary");
-        console.log(JSON.stringify({
-          geminiReferenceImageAttached: !!input.characterImage || !!input.originalCharacterImage,
-          pulidExecuted: false,
-          faceSwapExecuted: !!(input.characterEnabled && input.characterImage && input.preserveIdentity !== false),
-          faceSwapSucceeded: finalImageUrl !== imageResult,
-          finalOutputUrl: finalImageUrl
-        }, null, 2));
-      }
-
-      const finishedScene = {
-        ...scene,
-        imageUrl: mediaUrl,
-        imagePath: localPath,
-        imageSource: 'ai_generated'
-      };
+    };
       
       outputScenes.push(finishedScene);
-      previousSceneImageUrl = finalImageUrl;
+      previousSceneImageUrl = identityResult.imageSource || mediaUrl;
     }
 
   return outputScenes;
@@ -1304,7 +1376,11 @@ async function generateSceneClips({
     const clipUrl = buildMediaUrl(context.baseUrl, context.jobId, ['clips', clipName]);
 
     // Cache guard 0 (BEST): Cloudinary URL already saved from prior run → reuse for free, no download needed
-    const savedCloudUrl = String(scene.clipCloudUrl || '').trim();
+    const clipUrlValue = String(scene.clipUrl || '').trim();
+    const savedCloudUrl = String(
+      scene.clipCloudUrl ||
+      (clipUrlValue && !clipUrlValue.includes('/generated-media/') ? clipUrlValue : '')
+    ).trim();
     if (savedCloudUrl && savedCloudUrl.startsWith('http')) {
       if (logger) logger(`Reusing Cloudinary-backed clip for ${scene.sceneId} (no regen, no download)`);
       const enriched = {
@@ -1316,6 +1392,7 @@ async function generateSceneClips({
       if (typeof onSceneDone === 'function') {
         onSceneDone(index, scenes.length, enriched);
       }
+      await persistPartialSceneClip({ context, enrichedScene: enriched, logger });
       return enriched;
     }
 
@@ -1334,6 +1411,7 @@ async function generateSceneClips({
       if (typeof onSceneDone === 'function') {
         onSceneDone(index, scenes.length, enriched);
       }
+      await persistPartialSceneClip({ context, enrichedScene: enriched, logger });
       return enriched;
     }
 
@@ -1363,6 +1441,7 @@ async function generateSceneClips({
           if (typeof onSceneDone === 'function') {
             onSceneDone(index, scenes.length, enriched);
           }
+          await persistPartialSceneClip({ context, enrichedScene: enriched, logger });
           return enriched;
         }
       } catch (rehydrateErr) {
@@ -1374,7 +1453,10 @@ async function generateSceneClips({
     let enriched;
     try {
       if (context.input?.characterEnabled || context.input?.videoStyle) {
-        scene.videoPrompt = `${scene.videoPrompt}. ${context.input.videoStyle ? `Cinematic Style: ${context.input.videoStyle}.` : ''} ${context.input.characterEnabled ? 'Maintain exact facial identity. Preserve character appearance. Do not generate a different person. Animate naturally while preserving identity.' : ''}`;
+        let builtVideoPrompt = promptBuilder.buildSceneVideoPrompt(scene, context.plan);
+        scene.videoPrompt = `${builtVideoPrompt}. ${context.input.videoStyle ? `Cinematic Style: ${context.input.videoStyle}.` : ''} ${context.input.characterEnabled ? 'Maintain exact facial identity. Preserve character appearance. Do not generate a different person. Animate naturally while preserving identity.' : ''}`;
+      } else {
+        scene.videoPrompt = promptBuilder.buildSceneVideoPrompt(scene, context.plan);
       }
       
       console.log(`[${new Date().toISOString()}] [Job ID: ${context.jobId}] STEP 4: Fal.ai render started for scene ${scene.sceneId}`);
@@ -1397,7 +1479,19 @@ async function generateSceneClips({
         clipPath,
         clipUrl: cloudUrl || clipUrl,
         clipCloudUrl: cloudUrl || null,
-        falVideoUrl: falScene.video_url
+        falVideoUrl: falScene.video_url,
+        videoMetadata: {
+          draftId: context.jobId,
+          sceneId: scene.sceneId || scene.index,
+          videoUrl: cloudUrl || falScene.video_url,
+          provider: 'Fal.ai',
+          model: falScene.fal?.model || process.env.FAL_IMAGE_TO_VIDEO_MODEL || 'fal-ai/kling-video/v1/standard/image-to-video',
+          duration: scene.durationSeconds || 6,
+          resolution: process.env.FAL_VIDEO_RESOLUTION || '1080p',
+          aspectRatio: '9:16',
+          generatedAt: new Date().toISOString(),
+          workflowVersion: '2.0'
+        }
       };
     } catch (error) {
       const isFallbackAllowed = process.env.NODE_ENV === 'development' || 
@@ -1442,13 +1536,15 @@ async function generateSceneClips({
     if (typeof onSceneDone === 'function') {
       onSceneDone(index, scenes.length, enriched);
     }
+    await persistPartialSceneClip({ context, enrichedScene: enriched, logger });
 
     return enriched;
   });
 }
 
 function buildConcatListContent(paths = []) {
-  return paths
+  return (Array.isArray(paths) ? paths : [])
+    .filter((p) => Boolean(p && typeof p === 'string'))
     .map((clipPath) => `file '${String(path.resolve(clipPath)).replace(/\\/g, '/').replace(/'/g, "'\\''")}'`)
     .join('\n');
 }
@@ -1607,6 +1703,10 @@ function targetScriptName(code = 'en') {
   return scripts[toTtsLanguageCode(code)] || scripts.en;
 }
 
+function selectedVoiceGenderLabel(voiceGender = 'female') {
+  return String(voiceGender || '').toLowerCase() === 'male' ? 'Male' : 'Female';
+}
+
 function wordCount(text = '') {
   const clean = String(text || '').replace(/\s+/g, ' ').trim();
   if (!clean) return 0;
@@ -1717,11 +1817,12 @@ async function translateScriptDurationAware({
   targetDurationSeconds,
   languageCode,
   voiceGender = 'female',
+  brandTone = 'Professional',
   logger = null
 }) {
   const source = String(sourceText || '').replace(/\s+/g, ' ').trim();
   const lang = toTtsLanguageCode(languageCode);
-  if (!source || lang === 'en') {
+  if (!source) {
     return { fullScript: source, scenes: normalizeSceneTimingForTranslation(sceneData, targetDurationSeconds) };
   }
 
@@ -1733,7 +1834,7 @@ async function translateScriptDurationAware({
 
   const sceneBrief = scenes.length
     ? scenes.map((s) => {
-        const line = s.voiceLine ? `EN: ${s.voiceLine}` : '';
+        const line = s.voiceLine ? `Source: ${s.voiceLine}` : '';
         return [
           `Scene ${s.index} (${s.startSec}s-${s.endSec}s, ${s.durationSeconds}s)`,
           line
@@ -1741,68 +1842,54 @@ async function translateScriptDurationAware({
       }).join('\n\n')
     : '';
 
-  const prompt = `You translate cinematic short-video voiceovers WITHOUT summarizing.
+  const systemInstruction = `You are an expert multilingual AI voice script generator for cinematic marketing videos.
 
-Target language: ${language}
-Target script: ${script}
-Target total duration: ${safeDuration} seconds
-Target word count (approx): ${range.target} words (acceptable ${range.min}-${range.max})
-Voice style: ${String(voiceGender || 'female').toLowerCase() === 'male' ? 'deep, confident, cinematic' : 'warm, expressive, cinematic'}
+Generate the narration ONLY in the language selected by the user (English, Tamil, Telugu, Malayalam, Kannada, or Hindi). Never mix languages unless explicitly requested.
 
-Hard rules:
-- DO NOT summarize or shorten. Preserve ALL details, emotion, pacing, and CTA impact.
-- Keep the same storytelling structure and sentence richness.
-- Keep brand names, product names, prices, URLs, and technical terms unchanged when needed.
-- Return ONLY strict JSON. No markdown.
-- Output must be mostly in ${language} (avoid English filler).
-- Preserve natural pauses: use short sentences where appropriate (do not make it robotic).
-- Match scene timing: each scene narration must comfortably fill its scene duration.
+Rules:
+- Use ONLY the selected language.
+- Select a native voice and pronunciation for the chosen language.
+- Match the selected voice gender.
+- Generate the script to fit the requested video duration exactly using an average speaking speed appropriate for the selected language.
+- Never generate a script that is shorter or longer than the target duration.
+- Preserve the brand tone, emotion, and marketing intent.
+- Do not translate into another language or insert English words unless they are brand names or explicitly provided.
+- Return only the narration script.`;
 
-Return JSON exactly in this schema:
-{
-  "fullScript": "string",
-  "scenes": [
-    { "sceneId": "scene_1", "voiceLine": "string" }
-  ]
-}
+  const prompt = `Input:
+Language: ${language}
+Voice Gender: ${selectedVoiceGenderLabel(voiceGender)}
+Video Duration: ${safeDuration} seconds
+Brand Tone: ${String(brandTone || 'Professional').trim() || 'Professional'}
+Target Script: ${script}
+Target Word Count: approximately ${range.target} words (acceptable ${range.min}-${range.max}) based on ${language} speaking speed.
 
-English full voiceover:
+Source marketing intent and draft narration:
 ${source}
 
-Scene timing (English per scene when available):
-${sceneBrief || '(no per-scene lines provided; still keep full-length pacing)'}\n`;
+Scene timing context:
+${sceneBrief || '(no per-scene lines provided; still fit the total duration)'}
+
+Generate the final narration only in ${language}.`;
 
   const localized = await callGemini(prompt, {
+    systemInstruction,
     skipCache: true,
     temperature: 0.4,
     maxTokens: 2000,
     timeout: 90000
   });
 
-  let parsed;
-  try {
-    parsed = parseGeminiJSON(localized);
-  } catch (error) {
-    if (logger) logger(`Translation JSON parse failed for ${language}: ${error.message || error}`);
-    return { fullScript: source, scenes };
-  }
-
-  const fullScript = String(parsed?.fullScript || '').replace(/\s+/g, ' ').trim();
-  const outScenesRaw = Array.isArray(parsed?.scenes) ? parsed.scenes : [];
-  const byId = new Map(outScenesRaw
-    .map((s) => ({ sceneId: String(s?.sceneId || '').trim(), voiceLine: String(s?.voiceLine || '').trim() }))
-    .filter((s) => s.sceneId && s.voiceLine));
-
-  const mergedScenes = scenes.length
-    ? scenes.map((s) => ({
-        ...s,
-        voiceLine: byId.get(s.sceneId)?.voiceLine || s.voiceLine
-      }))
-    : scenes;
+  const fullScript = String(localized || '')
+    .replace(/^```(?:\w+)?/i, '')
+    .replace(/```$/i, '')
+    .replace(/^\s*(?:voiceover|narration|script|translated text)\s*:\s*/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 
   return {
     fullScript: fullScript || source,
-    scenes: mergedScenes
+    scenes
   };
 }
 
@@ -1812,11 +1899,12 @@ async function expandIfTooShort({
   languageCode,
   targetDurationSeconds,
   voiceGender = 'female',
+  brandTone = 'Professional',
   logger = null
 }) {
   const lang = toTtsLanguageCode(languageCode);
   const safeDuration = clamp(Number(targetDurationSeconds) || DEFAULT_DURATION_SECONDS, 6, 1800);
-  if (!localizedText || lang === 'en') return localizedText;
+  if (!localizedText) return localizedText;
 
   const estimated = estimateSpeechSeconds(localizedText, lang, voiceGender);
   if (estimated >= safeDuration * 0.92) return localizedText;
@@ -1825,28 +1913,37 @@ async function expandIfTooShort({
   const script = targetScriptName(lang);
   const range = targetWordRange(safeDuration, lang, voiceGender);
 
-  const prompt = `You are improving a translated cinematic voiceover to match the ORIGINAL duration and richness.
+  const systemInstruction = `You are an expert multilingual AI voice script generator for cinematic marketing videos.
 
-Target language: ${language}
-Target script: ${script}
-Target duration: ${safeDuration} seconds
-Target word count: ${range.target} words (acceptable ${range.min}-${range.max})
-Voice style: ${String(voiceGender || 'female').toLowerCase() === 'male' ? 'deep, confident, cinematic' : 'warm, expressive, cinematic'}
+Generate the narration ONLY in the language selected by the user (English, Tamil, Telugu, Malayalam, Kannada, or Hindi). Never mix languages unless explicitly requested.
 
 Rules:
-- DO NOT summarize or delete meaning.
-- Add natural connective phrasing, emotion, and descriptive beats to restore pacing.
-- Do not invent new facts not present in the English source.
-- Return only the improved translated text. No markdown, labels, or quotes.
+- Use ONLY the selected language.
+- Select a native voice and pronunciation for the chosen language.
+- Match the selected voice gender.
+- Generate the script to fit the requested video duration exactly using an average speaking speed appropriate for the selected language.
+- Never generate a script that is shorter or longer than the target duration.
+- Preserve the brand tone, emotion, and marketing intent.
+- Do not translate into another language or insert English words unless they are brand names or explicitly provided.
+- Return only the narration script.`;
 
-English source (ground truth):
+  const prompt = `Input:
+Language: ${language}
+Voice Gender: ${selectedVoiceGenderLabel(voiceGender)}
+Video Duration: ${safeDuration} seconds
+Brand Tone: ${String(brandTone || 'Professional').trim() || 'Professional'}
+Target Script: ${script}
+Target Word Count: approximately ${range.target} words (acceptable ${range.min}-${range.max}) based on ${language} speaking speed.
+
+Source marketing intent:
 ${String(sourceText || '').replace(/\\s+/g, ' ').trim()}
 
-Current translation (too short):
-${String(localizedText || '').replace(/\\s+/g, ' ').trim()}\n`;
+Current narration is too short. Rewrite it to fit the requested duration exactly, using only ${language}:
+${String(localizedText || '').replace(/\\s+/g, ' ').trim()}`;
 
   try {
     const improved = await callGemini(prompt, {
+      systemInstruction,
       skipCache: true,
       temperature: 0.45,
       maxTokens: 1800,
@@ -1912,7 +2009,7 @@ function googleCloudTtsVoice(languageCode = 'en', voiceGender = 'female') {
       female: 'ml-IN-Wavenet-A'
     }
   };
-  const voice = voices[locale] || voices['en-in'];
+  const voice = voices[locale] || voices['en-us'];
   return {
     languageCode: voice.languageCode,
     name: voice[gender],
@@ -1936,6 +2033,7 @@ function voiceCacheHash(value = '') {
 
 function isMatchingVoiceCache(cache, expected = {}) {
   if (!cache?.path || !fs.existsSync(cache.path)) return false;
+  if (expected.voiceId && String(cache.voiceId || '') !== String(expected.voiceId || '')) return false;
   return (
     String(cache.voiceGender || '').toLowerCase() === String(expected.voiceGender || '').toLowerCase() &&
     String(cache.languageCode || '').toLowerCase() === String(expected.languageCode || '').toLowerCase() &&
@@ -1980,6 +2078,8 @@ function speakingRateForTts({
 
 function edgeTtsRateString(rate = 1) {
   // edge-tts expects "+10%" / "-10%"
+  // IMPORTANT: negative values like "-7%" are misinterpreted by argparse as flags.
+  // We return the value in a format safe for CLI args.
   const pct = Math.round((Number(rate) - 1) * 100);
   if (!Number.isFinite(pct) || pct === 0) return '+0%';
   return `${pct > 0 ? '+' : ''}${pct}%`;
@@ -2001,7 +2101,15 @@ function getEdgeVoice(languageCode = 'en', voiceGender = 'female') {
   const configuredOverride = locale.startsWith('en-')
     ? (gender === 'male' ? EDGE_TTS_MALE_VOICE : EDGE_TTS_FEMALE_VOICE)
     : '';
-  return configuredOverride || voices[locale]?.[gender] || voices['en-in'][gender];
+  const selectedVoice = configuredOverride || voices[locale]?.[gender] || voices['en-us'][gender];
+  console.log(`=================================`);
+  console.log(`[Edge TTS Voice Selection]`);
+  console.log(`Language Input: "${languageCode}"`);
+  console.log(`Gender Input: "${voiceGender}"`);
+  console.log(`Resolved Locale: "${locale}"`);
+  console.log(`Selected Voice ID: "${selectedVoice}"`);
+  console.log(`=================================`);
+  return selectedVoice;
 }
 
 async function getGoogleTtsAccessToken() {
@@ -2092,27 +2200,56 @@ async function synthesizeEdgeTts({
   if (!EDGE_TTS_ENABLED) return false;
   const voice = getEdgeVoice(languageCode, voiceGender);
   const rate = edgeTtsRateString(speakingRate);
+
+  // Delete stale output file before synthesis attempt
+  await fs.promises.rm(outputPath, { force: true }).catch(() => {});
+
+  console.log("=================================");
+  console.log("[EDGE TTS PRE-SYNTHESIS INVOCATION]");
+  console.log("Language Input:", languageCode);
+  console.log("Voice Gender Input:", voiceGender);
+  console.log("Exact Voice Argument Passed:", voice);
+  console.log("Speaking Rate Argument:", rate);
+  console.log("Output File Path:", outputPath);
+  console.log("=================================");
   const attempts = [
     {
+      command: 'python3',
+      args: ['-m', 'edge_tts', '--voice', voice, `--rate=${rate}`, '--text', text, '--write-media', outputPath]
+    },
+    {
       command: 'python',
-      args: ['-m', 'edge_tts', '--voice', voice, '--rate', rate, '--text', text, '--write-media', outputPath]
+      args: ['-m', 'edge_tts', '--voice', voice, `--rate=${rate}`, '--text', text, '--write-media', outputPath]
     },
     {
       command: 'py',
-      args: ['-m', 'edge_tts', '--voice', voice, '--rate', rate, '--text', text, '--write-media', outputPath]
+      args: ['-m', 'edge_tts', '--voice', voice, `--rate=${rate}`, '--text', text, '--write-media', outputPath]
     },
     {
       command: 'edge-tts',
-      args: ['--voice', voice, '--rate', rate, '--text', text, '--write-media', outputPath]
+      args: ['--voice', voice, `--rate=${rate}`, '--text', text, '--write-media', outputPath]
     }
   ];
 
   for (const attempt of attempts) {
     try {
+      console.log(`[Edge TTS Attempt] Executing: ${attempt.command} ${attempt.args.join(' ')}`);
       await runProcess(attempt.command, attempt.args);
       const stat = await fs.promises.stat(outputPath);
-      if (stat.size > 1200) return true;
-    } catch (error) {
+      if (stat.size > 1200) {
+        const durationSec = await getAudioDurationSecondsFromFile(outputPath).catch(() => 0);
+        const sizeMb = (stat.size / 1024 / 1024).toFixed(2);
+      if (logger) logger(`[TTS Provider] Provider: Edge Neural (${attempt.command}), Voice: ${voice}`);
+      console.log("=================================");
+      console.log("[TTS PROVIDER COMPLETED]");
+      console.log("Provider: Edge Neural");
+      console.log("Voice ID:", voice);
+      console.log("Generated File:", path.basename(outputPath));
+      console.log("=================================");
+      return true;
+    }
+  } catch (error) {
+      console.error(`[Edge TTS Attempt Error] (${attempt.command}):`, error?.message || error);
       if (logger) logger(`Edge TTS ${voice} via ${attempt.command} failed: ${error.message || error}`);
     }
   }
@@ -2174,7 +2311,55 @@ async function synthesizeNeuralTts({
 }) {
   const normalizedGender = String(voiceGender || 'female').toLowerCase() === 'male' ? 'male' : 'female';
   const normalizedLocale = toTtsLocaleCode(languageCode);
-  const preferGoogleMale = normalizedGender === 'male' && /^(en-in|hi-in|ta-in|te-in|kn-in|ml-in)$/.test(normalizedLocale);
+
+  console.log("=================================");
+  console.log("🔍 [synthesizeNeuralTts Input]");
+  console.log("  Input Language Code:", languageCode);
+  console.log("  Normalized Locale:", normalizedLocale);
+  console.log("  Raw Voice Gender:", voiceGender);
+  console.log("  voiceGender Type:", typeof voiceGender);
+  console.log("  voiceGender === 'male':", voiceGender === 'male');
+  console.log("  Normalized Voice Gender:", normalizedGender);
+  console.log("=================================");
+
+  const tryElevenLabs = async () => {
+    try {
+      const ok = await synthesizeElevenLabsTts({
+        text,
+        languageCode,
+        voiceGender: normalizedGender,
+        outputPath
+      });
+      if (ok) {
+        console.log("[TTS PROVIDER COMPLETED] ElevenLabs Used");
+        if (logger) logger(`[TTS Provider] Synthesized voice using ElevenLabs`);
+        return { ok: true, provider: 'elevenlabs', voiceId: ELEVENLABS_MALE_VOICE_ID || 'eleven-studio' };
+      }
+    } catch (error) {
+      if (logger) logger(`ElevenLabs voice failed: ${error.message || error}`);
+    }
+    return false;
+  };
+
+  const tryEdge = async () => {
+    try {
+      const ok = await synthesizeEdgeTts({
+        text,
+        languageCode,
+        voiceGender: normalizedGender,
+        outputPath,
+        speakingRate,
+        logger
+      });
+      if (ok) {
+        console.log("[TTS PROVIDER COMPLETED] Edge TTS Used");
+        return { ok: true, provider: 'edge', voiceId: getEdgeVoice(languageCode, normalizedGender) };
+      }
+    } catch (error) {
+      if (logger) logger(`Edge TTS failed: ${error.message || error}`);
+    }
+    return false;
+  };
 
   const tryGoogle = async () => {
     try {
@@ -2186,8 +2371,10 @@ async function synthesizeNeuralTts({
         speakingRate
       });
       if (ok) {
-        if (logger) logger(`Google Cloud TTS ${googleCloudTtsVoice(languageCode, normalizedGender).name} succeeded`);
-        return true;
+        console.log("[TTS PROVIDER COMPLETED] Google Cloud TTS Used");
+        if (logger) logger(`Google Cloud TTS succeeded`);
+        const v = googleCloudTtsVoice(languageCode, normalizedGender);
+        return { ok: true, provider: 'google-cloud', voiceId: v.name };
       }
     } catch (error) {
       if (logger) logger(`Google Cloud TTS failed: ${error.message || error}`);
@@ -2195,40 +2382,30 @@ async function synthesizeNeuralTts({
     return false;
   };
 
-  const tryEdge = async () => {
-    try {
-      return await synthesizeEdgeTts({
-        text,
-        languageCode,
-        voiceGender: normalizedGender,
-        outputPath,
-        speakingRate,
-        logger
-      });
-    } catch (error) {
-      if (logger) logger(`Edge TTS failed: ${error.message || error}`);
-    }
-    return false;
+  const providers = {
+    elevenlabs: tryElevenLabs,
+    google: tryGoogle,
+    edge: tryEdge
   };
 
-  const tryElevenLabs = async () => {
-    try {
-      return await synthesizeElevenLabsTts({
-        text,
-        languageCode,
-        voiceGender: normalizedGender,
-        outputPath
-      });
-    } catch (error) {
-      if (logger) logger(`ElevenLabs male voice failed: ${error.message || error}`);
-    }
-    return false;
-  };
+  const priorityOrder = String(process.env.TTS_PROVIDER_PRIORITY || 'google,elevenlabs,edge')
+    .toLowerCase()
+    .split(',')
+    .map((p) => p.trim());
 
-  if (preferGoogleMale && await tryGoogle()) return true;
-  if (await tryEdge()) return true;
-  if (normalizedGender === 'male' && await tryElevenLabs()) return true;
-  if (!preferGoogleMale && await tryGoogle()) return true;
+  for (const name of priorityOrder) {
+    const fn = providers[name];
+    if (fn) {
+      console.log(`📡 [TTS Provider Attempt] Trying provider: ${name}`);
+      const res = await fn();
+      if (res && res.ok) {
+        console.log(`✅ [TTS Provider SUCCESS] Provider '${name}' synthesized audio successfully with voice '${res.voiceId}'`);
+        return res;
+      }
+      console.log(`⚠️ [TTS Provider FAILED] Provider '${name}' failed or returned false. Trying next fallback...`);
+    }
+  }
+
   return false;
 }
 
@@ -2238,19 +2415,19 @@ async function synthesizeVoiceTrack({
   sceneData = [],
   languageCode,
   voiceGender = 'female',
+  brandTone = 'Professional',
   targetDurationSeconds = null,
   fitToDuration = true,
   context,
   logger = null
 }) {
-  const normalizedLang = toTtsLanguageCode(languageCode);
   const safeTarget = Number.isFinite(Number(targetDurationSeconds)) ? Number(targetDurationSeconds) : null;
 
-  // Step 1: Translate with duration awareness (scene-timed) and avoid summarization.
+  // Step 1: Generate narration in the selected language with duration awareness.
   let scriptForTts = String(voiceScript || '').replace(/\s+/g, ' ').trim();
   let localizedScenes = normalizeSceneTimingForTranslation(sceneData, safeTarget || DEFAULT_DURATION_SECONDS);
 
-  if (normalizedLang !== 'en' && sourceVoiceScript) {
+  if (sourceVoiceScript) {
     try {
       const translated = await translateScriptDurationAware({
         sourceText: sourceVoiceScript,
@@ -2258,6 +2435,7 @@ async function synthesizeVoiceTrack({
         targetDurationSeconds: safeTarget || DEFAULT_DURATION_SECONDS,
         languageCode,
         voiceGender,
+        brandTone,
         logger
       });
       scriptForTts = translated.fullScript || scriptForTts;
@@ -2268,13 +2446,14 @@ async function synthesizeVoiceTrack({
   }
 
   // Step 2: If still too short, expand slightly while keeping meaning.
-  if (fitToDuration && safeTarget && normalizedLang !== 'en' && sourceVoiceScript) {
+  if (fitToDuration && safeTarget && sourceVoiceScript) {
     scriptForTts = await expandIfTooShort({
       localizedText: scriptForTts,
       sourceText: sourceVoiceScript,
       languageCode,
       targetDurationSeconds: safeTarget,
       voiceGender,
+      brandTone,
       logger
     });
   }
@@ -2301,6 +2480,7 @@ async function synthesizeVoiceTrack({
   const finalVoicePath = path.join(context.dirs.audio, finalVoiceFileName);
   const voiceMetadata = {
     voiceGender: normalizedGender,
+    voiceId: getEdgeVoice(languageCode, normalizedGender),
     languageCode: toTtsLocaleCode(languageCode),
     sourceScriptHash: voiceCacheHash(sourceVoiceScript || voiceScript || scriptForTts),
     durationSeconds: Number(safeTarget || 0),
@@ -2309,10 +2489,29 @@ async function synthesizeVoiceTrack({
 
   const maybeStretchToTarget = async () => {
     if (!fitToDuration || !safeTarget) return;
-    const actual = await getAudioDurationSecondsFromFile(finalVoicePath);
+    let actual = await getAudioDurationSecondsFromFile(finalVoicePath);
     if (!Number.isFinite(actual) || actual <= 0) return;
     
-    // Negligible time differences (less than 0.2s) do not require modification
+    // If the generated narration is too short (e.g. 16s for a 60s video), loop narration to reach target duration
+    if (actual < safeTarget * 0.75) {
+      const loopCount = Math.ceil(safeTarget / actual);
+      const loopedPath = path.join(context.dirs.audio, `voice_track_${normalizedGender}_looped.mp3`);
+      console.log(`[Voice Duration Sync] Narration is ${actual.toFixed(1)}s, target is ${safeTarget}s. Looping ${loopCount}x`);
+      await runFfmpeg([
+        '-y',
+        '-stream_loop', String(loopCount - 1),
+        '-i', finalVoicePath,
+        '-vn',
+        '-t', String(safeTarget),
+        '-c:a', 'libmp3lame',
+        '-q:a', '2',
+        loopedPath
+      ]);
+      await fs.promises.copyFile(loopedPath, finalVoicePath);
+      await fs.promises.unlink(loopedPath).catch(() => {});
+      actual = await getAudioDurationSecondsFromFile(finalVoicePath);
+    }
+
     if (Math.abs(actual - safeTarget) < 0.2) return;
 
     const ratio = actual / safeTarget;
@@ -2333,6 +2532,7 @@ async function synthesizeVoiceTrack({
       ]);
 
       await fs.promises.copyFile(stretchedPath, finalVoicePath);
+      await fs.promises.unlink(stretchedPath).catch(() => {});
     } else {
       // If way out of bounds, trim precisely to safeTarget
       const stretchedPath = path.join(context.dirs.audio, `voice_track_${normalizedGender}_stretched.mp3`);
@@ -2347,15 +2547,19 @@ async function synthesizeVoiceTrack({
         stretchedPath
       ]);
       await fs.promises.copyFile(stretchedPath, finalVoicePath);
+      await fs.promises.unlink(stretchedPath).catch(() => {});
     }
   };
+
+  // Force purge any old voice track before fresh synthesis
+  await fs.promises.rm(finalVoicePath, { force: true }).catch(() => {});
 
   // Try single pass synthesis for ultra fast TTS performance
   let singlePassSuccess = false;
   try {
     if (logger) logger(`Attempting single-pass TTS synthesis for entire script (${scriptForTts.length} chars)`);
 
-    const ok = await synthesizeNeuralTts({
+    const synthesisResult = await synthesizeNeuralTts({
       text: scriptForTts,
       languageCode,
       voiceGender: normalizedGender,
@@ -2364,9 +2568,9 @@ async function synthesizeVoiceTrack({
       logger
     });
 
-    if (ok && fs.existsSync(finalVoicePath)) {
+    if (synthesisResult && synthesisResult.ok && fs.existsSync(finalVoicePath)) {
       const stat = await fs.promises.stat(finalVoicePath);
-      if (stat.size > 2000) {
+      if (stat.size > 500) {
         singlePassSuccess = true;
         if (logger) logger(`✅ Single-pass TTS synthesis succeeded (size = ${stat.size} bytes)`);
         await maybeStretchToTarget();
@@ -2375,7 +2579,9 @@ async function synthesizeVoiceTrack({
           url: publicAudioUrl(context, finalVoiceFileName),
           script: scriptForTts,
           sceneData: localizedScenes,
-          ...voiceMetadata
+          ...voiceMetadata,
+          voiceProvider: synthesisResult.provider || voiceMetadata.voiceProvider,
+          voiceId: synthesisResult.voiceId || voiceMetadata.voiceId
         };
       }
     }
@@ -2399,31 +2605,10 @@ async function synthesizeVoiceTrack({
       speakingRate,
       logger: logger ? (line) => logger(`Voice chunk ${index + 1}: ${line}`) : null
     });
-    if (neuralOk) return outPath;
-
-    try {
-      const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${encodeURIComponent(ttsLocale)}&q=${encodeURIComponent(text)}`;
-      const response = await fetchImpl(ttsUrl, {
-        method: 'GET',
-        headers: {
-          'User-Agent': 'Mozilla/5.0',
-          Referer: 'https://translate.google.com/'
-        }
-      });
-      if (!response.ok) {
-        throw new Error(`TTS HTTP ${response.status}`);
-      }
-      const arrayBuffer = typeof response.arrayBuffer === 'function'
-        ? await response.arrayBuffer()
-        : await response.buffer();
-      await fs.promises.writeFile(outPath, Buffer.from(arrayBuffer));
+    if (neuralOk && fs.existsSync(outPath)) {
       const stat = await fs.promises.stat(outPath);
-      if (stat.size < 1200) throw new Error('TTS chunk too small');
-      return outPath;
-    } catch (error) {
-      if (logger) logger(`Voice chunk ${index + 1} failed: ${error.message || error}`);
+      if (stat.size >= 500) return outPath;
     }
-
     return null;
   });
 
@@ -2532,15 +2717,15 @@ async function prepareBackgroundTrack({ audioOptions, context, durationSeconds =
     if (preferredTrack) {
       const lower = preferredTrack.toLowerCase();
       selectedPath =
-        candidates.find((p) => path.basename(p).toLowerCase() === lower) ||
-        candidates.find((p) => p.toLowerCase().includes(lower)) ||
+        candidates.find((p) => p && typeof p === 'string' && path.basename(p).toLowerCase() === lower) ||
+        candidates.find((p) => p && typeof p === 'string' && p.toLowerCase().includes(lower)) ||
         null;
     }
     if (!selectedPath) {
       selectedPath = stablePick(candidates, context?.jobId || '') || null;
     }
 
-    if (selectedPath) {
+    if (selectedPath && typeof selectedPath === 'string') {
       const ext = path.extname(selectedPath) || '.mp3';
       const outputName = `background_track${ext}`;
       const outputPath = path.join(context.dirs.audio, outputName);
@@ -2623,6 +2808,7 @@ async function generateAudioTracks({
   const requestedSourceVoiceScript = plan.sourceVoiceScript || plan.voiceScript || input.description;
   const expectedVoiceCache = {
     voiceGender: audioOptions.voiceGender,
+    voiceId: getEdgeVoice(audioOptions.languageCode, audioOptions.voiceGender),
     languageCode: toTtsLocaleCode(audioOptions.languageCode),
     sourceScriptHash: voiceCacheHash(requestedSourceVoiceScript || requestedVoiceScript),
     durationSeconds: Number(input.durationSeconds || 0)
@@ -2647,17 +2833,35 @@ async function generateAudioTracks({
   }
 
   if (audioOptions.mode === 'auto' && !voice) {
+    if (logger) logger(`[TTS Generation Starting] Voice Gender: ${audioOptions.voiceGender}, Language: ${audioOptions.languageCode}`);
+    console.log("=================================");
+    console.log("[TTS Generation Starting]");
+    console.log("Gender:", audioOptions.voiceGender);
+    console.log("Language:", audioOptions.languageCode);
+    console.log("Script Length:", requestedVoiceScript ? requestedVoiceScript.length : 0);
+    console.log("=================================");
+
     voice = await synthesizeVoiceTrack({
       voiceScript: requestedVoiceScript,
       sourceVoiceScript: requestedSourceVoiceScript,
       sceneData: plan.sceneData || [],
       languageCode: audioOptions.languageCode,
       voiceGender: audioOptions.voiceGender,
+      brandTone: audioOptions.brandTone,
       targetDurationSeconds: input.durationSeconds,
       fitToDuration: audioOptions.fitVoiceToDuration,
       context,
       logger
     });
+
+    console.log("=================================");
+    console.log("[TTS Generation Result]");
+    console.log("Voice Object Returned:", !!voice);
+    console.log("Voice File Path:", voice?.path || 'N/A');
+    console.log("Voice File Exists:", voice?.path ? fs.existsSync(voice.path) : false);
+    console.log("Background Track Path:", background?.path || 'N/A');
+    console.log("Background File Exists:", background?.path ? fs.existsSync(background.path) : false);
+    console.log("=================================");
 
     // Update local cache records
     if (audioOptions.voiceGender === 'male') {
@@ -2738,8 +2942,54 @@ async function mergeAudioTracks({
   const volumeStages = inputTracks
     .map((track, idx) => `[${idx}:a]volume=${track.volume.toFixed(2)}[a${idx}]`)
     .join(';');
-  const mixedInputs = inputTracks.map((_, idx) => `[a${idx}]`).join('');
-  const filterComplex = `${volumeStages};${mixedInputs}amix=inputs=${inputTracks.length}:duration=longest:dropout_transition=2,apad[mix]`;
+
+  const voiceIndices = [];
+  const bgIndices = [];
+  const otherIndices = [];
+  
+  inputTracks.forEach((track, idx) => {
+    if (track.label === 'voice' || track.label === 'manual') {
+      voiceIndices.push(idx);
+    } else if (track.label === 'background') {
+      bgIndices.push(idx);
+    } else {
+      otherIndices.push(idx);
+    }
+  });
+
+  const duckingFactor = normalizedAudioOptions.duckingFactor || 0.5;
+  let filterComplex = volumeStages;
+  let finalMixInputs = [];
+
+  if (voiceIndices.length > 0 && bgIndices.length > 0) {
+    if (voiceIndices.length > 1) {
+      const voiceMixStr = voiceIndices.map(idx => `[a${idx}]`).join('');
+      filterComplex += `;${voiceMixStr}amix=inputs=${voiceIndices.length}:duration=longest:dropout_transition=2[voice_mix]`;
+    } else {
+      filterComplex += `;[a${voiceIndices[0]}]acopy[voice_mix]`;
+    }
+
+    if (bgIndices.length > 1) {
+      const bgMixStr = bgIndices.map(idx => `[a${idx}]`).join('');
+      filterComplex += `;${bgMixStr}amix=inputs=${bgIndices.length}:duration=longest:dropout_transition=2[bg_mix]`;
+    } else {
+      filterComplex += `;[a${bgIndices[0]}]acopy[bg_mix]`;
+    }
+
+    filterComplex += `;[voice_mix]asplit=2[voice_final][voice_control]`;
+
+    const ratio = Math.max(1.5, 8.0 - (duckingFactor * 10)); 
+    filterComplex += `;[bg_mix][voice_control]sidechaincompress=threshold=0.08:ratio=${ratio.toFixed(1)}:attack=50:release=300[bg_ducked]`;
+
+    finalMixInputs.push('[voice_final]', '[bg_ducked]');
+  } else {
+    voiceIndices.forEach(idx => finalMixInputs.push(`[a${idx}]`));
+    bgIndices.forEach(idx => finalMixInputs.push(`[a${idx}]`));
+  }
+
+  otherIndices.forEach(idx => finalMixInputs.push(`[a${idx}]`));
+
+  filterComplex += `;${finalMixInputs.join('')}amix=inputs=${finalMixInputs.length}:duration=longest:dropout_transition=2,apad[mix]`;
 
   args.push(
     '-filter_complex', filterComplex,
@@ -2751,7 +3001,8 @@ async function mergeAudioTracks({
   );
 
   await runFfmpeg(args);
-  return { path: outputPath, url: outputUrl };
+  const cacheBustUrl = `${outputUrl.split('?')[0]}?t=${Date.now()}`;
+  return { path: outputPath, url: cacheBustUrl };
 }
 
 function toSrtTimestamp(seconds) {
@@ -2790,6 +3041,7 @@ async function generateSrtFile({
 }
 
 function ffmpegSubtitlePath(filePath) {
+  if (!filePath || typeof filePath !== 'string') return '';
   let resolved = path.resolve(filePath).replace(/\\/g, '/');
   if (/^[A-Za-z]:/.test(resolved)) {
     resolved = `${resolved[0]}\\:${resolved.slice(2)}`;
@@ -2894,31 +3146,314 @@ async function generateThumbnail({
   const outputPath = path.join(context.dirs.final, outputName);
   const outputUrl = buildMediaUrl(context.baseUrl, context.jobId, ['final', outputName]);
 
-  // Try AI thumbnail first.
+  // Construct context-rich thumbnail generation prompt dynamically using Gemini with JSON structure
+  let dynamicPromptText = plan?.thumbnailPrompt || input.description || '';
+  let selectedSceneIndex = 0;
+
   try {
-    const result = await generateCampaignImageNanoBanana(plan.thumbnailPrompt || input.description, {
-      aspectRatio: '16:9',
-      linkedProduct: product ? {
-        name: product.name,
-        description: product.description,
-        imageUrl: product.imageUrl
-      } : null,
-      productReferenceImage: input.imageData || input.imageUrl || product?.imageUrl || null,
-      tone: 'professional'
-    });
-    if (result?.success && result?.imageUrl) {
-      await materializeSourceToFile({ source: result.imageUrl, destinationPath: outputPath });
-      return { path: outputPath, url: outputUrl };
+    if (logger) logger('Building structured context-rich thumbnail prompt and performing scene scoring via Gemini...');
+    
+    // Extract metadata details
+    const characterDetail = input.characterEnabled && input.characterName
+      ? `Main Character: ${input.characterName} (${input.characterRole || ''}, ${input.characterGender || ''}, ${input.characterAge || ''}, ${input.characterRace || ''}, Hair: ${input.characterHairStyle || ''}, Appearance: ${input.characterAppearance || ''})`
+      : 'No recurring characters present.';
+
+    const productDetail = product
+      ? `Product Name: ${product.name}\nProduct Description: ${product.description}`
+      : 'No specific physical product details.';
+
+    const visualStyle = plan?.globalVisualStyle || 'Cinematic advertising photography style';
+
+    const scenesSummary = Array.isArray(sceneData)
+      ? sceneData.map((s, idx) => `Scene Index: ${idx}\nScene Title: ${s.title || ''}\nVisual Description: ${s.imagePrompt || ''}\nDialogue: ${s.voiceLine || ''}`).join('\n\n')
+      : 'No scene layout summary.';
+
+    // Resolve Industry Presets
+    const industryLower = String(input.industry || '').toLowerCase();
+    let industryPresetRules = '';
+    if (industryLower.includes('software') || industryLower.includes('saas') || industryLower.includes('tech')) {
+      industryPresetRules = 'SaaS/AI Preset: Enforce clean digital UI dashboard mockup details, glassmorphism panel styling, crisp typography space, vibrant technology accents, and premium modern workspace lighting.';
+    } else if (industryLower.includes('real') || industryLower.includes('property') || industryLower.includes('estate') || industryLower.includes('home')) {
+      industryPresetRules = 'Real Estate Preset: Bright architectural lighting, photorealistic interior/exterior framing, luxury home spacing, and clean landscape contrast.';
+    } else if (industryLower.includes('restaurant') || industryLower.includes('food') || industryLower.includes('cafe') || industryLower.includes('dining')) {
+      industryPresetRules = 'Restaurant/Food Preset: Warm lighting highlights, vibrant close-up food photography, high-contrast dish texture, and welcoming premium restaurant dining vibe.';
+    } else if (industryLower.includes('health') || industryLower.includes('doctor') || industryLower.includes('medical') || industryLower.includes('clinic')) {
+      industryPresetRules = 'Healthcare Preset: Clean clinical lighting, trustworthy premium environment, soft light tones, and clear focal medical subjects.';
+    } else if (industryLower.includes('car') || industryLower.includes('auto') || industryLower.includes('vehicle')) {
+      industryPresetRules = 'Automotive Preset: Dramatic reflections, high-contrast dynamic lighting, sleek vehicle body contours, and modern professional commercial atmosphere.';
+    } else {
+      industryPresetRules = 'Luxury/Brand Preset: Clean minimalist composition, premium high-fashion texture details, rich lighting shadows, and modern visual design hierarchy.';
     }
-  } catch (error) {
-    if (logger) logger(`AI thumbnail generation failed: ${error.message || error}`);
+
+    const promptContext = `You are an expert YouTube thumbnail designer and cinematic visual storyteller.
+Your task is to analyze the storyboard scenes, score them based on visual impact (emotional intensity, product visibility, character prominence, motion/action, framing, and contrast), select the strongest scene, and generate a descriptive DALL-E/Midjourney image prompt for a premium 16:9 thumbnail.
+
+Here is the exact video context:
+- Video Description: ${input.description}
+- Visual Style: ${visualStyle}
+- ${characterDetail}
+- ${productDetail}
+- Scenes Storyboard:
+${scenesSummary}
+
+Follow these strict design principles:
+1. SCENE SCORING: Evaluate the visual impact of each scene. Select the scene with the highest visual potential to make a clickable thumbnail.
+2. CHARACTER CONSISTENCY: If the storyboard contains the same character across multiple scenes, reuse the exact same character identity. Do not create a different face, hairstyle, age, ethnicity, clothing, or body type unless the storyboard explicitly changes them.
+3. PRODUCT-FIRST: For videos without recurring human characters, prioritize prominent product UI (for SaaS), a signature dish (for restaurant), a featured property (for real estate), or equipment/vehicles. Avoid generic backgrounds.
+4. COMPOSITION: Keep composition simple, bold, and modern, leaving clean space for headline text. Specify cinematic lighting and contrast.
+5. STRICT DO NOT HALLUCINATE RULE: If a recurring character, product, logo, UI, vehicle, building, or object already exists in the generated scenes, reuse it. Do not invent a different subject or replace it with a generic futuristic illustration.
+6. THUMBNAIL QUALITY STANDARDS:
+   - PREMIUM QUALITY: Crisp, sharp details, photorealistic lighting, cinematic composition. No blurry, noisy, or low-detail regions.
+   - PRESET RULES: ${industryPresetRules}
+   - NEGATIVE CONSTRAINTS: No generic AI concept drawings, no distorted hands, no duplicate people, no watermarks, no low-resolution visual elements.
+
+Return a strict JSON response matching the following format:
+{
+  "selectedSceneIndex": 1,
+  "visualImpactScores": {
+    "scene_index_0": 6,
+    "scene_index_1": 9,
+    "scene_index_2": 7
+  },
+  "primarySubject": "Founder looking confident",
+  "secondarySubject": "AI Dashboard",
+  "background": "Modern technology office",
+  "cameraAngle": "Close-up",
+  "lighting": "Cinematic purple rim lighting",
+  "headlinePlacement": "Top center",
+  "thumbnailPrompt": "A descriptive prompt combining all visual details...",
+  "qualityScoreChecklist": {
+    "qualityScore": 95,
+    "sharpness": 95,
+    "characterConsistency": 98,
+    "productConsistency": 95,
+    "brandConsistency": 97
+  }
+}`;
+
+    const rawResponse = await callGemini(promptContext, { skipCache: true, responseMimeType: 'application/json' });
+    const parsed = parseGeminiJSON(rawResponse);
+    
+    // Strict quality validation checklist layer
+    const isValid = parsed
+      && typeof parsed.thumbnailPrompt === 'string' && parsed.thumbnailPrompt.trim().length > 10
+      && Number.isInteger(parsed.selectedSceneIndex)
+      && parsed.selectedSceneIndex >= 0
+      && parsed.primarySubject
+      && parsed.lighting
+      && parsed.cameraAngle;
+
+    if (isValid) {
+      dynamicPromptText = parsed.thumbnailPrompt;
+      selectedSceneIndex = parsed.selectedSceneIndex;
+      
+      // Fallback verification: Check if the selected scene index actually has a generated image URL
+      const targetScene = Array.isArray(sceneData) ? sceneData[selectedSceneIndex] : null;
+      const targetSceneHasImage = Boolean(targetScene?.imageUrl || targetScene?.imagePath);
+      
+      if (!targetSceneHasImage && Array.isArray(sceneData)) {
+        if (logger) logger(`⚠️ Scored Scene ${selectedSceneIndex} is missing a generated image. Finding next best scored scene with visual content...`);
+        
+        // Find next highest scored scene index that actually contains a generated image
+        const sortedIndices = Object.entries(parsed.visualImpactScores || {})
+          .map(([key, score]) => ({
+            index: parseInt(key.replace('scene_index_', ''), 10),
+            score: Number(score)
+          }))
+          .filter(item => !isNaN(item.index) && item.index >= 0 && item.index < sceneData.length)
+          .sort((a, b) => b.score - a.score);
+          
+        const bestVisuallyValid = sortedIndices.find(item => {
+          const s = sceneData[item.index];
+          return Boolean(s?.imageUrl || s?.imagePath);
+        });
+        
+        if (bestVisuallyValid !== undefined) {
+          selectedSceneIndex = bestVisuallyValid.index;
+          if (logger) logger(`✅ Corrected selectedSceneIndex to ${selectedSceneIndex} based on visual availability (score: ${bestVisuallyValid.score}).`);
+        }
+      }
+      
+      if (logger) {
+        logger(`✅ Structured prompt validated: Scene ${selectedSceneIndex} selected. Impact scores: ${JSON.stringify(parsed.visualImpactScores)}`);
+        logger(`Generated dynamic structured thumbnail prompt: "${dynamicPromptText}"`);
+      }
+    } else {
+      if (logger) logger('⚠️ Structured prompt failed validation checklist. Falling back to default script description.');
+    }
+  } catch (promptError) {
+    if (logger) logger(`Failed to generate dynamic thumbnail prompt: ${promptError.message}. Using fallback.`);
   }
 
-  // Fallback to first scene image.
-  const firstScene = Array.isArray(sceneData) && sceneData.length > 0 ? sceneData[0] : null;
-  if (firstScene?.imagePath) {
-    await fs.promises.copyFile(firstScene.imagePath, outputPath);
-    return { path: outputPath, url: outputUrl };
+  const startTime = Date.now();
+  let fallbackUsed = false;
+  let reviewMetadata = null;
+  const chosenScene = Array.isArray(sceneData) && sceneData.length > selectedSceneIndex ? sceneData[selectedSceneIndex] : (Array.isArray(sceneData) && sceneData.length > 0 ? sceneData[0] : null);
+  const sceneVisualRef = chosenScene?.imageUrl || chosenScene?.imageUrl || null;
+  const isImageToImage = Boolean(sceneVisualRef);
+
+  // Helper loop to allow up to 2 generation attempts
+  for (let attemptNum = 1; attemptNum <= 2; attemptNum++) {
+    try {
+      if (logger) {
+        logger(`[THUMBNAIL PIPELINE STARTING - ATTEMPT ${attemptNum}/2]
+- Selected Scene Index: ${selectedSceneIndex}
+- Reference Image Available: ${isImageToImage ? 'YES' : 'NO'}
+- Reference Image URL: ${sceneVisualRef || 'N/A'}
+- Image-to-Image Mode: ${isImageToImage ? 'YES' : 'NO'}
+- Character Preservation Enabled: ${input.characterEnabled ? 'YES' : 'NO'}`);
+      }
+
+      const result = await generateCampaignImageNanoBanana(dynamicPromptText, {
+        aspectRatio: '16:9',
+        linkedProduct: product ? {
+          name: product.name,
+          description: product.description,
+          imageUrl: product.imageUrl
+        } : null,
+        productReferenceImage: input.imageData || input.imageUrl || product?.imageUrl || null,
+        characterReferenceImage: input.characterEnabled ? sceneVisualRef : null,
+        previousSceneImage: sceneVisualRef,
+        preserveCharacterIdentity: input.characterEnabled,
+        tone: 'professional'
+      });
+
+      if (result?.success && result?.imageUrl) {
+        await materializeSourceToFile({ source: result.imageUrl, destinationPath: outputPath });
+        
+        // PASS 2: AI Visual Quality Reviewer
+        try {
+          if (logger) logger(`Starting Pass 2: Multimodal AI Visual Quality Review on generated thumbnail (Attempt ${attemptNum})...`);
+          
+          // Read file content locally to prepare base64 for multimodal callGemini
+          const generatedImageBuffer = await fs.promises.readFile(outputPath);
+          const generatedImageBase64 = generatedImageBuffer.toString('base64');
+          
+          const reviewPrompt = `You are a strict, senior creative director performing a Pass 2 visual review on a generated 16:9 video thumbnail image.
+Analyze the image for composition, marketing appeal, character/product preservation consistency, and common AI generation failures.
+
+Strict Quality Gates:
+- overallScore: Minimum 90/100
+- correctness scores (characterConsistency, productConsistency, brandConsistency): Minimum 95/100 (If applicable)
+- quality scores (sharpness, composition, clickability): Minimum 90/100
+
+Failure Checklist:
+Detect any instances of:
+- Holographic/abstract concepts replacing human character,
+- Duplicate people or warped limbs,
+- Distorted hands or faces,
+- Unreadable dashboard text or fake UI placeholders.
+
+Return a strict JSON response matching the following schema:
+{
+  "correctness": {
+    "characterConsistency": 96,
+    "productConsistency": 95,
+    "brandConsistency": 97,
+    "hallucinationDetected": false
+  },
+  "quality": {
+    "sharpness": 95,
+    "composition": 93,
+    "lighting": 92,
+    "clickability": 94
+  },
+  "overallScore": 92,
+  "recommendation": "PASS"
+}`;
+
+          const reviewResponse = await callGemini(reviewPrompt, {
+            skipCache: true,
+            responseMimeType: 'application/json',
+            inlineImage: {
+              mimeType: 'image/jpeg',
+              data: generatedImageBase64
+            }
+          });
+          const review = parseGeminiJSON(reviewResponse);
+          
+          if (review) {
+            reviewMetadata = {
+              overallScore: review.overallScore || 0,
+              recommendation: review.recommendation || 'FAIL',
+              fallbackUsed: false,
+              reviewModel: 'Gemini-Multimodal',
+              reviewVersion: '2026.07',
+              details: review
+            };
+
+            const correctnessValid = review.correctness
+              ? (!review.correctness.hallucinationDetected &&
+                 (review.correctness.characterConsistency === undefined || review.correctness.characterConsistency >= 95) &&
+                 (review.correctness.productConsistency === undefined || review.correctness.productConsistency >= 95) &&
+                 (review.correctness.brandConsistency === undefined || review.correctness.brandConsistency >= 95))
+              : true;
+
+            const qualityValid = review.quality
+              ? ((review.quality.sharpness === undefined || review.quality.sharpness >= 90) &&
+                 (review.quality.composition === undefined || review.quality.composition >= 90) &&
+                 (review.quality.clickability === undefined || review.quality.clickability >= 90))
+              : true;
+
+            const passGates = (review.overallScore >= 90) && 
+                              correctnessValid && 
+                              qualityValid && 
+                              (review.recommendation === 'PASS');
+                              
+            if (logger) logger(`[THUMBNAIL REVIEW RESULT ATTEMPT ${attemptNum}]: ${JSON.stringify(review)}`);
+            
+            if (!passGates) {
+              if (logger) logger(`❌ Generated thumbnail failed Pass 2 quality/correctness gates. Recommendation: ${review.recommendation || 'FAIL'}.`);
+              throw new Error('Failed visual quality review gates.');
+            }
+            
+            // If passed, exit loop and return
+            if (logger) {
+              logger(`[THUMBNAIL PIPELINE SUCCESS]
+- Selected Scene: ${selectedSceneIndex}
+- Reference Image: ${sceneVisualRef || 'none'}
+- Image-to-Image Mode: ${isImageToImage ? 'YES' : 'NO'}
+- Fallback Used: NO
+- Generation Time: ${((Date.now() - startTime) / 1000).toFixed(2)}s`);
+            }
+            return { path: outputPath, url: outputUrl, reviewMetadata };
+          }
+        } catch (reviewError) {
+          if (logger) logger(`⚠️ Quality check failed on attempt ${attemptNum}: ${reviewError.message || reviewError}`);
+          if (attemptNum === 1) {
+            if (logger) logger('🔄 Attempting one-time thumbnail regeneration before falling back...');
+            continue; // Next iteration of loop (attempt 2)
+          }
+          throw reviewError; // Max attempts reached, bubble to trigger scene fallback
+        }
+      }
+    } catch (error) {
+      if (logger) logger(`AI thumbnail generation/review failed (Attempt ${attemptNum}/2): ${error.message || error}`);
+      if (attemptNum === 1) {
+        if (logger) logger('🔄 Attempting one-time thumbnail regeneration before falling back...');
+        continue;
+      }
+    }
+  }
+
+  // Fallback: Copy-scale the highest-scored scene image directly so it is guaranteed to match the video.
+  if (chosenScene?.imagePath) {
+    fallbackUsed = true;
+    reviewMetadata = {
+      overallScore: 0,
+      recommendation: 'FAIL',
+      fallbackUsed: true,
+      reviewModel: 'Fallback-Selector',
+      reviewVersion: '2026.07'
+    };
+    if (logger) {
+      logger(`[THUMBNAIL PIPELINE FALLBACK ACTIVATED]
+- Copying Scene ${selectedSceneIndex} image (${chosenScene.imagePath}) directly as final thumbnail.
+- Fallback Used: YES
+- Total Time: ${((Date.now() - startTime) / 1000).toFixed(2)}s`);
+    }
+    await fs.promises.copyFile(chosenScene.imagePath, outputPath);
+    return { path: outputPath, url: outputUrl, reviewMetadata };
   }
 
   return null;
@@ -2936,6 +3471,8 @@ function ensureSceneInputForClipStage(scene = {}, index = 0) {
   const duration = clamp(Number.parseInt(String(scene.durationSeconds || scene.duration || 4), 10), 1, 120);
   const endSec = Number.isFinite(Number(scene.endSec)) ? Number(scene.endSec) : (startSec + duration);
   const imageUrl = String(scene.imageUrl || scene.image_url || '').trim();
+  const clipUrl = String(scene.clipUrl || scene.clip_url || '').trim();
+  const clipCloudUrl = String(scene.clipCloudUrl || '').trim();
   const videoUrl = String(scene.video_url || scene.videoUrl || scene.falVideoUrl || '').trim();
   return {
     index: idx,
@@ -2948,12 +3485,81 @@ function ensureSceneInputForClipStage(scene = {}, index = 0) {
     image_url: imageUrl,
     video_url: videoUrl,
     videoUrl,
+    clipUrl,
+    clipCloudUrl,
+    falVideoUrl: String(scene.falVideoUrl || videoUrl || '').trim(),
     imagePath: String(scene.imagePath || '').trim(),
     voiceLine: String(scene.voiceLine || ''),
     onScreenText: String(scene.onScreenText || ''),
     imagePrompt: String(scene.imagePrompt || scene.image_prompt || ''),
     videoPrompt: String(scene.videoPrompt || scene.video_prompt || '')
   };
+}
+
+function hasSceneClip(scene = {}) {
+  return Boolean(String(scene.clipUrl || scene.clipCloudUrl || scene.video_url || scene.videoUrl || scene.falVideoUrl || '').trim());
+}
+
+function mergeSceneClip(existingScenes = [], enrichedScene = {}) {
+  const scenes = Array.isArray(existingScenes) ? existingScenes : [];
+  const sceneId = String(enrichedScene.sceneId || enrichedScene.id || '').trim();
+  const sceneIndex = Number.parseInt(String(enrichedScene.index || ''), 10);
+  let matched = false;
+
+  const merged = scenes.map((scene, index) => {
+    const currentId = String(scene?.sceneId || scene?.id || '').trim();
+    const currentIndex = Number.parseInt(String(scene?.index || index + 1), 10);
+    const isMatch =
+      (sceneId && currentId && sceneId === currentId) ||
+      (Number.isFinite(sceneIndex) && sceneIndex > 0 && currentIndex === sceneIndex);
+
+    if (!isMatch) return scene;
+    matched = true;
+    return { ...scene, ...enrichedScene };
+  });
+
+  return matched ? merged : [...merged, enrichedScene].sort((a, b) => Number(a?.index || 0) - Number(b?.index || 0));
+}
+
+async function persistPartialSceneClip({ context, enrichedScene, logger = null }) {
+  const jobId = String(context?.jobId || '').trim();
+  if (!jobId || !hasSceneClip(enrichedScene)) return;
+
+  try {
+    await updateDraft(jobId, null, (current) => {
+      const baseScenes =
+        (Array.isArray(current?.clips?.sceneData) && current.clips.sceneData.length ? current.clips.sceneData : null) ||
+        (Array.isArray(current?.scenes) ? current.scenes : null) ||
+        current?.scenes?.sceneData ||
+        current?.images?.sceneData ||
+        [];
+      const mergedScenes = mergeSceneClip(baseScenes, enrichedScene);
+      const clipUrls = mergedScenes.map((scene) => scene.clipUrl || scene.clipCloudUrl || scene.video_url || scene.videoUrl).filter(Boolean);
+
+      return {
+        ...current,
+        currentStep: Math.max(Number(current.currentStep || 1), 4),
+        scenes: mergedScenes,
+        images: current?.images?.sceneData?.length
+          ? {
+              ...(current.images || {}),
+              sceneData: mergeSceneClip(current.images.sceneData, enrichedScene),
+              generatedAt: current.images.generatedAt || new Date().toISOString()
+            }
+          : (current.images || null),
+        clips: {
+          ...(current.clips || {}),
+          sceneData: mergedScenes,
+          clipUrls,
+          partial: clipUrls.length < mergedScenes.length,
+          lastPartialSavedAt: new Date().toISOString()
+        }
+      };
+    });
+    if (logger) logger(`Saved completed clip for ${enrichedScene.sceneId || enrichedScene.index}; retry will reuse it.`);
+  } catch (error) {
+    if (logger) logger(`Partial clip save skipped for ${enrichedScene.sceneId || enrichedScene.index}: ${error.message}`);
+  }
 }
 
 async function runCreateVideoPipeline({
@@ -2981,6 +3587,7 @@ async function runCreateVideoPipeline({
   update(5, 'generateScenes');
   log('Generating structured scene plan');
   const plan = await measureStep('generateScenes', () => generateScenesPlan({ input, product, user, logger: log }), log);
+  context.plan = plan;
 
   console.log(`[${new Date().toISOString()}] [Job ID: ${context.jobId}] STEP 2: Scene generation completed. Storyboard with ${plan.scenes?.length} scenes generated successfully.`);
   log(`STEP 2: Scene generation completed`);
@@ -3153,7 +3760,8 @@ async function runCreateVideoPipeline({
       finalOutput: finalOutput.url,
       subtitle: subtitles?.url || null,
       thumbnail: thumbnail?.url || null
-    }
+    },
+    thumbnailReview: thumbnail?.reviewMetadata || null
   };
 
   await saveManifest({ context, data: responsePayload });
@@ -3180,7 +3788,8 @@ async function runGenerateScenes({
     sceneCount: plan.sceneCount,
     globalVisualStyle: plan.globalVisualStyle,
     voiceScript: plan.voiceScript,
-    thumbnailPrompt: plan.thumbnailPrompt
+    thumbnailPrompt: plan.thumbnailPrompt,
+    productionBible: plan.productionBible
   };
 }
 
@@ -3318,6 +3927,10 @@ async function runGenerateAudio({
     localizedVoiceScript: audioTracks.tracks?.voice?.script || null,
     localizedSceneData: audioTracks.tracks?.voice?.sceneData || null,
     tracks: {
+      manual: audioTracks.tracks?.manual || null,
+      voice: audioTracks.tracks?.voice || null,
+      background: audioTracks.tracks?.background || null,
+      soundEffects: audioTracks.tracks?.soundEffects || [],
       manualUrl: audioTracks.tracks?.manual?.url || null,
       voiceUrl: audioTracks.tracks?.voice?.url || null,
       backgroundUrl: audioTracks.tracks?.background?.url || null,

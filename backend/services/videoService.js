@@ -8,6 +8,14 @@ const IMAGE_TO_VIDEO_MODEL = process.env.FAL_IMAGE_TO_VIDEO_MODEL || 'fal-ai/kli
 const DEFAULT_MODEL = process.env.FAL_TEXT_TO_VIDEO_MODEL || 'fal-ai/kling-video/v1/standard/text-to-video';
 const DEFAULT_SEED = Number.parseInt(String(process.env.FAL_VIDEO_SEED || '-1'), 10);
 const DEFAULT_NUM_FRAMES = 33;
+const FAL_VIDEO_SUBSCRIBE_TIMEOUT_MS = Math.max(
+  60 * 1000,
+  Number.parseInt(String(process.env.FAL_VIDEO_SUBSCRIBE_TIMEOUT_MS || String(6 * 60 * 1000)), 10) || (6 * 60 * 1000)
+);
+const FAL_VIDEO_MAX_RETRIES = Math.max(
+  0,
+  Number.parseInt(String(process.env.FAL_VIDEO_MAX_RETRIES || '1'), 10) || 1
+);
 const VIDEO_SIZE = {
   width: clamp(process.env.FAL_VIDEO_WIDTH || 576, 288, 1080),
   height: clamp(process.env.FAL_VIDEO_HEIGHT || 1024, 512, 1920)
@@ -35,11 +43,12 @@ function getScenePrompt(scene = {}) {
 
   // Motion-first prompt modifications
   return [
+    'CRITICAL: Single continuous camera shot only. Do NOT make any camera cuts, jump cuts, scene edits, transitions, or split screens. Keep the video completely continuous from the first frame to the last frame.',
     'Cinematic camera movement,',
     basePrompt,
-    'Dynamic motion, slow smooth pan, tracking shot, premium commercial style, natural light reflections, subtle depth movement.',
-    'Vertical 9:16 professional marketing video, high-detail 1080p look, sharp product details, clean edges, realistic materials.',
-    'Keep faces, hands, product packaging, logos, and object geometry consistent from frame to frame.',
+    'Dynamic and precise motion, slow smooth pan, tracking shot, premium commercial style, natural light reflections, subtle depth movement.',
+    'Vertical 9:16 professional marketing video, ultra-high-quality 1080p look, photorealistic, real video feel, sharp product details, clean edges, realistic materials.',
+    'Keep faces, hands, product packaging, logos, and object geometry perfectly consistent and precise from frame to frame.',
     'Avoid pixelation, distortion, flicker, duplicated objects, warped text, noisy backgrounds, blur, compression artifacts, and low-resolution details.'
   ].filter(Boolean).join(' ');
 }
@@ -77,7 +86,6 @@ function isLocalhostUrl(url = '') {
 }
 
 async function getFalClient() {
-  console.log("Fal key exists:", !!process.env.FAL_KEY);
   const apiKey = String(process.env.FAL_KEY || '').trim();
   if (!apiKey) {
     throw new Error('FAL_KEY environment variable is required for Fal.ai video clip generation');
@@ -96,27 +104,108 @@ async function getFalClient() {
   return falClientPromise;
 }
 
-async function uploadSceneImageIfNeeded({ fal, scene, imageUrl }) {
-  const imagePath = String(scene.imagePath || scene.image_path || '').trim();
-  if (!imagePath) return imageUrl;
-  if (imageUrl && !isLocalhostUrl(imageUrl)) return imageUrl;
-  if (!fal.storage?.upload) {
-    throw new Error(
-      'Cannot upload scene image to Fal.ai storage. ' +
-      'This usually happens when `@fal-ai/serverless-client` is missing storage support. ' +
-      'Upgrade the dependency and/or provide a publicly accessible image URL.'
-    );
+const { uploadBase64Image } = require('./imageUploader');function getSceneImageUrl(scene = {}) {
+  return String(
+    scene.image_url ||
+    scene.imageUrl ||
+    scene.generatedImageUrl ||
+    scene.image ||
+    ''
+  ).trim();
+}
+
+function resolveDiskPathFromUrl(imageUrl) {
+  if (!imageUrl || typeof imageUrl !== 'string') return null;
+  const cleanUrl = imageUrl.split('?')[0];
+
+  let subPath = '';
+  if (cleanUrl.includes('/generated-media/')) {
+    subPath = cleanUrl.substring(cleanUrl.indexOf('/generated-media/') + '/generated-media/'.length);
+  } else if (cleanUrl.includes('/storage/ai-videos/')) {
+    subPath = cleanUrl.substring(cleanUrl.indexOf('/storage/ai-videos/') + '/storage/ai-videos/'.length);
+  } else if (cleanUrl.includes('/uploads/')) {
+    subPath = cleanUrl.substring(cleanUrl.indexOf('/uploads/') + '/uploads/'.length);
   }
 
-  const buffer = await fs.promises.readFile(imagePath);
-  const fileName = path.basename(imagePath) || 'scene.jpg';
-  const BlobImpl = globalThis.Blob || BufferBlob;
-  if (!BlobImpl) {
-    throw new Error('Node.js Blob is not available. Upgrade Node.js to v18+ to upload images to Fal.ai.');
+  if (subPath) {
+    const pathsToTry = [
+      path.join(process.cwd(), 'storage', 'ai-videos', subPath),
+      path.join(process.cwd(), 'backend', 'storage', 'ai-videos', subPath),
+      path.join(__dirname, '..', 'storage', 'ai-videos', subPath),
+      path.join(__dirname, '..', '..', 'storage', 'ai-videos', subPath),
+      path.join(process.cwd(), 'uploads', subPath),
+      path.join(process.cwd(), 'backend', 'uploads', subPath),
+      path.join(process.cwd(), 'generated-media', subPath),
+      path.join(process.cwd(), 'backend', 'generated-media', subPath)
+    ];
+    for (const p of pathsToTry) {
+      if (fs.existsSync(p)) {
+        console.log(`[Fal.ai Image Upload] Resolved local disk image path: ${p}`);
+        return p;
+      }
+    }
   }
-  const blob = new BlobImpl([buffer], { type: getMimeType(imagePath) });
-  blob.name = fileName;
-  return fal.storage.upload(blob);
+  return null;
+}
+
+async function uploadSceneImageIfNeeded({ fal, scene = {}, imageUrl }) {
+  let url = String(imageUrl || getSceneImageUrl(scene)).trim();
+
+  // If already a valid remote HTTPS URL, return as is
+  if (url && url.startsWith('https://') && !isLocalhostUrl(url)) {
+    return url;
+  }
+
+  let imagePath = String(scene.imagePath || scene.image_path || '').trim();
+  if (!imagePath || !fs.existsSync(imagePath)) {
+    imagePath = resolveDiskPathFromUrl(url) || imagePath;
+  }
+
+  // Option 1: Upload local image to Cloudinary (returns public https:// URL)
+  if (imagePath && fs.existsSync(imagePath)) {
+    try {
+      const buffer = await fs.promises.readFile(imagePath);
+      const base64 = `data:image/png;base64,${buffer.toString('base64')}`;
+      const uploadRes = await uploadBase64Image(base64, 'nebula-scene-images');
+      if (uploadRes?.url && uploadRes.url.startsWith('https://')) {
+        console.log(`[Fal.ai Image Upload] ✅ Uploaded scene image to Cloudinary: ${uploadRes.url}`);
+        return uploadRes.url;
+      }
+    } catch (err) {
+      console.warn(`[Fal.ai Image Upload] Cloudinary upload attempt failed: ${err.message}. Trying Fal storage...`);
+    }
+  }
+
+  // Option 2: Upload local image to Fal.ai storage directly
+  if (imagePath && fs.existsSync(imagePath) && fal?.storage?.upload) {
+    try {
+      const buffer = await fs.promises.readFile(imagePath);
+      const fileName = path.basename(imagePath) || 'scene.png';
+      const BlobImpl = globalThis.Blob || BufferBlob;
+      if (BlobImpl) {
+        const blob = new BlobImpl([buffer], { type: getMimeType(imagePath) });
+        blob.name = fileName;
+        const falUrl = await fal.storage.upload(blob);
+        if (falUrl && String(falUrl).startsWith('https://')) {
+          console.log(`[Fal.ai Image Upload] ✅ Uploaded scene image to Fal storage: ${falUrl}`);
+          return falUrl;
+        }
+      }
+    } catch (err) {
+      console.warn(`[Fal.ai Image Upload] Fal storage upload failed: ${err.message}`);
+    }
+  }
+
+  // Option 3: Replace localhost host with PUBLIC_URL / SERVER_URL if configured
+  const publicBase = String(process.env.PUBLIC_URL || process.env.SERVER_URL || process.env.BASE_URL || '').trim();
+  if (publicBase && publicBase.startsWith('https://')) {
+    const relativePath = url.replace(/^https?:\/\/[^\/]+/, '');
+    const ngrokUrl = `${publicBase.replace(/\/$/, '')}${relativePath}`;
+    console.log(`[Fal.ai Image Upload] Transformed localhost URL using PUBLIC_URL: ${ngrokUrl}`);
+    return ngrokUrl;
+  }
+
+  return url;
 }
 
 function extractVideoUrl(result) {
@@ -156,6 +245,17 @@ async function retry(label, fn, maxRetries = 2) {
   throw lastError || new Error(`${label} failed`);
 }
 
+function withTimeout(promise, timeoutMs, message) {
+  let timer = null;
+  const timeoutPromise = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), timeoutMs);
+  });
+
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
 function mapFalError(error, model) {
   const status = Number(error?.status || 0);
   const message = String(error?.message || '').trim();
@@ -172,14 +272,64 @@ function mapFalError(error, model) {
   return error;
 }
 
+const axios = require('axios');
+
+async function verifyPublicImageReachable(url) {
+  if (!url || typeof url !== 'string' || !url.startsWith('https://')) {
+    return { ok: false, status: 0, contentType: 'none', contentLength: 0, reason: 'URL must be a public https:// string' };
+  }
+  try {
+    const res = await axios.head(url, { timeout: 8000 });
+    const status = res.status;
+    const contentType = String(res.headers['content-type'] || 'image/png');
+    const contentLength = Number(res.headers['content-length'] || 0);
+    const ok = status >= 200 && status < 400;
+    return { ok, status, contentType, contentLength, reason: ok ? 'SUCCESS' : `Invalid HTTP status: ${status}` };
+  } catch (err) {
+    try {
+      const getRes = await axios.get(url, { headers: { Range: 'bytes=0-1024' }, timeout: 8000 });
+      const status = getRes.status;
+      const contentType = String(getRes.headers['content-type'] || 'image/png');
+      const ok = status >= 200 && status < 400;
+      return { ok, status, contentType, contentLength: 0, reason: ok ? 'SUCCESS' : `GET status: ${status}` };
+    } catch (getErr) {
+      return { ok: false, status: 0, contentType: 'none', contentLength: 0, reason: getErr.message };
+    }
+  }
+}
+
 async function generateVideoClip(scene = {}) {
   const fal = await getFalClient();
   const prompt = getScenePrompt(scene);
+  const rawSceneImgUrl = getSceneImageUrl(scene);
+
+  console.log("===============================");
+  console.log("[Fal.ai Video Pipeline] Original Scene Image URL:", rawSceneImgUrl);
+
   const imageUrl = await uploadSceneImageIfNeeded({
     fal,
     scene,
-    imageUrl: getSceneImageUrl(scene)
+    imageUrl: rawSceneImgUrl
   });
+
+  console.log("[Fal.ai Video Pipeline] Converted Image URL:", imageUrl);
+  console.log("[Fal.ai Video Pipeline] Valid Public HTTPS:", String(imageUrl || '').startsWith('https://'));
+
+  if (imageUrl && imageUrl.startsWith("https://")) {
+    const check = await verifyPublicImageReachable(imageUrl);
+    console.log(`[Fal.ai Upload Verification]
+  Image Upload: ${check.ok ? 'SUCCESS' : 'FAILED'}
+  Public URL: ${imageUrl}
+  HTTP Status: ${check.status || 200} OK
+  Content-Type: ${check.contentType}
+  Content-Length: ${check.contentLength ? (check.contentLength / 1024 / 1024).toFixed(2) + ' MB' : 'N/A'}
+  Reason: ${check.reason}`);
+
+    if (!check.ok) {
+      throw new Error(`Public image asset verification failed for ${imageUrl}: ${check.reason}. Pipeline stopped before calling Fal.ai to protect credit balance.`);
+    }
+  }
+  console.log("===============================");
 
   if (imageUrl && !imageUrl.startsWith("https://")) {
     throw new Error(`Invalid public image URL for Fal.ai: ${imageUrl}. Must be a public HTTPS URL.`);
@@ -193,7 +343,8 @@ async function generateVideoClip(scene = {}) {
   const input = seedance
     ? {
         prompt,
-        ...(imageUrl ? { image_url: imageUrl } : { aspect_ratio: FAL_VIDEO_ASPECT_RATIO, resolution: FAL_VIDEO_RESOLUTION }),
+        image_url: imageUrl || undefined,
+        aspect_ratio: '9:16',
         duration: String(getSeedanceDuration(scene)),
         camera_fixed: false,
         seed,
@@ -204,6 +355,8 @@ async function generateVideoClip(scene = {}) {
       }
     : {
         prompt,
+        image_url: imageUrl || undefined,
+        aspect_ratio: '9:16',
         num_frames: numFrames,
         video_size: VIDEO_SIZE,
         fps: 25,
@@ -214,10 +367,6 @@ async function generateVideoClip(scene = {}) {
         dynamic_camera: true,
         cinematic_movement: true
       };
-
-  if (imageUrl && !seedance) {
-    input.image_url = imageUrl;
-  }
 
   const payload = { model, input };
   console.log("Fal request payload:", JSON.stringify(payload, null, 2));
@@ -230,25 +379,69 @@ async function generateVideoClip(scene = {}) {
       async (attempt) => {
         console.log(`Fal render attempt ${attempt + 1} starting...`);
         const subStart = Date.now();
-        const res = await fal.subscribe(model, { input });
+        const res = await withTimeout(
+          fal.subscribe(model, { input }),
+          FAL_VIDEO_SUBSCRIBE_TIMEOUT_MS,
+          `Fal.ai video render timed out after ${Math.round(FAL_VIDEO_SUBSCRIBE_TIMEOUT_MS / 60000)} minutes`
+        );
         const subDuration = Date.now() - subStart;
         console.log(`Fal render attempt ${attempt + 1} completed in ${subDuration}ms. Status: Success`);
         return res;
       },
-      2
+      FAL_VIDEO_MAX_RETRIES
     );
     const durationMs = Date.now() - startTime;
     console.log(`Scene ${scene.sceneId || scene.id || 'unknown'} render duration: ${durationMs}ms`);
     console.log("Fal response JSON:", JSON.stringify(result, null, 2));
 
-    const videoUrl = extractVideoUrl(result);
-    console.log("Fal response URL:", videoUrl);
+    const rawVideoUrl = extractVideoUrl(result);
+    console.log("Fal response URL:", rawVideoUrl);
+
+    let finalVideoUrl = rawVideoUrl;
+    try {
+      const { uploadVideoFile } = require('./imageUploader');
+      console.log('☁️ Uploading generated Fal video clip to Cloudinary folder nebula-scene-clips...');
+      const uploadRes = await uploadVideoFile(rawVideoUrl, 'nebula-scene-clips');
+      if (uploadRes && uploadRes.url) {
+        finalVideoUrl = uploadRes.url;
+        console.log('✅ Video clip permanently uploaded to Cloudinary:', finalVideoUrl);
+      }
+    } catch (cloudErr) {
+      console.warn('⚠️ Cloudinary upload warning for video clip (using direct Fal URL as fallback):', cloudErr.message);
+    }
+
+    // Save local copy to job storage if jobId is available
+    const jobId = scene.jobId || scene.job_id;
+    if (jobId && rawVideoUrl) {
+      try {
+        const fs = require('fs');
+        const path = require('path');
+        const axios = require('axios');
+        const clipsDir = path.resolve(`./storage/ai-videos/${jobId}/clips`);
+        if (!fs.existsSync(clipsDir)) {
+          fs.mkdirSync(clipsDir, { recursive: true });
+        }
+        const localFileName = `scene_${scene.sceneId || scene.id || Date.now()}.mp4`;
+        const localFilePath = path.join(clipsDir, localFileName);
+        const writer = fs.createWriteStream(localFilePath);
+        const resp = await axios.get(rawVideoUrl, { responseType: 'stream', timeout: 30000 });
+        resp.data.pipe(writer);
+        await new Promise((resolve, reject) => {
+          writer.on('finish', resolve);
+          writer.on('error', reject);
+        });
+        console.log(`💾 Local backup video clip saved to disk: ${localFilePath}`);
+      } catch (localSaveErr) {
+        console.warn('⚠️ Failed to save local video clip backup to disk:', localSaveErr.message);
+      }
+    }
 
     return {
       ...scene,
-      video_url: videoUrl,
-      videoUrl,
-      clipUrl: videoUrl,
+      video_url: finalVideoUrl,
+      videoUrl: finalVideoUrl,
+      clipUrl: finalVideoUrl,
+      rawFalUrl: rawVideoUrl,
       fal: {
         model,
         seed,

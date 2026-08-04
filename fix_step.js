@@ -1,0 +1,1 @@
+const fs = require("fs"); const file = "frontend/pages/ReelGenerator.tsx"; let content = fs.readFileSync(file, "utf8"); content = content.replace("currentStep: 3\n    });\n    \n  });", "currentStep: 3\n    });\n    setStep(3);\n  });"); fs.writeFileSync(file, content);

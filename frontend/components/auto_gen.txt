@@ -1,0 +1,53 @@
+  const autoGeneratePending = async () => {
+    const pendingChars = allCharacters.filter((c: any) => !c.image);
+    if (pendingChars.length === 0) return;
+    
+    try {
+      setBusy(true);
+      let updatedChars = [...(draft?.characters || [])];
+      
+      for (const char of pendingChars) {
+        const cid = char.id || char.characterId;
+        const res = await videoGenerationAPI.generateCharacterPreview({
+          name: char.name || '',
+          age: char.appearance?.ageAppearance || char.age || '25',
+          gender: char.appearance?.gender || char.gender || 'Any',
+          hairStyle: char.hair?.style || char.hairStr || '',
+          appearance: char.appearance ? JSON.stringify(char.appearance) : char.appearanceStr || '',
+          artStyle: 'Realistic / Photography'
+        });
+        
+        if (res?.image) {
+          const newChar = {
+            id: cid,
+            characterId: cid,
+            name: char.name || '',
+            role: char.role || char.appearance?.role || 'Character',
+            age: char.appearance?.ageAppearance || char.age || '25',
+            gender: char.appearance?.gender || char.gender || 'Any',
+            appearanceStr: char.appearance ? JSON.stringify(char.appearance) : char.appearanceStr || '',
+            hairStr: char.hair?.style || char.hairStr || '',
+            image: res.image
+          };
+          
+          const idx = updatedChars.findIndex((c: any) => c.id === cid);
+          if (idx > -1) {
+            updatedChars[idx] = newChar;
+          } else {
+            updatedChars.push(newChar);
+          }
+        }
+      }
+      
+      await videoGenerationAPI.updateDraft(jobId, { characters: updatedChars });
+      setDraft((prev: any) => prev ? { ...prev, characters: updatedChars } : prev);
+      
+    } catch (e: any) {
+      console.error("Failed to auto-generate characters:", e);
+      alert("Error auto-generating characters");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const deleteCharacter = async (id: string) => {

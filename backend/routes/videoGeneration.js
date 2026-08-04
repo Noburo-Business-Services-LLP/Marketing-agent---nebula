@@ -4,6 +4,7 @@ const rateLimit = require('express-rate-limit');
 const { ipKeyGenerator } = rateLimit;
 const fs = require('fs');
 const path = require('path');
+const { v4: uuidv4 } = require('uuid');
 
 const Product = require('../models/Product');
 const { protect } = require('../middleware/auth');
@@ -25,6 +26,7 @@ const {
   loadDraftForUser,
   deleteDraftForUser,
   updateDraft,
+  patchDraft,
   buildMediaUrl,
   toUserId,
   saveDataUrlToJob
@@ -32,6 +34,13 @@ const {
 const { callGemini, parseGeminiJSON, generateCampaignImageNanoBanana } = require('../services/geminiAI');
 const { buildAIContext } = require('../services/aiContextBuilder');
 const { learnVideoStep } = require('../services/aiVideoLearning');
+const {
+  generateSceneImageWithIdentityLock,
+  resolveCharacterMemoryForScene
+} = require('../services/sceneImageIdentityPipeline');
+const { ensureCharacterMemoryFromSource } = require('../services/characterMemoryStore');
+const { runDirectorImageGeneration } = require('../services/directorImageJobService');
+const { logJobFailed } = require('../services/directorLogger');
 
 // -----------------------------------------------------------------------------
 // Register persistent background handlers for queue tasks
@@ -122,6 +131,197 @@ videoGenerationQueue.registerHandler('generate_clips', async (payload, { update,
   };
 });
 
+videoGenerationQueue.registerHandler('generate_scene_clip', async (payload, { update, log }) => {
+  const { jobId, userId, sceneId, prompt, imageUrl, duration } = payload;
+  await update({ progress: 10, currentStep: 'generate_scene_clip' });
+  await log(`Generating video clip for scene ${sceneId} in draft ${jobId}`);
+
+  const { generateVideoClip } = require('../services/videoService');
+  const draft = await loadDraftForUser(jobId, userId);
+  const result = await generateVideoClip({
+    sceneId,
+    videoPrompt: prompt,
+    imageUrl,
+    durationSeconds: duration || 5
+  });
+
+  await update({ progress: 75, currentStep: 'saving_clip' });
+
+  const sourceScenes = Array.isArray(draft?.scenes) ? draft.scenes : [];
+  const videoUrl = result.videoUrl;
+  const updatedScenes = sourceScenes.map((scene) => (
+    String(scene.sceneId) === String(sceneId)
+      ? {
+        ...scene,
+        generatedVideoUrl: videoUrl,
+        clipUrl: videoUrl,
+        videoUrl
+      }
+      : scene
+  ));
+
+  const clipUrls = [...new Set([
+    ...(Array.isArray(draft?.clips?.clipUrls) ? draft.clips.clipUrls : []),
+    videoUrl
+  ].filter(Boolean))];
+
+  const updated = await updateDraft(jobId, userId, (current) => ({
+    ...current,
+    currentStep: Math.max(Number(current.currentStep || 1), 6),
+    scenes: updatedScenes,
+    clips: {
+      ...(current.clips || {}),
+      sceneData: updatedScenes,
+      clipUrls
+    },
+    jobs: {
+      ...(current.jobs || {}),
+      sceneClips: {
+        ...(current.jobs?.sceneClips || {}),
+        [sceneId]: {
+          status: 'completed',
+          videoUrl,
+          completedAt: new Date().toISOString()
+        }
+      }
+    }
+  }));
+
+  await update({ progress: 100, currentStep: 'completed' });
+  return { success: true, jobId, sceneId, videoUrl, draft: updated };
+});
+
+videoGenerationQueue.registerHandler('generate_images', async (payload, { update, log }) => {
+  const {
+    jobId,
+    userId,
+    action,
+    sceneId,
+    imagePrompt,
+    characterId,
+    sceneData,
+    baseUrl,
+    brandContext
+  } = payload;
+
+  await update({ progress: 2, currentStep: 'generate_images' });
+  await log(`Starting background image generation for draft ${jobId}`);
+
+  try {
+    const draft = await loadDraftForUser(jobId, userId);
+    const result = await runDirectorImageGeneration({
+      jobId,
+      userId,
+      draft,
+      baseUrl,
+      action,
+      sceneId,
+      imagePrompt,
+      characterId,
+      sceneData,
+      brandContext,
+      onProgress: ({ progress, currentStep, metadata }) => update({ progress, currentStep, metadata }),
+      onLog: (line) => log(line)
+    });
+
+    await update({ progress: 100, currentStep: 'completed' });
+    return result;
+  } catch (error) {
+    logJobFailed({ jobId, userId }, { error: error.message });
+    await updateDraft(jobId, userId, (current) => ({
+      ...current,
+      imageJobs: {
+        ...(current.imageJobs || {}),
+        status: 'failed',
+        error: error.message,
+        failedAt: new Date().toISOString()
+      }
+    }));
+    throw error;
+  }
+});
+
+videoGenerationQueue.registerHandler('generate_audio', async (payload, { update, log }) => {
+  const { jobId, userId, audio = {}, baseUrl } = payload;
+  await update({ progress: 5, currentStep: 'generate_audio' });
+  await log(`Starting background audio generation for draft ${jobId}`);
+
+  const draft = await loadDraftForUser(jobId, userId);
+  const requestedLanguageCode = normalizeAudioLanguageCode(audio?.languageCode || 'en');
+  const sourceVoiceScript = String(audio?.voiceScript || deriveVoiceScriptFromDraft(draft) || '').trim();
+
+  const sceneDataForTiming =
+    (Array.isArray(draft?.scenes) && draft.scenes.length ? draft.scenes : null) ||
+    (Array.isArray(draft?.scenes?.sceneData) && draft.scenes.sceneData.length ? draft.scenes.sceneData : null) ||
+    (Array.isArray(draft?.clips?.sceneData) && draft.clips.sceneData.length ? draft.clips.sceneData : null) ||
+    (Array.isArray(draft?.images?.sceneData) && draft.images.sceneData.length ? draft.images.sceneData : null) ||
+    [];
+
+  const audioConfig = {
+    enabled: audio?.enabled !== false,
+    mode: String(audio?.mode || 'auto').toLowerCase(),
+    languageCode: requestedLanguageCode,
+    tone: String(audio?.tone || 'professional').toLowerCase(),
+    musicSource: String(audio?.musicSource || process.env.AI_VIDEO_MUSIC_SOURCE || 'library').toLowerCase(),
+    musicTrack: typeof audio?.musicTrack === 'string' ? audio.musicTrack : '',
+    voiceGender: String(audio?.voiceGender || 'female').toLowerCase(),
+    voiceVolume: Number.isFinite(Number(audio?.voiceVolume)) ? Number(audio.voiceVolume) : 1,
+    musicVolume: Number.isFinite(Number(audio?.musicVolume)) ? Number(audio.musicVolume) : 0.24,
+    sourceVoiceScript,
+    voiceScript: sourceVoiceScript,
+    localizedVoiceScript: null,
+    localizedSceneData: null,
+    manualAudioData: typeof audio?.manualAudioData === 'string' ? audio.manualAudioData : '',
+    manualAudioUrl: typeof audio?.manualAudioUrl === 'string' ? audio.manualAudioUrl : '',
+    soundEffectUrls: Array.isArray(audio?.soundEffectUrls) ? audio.soundEffectUrls : []
+  };
+  audioConfig.voiceGender = audioConfig.voiceGender === 'male' ? 'male' : 'female';
+
+  const generated = await runGenerateAudio({
+    payload: {
+      jobId,
+      skipMix: true,
+      description: String(sourceVoiceScript || draft?.input?.description || ''),
+      voiceScript: String(sourceVoiceScript || ''),
+      sourceVoiceScript: String(sourceVoiceScript || ''),
+      sceneData: sceneDataForTiming,
+      durationSeconds: draft?.input?.durationSeconds || 60,
+      audio: audioConfig
+    },
+    baseUrl
+  });
+
+  await update({ progress: 90, currentStep: 'saving_audio' });
+
+  const updated = await updateDraft(jobId, userId, (current) => ({
+    ...current,
+    currentStep: Math.max(Number(current.currentStep || 1), 7),
+    finalVideoUrl: null,
+    audio: {
+      config: {
+        ...audioConfig,
+        localizedVoiceScript: generated?.localizedVoiceScript || null,
+        localizedSceneData: generated?.localizedSceneData || null
+      },
+      tracks: generated?.tracks || {},
+      generatedAt: new Date().toISOString()
+    },
+    mix: null,
+    merge: null,
+    jobs: {
+      ...(current.jobs || {}),
+      audio: {
+        ...(current.jobs?.audio || {}),
+        status: 'completed',
+        completedAt: new Date().toISOString()
+      },
+      merge: null
+    }
+  }));
+
+  await update({ progress: 100, currentStep: 'completed' });
+  return { success: true, jobId, audio: updated.audio, draft: updated };
+});
 
 videoGenerationQueue.registerHandler('generate_content', async (payload, { update, log }) => {
   const { jobId, userId, selectedPlatforms, baseUrl } = payload;
@@ -130,20 +330,16 @@ videoGenerationQueue.registerHandler('generate_content', async (payload, { updat
 
   const draft = await loadDraftForUser(jobId, userId);
   const platforms = normalizePlatforms(selectedPlatforms?.length ? selectedPlatforms : (draft?.platform?.selectedPlatforms || []));
-  
+
   const thumbnailUrl = await generateThumbnailFromDraft({ draft, baseUrl });
   const socialContent = await generateCaptionAndHashtags({ draft, selectedPlatforms: platforms });
+  const normalizedContent = normalizeGeneratedContent({ draft, thumbnailUrl, socialContent });
 
   const updated = await updateDraft(jobId, userId, (current) => ({
     ...current,
     currentStep: Math.max(Number(current.currentStep || 1), 8),
-    thumbnailUrl,
-    content: {
-      thumbnailUrl,
-      caption: socialContent.caption,
-      hashtags: socialContent.hashtags,
-      generatedAt: new Date().toISOString()
-    },
+    thumbnailUrl: normalizedContent.thumbnailUrl,
+    content: normalizedContent,
     thumbnails: thumbnailUrl ? { url: thumbnailUrl, generatedAt: new Date().toISOString() } : current.thumbnails,
     jobs: {
       ...(current.jobs || {}),
@@ -168,8 +364,8 @@ videoGenerationQueue.registerHandler('generate_content', async (payload, { updat
     action: 'video_content',
     prompt: draft?.prompt?.promptText || '',
     userInput: draft.input || {},
-    captions: [socialContent.caption],
-    hashtags: socialContent.hashtags,
+    captions: [normalizedContent.caption],
+    hashtags: normalizedContent.hashtags,
     thumbnails: [thumbnailUrl].filter(Boolean),
     generatedVideos: [draft?.merge?.finalOutputUrl || draft?.merge?.finalVideoUrl].filter(Boolean),
     product: draft?.input?.product || null,
@@ -193,13 +389,15 @@ videoGenerationQueue.registerHandler('merge_video', async (payload, { update, lo
   const sceneDataForSubtitles =
     subtitles?.enabled === true && draft?.audio?.config?.languageCode && draft.audio.config.languageCode !== 'en' && translatedSceneData?.length
       ? translatedSceneData
-      : (draft?.clips?.sceneData || draft?.images?.sceneData || draft?.scenes?.sceneData || []);
+      : (draft?.clips?.sceneData || draft?.images?.sceneData || (Array.isArray(draft?.scenes) ? draft.scenes : null) || draft?.scenes?.sceneData || []);
+
+  const audioUrlToUse = await ensureAudioMixUrl(jobId, userId, finalAudioUrl, draft, baseUrl, log);
 
   const merged = await runMergeVideo({
     payload: {
       jobId,
       clipUrls: effectiveClipUrls,
-      finalAudioUrl: finalAudioUrl || draft?.mix?.finalAudioUrl || null,
+      finalAudioUrl: audioUrlToUse,
       subtitles: { enabled: subtitles?.enabled === true },
       sceneData: sceneDataForSubtitles,
       durationSeconds: draft?.input?.durationSeconds || null
@@ -265,7 +463,7 @@ videoGenerationQueue.registerHandler('merge_video', async (payload, { update, lo
       action: 'video_merge',
       prompt: draft?.prompt?.promptText || '',
       userInput: draft.input || {},
-      sceneData: draft?.clips?.sceneData || draft?.images?.sceneData || draft?.scenes?.sceneData || [],
+      sceneData: draft?.clips?.sceneData || draft?.images?.sceneData || (Array.isArray(draft?.scenes) ? draft.scenes : null) || draft?.scenes?.sceneData || [],
       generatedVideos: [updated.merge.finalOutputUrl || updated.merge.finalVideoUrl].filter(Boolean),
       audioSettings: draft?.audio?.config || {},
       duration: draft?.input?.durationSeconds || null,
@@ -286,8 +484,8 @@ videoGenerationQueue.registerHandler('merge_video', async (payload, { update, lo
 
 // Keep heavy AI generation protected, but allow frequent job polling.
 const videoAiWriteLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
+  windowMs: 1 * 60 * 1000,
+  max: 1000,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many AI generation requests, please try again later.' },
@@ -637,10 +835,12 @@ function mergeClipUrlsIntoScenes(existingScenes = [], clipScenes = []) {
       (sceneId && bySceneId.get(sceneId)) ||
       clips[idx] ||
       null;
-    if (!clipMatch?.clipUrl) return scene;
+    const clipUrl = clipMatch?.clipUrl || clipMatch?.clipCloudUrl || clipMatch?.video_url || clipMatch?.videoUrl || clipMatch?.falVideoUrl;
+    if (!clipUrl) return scene;
     return {
       ...scene,
-      clipUrl: clipMatch.clipUrl
+      ...clipMatch,
+      clipUrl
     };
   });
 }
@@ -745,13 +945,21 @@ Rules:
 }
 
 async function generateCaptionAndHashtags({ draft, selectedPlatforms = [] }) {
-  const sceneSummary = Array.isArray(draft?.scenes?.sceneData)
-    ? draft.scenes.sceneData
+  console.log('--- generateCaptionAndHashtags ---');
+  console.log('DRAFT:', JSON.stringify(draft, null, 2));
+  const sceneSummary = Array.isArray(draft?.scenes)
+    ? draft.scenes
       .map((scene) => String(scene?.voiceLine || scene?.onScreenText || scene?.title || '').trim())
       .filter(Boolean)
       .slice(0, 5)
       .join(' | ')
-    : '';
+    : Array.isArray(draft?.scenes?.sceneData)
+      ? draft.scenes.sceneData
+        .map((scene) => String(scene?.voiceLine || scene?.onScreenText || scene?.title || '').trim())
+        .filter(Boolean)
+        .slice(0, 5)
+        .join(' | ')
+      : '';
 
   const aiMemoryContext = await buildAIContext({
     userId: draft?.userId,
@@ -778,6 +986,8 @@ Rules:
 - caption: 1-3 lines, conversion-aware, no markdown.
 - hashtags: 5 to 12 relevant tags, each starting with #.`;
 
+  console.log('PROMPT:', prompt);
+
   try {
     const raw = await callGemini(prompt, {
       skipCache: true,
@@ -785,7 +995,9 @@ Rules:
       maxTokens: 900,
       timeout: 90000
     });
+    console.log('RAW GEMINI RESPONSE:', raw);
     const parsed = parseGeminiJSON(raw);
+    console.log('PARSED GEMINI RESPONSE:', JSON.stringify(parsed, null, 2));
     const caption = String(parsed?.caption || '').trim();
     const hashtagsRaw = Array.isArray(parsed?.hashtags) ? parsed.hashtags : [];
     const hashtags = Array.from(
@@ -797,12 +1009,42 @@ Rules:
       )
     ).slice(0, 12);
     if (!caption) throw new Error('Caption missing');
-    return { caption, hashtags };
-  } catch (_) {
+    const result = { caption, hashtags };
+    console.log('RESULT:', JSON.stringify(result, null, 2));
+    return result;
+  } catch (error) {
+    console.error('ERROR in generateCaptionAndHashtags:', error);
     const fallbackCaption = String(draft?.input?.description || '').trim() || 'Discover our latest update.';
     const fallbackTags = ['#Marketing', '#AIVideo', '#BrandGrowth', '#DigitalCampaign', '#ContentCreation'];
-    return { caption: fallbackCaption, hashtags: fallbackTags };
+    const fallbackResult = { caption: fallbackCaption, hashtags: fallbackTags };
+    console.log('FALLBACK RESULT:', JSON.stringify(fallbackResult, null, 2));
+    return fallbackResult;
   }
+}
+
+function normalizeGeneratedContent({ draft, thumbnailUrl = '', socialContent = {} }) {
+  const fallbackCaption = String(draft?.input?.description || draft?.prompt?.promptText || '').trim() || 'Discover our latest update.';
+  const caption = String(socialContent?.caption || '').trim() || fallbackCaption;
+  const rawTags = Array.isArray(socialContent?.hashtags)
+    ? socialContent.hashtags
+    : String(socialContent?.hashtags || '').split(/\s+/);
+  const hashtags = Array.from(
+    new Set(
+      rawTags
+        .map((tag) => String(tag || '').trim())
+        .filter(Boolean)
+        .map((tag) => (tag.startsWith('#') ? tag : `#${tag}`))
+    )
+  ).slice(0, 12);
+
+  return {
+    thumbnailUrl: String(thumbnailUrl || '').trim(),
+    caption,
+    hashtags: hashtags.length
+      ? hashtags
+      : ['#Marketing', '#AIVideo', '#BrandGrowth', '#DigitalCampaign', '#ContentCreation'],
+    generatedAt: new Date().toISOString()
+  };
 }
 
 async function generateThumbnailFromDraft({ draft, baseUrl }) {
@@ -830,7 +1072,9 @@ async function generateThumbnailFromDraft({ draft, baseUrl }) {
         jobId: draft.jobId,
         dataUrl: result.imageUrl,
         folder: 'final',
-        fileName: 'thumbnail'
+        // Unique filename per generation so a freshly generated thumbnail is not
+        // masked by a browser-cached copy of a previous one after refresh.
+        fileName: `thumbnail-${Date.now()}`
       });
       return buildMediaUrl(baseUrl, draft.jobId, saved.relativePath);
     }
@@ -852,6 +1096,104 @@ router.post('/createVideo', protect, checkTrial, videoAiWriteLimiter, async (req
   
   if (!userId) {
     return res.status(401).json({ success: false, message: 'Authentication required' });
+  }
+
+  const { jobId, sceneId, prompt, imageUrl, duration } = req.body || {};
+
+  if (sceneId) {
+    try {
+      const userId = toUserId(req.user);
+      const shouldQueue =
+        req.body?.async === true ||
+        String(req.query?.async || '').toLowerCase() === 'true' ||
+        String(process.env.VIDEO_STEP_ASYNC || '').toLowerCase() === 'true';
+
+      if (shouldQueue) {
+        const draft = await loadDraftForUser(jobId, userId);
+        const existingJobId = draft?.jobs?.sceneClips?.[sceneId]?.queueJobId;
+        let queued;
+        if (existingJobId) {
+          const existingJob = await videoGenerationQueue.getJob(existingJobId, userId);
+          if (existingJob && ['queued', 'processing'].includes(existingJob.status)) {
+            queued = existingJob;
+          }
+        }
+
+        if (!queued) {
+          queued = await videoGenerationQueue.enqueue({
+            userId,
+            jobType: 'generate_scene_clip',
+            payload: {
+              jobId,
+              userId,
+              sceneId,
+              prompt,
+              imageUrl,
+              duration: duration || 5
+            }
+          });
+
+          await updateDraft(jobId, userId, (current) => ({
+            ...current,
+            jobs: {
+              ...(current.jobs || {}),
+              sceneClips: {
+                ...(current.jobs?.sceneClips || {}),
+                [sceneId]: {
+                  queueJobId: queued.jobId,
+                  status: queued.status,
+                  queuedAt: new Date().toISOString()
+                }
+              }
+            }
+          }));
+        }
+
+        return res.status(202).json({
+          success: true,
+          queueJobId: queued.jobId,
+          status: queued.status,
+          progress: queued.progress || 0,
+          currentStep: queued.currentStep || 'generate_scene_clip'
+        });
+      }
+
+      const { generateVideoClip } = require('../services/videoService');
+      const VideoDraft = require('../models/VideoDraft');
+
+      const draft = await VideoDraft.findOne({ jobId });
+      if (!draft) {
+        return res.status(404).json({ success: false, message: 'Draft not found' });
+      }
+
+      console.log(`🎬 Generating video clip for scene ${sceneId} with configured Fal AI video model...`);
+      const sceneData = {
+        sceneId,
+        videoPrompt: prompt,
+        imageUrl: imageUrl,
+        durationSeconds: duration || 5
+      };
+
+      const result = await generateVideoClip(sceneData);
+      const videoUrl = result.videoUrl;
+
+      // Update the draft scenes in MongoDB
+      const sourceScenes = draft.scenes || [];
+      const updatedScenes = sourceScenes.map(s => 
+        String(s.sceneId) === String(sceneId) ? { ...s, generatedVideoUrl: videoUrl, clipUrl: videoUrl, videoUrl } : s
+      );
+
+      draft.scenes = updatedScenes;
+      await draft.save();
+
+      return res.json({
+        success: true,
+        videoUrl
+      });
+    } catch (error) {
+      console.error('Single scene video generation failed:', error);
+      return res.status(500).json({ success: false, message: 'Video generation failed: ' + error.message });
+    }
   }
 
   // Deduct 7 credits synchronously before enqueuing
@@ -960,6 +1302,20 @@ router.post('/jobs/:jobId/cancel', protect, videoAiWriteLimiter, async (req, res
   }
 });
 
+router.post('/jobs/:jobId/retry', protect, videoAiWriteLimiter, async (req, res) => {
+  try {
+    const userId = toUserId(req.user);
+    const job = await videoGenerationQueue.retryJob(req.params.jobId, userId);
+    return res.json({
+      success: true,
+      message: 'Job re-queued for retry.',
+      job
+    });
+  } catch (error) {
+    return responseError(res, error, 'Failed to retry job');
+  }
+});
+
 // -----------------------------------------------------------------------------
 // Wizard endpoints (step-by-step with draft state)
 // -----------------------------------------------------------------------------
@@ -996,7 +1352,7 @@ router.get('/draft/:jobId', protect, videoJobReadLimiter, async (req, res) => {
   }
 });
 
-router.delete('/draft/:jobId', protect, videoAiWriteLimiter, async (req, res) => {
+router.delete('/draft/:jobId', protect, videoJobReadLimiter, async (req, res) => {
   try {
     const userId = toUserId(req.user);
     const draft = await deleteDraftForUser(req.params.jobId, userId);
@@ -1010,18 +1366,29 @@ router.delete('/draft/:jobId', protect, videoAiWriteLimiter, async (req, res) =>
   }
 });
 
-router.put('/draft/:jobId', protect, videoAiWriteLimiter, async (req, res) => {
+router.put('/draft/:jobId', protect, videoJobReadLimiter, async (req, res) => {
   try {
     const userId = toUserId(req.user);
-    const updated = await updateDraft(req.params.jobId, userId, (current) => ({
-      ...current,
-      ...req.body
-    }));
+    const expectedVersion = req.body?.version ?? req.headers['x-draft-version'];
+    const updated = await patchDraft(req.params.jobId, userId, req.body, {
+      expectedVersion: expectedVersion !== undefined && expectedVersion !== null && expectedVersion !== ''
+        ? Number(expectedVersion)
+        : undefined
+    });
     return res.json({
       success: true,
-      draft: updated
+      draft: updated,
+      version: updated.version
     });
   } catch (error) {
+    if (error.statusCode === 409) {
+      return res.status(409).json({
+        success: false,
+        message: error.message,
+        currentVersion: error.currentVersion,
+        draft: error.draft
+      });
+    }
     return responseError(res, error, 'Failed to update draft');
   }
 });
@@ -1047,7 +1414,20 @@ router.post('/createDraft', protect, checkTrial, videoAiWriteLimiter, async (req
         imageData: payload.imageData,
         imageUrl: payload.imageUrl,
         productId: payload.productId || resolvedProduct?._id || null,
-        product: resolvedProduct
+        product: resolvedProduct,
+        businessName: payload.businessName,
+        industry: payload.industry,
+        targetAudience: payload.targetAudience,
+        brandTone: payload.brandTone,
+        commercialObjective: payload.commercialObjective,
+        brandSummary: payload.brandSummary || description,
+        storyDirection: payload.storyDirection,
+        videoStyle: payload.videoStyle,
+        useCharacters: payload.useCharacters,
+        useLogo: payload.useLogo,
+        currentStep: payload.currentStep,
+        completedSteps: payload.completedSteps,
+        uiState: payload.uiState
       }
     });
 
@@ -1062,9 +1442,9 @@ router.post('/createDraft', protect, checkTrial, videoAiWriteLimiter, async (req
   }
 });
 
-router.post('/generateCharacterPreview', protect, checkTrial, videoAiWriteLimiter, async (req, res) => {
+router.post('/generateCharacterPreview', protect, checkTrial, async (req, res) => {
   try {
-    const { name, age, gender, hairStyle, beard, race, role, personality, videoStyle, brandName, artStyle, appearance, characterImageBase64 } = req.body;
+    const { name, age, gender, hairStyle, beard, race, role, personality, videoStyle, brandName, artStyle, appearance, characterImageBase64, characterId: requestedCharacterId } = req.body;
     
     let description = ``;
     if (gender) description += `Gender: ${gender}. `;
@@ -1079,37 +1459,57 @@ router.post('/generateCharacterPreview', protect, checkTrial, videoAiWriteLimite
     }
     
     const resolvedArtStyle = artStyle || 'Realistic / Photography';
-    
-    let prompt = `Create a professional Master Character Reference Sheet.
-The sheet must show the exact same person in all views and preserve the identical face, hairstyle, beard, skin tone, body proportions, and age.
 
-Include the following sections:
-1. Face Views: Front view, Left profile, Right profile, 45-degree angle.
-2. Body Views: Full body front, Full body side, Full body back.
-3. Expression Sheet: Neutral, Happy, Serious, Thinking.
-4. Pose Sheet: Standing, Walking, Sitting, Pointing.
+    // -------------------------------------------------------------------------
+    // Build the shared "person description" suffix used in every angle prompt
+    // -------------------------------------------------------------------------
+    const personSuffix = [
+      description ? `The person has these characteristics: ${description}` : '',
+      characterImageBase64
+        ? 'CRITICAL: Match the exact face, skin tone, hair, eyes, and all facial features from the supplied reference image.'
+        : ''
+    ].filter(Boolean).join('\n');
 
-Requirements:
-- Use the exact same person in every image.
-- Maintain identical facial geometry.
-- Maintain identical beard style.
-- Maintain identical hairstyle and hairline.
-- Maintain identical skin tone and ethnicity.
-- Maintain identical body proportions.
-- Use a clean studio background.
-- Arrange everything in a professional character reference sheet layout.
-- Art Style / Format: ${resolvedArtStyle}.
-- Video Theme Style: ${videoStyle || 'Cinematic, extremely high quality.'}
-- CRITICAL: Do not add glasses, hats, or other face-obscuring accessories unless explicitly specified.
-`;
+    // -------------------------------------------------------------------------
+    // Build a single-portrait prompt for one specific angle
+    // -------------------------------------------------------------------------
+    function buildAnglePrompt(angleDescription) {
+      return `A single ultra-photorealistic studio portrait photograph.
 
-    if (description) {
-        prompt += `\nSubject details to enforce: ${description}`;
+${angleDescription}
+
+Shot with a Canon EOS 5D Mark IV DSLR camera, 85mm f/1.4 prime lens, professional softbox studio lighting, neutral gray background.
+
+The subject is a REAL LIVING HUMAN BEING with:
+- Real skin texture, natural pores, fine lines, subtle imperfections
+- Natural skin tone with subsurface scattering light
+- Natural facial asymmetry (no perfectly symmetrical face)
+- Real hair with individual strands and natural flyaways
+- Natural eyes with realistic iris, eyelashes, and eye whites
+- Shallow depth of field, natural bokeh
+- Studio softbox lighting with natural highlights and shadows
+
+This is REAL PHOTOGRAPHY of a REAL PERSON. NOT CGI, NOT 3D render, NOT illustration, NOT cartoon, NOT anime, NOT digital art, NOT wax figure.
+
+No text. No labels. No watermarks. No borders. No annotations.
+${personSuffix}`;
     }
-    
-    if (characterImageBase64) {
-        prompt += `\n\nCRITICAL: You MUST base this character sheet on the exact person in the provided reference image. Keep their face and identity perfectly identical!`;
-    }
+
+    // -------------------------------------------------------------------------
+    // Define the 10 exact angle views
+    // -------------------------------------------------------------------------
+    const ANGLE_VIEWS = [
+      { label: 'Left 45°',         prompt: 'HEAD ANGLE: Left 45° three-quarter view. Head turned exactly 45 degrees to the LEFT. Both eyes visible but left side more prominent. Nose pointing left of center.' },
+      { label: 'Left Profile 90°', prompt: 'HEAD ANGLE: Pure LEFT side profile (90°). Only the left side of the face visible. Right eye completely hidden. Left ear fully visible. Nose clearly visible in silhouette. A true side profile, not a three-quarter view.' },
+      { label: 'Front 0°',         prompt: 'HEAD ANGLE: Perfect FRONT view (0°). Face looking straight at camera. Both eyes perfectly level and equidistant from center. Nose centered. A true front-facing portrait.' },
+      { label: 'Right Profile 90°',prompt: 'HEAD ANGLE: Pure RIGHT side profile (90°). Only the right side of the face visible. Left eye completely hidden. Right ear fully visible. Nose clearly visible in silhouette. A true side profile, not a three-quarter view.' },
+      { label: 'Right 45°',        prompt: 'HEAD ANGLE: Right 45° three-quarter view. Head turned exactly 45 degrees to the RIGHT. Both eyes visible but right side more prominent. Nose pointing right of center.' },
+      { label: 'Rear View 180°',   prompt: 'HEAD ANGLE: Rear view (180°). Back of the head facing camera. No face visible. Back of hairstyle and back of neck fully visible. Rear-facing portrait.' },
+      { label: 'Looking Up 20°',   prompt: 'HEAD ANGLE: Looking up 20°. Face pointing slightly upward, chin raised, forehead tilted back. Camera positioned slightly below eye level looking up at the face.' },
+      { label: 'Looking Down 20°', prompt: 'HEAD ANGLE: Looking down 20°. Face pointing slightly downward, chin lowered, forehead tilted forward. Camera positioned slightly above eye level looking down at the face.' },
+      { label: 'Left 30°',         prompt: 'HEAD ANGLE: Left 30° slight turn. Head turned 30 degrees to the LEFT — less than a 45° turn, more than a front view. Both eyes clearly visible. A subtle left turn, distinctly different from 45°.' },
+      { label: 'Right 30°',        prompt: 'HEAD ANGLE: Right 30° slight turn. Head turned 30 degrees to the RIGHT — less than a 45° turn, more than a front view. Both eyes clearly visible. A subtle right turn, distinctly different from 45°.' },
+    ];
 
     let cleanBase64 = null;
     if (characterImageBase64) {
@@ -1119,19 +1519,127 @@ Requirements:
       }
     }
 
-    const imageUrl = await generateCampaignImageNanoBanana(prompt, {
-      aspectRatio: '16:9',
-      brandName: brandName || '',
-      tone: 'professional',
-      characterReferenceImage: cleanBase64 ? `data:image/jpeg;base64,${cleanBase64}` : null,
-      isCinematic: !!cleanBase64
-    });
+    // -------------------------------------------------------------------------
+    // Generate all 10 angle images individually (sequentially to avoid rate limits)
+    // -------------------------------------------------------------------------
+    console.log('[CharacterSheet] Starting 10-angle generation pipeline...');
+    const axios = require('axios');
+    const { createCanvas, loadImage: canvasLoadImage } = require('canvas');
+    const { uploadBase64Image } = require('../services/imageUploader');
 
-    if (!imageUrl || (typeof imageUrl === 'object' && !imageUrl.imageUrl)) {
-      throw new Error('Failed to generate character preview');
+    const PANEL_W = 512;
+    const PANEL_H = 512;
+    const COLS = 5;
+    const ROWS = 2;
+
+    const panelImages = [];
+
+    for (let i = 0; i < ANGLE_VIEWS.length; i++) {
+      const view = ANGLE_VIEWS[i];
+      console.log(`[CharacterSheet] Generating angle ${i + 1}/${ANGLE_VIEWS.length}: ${view.label}`);
+      try {
+        const angleUrl = await generateCampaignImageNanoBanana(buildAnglePrompt(view.prompt), {
+          aspectRatio: '1:1',
+          brandName: brandName || '',
+          tone: 'professional',
+          characterReferenceImage: cleanBase64 ? `data:image/jpeg;base64,${cleanBase64}` : null,
+          isCinematic: !!cleanBase64,
+          skipFaceSimilarity: true
+        });
+        const urlStr = (angleUrl && typeof angleUrl === 'object') ? angleUrl.imageUrl : (typeof angleUrl === 'string' ? angleUrl : null);
+        if (urlStr) {
+          panelImages.push({ label: view.label, url: urlStr });
+          console.log(`[CharacterSheet] ✅ Angle ${i + 1} (${view.label}) done: ${urlStr}`);
+        } else {
+          console.warn(`[CharacterSheet] ⚠️ Angle ${i + 1} (${view.label}) returned no URL, skipping.`);
+          panelImages.push(null);
+        }
+      } catch (angleErr) {
+        console.warn(`[CharacterSheet] ⚠️ Angle ${i + 1} (${view.label}) failed: ${angleErr.message}`);
+        panelImages.push(null);
+      }
     }
 
-    res.json({ success: true, imageUrl: typeof imageUrl === 'string' ? imageUrl : imageUrl.imageUrl });
+    // -------------------------------------------------------------------------
+    // Compose 10 panels into a 5×2 grid using canvas
+    // -------------------------------------------------------------------------
+    console.log('[CharacterSheet] Composing character sheet grid...');
+    const sheetW = PANEL_W * COLS;
+    const sheetH = PANEL_H * ROWS;
+    const sheetCanvas = createCanvas(sheetW, sheetH);
+    const ctx = sheetCanvas.getContext('2d');
+
+    // Fill background
+    ctx.fillStyle = '#f0f0f0';
+    ctx.fillRect(0, 0, sheetW, sheetH);
+
+    for (let i = 0; i < ANGLE_VIEWS.length; i++) {
+      const col = i % COLS;
+      const row = Math.floor(i / COLS);
+      const x = col * PANEL_W;
+      const y = row * PANEL_H;
+      const panelEntry = panelImages[i];
+
+      if (panelEntry && panelEntry.url) {
+        try {
+          const img = await canvasLoadImage(panelEntry.url);
+          ctx.drawImage(img, x, y, PANEL_W, PANEL_H);
+        } catch (drawErr) {
+          console.warn(`[CharacterSheet] Failed to draw panel ${i}: ${drawErr.message}`);
+          ctx.fillStyle = '#cccccc';
+          ctx.fillRect(x, y, PANEL_W, PANEL_H);
+        }
+      } else {
+        // Placeholder for failed panels
+        ctx.fillStyle = '#cccccc';
+        ctx.fillRect(x, y, PANEL_W, PANEL_H);
+      }
+
+      // Draw thin separator lines between panels
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x, y, PANEL_W, PANEL_H);
+    }
+
+    // Convert canvas to base64 and upload to Cloudinary
+    const sheetBase64 = sheetCanvas.toDataURL('image/jpeg', 0.92).split(',')[1];
+    const uploadResult = await uploadBase64Image(sheetBase64, 'nebula-character-sheets');
+    const composedSheetUrl = uploadResult?.url || null;
+
+    if (!composedSheetUrl) {
+      throw new Error('Failed to upload composed character sheet to Cloudinary');
+    }
+
+    console.log('[CharacterSheet] ✅ Composed character sheet uploaded:', composedSheetUrl);
+    const finalImageUrl = composedSheetUrl;
+    const frontPortraitUrl = panelImages[2]?.url || panelImages[0]?.url || finalImageUrl;
+
+    // --- Create Character Memory ---
+    const characterId = String(requestedCharacterId || '').trim() || uuidv4();
+    await ensureCharacterMemoryFromSource({
+      characterId,
+      imageSource: frontPortraitUrl,
+      metadata: {
+        characterId,
+        name,
+        gender,
+        age,
+        language: 'en',
+        sheetUrl: finalImageUrl,
+        frontPortraitUrl,
+        referenceImageType: 'front_portrait',
+        referenceImageUrl: frontPortraitUrl,
+        embeddingVersion: 'v2',
+        identityModel: 'InsightFace',
+        embeddingCreatedAt: new Date().toISOString(),
+        sourceCharacterSheet: finalImageUrl,
+        source: 'generateCharacterPreview'
+      }
+    });
+    // --- End Create Character Memory ---
+
+
+    res.json({ success: true, imageUrl: finalImageUrl, characterId });
   } catch (error) {
     console.error('Error in /generateCharacterPreview:', error);
     res.status(500).json({ success: false, error: error.message || 'Failed to generate character preview' });
@@ -1239,6 +1747,7 @@ router.post('/generateScenes', protect, checkTrial, videoAiWriteLimiter, async (
           characterHairColor: draft?.characterHairColor,
           characterClothing: draft?.characterClothing,
           videoStyle: draft?.videoStyle,
+          location: draft?.location || req.body.location || '',
           preserveIdentity: draft?.preserveIdentity,
           characterUsage: draft?.characterUsage,
           characterConsistencyStrength: draft?.characterConsistencyStrength
@@ -1267,6 +1776,7 @@ router.post('/generateScenes', protect, checkTrial, videoAiWriteLimiter, async (
         ...current,
         currentStep: Math.max(Number(current.currentStep || 1), 2),
         scenes: normalizedScenes,
+        productionBible: current?.productionBible || null,
         scenesMetadata: {
           voiceScript: current?.scenesMetadata?.voiceScript || current?.scenes?.voiceScript || '',
           thumbnailPrompt: current?.scenesMetadata?.thumbnailPrompt || current?.scenes?.thumbnailPrompt || '',
@@ -1308,6 +1818,7 @@ router.post('/generateScenes', protect, checkTrial, videoAiWriteLimiter, async (
         characterHairColor: draft?.characterHairColor,
         characterClothing: draft?.characterClothing,
         videoStyle: draft?.videoStyle,
+        location: draft?.location || req.body.location || '',
         preserveIdentity: draft?.preserveIdentity,
         characterUsage: draft?.characterUsage,
         characterConsistencyStrength: draft?.characterConsistencyStrength
@@ -1320,6 +1831,7 @@ router.post('/generateScenes', protect, checkTrial, videoAiWriteLimiter, async (
       ...current,
       currentStep: Math.max(Number(current.currentStep || 1), 2),
       scenes: normalizedScenes,
+      productionBible: generated?.productionBible || current?.productionBible || null,
       scenesMetadata: {
         voiceScript: generated.voiceScript || '',
         thumbnailPrompt: generated.thumbnailPrompt || '',
@@ -1356,7 +1868,7 @@ router.post('/generateScenes', protect, checkTrial, videoAiWriteLimiter, async (
 
 router.post('/generateImages', protect, checkTrial, videoAiWriteLimiter, async (req, res) => {
   try {
-    const { jobId, action = 'generateAll', sceneId, sceneData, imagePrompt, imageData, imageUrl } = req.body || {};
+    const { jobId, action = 'generateAll', sceneId, sceneData, imagePrompt, imageData, imageUrl, characterId } = req.body || {};
     if (!jobId) {
       return res.status(400).json({ success: false, message: 'jobId is required' });
     }
@@ -1368,6 +1880,7 @@ router.post('/generateImages', protect, checkTrial, videoAiWriteLimiter, async (
     const sourceScenes = sanitizeSceneData(
       sceneData ||
       draft?.images?.sceneData ||
+      (Array.isArray(draft?.scenes) ? draft.scenes : null) ||
       draft?.scenes?.sceneData ||
       [],
       durationSeconds
@@ -1377,163 +1890,132 @@ router.post('/generateImages', protect, checkTrial, videoAiWriteLimiter, async (
       return res.status(400).json({ success: false, message: 'No scene data available. Generate scenes first.' });
     }
 
-    let nextScenes = sourceScenes;
+    const brandContext = {
+      brandName: req.user?.businessProfile?.name || '',
+      industry: req.user?.businessProfile?.industry || '',
+      tone: req.user?.businessProfile?.brandVoice || 'professional'
+    };
+
+    let nextScenes = [...sourceScenes];
+
     if (action === 'replace' && sceneId) {
-      const idx = sourceScenes.findIndex((item) => String(item.sceneId) === String(sceneId));
-      if (idx === -1) {
-        return res.status(404).json({ success: false, message: 'Scene not found' });
-      }
-
-      let replacementUrl = String(imageUrl || '').trim();
-      if (imageData && String(imageData).startsWith('data:')) {
-        const saved = await saveDataUrlToJob({
-          jobId,
-          dataUrl: imageData,
-          folder: 'images',
-          fileName: `${sceneId}_manual`
-        });
-        replacementUrl = buildMediaUrl(baseUrl, jobId, saved.relativePath);
-      }
-      if (!replacementUrl) {
-        return res.status(400).json({ success: false, message: 'No replacement image found' });
-      }
-
-      nextScenes = sourceScenes.map((scene, index) => (
-        index === idx
-          ? { ...scene, imageUrl: replacementUrl, imageSource: 'manual' }
-          : scene
-      ));
-    } else if (action === 'regenerate' && sceneId) {
-      const idx = sourceScenes.findIndex((item) => String(item.sceneId) === String(sceneId));
-      if (idx === -1) {
-        return res.status(404).json({ success: false, message: 'Scene not found' });
-      }
-      const targetScene = sourceScenes[idx];
-      let regenPrompt = String(imagePrompt || targetScene.imagePrompt || draft?.prompt?.promptText || '').trim();
-      let finalRegenImageUrl = null;
-      if (req.body.characterImageBase64) {
-          const characterImageBase64 = req.body.characterImageBase64;
-          const characterName = req.body.characterName || '';
-          const videoStyle = req.body.videoStyle || draft?.videoStyle || 'Cinematic';
-
-          // Inject strict demographics from draft
-          const demographics = [
-            draft?.characterRace ? `${draft.characterRace} ethnicity` : '',
-            draft?.characterAge ? `${draft.characterAge} years old` : '',
-            draft?.characterGender ? draft.characterGender : '',
-            draft?.characterBeard && draft?.characterBeard !== 'Clean Shaven (No Beard)' ? `with ${draft.characterBeard}` : (draft?.characterBeard === 'Clean Shaven (No Beard)' ? 'completely clean shaven, absolutely no facial hair' : '')
-          ].filter(Boolean).join(', ');
-
-          const demographicString = demographics ? `The character is a ${demographics}.` : '';
-          const strictContext = `CRITICAL INSTRUCTION: You MUST exactly recreate the face and identity of the person in the reference image. ${demographicString} DO NOT change their facial structure, skin tone, or demographic. Match the reference image 100%.`;
-          
-          regenPrompt = `${strictContext}\n\nSCENE TO GENERATE:\n${regenPrompt}`;
-
-          let cleanBase64 = characterImageBase64;
-          if (cleanBase64.includes('data:image')) {
-            cleanBase64 = cleanBase64.split(',')[1];
-          }
-
-          console.log('\n🎭 ==================== CHARACTER CONSISTENCY (NANO BANANA) ====================');
-          console.log(`📸 Character: ${characterName || 'Unknown'}`);
-          console.log(`🎬 Scene: ${regenPrompt}`);
-          console.log(`🎨 Style: ${videoStyle}`);
-          console.log(`🔧 API: Gemini Nano Banana`);
-          console.log('=========================================================================\n');
-
-          const imageData = `data:image/jpeg;base64,${cleanBase64}`;
-          
-          try {
-            const nanoResult = await generateCampaignImageNanoBanana(regenPrompt, {
-              aspectRatio: '16:9', // default for video
-              characterReferenceImage: imageData,
-              isCinematic: true
-            });
-            
-            if (nanoResult && (nanoResult.imageUrl || typeof nanoResult === 'string')) {
-                finalRegenImageUrl = typeof nanoResult === 'string' ? nanoResult : nanoResult.imageUrl;
-            } else {
-                throw new Error('Nano Banana returned no image');
-            }
-          } catch (error) {
-            console.error('Nano Banana API Error:', error);
-            return res.status(500).json({ success: false, message: 'Nano Banana API Error: ' + error.message });
-          }
-      } else {
-        const regen = await generateCampaignImageNanoBanana(regenPrompt, {
-          aspectRatio: '9:16',
-          linkedProduct: draft?.input?.product || null,
-          productReferenceImage: draft?.input?.sourceImage?.url || draft?.input?.product?.imageUrl || null,
-          tone: 'professional'
-        });
-        if (!regen?.success || !regen?.imageUrl) {
-          throw new Error(regen?.error || 'Image regeneration failed');
+        const idx = sourceScenes.findIndex((item) => String(item.sceneId) === String(sceneId));
+        if (idx === -1) {
+            return res.status(404).json({ success: false, message: 'Scene not found' });
         }
-        finalRegenImageUrl = regen.imageUrl;
-      }
-      nextScenes = sourceScenes.map((scene, index) => (
-        index === idx
-          ? {
-            ...scene,
-            imageUrl: finalRegenImageUrl,
-            imagePrompt: regenPrompt
+
+        let replacementUrl = String(imageUrl || '').trim();
+        if (imageData && String(imageData).startsWith('data:')) {
+            const saved = await saveDataUrlToJob({
+                jobId,
+                dataUrl: imageData,
+                folder: 'images',
+                fileName: `${sceneId}_manual`
+            });
+            replacementUrl = buildMediaUrl(baseUrl, jobId, saved.relativePath);
+        }
+        if (!replacementUrl) {
+            return res.status(400).json({ success: false, message: 'No replacement image found' });
+        }
+
+        nextScenes = sourceScenes.map((scene, index) => (
+            index === idx
+            ? { ...scene, imageUrl: replacementUrl, imageSource: 'manual' }
+            : scene
+        ));
+
+        const replaced = await updateDraft(jobId, userId, (current) => ({
+          ...current,
+          currentStep: Math.max(Number(current.currentStep || 1), 5),
+          scenes: nextScenes,
+          images: {
+            sceneData: nextScenes,
+            generatedAt: new Date().toISOString()
           }
-          : scene
-      ));
-    } else {
-      const generated = await runGenerateImages({
-        payload: {
+        }));
+
+        return res.json({
+          success: true,
           jobId,
-          description: String(draft?.prompt?.promptText || draft?.input?.description || ''),
-          durationSeconds,
-          sceneCount: draft?.input?.sceneCount || sourceScenes.length,
-          imageUrl: draft?.input?.sourceImage?.url || undefined,
-          productId: draft?.input?.productId || undefined,
-          product: draft?.input?.product || undefined,
-          sceneData: sourceScenes,
-          globalVisualStyle: draft?.scenesMetadata?.globalVisualStyle || draft?.scenes?.globalVisualStyle || '',
-          voiceScript: draft?.scenesMetadata?.voiceScript || draft?.scenes?.voiceScript || '',
-          thumbnailPrompt: draft?.scenesMetadata?.thumbnailPrompt || draft?.scenes?.thumbnailPrompt || '',
-          characterImageBase64: req.body.characterImageBase64 || draft?.characterImageBase64 || undefined,
-          characterName: req.body.characterName || draft?.characterName || undefined,
-          videoStyle: req.body.videoStyle || draft?.videoStyle || undefined,
-          characterEnabled: draft?.characterEnabled,
-          characterImage: draft?.characterImage,
-          originalCharacterImage: draft?.originalCharacterImage,
-          preserveIdentity: draft?.preserveIdentity,
-          characterConsistencyStrength: draft?.characterConsistencyStrength,
-          characterRace: draft?.characterRace,
-          characterBeard: draft?.characterBeard,
-          characterAge: draft?.characterAge,
-          characterGender: draft?.characterGender,
-          useLogo: req.body.useLogo !== undefined ? req.body.useLogo : (draft?.useLogo !== undefined ? draft.useLogo : true)
-        },
-        user: req.user,
-        baseUrl
+          sceneData: replaced.scenes,
+          draft: replaced
+        });
+    }
+
+    const shouldQueue =
+      req.body?.async === true ||
+      String(req.query?.async || '').toLowerCase() === 'true' ||
+      String(process.env.VIDEO_STEP_ASYNC || '').toLowerCase() === 'true';
+
+    if (shouldQueue && (action === 'generateAll' || (action === 'regenerate' && sceneId))) {
+      const existingJobId = draft?.jobs?.images?.queueJobId || draft?.imageJobs?.queueJobId;
+      let queued;
+      if (existingJobId) {
+        const existingJob = await videoGenerationQueue.getJob(existingJobId, userId);
+        if (existingJob && ['queued', 'processing'].includes(existingJob.status)) {
+          queued = existingJob;
+        }
+      }
+
+      if (!queued) {
+        queued = await videoGenerationQueue.enqueue({
+          userId,
+          jobType: 'generate_images',
+          payload: {
+            jobId,
+            userId,
+            action,
+            sceneId,
+            imagePrompt,
+            characterId: characterId || draft.characterId,
+            sceneData: sourceScenes,
+            baseUrl,
+            brandContext
+          }
+        });
+
+        await updateDraft(jobId, userId, (current) => ({
+          ...current,
+          jobs: {
+            ...(current.jobs || {}),
+            images: {
+              queueJobId: queued.jobId,
+              status: queued.status,
+              queuedAt: new Date().toISOString()
+            }
+          },
+          imageJobs: {
+            ...(current.imageJobs || {}),
+            queueJobId: queued.jobId,
+            status: 'queued',
+            queuedAt: new Date().toISOString()
+          }
+        }));
+      }
+
+      return res.status(202).json({
+        success: true,
+        queueJobId: queued.jobId,
+        status: queued.status,
+        progress: queued.progress || 0,
+        currentStep: queued.currentStep || 'generate_images'
       });
-      nextScenes = sanitizeSceneData(generated.sceneData || [], durationSeconds);
     }
 
-    const updated = await updateDraft(jobId, userId, (current) => ({
-      ...current,
-      currentStep: Math.max(Number(current.currentStep || 1), 3),
-      scenes: nextScenes,
-      images: {
-        sceneData: nextScenes,
-        generatedAt: new Date().toISOString()
-      }
-    }));
+    const generated = await runDirectorImageGeneration({
+      jobId,
+      userId,
+      draft,
+      baseUrl,
+      action,
+      sceneId,
+      imagePrompt,
+      characterId: characterId || draft.characterId,
+      sceneData: sourceScenes,
+      brandContext
+    });
 
-    try {
-      const VideoDraft = require('../models/VideoDraft');
-      const draftDoc = await VideoDraft.findOne({ jobId });
-      if (draftDoc) {
-        draftDoc.scenes = nextScenes;
-        await draftDoc.save();
-      }
-    } catch (saveErr) {
-      console.error("⚠️ Failed to immediately save draft scenes imageUrl in MongoDB:", saveErr.message);
-    }
+    const updated = generated.draft;
 
     await learnVideoStep({
       userId,
@@ -1541,8 +2023,8 @@ router.post('/generateImages', protect, checkTrial, videoAiWriteLimiter, async (
       action: 'image_generation',
       prompt: String(imagePrompt || draft?.prompt?.promptText || draft?.input?.description || ''),
       userInput: draft.input || {},
-      sceneData: nextScenes,
-      generatedImages: nextScenes.map((scene) => scene.imageUrl).filter(Boolean),
+      sceneData: generated.sceneData,
+      generatedImages: (generated.sceneData || []).map((scene) => scene.imageUrl).filter(Boolean),
       duration: durationSeconds,
       product: draft?.input?.product || null,
       aiSettings: { action }
@@ -1551,7 +2033,7 @@ router.post('/generateImages', protect, checkTrial, videoAiWriteLimiter, async (
     return res.json({
       success: true,
       jobId,
-      sceneData: updated.scenes,
+      sceneData: generated.sceneData,
       draft: updated
     });
   } catch (error) {
@@ -1568,11 +2050,17 @@ router.post('/generateClips', protect, checkTrial, videoAiWriteLimiter, async (r
 
     const userId = toUserId(req.user);
     const draft = await loadDraftForUser(jobId, userId);
-    const sourceScenes = sanitizeSceneData(
-      sceneData ||
-      draft?.images?.sceneData ||
+    const requestedScenes = Array.isArray(sceneData) && sceneData.length ? sceneData : null;
+    const savedClipScenes = Array.isArray(draft?.clips?.sceneData) && draft.clips.sceneData.length ? draft.clips.sceneData : null;
+    const draftScenes =
+      (Array.isArray(draft?.scenes) ? draft.scenes : null) ||
       draft?.scenes?.sceneData ||
-      [],
+      draft?.images?.sceneData ||
+      [];
+    const sourceScenes = sanitizeSceneData(
+      savedClipScenes
+        ? mergeClipUrlsIntoScenes(requestedScenes || draftScenes, savedClipScenes)
+        : (requestedScenes || draft?.images?.sceneData || draftScenes),
       draft?.input?.durationSeconds || 60
     );
 
@@ -1701,6 +2189,64 @@ router.post('/generateClips', protect, checkTrial, videoAiWriteLimiter, async (r
   }
 });
 
+router.post('/test-edge-tts', async (req, res) => {
+  const { text = "This is a male voice test.", voice = "hi-IN-MadhurNeural" } = req.body || {};
+  const tmpPath = path.join(require('os').tmpdir(), `test_tts_${Date.now()}.mp3`);
+  
+  console.log("=================================");
+  console.log("[STANDALONE TEST EDGE TTS REQUEST]");
+  console.log("Requested Voice ID:", voice);
+  console.log("Text Input:", text);
+  console.log("Output Path:", tmpPath);
+  console.log("=================================");
+
+  try {
+    const { spawnSync } = require('child_process');
+    const attempts = [
+      { command: 'python', args: ['-m', 'edge_tts', '--voice', voice, '--text', text, '--write-media', tmpPath] },
+      { command: 'py', args: ['-m', 'edge_tts', '--voice', voice, '--text', text, '--write-media', tmpPath] },
+      { command: 'edge-tts', args: ['--voice', voice, '--text', text, '--write-media', tmpPath] }
+    ];
+
+    let success = false;
+    let usedAttempt = null;
+    let lastError = '';
+    for (const attempt of attempts) {
+      console.log(`Executing Standalone Test: ${attempt.command} ${attempt.args.join(' ')}`);
+      const proc = spawnSync(attempt.command, attempt.args, { encoding: 'utf-8' });
+      console.log(`Process Output (stdout): "${proc.stdout || ''}"`);
+      console.log(`Process Output (stderr): "${proc.stderr || ''}"`);
+      console.log(`Process Exit Code: ${proc.status}`);
+      if (proc.stderr) lastError = proc.stderr;
+
+      if (fs.existsSync(tmpPath)) {
+        const stat = fs.statSync(tmpPath);
+        if (stat.size > 1200) {
+          success = true;
+          usedAttempt = attempt;
+          break;
+        }
+      }
+    }
+
+    if (!success) {
+      return res.status(500).json({
+        success: false,
+        message: 'Standalone Edge TTS execution failed on host machine. Ensure Python package edge-tts is installed.',
+        requestedVoice: voice,
+        lastError
+      });
+    }
+
+    const buffer = fs.readFileSync(tmpPath);
+    res.setHeader('Content-Type', 'audio/mpeg');
+    res.setHeader('Content-Disposition', `inline; filename="test_${voice}.mp3"`);
+    res.send(buffer);
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 router.post('/generateAudio', protect, checkTrial, videoAiWriteLimiter, async (req, res) => {
   try {
     const { jobId, audio = {} } = req.body || {};
@@ -1714,30 +2260,35 @@ router.post('/generateAudio', protect, checkTrial, videoAiWriteLimiter, async (r
     const sourceVoiceScript = String(audio?.voiceScript || deriveVoiceScriptFromDraft(draft) || '').trim();
 
     const sceneDataForTiming =
+      (Array.isArray(draft?.scenes) && draft.scenes.length ? draft.scenes : null) ||
       (Array.isArray(draft?.scenes?.sceneData) && draft.scenes.sceneData.length ? draft.scenes.sceneData : null) ||
       (Array.isArray(draft?.clips?.sceneData) && draft.clips.sceneData.length ? draft.clips.sceneData : null) ||
       (Array.isArray(draft?.images?.sceneData) && draft.images.sceneData.length ? draft.images.sceneData : null) ||
       (Array.isArray(draft?.scenes?.scenes) && draft.scenes.scenes.length ? draft.scenes.scenes : null) ||
       [];
 
-    if (!String(draft?.scenes?.voiceScript || '').trim() && sourceVoiceScript) {
+    if (!String(draft?.voiceScript || '').trim() && sourceVoiceScript) {
       await updateDraft(jobId, userId, (current) => ({
         ...current,
-        scenes: {
-          ...(current.scenes || {}),
-          voiceScript: sourceVoiceScript
-        }
+        voiceScript: sourceVoiceScript
       }));
     }
+
+    const rawGender = String(audio?.voiceGender || audio?.config?.voiceGender || draft?.audioConfig?.voiceGender || draft?.voiceGender || 'female').toLowerCase();
+    const resolvedGender = rawGender === 'male' ? 'male' : 'female';
+    const rawLang = String(audio?.languageCode || audio?.config?.languageCode || draft?.audioConfig?.languageCode || draft?.audioLanguageCode || requestedLanguageCode || 'en').toLowerCase();
+
+    console.log("=== Incoming Audio Payload ===");
+    console.log(req.body.audio);
 
     const audioConfig = {
       enabled: audio?.enabled !== false,
       mode: String(audio?.mode || 'auto').toLowerCase(),
-      languageCode: requestedLanguageCode,
+      languageCode: rawLang,
       tone: String(audio?.tone || 'professional').toLowerCase(),
       musicSource: String(audio?.musicSource || process.env.AI_VIDEO_MUSIC_SOURCE || 'library').toLowerCase(),
       musicTrack: typeof audio?.musicTrack === 'string' ? audio.musicTrack : '',
-      voiceGender: String(audio?.voiceGender || 'female').toLowerCase(),
+      voiceGender: resolvedGender,
       voiceVolume: Number.isFinite(Number(audio?.voiceVolume)) ? Number(audio.voiceVolume) : 1,
       musicVolume: Number.isFinite(Number(audio?.musicVolume)) ? Number(audio.musicVolume) : 0.24,
       sourceVoiceScript,
@@ -1748,7 +2299,58 @@ router.post('/generateAudio', protect, checkTrial, videoAiWriteLimiter, async (r
       manualAudioUrl: typeof audio?.manualAudioUrl === 'string' ? audio.manualAudioUrl : '',
       soundEffectUrls: Array.isArray(audio?.soundEffectUrls) ? audio.soundEffectUrls : []
     };
-    audioConfig.voiceGender = audioConfig.voiceGender === 'male' ? 'male' : 'female';
+
+    console.log("=== Normalized Audio Options ===");
+    console.log(audioConfig);
+
+    const shouldQueue =
+      req.body?.async === true ||
+      String(req.query?.async || '').toLowerCase() === 'true' ||
+      String(process.env.VIDEO_STEP_ASYNC || '').toLowerCase() === 'true';
+
+    if (shouldQueue) {
+      const existingJobId = draft?.jobs?.audio?.queueJobId;
+      let queued;
+      if (existingJobId) {
+        const existingJob = await videoGenerationQueue.getJob(existingJobId, userId);
+        if (existingJob && ['queued', 'processing'].includes(existingJob.status)) {
+          queued = existingJob;
+        }
+      }
+
+      if (!queued) {
+        queued = await videoGenerationQueue.enqueue({
+          userId,
+          jobType: 'generate_audio',
+          payload: {
+            jobId,
+            userId,
+            audio: audioConfig,
+            baseUrl: reqBaseUrl(req)
+          }
+        });
+
+        await updateDraft(jobId, userId, (current) => ({
+          ...current,
+          jobs: {
+            ...(current.jobs || {}),
+            audio: {
+              queueJobId: queued.jobId,
+              status: queued.status,
+              queuedAt: new Date().toISOString()
+            }
+          }
+        }));
+      }
+
+      return res.status(202).json({
+        success: true,
+        queueJobId: queued.jobId,
+        status: queued.status,
+        progress: queued.progress || 0,
+        currentStep: queued.currentStep || 'generate_audio'
+      });
+    }
 
     const generated = await runGenerateAudio({
       payload: {
@@ -1766,10 +2368,27 @@ router.post('/generateAudio', protect, checkTrial, videoAiWriteLimiter, async (r
       baseUrl: reqBaseUrl(req)
     });
 
+    console.log("=== Final Audio Tracks ===");
+    console.log(generated?.tracks);
+
+    console.log("=== Response Tracks Verification ===");
+    console.log({
+      voice: generated?.tracks?.voice,
+      background: generated?.tracks?.background
+    });
+
     const updated = await updateDraft(jobId, userId, (current) => ({
       ...current,
       currentStep: Math.max(Number(current.currentStep || 1), 5),
       finalVideoUrl: null,
+      audioConfig: {
+        ...(current?.audioConfig || {}),
+        ...audioConfig,
+        localizedVoiceScript: generated?.localizedVoiceScript || null,
+        localizedSceneData: generated?.localizedSceneData || null
+      },
+      audioLanguageCode: audioConfig.languageCode,
+      voiceGender: audioConfig.voiceGender,
       audio: {
         config: {
           ...audioConfig,
@@ -1817,6 +2436,47 @@ router.post('/generateAudio', protect, checkTrial, videoAiWriteLimiter, async (r
   }
 });
 
+router.get('/debug-voices', protect, async (req, res) => {
+  try {
+    const testText = "In a world of constant evolution, innovation is the foundation of progress. Partner with Protekk, and unlock your potential.";
+    const sampleVoices = [
+      { id: 'en-US-ChristopherNeural', label: 'Christopher (US Deep Male)' },
+      { id: 'en-US-AndrewNeural', label: 'Andrew (US Warm Male)' },
+      { id: 'en-US-RogerNeural', label: 'Roger (US Formal Male)' },
+      { id: 'en-GB-RyanNeural', label: 'Ryan (UK Male)' },
+      { id: 'hi-IN-MadhurNeural', label: 'Madhur (Hindi Male)' },
+      { id: 'en-US-JennyNeural', label: 'Jenny (US Female Reference)' }
+    ];
+
+    const results = [];
+    const tempDir = path.join(__dirname, '../public/debug-voices');
+    await fs.promises.mkdir(tempDir, { recursive: true });
+
+    for (const voice of sampleVoices) {
+      const fileName = `sample_${voice.id}.mp3`;
+      const filePath = path.join(tempDir, fileName);
+      await runProcess('python3', [
+        '-m', 'edge_tts',
+        '--voice', voice.id,
+        '--text', testText,
+        '--write-media', filePath
+      ]).catch(() => null);
+
+      if (fs.existsSync(filePath)) {
+        results.push({
+          voiceId: voice.id,
+          label: voice.label,
+          url: `/debug-voices/${fileName}`
+        });
+      }
+    }
+
+    return res.json({ success: true, samples: results });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 router.post('/mixAudio', protect, checkTrial, videoAiWriteLimiter, async (req, res) => {
   try {
     const { jobId, tracks = {}, durationSeconds } = req.body || {};
@@ -1841,19 +2501,37 @@ router.post('/mixAudio', protect, checkTrial, videoAiWriteLimiter, async (req, r
           backgroundUrl: mergedTracks?.backgroundUrl || ''
         },
         soundEffectUrls: Array.isArray(mergedTracks?.soundEffectUrls) ? mergedTracks.soundEffectUrls : [],
-        audio: draft?.audio?.config || {}
+        audio: {
+          ...(draft?.audio?.config || {}),
+          ...(req.body?.audio || {}),
+          voiceVolume: req.body?.voiceVolume !== undefined ? Number(req.body.voiceVolume) : (draft?.audio?.config?.voiceVolume),
+          musicVolume: req.body?.musicVolume !== undefined ? Number(req.body.musicVolume) : (draft?.audio?.config?.musicVolume)
+        }
       },
       baseUrl: reqBaseUrl(req)
     });
 
-    const updated = await updateDraft(jobId, userId, (current) => ({
-      ...current,
-      currentStep: Math.max(Number(current.currentStep || 1), 6),
-      mix: {
-        finalAudioUrl: mixed?.finalAudioUrl || null,
-        mixedAt: new Date().toISOString()
-      }
-    }));
+    const updated = await updateDraft(jobId, userId, (current) => {
+      const canonicalConfig = {
+        ...(current?.audio?.config || {}),
+        ...(current?.audioConfig || {}),
+        voiceVolume: req.body?.voiceVolume !== undefined ? Number(req.body.voiceVolume) : (current?.audio?.config?.voiceVolume),
+        musicVolume: req.body?.musicVolume !== undefined ? Number(req.body.musicVolume) : (current?.audio?.config?.musicVolume)
+      };
+      return {
+        ...current,
+        currentStep: Math.max(Number(current.currentStep || 1), 6),
+        audioConfig: canonicalConfig,
+        audio: {
+          ...(current?.audio || {}),
+          config: canonicalConfig
+        },
+        mix: {
+          finalAudioUrl: mixed?.finalAudioUrl || null,
+          mixedAt: new Date().toISOString()
+        }
+      };
+    });
 
     return res.json({
       success: true,
@@ -1865,6 +2543,57 @@ router.post('/mixAudio', protect, checkTrial, videoAiWriteLimiter, async (req, r
     return responseError(res, error, 'Failed to mix audio');
   }
 });
+
+async function ensureAudioMixUrl(jobId, userId, finalAudioUrl, draft, baseUrl, logFn = console.log) {
+  let audioUrlToUse = finalAudioUrl || draft?.mix?.finalAudioUrl || null;
+  const rawTracks = draft?.audio?.tracks || draft?.audioConfig?.tracks || null;
+  const hasRawVoice = rawTracks?.voiceUrl || rawTracks?.voice?.url || rawTracks?.manualUrl || rawTracks?.manual?.url;
+  const hasRawBackground = rawTracks?.backgroundUrl || rawTracks?.background?.url;
+
+  if (!audioUrlToUse && (hasRawVoice || hasRawBackground)) {
+    logFn('No pre-mixed audio track found. Auto-generating a default mix from individual tracks...');
+    try {
+      const mixResult = await runMergeAudio({
+        payload: {
+          jobId,
+          durationSeconds: draft?.input?.durationSeconds || draft?.durationSeconds || 60,
+          tracks: {
+            manualUrl: rawTracks?.manualUrl || rawTracks?.manual?.url || '',
+            voiceUrl: rawTracks?.voiceUrl || rawTracks?.voice?.url || '',
+            backgroundUrl: rawTracks?.backgroundUrl || rawTracks?.background?.url || ''
+          },
+          soundEffectUrls: Array.isArray(rawTracks?.soundEffectUrls) ? rawTracks.soundEffectUrls : [],
+          audio: {
+            enabled: true,
+            mode: draft?.audio?.config?.mode || draft?.audioConfig?.mode || 'auto',
+            audioPriority: draft?.audio?.config?.audioPriority || draft?.audioConfig?.audioPriority || 'balanced',
+            tone: draft?.audio?.config?.tone || draft?.audioConfig?.tone || 'professional',
+            languageCode: draft?.audio?.config?.languageCode || draft?.audioConfig?.languageCode || 'en',
+            voiceGender: draft?.audio?.config?.voiceGender || draft?.audioConfig?.voiceGender || 'female',
+            voiceVolume: draft?.audio?.config?.voiceVolume !== undefined ? Number(draft.audio.config.voiceVolume) : (draft?.audioConfig?.voiceVolume !== undefined ? Number(draft.audioConfig.voiceVolume) : 1.0),
+            musicVolume: draft?.audio?.config?.musicVolume !== undefined ? Number(draft.audio.config.musicVolume) : (draft?.audioConfig?.musicVolume !== undefined ? Number(draft.audioConfig.musicVolume) : 0.24)
+          }
+        },
+        baseUrl
+      });
+
+      if (mixResult?.finalAudioUrl) {
+        audioUrlToUse = mixResult.finalAudioUrl;
+        logFn(`Auto-generated audio mix URL successfully: ${audioUrlToUse}`);
+        await updateDraft(jobId, userId, (current) => ({
+          ...current,
+          mix: {
+            finalAudioUrl: mixResult.finalAudioUrl,
+            mixedAt: new Date().toISOString()
+          }
+        }));
+      }
+    } catch (err) {
+      logFn(`⚠️ Auto-generating audio mix failed: ${err.message}`);
+    }
+  }
+  return audioUrlToUse;
+}
 
 router.post('/mergeVideo', protect, checkTrial, videoAiWriteLimiter, async (req, res) => {
   try {
@@ -1938,11 +2667,13 @@ router.post('/mergeVideo', protect, checkTrial, videoAiWriteLimiter, async (req,
       });
     }
 
+    const audioUrlToUse = await ensureAudioMixUrl(jobId, userId, finalAudioUrl, draft, reqBaseUrl(req), console.log);
+
     const merged = await runMergeVideo({
       payload: {
         jobId,
         clipUrls: effectiveClipUrls,
-        finalAudioUrl: finalAudioUrl || draft?.mix?.finalAudioUrl || null,
+        finalAudioUrl: audioUrlToUse,
         subtitles: { enabled: subtitles?.enabled === true },
         durationSeconds: draft?.input?.durationSeconds || null,
         sceneData: (
@@ -1953,7 +2684,7 @@ router.post('/mergeVideo', protect, checkTrial, videoAiWriteLimiter, async (req,
           draft.audio.config.localizedSceneData.length
         )
           ? draft.audio.config.localizedSceneData
-          : (draft?.clips?.sceneData || draft?.images?.sceneData || draft?.scenes?.sceneData || [])
+          : (draft?.clips?.sceneData || draft?.images?.sceneData || (Array.isArray(draft?.scenes) ? draft.scenes : null) || draft?.scenes?.sceneData || [])
       },
       baseUrl: reqBaseUrl(req)
     });
@@ -1998,7 +2729,7 @@ router.post('/mergeVideo', protect, checkTrial, videoAiWriteLimiter, async (req,
       action: 'video_merge',
       prompt: draft?.prompt?.promptText || '',
       userInput: draft.input || {},
-      sceneData: draft?.clips?.sceneData || draft?.images?.sceneData || draft?.scenes?.sceneData || [],
+      sceneData: draft?.clips?.sceneData || draft?.images?.sceneData || (Array.isArray(draft?.scenes) ? draft.scenes : null) || draft?.scenes?.sceneData || [],
       generatedVideos: [updated.merge.finalOutputUrl || updated.merge.finalVideoUrl].filter(Boolean),
       audioSettings: draft?.audio?.config || {},
       duration: draft?.input?.durationSeconds || null,
@@ -2027,19 +2758,67 @@ router.post('/generateContent', protect, checkTrial, videoAiWriteLimiter, async 
     const userId = toUserId(req.user);
     const draft = await loadDraftForUser(jobId, userId);
     const platforms = normalizePlatforms(selectedPlatforms.length ? selectedPlatforms : (draft?.platform?.selectedPlatforms || []));
+
+    const shouldQueue =
+      req.body?.async === true ||
+      String(req.query?.async || '').toLowerCase() === 'true' ||
+      String(process.env.VIDEO_STEP_ASYNC || '').toLowerCase() === 'true';
+
+    if (shouldQueue) {
+      const existingJobId = draft?.jobs?.content?.queueJobId;
+      let queued;
+      if (existingJobId) {
+        const existingJob = await videoGenerationQueue.getJob(existingJobId, userId);
+        if (existingJob && ['queued', 'processing'].includes(existingJob.status)) {
+          queued = existingJob;
+        }
+      }
+
+      if (!queued) {
+        queued = await videoGenerationQueue.enqueue({
+          userId,
+          jobType: 'generate_content',
+          payload: {
+            jobId,
+            userId,
+            selectedPlatforms: platforms,
+            baseUrl: reqBaseUrl(req)
+          }
+        });
+
+        await updateDraft(jobId, userId, (current) => ({
+          ...current,
+          jobs: {
+            ...(current.jobs || {}),
+            content: {
+              queueJobId: queued.jobId,
+              status: queued.status,
+              queuedAt: new Date().toISOString()
+            }
+          }
+        }));
+      }
+
+      return res.status(202).json({
+        success: true,
+        message: 'Content generation queued',
+        draftJobId: jobId,
+        queueJobId: queued.jobId,
+        status: queued.status,
+        progress: queued.progress,
+        currentStep: queued.currentStep
+      });
+    }
+
     const thumbnailUrl = await generateThumbnailFromDraft({ draft, baseUrl: reqBaseUrl(req) });
     const socialContent = await generateCaptionAndHashtags({ draft, selectedPlatforms: platforms });
+    const normalizedContent = normalizeGeneratedContent({ draft, thumbnailUrl, socialContent });
 
     const updated = await updateDraft(jobId, userId, (current) => ({
       ...current,
       currentStep: Math.max(Number(current.currentStep || 1), 8),
-      thumbnailUrl,
-      content: {
-        thumbnailUrl,
-        caption: socialContent.caption,
-        hashtags: socialContent.hashtags,
-        generatedAt: new Date().toISOString()
-      },
+      thumbnailUrl: normalizedContent.thumbnailUrl,
+      content: normalizedContent,
       thumbnails: thumbnailUrl ? { url: thumbnailUrl, generatedAt: new Date().toISOString() } : current.thumbnails
     }));
 
@@ -2060,8 +2839,8 @@ router.post('/generateContent', protect, checkTrial, videoAiWriteLimiter, async 
       action: 'video_content',
       prompt: draft?.prompt?.promptText || '',
       userInput: draft.input || {},
-      captions: [socialContent.caption],
-      hashtags: socialContent.hashtags,
+      captions: [normalizedContent.caption],
+      hashtags: normalizedContent.hashtags,
       thumbnails: [thumbnailUrl].filter(Boolean),
       generatedVideos: [draft?.merge?.finalOutputUrl || draft?.merge?.finalVideoUrl].filter(Boolean),
       product: draft?.input?.product || null,
@@ -2071,6 +2850,9 @@ router.post('/generateContent', protect, checkTrial, videoAiWriteLimiter, async 
     return res.json({
       success: true,
       jobId,
+      thumbnailUrl: normalizedContent.thumbnailUrl,
+      caption: normalizedContent.caption,
+      hashtags: normalizedContent.hashtags,
       content: updated.content,
       draft: updated
     });
@@ -2166,5 +2948,7 @@ router.post('/mergeAudio', protect, checkTrial, videoAiWriteLimiter, async (req,
     return responseError(res, error, 'Failed to merge audio');
   }
 });
+
+router.use(require('./directorHealth'));
 
 module.exports = router;
