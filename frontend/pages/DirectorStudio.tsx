@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+﻿import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   Clapperboard, Users, BookOpen, Wand2, Check,
   Edit3, Loader2, RefreshCw, Image as ImageIcon, Video,
@@ -2222,7 +2222,7 @@ export default function DirectorStudio() {
                     onClick={handleContinueExistingWorkflow}
                     className="px-5 py-2.5 rounded-xl bg-[#ffcc29] text-black font-bold text-xs hover:bg-[#e6b825] transition flex items-center gap-2 shadow-md"
                   >
-                    📂 Continue Existing Workflow
+                    Continue Existing Workflow
                   </button>
                 </div>
 
