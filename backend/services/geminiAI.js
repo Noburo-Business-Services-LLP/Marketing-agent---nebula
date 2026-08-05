@@ -4639,6 +4639,10 @@ async function generateCampaignImageNanoBanana(imageDescription, options = {}) {
     characterReferenceImage = null,
     previousSceneImage = null,
     productReferenceImage = null,
+    // NEW — environment reference image (locked physical space for
+    // the whole video). Has a dedicated note that tells Nano Banana
+    // this is a PLACE not a person; match walls/floor/lighting.
+    environmentReferenceImage = null,
     industry = '',
     tone = 'professional',
     postIndex = 0,
@@ -4858,12 +4862,13 @@ Treat this as an image editing task where the original person must remain identi
       return null;
     };
 
-    const [logoInline, productInline, originalCharacterInline, characterInline, previousSceneInline] = await Promise.all([
+    const [logoInline, productInline, originalCharacterInline, characterInline, previousSceneInline, environmentInline] = await Promise.all([
       prepareInlineImage(brandLogo, 'brand logo'),
       prepareInlineImage(productReferenceImage, 'product reference image'),
       prepareInlineImage(originalCharacterImage, 'original character image'),
       prepareInlineImage(characterReferenceImage, 'canonical character image'),
-      prepareInlineImage(previousSceneImage, 'previous scene image')
+      prepareInlineImage(previousSceneImage, 'previous scene image'),
+      prepareInlineImage(environmentReferenceImage, 'environment reference image')
     ]);
 
     const referenceNotes = [];
@@ -4888,11 +4893,11 @@ Do not create another person.`);
           data: characterInline.data
         }
       });
-      referenceNotes.push(`Image ${parts.length} is the CANONICAL STUDIO PORTRAIT.
-Take the exact person in the uploaded image.
+      referenceNotes.push(`Image ${parts.length} is the CANONICAL STUDIO PORTRAIT of the character(s).
+Take the exact person(s) in the uploaded image.
 Keep the identical face, beard, hairstyle, skin tone and facial structure.
-Only change the environment to the requested scene.
-Do not create another person. Preserve identity perfectly.`);
+Do not create another person. Preserve identity perfectly.
+IMPORTANT: If an ENVIRONMENT REFERENCE image is also attached (see notes below), the environment MUST come from that env reference — do NOT invent a fresh environment. Only the character's identity is anchored by THIS image; the physical space is anchored by the env reference.`);
     }
 
     if (previousSceneInline?.data) {
@@ -4902,10 +4907,10 @@ Do not create another person. Preserve identity perfectly.`);
           data: previousSceneInline.data
         }
       });
-      referenceNotes.push(`Image ${parts.length} is the PREVIOUS SCENE IMAGE.
-Take the exact person and visual style from this uploaded image.
-Edit this exact image into the new requested scene.
-Keep the identical face, clothing, and character identity. Do not create a new person.`);
+      referenceNotes.push(`Image ${parts.length} is the PREVIOUS SCENE IMAGE — the frame that came just before this one.
+If it contains people, keep their exact identity, clothing, and props consistent in this next frame.
+If it is a backdrop / interior only, match its lighting palette and material vocabulary in this next frame.
+Do NOT invent new people not visible in earlier scenes.`);
     }
 
     if (productInline?.data) {
@@ -4926,6 +4931,16 @@ Keep the identical face, clothing, and character identity. Do not create a new p
         }
       });
       referenceNotes.push(`Image ${parts.length} is the exact uploaded brand logo. Use it exactly as-is. Do not recreate or recolor it.`);
+    }
+
+    if (environmentInline?.data) {
+      parts.push({
+        inlineData: {
+          mimeType: environmentInline.mimeType || 'image/png',
+          data: environmentInline.data
+        }
+      });
+      referenceNotes.push(`Image ${parts.length} is the environment reference — a photo of the user's actual physical space. The generated scene must take place inside this space. Match its walls, floor, ceiling, lighting, and material vocabulary.`);
     }
 
     if (referenceNotes.length > 0) {
@@ -4986,16 +5001,26 @@ Keep the identical face, clothing, and character identity. Do not create a new p
       }
     }
 
-    throw new Error('Nano Banana 2 returned no image');
+    // Primary returned success (200) but NO image in the response
+    // parts. Surface the finish reason so we can see why (safety
+    // block, content filter, MAX_TOKENS, etc.)
+    const finishReason = candidates[0]?.finishReason || candidates[0]?.finish_reason || 'unknown';
+    const safetyRatings = candidates[0]?.safetyRatings || candidates[0]?.safety_ratings || [];
+    console.warn(`[NanoBanana2] Post ${postIndex + 1} — no image in response. finishReason=${finishReason}. safety=${JSON.stringify(safetyRatings)}`);
+    throw new Error(`Nano Banana 2 returned no image (finishReason=${finishReason})`);
 
   } catch (error) {
     console.error(`[NanoBanana2] Post ${postIndex + 1} failed:`, error.message);
 
     try {
-      console.log('[NanoBanana2] Trying fallback gemini-2.5-flash-image...');
+      console.log('[NanoBanana2] Trying fallback gemini-2.5-flash-image WITH reference images...');
       const fallbackUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent';
+      // CRITICAL: reuse the SAME `parts` array that was sent to the
+      // primary (contains character + env + logo reference images +
+      // text prompt). Previously the fallback was text-only which
+      // produced random scenes with no character / env / logo lock.
       const fallbackBody = {
-        contents: [{ parts: [{ text: prompt }] }],
+        contents: [{ parts }],
         generationConfig: { temperature: 0.8, responseModalities: ["TEXT", "IMAGE"] }
       };
 
@@ -5023,6 +5048,10 @@ Keep the identical face, clothing, and character identity. Do not create a new p
             }
           }
         }
+        const fbFinish = fbData.candidates?.[0]?.finishReason || fbData.candidates?.[0]?.finish_reason || 'unknown';
+        console.warn(`[NanoBanana2 fallback] no image in response either. finishReason=${fbFinish}`);
+      } else {
+        console.warn(`[NanoBanana2 fallback] HTTP ${fbResponse.status}: ${JSON.stringify(fbData?.error || fbData).slice(0, 300)}`);
       }
     } catch (fbErr) {
       console.error('Fallback also failed:', fbErr.message);

@@ -2,10 +2,10 @@ const fs = require('fs');
 const path = require('path');
 const { Blob: BufferBlob } = require('buffer');
 
-// Both default to Kling v1 standard — widely available on most fal.ai keys.
+// Default: Kling v2.5 Turbo Pro — best face-lock + fastest of the v2.5 line.
 // Override per environment via FAL_IMAGE_TO_VIDEO_MODEL / FAL_TEXT_TO_VIDEO_MODEL.
-const IMAGE_TO_VIDEO_MODEL = process.env.FAL_IMAGE_TO_VIDEO_MODEL || 'fal-ai/kling-video/v1/standard/image-to-video';
-const DEFAULT_MODEL = process.env.FAL_TEXT_TO_VIDEO_MODEL || 'fal-ai/kling-video/v1/standard/text-to-video';
+const IMAGE_TO_VIDEO_MODEL = process.env.FAL_IMAGE_TO_VIDEO_MODEL || 'fal-ai/kling-video/v2.5-turbo/pro/image-to-video';
+const DEFAULT_MODEL = process.env.FAL_TEXT_TO_VIDEO_MODEL || 'fal-ai/kling-video/v2.5-turbo/pro/text-to-video';
 const DEFAULT_SEED = Number.parseInt(String(process.env.FAL_VIDEO_SEED || '-1'), 10);
 const DEFAULT_NUM_FRAMES = 33;
 const VIDEO_SIZE = {
@@ -23,25 +23,92 @@ function clamp(value, min, max) {
   return Math.min(max, Math.max(min, n));
 }
 
-function getScenePrompt(scene = {}) {
-  const basePrompt = String(
-    scene.video_prompt ||
-      scene.videoPrompt ||
-      scene.prompt ||
-      scene.imagePrompt ||
-      scene.title ||
-      'Cinematic camera pan and dynamic motion showcasing the scene.'
-  ).trim();
+function aspectLabel(ar) {
+  const s = String(ar || '9:16').trim();
+  if (s === '16:9') return 'Horizontal 16:9 widescreen cinematic';
+  if (s === '1:1') return 'Square 1:1 social-feed';
+  if (s === '4:5') return 'Portrait 4:5 social-feed';
+  return 'Vertical 9:16 reels/shorts';
+}
 
-  // Motion-first prompt modifications
-  return [
-    'Cinematic camera movement,',
-    basePrompt,
-    'Dynamic motion, slow smooth pan, tracking shot, premium commercial style, natural light reflections, subtle depth movement.',
-    'Vertical 9:16 professional marketing video, high-detail 1080p look, sharp product details, clean edges, realistic materials.',
-    'Keep faces, hands, product packaging, logos, and object geometry consistent from frame to frame.',
-    'Avoid pixelation, distortion, flicker, duplicated objects, warped text, noisy backgrounds, blur, compression artifacts, and low-resolution details.'
-  ].filter(Boolean).join(' ');
+function buildCharacterBlock(scene = {}) {
+  const chars = Array.isArray(scene.sceneCharacters) ? scene.sceneCharacters : [];
+  if (!chars.length) return '';
+  return 'CHARACTERS PERFORMING IN THIS SHOT (keep faces / builds / clothing consistent with earlier scenes):\n' +
+    chars.map((c) => `  - ${c.name || c.id || 'character'} (${c.age || '?'}, ${c.gender || ''}, ${c.role || ''}): ${c.appearance || ''}. Wearing ${c.clothing || 'n/a'}.`).join('\n');
+}
+
+const KLING_MAX_PROMPT_CHARS = 2400; // Kling caps at 2500; keep a safety margin.
+
+function getScenePrompt(scene = {}) {
+  const aspect = String(scene.aspectRatio || scene.aspect_ratio || '9:16').trim();
+  const imagePrompt = String(scene.image_prompt || scene.imagePrompt || '').trim();
+  const videoPrompt = String(scene.video_prompt || scene.videoPrompt || '').trim();
+  const visual = String(scene.visualDescription || '').trim();
+  const scriptLine = String(scene.scriptLine || scene.voiceLine || '').trim();
+  const emotion = String(scene.emotion || '').trim();
+  const cameraMovement = String(scene.cameraMovement || '').trim();
+  const cameraAngle = String(scene.cameraAngle || '').trim();
+  const location = String(scene.location || '').trim();
+  const characterBlock = buildCharacterBlock(scene);
+  const tweak = String(scene.regenTweak || '').trim();
+  const envClause = String(scene.envClause || '').trim();
+
+  // COMPACT prompt (Kling has a HARD 2500-char cap). We rank clauses by
+  // importance and drop the trailing ones if we exceed budget:
+  //   MUST-HAVE — action, characters, camera, tweak
+  //   NICE-TO-HAVE — performance direction, dialogue rule, environment
+  //   OPTIONAL — AVOID clause (safety only, always drop first)
+  const must = [
+    'Photoreal live-action cinematic shot.',
+    location ? `Location: ${location}.` : '',
+    characterBlock,
+    visual ? `Action: ${visual}` : '',
+    envClause,
+    cameraMovement ? `Camera: ${cameraMovement}.` : 'Camera: slow smooth dolly-in, no jitter.',
+    cameraAngle ? `Framing: ${cameraAngle}.` : '',
+    tweak ? `USER OVERRIDE (respect above all): ${tweak}` : '',
+    scriptLine ? `Voiceover mood: "${scriptLine.slice(0, 140)}" — characters react via expression only, mouths closed, NO lip-sync.` : 'Characters must NOT lip-sync to any voiceover.',
+    emotion ? `Emotion: ${emotion}.` : '',
+  ].filter(Boolean);
+
+  const nice = [
+    videoPrompt ? `Motion: ${videoPrompt.slice(0, 220)}` : '',
+    imagePrompt ? `Visual match: ${imagePrompt.slice(0, 220)}` : '',
+    'Characters ACT with natural gestures + real eye contact — no mannequin poses, no frozen faces.',
+    'Real-world physics on hair, fabric, shadows, products. Backgrounds move naturally, no floating objects.',
+    `${aspectLabel(aspect)} 1080p commercial. Preserve identity: faces, wardrobe, logos, geometry must not drift frame-to-frame.`
+  ].filter(Boolean);
+
+  const optional = [
+    'Avoid pixelation, distortion, warped text, duplicated limbs, stock-photo stiffness.'
+  ];
+
+  // Assemble greedily, dropping optional > nice[end] > nice > must[end]
+  // until we fit under the cap. `must` is never dropped.
+  const budget = KLING_MAX_PROMPT_CHARS;
+  const join = (arr) => arr.join(' ').replace(/\s+/g, ' ').trim();
+
+  let out = join([...must, ...nice, ...optional]);
+  if (out.length <= budget) return out;
+
+  out = join([...must, ...nice]);
+  if (out.length <= budget) return out;
+
+  const niceTrimmed = [...nice];
+  while (niceTrimmed.length && join([...must, ...niceTrimmed]).length > budget) {
+    niceTrimmed.pop();
+  }
+  out = join([...must, ...niceTrimmed]);
+  if (out.length <= budget) return out;
+
+  // If MUST alone still overflows, hard-truncate the visual/motion
+  // clauses (they're the fattest ones) inside must and re-join.
+  const mustTrimmed = must.map((line) =>
+    line.length > 400 ? line.slice(0, 397) + '...' : line
+  );
+  out = join(mustTrimmed);
+  return out.length <= budget ? out : out.slice(0, budget);
 }
 
 function getSceneImageUrl(scene = {}) {
@@ -189,11 +256,18 @@ async function generateVideoClip(scene = {}) {
   const numFrames = clamp(scene.num_frames || scene.numFrames || DEFAULT_NUM_FRAMES, 25, 33);
   const seed = getSeed(scene);
   const seedance = isSeedanceModel(model);
+  const validAspect = new Set(['9:16', '16:9', '1:1', '4:5']);
+  const requestedAspect = String(scene.aspectRatio || scene.aspect_ratio || FAL_VIDEO_ASPECT_RATIO || '9:16').trim();
+  const sceneAspect = validAspect.has(requestedAspect) ? requestedAspect : '9:16';
+  // Kling accepts 9:16/16:9/1:1 natively — for 4:5 (feed portrait) fall back
+  // to 9:16 render and let downstream ffmpeg crop, so we never send an
+  // aspect Kling rejects.
+  const klingAspect = sceneAspect === '4:5' ? '9:16' : sceneAspect;
 
   const input = seedance
     ? {
         prompt,
-        ...(imageUrl ? { image_url: imageUrl } : { aspect_ratio: FAL_VIDEO_ASPECT_RATIO, resolution: FAL_VIDEO_RESOLUTION }),
+        ...(imageUrl ? { image_url: imageUrl } : { aspect_ratio: klingAspect, resolution: FAL_VIDEO_RESOLUTION }),
         duration: String(getSeedanceDuration(scene)),
         camera_fixed: false,
         seed,
@@ -212,7 +286,9 @@ async function generateVideoClip(scene = {}) {
         use_multiscale: true,
         motion_strength: 7,
         dynamic_camera: true,
-        cinematic_movement: true
+        cinematic_movement: true,
+        aspect_ratio: klingAspect,
+        resolution: FAL_VIDEO_RESOLUTION
       };
 
   if (imageUrl && !seedance) {
@@ -220,6 +296,7 @@ async function generateVideoClip(scene = {}) {
   }
 
   const payload = { model, input };
+  console.log(`[Kling] prompt length: ${input.prompt.length} chars (cap 2500)`);
   console.log("Fal request payload:", JSON.stringify(payload, null, 2));
 
   const startTime = Date.now();
@@ -255,8 +332,8 @@ async function generateVideoClip(scene = {}) {
         num_frames: seedance ? undefined : numFrames,
         width: seedance ? undefined : VIDEO_SIZE.width,
         height: seedance ? undefined : VIDEO_SIZE.height,
-        aspect_ratio: seedance ? FAL_VIDEO_ASPECT_RATIO : undefined,
-        resolution: seedance ? FAL_VIDEO_RESOLUTION : undefined,
+        aspect_ratio: klingAspect,
+        resolution: FAL_VIDEO_RESOLUTION,
         duration: seedance ? getSeedanceDuration(scene) : undefined
       }
     };

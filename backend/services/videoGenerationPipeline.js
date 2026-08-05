@@ -35,7 +35,12 @@ const EDGE_TTS_MALE_VOICE = String(process.env.EDGE_TTS_MALE_VOICE || '').trim()
 const EDGE_TTS_FEMALE_VOICE = String(process.env.EDGE_TTS_FEMALE_VOICE || '').trim();
 const ELEVENLABS_API_KEY = String(process.env.ELEVENLABS_API_KEY || '').trim();
 const ELEVENLABS_MALE_VOICE_ID = String(process.env.ELEVENLABS_MALE_VOICE_ID || '').trim();
-const ELEVENLABS_MODEL_ID = String(process.env.ELEVENLABS_MODEL_ID || 'eleven_multilingual_v2').trim();
+// Latest expressive model. eleven_v3 supports 70+ languages
+// (incl. Tamil / Telugu / Kannada / Malayalam) with emotional
+// prosody. If a specific voice isn't v3-compatible we fall back
+// to eleven_multilingual_v2 automatically (see synthesize below).
+const ELEVENLABS_MODEL_ID = String(process.env.ELEVENLABS_MODEL_ID || 'eleven_v3').trim();
+const ELEVENLABS_MODEL_FALLBACK = 'eleven_multilingual_v2';
 const MAX_SCENES = 10;
 const MIN_SCENES = 1;
 const DEFAULT_DURATION_SECONDS = 60;
@@ -395,13 +400,20 @@ function normalizeAudioOptions(raw = {}) {
     mode,
     languageCode: String(raw?.languageCode || 'en').toLowerCase(),
     tone: normalizeTone(raw?.tone) || 'professional',
-    musicSource: ['tone', 'library'].includes(String(raw?.musicSource || '').toLowerCase())
+    musicSource: ['tone', 'library', 'elevenlabs_ai'].includes(String(raw?.musicSource || '').toLowerCase())
       ? String(raw.musicSource).toLowerCase()
       : String(process.env.AI_VIDEO_MUSIC_SOURCE || 'library').toLowerCase(),
     musicTrack: typeof raw?.musicTrack === 'string' ? raw.musicTrack.trim() : '',
+    // Optional user-supplied prompt for AI-composed music. Empty →
+    // auto-derived from voice script + emotions.
+    musicPrompt: typeof raw?.musicPrompt === 'string' ? raw.musicPrompt.trim().slice(0, 500) : '',
     voiceGender: ['male', 'female'].includes(String(raw?.voiceGender || '').toLowerCase())
       ? String(raw.voiceGender).toLowerCase()
       : 'female',
+    // ElevenLabs voice ID chosen in the Audio Config UI. When present,
+    // the TTS pipeline routes to ElevenLabs first (Google / Edge stay
+    // as fallbacks if the ElevenLabs call fails).
+    voiceId: typeof raw?.voiceId === 'string' ? raw.voiceId.trim() : '',
     voiceVolume: Number.isFinite(Number(raw?.voiceVolume)) ? Number(raw.voiceVolume) : 1,
     musicVolume: Number.isFinite(Number(raw?.musicVolume)) ? Number(raw.musicVolume) : 0.24,
     fitVoiceToDuration: raw?.fitVoiceToDuration !== false,
@@ -592,11 +604,41 @@ function normalizeCreateInput(payload = {}, options = {}) {
   const sceneCount = estimateSceneCount(durationSeconds, payload.sceneCount);
   const audio = normalizeAudioOptions(payload.audio || {});
   const subtitles = normalizeSubtitleOptions(payload.subtitles || {});
+  const validAspect = new Set(['9:16', '16:9', '1:1', '4:5']);
+  const aspectRatio = validAspect.has(String(payload.aspectRatio || '').trim())
+    ? String(payload.aspectRatio).trim()
+    : '9:16';
+  const validLangs = new Set(['en', 'hi', 'ta', 'te', 'kn', 'ml']);
+  const languageCode = validLangs.has(String(payload.languageCode || '').toLowerCase())
+    ? String(payload.languageCode).toLowerCase()
+    : 'en';
+
+  // Environment definition (Step 3 of the wizard). Kept as a plain
+  // pass-through so downstream prompt builders can read enabled +
+  // referenceImages + notes. When enabled=false, prompts should
+  // behave as if the env block doesn't exist.
+  const environment = {
+    enabled: !!payload.environment?.enabled,
+    referenceImages: Array.isArray(payload.environment?.referenceImages)
+      ? payload.environment.referenceImages
+          .filter((r) => r && (r.url || r.dataUrl))
+          .map((r) => ({
+            url: String(r.url || '').trim(),
+            dataUrl: String(r.dataUrl || '').trim(),
+            source: r.source === 'brand-asset' ? 'brand-asset' : 'upload'
+          }))
+          .slice(0, 5)
+      : [],
+    notes: String(payload.environment?.notes || '').trim().slice(0, 500)
+  };
 
   return {
     description: safeDescription,
     durationSeconds,
     sceneCount,
+    aspectRatio,
+    languageCode,
+    environment,
     imageData: typeof payload.imageData === 'string' ? payload.imageData.trim() : '',
     imageUrl: typeof payload.imageUrl === 'string' ? payload.imageUrl.trim() : '',
     productId: typeof payload.productId === 'string' ? payload.productId.trim() : '',
@@ -825,11 +867,19 @@ ${usageRules}`;
     : String(profile?.brandVoice || profile?.tone || 'Emotional');
   const brandSummary = String(profile?.description || profile?.bio || profile?.about || '').trim();
 
-  const systemPrompt = `You are an award-winning Creative Director and Film Director who has created commercials for brands like Apple, Nike, Google, Tanishq and Dove.
-The commercial concept has already been finalized.
-Your job is to convert this concept into a production-ready commercial.
-This is NOT a social media content piece.
-This is a premium brand film.
+  // Script & Scenes generation — mirrors Script & Scenes.docx block-for-block:
+  // STORY (6 beats) + VOICEOVER (75-word narration, ElevenLabs-ready) + SCENE
+  // BREAKDOWN (12 fields per scene). Generalized so it fits ANY brand tier
+  // (food stall, gym, jewellery, corporate SaaS) — the docx's discipline is
+  // preserved but the tone adapts to whatever brandTone is set on the profile.
+  // Downstream Steps 4-8 still read the old fields (scriptLine, voiceLine,
+  // imagePrompt, videoPrompt) which we backfill from the richer new ones.
+  const systemPrompt = `You are an award-winning Creative Director and Film Director.
+You have written commercials across every tier — cinematic luxury films for jewellery and premium brands, warm family stories for traditional shops, kinetic D2C reels, corporate confidence pieces, playful food & lifestyle content.
+
+The creative concept has already been approved.
+Your job is to convert it into a production-ready commercial SCRIPT + STORYBOARD that matches THIS brand's tone — not a one-size-fits-all luxury film.
+
 ═══════════════════════════════════════
 BRAND DETAILS
 Business Name: ${profile?.name || 'N/A'}
@@ -842,78 +892,163 @@ APPROVED CONCEPT
 ${input.description}
 ═══════════════════════════════════════
 OBJECTIVE
-Expand this concept into a cinematic commercial that emotionally connects with the audience before introducing the brand.
+Expand this concept into a commercial that emotionally connects with the audience BEFORE introducing the brand.
 The audience should remember the feeling first, and the brand second.
-Avoid generic advertising.
-Avoid direct selling.
-Avoid explaining the product.
-Show emotions instead of information.
-Think like the best commercial for this brand's tier — luxury polish if premium, warm authenticity if traditional, kinetic energy if D2C/reel-first. Match the Brand Tone above.
-═══════════════════════════════════════
-Create the following in order:
+Avoid direct selling. Avoid explaining the product. Show emotions instead of information.
 
-## 1. STORY
-Expand the concept into a complete story.
-The story should have:
-• Hook
-• Beginning
-• Emotional progression
-• Climax
-• Brand Reveal
-• Ending
-Maximum duration: ${input.durationSeconds} seconds
-Maximum scenes: ${sceneCount}
-The story should naturally flow from one scene to another.
+TIER-ADAPTIVE VOICE (match the brand — do NOT force luxury polish on a casual brand):
+- Premium / Luxury → cinematic restraint, poetic narration, slow reveal
+- Traditional / Family → warm authenticity, everyday moments, honest voice
+- Playful / D2C / Reel-first → kinetic energy, punchy lines, humor when fitting
+- Corporate / SaaS / Professional → calm confidence, clarity, credibility
+- Food / Lifestyle / Local → sensory, casual, close to the customer
+
 ═══════════════════════════════════════
-## 2. VOICE OVER
-Write a premium cinematic narration.
-Rules:
-• Aim for a word count that fits ${input.durationSeconds} seconds of narration at a natural pace (~2 words/second)
-• One short sentence at a time
-• Natural pauses
-• Emotional
-• Poetic
-• Don't explain visuals
-• Don't mention products unnecessarily
+Create the following in order — every text field MUST be elaborated (multi-sentence, production-ready), NEVER single-line placeholders.
+
+## 1. STORY ARC (six beats)
+Write each beat as 2-4 rich sentences. This is the shooting bible.
+• hook — the first 3-5 seconds that earn attention (curiosity or emotional pull)
+• beginning — how we enter the world of the story
+• emotionalProgression — how feeling builds through the middle
+• climax — the peak emotional moment
+• brandReveal — how the brand appears naturally (never leading, never salesy)
+• ending — the final image + line the viewer will remember
+
+Constraints: Maximum duration ${input.durationSeconds} seconds. Maximum scenes ${sceneCount}. Every scene must flow naturally to the next.
+
+## 2. VOICEOVER SCRIPT
+Write the full narration as ONE continuous string, ready to paste into ElevenLabs.
+This is SPOKEN language — not scene descriptions, not stage directions, not visual summaries.
+The voiceover must add something the visuals cannot:
+• A feeling the picture alone cannot deliver
+• A thought that reframes what the viewer is seeing
+• A memory or emotion the viewer connects to
+
+STYLE
+- Sounds like a real human speaking, not a narrator reading a script
+- Rhythmic — sentences of varying length, natural pauses
+- Concrete words, not marketing abstractions ("evening light" not "premium ambience")
+- If Brand Tone is Luxury → poetic restraint; Traditional → warm honesty; Playful → punchy wit; Corporate → calm confidence
+
+RULES
+• Target ${Math.round(input.durationSeconds * 2)} words (±10%) for ${input.durationSeconds} seconds at natural pace
+• Use \\n between sentences for natural spoken pauses — do NOT run everything into one paragraph
+• DO NOT describe what the camera sees — the visual scene already shows it
+• DO NOT paraphrase the visualDescription of each scene — that's a different job
+• DO NOT mention the product unnecessarily
 • End with a memorable brand line
+
+CRITICAL: The voiceover MUST be distinct from the scene visualDescriptions. If your voiceover reads like a list of what's on screen ("A chair sways… tables join in… the room fills…"), you have failed. Rewrite it as something a real person would SAY that adds emotional meaning ON TOP of what the viewer already sees.
+
+## 3. SCENE BREAKDOWN (per scene — every field required, all elaborated)
+For every scene fill ALL 12 fields:
+1. sceneNumber — 1, 2, 3…
+2. title — a specific, story-driven title (NOT "Opening Hook" or "Scene 1")
+3. purpose — 2-3 sentences on why this scene exists in the arc and what it must land emotionally
+4. charactersRequired — array of character IDs from the approved cast (e.g. ["01", "02"]) or a plain-language list of who is on camera
+5. location — specific location or set description (2-3 sentences)
+6. visualDescription — 3-5 sentences of what the camera SEES: subjects, environment, lighting, mood, color palette, hero moment
+7. emotion — the ONE dominant emotion of this scene (single phrase, e.g. "quiet nostalgia", "electric joy", "reverent stillness")
+8. cameraAngle — specific angle (e.g. "low-angle hero shot", "over-the-shoulder", "eye-level close-up")
+9. cameraMovement — specific movement (e.g. "slow dolly in", "handheld sway", "static hold with rack focus")
+10. durationSeconds — integer seconds
+11. scriptLine — the exact spoken narration line for THIS scene (from part 2's voiceover, split naturally)
+12. transitionToNext — how this scene resolves into the next (e.g. "hard cut on the sound of…", "slow crossfade to…")
+
 ═══════════════════════════════════════
-## 3. SCENE BREAKDOWN
-Create a production-ready scene breakdown.
-For every scene include: Scene Title, Purpose, Visual Description, Emotion, Camera Angle, Camera Movement, Duration (seconds), Voice-over Line, Transition to next scene.
-═══════════════════════════════════════
-## CREATIVE RULES
-Before finalizing, check that:
-✓ The first 5 seconds create curiosity.
-✓ Every scene moves the story forward.
-✓ Every scene has only ONE dominant emotion.
-✓ The product is never the hero.
-✓ The brand appears naturally near the end.
-✓ The ending feels memorable.
-✓ The audience should feel something before seeing the logo.
-✓ The commercial should feel worthy of its brand tier.
-If any scene feels generic or unnecessary, rewrite it before presenting the final output.
+CREATIVE RULES (must all be true before you return)
+✓ First 5 seconds create curiosity or emotional pull
+✓ Every scene moves the story forward — cut any filler
+✓ Every scene has ONE dominant emotion
+✓ The product is never the hero — the story is
+✓ Brand appears naturally near the end
+✓ Ending feels memorable — the viewer replays it in their head
+✓ Audience feels something BEFORE seeing the logo
+✓ Tone matches this brand's actual tier — not a generic luxury film
+Rewrite any scene that feels generic or filler before returning.
 ${videoStyleContext}${characterContext}
 ═══════════════════════════════════════
-OUTPUT FORMAT — STRICT JSON ONLY
-Return ONLY a valid JSON object (no markdown, no code fences, no prose) with this exact schema:
+OUTPUT FORMAT — STRICT JSON ONLY (no markdown, no code fences, no prose outside JSON)
 {
-  "globalVisualStyle": "string — cinematography direction that applies to every scene",
-  "thumbnailPrompt": "string — an attention-grabbing thumbnail image description",
-  "voiceScript": "string — the full narration from VOICE OVER above, one string, no headings",
+  "story": {
+    "hook": "2-4 sentence hook description",
+    "beginning": "2-4 sentence beginning",
+    "emotionalProgression": "2-4 sentence middle build",
+    "climax": "2-3 sentence climax",
+    "brandReveal": "2-3 sentence brand reveal moment",
+    "ending": "2-3 sentence ending"
+  },
+  "voiceScript": "The full narration as ONE string, using \\n for natural pauses between lines. Directly ElevenLabs-ready.",
+  "globalVisualStyle": "One paragraph describing the cinematography direction that applies to every scene",
+  "thumbnailPrompt": "One paragraph describing the strongest single frame for the thumbnail",
   "scenes": [
     {
-      "title": "string — scene title",
-      "imagePrompt": "string — photoreal visual description for image gen (environment, lighting, camera angle, character continuity, mood)",
-      "videoPrompt": "string — motion only (camera movement, character movement, environmental movement); do NOT repeat imagePrompt visuals",
-      "voiceLine": "string — the narration line for THIS scene from the VOICE OVER",
-      "onScreenText": "string — optional short caption or empty string"
+      "sceneNumber": 1,
+      "title": "specific story-driven title",
+      "purpose": "2-3 sentence purpose",
+      "charactersRequired": ["01", "02"],
+      "location": "2-3 sentence location description",
+      "visualDescription": "3-5 sentence detailed visual description",
+      "emotion": "one dominant emotion phrase",
+      "cameraAngle": "specific angle",
+      "cameraMovement": "specific movement",
+      "durationSeconds": 4,
+      "scriptLine": "the exact line spoken in this scene",
+      "onScreenText": "optional short caption or empty string",
+      "transitionToNext": "how this scene ends and flows into the next",
+      "voiceLine": "same as scriptLine — kept for backwards compat with downstream steps",
+      "imagePrompt": "photoreal single-frame image prompt combining visualDescription + cameraAngle + character continuity + mood — used by the image generator",
+      "videoPrompt": "motion-only spec (camera movement + character movement + environmental motion) — used by the video generator, do NOT repeat visualDescription"
     }
   ]
 }
-Priority Order (Highest to Lowest): Character Identity Rules, Character Reference Image, Character Usage Rules, Video Style Rules, Approved Concept, Brand Details, AI Creativity. Never violate a higher priority rule to satisfy a lower priority rule.
+
+Priority Order (Highest → Lowest): Character Identity Rules, Character Reference Image, Character Usage Rules, Video Style Rules, Approved Concept, Brand Details, AI Creativity. Never violate a higher-priority rule to satisfy a lower one.
 You MUST return exactly ${sceneCount} scenes.
-The number of scenes and voice-line lengths must be consistent with ${input.durationSeconds} seconds of total video.
 Every scene must be suitable for 9:16 vertical video.
+
+═══════════════════════════════════════
+FIELD REQUIREMENTS — NON-NEGOTIABLE
+Every scene object MUST contain ALL of these fields, elaborated to production quality. Omitting ANY of these will cause the response to be REJECTED and you will be asked to regenerate.
+
+For each scene:
+1. sceneNumber — integer
+2. title — a specific, story-driven title (NOT "Opening Hook")
+3. purpose — 2-3 sentences on why this scene exists in the arc
+4. charactersRequired — array of character IDs (["01"], ["01","02"], or [] if none)
+5. location — 1-2 sentences describing the specific place
+6. visualDescription — 3-5 sentences describing what the camera sees (subjects, lighting, color, mood)
+7. emotion — a 2-4 word phrase naming the ONE dominant feeling (e.g. "quiet reverence", "electric joy")
+8. cameraAngle — e.g. "low-angle hero shot", "over-the-shoulder", "eye-level close-up"
+9. cameraMovement — e.g. "slow dolly in", "handheld sway", "static hold with rack focus"
+10. durationSeconds — integer
+11. scriptLine — the exact spoken line for this scene (from the voiceover, split naturally)
+12. onScreenText — a caption if any, or empty string ""
+13. transitionToNext — 1 sentence on how this scene resolves into the next
+14. imagePrompt — auto-derivable, still required as a rich sentence
+15. videoPrompt — auto-derivable, still required as a motion-only sentence
+
+CONCRETE EXAMPLE of a fully-filled scene (for reference only — do NOT copy the content, only the level of detail):
+{
+  "sceneNumber": 1,
+  "title": "The Quiet Before Dawn",
+  "purpose": "This scene opens the film with stillness so the viewer leans in. It plants the emotional key of memory that the rest of the arc will build on. Without curiosity here, no one stays for scene 2.",
+  "charactersRequired": ["01"],
+  "location": "An old wooden home interior at 5 AM, one lamp still on from the night before, a saree draped over the back of a chair.",
+  "visualDescription": "A single warm lamp glows in a dim living room. Dust motes drift in its beam. A woman in her sixties sits half-facing the window, her hands folded in her lap. The palette is warm ochre, brown wood, and one thin sliver of pre-dawn blue from the window. Everything is very still.",
+  "emotion": "quiet reverence",
+  "cameraAngle": "low eye-level, framing her from the side",
+  "cameraMovement": "slow 4-second dolly in from 3m to 1.5m",
+  "durationSeconds": 4,
+  "scriptLine": "There are moments before the world wakes up.",
+  "onScreenText": "",
+  "transitionToNext": "The lamp flickers off as morning light rises — a soft crossfade into scene 2.",
+  "imagePrompt": "Cinematic still: 60-year-old South Indian woman in warm ochre living room, single lamp glow, dust motes in beam, low eye-level side framing, ochre and brown palette, sliver of pre-dawn blue from window, hyperreal skin detail, shallow depth of field, 35mm anamorphic look.",
+  "videoPrompt": "Slow 4-second dolly-in from 3m to 1.5m. Subject remains still — only her breath and one blink. Lamp glow flickers once at the end signalling transition."
+}
+
+Every scene in your output must match THIS level of detail — no exceptions.
 Do not include any text outside the JSON object.`;
 
   const userPrompt = [
@@ -934,18 +1069,22 @@ Do not include any text outside the JSON object.`;
 
   try {
     let validationError = '';
+    let elaborationAttempts = 0;
     const raw = await runWithRetries(
       'scene generation',
       async () => {
         const callPrompt = `${systemPrompt}\n\n${userPrompt}${validationError ? '\n\nIMPORTANT CORRECTION REQUIRED: ' + validationError : ''}`;
         // Primary: OpenAI (gpt-4o) for the creative brain of the video.
         // Fallback: Gemini, so the pipeline still works if OpenAI errors out.
+        // maxTokens 4500 (up from 2500) — the v2 Script + Scenes response
+        // includes a 6-beat story arc, 75-word voiceover, and 12 fields
+        // per scene with elaborated multi-sentence content. 2500 truncates.
         let result;
         try {
           result = await callOpenAI(callPrompt, {
             temperature: 0.7,
-            maxTokens: 2500,
-            timeout: 120000,
+            maxTokens: 8000,
+            timeout: 240000,
             jsonMode: true
           });
         } catch (openAiErr) {
@@ -953,9 +1092,105 @@ Do not include any text outside the JSON object.`;
           result = await callGemini(callPrompt, {
             skipCache: true,
             temperature: 0.65,
-            maxTokens: 2500,
-            timeout: 120000
+            maxTokens: 8000,
+            timeout: 240000
           });
+        }
+
+        // Elaboration guard — reject responses where ANY required scene
+        // field is empty or too short. Common failure: OpenAI returns
+        // only title + scriptLine + duration and skips emotion / camera
+        // angle / location / etc. We force a retry until every field is
+        // filled and elaborated to production quality.
+        try {
+          const previewParsed = parseGeminiJSON(result);
+          const previewScenes = Array.isArray(previewParsed?.scenes) ? previewParsed.scenes : [];
+
+          // Enumerate every scene field that MUST be non-trivially populated.
+          // Numbers = minimum char length (single word = weak, sentence = ok).
+          const required = {
+            purpose: 40,
+            location: 15,
+            visualDescription: 60,
+            emotion: 5,
+            cameraAngle: 5,
+            cameraMovement: 5,
+            transitionToNext: 8,
+            scriptLine: 5,
+          };
+          const thinScenes = previewScenes
+            .map((s, i) => {
+              const missing = Object.entries(required)
+                .filter(([k, min]) => String(s?.[k] || '').trim().length < min)
+                .map(([k]) => k);
+              return missing.length ? { i: i + 1, missing } : null;
+            })
+            .filter(Boolean);
+
+          const rawStory = previewParsed?.story || {};
+          const storyBeats = ['hook', 'beginning', 'emotionalProgression', 'climax', 'brandReveal', 'ending'];
+          const thinStoryBeats = storyBeats.filter((b) => String(rawStory[b] || '').trim().length < 40);
+
+          const voiceScript = String(previewParsed?.voiceScript || '').trim();
+          const voiceWordCount = voiceScript.split(/\s+/).filter(Boolean).length;
+          const voiceTooShort = voiceWordCount < 20;
+
+          // Diagnostic — print what fields the model actually returned for
+          // each scene so we can tell if OpenAI is skipping fields or if
+          // downstream normalization is dropping them.
+          const rawFieldReport = previewScenes.map((s, i) => {
+            const keys = ['emotion', 'cameraAngle', 'cameraMovement', 'purpose', 'location', 'visualDescription', 'transitionToNext', 'scriptLine', 'onScreenText'];
+            const fill = keys.map((k) => `${k}=${String(s?.[k] || '').length}`).join(' ');
+            return `  scene ${i + 1}: ${fill}`;
+          }).join('\n');
+          console.log('[scene-gen] Raw AI response — field lengths per scene:\n' + rawFieldReport);
+          console.log('[scene-gen] voiceScript wc=' + voiceWordCount + ' story present=' + Boolean(previewParsed?.story));
+
+          // Detect the "voiceover just re-lists visualDescriptions" bug —
+          // if MORE than half of the voiceover's meaningful words are
+          // literally copied from scene visualDescriptions, it's not a
+          // proper voice-over, it's a scene summary. Force a rewrite.
+          const stripStopWords = (s) => String(s || '')
+            .toLowerCase().replace(/[^a-z\s]/g, ' ').split(/\s+/)
+            .filter((w) => w.length > 3);
+          const visualWords = new Set(previewScenes.flatMap((s) => stripStopWords(s?.visualDescription)));
+          const vOverlapWords = stripStopWords(voiceScript).filter((w) => visualWords.has(w));
+          const overlapRatio = voiceWordCount > 0 ? (vOverlapWords.length / voiceWordCount) : 0;
+          const voiceIsRehash = voiceWordCount > 15 && overlapRatio > 0.55;
+
+          // Allow up to 2 elaboration retries (in addition to the outer
+          // runWithRetries) — this specific failure mode (thin scenes)
+          // needs an explicit rejection loop, not a single one-shot.
+          const needsRetry = (thinScenes.length > 0 || thinStoryBeats.length > 0 || voiceTooShort || voiceIsRehash)
+            && elaborationAttempts < 2;
+
+          if (needsRetry) {
+            elaborationAttempts += 1;
+            const msg = `Elaboration retry #${elaborationAttempts} — thinScenes=${thinScenes.length}, thinStory=${thinStoryBeats.length}, voiceShort=${voiceTooShort}, voiceRehash=${voiceIsRehash}`;
+            console.log('[scene-gen]', msg);
+            if (logger) logger(msg);
+            const parts = [];
+            if (thinScenes.length) {
+              parts.push('These scenes are missing / too-thin fields: ' +
+                thinScenes.map((t) => `Scene ${t.i} → [${t.missing.join(', ')}]`).join('; '));
+            }
+            if (thinStoryBeats.length) {
+              parts.push('Story beats too thin: ' + thinStoryBeats.join(', '));
+            }
+            if (voiceTooShort) {
+              parts.push('voiceScript is empty or too short — write the full narration in ONE continuous string of ~' + Math.round(input.durationSeconds * 2) + ' words.');
+            }
+            if (voiceIsRehash) {
+              parts.push('voiceScript is just paraphrasing the scene visualDescriptions — REWRITE it as spoken emotional language that ADDS meaning ON TOP of what viewers already see (a feeling, a memory, a reframing). Use fresh words, not the same words as the visual descriptions.');
+            }
+            validationError = 'ELABORATE MORE — you MUST fill EVERY field with production-ready detail. ' +
+              parts.join(' | ') +
+              '. Regenerate the ENTIRE JSON with EVERY field populated per the schema. Do NOT leave any field empty or as a single word placeholder.';
+            throw new Error(validationError);
+          }
+        } catch (elabErr) {
+          if (String(elabErr?.message || '').includes('ELABORATE')) throw elabErr;
+          // parse errors fall through to the outer validation
         }
         
         // Validation Layer
@@ -977,7 +1212,7 @@ Do not include any text outside the JSON object.`;
         }
         return result;
       },
-      3,
+      5,
       logger
     );
 
@@ -995,17 +1230,46 @@ Do not include any text outside the JSON object.`;
       const endSec = cursor + duration;
       cursor = endSec;
 
+      // scriptLine is the primary user-facing field for this step; fall
+      // back to voiceLine (older format) so nothing breaks mid-migration.
+      const scriptLine = String(source?.scriptLine || source?.voiceLine || source?.onScreenText || fallbackScenes[index]?.voiceLine || '').trim();
+      // Elaborated visualDescription — new v2 field. If the model doesn't
+      // return it, backfill from imagePrompt so downstream image gen still
+      // has substance to work with.
+      const visualDescription = String(source?.visualDescription || source?.imagePrompt || fallbackScenes[index]?.imagePrompt || input.description).trim();
+      // If the model returned only visualDescription (rich) but no
+      // imagePrompt, synthesize an imagePrompt from the rich fields so
+      // downstream Nano Banana still receives a proper prompt.
+      const synthesizedImagePrompt = String(
+        source?.imagePrompt ||
+        [visualDescription, source?.cameraAngle, source?.cameraMovement, source?.emotion, plan?.globalVisualStyle]
+          .filter(Boolean).join(' | ')
+      ).trim();
       return {
         index: index + 1,
         sceneId: `scene_${index + 1}`,
+        // Legacy fields (needed by downstream Steps 4-8):
         title: String(source?.title || `Scene ${index + 1}`).trim(),
-        durationSeconds: duration,
+        durationSeconds: Number(source?.durationSeconds) || duration,
         startSec,
         endSec,
-        imagePrompt: String(source?.imagePrompt || fallbackScenes[index]?.imagePrompt || input.description).trim(),
+        imagePrompt: synthesizedImagePrompt || input.description,
         videoPrompt: String(source?.videoPrompt || fallbackScenes[index]?.videoPrompt || input.description).trim(),
-        voiceLine: String(source?.voiceLine || source?.onScreenText || fallbackScenes[index]?.voiceLine || '').trim(),
-        onScreenText: String(source?.onScreenText || source?.voiceLine || '').trim()
+        scriptLine,
+        voiceLine: scriptLine,
+        onScreenText: String(source?.onScreenText || '').trim(),
+        // New v2 fields (Script & Scenes.docx SCENE BREAKDOWN):
+        sceneNumber: Number(source?.sceneNumber) || (index + 1),
+        purpose: String(source?.purpose || '').trim(),
+        charactersRequired: Array.isArray(source?.charactersRequired)
+          ? source.charactersRequired.map((c) => String(c || '').trim()).filter(Boolean)
+          : (typeof source?.charactersRequired === 'string' ? [source.charactersRequired] : []),
+        location: String(source?.location || '').trim(),
+        visualDescription,
+        emotion: String(source?.emotion || '').trim(),
+        cameraAngle: String(source?.cameraAngle || '').trim(),
+        cameraMovement: String(source?.cameraMovement || '').trim(),
+        transitionToNext: String(source?.transitionToNext || '').trim()
       };
     });
 
@@ -1016,12 +1280,27 @@ Do not include any text outside the JSON object.`;
     const globalVisualStyle = String(parsed?.globalVisualStyle || '').trim()
       || 'Cinematic product-focused vertical ad, crisp details, stable motion, cohesive color palette, consistent lighting.';
 
+    // Normalize the STORY arc block from the docx v2 schema. Every beat
+    // gets a safe empty-string default so the frontend can render 6 cards
+    // without null checks. Fall back to an empty story object if the
+    // model omits it entirely (fallback path uses the raw description).
+    const rawStory = parsed?.story && typeof parsed.story === 'object' ? parsed.story : {};
+    const story = {
+      hook: String(rawStory.hook || '').trim(),
+      beginning: String(rawStory.beginning || '').trim(),
+      emotionalProgression: String(rawStory.emotionalProgression || rawStory.progression || '').trim(),
+      climax: String(rawStory.climax || '').trim(),
+      brandReveal: String(rawStory.brandReveal || rawStory.reveal || '').trim(),
+      ending: String(rawStory.ending || '').trim()
+    };
+
     return {
       sceneCount: effectiveSceneCount,
       totalDurationSeconds: input.durationSeconds,
       globalVisualStyle,
       thumbnailPrompt,
       voiceScript,
+      story,
       scenes: normalizedScenes
     };
   } catch (error) {
@@ -1032,9 +1311,338 @@ Do not include any text outside the JSON object.`;
       globalVisualStyle: 'Premium vertical ad style with crisp details, clean product edges, stable motion, consistent framing and lighting.',
       thumbnailPrompt: `${input.description}. Design a compelling thumbnail for social video.`,
       voiceScript: input.description,
+      story: {
+        hook: '', beginning: '', emotionalProgression: '',
+        climax: '', brandReveal: '', ending: ''
+      },
       scenes: fallbackScenes
     };
   }
+}
+
+// ============================================================
+// Sequential scene generation (v3) — split the big Script + Scenes
+// request into (a) skeleton and (b) per-scene enrichment so the model
+// never has to fit 10 rich scenes into one response. This lets us:
+//   1. Return story + voiceover + scene titles fast (~5-10s)
+//   2. Stream individual richly-detailed scenes back as they finish
+//   3. Never lose fields to token truncation — each scene gets its
+//      own ~2000-token budget instead of sharing 4500 with 9 others.
+// ============================================================
+
+async function generateStoryAndSkeleton({ input, product, user, characters = [], castImageUrl = '', logger = null }) {
+  const profile = user?.businessProfile || {};
+  const sceneCount = estimateSceneCount(input.durationSeconds, input.sceneCount);
+  const brandToneFromProfile = Array.isArray(profile?.brandVoice)
+    ? profile.brandVoice.join(', ')
+    : String(profile?.brandVoice || profile?.tone || 'Emotional');
+  const brandSummary = String(profile?.description || profile?.bio || profile?.about || '').trim();
+  const durations = splitDurations(input.durationSeconds, sceneCount);
+  // Target language for the voiceover script. Written directly in the
+  // target language (not translated after the fact) so idioms, syntax,
+  // and cadence feel native. Story arc + globalVisualStyle stay in
+  // English for downstream image-prompt engineering.
+  const targetLangCode = String(input.languageCode || 'en').toLowerCase();
+  const targetLangLabel = ttsLanguageLabel(targetLangCode);
+  const targetScript = targetScriptName(targetLangCode);
+  const voiceLanguageDirective = targetLangCode === 'en'
+    ? 'Write voiceScript in natural conversational English.'
+    : `Write voiceScript DIRECTLY in ${targetLangLabel} using ${targetScript} script — do NOT write in English then translate. Use natural spoken ${targetLangLabel} idioms and rhythm as a native speaker would. Story arc + globalVisualStyle stay in English (they are production notes, not spoken).`;
+
+  // Environment definition (Step 3 of the wizard). When enabled, the
+  // user has told us EXACTLY which physical space this whole video
+  // takes place in — their shop, showroom, storefront, workshop, etc.
+  // Every scene must happen inside/around that space; the storyboard
+  // planner should NOT invent a fresh location for each scene.
+  const envEnabled = input.environment?.enabled && Array.isArray(input.environment?.referenceImages) && input.environment.referenceImages.length > 0;
+  const envNotes = String(input.environment?.notes || '').trim();
+  const environmentDirective = envEnabled
+    ? `\n\nENVIRONMENT LOCK (MANDATORY):
+The user has locked this entire video to ONE physical space. Reference images of this space are attached to the image-gen call (you don't need to describe them from imagination — the artist will see them). Your job is only to write scenes that HAPPEN IN this space.
+${envNotes ? `User notes about the space: ${envNotes}` : ''}
+Rules:
+- Every scene's \`location\` field must describe a SPECIFIC angle / part of this same space (front counter, back workshop area, storefront window, aisle 3, delivery bay, workshop bench, dining floor near the window, etc.) — NOT a different building or fictional venue.
+- Do NOT invent locations that don't belong to this space (no "on a beach", "in a park", "in a lab", unless the user's notes explicitly say so).
+- Different scenes can show different corners / angles / times of day WITHIN the same space, but the walls, flooring, lighting fixtures, brand palette, and overall material vocabulary must stay consistent scene-to-scene.
+- Wardrobe of characters can be adjusted to fit the space's dress code.`
+    : '';
+
+  // ---- CHARACTER BIBLE (from Step 2 accepted cast) ----
+  // Injected into the prompt so the storyboard planner MUST route scenes
+  // through these specific characters, referencing them by their 01/02/03
+  // IDs. Prevents the "no characters in scene" problem.
+  const characterBibleBlock = Array.isArray(characters) && characters.length > 0
+    ? `\n\nAPPROVED CHARACTER CAST (${characters.length} character${characters.length > 1 ? 's' : ''} — reference by ID in every scene):\n${characters.map((c) => `  ${c.id || '01'} · ${c.name || 'Unnamed'} (${c.age || '?'}, ${c.gender || '?'}) — Role: ${c.role || 'n/a'}. ${c.appearance || ''} Wearing: ${c.clothing || 'n/a'}.`).join('\n')}
+
+CAST USAGE RULES (be intentional — characters must EARN their place in each scene):
+- charactersRequired is an ARRAY. Choose based on what the SCENE genuinely needs, not by any default rule.
+- USE characters when the scene needs a human presence to carry the emotion, gesture, or story beat. Cast the right people:
+    * A solo intimate moment → 1 character
+    * A conversation, exchange, gift-giving → 2 characters
+    * A family / group / celebration moment → the full relevant subset (3+ if it fits)
+- DO NOT add a character just because they exist in the cast. Only include IDs the scene actually shows.
+- USE an EMPTY array [] when the scene is legitimately character-less:
+    * Product close-ups (hero product shot, texture reveal)
+    * Atmospheric / environmental shots (an empty room, a sunlit doorway, a still-life setup)
+    * Abstract cutaways (macro texture, light play, symbolic imagery)
+    * Brand logo reveal (unless the character is present in-frame with the logo)
+- Do NOT invent new people — use ONLY IDs from the cast above.
+- Cast the visualDescription honestly: if you write "she walks through the room", her ID must be in charactersRequired. If you write "sunlight falls across the table", charactersRequired can be empty.`
+    : '\n\n(No approved character cast — write character-agnostic scenes.)';
+
+  const prompt = `You are an award-winning Creative Director and Film Director.
+Build the STORY ARC + VOICEOVER + SCENE SKELETON for this brand's commercial.
+Individual scenes will be elaborated in follow-up calls — for now you only need to plan the shape.
+
+BRAND DETAILS
+Business Name: ${profile?.name || 'N/A'}
+Industry: ${profile?.industry || 'N/A'}
+Target Audience: ${profile?.targetAudience || 'General audience'}
+Brand Tone: ${brandToneFromProfile}
+Brand Summary: ${brandSummary || 'N/A'}
+
+APPROVED CONCEPT
+${input.description}
+${characterBibleBlock}
+
+VIDEO SPEC
+Total duration: ${input.durationSeconds} seconds
+Scene count: ${sceneCount}
+Suggested per-scene durations (seconds): [${durations.join(', ')}]
+
+VOICEOVER LANGUAGE — MANDATORY
+${voiceLanguageDirective}
+${environmentDirective}
+
+OUTPUT FORMAT — STRICT JSON ONLY:
+{
+  "story": {
+    "hook": "2-4 sentence hook — first 3-5 seconds",
+    "beginning": "2-4 sentences",
+    "emotionalProgression": "2-4 sentences",
+    "climax": "2-3 sentences",
+    "brandReveal": "2-3 sentences",
+    "ending": "2-3 sentences"
+  },
+  "voiceScript": "Full narration as ONE string, ~${Math.round(input.durationSeconds * 2)} words, \\n between spoken sentences. Written DIRECTLY in ${targetLangLabel} (${targetScript} script) — not English. This is SPOKEN language — feelings and thoughts, not scene descriptions.",
+  "globalVisualStyle": "One paragraph on the cinematography direction that applies to every scene",
+  "thumbnailPrompt": "One paragraph on the strongest single frame for the thumbnail",
+  "scenes": [
+    {
+      "sceneNumber": 1,
+      "title": "Specific, story-driven scene title (NOT 'Opening Hook')",
+      "durationSeconds": ${durations[0] || 3},
+      "purpose": "2-3 sentences on why this scene exists in the arc",
+      "charactersRequired": ["01"]              // solo intimate moment
+    },
+    {
+      "sceneNumber": 2,
+      "title": "...",
+      "durationSeconds": ${durations[1] || 3},
+      "purpose": "...",
+      "charactersRequired": []                  // atmospheric / product shot, no humans
+    },
+    {
+      "sceneNumber": 3,
+      "title": "...",
+      "durationSeconds": ${durations[2] || 3},
+      "purpose": "...",
+      "charactersRequired": ${characters && characters.length >= 2 ? JSON.stringify(characters.slice(0, 2).map((c) => c.id)) : '["01"]'}   // conversation between two
+    }
+    // ... continue for all ${sceneCount} scenes. Vary casting BY WHAT THE SCENE NEEDS.
+    // Empty array [] is fine and often right for product / environment / atmospheric shots.
+    // Multi-character arrays are right when the story beat is inherently social.
+  ]
+}
+
+Rules:
+- Match the brand tone (${brandToneFromProfile}) — do NOT default to poetic luxury unless the tone is Luxury.
+- Voiceover must NOT paraphrase the visual descriptions — it should add emotional meaning ON TOP of what the viewer will see.
+- Scene titles must be specific and story-driven, not generic.
+- Return exactly ${sceneCount} scenes.
+- charactersRequired in each scene must reference character IDs from the APPROVED CHARACTER CAST above (or empty [] if the scene has no people).`;
+
+  let raw;
+  try {
+    raw = await callOpenAI(prompt, {
+      temperature: 0.7,
+      maxTokens: 3500,
+      timeout: 120000,
+      jsonMode: true
+    });
+  } catch (err) {
+    if (logger) logger(`OpenAI story+skeleton failed, falling back to Gemini: ${err.message || err}`);
+    raw = await callGemini(prompt, { skipCache: true, temperature: 0.65, maxTokens: 3500, timeout: 120000 });
+  }
+
+  const parsed = parseGeminiJSON(raw) || {};
+  const rawStory = parsed?.story && typeof parsed.story === 'object' ? parsed.story : {};
+  const story = {
+    hook: String(rawStory.hook || '').trim(),
+    beginning: String(rawStory.beginning || '').trim(),
+    emotionalProgression: String(rawStory.emotionalProgression || rawStory.progression || '').trim(),
+    climax: String(rawStory.climax || '').trim(),
+    brandReveal: String(rawStory.brandReveal || rawStory.reveal || '').trim(),
+    ending: String(rawStory.ending || '').trim()
+  };
+  const rawScenes = Array.isArray(parsed?.scenes) ? parsed.scenes : [];
+  const skeleton = Array.from({ length: sceneCount }, (_, i) => {
+    const src = rawScenes[i] || {};
+    return {
+      sceneNumber: Number(src.sceneNumber) || (i + 1),
+      sceneId: `scene_${i + 1}`,
+      index: i + 1,
+      title: String(src.title || `Scene ${i + 1}`).trim(),
+      durationSeconds: Number(src.durationSeconds) || durations[i] || 3,
+      purpose: String(src.purpose || '').trim(),
+      // Preserve character routing decided at skeleton time so the
+      // per-scene call knows which cast members appear.
+      charactersRequired: Array.isArray(src.charactersRequired)
+        ? src.charactersRequired.map((c) => String(c).trim()).filter(Boolean)
+        : [],
+      location: '', visualDescription: '',
+      emotion: '', cameraAngle: '', cameraMovement: '',
+      scriptLine: '', voiceLine: '', onScreenText: '', transitionToNext: '',
+      imagePrompt: '', videoPrompt: ''
+    };
+  });
+  return {
+    story,
+    voiceScript: String(parsed?.voiceScript || '').trim(),
+    globalVisualStyle: String(parsed?.globalVisualStyle || '').trim()
+      || 'Cinematic product-focused vertical ad, crisp details, stable motion, cohesive color palette.',
+    thumbnailPrompt: String(parsed?.thumbnailPrompt || '').trim()
+      || `${input.description}. Create an attention-grabbing vertical-video thumbnail.`,
+    scenes: skeleton,
+    sceneCount,
+    totalDurationSeconds: input.durationSeconds
+  };
+}
+
+async function generateSingleScene({ input, product, user, story, voiceScript, globalVisualStyle, scenesSoFar, currentSceneSkeleton, characters = [], castImageUrl = '', logger = null }) {
+  // Env lock — same as generateStoryAndSkeleton. When enabled, every
+  // scene must happen IN the user's locked physical space.
+  const _envEnabled = input.environment?.enabled && Array.isArray(input.environment?.referenceImages) && input.environment.referenceImages.length > 0;
+  const _envNotes = String(input.environment?.notes || '').trim();
+  const environmentDirective = _envEnabled
+    ? `\n\nENVIRONMENT LOCK: This scene MUST happen inside/around the user's locked space (reference images are attached to the image-gen call). ${_envNotes ? 'User notes: ' + _envNotes : ''} location field must describe a SPECIFIC angle / part of that space, not a different building. Walls, flooring, lighting fixtures, and material vocabulary must stay consistent with earlier scenes.`
+    : '';
+  const profile = user?.businessProfile || {};
+  const brandToneFromProfile = Array.isArray(profile?.brandVoice)
+    ? profile.brandVoice.join(', ')
+    : String(profile?.brandVoice || profile?.tone || 'Emotional');
+
+  const previousScenesSummary = (scenesSoFar || [])
+    .map((s, i) => `Scene ${i + 1} "${s.title}" [${s.emotion || '—'}] chars=${JSON.stringify(s.charactersRequired || [])}: ${String(s.visualDescription || '').slice(0, 200)}`)
+    .join('\n');
+
+  // Character bible for this specific scene. If skeleton pre-assigned
+  // charactersRequired, filter to just those; otherwise show all.
+  const assignedIds = Array.isArray(currentSceneSkeleton.charactersRequired) && currentSceneSkeleton.charactersRequired.length
+    ? currentSceneSkeleton.charactersRequired.map(String)
+    : [];
+  const relevantChars = assignedIds.length
+    ? (characters || []).filter((c) => assignedIds.includes(String(c.id)))
+    : (characters || []);
+  const characterBibleBlock = relevantChars.length > 0
+    ? `\n\nCHARACTERS APPEARING IN THIS SCENE (render them EXACTLY as described — same faces / builds / clothing across the whole video):\n${relevantChars.map((c) => `  ${c.id} · ${c.name} · ${c.age}, ${c.gender} · Role: ${c.role}. Appearance: ${c.appearance || 'n/a'}. Hair: ${c.hairStyle || 'n/a'} ${c.hairColor || ''}. Clothing: ${c.clothing || 'n/a'}.`).join('\n')}${castImageUrl ? '\n\nMaster cast reference image (all characters together, use for identity anchor): ' + castImageUrl : ''}`
+    : (characters && characters.length > 0
+      ? '\n\n(No specific characters assigned to this scene by the storyboard planner — you may leave charactersRequired empty if this scene shows no human subjects.)'
+      : '\n\n(No approved cast — write a character-agnostic scene.)');
+
+  const prompt = `You are elaborating ONE scene of an already-planned commercial into full production detail.
+
+BRAND
+Business: ${profile?.name || 'N/A'} · ${profile?.industry || 'N/A'} · Tone: ${brandToneFromProfile}
+
+APPROVED STORY ARC
+Hook: ${story?.hook || ''}
+Beginning: ${story?.beginning || ''}
+Emotional Progression: ${story?.emotionalProgression || ''}
+Climax: ${story?.climax || ''}
+Brand Reveal: ${story?.brandReveal || ''}
+Ending: ${story?.ending || ''}
+
+FULL VOICEOVER (already written)
+${voiceScript || '(none)'}
+
+GLOBAL VISUAL STYLE
+${globalVisualStyle || 'Cinematic vertical commercial'}
+${characterBibleBlock}
+
+${previousScenesSummary ? 'PREVIOUS SCENES (already elaborated — keep continuity):\n' + previousScenesSummary : 'This is the first scene.'}
+
+THIS SCENE TO ELABORATE
+Scene ${currentSceneSkeleton.sceneNumber}: "${currentSceneSkeleton.title}"
+Duration: ${currentSceneSkeleton.durationSeconds}s
+Purpose: ${currentSceneSkeleton.purpose}
+Skeleton charactersRequired: ${JSON.stringify(currentSceneSkeleton.charactersRequired || [])}
+${environmentDirective}
+
+FILL EVERY FIELD BELOW. Do NOT skip any. Return STRICT JSON only:
+{
+  "sceneNumber": ${currentSceneSkeleton.sceneNumber},
+  "title": "${currentSceneSkeleton.title}",
+  "durationSeconds": ${currentSceneSkeleton.durationSeconds},
+  "purpose": "2-3 elaborated sentences on why this scene exists",
+  "charactersRequired": ["01"],
+  "location": "1-2 sentence specific location / set description",
+  "visualDescription": "3-5 sentences on what the camera SEES — MUST name the specific character(s) present by name and role (from the CHARACTERS APPEARING block above), what they are doing, how they look, the lighting, palette, mood.",
+  "emotion": "2-4 word phrase for the ONE dominant feeling (e.g. 'quiet reverence')",
+  "cameraAngle": "specific angle (e.g. 'low-angle hero shot', 'eye-level close-up')",
+  "cameraMovement": "specific movement (e.g. 'slow dolly in', 'handheld sway', 'static hold')",
+  "scriptLine": "the exact spoken narration line for THIS scene (drawn from the full voiceover above, split naturally)",
+  "onScreenText": "optional short caption or empty string",
+  "transitionToNext": "1 sentence on how this scene resolves into the next",
+  "imagePrompt": "Photoreal single-frame image prompt for Nano Banana. START with 'Use uploaded reference image as primary reference for character faces.' then describe the scene combining visualDescription + cameraAngle + specific character names/ages/wardrobe from the bible above + mood. The characters MUST look identical to the master cast reference.",
+  "videoPrompt": "Motion-only spec (camera movement + character movement + environmental motion). Do NOT repeat imagePrompt visuals."
+}
+
+Every field required. No empty strings except onScreenText.
+charactersRequired MUST match the skeleton exactly (${JSON.stringify(currentSceneSkeleton.charactersRequired || [])}) — do NOT drop any, do NOT invent new IDs, do NOT add characters the skeleton didn't include.
+${(currentSceneSkeleton.charactersRequired || []).length > 1
+  ? 'The skeleton assigned MULTIPLE characters — visualDescription MUST show ALL of them in-frame interacting, not just one.'
+  : (currentSceneSkeleton.charactersRequired || []).length === 1
+    ? 'The skeleton assigned ONE character — write a solo/intimate scene for them.'
+    : 'The skeleton assigned NO characters — this is a legitimate character-less scene (product, environment, atmospheric). Do NOT force any human into visualDescription. Focus on objects, light, texture, mood.'}`;
+
+  let raw;
+  try {
+    raw = await callOpenAI(prompt, {
+      temperature: 0.7,
+      maxTokens: 2000,
+      timeout: 90000,
+      jsonMode: true
+    });
+  } catch (err) {
+    if (logger) logger(`OpenAI single-scene failed, falling back to Gemini: ${err.message || err}`);
+    raw = await callGemini(prompt, { skipCache: true, temperature: 0.7, maxTokens: 2000, timeout: 90000 });
+  }
+  const parsed = parseGeminiJSON(raw) || {};
+  const scriptLine = String(parsed.scriptLine || parsed.voiceLine || currentSceneSkeleton.scriptLine || '').trim();
+  const visualDescription = String(parsed.visualDescription || parsed.imagePrompt || '').trim();
+  const enriched = {
+    ...currentSceneSkeleton,
+    sceneNumber: Number(parsed.sceneNumber) || currentSceneSkeleton.sceneNumber,
+    title: String(parsed.title || currentSceneSkeleton.title).trim(),
+    durationSeconds: Number(parsed.durationSeconds) || currentSceneSkeleton.durationSeconds,
+    purpose: String(parsed.purpose || currentSceneSkeleton.purpose || '').trim(),
+    charactersRequired: Array.isArray(parsed.charactersRequired)
+      ? parsed.charactersRequired.map((c) => String(c || '').trim()).filter(Boolean)
+      : [],
+    location: String(parsed.location || '').trim(),
+    visualDescription,
+    emotion: String(parsed.emotion || '').trim(),
+    cameraAngle: String(parsed.cameraAngle || '').trim(),
+    cameraMovement: String(parsed.cameraMovement || '').trim(),
+    scriptLine,
+    voiceLine: scriptLine,
+    onScreenText: String(parsed.onScreenText || '').trim(),
+    transitionToNext: String(parsed.transitionToNext || '').trim(),
+    imagePrompt: String(parsed.imagePrompt || [visualDescription, parsed.cameraAngle, parsed.emotion, globalVisualStyle].filter(Boolean).join(' | ')).trim(),
+    videoPrompt: String(parsed.videoPrompt || parsed.cameraMovement || 'natural motion').trim()
+  };
+  return enriched;
 }
 
 async function prepareReferenceImage({
@@ -1467,16 +2075,25 @@ async function createSceneVideoClip({ scene, outputPath }) {
 
 async function normalizeSceneVideoClip({ inputPath, outputPath, durationSeconds }) {
   const safeDuration = clamp(Number.parseInt(String(durationSeconds || 4), 10), 1, 120);
+
+  // If Kling returned a clip SHORTER than the scene's target duration,
+  // we used to `-stream_loop -1` and truncate → that visibly loops the
+  // content inside the clip (same 6s repeats to fill 10s). Instead
+  // freeze the last frame with `tpad=stop_mode=clone` so the extra
+  // seconds hold on the final frame — no repeat, no jarring restart.
+  // If Kling is LONGER than target, `-t` still trims cleanly.
   const filterChain = [
     `scale=${VIDEO_TARGET.width}:${VIDEO_TARGET.height}:force_original_aspect_ratio=increase`,
     `crop=${VIDEO_TARGET.width}:${VIDEO_TARGET.height}`,
     `fps=${VIDEO_TARGET.fps}`,
+    // Hold last frame until we hit the target duration (no-op if the
+    // source is already >= target because tpad only pads shorter input).
+    `tpad=stop_mode=clone:stop_duration=${safeDuration}`,
     'format=yuv420p'
   ].join(',');
 
   const args = [
     '-y',
-    '-stream_loop', '-1',
     '-i', inputPath,
     '-t', String(safeDuration),
     '-vf', filterChain,
@@ -2447,17 +3064,165 @@ async function synthesizeEdgeTts({
   return false;
 }
 
+// Voice IDs that failed a lookup on the user's account get cached
+// with the resolved ID from the community library after we auto-add
+// them. Prevents re-hitting the ElevenLabs "add" endpoint on every
+// synthesis call for the same voice.
+const _elevenLabsSharedVoiceCache = new Map();
+
+async function ensureElevenLabsVoiceInAccount(voiceId) {
+  if (!voiceId || !fetchImpl || !ELEVENLABS_API_KEY) return voiceId;
+  if (_elevenLabsSharedVoiceCache.has(voiceId)) return _elevenLabsSharedVoiceCache.get(voiceId);
+
+  // If the voice already exists on the account, /v1/voices/{id}
+  // returns 200. Otherwise 404 → it's a shared voice we must add.
+  try {
+    const checkRes = await fetchImpl(`https://api.elevenlabs.io/v1/voices/${encodeURIComponent(voiceId)}`, {
+      headers: { 'xi-api-key': ELEVENLABS_API_KEY }
+    });
+    if (checkRes.ok) {
+      _elevenLabsSharedVoiceCache.set(voiceId, voiceId);
+      return voiceId;
+    }
+  } catch (_) { /* fall through to add */ }
+
+  // Voice isn't in the account — look it up in the shared library to
+  // grab its owner ID, then add.
+  try {
+    const searchRes = await fetchImpl(`https://api.elevenlabs.io/v1/shared-voices?search=${encodeURIComponent(voiceId)}&page_size=100`, {
+      headers: { 'xi-api-key': ELEVENLABS_API_KEY }
+    });
+    if (!searchRes.ok) return voiceId; // give up — let TTS return real error
+    const searchPayload = await searchRes.json();
+    const match = (searchPayload?.voices || []).find((v) => v.voice_id === voiceId);
+    if (!match || !match.public_owner_id) return voiceId;
+
+    const addRes = await fetchImpl(
+      `https://api.elevenlabs.io/v1/voices/add/${encodeURIComponent(match.public_owner_id)}/${encodeURIComponent(voiceId)}`,
+      {
+        method: 'POST',
+        headers: {
+          'xi-api-key': ELEVENLABS_API_KEY,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ new_name: match.name || `Shared voice ${voiceId.slice(0, 6)}` })
+      }
+    );
+    if (!addRes.ok) return voiceId;
+    const addPayload = await addRes.json();
+    const newId = addPayload?.voice_id || voiceId;
+    _elevenLabsSharedVoiceCache.set(voiceId, newId);
+    return newId;
+  } catch (e) {
+    console.warn('[ElevenLabs] ensureElevenLabsVoiceInAccount failed:', e.message);
+    return voiceId;
+  }
+}
+
+// Auto-derive a music prompt from the voice script + scene emotions.
+// Simple keyword extraction — no extra LLM call to keep it fast/cheap.
+function deriveMusicPromptFromScript(voiceScript = '', sceneData = [], durationSeconds = 30) {
+  const emotions = new Set();
+  (sceneData || []).forEach((s) => {
+    String(s?.emotion || '').split(/[,;/&]+/).forEach((e) => {
+      const t = e.trim().toLowerCase();
+      if (t) emotions.add(t);
+    });
+  });
+  const emotionStr = [...emotions].slice(0, 3).join(', ');
+
+  // Very light heuristic on script sentiment
+  const script = String(voiceScript || '').toLowerCase();
+  let mood = 'warm, cinematic';
+  if (/loss|grief|farewell|goodbye|miss/i.test(script)) mood = 'melancholic, tender, slow';
+  else if (/celebrate|festival|joy|happy|dance/i.test(script)) mood = 'uplifting, joyful, celebratory';
+  else if (/journey|adventure|discover|explore/i.test(script)) mood = 'epic, expansive, aspirational';
+  else if (/family|home|memory|nostalgi/i.test(script)) mood = 'warm, sentimental, nostalgic, gentle strings';
+  else if (/luxury|premium|exclusive/i.test(script)) mood = 'sophisticated, elegant, minimal piano';
+  else if (/product|launch|showcase|brand/i.test(script)) mood = 'confident, modern, motivational';
+
+  const parts = [
+    `Instrumental background music for a ${Math.round(durationSeconds)}-second commercial`,
+    mood,
+    emotionStr ? `Scene emotions: ${emotionStr}` : '',
+    'No lyrics, no vocals, radio-quality mix suitable for advertising, soft dynamics that sit under a spoken voiceover, gentle intro and outro'
+  ].filter(Boolean).join('. ');
+
+  return parts;
+}
+
+async function generateElevenLabsMusic({
+  prompt,
+  durationSeconds = 30,
+  outputPath,
+  logger = null
+}) {
+  if (!fetchImpl || !ELEVENLABS_API_KEY) return false;
+  const clampedDuration = clamp(Number.parseInt(String(durationSeconds || 30), 10), 10, 300);
+  const musicLengthMs = clampedDuration * 1000;
+
+  try {
+    if (logger) logger(`[ElevenLabs Music] composing ${clampedDuration}s track — prompt: "${prompt.slice(0, 120)}..."`);
+    // ElevenLabs music compose endpoint. Returns audio bytes.
+    const response = await fetchImpl(
+      `https://api.elevenlabs.io/v1/music?output_format=mp3_44100_128`,
+      {
+        method: 'POST',
+        headers: {
+          'xi-api-key': ELEVENLABS_API_KEY,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          prompt,
+          music_length_ms: musicLengthMs
+        })
+      }
+    );
+    if (!response.ok) {
+      const details = await response.text().catch(() => '');
+      console.warn(`[ElevenLabs Music] HTTP ${response.status}: ${details.slice(0, 240)}`);
+      return false;
+    }
+    const arrayBuffer = typeof response.arrayBuffer === 'function'
+      ? await response.arrayBuffer()
+      : await response.buffer();
+    await fs.promises.writeFile(outputPath, Buffer.from(arrayBuffer));
+    const stat = await fs.promises.stat(outputPath);
+    return stat.size > 2000;
+  } catch (e) {
+    if (logger) logger(`[ElevenLabs Music] failed: ${e.message}`);
+    return false;
+  }
+}
+
 async function synthesizeElevenLabsTts({
   text,
   languageCode,
   voiceGender,
-  outputPath
+  outputPath,
+  voiceId = ''
 }) {
-  if (!fetchImpl || String(voiceGender || '').toLowerCase() !== 'male') return false;
-  if (!ELEVENLABS_API_KEY || !ELEVENLABS_MALE_VOICE_ID) return false;
+  if (!fetchImpl || !ELEVENLABS_API_KEY) return false;
+  // Resolve which voice ID to use.
+  // Priority: explicit voiceId from audio config (voice starred by user)
+  //           > gender-specific env override
+  //           > ElevenLabs premade default (Rachel for female, Adam for male)
+  const isMale = String(voiceGender || '').toLowerCase() === 'male';
+  const envFemaleId = String(process.env.ELEVENLABS_FEMALE_VOICE_ID || '').trim();
+  const envMaleId = ELEVENLABS_MALE_VOICE_ID;
+  let resolvedId = String(voiceId || '').trim()
+    || (isMale ? envMaleId : envFemaleId)
+    // ElevenLabs premade defaults (public, always available on any account)
+    || (isMale ? 'pNInz6obpgDQGcFmaJgB' /* Adam */ : '21m00Tcm4TlvDq8ikWAM' /* Rachel */);
+  if (!resolvedId) return false;
 
-  const response = await fetchImpl(
-    `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(ELEVENLABS_MALE_VOICE_ID)}?output_format=mp3_44100_128`,
+  // Auto-add shared/community voices to the account (needed for TTS).
+  resolvedId = await ensureElevenLabsVoiceInAccount(resolvedId);
+
+  // Try eleven_v3 first (latest, most expressive). If the voice
+  // doesn't support v3 yet, fall back to eleven_multilingual_v2.
+  const callElevenLabs = async (modelId) => fetchImpl(
+    `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(resolvedId)}?output_format=mp3_44100_128`,
     {
       method: 'POST',
       headers: {
@@ -2466,7 +3231,7 @@ async function synthesizeElevenLabsTts({
       },
       body: JSON.stringify({
         text,
-        model_id: ELEVENLABS_MODEL_ID,
+        model_id: modelId,
         language_code: toTtsLanguageCode(languageCode),
         voice_settings: {
           stability: 0.35,
@@ -2477,6 +3242,14 @@ async function synthesizeElevenLabsTts({
       })
     }
   );
+
+  let response = await callElevenLabs(ELEVENLABS_MODEL_ID);
+  if (!response.ok && ELEVENLABS_MODEL_ID !== ELEVENLABS_MODEL_FALLBACK) {
+    // Voice-model incompatibility → try the multilingual v2 fallback
+    const bodyText = await response.text().catch(() => '');
+    console.warn(`[ElevenLabs] ${ELEVENLABS_MODEL_ID} rejected for voice ${resolvedId} (HTTP ${response.status}). Retrying with ${ELEVENLABS_MODEL_FALLBACK}. Detail: ${bodyText.slice(0, 200)}`);
+    response = await callElevenLabs(ELEVENLABS_MODEL_FALLBACK);
+  }
 
   if (!response.ok) {
     const details = await response.text().catch(() => '');
@@ -2497,11 +3270,13 @@ async function synthesizeNeuralTts({
   voiceGender,
   outputPath,
   speakingRate = 1,
-  logger = null
+  logger = null,
+  voiceId = ''
 }) {
   const normalizedGender = String(voiceGender || 'female').toLowerCase() === 'male' ? 'male' : 'female';
   const normalizedLocale = toTtsLocaleCode(languageCode);
   const preferGoogleMale = normalizedGender === 'male' && /^(en-in|hi-in|ta-in|te-in|kn-in|ml-in)$/.test(normalizedLocale);
+  const preferElevenLabs = !!String(voiceId || '').trim();
 
   const tryGoogle = async () => {
     try {
@@ -2544,17 +3319,21 @@ async function synthesizeNeuralTts({
         text,
         languageCode,
         voiceGender: normalizedGender,
-        outputPath
+        outputPath,
+        voiceId
       });
     } catch (error) {
-      if (logger) logger(`ElevenLabs male voice failed: ${error.message || error}`);
+      if (logger) logger(`ElevenLabs voice failed: ${error.message || error}`);
     }
     return false;
   };
 
+  // User-picked voice (starred / selected in the Audio Config UI) is
+  // ALWAYS ElevenLabs — try that first and only fall through on failure.
+  if (preferElevenLabs && await tryElevenLabs()) return true;
   if (preferGoogleMale && await tryGoogle()) return true;
   if (await tryEdge()) return true;
-  if (normalizedGender === 'male' && await tryElevenLabs()) return true;
+  if (!preferElevenLabs && await tryElevenLabs()) return true;
   if (!preferGoogleMale && await tryGoogle()) return true;
   return false;
 }
@@ -2568,7 +3347,8 @@ async function synthesizeVoiceTrack({
   targetDurationSeconds = null,
   fitToDuration = true,
   context,
-  logger = null
+  logger = null,
+  voiceId = ''
 }) {
   const normalizedLang = toTtsLanguageCode(languageCode);
   const safeTarget = Number.isFinite(Number(targetDurationSeconds)) ? Number(targetDurationSeconds) : null;
@@ -2688,7 +3468,8 @@ async function synthesizeVoiceTrack({
       voiceGender: normalizedGender,
       outputPath: finalVoicePath,
       speakingRate,
-      logger
+      logger,
+      voiceId
     });
 
     if (ok && fs.existsSync(finalVoicePath)) {
@@ -2724,7 +3505,8 @@ async function synthesizeVoiceTrack({
       voiceGender: normalizedGender,
       outputPath: outPath,
       speakingRate,
-      logger: logger ? (line) => logger(`Voice chunk ${index + 1}: ${line}`) : null
+      logger: logger ? (line) => logger(`Voice chunk ${index + 1}: ${line}`) : null,
+      voiceId
     });
     if (neuralOk) return outPath;
 
@@ -2839,9 +3621,35 @@ async function prepareManualAudioTrack({ audioOptions, context, logger = null })
   return null;
 }
 
-async function prepareBackgroundTrack({ audioOptions, context, durationSeconds = 60 }) {
+async function prepareBackgroundTrack({ audioOptions, context, durationSeconds = 60, voiceScript = '', sceneData = [], logger = null }) {
   const tone = normalizeTone(audioOptions.tone) || 'professional';
   const durationBucket = bucketDurationSeconds(durationSeconds);
+
+  // Option: ElevenLabs AI-composed music with mood-derived prompt.
+  // Takes priority when musicSource === 'elevenlabs_ai'.
+  if (audioOptions.musicSource === 'elevenlabs_ai') {
+    const promptText = String(audioOptions.musicPrompt || '').trim()
+      || deriveMusicPromptFromScript(voiceScript, sceneData, durationSeconds);
+    const outputName = 'background_ai.mp3';
+    const outputPath = path.join(context.dirs.audio, outputName);
+    const ok = await generateElevenLabsMusic({
+      prompt: promptText,
+      durationSeconds,
+      outputPath,
+      logger
+    });
+    if (ok) {
+      return {
+        path: outputPath,
+        url: buildMediaUrl(context.baseUrl, context.jobId, ['audio', outputName]),
+        tone,
+        source: 'elevenlabs_ai',
+        prompt: promptText,
+        durationBucketSeconds: durationBucket
+      };
+    }
+    if (logger) logger('[ElevenLabs Music] failed — falling back to library track');
+  }
 
   if (audioOptions.musicSource === 'library') {
     const root = musicLibraryRoot();
@@ -2939,7 +3747,10 @@ async function generateAudioTracks({
   const background = await prepareBackgroundTrack({
     audioOptions,
     context,
-    durationSeconds: input.durationSeconds
+    durationSeconds: input.durationSeconds,
+    voiceScript: plan.voiceScript || input.description,
+    sceneData: plan.sceneData || [],
+    logger: null
   });
   const sfx = await prepareSoundEffects({ audioOptions, context, logger });
 
@@ -2980,6 +3791,7 @@ async function generateAudioTracks({
       sceneData: plan.sceneData || [],
       languageCode: audioOptions.languageCode,
       voiceGender: audioOptions.voiceGender,
+      voiceId: audioOptions.voiceId,
       targetDurationSeconds: input.durationSeconds,
       fitToDuration: audioOptions.fitVoiceToDuration,
       context,
@@ -3507,7 +4319,10 @@ async function runGenerateScenes({
 }) {
   const input = normalizeCreateInput(payload);
   const product = await resolveProductContext({ user, payload: input });
-  const plan = await generateScenesPlan({ input, product, user });
+  // Pass a console logger so the elaboration guard actually surfaces its
+  // retry decisions in local backend output (Step 3 UI path).
+  const stepLogger = (msg) => console.log('[generateScenes]', msg);
+  const plan = await generateScenesPlan({ input, product, user, logger: stepLogger });
   return {
     success: true,
     sceneData: plan.scenes,
@@ -3515,7 +4330,8 @@ async function runGenerateScenes({
     sceneCount: plan.sceneCount,
     globalVisualStyle: plan.globalVisualStyle,
     voiceScript: plan.voiceScript,
-    thumbnailPrompt: plan.thumbnailPrompt
+    thumbnailPrompt: plan.thumbnailPrompt,
+    story: plan.story || null
   };
 }
 
@@ -3879,21 +4695,31 @@ async function runGenerateAudio({
     }
   } catch (_) { /* soft-fail — enrichment will use defaults */ }
 
-  // STEP 7 (docx): Rewrite the voiceScript via the "Elite Voiceover Writer"
-  // prompt BEFORE TTS synthesizes it. Improves human tone, matches the
-  // storyboard emotion, respects duration word budgets, avoids AI clichés.
-  const enrichedVoice = await enrichVoiceoverWithLLM({
-    voiceScript: plan.voiceScript,
-    sceneData: plan.sceneData,
-    input,
-    product: productForEnrichment,
-    profile: profileForEnrichment,
-    languageCode: payload?.audio?.languageCode || 'en',
-    logger: null
-  });
-  if (enrichedVoice?.voiceScript) {
-    plan.voiceScript = enrichedVoice.voiceScript;
-    plan.sourceVoiceScript = enrichedVoice.voiceScript;
+  // The Step 3 "Script & Scenes" flow (generateStoryAndSkeleton) writes
+  // the FINAL voiceScript for this video. Do NOT re-enrich it here —
+  // that used to run enrichVoiceoverWithLLM which rewrites the text
+  // via a non-deterministic LLM, producing a different script on
+  // every "Generate Preview" click (bad UX + broke script/audio
+  // consistency after refresh). We use the Step 3 script verbatim.
+  //
+  // Enrichment only runs as a one-shot fallback when NO script exists
+  // yet (e.g. user clicks Audio Preview without visiting Step 3).
+  let enrichedVoice = null;
+  const hasLockedScript = String(plan.voiceScript || '').trim().length > 20;
+  if (!hasLockedScript) {
+    enrichedVoice = await enrichVoiceoverWithLLM({
+      voiceScript: plan.voiceScript,
+      sceneData: plan.sceneData,
+      input,
+      product: productForEnrichment,
+      profile: profileForEnrichment,
+      languageCode: payload?.audio?.languageCode || 'en',
+      logger: null
+    });
+    if (enrichedVoice?.voiceScript) {
+      plan.voiceScript = enrichedVoice.voiceScript;
+      plan.sourceVoiceScript = enrichedVoice.voiceScript;
+    }
   }
 
   // STEP 6 (docx): Run in parallel with voice synthesis — recommend
@@ -4132,5 +4958,13 @@ module.exports = {
   runGenerateVideoClips,
   runGenerateAudio,
   runMergeAudio,
-  runMergeVideo
+  runMergeVideo,
+  // Sequential v3 helpers (skeleton + per-scene enrichment)
+  generateStoryAndSkeleton,
+  generateSingleScene,
+  normalizeCreateInput,
+  // Low-level helpers exposed for the per-scene /generateSingleVideoClip route
+  materializeSourceToFile,
+  normalizeSceneVideoClip,
+  createJobContext
 };

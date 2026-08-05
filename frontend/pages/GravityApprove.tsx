@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, RotateCcw, ChevronLeft, ChevronRight, Edit3, Loader2, Sparkles, Instagram, Facebook, Linkedin, Youtube } from 'lucide-react';
+import { Check, RotateCcw, ChevronLeft, ChevronRight, Loader2, Sparkles, Instagram, Facebook, Linkedin, Youtube, AlertCircle } from 'lucide-react';
 import { draftsAPI, apiService } from '../services/api';
 import { Draft } from '../types';
 
@@ -36,16 +36,33 @@ const GravityApprove: React.FC = () => {
   const [index, setIndex] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Track drafts we've auto-retried image gen for, so we don't spam.
+  const autoRetriedRef = useRef<Set<string>>(new Set());
+  const pollTimerRef = useRef<any>(null);
+
+  // Statuses that mean "still awaiting user action" (i.e. show in Approve).
+  // Includes 'completed' — completed = image ready, but not yet approved.
+  // A draft only leaves the queue when the user approves/rejects/publishes it.
+  const APPROVABLE_STATUSES = new Set([
+    'pending', 'draft', 'ready', 'processing', 'failed', 'completed'
+  ]);
 
   const loadDrafts = async () => {
     setLoading(true);
     try {
       const res = await draftsAPI.getDrafts();
-      const filtered = (Array.isArray(res?.drafts) ? res.drafts : []).filter(
-        (d: any) => ['pending', 'draft', 'ready'].includes(String(d?.status || 'draft').toLowerCase())
-      );
+      const filtered = (Array.isArray(res?.drafts) ? res.drafts : []).filter((d: any) => {
+        const status = String(d?.status || 'draft').toLowerCase();
+        const source = String(d?.sourceType || d?.contentType || 'post').toLowerCase();
+        // Skip reels/videos — they belong in the AI Reels flow, not here.
+        if (source === 'reel' || source === 'video') return false;
+        // Skip drafts that have already been published/scheduled/rejected.
+        if (['published', 'posted', 'scheduled', 'rejected', 'approved'].includes(status)) return false;
+        return APPROVABLE_STATUSES.has(status);
+      });
       setDrafts(filtered);
-      setIndex(0);
+      // Preserve index if possible so we don't jump around while polling
+      setIndex((prev) => Math.min(prev, Math.max(0, filtered.length - 1)));
     } catch (e: any) {
       setError(e?.message || 'Failed to load drafts');
     } finally {
@@ -54,6 +71,53 @@ const GravityApprove: React.FC = () => {
   };
 
   useEffect(() => { loadDrafts(); }, []);
+
+  // Poll every 6s if any draft is still processing — refresh so the
+  // image URL appears as soon as the backend worker saves it.
+  useEffect(() => {
+    const anyProcessing = drafts.some((d: any) => {
+      const s = String(d?.status || '').toLowerCase();
+      const hasImage = Boolean(d?.imageUrl || d?.creative?.imageUrls?.[0]);
+      return s === 'processing' || (!hasImage && s !== 'failed');
+    });
+    if (anyProcessing && !pollTimerRef.current) {
+      pollTimerRef.current = setInterval(() => {
+        draftsAPI.getDrafts().then((res) => {
+          const list = (Array.isArray(res?.drafts) ? res.drafts : []).filter((d: any) => {
+            const status = String(d?.status || 'draft').toLowerCase();
+            const source = String(d?.sourceType || d?.contentType || 'post').toLowerCase();
+            if (source === 'reel' || source === 'video') return false;
+            if (['published', 'posted', 'scheduled', 'rejected', 'approved'].includes(status)) return false;
+            return APPROVABLE_STATUSES.has(status);
+          });
+          setDrafts(list);
+        }).catch(() => {});
+      }, 6000);
+    }
+    if (!anyProcessing && pollTimerRef.current) {
+      clearInterval(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+    return () => {
+      if (pollTimerRef.current) { clearInterval(pollTimerRef.current); pollTimerRef.current = null; }
+    };
+  }, [drafts]);
+
+  // Auto-retry image generation for drafts that don't have an image
+  // AND aren't currently processing. Fires once per draft.
+  useEffect(() => {
+    const current: any = drafts[index];
+    if (!current?._id) return;
+    const hasImage = Boolean(current?.imageUrl || current?.creative?.imageUrls?.[0]);
+    const status = String(current?.status || '').toLowerCase();
+    const alreadyTried = autoRetriedRef.current.has(String(current._id));
+    if (!hasImage && status !== 'processing' && !alreadyTried) {
+      autoRetriedRef.current.add(String(current._id));
+      draftsAPI.retryImageGeneration(String(current._id)).catch(() => {});
+      // Trigger a quick refresh so status flips to processing
+      setTimeout(() => loadDrafts(), 800);
+    }
+  }, [index, drafts]);
 
   const current: any = drafts[index] || null;
   const total = drafts.length;
@@ -108,9 +172,16 @@ const GravityApprove: React.FC = () => {
 
   const handleRedo = async () => {
     if (!current?._id) return;
-    // For now just move to next — a proper "regenerate" would call the
-    // regenerate endpoint. Left as a TODO to hook up cleanly.
-    goNext();
+    setBusy(true);
+    try {
+      await draftsAPI.retryImageGeneration(String(current._id));
+      // Refresh so status flips to 'processing' and poll kicks in.
+      await loadDrafts();
+    } catch (e: any) {
+      setError(e?.message || 'Failed to regenerate.');
+    } finally {
+      setBusy(false);
+    }
   };
 
   // -------- render --------
@@ -181,11 +252,32 @@ const GravityApprove: React.FC = () => {
           <div className="relative w-[380px] aspect-[4/5] rounded-2xl bg-[#151515] border border-white/[0.06] overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.6)]">
             {imageUrl ? (
               <img src={imageUrl} alt={current?.title || 'draft preview'} className="w-full h-full object-cover" />
+            ) : String(current?.status || '').toLowerCase() === 'failed' ? (
+              <div className="w-full h-full bg-gradient-to-br from-red-950/20 to-white/[0.01] flex flex-col items-center justify-center gap-3 px-6 text-center">
+                <AlertCircle className="w-8 h-8 text-red-400/70" />
+                <div className="text-[13px] font-semibold text-[#F5F4F1]">Image generation failed</div>
+                <div className="text-[11.5px] text-white/50 max-w-[260px] leading-relaxed">
+                  {current?.errorMessage || 'Something went wrong. Click Redo to try again.'}
+                </div>
+                <button
+                  onClick={handleRedo}
+                  className="mt-2 h-8 px-3 rounded-md bg-white/[0.06] hover:bg-white/[0.12] text-[12px] font-semibold text-[#F5F4F1]"
+                >
+                  Retry now
+                </button>
+              </div>
             ) : (
-              <div className="w-full h-full bg-gradient-to-br from-white/[0.04] to-white/[0.01] flex items-center justify-center">
-                <div className="text-white/40 text-center px-6">
-                  <div className="text-[11px] uppercase tracking-widest text-white/25 mb-2">no preview</div>
-                  <div className="text-[13px]">{current?.title || 'Untitled draft'}</div>
+              <div className="w-full h-full bg-gradient-to-br from-white/[0.04] to-white/[0.01] flex flex-col items-center justify-center gap-3 px-6 text-center">
+                <div className="relative w-10 h-10">
+                  <div className="absolute inset-0 rounded-full border-2 border-[#F5A623]/25" />
+                  <Loader2 className="w-10 h-10 text-[#F5A623] animate-spin absolute inset-0" strokeWidth={1.5} />
+                </div>
+                <div className="text-[11px] uppercase tracking-widest text-white/45">generating…</div>
+                <div className="text-[13.5px] font-semibold text-[#F5F4F1] max-w-[260px]">
+                  {current?.title || 'Untitled draft'}
+                </div>
+                <div className="text-[11px] text-white/40 max-w-[260px]">
+                  The image is being drafted. This usually takes 20–40 seconds.
                 </div>
               </div>
             )}

@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Sparkles, Layers, Calendar as CalendarIcon, Zap, Image as ImageIcon, Instagram, Facebook, Linkedin, ChevronRight, Loader2 } from 'lucide-react';
-import { apiService } from '../services/api';
+import { draftsAPI } from '../services/api';
 
 // Direct fetch to the streaming endpoint — apiService doesn't expose SSE.
 const API_BASE = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
@@ -121,24 +121,22 @@ const GravityCreate: React.FC = () => {
     return '4:5';
   }, [visualStyle]);
 
-  // Single-post mode — quick create via the existing createCampaign API,
-  // then land in Approve to review + tweak the draft.
+  // Single-post mode — use draftsAPI.generateImageBg which:
+  //   1. Creates a Draft record with status='processing'
+  //   2. Enqueues the background worker to generate the image via
+  //      Nano Banana + save the Cloudinary URL back to the draft.
+  // The Approve page polls for updates so the image appears when ready.
   const handleDraftSinglePost = async () => {
-    await apiService.createCampaign({
-      name: name.trim() || 'Untitled post',
-      objective: 'engagement',
+    setProgressMsg('Queuing the poster…');
+    await draftsAPI.generateImageBg({
+      type: 'post',
+      title: name.trim() || 'Untitled post',
+      caption: description.trim() || name.trim() || '',
+      hashtags: [],
       platforms: selectedPlatforms,
-      status: 'draft',
-      creative: {
-        type: 'image',
-        textContent: description.trim() || name.trim() || 'Untitled post',
-        imageUrls: [],
-        captions: '',
-      },
-      scheduling: { startDate: new Date().toISOString(), frequency: 'once' as any },
-      tone,
-      aiGenerated: true,
-    } as any);
+      prompt: description.trim() || name.trim() || 'A cinematic marketing poster',
+      aspectRatio: backendAspect,
+    });
     navigate('/drafts');
   };
 

@@ -96,6 +96,32 @@ const userSchema = new mongoose.Schema({
         src: { type: String },
         alt: { type: String },
         isLogo: { type: Boolean }
+      }],
+      // ElevenLabs voices the user has starred as favourites. Persisted
+      // so future videos can pre-select the user's preferred narrator
+      // without re-picking from the full ElevenLabs catalog every time.
+      favouriteVoices: [{
+        voiceId: { type: String, required: true },
+        name: { type: String, default: '' },
+        gender: { type: String, default: '' },
+        language: { type: String, default: '' },
+        accent: { type: String, default: '' },
+        previewUrl: { type: String, default: '' },
+        category: { type: String, default: '' },
+        addedAt: { type: Date, default: Date.now }
+      }],
+      // Audio tracks (voice recordings + AI-composed music) the user
+      // has starred as favourites. Persisted so future videos can
+      // reuse them without re-generating from scratch.
+      favouriteAudioTracks: [{
+        url: { type: String, required: true },
+        kind: { type: String, enum: ['voice', 'music', 'mix'], default: 'music' },
+        label: { type: String, default: '' },
+        prompt: { type: String, default: '' },
+        durationSeconds: { type: Number, default: 0 },
+        languageCode: { type: String, default: '' },
+        voiceId: { type: String, default: '' },
+        addedAt: { type: Date, default: Date.now }
       }]
     }
   },

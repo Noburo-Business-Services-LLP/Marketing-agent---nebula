@@ -357,9 +357,34 @@ async function createDraft({
       description: String(input.description || '').trim(),
       durationSeconds: Number.parseInt(String(input.durationSeconds || 60), 10) || 60,
       sceneCount: Number.parseInt(String(input.sceneCount || 0), 10) || null,
+      aspectRatio: (['9:16','16:9','1:1','4:5'].includes(String(input.aspectRatio || '').trim())
+        ? String(input.aspectRatio).trim()
+        : '9:16'),
+      languageCode: (['en','hi','ta','te','kn','ml'].includes(String(input.languageCode || '').toLowerCase())
+        ? String(input.languageCode).toLowerCase()
+        : 'en'),
       sourceImage,
       product: input.product || null,
       productId: input.productId || null
+    },
+    // Env definition (Step 3 of wizard). When enabled=false, all
+    // scene/image/clip prompts run without env constraints as before.
+    // When enabled=true, referenceImages + notes are threaded into
+    // every LLM prompt AND every Nano Banana / Kling call so the
+    // whole video renders IN that specific space.
+    environment: {
+      enabled: !!input.environment?.enabled,
+      referenceImages: Array.isArray(input.environment?.referenceImages)
+        ? input.environment.referenceImages
+            .filter((r) => r && (r.url || r.dataUrl))
+            .map((r) => ({
+              url: String(r.url || '').trim(),
+              dataUrl: String(r.dataUrl || '').trim(),
+              source: r.source === 'brand-asset' ? 'brand-asset' : 'upload'
+            }))
+            .slice(0, 5)
+        : [],
+      notes: String(input.environment?.notes || '').trim().slice(0, 500)
     },
     prompt: null,
     scenes: null,

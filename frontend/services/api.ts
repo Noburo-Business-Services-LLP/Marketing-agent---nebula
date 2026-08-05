@@ -3316,6 +3316,79 @@ export const videoGenerationAPI = {
     }, true);
   },
 
+  // Generate 3 creative-director-level video concepts (Video Concept Prompt.docx).
+  // Returns { concepts[], recommended, recommendationReason }.
+  generateConcepts: async (payload: {
+    description: string;
+    durationSeconds: number;
+  }): Promise<{
+    success: boolean;
+    concepts?: Array<{
+      id: string;
+      type: string;
+      title: string;
+      coreEmotion: string;
+      bigIdea: string;
+      storySummary: string;
+      whyItWorks: string;
+      visualStyle: string;
+      musicStyle: string;
+      endingMessage: string;
+    }>;
+    recommended?: string;
+    recommendationReason?: string;
+    message?: string;
+  }> => {
+    return apiCall('/video-generation/generateConcepts', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }, true);
+  },
+
+  // Generate 1-3 character bibles from an accepted concept (Character Prompt.docx).
+  generateCharacters: async (payload: {
+    description?: string;
+    conceptTitle?: string;
+    conceptStory?: string;
+    conceptEmotion?: string;
+    conceptVisualStyle?: string;
+  }): Promise<{
+    success: boolean;
+    characters?: Array<{
+      id: string;
+      name: string;
+      age: string;
+      gender: string;
+      role: string;
+      personality: string;
+      appearance: string;
+      clothing: string;
+      hairStyle: string;
+      hairColor: string;
+      referencePrompt: string;
+    }>;
+    message?: string;
+  }> => {
+    return apiCall('/video-generation/generateCharacters', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }, true);
+  },
+
+  // Render a single reference portrait for a Character Bible entry.
+  // overridePrompt lets users regenerate a specific character with a tweak.
+  generateCharacterPortrait: async (payload: {
+    referencePrompt?: string;
+    overridePrompt?: string;
+    characterName?: string;
+    aspectRatio?: string;
+  }): Promise<{ success: boolean; imageUrl?: string; message?: string }> => {
+    return apiCall('/video-generation/generateCharacterPortrait', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }, true);
+  },
+
   createVideo: async (payload: {
     description: string;
     durationSeconds: number;
@@ -3417,6 +3490,43 @@ export const videoGenerationAPI = {
     }, true);
   },
 
+  // Sequential v3 — returns story + voiceover + skeleton scenes (title,
+  // duration, purpose only). Fast (~5-10s). Frontend then calls
+  // generateSingleScene N times to fill each scene's rich detail.
+  generateStoryAndSkeleton: async (payload: { jobId: string; promptText?: string; characters?: any[]; castImageUrl?: string }): Promise<any> => {
+    return apiCall('/video-generation/generateStoryAndSkeleton', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }, true);
+  },
+
+  generateSingleScene: async (payload: { jobId: string; sceneIndex: number; scenesSoFar?: any[]; characters?: any[]; castImageUrl?: string }): Promise<any> => {
+    return apiCall('/video-generation/generateSingleScene', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }, true);
+  },
+
+  // Sequential per-scene image generation. Uses cast image as identity
+  // anchor so scene faces match the approved characters from Step 2.
+  generateSingleSceneImage: async (payload: { jobId: string; sceneIndex: number; castImageUrl?: string }): Promise<any> => {
+    return apiCall('/video-generation/generateSingleSceneImage', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }, true);
+  },
+
+  // Apply / remove the user's brand logo on a scene image via sharp
+  // composite (pixel-exact overlay). mode: 'watermark' (subtle
+  // top-right corner) | 'prominent' (larger, top-center like a wall
+  // sign) | 'off' (restore clean base image).
+  applySceneLogo: async (payload: { jobId: string; sceneIndex: number; mode: 'watermark' | 'prominent' | 'off' }): Promise<any> => {
+    return apiCall('/video-generation/applySceneLogo', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }, true);
+  },
+
   generateImages: async (payload: any): Promise<any> => {
     return apiCall('/video-generation/generateImages', {
       method: 'POST',
@@ -3426,6 +3536,22 @@ export const videoGenerationAPI = {
 
   generateClips: async (payload: any): Promise<any> => {
     return apiCall('/video-generation/generateClips', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }, true);
+  },
+
+  // Sequential per-scene Fal.ai render. Frontend Step 5 loops through
+  // scenes calling this one-by-one so each clip appears the moment
+  // Kling returns. Also used for per-clip regenerate (blank tweak) and
+  // regenerate-with-tweak (custom motion / performance direction).
+  generateSingleVideoClip: async (payload: {
+    jobId: string;
+    sceneIndex: number;
+    regenTweak?: string;
+    aspectRatio?: string;
+  }): Promise<any> => {
+    return apiCall('/video-generation/generateSingleVideoClip', {
       method: 'POST',
       body: JSON.stringify(payload)
     }, true);
@@ -3448,6 +3574,83 @@ export const videoGenerationAPI = {
   getMusicTracks: async (durationSeconds: number): Promise<any> => {
     return apiCall(`/video-generation/music-tracks?durationSeconds=${encodeURIComponent(String(durationSeconds || 60))}`, {
       method: 'GET'
+    }, true);
+  },
+
+  // ElevenLabs voice catalog for the Audio Config picker. Filters by
+  // language chosen on Step 1 + voice gender chosen on Step 1.
+  listElevenLabsVoices: async (params: { languageCode: string; gender?: string; includeMultilingual?: boolean }): Promise<any> => {
+    const q = new URLSearchParams();
+    q.set('languageCode', params.languageCode || 'en');
+    if (params.gender) q.set('gender', params.gender);
+    if (params.includeMultilingual) q.set('includeMultilingual', '1');
+    return apiCall(`/video-generation/elevenlabs-voices?${q.toString()}`, {
+      method: 'GET'
+    }, true);
+  },
+
+  // Toggle a voice into / out of the user's favourite voices list on
+  // brandAssets. Pass `action: 'add'` or `action: 'remove'` to force,
+  // otherwise the endpoint infers from current state (toggle behavior).
+  // Env lock (Step 3 of the wizard) — save env config on a draft.
+  updateEnvironment: async (payload: {
+    jobId: string;
+    environment: {
+      enabled: boolean;
+      referenceImages: Array<{ url?: string; dataUrl?: string; source?: 'upload' | 'brand-asset' }>;
+      notes?: string;
+    };
+  }): Promise<any> => {
+    return apiCall('/video-generation/updateEnvironment', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }, true);
+  },
+
+  // List the user's brand-asset images for the Env picker.
+  listBrandAssetImages: async (): Promise<any> => {
+    return apiCall('/video-generation/brand-assets/images', {
+      method: 'GET'
+    }, true);
+  },
+
+  // Star / unstar a generated audio track (voice/music/mix) so the
+  // user can reuse it in later videos.
+  toggleFavouriteAudio: async (payload: {
+    url: string;
+    kind?: 'voice' | 'music' | 'mix';
+    label?: string;
+    prompt?: string;
+    durationSeconds?: number;
+    languageCode?: string;
+    voiceId?: string;
+    action?: 'add' | 'remove';
+  }): Promise<any> => {
+    return apiCall('/video-generation/favourite-audio', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }, true);
+  },
+
+  listFavouriteAudio: async (): Promise<any> => {
+    return apiCall('/video-generation/favourite-audio', {
+      method: 'GET'
+    }, true);
+  },
+
+  toggleFavouriteVoice: async (payload: {
+    voiceId: string;
+    name?: string;
+    gender?: string;
+    language?: string;
+    accent?: string;
+    previewUrl?: string;
+    category?: string;
+    action?: 'add' | 'remove';
+  }): Promise<any> => {
+    return apiCall('/video-generation/favourite-voice', {
+      method: 'POST',
+      body: JSON.stringify(payload)
     }, true);
   },
 
