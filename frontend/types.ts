@@ -210,9 +210,12 @@ export interface ContentCalendarItem {
   shootType: string;
   cta: string;
   objective: string;
-  status: 'draft' | 'approved' | 'rejected' | 'scheduled' | 'published' | 'generated';
+  status: 'draft' | 'approved' | 'rejected' | 'scheduled' | 'published' | 'generated' | 'generating';
   generatedDraftId?: string | null;
   generatedCampaignId?: string | null;
+  /** Set once Approve queues a background reel build; also the Draft jobId. */
+  reelQueueJobId?: string | null;
+  reelQueuedAt?: string | null;
   scheduledFor?: string | null;
 }
 

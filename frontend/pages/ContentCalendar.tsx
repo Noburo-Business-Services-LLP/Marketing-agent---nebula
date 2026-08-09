@@ -13,10 +13,15 @@ import {
   ToggleRight,
   X
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { contentCalendarAPI, draftsAPI } from '../services/api';
 import { ContentCalendar as ContentCalendarType, ContentCalendarItem, Draft } from '../types';
 import { getThemeClasses, useTheme } from '../context/ThemeContext';
 import StrategyDocumentView from '../components/StrategyDocumentView';
+import { startBackgroundReel } from '../utils/backgroundReel';
+
+// Reel days are the ones Approve auto-builds; everything else just gets a status.
+const isReelItem = (item: ContentCalendarItem) => /reel|video/i.test(String(item?.format || ''));
 
 const editableFields: Array<keyof ContentCalendarItem> = [
   'format',
@@ -32,6 +37,7 @@ const editableFields: Array<keyof ContentCalendarItem> = [
 const ContentCalendar: React.FC = () => {
   const { isDarkMode } = useTheme();
   const theme = getThemeClasses(isDarkMode);
+  const navigate = useNavigate();
   const [calendar, setCalendar] = useState<ContentCalendarType | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState('');
@@ -151,6 +157,41 @@ const ContentCalendar: React.FC = () => {
 
   const updateItemStatus = (item: ContentCalendarItem, status: ContentCalendarItem['status']) => {
     updateCalendar(async () => contentCalendarAPI.updateItem(item._id, { status }), `${status}-${item._id}`);
+  };
+
+  // Approving a reel day does more than flip a label: it queues the full AI
+  // Reels pipeline server-side, then drops the user into the wizard so they
+  // watch it fill in. Non-reel days keep the old status-only behaviour.
+  const approveItem = async (item: ContentCalendarItem) => {
+    if (!isReelItem(item)) {
+      updateItemStatus(item, 'approved');
+      return;
+    }
+
+    setSaving(`approved-${item._id}`);
+    setError('');
+    try {
+      const response = await contentCalendarAPI.autoGenerateReel(item._id);
+      if (!response?.success || !response.jobId) {
+        throw new Error(response?.message || 'Could not start reel generation');
+      }
+      if (response.calendar) setCalendar(response.calendar);
+
+      startBackgroundReel({
+        jobId: response.jobId,
+        itemId: item._id,
+        day: Number(item.day) || 0,
+        headline: item.headline || ''
+      });
+
+      // The wizard resumes from this jobId and syncs its step as the
+      // pipeline advances, which is what produces the live autofill.
+      navigate(`/reels?jobId=${encodeURIComponent(response.jobId)}`);
+    } catch (err: any) {
+      setError(err?.message || 'Could not start reel generation');
+    } finally {
+      setSaving('');
+    }
   };
 
   const moveItem = (itemId: string, direction: -1 | 1) => {
@@ -519,9 +560,21 @@ const ContentCalendar: React.FC = () => {
                           Save
                         </button>
                       )}
-                      <button type="button" onClick={() => updateItemStatus(item, 'approved')} disabled={busy} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-emerald-500/15 text-emerald-400">
-                        <Check className="w-3.5 h-3.5" />
-                        Approve
+                      <button
+                        type="button"
+                        onClick={() => approveItem(item)}
+                        disabled={busy || Boolean(item.reelQueueJobId)}
+                        title={isReelItem(item) ? 'Approve and build this reel in the background' : 'Mark this day approved'}
+                        className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold ${
+                          isReelItem(item) ? 'bg-[#ffcc29] text-black' : 'bg-emerald-500/15 text-emerald-400'
+                        } disabled:opacity-50`}
+                      >
+                        {saving === `approved-${item._id}`
+                          ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          : isReelItem(item) ? <Sparkles className="w-3.5 h-3.5" /> : <Check className="w-3.5 h-3.5" />}
+                        {item.reelQueueJobId
+                          ? 'Generating…'
+                          : isReelItem(item) ? 'Approve & Generate Reel' : 'Approve'}
                       </button>
                       <button type="button" onClick={() => updateItemStatus(item, 'rejected')} disabled={busy} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-red-500/15 text-red-400">
                         <X className="w-3.5 h-3.5" />

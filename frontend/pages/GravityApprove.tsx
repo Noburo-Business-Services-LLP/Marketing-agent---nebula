@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, RotateCcw, ChevronLeft, ChevronRight, Loader2, Sparkles, Instagram, Facebook, Linkedin, Youtube, AlertCircle } from 'lucide-react';
+import { Check, RotateCcw, ChevronLeft, ChevronRight, Loader2, Sparkles, Instagram, Facebook, Linkedin, Youtube, AlertCircle, X, Pencil } from 'lucide-react';
 import { draftsAPI, apiService } from '../services/api';
 import { Draft } from '../types';
+import GeneratingFill from '../components/GeneratingFill';
+import { DraftPreviewModal } from '../components/DraftPreviewModal';
 
 // Gravity Approve — matches the prototype's Approve screen: single big
 // preview on the left, structured metadata + caption on the right,
@@ -39,6 +41,101 @@ const GravityApprove: React.FC = () => {
   // Track drafts we've auto-retried image gen for, so we don't spam.
   const autoRetriedRef = useRef<Set<string>>(new Set());
   const pollTimerRef = useRef<any>(null);
+
+  // ---- Library tabs -------------------------------------------------------
+  // Everything past "Needs review" is a read-only browse of your posts by
+  // status. Generation runs server-side, so a post that is still rendering
+  // when you navigate away shows up here as 'processing' and quietly swaps
+  // to the finished image once the worker lands it.
+  const TABS = [
+    { key: 'review',    label: 'Needs review', status: '' },
+    { key: 'all',       label: 'All',          status: 'all' },
+    { key: 'draft',     label: 'Drafts',       status: 'draft' },
+    { key: 'scheduled', label: 'Scheduled',    status: 'scheduled' },
+    { key: 'published', label: 'Posted',       status: 'published' },
+    { key: 'archived',  label: 'Archived',     status: 'archived' },
+  ] as const;
+
+  const [tab, setTab] = useState<string>('review');
+  const [libraryItems, setLibraryItems] = useState<Draft[]>([]);
+  const [libraryLoading, setLibraryLoading] = useState(false);
+  const libraryPollRef = useRef<any>(null);
+
+  const activeTab = TABS.find((t) => t.key === tab) || TABS[0];
+
+  const loadLibrary = async (status: string, quiet = false) => {
+    if (!quiet) setLibraryLoading(true);
+    try {
+      const res = await draftsAPI.getDrafts(status === 'all' ? undefined : status);
+      const rows = (Array.isArray(res?.drafts) ? res.drafts : []).filter((d: any) => {
+        const source = String(d?.sourceType || d?.contentType || 'post').toLowerCase();
+        return source !== 'reel' && source !== 'video'; // reels live in AI Reels
+      });
+      setLibraryItems(rows);
+    } catch {
+      setLibraryItems([]);
+    } finally {
+      if (!quiet) setLibraryLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (tab === 'review') { setLibraryItems([]); return; }
+    loadLibrary(activeTab.status);
+  }, [tab]);
+
+  // Keep pulling while anything in view is still being generated.
+  useEffect(() => {
+    const anyProcessing = libraryItems.some((d: any) => String(d?.status || '').toLowerCase() === 'processing');
+    if (tab === 'review' || !anyProcessing) {
+      if (libraryPollRef.current) { clearInterval(libraryPollRef.current); libraryPollRef.current = null; }
+      return;
+    }
+    if (libraryPollRef.current) return;
+    libraryPollRef.current = setInterval(() => loadLibrary(activeTab.status, true), 6000);
+    return () => { if (libraryPollRef.current) { clearInterval(libraryPollRef.current); libraryPollRef.current = null; } };
+  }, [libraryItems, tab]);
+
+  useEffect(() => () => { if (libraryPollRef.current) clearInterval(libraryPollRef.current); }, []);
+
+  // ---- Detail sheet -------------------------------------------------------
+  // Clicking a card opens it for editing, rescheduling, regenerating and
+  // publishing. Every action below maps to an endpoint that already exists.
+  const [selected, setSelected] = useState<any | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editCaption, setEditCaption] = useState('');
+  const [editWhen, setEditWhen] = useState('');
+  const [sheetBusy, setSheetBusy] = useState('');
+  const [sheetMsg, setSheetMsg] = useState('');
+
+  const openDetail = (d: any) => {
+    setSelected(d);
+    setEditTitle(d.title || '');
+    setEditCaption(d.caption || '');
+    setEditWhen(d.scheduledDate ? new Date(d.scheduledDate).toISOString().slice(0, 16) : '');
+    setSheetMsg('');
+  };
+
+  const closeDetail = () => { setSelected(null); setSheetMsg(''); };
+
+  // Applies a change, refreshes the grid, and keeps the sheet in sync.
+  const runAction = async (key: string, fn: () => Promise<any>, note: string, close = false) => {
+    setSheetBusy(key);
+    setSheetMsg('');
+    try {
+      const res = await fn();
+      await loadLibrary(activeTab.status, true);
+      if (close) { closeDetail(); return; }
+      if (res?.draft) setSelected((prev: any) => ({ ...prev, ...res.draft }));
+      setSheetMsg(note);
+    } catch (e: any) {
+      setSheetMsg(e?.message || 'That did not work');
+    } finally {
+      setSheetBusy('');
+    }
+  };
+
+  const detailImage = (d: any) => d?.imageUrl || d?.creative?.imageUrls?.[0] || '';
 
   // Statuses that mean "still awaiting user action" (i.e. show in Approve).
   // Includes 'completed' — completed = image ready, but not yet approved.
@@ -154,11 +251,11 @@ const GravityApprove: React.FC = () => {
     if (!current?._id) return;
     setBusy(true);
     try {
-      // Promote draft's underlying campaign to scheduled/publishing.
-      const campaignId = current?.campaignId || current?._id;
-      if (current?.campaignId) {
-        await apiService.publishCampaign(current.campaignId, platforms);
-      }
+      // Publish through the draft endpoint. It creates the underlying
+      // Campaign itself (upsertCampaignFromDraft), so this also works for
+      // single posts, which have no campaignId — the old path silently
+      // skipped those and removed them from the list without publishing.
+      await draftsAPI.publishDraft(current._id, platforms);
       // Remove from the queue locally.
       const next = drafts.filter((_, i) => i !== index);
       setDrafts(next);
@@ -186,6 +283,129 @@ const GravityApprove: React.FC = () => {
 
   // -------- render --------
 
+  const TabBar = () => (
+    <div className="flex items-center gap-1 overflow-x-auto border-b border-white/[0.07] mb-8">
+      {TABS.map((t) => (
+        <button
+          key={t.key}
+          onClick={() => setTab(t.key)}
+          className={`relative whitespace-nowrap px-3.5 py-2.5 text-[13px] font-semibold transition-colors ${
+            tab === t.key ? 'text-[#F5A623]' : 'text-white/50 hover:text-white/80'
+          }`}
+        >
+          {t.label}
+          {tab === t.key && <span className="absolute left-2 right-2 -bottom-px h-0.5 rounded-full bg-[#F5A623]" />}
+        </button>
+      ))}
+    </div>
+  );
+
+  // Read-only browse of posts at a given status. No approve/reject here —
+  // this is for finding things, not actioning them.
+  if (tab !== 'review') {
+    const statusChip = (s: string) => {
+      const v = String(s || 'draft').toLowerCase();
+      const map: Record<string, string> = {
+        processing: 'bg-[#F5A623]/15 text-[#F5A623]',
+        scheduled: 'bg-blue-500/15 text-blue-300',
+        published: 'bg-emerald-500/15 text-emerald-400',
+        archived: 'bg-white/[0.06] text-white/45',
+        failed: 'bg-red-500/15 text-red-400',
+      };
+      return map[v] || 'bg-white/[0.06] text-white/55';
+    };
+
+    return (
+      <div className="max-w-[1100px] mx-auto pb-24">
+        <TabBar />
+
+        {libraryLoading ? (
+          <div className="flex items-center justify-center py-20 text-white/50">
+            <Loader2 className="w-5 h-5 animate-spin mr-2" />
+            Loading…
+          </div>
+        ) : libraryItems.length === 0 ? (
+          <div className="text-center py-24">
+            <div className="gravity-label mb-3">Nothing here</div>
+            <p className="text-[14px] text-white/45">
+              No {activeTab.label.toLowerCase()} posts yet.
+            </p>
+          </div>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {libraryItems.map((d: any) => {
+              const img = d.imageUrl || d.creative?.imageUrls?.[0] || '';
+              const processing = String(d?.status || '').toLowerCase() === 'processing';
+              return (
+                <div
+                  key={d._id}
+                  onClick={() => !processing && openDetail(d)}
+                  className={`group relative rounded-xl border overflow-hidden transition-all duration-200 ${
+                    processing
+                      ? 'cursor-wait border-white/[0.08] bg-white/[0.02]'
+                      : 'cursor-pointer border-white/[0.08] bg-white/[0.02] hover:border-[#F5A623]/70 hover:bg-white/[0.05] hover:-translate-y-1 hover:shadow-[0_12px_36px_rgba(0,0,0,0.55),0_0_0_1px_rgba(245,166,35,0.25)]'
+                  }`}
+                >
+                  <div className="relative bg-black aspect-[4/5] overflow-hidden">
+                    {/* Hover affordance — makes the target unmistakable */}
+                    {!processing && (
+                      <div className="absolute inset-0 z-10 bg-black/45 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#F5A623] text-black text-[11.5px] font-bold">
+                          <Pencil className="w-3.5 h-3.5" />
+                          Edit
+                        </span>
+                      </div>
+                    )}
+                    {img ? (
+                      <img src={img} alt={d.title || 'Post'} className="w-full h-full object-contain" />
+                    ) : processing ? (
+                      <GeneratingFill resolution="" />
+                    ) : (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <AlertCircle className="w-5 h-5 text-white/25" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-3">
+                    <p className="text-[12.5px] font-semibold text-[#F5F4F1] truncate">{d.title || 'Untitled'}</p>
+                    {d.caption && <p className="text-[11px] text-white/40 line-clamp-2 mt-1">{d.caption}</p>}
+                    <div className="flex items-center justify-between mt-2.5 gap-2">
+                      <span className={`text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded ${statusChip(d.status)}`}>
+                        {processing ? 'Generating' : (d.status || 'draft')}
+                      </span>
+                      {/* Where this post is headed */}
+                      <div className="flex items-center gap-1">
+                        {(d.platforms || []).length === 0 ? (
+                          <span className="text-[10px] text-white/25">No platform</span>
+                        ) : (d.platforms || []).slice(0, 4).map((p: string) => {
+                          const meta = PLATFORM_META[String(p).toLowerCase()];
+                          return meta
+                            ? <meta.Icon key={p} className="w-3.5 h-3.5 text-white/50" />
+                            : <span key={p} className="text-[10px] text-white/40">{p}</span>;
+                        })}
+                      </div>
+                    </div>
+                    {d.scheduledDate && (
+                      <div className="text-[10px] text-white/35 mt-1.5">{formatScheduleDate(d.scheduledDate)}</div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {selected && (
+          <DraftPreviewModal
+            draft={selected}
+            onClose={closeDetail}
+            onSuccess={() => { closeDetail(); loadLibrary(activeTab.status, true); }}
+          />
+        )}
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20 text-white/50">
@@ -201,7 +421,9 @@ const GravityApprove: React.FC = () => {
 
   if (total === 0) {
     return (
-      <div className="max-w-[720px] mx-auto text-center py-24">
+      <div className="max-w-[1100px] mx-auto pb-24">
+        <TabBar />
+        <div className="max-w-[720px] mx-auto text-center py-16">
         <div className="gravity-label mb-4">Nothing to approve</div>
         <h1 className="font-serif-display text-[42px] leading-[1.05] tracking-[-0.02em] text-[#F5F4F1] mb-4">
           You're all <span className="italic text-[#F5A623]">caught up</span>.
@@ -216,12 +438,14 @@ const GravityApprove: React.FC = () => {
           <Sparkles className="w-4 h-4" />
           Draft something new
         </button>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="max-w-[1180px] mx-auto pb-16">
+      <TabBar />
       {/* Header row */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-baseline gap-3">

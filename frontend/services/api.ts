@@ -3783,6 +3783,20 @@ export const contentCalendarAPI = {
     }, true);
   },
 
+  // Kicks off a full background reel build for a reel day. Returns the
+  // queue jobId, which is also the Draft jobId the wizard resumes from.
+  autoGenerateReel: async (itemId: string): Promise<{
+    success: boolean;
+    jobId?: string;
+    alreadyRunning?: boolean;
+    calendar?: ContentCalendar;
+    message?: string;
+  }> => {
+    return apiCall(`/content-calendar/items/${encodeURIComponent(itemId)}/auto-generate`, {
+      method: 'POST'
+    }, true);
+  },
+
   reorder: async (orderedIds: string[]): Promise<{ success: boolean; calendar: ContentCalendar }> => {
     return apiCall('/content-calendar/reorder', {
       method: 'POST',
@@ -4236,6 +4250,39 @@ export const draftsAPI = {
     return apiCall('/drafts/generate-image-bg', {
       method: 'POST',
       body: JSON.stringify(data)
+    }, true);
+  },
+
+  // Brings a user's own image/video in as a draft. Sent as multipart rather
+  // than base64 JSON so real video files don't exceed the body limit.
+  uploadMedia: async (
+    file: File,
+    meta?: { title?: string; caption?: string; platforms?: string[] }
+  ): Promise<{ success: boolean; draft: Draft; mediaUrl: string; mediaType: 'image' | 'video' }> => {
+    const form = new FormData();
+    form.append('file', file);
+    if (meta?.title) form.append('title', meta.title);
+    if (meta?.caption) form.append('caption', meta.caption);
+    if (meta?.platforms) form.append('platforms', JSON.stringify(meta.platforms));
+
+    const token = localStorage.getItem('token');
+    const res = await fetch(`${API_BASE_URL}/drafts/upload-media`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      body: form // no Content-Type — the browser sets the multipart boundary
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data?.message || 'Upload failed');
+    return data;
+  },
+
+  // Composites a brand logo onto a draft's finished image (Sharp, server
+  // side). Separate from generation on purpose — an image model handed a
+  // logo redraws and smears it.
+  applyLogo: async (id: string, logoUrl: string, opts?: { position?: string; size?: string }): Promise<{ success: boolean; draft: Draft; imageUrl: string }> => {
+    return apiCall(`/drafts/${id}/apply-logo`, {
+      method: 'POST',
+      body: JSON.stringify({ logoUrl, ...(opts || {}) })
     }, true);
   },
 

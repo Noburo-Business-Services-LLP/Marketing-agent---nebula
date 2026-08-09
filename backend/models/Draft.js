@@ -27,6 +27,16 @@ const draftSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  // Clean frame kept before a logo is composited on, so the mark can be
+  // swapped or removed without re-generating the artwork.
+  imageUrlNoLogo: {
+    type: String,
+    default: ''
+  },
+  logoApplied: {
+    type: Boolean,
+    default: false
+  },
   imagePrompt: {
     type: String,
     default: ''

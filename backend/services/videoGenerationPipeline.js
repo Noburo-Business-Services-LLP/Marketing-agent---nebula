@@ -13,7 +13,7 @@ const User = require('../models/User');
 const { callGemini, parseGeminiJSON, generateCampaignImageNanoBanana, extractCharacterVisualTraits } = require('./geminiAI');
 const { callOpenAI } = require('./openAI');
 const { getPublicBaseUrl, normalizeTone, audioFilePathForTone } = require('../utils/toneAudio');
-const { generateVideoClip, generateCharacterImageFal, generateCharacterSheetFal, applyFaceSwapFal, extractFaceEmbedding } = require('./videoService');
+const { generateVideoClip, getKlingDuration, generateCharacterImageFal, generateCharacterSheetFal, applyFaceSwapFal, extractFaceEmbedding } = require('./videoService');
 const { uploadVideoFile } = require('./imageUploader');
 
 const STORAGE_ROOT = path.resolve(__dirname, '../storage/ai-videos');
@@ -2073,30 +2073,48 @@ async function createSceneVideoClip({ scene, outputPath }) {
   await runFfmpeg(args);
 }
 
-async function normalizeSceneVideoClip({ inputPath, outputPath, durationSeconds }) {
+async function normalizeSceneVideoClip({ inputPath, outputPath, durationSeconds, logoPath = '', logoMode = 'watermark' }) {
   const safeDuration = clamp(Number.parseInt(String(durationSeconds || 4), 10), 1, 120);
 
-  // If Kling returned a clip SHORTER than the scene's target duration,
-  // we used to `-stream_loop -1` and truncate → that visibly loops the
-  // content inside the clip (same 6s repeats to fill 10s). Instead
-  // freeze the last frame with `tpad=stop_mode=clone` so the extra
-  // seconds hold on the final frame — no repeat, no jarring restart.
-  // If Kling is LONGER than target, `-t` still trims cleanly.
-  const filterChain = [
+  // `tpad=stop_mode=clone` holds the final frame if the source is shorter
+  // than the target. Scene durations are now snapped to what Kling actually
+  // renders (5s or 10s), so this should never fire — it stays purely as a
+  // safety net for a model that returns a short clip. If you see a frozen
+  // tail again, that means the snapping upstream has drifted.
+  const videoFilters = [
     `scale=${VIDEO_TARGET.width}:${VIDEO_TARGET.height}:force_original_aspect_ratio=increase`,
     `crop=${VIDEO_TARGET.width}:${VIDEO_TARGET.height}`,
     `fps=${VIDEO_TARGET.fps}`,
-    // Hold last frame until we hit the target duration (no-op if the
-    // source is already >= target because tpad only pads shorter input).
     `tpad=stop_mode=clone:stop_duration=${safeDuration}`,
     'format=yuv420p'
-  ].join(',');
+  ];
 
-  const args = [
-    '-y',
-    '-i', inputPath,
+  const args = ['-y', '-i', inputPath];
+
+  if (logoPath && fs.existsSync(logoPath)) {
+    // Stamp the logo AFTER the model has rendered. Kling regenerates every
+    // pixel it is given, so a logo baked into its input image comes back
+    // smeared. Compositing here means the mark is never re-synthesised —
+    // it lands on finished video, pixel-exact.
+    const isProminent = String(logoMode) === 'prominent';
+    const logoWidth = Math.round(VIDEO_TARGET.width * (isProminent ? 0.26 : 0.14));
+    const margin = Math.round(VIDEO_TARGET.width * 0.035);
+    const x = isProminent ? '(W-w)/2' : `W-w-${margin}`;
+    const y = isProminent ? String(margin) : String(margin);
+    const opacity = isProminent ? 1.0 : 0.85;
+
+    args.push('-i', logoPath);
+    const filterComplex =
+      `[0:v]${videoFilters.join(',')}[base];` +
+      `[1:v]scale=${logoWidth}:-1,format=rgba,colorchannelmixer=aa=${opacity}[wm];` +
+      `[base][wm]overlay=${x}:${y}:format=auto[v]`;
+    args.push('-filter_complex', filterComplex, '-map', '[v]');
+  } else {
+    args.push('-vf', videoFilters.join(','));
+  }
+
+  args.push(
     '-t', String(safeDuration),
-    '-vf', filterChain,
     '-r', String(VIDEO_TARGET.fps),
     '-c:v', 'libx264',
     '-pix_fmt', 'yuv420p',
@@ -2104,7 +2122,7 @@ async function normalizeSceneVideoClip({ inputPath, outputPath, durationSeconds 
     '-crf', VIDEO_ENCODE_CRF,
     '-an',
     outputPath
-  ];
+  );
 
   await runFfmpeg(args);
 }
@@ -2292,7 +2310,9 @@ async function generateSceneClips({
         await normalizeSceneVideoClip({
           inputPath: rawClipPath,
           outputPath: clipPath,
-          durationSeconds: scene.durationSeconds
+          // Snap to what Kling actually renders — older drafts still carry
+          // 6s scenes, which would otherwise get a frozen tail.
+          durationSeconds: getKlingDuration(scene)
         });
         const stat = await fs.promises.stat(clipPath);
         if (stat.size) {
@@ -2329,7 +2349,8 @@ async function generateSceneClips({
       await normalizeSceneVideoClip({
         inputPath: rawClipPath,
         outputPath: clipPath,
-        durationSeconds: scene.durationSeconds
+        // Match the rendered length exactly so tpad never freezes a tail.
+        durationSeconds: falScene.renderedDurationSeconds || getKlingDuration(scene)
       });
 
       const stat = await fs.promises.stat(clipPath);

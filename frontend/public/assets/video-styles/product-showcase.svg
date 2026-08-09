@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180" width="320" height="180" role="img" aria-label="product-showcase">
+  <defs>
+    <radialGradient id="vig" cx="50%" cy="44%" r="78%">
+      <stop offset="0.5" stop-color="#000" stop-opacity="0"/>
+      <stop offset="1" stop-color="#000" stop-opacity="0.55"/>
+    </radialGradient>
+    <filter id="grain" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="3" stitchTiles="stitch"/>
+      <feColorMatrix type="saturate" values="0"/>
+    </filter>
+    <filter id="soft" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="7"/>
+    </filter>
+    <filter id="soft2" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="16"/>
+    </filter>
+    <filter id="tiny" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2.2"/>
+    </filter>
+    <linearGradient id="stage" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#08080c"/><stop offset="0.66" stop-color="#171219"/>
+      <stop offset="0.67" stop-color="#0d0a10"/><stop offset="1" stop-color="#05050a"/>
+    </linearGradient>
+    <linearGradient id="cone" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffcc29" stop-opacity="0.42"/><stop offset="1" stop-color="#ffcc29" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffe9a8"/><stop offset="0.5" stop-color="#e0a733"/><stop offset="1" stop-color="#8a5f14"/>
+    </linearGradient>
+    <linearGradient id="refl" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e0a733" stop-opacity="0.35"/><stop offset="1" stop-color="#e0a733" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="320" height="180" fill="url(#stage)"/>
+  <path d="M160 0 L96 120 L224 120 Z" fill="url(#cone)"/>
+  <ellipse cx="160" cy="120" rx="66" ry="12" fill="#ffcc29" opacity="0.14" filter="url(#soft)"/>
+  <g>
+    <rect x="152" y="34" width="16" height="12" rx="2" fill="url(#gold)"/>
+    <path d="M154 46 L166 46 L170 58 L150 58 Z" fill="url(#gold)" opacity="0.85"/>
+    <path d="M142 58 q18 -6 36 0 q8 26 6 46 q-1 8 -9 8 l-30 0 q-8 0 -9 -8 q-2 -20 6 -46 z" fill="url(#gold)"/>
+    <path d="M160 58 q10 -2 18 0 q8 26 6 46 q-1 8 -9 8 l-15 0 z" fill="#000" opacity="0.2"/>
+    <path d="M148 66 q-4 20 -3 38 q0 5 4 5 l4 0 q-5 -22 -1 -43 z" fill="#fff6da" opacity="0.45"/>
+    <rect x="144" y="80" width="32" height="14" rx="2" fill="#0d0a10" opacity="0.55"/>
+    <rect x="147" y="84" width="26" height="2.4" rx="1.2" fill="#ffe9a8" opacity="0.8"/>
+    <rect x="147" y="89" width="17" height="2" rx="1" fill="#ffe9a8" opacity="0.5"/>
+  </g>
+  <ellipse cx="160" cy="118" rx="34" ry="6" fill="#000" opacity="0.55"/>
+  <path d="M143 122 q17 -4 34 0 q-4 24 -8 30 l-18 0 q-4 -6 -8 -30 z" fill="url(#refl)"/>
+  <g fill="#ffe9a8" opacity="0.75"><circle cx="112" cy="44" r="1.6"/><circle cx="214" cy="34" r="1.3"/><circle cx="196" cy="70" r="1"/><circle cx="128" cy="76" r="1.1"/></g>
+  <rect width="320" height="180" fill="url(#vig)"/>
+  <rect width="320" height="180" filter="url(#grain)" opacity="0.14" style="mix-blend-mode:overlay"/>
+</svg>

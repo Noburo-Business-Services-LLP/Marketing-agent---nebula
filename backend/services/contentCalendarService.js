@@ -51,6 +51,10 @@ The content calendar should help achieve:
 CONTENT RULES:
 1. Create exactly 30 days of content.
 2. Mix Posters, Carousels, Reels, Campaigns properly.
+2a. Use EXACTLY 4 reels across the whole month — no more, no fewer.
+    Spread them out, roughly one per week, and reserve them for the
+    ideas that genuinely need motion. Every other day must be a
+    poster, carousel, story, or campaign.
 3. Avoid repetitive content.
 4. Every content must have a clear marketing objective.
 5. Content must be engaging, shareable, and conversion-focused.
@@ -98,6 +102,16 @@ IMPORTANT:
 
 Return ONLY valid JSON array.
 `;
+
+// Reels cost real money per item (Fal render + ElevenLabs voice + ffmpeg
+// merge), so a month is capped at this many regardless of what the model
+// returns. Enforced in normalizeCalendarItems, which every calendar passes
+// through — AI-generated and fallback alike.
+const MAX_REELS_PER_MONTH = 4;
+// Preferred reel days when we get to choose: one per week.
+const REEL_DAYS = [4, 11, 18, 25];
+// A format counts as a reel if it implies motion.
+const isReelFormat = (value = '') => /reel|video/i.test(String(value || ''));
 
 function normalizeLanguage(value = '') {
   const normalized = String(value || '').trim().toLowerCase();
@@ -179,22 +193,28 @@ function fallbackCalendar(userProfile = {}) {
   const businessName = profile.businessName || profile.name || userProfile.companyName || 'Your Business';
   const heroProduct = profile.heroProduct || profile.niche || 'your offer';
   const language = normalizeLanguage(profile.language || profile.contentLanguage);
-  const formats = ['post', 'reel', 'carousel', 'story', 'campaign'];
+  // Reels are the expensive format (Fal + ElevenLabs + ffmpeg per item), so
+  // the month gets exactly MAX_REELS_PER_MONTH of them — one per week.
+  // Every other day cycles through the cheap formats.
+  const otherFormats = ['post', 'carousel', 'story', 'campaign'];
   const pillars = ['education', 'product', 'social proof', 'behind the scenes', 'offer'];
   const objectives = ['awareness', 'engagement', 'leads', 'sales', 'community'];
+  let otherIndex = 0;
   const items = Array.from({ length: 30 }, (_, index) => {
     const day = index + 1;
+    const isReel = REEL_DAYS.includes(day);
+    const format = isReel ? 'reel' : otherFormats[otherIndex++ % otherFormats.length];
     const headline = language === 'Tamil'
       ? tamilFallbackHeadline(day, businessName, heroProduct)
       : `${businessName}: ${heroProduct} idea for day ${day}`;
     return {
       day,
-      format: formats[index % formats.length],
+      format,
       contentPillar: pillars[index % pillars.length],
       headline,
       creativeConcept: `Show ${heroProduct} through a ${pillars[index % pillars.length]} angle for the target customer.`,
       productNeeded: heroProduct,
-      shootType: formats[index % formats.length] === 'reel' ? 'video' : 'photo',
+      shootType: isReel ? 'video' : 'photo',
       cta: index % 3 === 0 ? 'Book now' : index % 3 === 1 ? 'Message us' : 'Learn more',
       objective: objectives[index % objectives.length],
       status: 'draft'
@@ -231,6 +251,51 @@ function normalizeCalendarItems(rawCalendar, userProfile = {}) {
       status: ['approved', 'rejected'].includes(String(raw?.status || '').toLowerCase()) ? String(raw.status).toLowerCase() : 'draft'
     };
   });
+
+  // Hard cap on reels. The prompt asks for 4, but models drift and the reel
+  // path is the expensive one — so enforce it here rather than trust output.
+  const reelIndexes = items.reduce((acc, item, i) => (isReelFormat(item.format) ? [...acc, i] : acc), []);
+  const keep = new Set();
+
+  if (reelIndexes.length > MAX_REELS_PER_MONTH) {
+    // Over-delivered. Rather than keeping the first N (which bunches them
+    // at the top of the month), keep whichever the model chose that sit
+    // closest to the preferred weekly slots, so spacing stays sane.
+    const pool = [...reelIndexes];
+    for (const day of REEL_DAYS) {
+      if (!pool.length || keep.size >= MAX_REELS_PER_MONTH) break;
+      let best = 0;
+      for (let k = 1; k < pool.length; k += 1) {
+        if (Math.abs(pool[k] + 1 - day) < Math.abs(pool[best] + 1 - day)) best = k;
+      }
+      keep.add(pool[best]);
+      pool.splice(best, 1);
+    }
+  } else {
+    reelIndexes.forEach((i) => keep.add(i));
+  }
+
+  for (const i of reelIndexes) {
+    if (keep.has(i)) {
+      items[i].format = 'reel';
+      items[i].shootType = 'video';
+    } else {
+      items[i].format = 'carousel';
+      items[i].shootType = 'photo';
+    }
+  }
+
+  // Under-delivery is possible too (a model that returns zero reels). Top up
+  // on the preferred days, skipping any that are already reels.
+  for (const day of REEL_DAYS) {
+    if (keep.size >= MAX_REELS_PER_MONTH) break;
+    const index = day - 1;
+    const item = items[index];
+    if (!item || keep.has(index)) continue;
+    item.format = 'reel';
+    item.shootType = 'video';
+    keep.add(index);
+  }
 
   return [1, 2, 3, 4].map((weekNumber) => ({
     weekNumber,
@@ -394,5 +459,7 @@ module.exports = {
   todaySuggestion,
   findItem,
   calendarMonth,
+  normalizeCalendarItems,
+  MAX_REELS_PER_MONTH,
   CONTENT_CALENDAR_PROMPT
 };

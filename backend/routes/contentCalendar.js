@@ -3,6 +3,8 @@ const router = express.Router();
 const { protect } = require('../middleware/auth');
 const User = require('../models/User');
 const ContentCalendar = require('../models/ContentCalendar');
+const { deductCredits, refundCredits } = require('../middleware/trialGuard');
+const { videoGenerationQueue } = require('../services/videoGenerationQueue');
 const {
   generateMonthlyCalendar,
   createDraftsForItem,
@@ -10,6 +12,9 @@ const {
   todaySuggestion,
   calendarMonth
 } = require('../services/contentCalendarService');
+
+// A calendar row is a reel if its format implies motion.
+const isReelFormat = (value = '') => /reel|video/i.test(String(value || ''));
 
 async function getCurrentCalendar(userId) {
   return ContentCalendar.findOne({ userId, month: calendarMonth() }).sort({ createdAt: -1 });
@@ -134,6 +139,133 @@ router.patch('/items/:itemId', protect, async (req, res) => {
   } catch (error) {
     console.error('Content calendar item update error:', error);
     res.status(500).json({ success: false, message: 'Failed to update calendar item' });
+  }
+});
+
+// POST /items/:itemId/auto-generate
+// Approve on a reel day kicks the full AI Reels pipeline off in the
+// background. Reuses the exact machinery /video-generation/createVideo
+// uses — same queue, same job type, same Draft record — so the wizard can
+// resume from the returned jobId and autofill as each stage lands.
+router.post('/items/:itemId/auto-generate', protect, async (req, res) => {
+  const userId = req.user?._id ? String(req.user._id) : (req.user?.id ? String(req.user.id) : null);
+  if (!userId) return res.status(401).json({ success: false, message: 'Authentication required' });
+
+  let creditsTaken = false;
+  try {
+    const calendar = await getCurrentCalendar(req.user._id);
+    if (!calendar) return res.status(404).json({ success: false, message: 'Content calendar not found' });
+
+    const item = findItem(calendar, req.params.itemId);
+    if (!item) return res.status(404).json({ success: false, message: 'Calendar item not found' });
+
+    if (!isReelFormat(item.format)) {
+      return res.status(400).json({
+        success: false,
+        message: `Day ${item.day} is a ${item.format}, not a reel. Use Save Draft for non-reel formats.`
+      });
+    }
+
+    // Idempotency — a second Approve must not spawn a second render.
+    if (item.reelQueueJobId) {
+      return res.json({
+        success: true,
+        alreadyRunning: true,
+        jobId: item.reelQueueJobId,
+        calendar,
+        message: 'A reel build is already running for this day.'
+      });
+    }
+
+    const user = await User.findById(req.user._id);
+    const profile = user?.businessProfile || {};
+    const language = String(calendar.language || profile.language || 'English').trim();
+
+    // Map the calendar row onto the shape /createVideo expects. The concept
+    // and CTA carry the marketing intent; business profile supplies the
+    // brand context the calendar row doesn't hold.
+    const payload = {
+      description: [item.headline, item.creativeConcept].filter(Boolean).join('. '),
+      videoStyle: 'Cinematic Commercial',
+      language,
+      aspectRatio: '9:16',
+      sceneCount: 5,
+      cta: item.cta || '',
+      objective: item.objective || 'awareness',
+      productName: item.productNeeded || profile.heroProduct || '',
+      businessName: calendar.businessName || profile.businessName || '',
+      source: 'smart-calendar',
+      calendarItemId: String(item._id),
+      calendarDay: item.day
+    };
+
+    const creditResult = await deductCredits(userId, 'campaign_full', 1, `Smart Calendar reel — day ${item.day}`);
+    if (!creditResult.success) {
+      return res.status(403).json({
+        success: false,
+        creditsExhausted: true,
+        message: creditResult.error || 'Insufficient credits to generate this reel.'
+      });
+    }
+    creditsTaken = true;
+
+    const baseUrl = String(process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get('host')}`).replace(/\/+$/, '');
+    const queued = await videoGenerationQueue.enqueue({
+      userId,
+      jobType: 'create_video_pipeline',
+      payload: {
+        payload,
+        user: { _id: req.user?._id, id: req.user?.id, businessProfile: profile },
+        baseUrl
+      }
+    });
+
+    // Mirror /createVideo: seed the Draft so the wizard has something to
+    // resume against before the pipeline writes its first real stage.
+    try {
+      const Draft = require('../models/Draft');
+      await Draft.findOneAndUpdate(
+        { 'generationProgress.jobId': queued.jobId, userId: String(userId) },
+        {
+          $set: {
+            title: String(item.headline || `Day ${item.day} reel`).substring(0, 50),
+            status: 'processing',
+            sourceType: 'reel',
+            contentType: 'reel',
+            'generationProgress.step': 'Queued in background',
+            'generationProgress.progress': 0
+          }
+        },
+        { upsert: true, new: true }
+      );
+    } catch (draftErr) {
+      console.error('[calendar auto-generate] Draft seed failed:', draftErr.message);
+    }
+
+    item.reelQueueJobId = queued.jobId;
+    item.reelQueuedAt = new Date();
+    item.status = 'generating';
+    await calendar.save();
+
+    return res.status(202).json({
+      success: true,
+      jobId: queued.jobId,
+      status: queued.status,
+      progress: queued.progress,
+      currentStep: queued.currentStep,
+      calendar,
+      item
+    });
+  } catch (error) {
+    if (creditsTaken) {
+      try {
+        await refundCredits(userId, 'campaign_full', 1, 'Refund: Smart Calendar reel enqueue failed');
+      } catch (refundErr) {
+        console.error('[calendar auto-generate] refund failed:', refundErr.message);
+      }
+    }
+    console.error('Calendar auto-generate error:', error);
+    return res.status(500).json({ success: false, message: 'Failed to start reel generation' });
   }
 });
 

@@ -1,7 +1,17 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, Layers, Calendar as CalendarIcon, Zap, Image as ImageIcon, Instagram, Facebook, Linkedin, ChevronRight, Loader2 } from 'lucide-react';
-import { draftsAPI } from '../services/api';
+import { Sparkles, Layers, Calendar as CalendarIcon, Zap, Image as ImageIcon, Instagram, Facebook, Linkedin, ChevronRight, Loader2, Check, Clock, Save, AlertCircle, RotateCcw, Pencil, Trash2 } from 'lucide-react';
+import { draftsAPI, brandAssetsAPI, apiService } from '../services/api';
+import { Draft } from '../types';
+import GeneratingFill from '../components/GeneratingFill';
+import { BorderBeam } from '../components/ui/border-beam';
+
+const ASPECTS = [
+  { key: '4:5',  label: '4:5',  hint: 'Portrait' },
+  { key: '1:1',  label: '1:1',  hint: 'Square' },
+  { key: '9:16', label: '9:16', hint: 'Vertical' },
+  { key: '16:9', label: '16:9', hint: 'Landscape' },
+];
 
 // Direct fetch to the streaming endpoint — apiService doesn't expose SSE.
 const API_BASE = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
@@ -92,6 +102,196 @@ const GravityCreate: React.FC = () => {
   const [progressMsg, setProgressMsg] = useState<string>('');
   const [postsGenerated, setPostsGenerated] = useState<number>(0);
 
+  // Results stay on this page instead of bouncing to /drafts. The image is
+  // produced by a background worker, so we poll the draft(s) until the
+  // artwork lands, then offer keep / publish / schedule inline.
+  const [results, setResults] = useState<Draft[]>([]);
+  const [actioned, setActioned] = useState<Record<string, 'draft' | 'approved' | 'scheduled'>>({});
+  const [actionBusy, setActionBusy] = useState<string>('');
+  const [scheduleFor, setScheduleFor] = useState<string>('');
+  const [schedulingId, setSchedulingId] = useState<string>('');
+  const pollRef = useRef<any>(null);
+
+  // Brand logo choice, pulled from Brand Assets. Applied AFTER the image is
+  // generated — handing a logo to an image model gets it redrawn and smeared.
+  const [logos, setLogos] = useState<Array<{ id: string; url: string; name: string }>>([]);
+  const [selectedLogo, setSelectedLogo] = useState<string>('');
+  const [captionBusy, setCaptionBusy] = useState<string>('');
+  const [editingCaption, setEditingCaption] = useState<string>('');
+  const [captionDraft, setCaptionDraft] = useState<string>('');
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res: any = await brandAssetsAPI.getLogos();
+        const list = (res?.assets || res?.logos || res?.data || [])
+          .map((a: any) => ({ id: String(a._id || a.id || a.url), url: a.url || a.imageUrl || '', name: a.name || 'Logo' }))
+          .filter((a: any) => a.url);
+        setLogos(list);
+        const primary = (res?.assets || res?.logos || []).find((a: any) => a.isPrimary);
+        if (primary?.url) setSelectedLogo(primary.url);
+      } catch { /* no logos configured — picker just stays empty */ }
+    })();
+  }, []);
+
+  const setAspect = (key: string) => {
+    const match = VISUAL_STYLES.find((v) => v.startsWith(key));
+    if (match) setVisualStyle(match);
+  };
+
+  const stillRendering = results.some((d) => String(d?.status || '').toLowerCase() === 'processing');
+
+  // Poll while any result is still rendering. Cleared as soon as everything
+  // has an image (or failed), so we are not hammering the API forever.
+  useEffect(() => {
+    if (!results.length || !stillRendering) {
+      if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+      return;
+    }
+    if (pollRef.current) return;
+    pollRef.current = setInterval(async () => {
+      try {
+        const refreshed = await Promise.all(
+          results.map(async (d) => {
+            if (String(d?.status || '').toLowerCase() !== 'processing') return d;
+            try {
+              const res = await draftsAPI.getDraft(d._id);
+              let next: any = res?.draft || d;
+              // Artwork just landed — stamp the chosen logo on now that
+              // there is something to stamp it onto.
+              const img = next?.imageUrl || next?.creative?.imageUrls?.[0];
+              if (selectedLogo && img && !next.logoApplied) {
+                try {
+                  const applied = await draftsAPI.applyLogo(next._id, selectedLogo);
+                  if (applied?.draft) next = applied.draft;
+                } catch { /* keep the unbranded image rather than losing it */ }
+              }
+              return next;
+            } catch { return d; }
+          })
+        );
+        setResults(refreshed);
+      } catch { /* transient — next tick retries */ }
+    }, 5000);
+    return () => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } };
+  }, [results, stillRendering]);
+
+  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
+
+  const draftImage = (d: any): string =>
+    d?.imageUrl || d?.creative?.imageUrls?.[0] || d?.images?.[0] || '';
+
+  // Keep as draft — the record already exists as a draft the moment it is
+  // generated, so this only needs to acknowledge and clear it from view.
+  const keepAsDraft = (d: Draft) => {
+    setActioned((prev) => ({ ...prev, [d._id]: 'draft' }));
+  };
+
+  const approveNow = async (d: Draft) => {
+    setActionBusy(d._id);
+    setError(null);
+    try {
+      await draftsAPI.publishDraft(d._id, selectedPlatforms);
+      setActioned((prev) => ({ ...prev, [d._id]: 'approved' }));
+    } catch (e: any) {
+      setError(e?.message || 'Could not publish this post');
+    } finally {
+      setActionBusy('');
+    }
+  };
+
+  // Writes a caption for the poster that was actually produced, rather than
+  // echoing the user's prompt back at them.
+  const generateCaption = async (d: any) => {
+    const img = draftImage(d);
+    if (!img) return;
+    setCaptionBusy(d._id);
+    setError(null);
+    try {
+      const res: any = await apiService.generateCaptionFromImage(img, selectedPlatforms[0] || 'instagram');
+      const next = res?.caption || res?.data?.caption || '';
+      if (!next) throw new Error('No caption came back');
+      await draftsAPI.updateDraft(d._id, { caption: next });
+      setResults((prev) => prev.map((x: any) => x._id === d._id ? { ...x, caption: next } : x));
+    } catch (e: any) {
+      setError(e?.message || 'Could not write a caption');
+    } finally {
+      setCaptionBusy('');
+    }
+  };
+
+  const saveCaption = async (d: Draft) => {
+    setCaptionBusy(d._id);
+    try {
+      await draftsAPI.updateDraft(d._id, { caption: captionDraft });
+      setResults((prev) => prev.map((x: any) => x._id === d._id ? { ...x, caption: captionDraft } : x));
+      setEditingCaption('');
+    } catch (e: any) {
+      setError(e?.message || 'Could not save the caption');
+    } finally {
+      setCaptionBusy('');
+    }
+  };
+
+  const regenerateImage = async (d: Draft) => {
+    setActionBusy(d._id);
+    setError(null);
+    try {
+      await draftsAPI.retryImageGeneration(d._id);
+      setResults((prev) => prev.map((x: any) => x._id === d._id ? { ...x, status: 'processing', imageUrl: '' } : x));
+    } catch (e: any) {
+      setError(e?.message || 'Could not regenerate');
+    } finally {
+      setActionBusy('');
+    }
+  };
+
+  const discard = async (d: Draft) => {
+    setActionBusy(d._id);
+    try {
+      await draftsAPI.deleteDraft(d._id);
+    } catch { /* already gone — drop it from view regardless */ }
+    setResults((prev) => prev.filter((x: any) => x._id !== d._id));
+    setActionBusy('');
+  };
+
+  // "Send all to approval" — publishes every card that hasn't been actioned.
+  const sendAllToApproval = async () => {
+    const pending = results.filter((d: any) => !actioned[d._id] && draftImage(d));
+    if (!pending.length) return;
+    setActionBusy('all');
+    setError(null);
+    const done: Record<string, 'approved'> = {};
+    for (const d of pending) {
+      try {
+        await draftsAPI.publishDraft(d._id, selectedPlatforms);
+        done[d._id] = 'approved';
+      } catch { /* keep going; the rest can still go out */ }
+    }
+    setActioned((prev) => ({ ...prev, ...done }));
+    const failed = pending.length - Object.keys(done).length;
+    if (failed > 0) setError(`${failed} of ${pending.length} could not be sent.`);
+    setActionBusy('');
+  };
+
+  const scheduleNow = async (d: Draft) => {
+    if (!scheduleFor) { setError('Pick a date and time first'); return; }
+    setActionBusy(d._id);
+    setError(null);
+    try {
+      // The backend creates the Campaign behind this draft, which is what the
+      // publishing scheduler actually picks up.
+      await draftsAPI.scheduleDraft(d._id, new Date(scheduleFor).toISOString());
+      setActioned((prev) => ({ ...prev, [d._id]: 'scheduled' }));
+      setSchedulingId('');
+      setScheduleFor('');
+    } catch (e: any) {
+      setError(e?.message || 'Could not schedule this post');
+    } finally {
+      setActionBusy('');
+    }
+  };
+
   const togglePlatform = (key: string) =>
     setSelectedPlatforms((prev) => prev.includes(key) ? prev.filter((p) => p !== key) : [...prev, key]);
 
@@ -125,10 +325,11 @@ const GravityCreate: React.FC = () => {
   //   1. Creates a Draft record with status='processing'
   //   2. Enqueues the background worker to generate the image via
   //      Nano Banana + save the Cloudinary URL back to the draft.
-  // The Approve page polls for updates so the image appears when ready.
+  // The result is then polled and shown on THIS page — keeping, approving
+  // and scheduling all happen here rather than over in /drafts.
   const handleDraftSinglePost = async () => {
     setProgressMsg('Queuing the poster…');
-    await draftsAPI.generateImageBg({
+    const res: any = await draftsAPI.generateImageBg({
       type: 'post',
       title: name.trim() || 'Untitled post',
       caption: description.trim() || name.trim() || '',
@@ -137,7 +338,11 @@ const GravityCreate: React.FC = () => {
       prompt: description.trim() || name.trim() || 'A cinematic marketing poster',
       aspectRatio: backendAspect,
     });
-    navigate('/drafts');
+    if (res?.draft) {
+      setResults([res.draft]);
+      setActioned({});
+    }
+    setProgressMsg('');
   };
 
   // Campaign mode — real AI generation via the streaming endpoint used
@@ -219,7 +424,24 @@ const GravityCreate: React.FC = () => {
     if (!complete && postCount === 0) {
       throw new Error('Generation ended without any posts.');
     }
-    navigate('/drafts');
+
+    // Same as single-post mode: show what was produced here rather than
+    // sending the user off to /drafts. Pull the freshly-created drafts so
+    // each one can be kept, approved or scheduled inline.
+    setProgressMsg('Loading what was drafted…');
+    try {
+      const res = await draftsAPI.getDrafts();
+      const fresh = (res?.drafts || [])
+        .filter((d: any) => !['published', 'posted', 'scheduled', 'rejected'].includes(String(d?.status || '').toLowerCase()))
+        .slice(0, postCount || 12);
+      setResults(fresh);
+      setActioned({});
+    } catch {
+      // If the fetch fails the posts still exist — fall back to Approve.
+      navigate('/drafts');
+      return;
+    }
+    setProgressMsg('');
   };
 
   const handleDraft = async () => {
@@ -250,6 +472,13 @@ const GravityCreate: React.FC = () => {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [submitting, name, description, duration, cadence, tone, visualStyle, selectedPlatforms]);
+
+  // While a request is in flight there is no draft record yet, so show
+  // placeholder cards in the grid straight away. They animate in place and
+  // are swapped for the real drafts the moment those come back.
+  const pendingCards = submitting && results.length === 0
+    ? Array.from({ length: mode === 'campaign' ? Math.min(estimate.total, 4) : 1 })
+    : [];
 
   return (
     <div className="max-w-[900px] mx-auto pb-24">
@@ -296,13 +525,43 @@ const GravityCreate: React.FC = () => {
         </p>
       </div>
 
-      {/* Name + Description card */}
-      <div
-        className="relative rounded-2xl border border-white/[0.08] bg-white/[0.02] p-5 mb-5 overflow-hidden"
-        style={{ boxShadow: '0 0 80px rgba(245,166,35,0.04)' }}
+      {/* Name + Description card, wrapped in a travelling border beam.
+          `mono` is the greyscale variant — desaturated and brightened it
+          reads as brushed steel rather than a neon outline, with a narrow
+          hue range so a warm glint passes through as the beam travels. */}
+      {/* Three layers make the metal read: a soft outward halo (CSS, below
+          the card), the travelling beam on the 1px edge (BorderBeam), and a
+          brushed gradient + rim highlights on the surface itself. */}
+      <div className="relative mb-5">
+      <div className="metalHalo" aria-hidden />
+      <BorderBeam
+        size="md"
+        // 'sunset' is the warm variant — orange/gold/amber, matching the
+        // Gravity accent. Hue-shift stays ON so the gold shimmers as the
+        // beam travels rather than sitting flat.
+        colorVariant="sunset"
+        theme="dark"
+        saturation={1.35}
+        brightness={2.4}
+        hueRange={18}
+        duration={3.6}
+        borderRadius={16}
+        strength={1}
+        className="relative block"
+        style={{ zIndex: 1 }}
       >
-        {/* Ambient interior glow */}
-        <div className="pointer-events-none absolute inset-0 -z-0" style={{ background: 'radial-gradient(60% 100% at 50% 100%, rgba(245,166,35,0.06) 0%, transparent 60%)' }} />
+      {/* No border of its own — the beam IS the border, so a competing
+          1px outline would sit exactly on top of it. Warm interior sheen
+          so the surface picks up the gold as the beam passes. */}
+      <div
+        className="relative rounded-2xl p-5 overflow-hidden"
+        style={{
+          background: 'linear-gradient(180deg, rgba(255,214,150,0.055) 0%, rgba(255,255,255,0.012) 45%, rgba(255,196,84,0.028) 100%), #0f0d0a',
+          boxShadow: 'inset 0 1px 0 0 rgba(255,214,150,0.16), inset 0 -1px 0 0 rgba(0,0,0,0.6), inset 0 0 70px rgba(245,166,35,0.05)'
+        }}
+      >
+        {/* Ambient interior glow, warm to match the travelling beam. */}
+        <div className="pointer-events-none absolute inset-0 -z-0" style={{ background: 'radial-gradient(60% 100% at 50% 100%, rgba(245,166,35,0.09) 0%, transparent 60%)' }} />
         <div className="relative">
           <div className="flex items-baseline gap-4 mb-3">
             <span className="gravity-label text-[#F5A623]">{mode === 'campaign' ? 'Campaign' : 'Post'}</span>
@@ -323,6 +582,8 @@ const GravityCreate: React.FC = () => {
             className="w-full bg-transparent border-none outline-none text-[14.5px] text-white/60 leading-relaxed resize-none placeholder:text-white/25"
           />
         </div>
+      </div>
+      </BorderBeam>
       </div>
 
       {/* Metadata grid — Campaign mode only */}
@@ -378,9 +639,75 @@ const GravityCreate: React.FC = () => {
         )}
       </div>
 
+      {/* Aspect + logo — shown for BOTH modes. These used to be campaign-only
+          (aspect) or missing entirely (logo), so single posts silently
+          rendered 4:5 with no branding. */}
+      <div className="max-w-2xl mx-auto mt-8 grid gap-4 sm:grid-cols-2">
+        <div>
+          <div className="gravity-label mb-2">Aspect ratio</div>
+          <div className="flex gap-1.5">
+            {ASPECTS.map((a) => {
+              const active = visualStyle.startsWith(a.key);
+              return (
+                <button
+                  key={a.key}
+                  onClick={() => setAspect(a.key)}
+                  title={a.hint}
+                  className={`flex-1 rounded-lg border px-2 py-2 text-[12px] font-semibold transition-colors ${
+                    active
+                      ? 'border-[#F5A623] bg-[#F5A623]/12 text-[#F5A623]'
+                      : 'border-white/[0.10] bg-white/[0.02] text-white/55 hover:text-white/85'
+                  }`}
+                >
+                  {a.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div>
+          <div className="gravity-label mb-2">
+            Logo {logos.length === 0 && <span className="text-white/30 normal-case">· none in Brand Assets</span>}
+          </div>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <button
+              onClick={() => setSelectedLogo('')}
+              className={`rounded-lg border px-3 py-2 text-[12px] font-semibold transition-colors ${
+                !selectedLogo
+                  ? 'border-[#F5A623] bg-[#F5A623]/12 text-[#F5A623]'
+                  : 'border-white/[0.10] bg-white/[0.02] text-white/55 hover:text-white/85'
+              }`}
+            >
+              No logo
+            </button>
+            {logos.map((l) => (
+              <button
+                key={l.id}
+                onClick={() => setSelectedLogo(l.url)}
+                title={l.name}
+                className={`w-11 h-11 rounded-lg border overflow-hidden bg-white/[0.04] transition-colors ${
+                  selectedLogo === l.url ? 'border-[#F5A623]' : 'border-white/[0.10] hover:border-white/30'
+                }`}
+              >
+                <img src={l.url} alt={l.name} className="w-full h-full object-contain p-1" />
+              </button>
+            ))}
+            {logos.length === 0 && (
+              <button
+                onClick={() => navigate('/brand-assets')}
+                className="text-[11.5px] text-white/40 hover:text-[#F5A623] underline underline-offset-2"
+              >
+                Add one
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* Error */}
       {error && (
-        <div className="text-center text-[13px] text-red-400 mb-4">{error}</div>
+        <div className="text-center text-[13px] text-red-400 mb-4 mt-4">{error}</div>
       )}
 
       {/* Primary CTA */}
@@ -403,12 +730,6 @@ const GravityCreate: React.FC = () => {
               </>
             )}
           </button>
-          <div className="hidden md:flex items-center gap-1.5 text-[11px] text-white/40">
-            <kbd className="inline-flex items-center gap-0.5 h-6 px-1.5 rounded bg-white/[0.06] border border-white/[0.08] text-[10px] font-semibold text-white/70">
-              ⌘↵
-            </kbd>
-            <span>to launch</span>
-          </div>
         </div>
         {submitting && progressMsg && (
           <div className="text-[12.5px] text-white/60 mt-1 flex items-center gap-2">
@@ -421,16 +742,237 @@ const GravityCreate: React.FC = () => {
         )}
       </div>
 
-      {/* Escape hatch to old page */}
-      <div className="text-center mt-14">
-        <button
-          onClick={() => navigate('/campaigns-classic')}
-          className="text-[12px] text-white/35 hover:text-white/60 inline-flex items-center gap-1"
-        >
-          <span>Browse all campaigns</span>
-          <ChevronRight className="w-3 h-3" />
-        </button>
-      </div>
+      {/* In-flight placeholders — the card appears immediately with the
+          animation in it, then becomes the real draft when it lands. */}
+      {pendingCards.length > 0 && (
+        <div className="max-w-5xl mx-auto mt-14">
+          <div className="text-center mb-10">
+            <div className="gravity-label text-[#F5A623] mb-3">
+              {mode === 'campaign' ? 'Building your campaign' : 'Drafting your post'}
+            </div>
+            <h2 className="text-[42px] leading-[1.1] font-semibold text-[#F5F4F1] tracking-[-0.02em]">
+              Making something <em className="italic font-normal text-[#F5A623]">good</em>.
+            </h2>
+            {progressMsg && <p className="text-[13.5px] text-white/45 mt-3">{progressMsg}</p>}
+          </div>
+          <div className={`grid gap-4 ${pendingCards.length === 1 ? 'grid-cols-1 max-w-md mx-auto' : 'sm:grid-cols-2 lg:grid-cols-3'}`}>
+            {pendingCards.map((_, i) => (
+              <div key={i} className="rounded-xl border border-white/[0.08] bg-white/[0.02] overflow-hidden">
+                <div className="relative bg-black" style={{ aspectRatio: backendAspect.replace(':', ' / ') }}>
+                  <GeneratingFill prompt={description.trim() || name.trim()} resolution={backendAspect} />
+                </div>
+                <div className="p-3.5">
+                  <div className="h-3 w-2/3 rounded bg-white/[0.07] animate-pulse" />
+                  <div className="h-2.5 w-1/3 rounded bg-white/[0.05] animate-pulse mt-2.5" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Results — everything happens here now. No hop to /drafts. */}
+      {results.length > 0 && (
+        <div className="max-w-5xl mx-auto mt-14">
+          <div className="relative text-center mb-10">
+            <button
+              onClick={() => { setResults([]); setActioned({}); setSchedulingId(''); }}
+              className="absolute right-0 top-0 inline-flex items-center gap-1.5 rounded-lg border border-white/[0.12] px-3 py-2 text-[12px] text-white/60 hover:text-white hover:border-white/25 transition-colors"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              Start over
+            </button>
+
+            <div className="gravity-label text-[#F5A623] mb-3">
+              {results.length} variation{results.length !== 1 ? 's' : ''} · pick what you love
+            </div>
+            <h2 className="text-[42px] leading-[1.1] font-semibold text-[#F5F4F1] tracking-[-0.02em]">
+              Here's what <em className="italic font-normal text-[#F5A623]">came back</em>.
+            </h2>
+            <p className="text-[13.5px] text-white/45 mt-3">
+              {stillRendering
+                ? 'Still rendering — this updates on its own.'
+                : 'Edit or regenerate any of them. Approve to send to your queue. Discard to throw away.'}
+            </p>
+          </div>
+
+          <div className={`grid gap-4 ${results.length === 1 ? 'grid-cols-1 max-w-md' : 'sm:grid-cols-2 lg:grid-cols-3'}`}>
+            {results.map((d: any) => {
+              const img = draftImage(d);
+              const processing = String(d?.status || '').toLowerCase() === 'processing';
+              const failed = String(d?.status || '').toLowerCase() === 'failed';
+              const done = actioned[d._id];
+              const busy = actionBusy === d._id;
+
+              return (
+                <div key={d._id} className="rounded-xl border border-white/[0.08] bg-white/[0.02] overflow-hidden">
+                  <div className="relative bg-black/40" style={{ aspectRatio: backendAspect.replace(':', ' / ') }}>
+                    {img ? (
+                      <img src={img} alt={d.title || 'Draft'} className="w-full h-full object-contain" />
+                    ) : failed ? (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+                        <AlertCircle className="w-6 h-6 text-red-400" />
+                        <span className="text-[11px] text-red-300">Image failed</span>
+                      </div>
+                    ) : (
+                      <GeneratingFill prompt={d.imagePrompt || d.title || ''} resolution={backendAspect} />
+                    )}
+                  </div>
+
+                  <div className="p-3.5">
+                    {editingCaption === d._id ? (
+                      <div className="space-y-2">
+                        <textarea
+                          value={captionDraft}
+                          onChange={(e) => setCaptionDraft(e.target.value)}
+                          rows={3}
+                          className="w-full rounded-lg bg-black/40 border border-white/[0.12] px-2.5 py-2 text-[12.5px] text-[#F5F4F1] resize-none"
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => saveCaption(d)}
+                            disabled={captionBusy === d._id}
+                            className="flex-1 rounded-lg bg-[#F5A623] text-black text-[11.5px] font-semibold py-1.5 disabled:opacity-50"
+                          >
+                            {captionBusy === d._id ? <Loader2 className="w-3.5 h-3.5 animate-spin mx-auto" /> : 'Save'}
+                          </button>
+                          <button
+                            onClick={() => setEditingCaption('')}
+                            className="px-3 rounded-lg border border-white/[0.12] text-[11.5px] text-white/60"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <p className="text-[12.5px] leading-snug text-[#F5F4F1]/90">
+                          {d.caption || <span className="text-white/30 italic">No caption yet</span>}
+                        </p>
+                        <div className="flex items-center justify-between mt-2.5">
+                          <div className="gravity-label text-white/35">
+                            {backendAspect} · {mode === 'campaign' ? 'Campaign' : 'Editorial'}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => generateCaption(d)}
+                              disabled={captionBusy === d._id || !img}
+                              title="Write a caption from this image"
+                              className="p-1.5 rounded-md text-white/40 hover:text-[#F5A623] hover:bg-white/[0.06] disabled:opacity-30"
+                            >
+                              {captionBusy === d._id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                            </button>
+                            <button
+                              onClick={() => { setEditingCaption(d._id); setCaptionDraft(d.caption || ''); }}
+                              title="Edit caption"
+                              className="p-1.5 rounded-md text-white/40 hover:text-white hover:bg-white/[0.06]"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => regenerateImage(d)}
+                              disabled={busy || processing}
+                              title="Regenerate image"
+                              className="p-1.5 rounded-md text-white/40 hover:text-white hover:bg-white/[0.06] disabled:opacity-30"
+                            >
+                              <RotateCcw className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => discard(d)}
+                              disabled={busy}
+                              title="Discard"
+                              className="p-1.5 rounded-md text-white/40 hover:text-red-400 hover:bg-white/[0.06] disabled:opacity-30"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      </>
+                    )}
+
+                    {done ? (
+                      <div className="mt-3 inline-flex items-center gap-1.5 text-[11.5px] font-semibold text-emerald-400">
+                        <Check className="w-3.5 h-3.5" />
+                        {done === 'approved' ? 'Published' : done === 'scheduled' ? 'Scheduled' : 'Saved to drafts'}
+                      </div>
+                    ) : schedulingId === d._id ? (
+                      <div className="mt-3 space-y-2">
+                        <input
+                          type="datetime-local"
+                          value={scheduleFor}
+                          onChange={(e) => setScheduleFor(e.target.value)}
+                          className="w-full rounded-lg bg-black/40 border border-white/[0.12] px-2.5 py-1.5 text-[12px] text-[#F5F4F1]"
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => scheduleNow(d)}
+                            disabled={busy || !scheduleFor}
+                            className="flex-1 rounded-lg bg-[#F5A623] text-black text-[11.5px] font-semibold py-1.5 disabled:opacity-50"
+                          >
+                            {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin mx-auto" /> : 'Confirm'}
+                          </button>
+                          <button
+                            onClick={() => { setSchedulingId(''); setScheduleFor(''); }}
+                            className="px-3 rounded-lg border border-white/[0.12] text-[11.5px] text-white/60"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="mt-3 flex flex-wrap gap-1.5">
+                        <button
+                          onClick={() => keepAsDraft(d)}
+                          disabled={busy}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-white/[0.12] text-[11.5px] text-white/70 hover:bg-white/[0.05] disabled:opacity-50"
+                        >
+                          <Save className="w-3 h-3" /> Draft
+                        </button>
+                        <button
+                          onClick={() => approveNow(d)}
+                          disabled={busy || processing || !img}
+                          title={processing ? 'Wait for the artwork' : 'Publish now'}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-500/15 text-emerald-400 text-[11.5px] font-semibold disabled:opacity-40"
+                        >
+                          {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} Approve
+                        </button>
+                        <button
+                          onClick={() => { setSchedulingId(d._id); setScheduleFor(''); }}
+                          disabled={busy || processing || !img}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#F5A623]/15 text-[#F5A623] text-[11.5px] font-semibold disabled:opacity-40"
+                        >
+                          <Clock className="w-3 h-3" /> Schedule
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Footer actions */}
+          <div className="flex items-center justify-center gap-3 mt-10">
+            <button
+              onClick={handleDraft}
+              disabled={submitting || stillRendering}
+              className="inline-flex items-center gap-2 h-11 px-5 rounded-xl border border-white/[0.14] text-[13px] font-semibold text-white/75 hover:text-white hover:border-white/30 transition-colors disabled:opacity-40"
+            >
+              {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+              Generate {results.length || 4} more
+            </button>
+            <button
+              onClick={sendAllToApproval}
+              disabled={actionBusy === 'all' || stillRendering || results.every((d: any) => actioned[d._id])}
+              className="inline-flex items-center gap-2 h-11 px-6 rounded-xl bg-[#F5A623] hover:bg-[#ffb833] text-[#1A1208] text-[13px] font-semibold shadow-[0_10px_40px_rgba(245,166,35,0.25)] transition-colors disabled:opacity-40"
+            >
+              {actionBusy === 'all' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" strokeWidth={2.5} />}
+              Send all to approval
+            </button>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

@@ -28,9 +28,29 @@ import { getThemeClasses, useTheme } from '../context/ThemeContext';
 import { contentCalendarAPI, inventoryAPI, videoGenerationAPI, draftsAPI } from '../services/api';
 import { Product, Draft } from '../types';
 import { useLocation, useSearchParams } from 'react-router-dom';
+import { updateBackgroundReel } from '../utils/backgroundReel';
 
 type AudioMode = 'off' | 'auto' | 'upload';
 type VideoStatusFilter = 'all' | 'draft' | 'created' | 'scheduled' | 'posted';
+
+// Video styles rendered as a picker grid in Step 2. `slug` maps to
+// public/assets/video-styles/<slug>.svg — drop a .jpg/.png in with the
+// same slug and swap the extension here to use real photography instead.
+const VIDEO_STYLES: { value: string; slug: string; blurb: string }[] = [
+  { value: 'Cinematic Commercial', slug: 'cinematic-commercial', blurb: 'Filmic grade, shallow depth, dramatic light' },
+  { value: 'Storytelling', slug: 'storytelling', blurb: 'Narrative arc with characters and emotional beats' },
+  { value: 'Product Advertisement', slug: 'product-advertisement', blurb: 'Clean studio focus on the product itself' },
+  { value: 'Daily Life Vlog', slug: 'daily-life-vlog', blurb: 'Handheld, casual, first-person energy' },
+  { value: 'Documentary', slug: 'documentary', blurb: 'Observational, grounded, real-world texture' },
+  { value: 'Educational', slug: 'educational', blurb: 'Clear explainer pacing with visual aids' },
+  { value: 'Motivational', slug: 'motivational', blurb: 'Rising energy, aspirational imagery' },
+  { value: 'Corporate Presentation', slug: 'corporate-presentation', blurb: 'Polished, professional, data-forward' },
+  { value: 'Testimonial', slug: 'testimonial', blurb: 'Customer to camera, trust-building' },
+  { value: 'Product Showcase', slug: 'product-showcase', blurb: 'Hero product on a lit stage' },
+  { value: 'News Update', slug: 'news-update', blurb: 'Broadcast framing with lower-third titling' },
+  { value: 'Social Media Reel', slug: 'social-media-reel', blurb: 'Fast cuts, vertical-first, punchy hooks' },
+  { value: 'Luxury Advertisement', slug: 'luxury-advertisement', blurb: 'Restrained, premium, gold and black' }
+];
 
 const WIZARD_STEPS = [
   'Input',
@@ -77,6 +97,16 @@ const ReelGenerator: React.FC = () => {
     isLoading: isCalendarLoading,
     getMappedData
   } = useSmartCalendarAutoFill('reel');
+
+  // Clear the hook's auto-selected FIFO pick on mount so the user
+  // starts with NO tile approved. They browse the Smart Calendar
+  // tiles in Step 1 and explicitly click "Approve & Use This" on the
+  // one they want — that click sets selectedItemId, which fires the
+  // effect below and populates the input fields.
+  useEffect(() => {
+    setSelectedItemId('');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (isAutoFillEnabled && selectedItem) {
@@ -295,6 +325,9 @@ const ReelGenerator: React.FC = () => {
   // gen call so images and Kling clips render in the correct format.
   type AspectRatio = '9:16' | '16:9' | '1:1' | '4:5';
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('9:16');
+  // Scene previews are framed to the chosen aspect and use object-contain,
+  // so the whole generated frame is always visible — never centre-cropped.
+  const previewAspectCss = ({ '9:16': '9 / 16', '16:9': '16 / 9', '1:1': '1 / 1', '4:5': '4 / 5' } as const)[aspectRatio];
   // Video language chosen on Step 1. Drives (a) script generation
   // (voiceover written directly in this language, not translated) and
   // (b) TTS voice pick for audio synthesis. Step 6 audio config picks
@@ -963,11 +996,58 @@ setCharacterAge(nextDraft?.characterAge || '');
 
   useEffect(() => {
     const qJobId = searchParams.get('jobId');
-    if (qJobId) {
-      setJobId(qJobId);
-      setShowWizard(true);
-      refreshDraft(qJobId, { syncStep: true });
-    }
+    if (!qJobId) return;
+
+    setJobId(qJobId);
+    setShowWizard(true);
+    refreshDraft(qJobId, { syncStep: true });
+
+    // If this job is still rendering in the background (Smart Calendar's
+    // "Approve & Generate Reel" path), keep pulling the draft so the wizard
+    // fills in and advances step-by-step while the user watches. A one-shot
+    // refresh would only ever show whatever stage had completed on arrival.
+    let cancelled = false;
+    let timer: number | undefined;
+
+    const watch = async () => {
+      if (cancelled) return;
+      let job: any = null;
+      try {
+        job = await videoGenerationAPI.getJobStatus(qJobId);
+      } catch {
+        // Transient failure — try again on the next tick.
+      }
+
+      if (cancelled) return;
+
+      if (job) {
+        const status = String(job.status || '').toLowerCase();
+        setActiveQueueJobId(qJobId);
+        setActiveJobStatus(status || 'running');
+        setActiveJobProgress(Number(job.progress) || 0);
+        setActiveJobStep(String(job.currentStep || job.step || ''));
+
+        updateBackgroundReel({
+          progress: Number(job.progress) || 0,
+          step: String(job.currentStep || job.step || ''),
+          status: status === 'completed' ? 'completed' : status === 'failed' ? 'failed' : 'running'
+        });
+
+        // Pull the draft on every tick — that is what repaints the wizard.
+        await refreshDraft(qJobId, { syncStep: true });
+
+        if (status === 'completed' || status === 'failed' || status === 'cancelled') {
+          setBusy(false);
+          if (status === 'failed') setError(job.error || 'Reel generation failed.');
+          return; // stop watching
+        }
+      }
+
+      timer = window.setTimeout(watch, 5000);
+    };
+
+    watch();
+    return () => { cancelled = true; if (timer) window.clearTimeout(timer); };
   }, [searchParams]);
 
   const withBusy = async (fn: () => Promise<void>) => {
@@ -2375,19 +2455,117 @@ setCharacterAge(nextDraft?.characterAge || '');
               <div className={`${panelClass} p-6 space-y-4`}>
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <h2 className={`font-bold text-lg ${theme.text}`}>Step 1: Input</h2>
-                  
-                <div className="flex flex-col items-end gap-2">
-                  {isAutoFillEnabled && availableItems.length === 0 && !isCalendarLoading && (
-                    <span className="text-xs text-red-500">No Smart Calendar content available.</span>
-                  )}
-                  {isCalendarLoading && <Loader2 className="w-3 h-3 animate-spin text-emerald-400" />}
+                  <div className="flex flex-col items-end gap-2">
+                    {isCalendarLoading && <span className="inline-flex items-center gap-1.5 text-[11px] text-white/60"><Loader2 className="w-3 h-3 animate-spin" /> Loading Smart Calendar…</span>}
+                  </div>
                 </div>
-              </div>
-              <textarea
+
+                {/* Smart Calendar suggestions — always visible on Step 1 so
+                    the user knows why tiles are/aren't showing. Four states:
+                    loading, disabled (autoGenerate off), enabled-but-empty,
+                    or tiles available. */}
+                {!isCalendarLoading && !isAutoFillEnabled && (
+                  <div className={`rounded-xl border border-white/10 bg-white/[0.02] p-4 flex items-start justify-between gap-3`}>
+                    <div className="flex-1">
+                      <p className={`text-[11px] font-semibold uppercase tracking-[0.16em] ${theme.textMuted}`}>Smart Calendar · off</p>
+                      <p className={`text-[13px] mt-1 ${theme.text}`}>
+                        Turn on Smart Calendar to see AI-generated reel briefs as tiles here.
+                      </p>
+                      <p className={`text-[11px] mt-1 ${theme.textSecondary}`}>
+                        Or just describe your video manually below.
+                      </p>
+                    </div>
+                    <a
+                      href="#/content-calendar"
+                      className="px-3 py-1.5 text-[11px] rounded-md border border-[#F5A623]/60 text-[#F5A623] hover:bg-[#F5A623]/10 font-semibold whitespace-nowrap"
+                    >
+                      Open Calendar →
+                    </a>
+                  </div>
+                )}
+                {isAutoFillEnabled && availableItems.length > 0 && (
+                  <div className="rounded-xl border border-[#F5A623]/30 bg-[#F5A623]/[0.04] p-4 space-y-3">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#F5A623]">
+                          Smart Calendar · {availableItems.length} pending reel{availableItems.length > 1 ? 's' : ''} this week
+                        </p>
+                        <p className={`text-[12px] mt-1 ${theme.textSecondary}`}>
+                          Approve one to load its brief as your input. Or scroll down and write manually.
+                        </p>
+                      </div>
+                      {selectedItemId && (
+                        <button
+                          onClick={() => { setSelectedItemId(''); setDescription(''); setPromptText(''); }}
+                          className="text-[11px] text-white/50 hover:text-white/85"
+                        >
+                          Clear selection
+                        </button>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {availableItems.map((item) => {
+                        const isSelected = selectedItemId === item._id;
+                        return (
+                          <div
+                            key={item._id}
+                            className={`relative rounded-lg border p-3 transition-all ${
+                              isSelected
+                                ? 'border-[#F5A623] bg-[#F5A623]/10 ring-1 ring-[#F5A623]/40'
+                                : 'border-white/[0.08] bg-white/[0.02] hover:border-white/20'
+                            }`}
+                          >
+                            <div className="flex items-baseline justify-between gap-2">
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide bg-[#F5A623]/20 text-[#F5A623]">
+                                {item.format || 'Reel'}
+                              </span>
+                              {item.contentPillar && (
+                                <span className={`text-[10px] uppercase tracking-wide ${theme.textMuted}`}>
+                                  {item.contentPillar}
+                                </span>
+                              )}
+                            </div>
+                            <h4 className={`font-semibold text-sm mt-2 line-clamp-2 ${theme.text}`}>
+                              {item.headline || 'Untitled scene'}
+                            </h4>
+                            {item.creativeConcept && (
+                              <p className={`text-[12px] mt-1.5 line-clamp-3 ${theme.textSecondary}`}>
+                                {item.creativeConcept}
+                              </p>
+                            )}
+                            <div className={`flex flex-wrap gap-2 mt-2.5 text-[10px] ${theme.textMuted}`}>
+                              {item.objective && <span>🎯 {item.objective}</span>}
+                              {item.cta && <span>📢 {item.cta}</span>}
+                              {item.productNeeded && <span>📦 {item.productNeeded}</span>}
+                            </div>
+                            <button
+                              onClick={() => setSelectedItemId(item._id)}
+                              disabled={isSelected}
+                              className={`mt-3 w-full px-3 py-1.5 rounded-md text-[11px] font-semibold transition-colors ${
+                                isSelected
+                                  ? 'bg-[#F5A623] text-black cursor-default'
+                                  : 'border border-[#F5A623]/60 text-[#F5A623] hover:bg-[#F5A623]/10'
+                              }`}
+                            >
+                              {isSelected ? '✓ Approved — loaded as input' : 'Approve & Use This'}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                {isAutoFillEnabled && availableItems.length === 0 && !isCalendarLoading && (
+                  <div className={`rounded-lg border border-white/10 bg-white/[0.02] p-3 text-[12px] ${theme.textSecondary}`}>
+                    No pending reels in the Smart Calendar for this week. Write your video description below to create manually.
+                  </div>
+                )}
+
+                <textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   className={`${inputClass} min-h-[120px]`}
-                  placeholder="Describe the video you want to create..."
+                  placeholder={selectedItemId ? 'Loaded from Smart Calendar — you can edit before continuing…' : 'Or describe your own video here…'}
                 />
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
                   <div>
@@ -3131,28 +3309,63 @@ setCharacterAge(nextDraft?.characterAge || '');
               )}
 
               <div className="mt-6">
-                <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Video Style</label>
-                <select className={inputClass} value={videoStyle} onChange={(e) => {
-                  const style = e.target.value;
-                  setVideoStyle(style);
-                  if (style === 'Storytelling' && characterConsistencyStrength !== 'Strict') {
-                    setCharacterConsistencyStrength('Strict');
-                  }
-                }}>
-                  <option value="Cinematic Commercial">Cinematic Commercial</option>
-                  <option value="Storytelling">Storytelling</option>
-                  <option value="Product Advertisement">Product Advertisement</option>
-                  <option value="Daily Life Vlog">Daily Life Vlog</option>
-                  <option value="Documentary">Documentary</option>
-                  <option value="Educational">Educational</option>
-                  <option value="Motivational">Motivational</option>
-                  <option value="Corporate Presentation">Corporate Presentation</option>
-                  <option value="Testimonial">Testimonial</option>
-                  <option value="Product Showcase">Product Showcase</option>
-                  <option value="News Update">News Update</option>
-                  <option value="Social Media Reel">Social Media Reel</option>
-                  <option value="Luxury Advertisement">Luxury Advertisement</option>
-                </select>
+                <div className="flex items-baseline justify-between mb-2">
+                  <label className={`block text-sm font-medium ${theme.textMuted}`}>Video Style</label>
+                  <span className={`text-[11px] ${theme.textSecondary}`}>{videoStyle}</span>
+                </div>
+                <div
+                  role="radiogroup"
+                  aria-label="Video Style"
+                  className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3"
+                >
+                  {VIDEO_STYLES.map((s) => {
+                    const isSelected = videoStyle === s.value;
+                    return (
+                      <button
+                        key={s.value}
+                        type="button"
+                        role="radio"
+                        aria-checked={isSelected}
+                        title={s.blurb}
+                        onClick={() => {
+                          setVideoStyle(s.value);
+                          if (s.value === 'Storytelling' && characterConsistencyStrength !== 'Strict') {
+                            setCharacterConsistencyStrength('Strict');
+                          }
+                        }}
+                        className={`group relative text-left rounded-xl overflow-hidden border-2 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[#F5A623] ${
+                          isSelected
+                            ? 'border-[#F5A623] shadow-lg shadow-[#F5A623]/20'
+                            : 'border-transparent hover:border-slate-500'
+                        }`}
+                      >
+                        <div className="relative">
+                          <img
+                            src={`/assets/video-styles/${s.slug}.svg`}
+                            alt=""
+                            loading="lazy"
+                            className={`w-full aspect-video object-cover transition-transform duration-300 ${
+                              isSelected ? 'scale-[1.03]' : 'group-hover:scale-[1.03]'
+                            }`}
+                          />
+                          {isSelected && (
+                            <span className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-[#F5A623] text-black text-[11px] font-bold flex items-center justify-center shadow">
+                              ✓
+                            </span>
+                          )}
+                        </div>
+                        <div className={`px-2.5 py-2 ${isSelected ? 'bg-[#F5A623]/10' : 'bg-black/25'}`}>
+                          <div className={`text-[12px] font-semibold leading-tight ${isSelected ? 'text-[#F5A623]' : theme.text}`}>
+                            {s.value}
+                          </div>
+                          <div className={`text-[10px] leading-snug mt-0.5 line-clamp-2 ${theme.textSecondary}`}>
+                            {s.blurb}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               <div className="flex justify-end pt-4 border-t border-slate-200 dark:border-slate-800">
@@ -3819,10 +4032,14 @@ setCharacterAge(nextDraft?.characterAge || '');
                           )}
                         </div>
                         <textarea value={scene.imagePrompt || ''} onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, imagePrompt: e.target.value } : item))} className={`${inputClass} mt-2 min-h-[70px]`} disabled={isRegen || isRendering} />
-                        <div className="relative mt-3 group cursor-pointer" onClick={() => { if (scene.imageUrl && !showSpinnerOverlay) setPreviewImageUrl(scene.imageUrl); }}>
+                        <div
+                          className="relative mt-3 group cursor-pointer rounded-lg overflow-hidden bg-black/50 mx-auto w-full"
+                          style={{ aspectRatio: previewAspectCss, maxHeight: 440 }}
+                          onClick={() => { if (scene.imageUrl && !showSpinnerOverlay) setPreviewImageUrl(scene.imageUrl); }}
+                        >
                           {scene.imageUrl ? (
                             <>
-                              <img src={scene.imageUrl} alt={scene.title} className={`w-full h-52 object-cover rounded-lg border border-slate-700 transition-all duration-300 ${showSpinnerOverlay ? 'opacity-30 blur-sm' : ''}`} />
+                              <img src={scene.imageUrl} alt={scene.title} className={`w-full h-full object-contain rounded-lg border border-slate-700 transition-all duration-300 ${showSpinnerOverlay ? 'opacity-30 blur-sm' : ''}`} />
                               {!showSpinnerOverlay && (
                                 <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-lg">
                                   <Eye className="w-8 h-8 text-white" />
@@ -3830,7 +4047,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                               )}
                             </>
                           ) : (
-                            <div className="h-52 rounded-lg border border-dashed border-slate-600 flex items-center justify-center bg-black/10">
+                            <div className="w-full h-full rounded-lg border border-dashed border-slate-600 flex items-center justify-center bg-black/10">
                               {isRendering ? (
                                 <div className="flex flex-col items-center gap-2">
                                   <Loader2 className="w-8 h-8 text-[#ffcc29] animate-spin" />
@@ -3960,13 +4177,18 @@ setCharacterAge(nextDraft?.characterAge || '');
                             <p className={`font-semibold ${theme.text}`}>{scene.title || `Scene ${idx + 1}`}</p>
                             {scene.scriptLine && <p className={`text-xs mt-1 italic ${theme.textSecondary}`}>"{scene.scriptLine}"</p>}
                           </div>
-                          <input
-                            type="number"
-                            min={1}
-                            value={scene.durationSeconds || 1}
-                            onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, durationSeconds: Number(e.target.value) || 1 } : item))}
-                            className={`${inputClass} w-20`}
-                          />
+                          {/* Kling renders 5s or 10s only. A free-text length
+                              leaves a gap the renderer fills by freezing the
+                              last frame, so the choice is constrained. */}
+                          <select
+                            value={Number(scene.durationSeconds) === 10 ? 10 : 5}
+                            onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, durationSeconds: Number(e.target.value) } : item))}
+                            title="Kling renders 5s or 10s clips only"
+                            className={`${inputClass} w-24`}
+                          >
+                            <option value={5}>5s</option>
+                            <option value={10}>10s</option>
+                          </select>
                         </div>
 
                         {isPending || isRegen ? (

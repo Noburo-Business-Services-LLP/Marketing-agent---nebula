@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180" width="320" height="180" role="img" aria-label="motivational">
+  <defs>
+    <radialGradient id="vig" cx="50%" cy="44%" r="78%">
+      <stop offset="0.5" stop-color="#000" stop-opacity="0"/>
+      <stop offset="1" stop-color="#000" stop-opacity="0.55"/>
+    </radialGradient>
+    <filter id="grain" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="3" stitchTiles="stitch"/>
+      <feColorMatrix type="saturate" values="0"/>
+    </filter>
+    <filter id="soft" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="7"/>
+    </filter>
+    <filter id="soft2" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="16"/>
+    </filter>
+    <filter id="tiny" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2.2"/>
+    </filter>
+    <linearGradient id="dawn" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2a1a4a"/><stop offset="0.42" stop-color="#c2456a"/>
+      <stop offset="0.72" stop-color="#ff8c42"/><stop offset="1" stop-color="#ffd07a"/>
+    </linearGradient>
+    <radialGradient id="sun" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#fff8e0"/><stop offset="0.5" stop-color="#ffd166" stop-opacity="0.7"/>
+      <stop offset="1" stop-color="#ffd166" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="320" height="180" fill="url(#dawn)"/>
+  <circle cx="160" cy="112" r="70" fill="url(#sun)"/>
+  <circle cx="160" cy="112" r="24" fill="#fff6da"/>
+  <path d="M0 132 L58 92 L104 126 L150 82 L206 130 L262 96 L320 134 L320 180 L0 180 Z" fill="#7a3352" opacity="0.55"/>
+  <path d="M0 148 L48 116 L98 150 L152 108 L214 152 L268 122 L320 150 L320 180 L0 180 Z" fill="#4d1f3d" opacity="0.8"/>
+  <path d="M0 166 L64 138 L126 168 L188 132 L250 170 L320 144 L320 180 L0 180 Z" fill="#2a0f27"/>
+  <g fill="#2a0f27" opacity="0.9"><path d="M186 132 q3 -12 6 0 z"/></g>
+  <g stroke="#fff2cf" stroke-width="1.4" opacity="0.3"><path d="M160 34 L160 62"/><path d="M104 52 L118 70"/><path d="M216 52 L202 70"/></g>
+  <rect width="320" height="180" fill="url(#vig)"/>
+  <rect width="320" height="180" filter="url(#grain)" opacity="0.14" style="mix-blend-mode:overlay"/>
+</svg>

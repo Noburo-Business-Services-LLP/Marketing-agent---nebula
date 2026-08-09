@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180" width="320" height="180" role="img" aria-label="cinematic-commercial">
+  <defs>
+    <radialGradient id="vig" cx="50%" cy="44%" r="78%">
+      <stop offset="0.5" stop-color="#000" stop-opacity="0"/>
+      <stop offset="1" stop-color="#000" stop-opacity="0.55"/>
+    </radialGradient>
+    <filter id="grain" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="3" stitchTiles="stitch"/>
+      <feColorMatrix type="saturate" values="0"/>
+    </filter>
+    <filter id="soft" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="7"/>
+    </filter>
+    <filter id="soft2" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="16"/>
+    </filter>
+    <filter id="tiny" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2.2"/>
+    </filter>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#071a24"/><stop offset="0.55" stop-color="#103543"/>
+      <stop offset="1" stop-color="#20160e"/>
+    </linearGradient>
+    <linearGradient id="flare" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#5ec8ff" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#9fe4ff" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#5ec8ff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="320" height="180" fill="url(#sky)"/>
+  <g fill="#f7a94a" opacity="0.55" filter="url(#soft)">
+    <circle cx="252" cy="52" r="20"/><circle cx="288" cy="84" r="13"/><circle cx="214" cy="36" r="10"/><circle cx="232" cy="102" r="8"/>
+  </g>
+  <g fill="#7fd6ff" opacity="0.34" filter="url(#soft)">
+    <circle cx="48" cy="46" r="15"/><circle cx="84" cy="72" r="9"/><circle cx="30" cy="92" r="7"/>
+  </g>
+  <g fill="#0a2029" opacity="0.92"><path d="M0 120 L40 120 L40 58 L72 58 L72 120 L112 120 L112 84 L142 84 L142 120 L320 120 L320 180 L0 180 Z"/></g>
+  <g fill="#ffce8a" opacity="0.8">
+    <rect x="48" y="68" width="5" height="8"/><rect x="58" y="84" width="5" height="8"/><rect x="48" y="100" width="5" height="8"/>
+    <rect x="120" y="94" width="5" height="8"/><rect x="130" y="108" width="5" height="8"/>
+  </g>
+  <ellipse cx="150" cy="104" rx="160" ry="3.4" fill="url(#flare)"/>
+  <ellipse cx="150" cy="104" rx="90" ry="1.2" fill="#eaf7ff" opacity="0.85"/>
+  <circle cx="150" cy="104" r="9" fill="#eaf7ff" filter="url(#tiny)"/>
+  <circle cx="150" cy="104" r="40" fill="#7fd6ff" opacity="0.2" filter="url(#soft2)"/>
+  <path d="M118 158 q14 -52 40 -52 q26 0 40 52 z" fill="#04141b"/>
+  <circle cx="158" cy="96" r="15" fill="#04141b"/>
+  <path d="M169 85 a15 15 0 0 1 0 22" fill="none" stroke="#7fd6ff" stroke-width="4" opacity="0.55" stroke-linecap="round"/>
+  <rect x="0" y="0" width="320" height="14" fill="#000"/><rect x="0" y="166" width="320" height="14" fill="#000"/>
+  <rect width="320" height="180" fill="url(#vig)"/>
+  <rect width="320" height="180" filter="url(#grain)" opacity="0.14" style="mix-blend-mode:overlay"/>
+</svg>

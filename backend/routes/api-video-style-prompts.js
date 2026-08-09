@@ -14,6 +14,7 @@ const {
   generateStyledPrompts,
   styleDefinitions
 } = require('../services/video-style-prompt-engineering');
+const { getKlingDuration } = require('../services/videoService');
 
 const router = express.Router();
 
@@ -104,16 +105,15 @@ router.post('/generateVideoStylePrompts', async (req, res) => {
       productName
     );
 
-    // Enhance each scene with timing and cinematography
+    // Enhance each scene with timing and cinematography.
+    //
+    // Scene length is NOT free: Kling v2.5 only renders 5s or 10s clips.
+    // Asking for anything else (the old 1.2x / 0.8x pacing weights produced
+    // 6s, 7s, 4s...) leaves a gap the renderer fills by freezing the final
+    // frame — which is what made every scene end on a still. Snap to what
+    // the model can deliver and the freeze never happens.
     const enhancedScenes = generatedScenes.map((scene, index) => {
-      // Distribute duration (some scenes can be longer/shorter for pacing)
-      let sceneDuration = baseDurationPerScene;
-      
-      // Opening hook longer for impact
-      if (index === 0) sceneDuration = Math.ceil(baseDurationPerScene * 1.2);
-      
-      // Closing shorter for pacing
-      if (index === sceneCount - 1) sceneDuration = Math.ceil(baseDurationPerScene * 0.8);
+      const sceneDuration = getKlingDuration({ durationSeconds: baseDurationPerScene });
 
       return {
         sceneNumber: scene.sceneNumber || index + 1,

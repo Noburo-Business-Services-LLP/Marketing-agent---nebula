@@ -235,316 +235,310 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
 
   const getPlatformIcon = (platform: string) => {
     switch (platform) {
-      case 'instagram': return <Instagram className="w-5 h-5" />;
-      case 'facebook': return <Facebook className="w-5 h-5" />;
-      case 'linkedin': return <Linkedin className="w-5 h-5" />;
-      case 'twitter': return <Twitter className="w-5 h-5" />;
+      case 'instagram': return <Instagram className="w-4 h-4" />;
+      case 'facebook': return <Facebook className="w-4 h-4" />;
+      case 'linkedin': return <Linkedin className="w-4 h-4" />;
+      case 'twitter': return <Twitter className="w-4 h-4" />;
       default: return null;
     }
   };
 
+  const PLATFORM_LABEL: Record<string, string> = {
+    instagram: 'Instagram', facebook: 'Facebook', linkedin: 'LinkedIn', twitter: 'X'
+  };
+
+  const statusTone = (s: string) => {
+    const v = String(s || '').toLowerCase();
+    if (v === 'published') return 'bg-emerald-500/12 text-emerald-300 border-emerald-400/25';
+    if (v === 'scheduled') return 'bg-sky-500/12 text-sky-300 border-sky-400/25';
+    if (v === 'processing') return 'bg-[#F5A623]/12 text-[#F5A623] border-[#F5A623]/30';
+    if (v === 'failed') return 'bg-red-500/12 text-red-300 border-red-400/25';
+    return 'bg-white/[0.05] text-white/55 border-white/[0.12]';
+  };
+
+  const busy = isSaving || isScheduling || isPublishing;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm overflow-y-auto">
-      <div className="relative w-full max-w-5xl bg-[#0d1326] border border-slate-800 rounded-2xl overflow-hidden shadow-2xl flex flex-col my-8 max-h-[90vh]">
-        
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/85 backdrop-blur-md overflow-y-auto"
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="relative w-full max-w-6xl my-6 rounded-[22px] overflow-hidden flex flex-col max-h-[92vh]"
+        style={{
+          background: 'linear-gradient(180deg, #131316 0%, #0b0b0e 42%)',
+          boxShadow: '0 40px 120px rgba(0,0,0,0.75), inset 0 1px 0 0 rgba(255,255,255,0.07)',
+          border: '1px solid rgba(255,255,255,0.09)'
+        }}
+      >
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-slate-800/80 bg-[#070A12]/80">
-          <div>
-            <h2 className="text-xl font-bold text-slate-100">Draft Editor & Preview</h2>
-            <p className="text-xs text-slate-400 mt-1">Source: {draft.sourceType.toUpperCase()} | Status: {draft.status}</p>
+        <div className="flex items-start justify-between gap-4 px-7 pt-6 pb-5">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2.5 mb-2">
+              <span className={`text-[10px] font-semibold uppercase tracking-[0.14em] px-2.5 py-1 rounded-full border ${statusTone(draft.status)}`}>
+                {draft.status}
+              </span>
+              <span className="gravity-label">{String(draft.sourceType || 'post')}</span>
+            </div>
+            <h2 className="font-serif-display text-[30px] leading-[1.1] tracking-[-0.02em] text-[#F5F4F1] truncate">
+              {title || <span className="italic text-[#F5A623]">Untitled</span>}
+            </h2>
           </div>
-          <button 
+          <button
             onClick={onClose}
-            className="p-2 rounded-lg bg-slate-800/50 hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors"
+            className="shrink-0 w-9 h-9 rounded-full grid place-items-center bg-white/[0.05] hover:bg-white/[0.11] border border-white/[0.08] text-white/55 hover:text-white transition-colors"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Content Body */}
-        <div className="flex-1 overflow-y-auto p-6 md:p-8 grid grid-cols-1 md:grid-cols-2 gap-8">
-          
-          {/* Left Column: Form Editing */}
-          <div className="space-y-6">
+        <div className="h-px bg-gradient-to-r from-transparent via-white/[0.10] to-transparent" />
+
+        {/* Body — artwork leads, controls follow */}
+        <div className="flex-1 overflow-y-auto px-7 py-7 grid grid-cols-1 lg:grid-cols-[1.05fr_1fr] gap-8">
+
+          {/* Artwork */}
+          <div>
+            <div
+              className="relative w-full rounded-2xl overflow-hidden bg-black grid place-items-center"
+              style={{ aspectRatio: '4 / 5', border: '1px solid rgba(255,255,255,0.08)' }}
+            >
+              {draft.status === 'processing' ? (
+                <div className="flex flex-col items-center gap-3 text-center px-6">
+                  <Loader2 className="w-8 h-8 text-[#F5A623] animate-spin" />
+                  <span className="text-[13px] text-white/55">Generating in the background…</span>
+                </div>
+              ) : draft.status === 'failed' ? (
+                <div className="flex flex-col items-center gap-3 text-center px-6">
+                  <span className="text-2xl">⚠️</span>
+                  <p className="text-[13.5px] font-semibold text-red-300">Generation failed</p>
+                  {draft.errorMessage && (
+                    <p className="text-[11.5px] text-white/40 max-w-[240px] line-clamp-2">{draft.errorMessage}</p>
+                  )}
+                  <button
+                    type="button"
+                    disabled={isRetryingImage}
+                    onClick={handleRetryImage}
+                    className="mt-1 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-[#F5A623] text-black text-[12px] font-semibold hover:bg-[#ffb833] disabled:opacity-50"
+                  >
+                    {isRetryingImage ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+                    Try again
+                  </button>
+                </div>
+              ) : imageUrl ? (
+                <img src={imageUrl} alt={title || 'Draft'} className="w-full h-full object-contain" />
+              ) : (
+                <p className="text-[13px] text-white/30 px-8 text-center">No artwork yet.</p>
+              )}
+            </div>
+
+            {imageUrl && draft.status !== 'processing' && (
+              <button
+                type="button"
+                onClick={handleRetryImage}
+                disabled={isRetryingImage}
+                className="mt-3 w-full inline-flex items-center justify-center gap-2 h-11 rounded-xl border border-white/[0.10] text-[13px] font-semibold text-white/70 hover:text-white hover:border-white/25 hover:bg-white/[0.03] transition-colors disabled:opacity-40"
+              >
+                {isRetryingImage ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+                Regenerate artwork
+              </button>
+            )}
+          </div>
+
+          {/* Controls */}
+          <div className="flex flex-col gap-6">
             <div>
-              <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Campaign/Post Title</label>
-              <input 
-                type="text" 
-                value={title} 
+              <label className="gravity-label block mb-2">Title</label>
+              <input
+                type="text"
+                value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                className="w-full px-4 py-3 bg-[#070A12]/60 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:border-[#ffcc29]/50 transition-colors"
-                placeholder="Enter draft title..."
+                placeholder="Give it a name…"
+                className="w-full px-0 py-2 bg-transparent border-0 border-b border-white/[0.12] text-[19px] font-semibold text-[#F5F4F1] placeholder:text-white/20 focus:outline-none focus:border-[#F5A623] transition-colors"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Caption</label>
-              <textarea 
-                value={caption} 
+              <label className="gravity-label block mb-2">Caption</label>
+              <textarea
+                value={caption}
                 onChange={(e) => setCaption(e.target.value)}
                 rows={5}
-                className="w-full px-4 py-3 bg-[#070A12]/60 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:border-[#ffcc29]/50 transition-colors resize-none"
-                placeholder="Write your caption here..."
+                placeholder="What should this say?"
+                className="w-full px-4 py-3 rounded-xl bg-black/40 border border-white/[0.09] text-[14px] leading-relaxed text-[#F5F4F1] placeholder:text-white/20 focus:outline-none focus:border-[#F5A623]/60 transition-colors resize-none"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Hashtags</label>
-              <form onSubmit={handleAddHashtag} className="flex gap-2 mb-3">
-                <input 
-                  type="text" 
-                  value={newHashtag} 
+              <label className="gravity-label block mb-2">Hashtags</label>
+              <form onSubmit={handleAddHashtag} className="flex gap-2">
+                <input
+                  type="text"
+                  value={newHashtag}
                   onChange={(e) => setNewHashtag(e.target.value)}
-                  className="flex-1 px-4 py-2 bg-[#070A12]/60 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:border-[#ffcc29]/50 transition-colors"
-                  placeholder="Add hashtag (without #)..."
+                  placeholder="add a tag…"
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-black/40 border border-white/[0.09] text-[13px] text-[#F5F4F1] placeholder:text-white/20 focus:outline-none focus:border-[#F5A623]/60 transition-colors"
                 />
-                <button 
+                <button
                   type="submit"
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-100 font-semibold rounded-xl transition-colors"
+                  className="px-4 rounded-xl bg-white/[0.06] hover:bg-white/[0.11] border border-white/[0.09] text-[13px] font-semibold text-white/80 transition-colors"
                 >
                   Add
                 </button>
               </form>
-              <div className="flex flex-wrap gap-2 max-h-24 overflow-y-auto p-2 bg-[#070A12]/30 border border-slate-800/50 rounded-xl">
-                {hashtags.length === 0 ? (
-                  <span className="text-xs text-slate-500 italic p-1">No hashtags added yet</span>
-                ) : (
-                  hashtags.map((tag) => (
-                    <span 
+              {hashtags.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-2.5">
+                  {hashtags.map((tag) => (
+                    <span
                       key={tag}
-                      className="inline-flex items-center gap-1 text-xs bg-[#ffcc29]/10 text-[#ffcc29] border border-[#ffcc29]/20 px-2 py-1 rounded-lg"
+                      className="group inline-flex items-center gap-1.5 text-[12px] bg-[#F5A623]/[0.10] text-[#F5A623] border border-[#F5A623]/25 pl-2.5 pr-1.5 py-1 rounded-full"
                     >
                       #{tag.replace(/^#/, '')}
-                      <button 
-                        type="button" 
+                      <button
+                        type="button"
                         onClick={() => handleRemoveHashtag(tag)}
-                        className="hover:text-red-400 font-bold transition-colors ml-1"
+                        className="w-4 h-4 grid place-items-center rounded-full text-[#F5A623]/60 hover:text-black hover:bg-[#F5A623] transition-colors"
                       >
-                        &times;
+                        <X className="w-2.5 h-2.5" />
                       </button>
                     </span>
-                  ))
-                )}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Call to Action (CTA)</label>
-              <input 
-                type="text" 
-                value={cta} 
+              <label className="gravity-label block mb-2">Call to action</label>
+              <input
+                type="text"
+                value={cta}
                 onChange={(e) => setCta(e.target.value)}
-                className="w-full px-4 py-3 bg-[#070A12]/60 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:border-[#ffcc29]/50 transition-colors"
-                placeholder="e.g. Shop Now, Learn More..."
+                placeholder="Shop now, Learn more…"
+                className="w-full px-4 py-2.5 rounded-xl bg-black/40 border border-white/[0.09] text-[13.5px] text-[#F5F4F1] placeholder:text-white/20 focus:outline-none focus:border-[#F5A623]/60 transition-colors"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Target Platforms</label>
-              <div className="flex gap-3">
-                {availablePlatforms.map(platform => {
+              <label className="gravity-label block mb-2">Posting to</label>
+              <div className="flex flex-wrap gap-2">
+                {availablePlatforms.map((platform) => {
                   const active = platforms.includes(platform);
                   return (
                     <button
                       key={platform}
                       type="button"
                       onClick={() => togglePlatform(platform)}
-                      className={`flex-1 flex flex-col items-center justify-center py-3 rounded-xl border transition-all ${
-                        active 
-                          ? 'bg-[#ffcc29]/10 border-[#ffcc29] text-[#ffcc29]' 
-                          : 'bg-[#070A12]/40 border-slate-800 text-slate-400 hover:text-slate-300 hover:border-slate-700'
+                      className={`inline-flex items-center gap-2 h-10 pl-3 pr-3.5 rounded-full border text-[12.5px] font-semibold transition-all ${
+                        active
+                          ? 'bg-[#F5A623] border-[#F5A623] text-black'
+                          : 'bg-white/[0.03] border-white/[0.10] text-white/55 hover:text-white/85 hover:border-white/25'
                       }`}
                     >
                       {getPlatformIcon(platform)}
-                      <span className="text-[10px] mt-1 capitalize font-medium">{platform}</span>
+                      {PLATFORM_LABEL[platform] || platform}
                     </button>
                   );
                 })}
               </div>
-            </div>
-          </div>
-
-          {/* Right Column: Visual Preview */}
-          <div className="flex flex-col space-y-6">
-            <div>
-              <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Image Preview</label>
-              <div className="relative aspect-square w-full rounded-2xl bg-[#070A12]/60 border border-slate-800 overflow-hidden flex items-center justify-center">
-                {draft.status === 'processing' ? (
-                  <div className="text-slate-400 text-sm flex flex-col items-center p-6 text-center">
-                    <Loader2 className="w-10 h-10 text-[#ffcc29] animate-spin mb-3" />
-                    <span>Generating image in background...</span>
-                  </div>
-                ) : draft.status === 'failed' ? (
-                  <div className="text-red-400 text-sm flex flex-col items-center p-6 text-center gap-3">
-                    <span className="text-3xl">⚠️</span>
-                    <div>
-                      <p className="font-semibold">Generation Failed</p>
-                      {draft.errorMessage && <p className="text-xs text-slate-500 mt-1 max-w-[200px] truncate">{draft.errorMessage}</p>}
-                    </div>
-                    <button
-                      type="button"
-                      disabled={isRetryingImage}
-                      onClick={handleRetryImage}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-[#ffcc29] text-[#070A12] text-xs font-semibold rounded-lg hover:bg-[#e6b825] disabled:opacity-50"
-                    >
-                      {isRetryingImage ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
-                      Retry Generation
-                    </button>
-                  </div>
-                ) : imageUrl ? (
-                  <img 
-                    src={imageUrl} 
-                    alt="Draft Creative" 
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="text-slate-500 text-sm flex flex-col items-center p-6 text-center">
-                    <span className="text-3xl mb-2">🖼️</span>
-                    No creative generated or linked yet. Use generation tools to add media.
-                  </div>
-                )}
-              </div>
-              <div className="mt-3">
-                <input
-                  type="text"
-                  value={imageUrl}
-                  onChange={(e) => setImageUrl(e.target.value)}
-                  placeholder="Paste Image URL here..."
-                  className="w-full px-3 py-2 text-xs bg-[#070A12]/40 border border-slate-800 rounded-xl text-slate-300 focus:outline-none"
-                />
-              </div>
-            </div>
-
-            {/* Quick Instagram/Social UI Mockup */}
-            <div className="border border-slate-800/80 rounded-2xl p-4 bg-[#070A12]/30 flex-1">
-              <div className="flex items-center gap-2 mb-3">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#ffcc29] to-orange-500 flex items-center justify-center font-bold text-xs text-black">
-                  N
-                </div>
-                <div>
-                  <h4 className="text-xs font-semibold text-slate-200">Your Business Profile</h4>
-                  <p className="text-[10px] text-slate-500">Sponsored</p>
-                </div>
-              </div>
-              <p className="text-xs text-slate-300 line-clamp-3 mb-2">{caption || 'Write caption to preview...'}</p>
-              <p className="text-xs text-[#ffcc29] mb-3">
-                {hashtags.map(t => `#${t.replace(/^#/, '')}`).join(' ')}
-              </p>
-              {cta && (
-                <div className="flex justify-between items-center py-2 px-3 bg-slate-800/30 border border-slate-800 rounded-lg text-xs font-semibold text-[#ffcc29]">
-                  <span>{cta}</span>
-                  <span>➜</span>
-                </div>
+              {platforms.length === 0 && (
+                <p className="text-[11.5px] text-white/30 mt-2">Pick at least one to publish.</p>
               )}
             </div>
-          </div>
-        </div>
 
-        {/* Action Panel */}
-        <div className="p-6 border-t border-slate-800/80 bg-[#070A12]/80 space-y-4">
-          {errorMsg && (
-            <p className="text-xs text-red-400 bg-red-950/20 border border-red-900/30 p-3 rounded-xl">
-              ⚠️ {errorMsg}
-            </p>
-          )}
-          {successMsg && (
-            <p className="text-xs text-green-400 bg-green-950/20 border border-green-900/30 p-3 rounded-xl flex items-center gap-2">
-              <Check className="w-4 h-4" /> {successMsg}
-            </p>
-          )}
-
-          {/* Scheduling inputs section */}
-          {showScheduler && (
-            <div className="p-4 bg-slate-900/50 border border-slate-800 rounded-xl grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">Date</label>
-                <input 
-                  type="date" 
-                  value={scheduleDate}
-                  onChange={(e) => setScheduleDate(e.target.value)}
-                  className="w-full px-3 py-2 text-sm bg-[#070A12] border border-slate-800 rounded-lg text-slate-200 focus:outline-none"
-                />
+            {showScheduler && (
+              <div className="rounded-xl border border-[#F5A623]/25 bg-[#F5A623]/[0.05] p-4">
+                <label className="gravity-label block mb-2.5 text-[#F5A623]">When should it go out?</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <input
+                    type="date"
+                    value={scheduleDate}
+                    onChange={(e) => setScheduleDate(e.target.value)}
+                    className="w-full px-3 py-2.5 rounded-lg bg-black/50 border border-white/[0.10] text-[13px] text-[#F5F4F1] focus:outline-none focus:border-[#F5A623]/60"
+                  />
+                  <input
+                    type="time"
+                    value={scheduleTime}
+                    onChange={(e) => setScheduleTime(e.target.value)}
+                    className="w-full px-3 py-2.5 rounded-lg bg-black/50 border border-white/[0.10] text-[13px] text-[#F5F4F1] focus:outline-none focus:border-[#F5A623]/60"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">Time</label>
-                <input 
-                  type="time" 
-                  value={scheduleTime}
-                  onChange={(e) => setScheduleTime(e.target.value)}
-                  className="w-full px-3 py-2 text-sm bg-[#070A12] border border-slate-800 rounded-lg text-slate-200 focus:outline-none"
-                />
-              </div>
-            </div>
-          )}
+            )}
 
-          <div className="flex flex-wrap gap-3 items-center justify-between">
-            <div className="flex gap-3">
-              <button
-                onClick={handleSave}
-                disabled={isSaving || isScheduling || isPublishing}
-                className="flex items-center gap-2 px-5 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-100 font-semibold text-sm transition-all disabled:opacity-50"
-              >
-                {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                Save Changes
-              </button>
-
-              <button
-                onClick={() => {
-                  if (showScheduler) {
-                    handleSchedule();
-                  } else {
-                    setShowScheduler(true);
-                  }
-                }}
-                disabled={isSaving || isScheduling || isPublishing}
-                className="flex items-center gap-2 px-5 py-3 rounded-xl bg-[#ffcc29]/10 border border-[#ffcc29]/30 text-[#ffcc29] hover:bg-[#ffcc29]/20 font-semibold text-sm transition-all disabled:opacity-50"
-              >
-                {isScheduling ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calendar className="w-4 h-4" />}
-                {showScheduler ? 'Confirm Schedule' : 'Schedule for Later'}
-              </button>
-
-              <button
-                onClick={handlePublishNow}
-                disabled={isSaving || isScheduling || isPublishing}
-                className="flex items-center gap-2 px-6 py-3 rounded-xl bg-[#ffcc29] hover:bg-[#ebd038] text-black font-bold text-sm transition-all disabled:opacity-50"
-              >
-                {isPublishing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                Publish Now
-              </button>
-            </div>
-
-            {draft.contentCalendarId && draft.calendarDay ? (
-              <div className="flex gap-2">
-                <button
-                  onClick={handleReject}
-                  disabled={isRejecting || isRegenerating}
-                  className="flex items-center gap-2 px-4 py-3 rounded-xl bg-red-950/30 border border-red-900/40 text-red-400 hover:bg-red-950/50 hover:text-red-300 font-semibold text-sm transition-all"
-                >
-                  {isRejecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
-                  Reject
-                </button>
-                <button
-                  onClick={handleRegenerate}
-                  disabled={isRejecting || isRegenerating}
-                  className="flex items-center gap-2 px-4 py-3 rounded-xl bg-indigo-950/30 border border-indigo-900/40 text-indigo-400 hover:bg-indigo-900/50 hover:text-indigo-300 font-semibold text-sm transition-all"
-                >
-                  {isRegenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
-                  Regenerate
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={handleDelete}
-                disabled={isDeleting}
-                className="flex items-center gap-2 px-4 py-3 rounded-xl bg-red-950/20 border border-red-900/30 text-red-400 hover:bg-red-950/40 hover:text-red-300 font-semibold text-sm transition-all"
-              >
-                {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                Archive Draft
-              </button>
+            {errorMsg && (
+              <p className="text-[12.5px] text-red-300 bg-red-500/[0.08] border border-red-400/20 px-3.5 py-2.5 rounded-xl">{errorMsg}</p>
+            )}
+            {successMsg && (
+              <p className="text-[12.5px] text-emerald-300 bg-emerald-500/[0.08] border border-emerald-400/20 px-3.5 py-2.5 rounded-xl flex items-center gap-2">
+                <Check className="w-3.5 h-3.5" /> {successMsg}
+              </p>
             )}
           </div>
         </div>
 
+        {/* Footer */}
+        <div className="h-px bg-gradient-to-r from-transparent via-white/[0.10] to-transparent" />
+        <div className="px-7 py-5 flex flex-wrap items-center gap-3 bg-black/30">
+          <button
+            onClick={handleSave}
+            disabled={busy}
+            className="inline-flex items-center gap-2 h-11 px-5 rounded-xl bg-white/[0.06] hover:bg-white/[0.11] border border-white/[0.09] text-[13px] font-semibold text-[#F5F4F1] transition-colors disabled:opacity-40"
+          >
+            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            Save
+          </button>
+
+          <button
+            onClick={() => (showScheduler ? handleSchedule() : setShowScheduler(true))}
+            disabled={busy}
+            className="inline-flex items-center gap-2 h-11 px-5 rounded-xl bg-[#F5A623]/[0.10] border border-[#F5A623]/30 text-[#F5A623] hover:bg-[#F5A623]/20 text-[13px] font-semibold transition-colors disabled:opacity-40"
+          >
+            {isScheduling ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calendar className="w-4 h-4" />}
+            {showScheduler ? 'Confirm schedule' : 'Schedule'}
+          </button>
+
+          <button
+            onClick={handlePublishNow}
+            disabled={busy}
+            className="inline-flex items-center gap-2 h-11 px-6 rounded-xl bg-[#F5A623] hover:bg-[#ffb833] text-black text-[13px] font-bold shadow-[0_8px_28px_rgba(245,166,35,0.28)] transition-colors disabled:opacity-40"
+          >
+            {isPublishing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            Publish now
+          </button>
+
+          <div className="ml-auto flex gap-2">
+            {draft.contentCalendarId && draft.calendarDay ? (
+              <>
+                <button
+                  onClick={handleRegenerate}
+                  disabled={isRejecting || isRegenerating}
+                  className="inline-flex items-center gap-2 h-11 px-4 rounded-xl border border-white/[0.10] text-[13px] font-semibold text-white/60 hover:text-white hover:border-white/25 transition-colors disabled:opacity-40"
+                >
+                  {isRegenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+                  Regenerate
+                </button>
+                <button
+                  onClick={handleReject}
+                  disabled={isRejecting || isRegenerating}
+                  className="inline-flex items-center gap-2 h-11 px-4 rounded-xl border border-white/[0.10] text-[13px] font-semibold text-white/45 hover:text-red-300 hover:border-red-400/40 transition-colors disabled:opacity-40"
+                >
+                  {isRejecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
+                  Reject
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={handleDelete}
+                disabled={isDeleting}
+                className="inline-flex items-center gap-2 h-11 px-4 rounded-xl border border-white/[0.10] text-[13px] font-semibold text-white/45 hover:text-red-300 hover:border-red-400/40 transition-colors disabled:opacity-40"
+              >
+                {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                Archive
+              </button>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

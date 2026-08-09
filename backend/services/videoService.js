@@ -119,6 +119,39 @@ function isSeedanceModel(model = '') {
   return String(model || '').toLowerCase().includes('seedance');
 }
 
+// Kling v2.5 renders 5s or 10s clips — nothing in between. Asking for any
+// other length means the renderer has to pad the gap by freezing the last
+// frame, which is what made every scene end on a still. Snap to what the
+// model can actually deliver so there is never a gap to fill.
+const KLING_ALLOWED_DURATIONS = [5, 10];
+const KLING_DEFAULT_DURATION = 5;
+
+function getKlingDuration(scene = {}) {
+  const requested = Number.parseInt(String(scene.durationSeconds || scene.duration || KLING_DEFAULT_DURATION), 10);
+  if (!Number.isFinite(requested)) return KLING_DEFAULT_DURATION;
+  // Nearest allowed value; ties round down to keep clips tight.
+  return KLING_ALLOWED_DURATIONS.reduce((best, option) =>
+    Math.abs(option - requested) < Math.abs(best - requested) ? option : best
+  , KLING_DEFAULT_DURATION);
+}
+
+// Kling's own default negative prompt is "blur, distort, and low quality".
+// Motion has to be defended explicitly — with nothing here the model happily
+// returns a near-static shot, which is what made the reels look like slides.
+const KLING_NEGATIVE_PROMPT = [
+  'static image', 'still frame', 'frozen', 'motionless', 'slideshow',
+  'photo slideshow', 'no camera movement', 'stiff mannequin pose',
+  'blur', 'distort', 'low quality', 'warped text', 'duplicated limbs'
+].join(', ');
+
+// 0–1. Higher follows the prompt (and therefore the camera direction in it)
+// more literally. Kling defaults to 0.5, which reads our motion language as
+// a suggestion.
+const KLING_CFG_SCALE = (() => {
+  const raw = Number.parseFloat(String(process.env.FAL_KLING_CFG_SCALE || '0.7'));
+  return Number.isFinite(raw) ? Math.min(1, Math.max(0, raw)) : 0.7;
+})();
+
 function getSeedanceDuration(scene = {}) {
   const duration = Number.parseInt(String(scene.durationSeconds || scene.duration || 6), 10);
   return clamp(Number.isFinite(duration) ? duration : 6, 6, 12);
@@ -264,6 +297,13 @@ async function generateVideoClip(scene = {}) {
   // aspect Kling rejects.
   const klingAspect = sceneAspect === '4:5' ? '9:16' : sceneAspect;
 
+  // Kling v2.5 accepts ONLY: prompt, image_url, duration, negative_prompt,
+  // cfg_scale (plus aspect_ratio on the text-to-video variant, where there is
+  // no source image to infer it from). Everything else we used to send —
+  // num_frames, fps, video_size, motion_strength, dynamic_camera,
+  // cinematic_movement, use_multiscale, resolution — was silently discarded,
+  // so the model fell back to its own defaults and barely moved. That is the
+  // whole reason the output looked like a slideshow.
   const input = seedance
     ? {
         prompt,
@@ -278,22 +318,13 @@ async function generateVideoClip(scene = {}) {
       }
     : {
         prompt,
-        num_frames: numFrames,
-        video_size: VIDEO_SIZE,
-        fps: 25,
-        seed,
-        generate_audio: false,
-        use_multiscale: true,
-        motion_strength: 7,
-        dynamic_camera: true,
-        cinematic_movement: true,
-        aspect_ratio: klingAspect,
-        resolution: FAL_VIDEO_RESOLUTION
+        duration: String(getKlingDuration(scene)),
+        negative_prompt: KLING_NEGATIVE_PROMPT,
+        cfg_scale: KLING_CFG_SCALE,
+        // Image-to-video derives its aspect from the source frame; only the
+        // text-to-video variant needs telling.
+        ...(imageUrl ? { image_url: imageUrl } : { aspect_ratio: klingAspect })
       };
-
-  if (imageUrl && !seedance) {
-    input.image_url = imageUrl;
-  }
 
   const payload = { model, input };
   console.log(`[Kling] prompt length: ${input.prompt.length} chars (cap 2500)`);
@@ -326,15 +357,19 @@ async function generateVideoClip(scene = {}) {
       video_url: videoUrl,
       videoUrl,
       clipUrl: videoUrl,
+      // The clip's true length — the renderer needs this so it never pads
+      // with a frozen frame. Seedance reports its own; Kling is 5 or 10.
+      renderedDurationSeconds: seedance ? getSeedanceDuration(scene) : getKlingDuration(scene),
       fal: {
         model,
         seed,
-        num_frames: seedance ? undefined : numFrames,
-        width: seedance ? undefined : VIDEO_SIZE.width,
-        height: seedance ? undefined : VIDEO_SIZE.height,
+        num_frames: seedance ? numFrames : undefined,
+        width: seedance ? VIDEO_SIZE.width : undefined,
+        height: seedance ? VIDEO_SIZE.height : undefined,
+        cfg_scale: seedance ? undefined : KLING_CFG_SCALE,
         aspect_ratio: klingAspect,
         resolution: FAL_VIDEO_RESOLUTION,
-        duration: seedance ? getSeedanceDuration(scene) : undefined
+        duration: seedance ? getSeedanceDuration(scene) : getKlingDuration(scene)
       }
     };
   } catch (error) {
@@ -533,6 +568,9 @@ async function extractFaceEmbedding(referenceImageUrl) {
 }
 
 module.exports = {
+  getKlingDuration,
+  KLING_DEFAULT_DURATION,
+  KLING_ALLOWED_DURATIONS,
   generateVideoClip,
   generateVideoClips,
   generateCharacterImageFal,

@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   Megaphone,
+  UploadCloud,
   Users,
   Settings,
   LogOut,
@@ -127,14 +128,14 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
     { path: '/content-calendar', label: 'Calendar', icon: CalendarDays },
     { path: '/analytics',        label: 'Insights', icon: BarChart3 },
   ];
+  // Ad Campaigns, Influencer Portal, Inventory and Competitors are hidden
+  // from navigation. Their routes and pages are left intact so nothing
+  // breaks and they can be restored by putting these entries back.
   const secondaryNav = [
     { path: '/reels',             label: 'AI Reels',          icon: PlayCircle },
-    { path: '/ad-campaigns',      label: 'Ad Campaigns',      icon: Layers },
-    { path: '/influencer-portal', label: 'Influencer Portal', icon: Users },
+    { path: '/upload',            label: 'Upload & Schedule', icon: UploadCloud },
     { path: '/connect-socials',   label: 'Connect Socials',   icon: Link2 },
     { path: '/brand-assets',      label: 'Brand Assets',      icon: Palette },
-    { path: '/inventory',         label: 'Inventory',         icon: Package },
-    { path: '/competitors',       label: 'Competitors',       icon: Users },
     { path: '/ai-memory',         label: 'AI Memory',         icon: Brain },
   ];
 

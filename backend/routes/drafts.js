@@ -1,4 +1,5 @@
 const express = require('express');
+const path = require('path');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
 const Draft = require('../models/Draft');
@@ -394,6 +395,128 @@ router.post('/:id/regenerate', protect, async (req, res) => {
   } catch (error) {
     console.error('Regenerate draft error:', error);
     res.status(500).json({ success: false, message: 'Failed to trigger draft regeneration', error: error.message });
+  }
+});
+
+// POST /upload-media — bring your OWN image or video in as a draft.
+//
+// Everything downstream (AI caption, schedule, publish) already works on a
+// Draft, so an upload just needs to become one. Uses multer + memory storage
+// rather than base64 JSON so real video files don't blow the body limit.
+const multer = require('multer');
+const mediaUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 120 * 1024 * 1024 }, // 120MB — comfortably over a reel
+  fileFilter: (req, file, cb) => {
+    const ok = /^(image|video)\//i.test(file.mimetype || '');
+    cb(ok ? null : new Error('Only image or video files are allowed'), ok);
+  }
+});
+
+router.post('/upload-media', protect, mediaUpload.single('file'), async (req, res) => {
+  const os = require('os');
+  const fsp = require('fs').promises;
+  let tempPath = '';
+  try {
+    const userId = req.user.userId || req.user.id;
+    if (!req.file) return res.status(400).json({ success: false, message: 'No file received' });
+
+    const { title, caption, platforms } = req.body || {};
+    const isVideo = /^video\//i.test(req.file.mimetype);
+    const { uploadBase64Image, uploadVideoFile } = require('../services/imageUploader');
+
+    let mediaUrl = '';
+    if (isVideo) {
+      // uploadVideoFile works from a path, so stage the buffer on disk first.
+      tempPath = path.join(os.tmpdir(), `upload_${Date.now()}_${(req.file.originalname || 'clip').replace(/[^\w.-]/g, '')}`);
+      await fsp.writeFile(tempPath, req.file.buffer);
+      const up = await uploadVideoFile(tempPath, 'nebula-uploads');
+      if (!up?.success || !up?.url) throw new Error(up?.error || 'Video upload failed');
+      mediaUrl = up.url;
+    } else {
+      const dataUrl = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+      const up = await uploadBase64Image(dataUrl, 'nebula-uploads');
+      if (!up?.success || !up?.url) throw new Error(up?.error || 'Image upload failed');
+      mediaUrl = up.url;
+    }
+
+    let platformList = [];
+    try {
+      platformList = Array.isArray(platforms) ? platforms : JSON.parse(platforms || '[]');
+    } catch { platformList = []; }
+
+    const draft = new Draft({
+      userId,
+      title: title || req.file.originalname || 'Uploaded post',
+      caption: caption || '',
+      hashtags: [],
+      platforms: platformList,
+      status: 'completed', // media already exists — nothing to generate
+      sourceType: 'post',
+      contentType: 'post',
+      imageUrl: isVideo ? '' : mediaUrl,
+      creative: {
+        type: isVideo ? 'video' : 'image',
+        textContent: caption || '',
+        captions: caption || '',
+        imageUrls: isVideo ? [] : [mediaUrl],
+        videoUrl: isVideo ? mediaUrl : undefined,
+        hashtags: []
+      }
+    });
+    await draft.save();
+
+    res.status(201).json({ success: true, draft, mediaUrl, mediaType: isVideo ? 'video' : 'image' });
+  } catch (error) {
+    console.error('Upload media error:', error);
+    res.status(500).json({ success: false, message: error.message || 'Failed to upload media' });
+  } finally {
+    if (tempPath) { try { await require('fs').promises.unlink(tempPath); } catch {} }
+  }
+});
+
+// POST /:id/apply-logo — composite a brand logo onto a draft's finished image.
+//
+// Deliberately a SEPARATE step from generation. Handing a logo to the image
+// model as a reference gets it redrawn and smeared; compositing with Sharp
+// afterwards keeps it pixel-exact. Same reasoning as the reels pipeline.
+router.post('/:id/apply-logo', protect, async (req, res) => {
+  try {
+    const userId = req.user.userId || req.user.id;
+    const { logoUrl, position, size } = req.body || {};
+    if (!logoUrl) {
+      return res.status(400).json({ success: false, message: 'logoUrl is required' });
+    }
+
+    const draft = await Draft.findOne({ _id: req.params.id, userId });
+    if (!draft) return res.status(404).json({ success: false, message: 'Draft not found' });
+
+    const baseImage = draft.imageUrl || draft.creative?.imageUrls?.[0] || '';
+    if (!baseImage) {
+      return res.status(400).json({ success: false, message: 'Draft has no image yet' });
+    }
+
+    const { overlayLogoAndUpload } = require('../services/logoOverlay');
+    const result = await overlayLogoAndUpload(baseImage, logoUrl, {
+      position: position || 'top-right',
+      size: size || 'small'
+    });
+
+    if (!result?.success || !result?.url) {
+      return res.status(502).json({ success: false, message: result?.error || 'Logo overlay failed' });
+    }
+
+    // Keep the clean original so the logo can be changed or removed later.
+    if (!draft.imageUrlNoLogo) draft.imageUrlNoLogo = baseImage;
+    draft.imageUrl = result.url;
+    draft.logoApplied = true;
+    if (Array.isArray(draft.creative?.imageUrls)) draft.creative.imageUrls[0] = result.url;
+    await draft.save();
+
+    res.json({ success: true, draft, imageUrl: result.url });
+  } catch (error) {
+    console.error('Apply logo error:', error);
+    res.status(500).json({ success: false, message: 'Failed to apply logo', error: error.message });
   }
 });
 

@@ -25,7 +25,7 @@ const {
   normalizeSceneVideoClip,
   createJobContext
 } = require('../services/videoGenerationPipeline');
-const { generateVideoClip } = require('../services/videoService');
+const { generateVideoClip, getKlingDuration } = require('../services/videoService');
 const { uploadVideoFile } = require('../services/imageUploader');
 const BrandAsset = require('../models/BrandAsset');
 const sharp = require('sharp');
@@ -2704,16 +2704,22 @@ router.post('/generateSingleVideoClip', protect, checkTrial, videoAiWriteLimiter
       ? `ENVIRONMENT LOCK: This shot takes place in the user's fixed physical space. Walls, flooring, lighting fixtures, windows, furniture, and material vocabulary must stay EXACTLY as shown in the frame — no morphing walls, no drifting decor, no substituting a generic backdrop. ${envNotes ? 'Space notes: ' + envNotes + '.' : ''}`
       : '';
 
+    // Feed Kling the CLEAN frame. /applySceneLogo overwrites scene.imageUrl
+    // with a logo-baked composite, but Kling regenerates every pixel it is
+    // handed — so a baked logo comes back smeared. The mark is re-applied
+    // losslessly with ffmpeg after the render instead.
+    const klingSourceImage = scene.imageUrlNoLogo || scene.imageUrl;
+
     const enrichedScene = {
       ...scene,
       aspectRatio,
       sceneCharacters,
       regenTweak: String(regenTweak || '').trim(),
       envClause,
-      image_url: scene.imageUrl,
-      imageUrl: scene.imageUrl,
-      // Kling image-to-video wants a public HTTPS URL; scene.imageUrl is
-      // already Cloudinary-hosted from /generateSingleSceneImage.
+      image_url: klingSourceImage,
+      imageUrl: klingSourceImage,
+      // Kling image-to-video wants a public HTTPS URL; both scene.imageUrl
+      // and imageUrlNoLogo are Cloudinary-hosted from the image steps.
     };
 
     // Prepare a scoped context dir so materialize/normalize can drop
@@ -2726,14 +2732,37 @@ router.post('/generateSingleVideoClip', protect, checkTrial, videoAiWriteLimiter
     const clipPath = path.join(context.dirs.clips, clipName);
     const rawClipPath = path.join(context.dirs.temp, `fal_scene_${sceneIndex + 1}_${Date.now()}.mp4`);
 
-    console.log(`[generateSingleVideoClip] jobId=${jobId} sceneIndex=${sceneIndex} aspect=${aspectRatio} tweak=${enrichedScene.regenTweak ? 'YES' : 'no'} chars=${sceneCharacters.length}`);
+    // If the user turned the logo on for this scene, pull the brand mark to
+    // disk so ffmpeg can composite it onto the finished clip.
+    let logoPath = '';
+    if (scene.logoApplied) {
+      const logoSource = draft?.brandLogoUrl
+        || draft?.input?.logoUrl
+        || req.user?.businessProfile?.brandAssets?.logoUrl
+        || req.user?.businessProfile?.logoUrl
+        || '';
+      if (logoSource) {
+        try {
+          const candidate = path.join(context.dirs.temp, `logo_${sceneIndex + 1}.png`);
+          await materializeSourceToFile({ source: logoSource, destinationPath: candidate });
+          logoPath = candidate;
+        } catch (logoErr) {
+          console.warn(`[generateSingleVideoClip] logo fetch failed, rendering without it:`, logoErr.message);
+        }
+      }
+    }
+
+    console.log(`[generateSingleVideoClip] jobId=${jobId} sceneIndex=${sceneIndex} aspect=${aspectRatio} tweak=${enrichedScene.regenTweak ? 'YES' : 'no'} chars=${sceneCharacters.length} cleanSource=${scene.imageUrlNoLogo ? 'YES' : 'no'} logoOverlay=${logoPath ? 'YES' : 'no'}`);
 
     const falScene = await generateVideoClip(enrichedScene);
     await materializeSourceToFile({ source: falScene.video_url, destinationPath: rawClipPath });
     await normalizeSceneVideoClip({
       inputPath: rawClipPath,
       outputPath: clipPath,
-      durationSeconds: scene.durationSeconds || 6
+      // Match what Kling actually rendered so tpad never pads a frozen tail.
+      durationSeconds: falScene.renderedDurationSeconds || getKlingDuration(scene),
+      logoPath,
+      logoMode: scene.logoMode || 'watermark'
     });
 
     let clipCloudUrl = null;

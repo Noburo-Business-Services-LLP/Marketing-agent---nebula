@@ -12,11 +12,16 @@ const calendarItemSchema = new mongoose.Schema({
   objective: { type: String, default: 'awareness', trim: true },
   status: {
     type: String,
-    enum: ['draft', 'approved', 'rejected', 'scheduled', 'published', 'generated'],
+    enum: ['draft', 'approved', 'rejected', 'scheduled', 'published', 'generated', 'generating'],
     default: 'draft'
   },
   generatedDraftId: { type: mongoose.Schema.Types.ObjectId, ref: 'ContentDraft', default: null },
   generatedCampaignId: { type: mongoose.Schema.Types.ObjectId, ref: 'Campaign', default: null },
+  // Set when Approve kicks off a background reel build. Holds the
+  // videoGenerationQueue job id, which doubles as the Draft's jobId — the
+  // wizard resumes from it via /reels?jobId=<this>.
+  reelQueueJobId: { type: String, default: '' },
+  reelQueuedAt: { type: Date, default: null },
   scheduledFor: { type: Date, default: null }
 }, { _id: true });
 

@@ -1,0 +1,29 @@
+# syntax=docker/dockerfile:1.7
+
+# ---- Stage 1: Build the Vite frontend ----
+FROM node:20-bookworm-slim AS build
+WORKDIR /app/frontend
+
+COPY frontend/package*.json ./
+RUN npm ci
+
+COPY frontend/ ./
+RUN npm run build
+
+
+# ---- Stage 2: Serve via nginx ----
+FROM nginx:1.27-alpine AS runtime
+
+# Default — override via ECS task env / docker-compose. Format: host:port
+ENV BACKEND_HOST=stratschool-prod-alb-59606506.ap-south-1.elb.amazonaws.com
+
+RUN rm -rf /usr/share/nginx/html/*
+COPY --from=build /app/backend/public /usr/share/nginx/html
+
+# nginx-alpine auto-substitutes env vars in *.template files at startup
+# (output goes to /etc/nginx/conf.d/*.conf)
+COPY nginx.conf /etc/nginx/templates/default.conf.template
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]

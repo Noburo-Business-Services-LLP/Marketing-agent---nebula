@@ -3,6 +3,8 @@ import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import Layout from './components/Layout';
 import ChatBot from './components/ChatBot';
 import CampaignReminderPopup from './components/CampaignReminderPopup';
+import BackgroundReelIndicator from './components/BackgroundReelIndicator';
+import UploadAndSchedule from './pages/UploadAndSchedule';
 import LandingPage from './pages/LandingPage';
 import Auth from './pages/Auth';
 import Onboarding from './pages/Onboarding';
@@ -182,12 +184,17 @@ const App: React.FC = () => {
                     <Routes>
                     <Route path="/dashboard" element={<GravityHome />} />
                     <Route path="/dashboard-classic" element={<Dashboard />} />
-                    <Route path="/content-calendar" element={<GravityCalendar />} />
+                    {/* Smart Calendar is the primary — full auto-fill, generation, scheduler.
+                        The pretty two-week grid from the Gravity prototype lives at -grid for now
+                        until its features are ported (auto-fill, scheduler, per-day generation). */}
+                    <Route path="/content-calendar" element={<ContentCalendar />} />
+                    <Route path="/content-calendar-grid" element={<GravityCalendar />} />
                     <Route path="/content-calendar-classic" element={<ContentCalendar />} />
                     <Route path="/campaigns" element={<GravityCreate />} />
                     <Route path="/campaigns-classic" element={<Campaigns />} />
                     <Route path="/drafts" element={<GravityApprove />} />
                     <Route path="/reels" element={<ReelGenerator />} />
+                    <Route path="/upload" element={<UploadAndSchedule />} />
                     <Route path="/ad-campaigns" element={<AdCampaigns />} />
                     <Route path="/competitors" element={<Competitors />} />
                     <Route path="/connect-socials" element={<ConnectSocials />} />
@@ -213,6 +220,8 @@ const App: React.FC = () => {
                     <Route path="/settings" element={<Settings user={user} onUserUpdate={setUser} />} />
                     <Route path="*" element={<Navigate to="/dashboard" replace />} />
                     </Routes>
+                    {/* Persists across navigation while a Smart Calendar reel renders. */}
+                    <BackgroundReelIndicator />
                 </Layout>
               ) : (
                   <Navigate to="/onboarding" replace />
