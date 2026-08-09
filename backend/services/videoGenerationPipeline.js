@@ -21,6 +21,19 @@ const VIDEO_TARGET = { width: 1080, height: 1920, fps: 30 };
 const VIDEO_ENCODE_PRESET = String(process.env.AI_VIDEO_ENCODE_PRESET || 'ultrafast');
 const VIDEO_ENCODE_CRF = String(process.env.AI_VIDEO_ENCODE_CRF || '23');
 const AUDIO_SYNC_THRESHOLD_SECONDS = Math.max(0, Number(process.env.AI_VIDEO_AUDIO_SYNC_THRESHOLD_SECONDS || 1.25) || 1.25);
+// ffmpeg's atempo accepts 0.5–2.0, but anything past ~1.06 is audibly
+// rushed — that was the "voice sounds like 1.25x" bug. Time-stretching is
+// only ever a last-millimetre nudge; a script that doesn't fit gets fixed
+// at generation time (see targetWordRange / fitVoiceScriptToDuration),
+// not papered over by speeding up the narrator.
+const AUDIO_MAX_SPEEDUP = clampEnvTempo(process.env.AI_VIDEO_AUDIO_MAX_SPEEDUP, 1.06, 1.0, 1.25);
+const AUDIO_MAX_SLOWDOWN = clampEnvTempo(process.env.AI_VIDEO_AUDIO_MAX_SLOWDOWN, 0.94, 0.8, 1.0);
+
+function clampEnvTempo(raw, fallback, min, max) {
+  const value = Number(raw);
+  if (!Number.isFinite(value)) return fallback;
+  return Math.min(max, Math.max(min, value));
+}
 const GOOGLE_TTS_PROJECT_ID = process.env.VERTEX_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT_ID || '';
 const GOOGLE_TTS_EN_MALE_VOICE = String(process.env.GOOGLE_TTS_EN_MALE_VOICE || 'en-US-Neural2-J').trim();
 const GOOGLE_TTS_EN_FEMALE_VOICE = String(process.env.GOOGLE_TTS_EN_FEMALE_VOICE || 'en-US-Neural2-F').trim();
@@ -510,18 +523,28 @@ function splitDurations(totalDurationSeconds, sceneCount) {
   return Array.from({ length: count }, (_, index) => base + (index < remainder ? 1 : 0));
 }
 
+// Split text into exactly `chunkCount` slots, in order. Slots may be empty
+// when there isn't enough source text — callers must treat an empty slot as
+// "no line here" and must NOT reuse a neighbouring chunk to fill it. Doing
+// that is what made short descriptions narrate the same sentence 3-4 times.
 function sentenceChunks(text = '', chunkCount = 4) {
   const clean = String(text || '').replace(/\s+/g, ' ').trim();
-  if (!clean) return [];
-  const bits = clean.split(/[.!?]/g).map((item) => item.trim()).filter(Boolean);
-  if (bits.length >= chunkCount) return bits.slice(0, chunkCount);
+  const count = Math.max(1, Number.parseInt(String(chunkCount), 10) || 1);
+  if (!clean) return Array.from({ length: count }, () => '');
+
+  // Spread every unit across the slots proportionally so nothing is dropped
+  // off the end and nothing is duplicated into the leftovers.
+  const spread = (units, join) => Array.from({ length: count }, (_, i) => {
+    const start = Math.floor((i * units.length) / count);
+    const end = Math.floor(((i + 1) * units.length) / count);
+    return units.slice(start, end).join(join).trim();
+  });
+
+  const sentences = clean.split(/[.!?]/g).map((item) => item.trim()).filter(Boolean);
+  if (sentences.length >= count) return spread(sentences, '. ');
+
   const words = clean.split(' ').filter(Boolean);
-  const size = Math.max(5, Math.ceil(words.length / chunkCount));
-  const out = [];
-  for (let i = 0; i < words.length; i += size) {
-    out.push(words.slice(i, i + size).join(' '));
-  }
-  return out.filter(Boolean).slice(0, chunkCount);
+  return spread(words, ' ');
 }
 
 function buildFallbackSceneSkeleton({
@@ -540,7 +563,12 @@ function buildFallbackSceneSkeleton({
     const endSec = cursor + duration;
     cursor = endSec;
 
-    const chunk = chunks[idx] || chunks[chunks.length - 1] || description;
+    // Narration must never be duplicated across scenes — an empty slot means
+    // this scene simply carries no spoken line. Visual prompts are allowed to
+    // fall back to the overall description, since repeated framing guidance
+    // is harmless whereas repeated narration is exactly the bug.
+    const chunk = String(chunks[idx] || '').trim();
+    const visualBrief = chunk || description;
     const productLine = productName ? `Feature ${productName} naturally in the frame.` : 'Focus on a clear visual story.';
 
     return {
@@ -550,8 +578,8 @@ function buildFallbackSceneSkeleton({
       durationSeconds: duration,
       startSec,
       endSec,
-      imagePrompt: `${chunk}. ${productLine} Keep composition vertical 9:16 and premium.`,
-      videoPrompt: `${chunk}. Add subtle stable camera motion (slow push-in, pan, reveal). Keep details sharp and avoid warped objects, flicker, pixelation, and noisy artifacts.`,
+      imagePrompt: `${visualBrief}. ${productLine} Keep composition vertical 9:16 and premium.`,
+      videoPrompt: `${visualBrief}. Add subtle stable camera motion (slow push-in, pan, reveal). Keep details sharp and avoid warped objects, flicker, pixelation, and noisy artifacts.`,
       voiceLine: chunk,
       onScreenText: chunk.slice(0, 90)
     };
@@ -2484,6 +2512,41 @@ async function mergeSceneVideos({
   };
 }
 
+// Remove sentences the narrator would otherwise speak more than once.
+// Two sources of repeats: an LLM looping on itself, and storyboard scenes
+// that carry the same voiceLine getting concatenated into one script.
+// Comparison is accent/punctuation/case-insensitive and Unicode-aware so
+// it works for Tamil, Hindi and the rest, not just English.
+function dedupeRepeatedSentences(text = '') {
+  const clean = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!clean) return '';
+
+  const sentences = clean.match(/[^.!?]+[.!?]*/g) || [clean];
+  const seen = new Set();
+  const kept = [];
+
+  for (const raw of sentences) {
+    const sentence = raw.trim();
+    if (!sentence) continue;
+    const key = sentence
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}\s]/gu, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    // Very short fragments ("Yes.", "இதோ.") can legitimately recur as a
+    // rhetorical beat, so only dedupe substantive lines.
+    if (!key || key.length < 12) {
+      kept.push(sentence);
+      continue;
+    }
+    if (seen.has(key)) continue;
+    seen.add(key);
+    kept.push(sentence);
+  }
+
+  return kept.join(' ').replace(/\s+/g, ' ').trim() || clean;
+}
+
 function chunkTextForTts(text, maxLen = 170) {
   const clean = String(text || '').replace(/\s+/g, ' ').trim();
   if (!clean) return [];
@@ -3375,7 +3438,10 @@ async function synthesizeVoiceTrack({
   const safeTarget = Number.isFinite(Number(targetDurationSeconds)) ? Number(targetDurationSeconds) : null;
 
   // Step 1: Translate with duration awareness (scene-timed) and avoid summarization.
-  let scriptForTts = String(voiceScript || '').replace(/\s+/g, ' ').trim();
+  // Drop duplicate sentences first — nothing downstream benefits from
+  // narrating the same line twice, and repeats inflate the script length,
+  // which is what used to force the voice into a sped-up atempo.
+  let scriptForTts = dedupeRepeatedSentences(voiceScript);
   let localizedScenes = normalizeSceneTimingForTranslation(sceneData, safeTarget || DEFAULT_DURATION_SECONDS);
 
   if (normalizedLang !== 'en' && sourceVoiceScript) {
@@ -3443,39 +3509,53 @@ async function synthesizeVoiceTrack({
     // Negligible time differences (less than 0.2s) do not require modification
     if (Math.abs(actual - safeTarget) < 0.2) return;
 
+    // Nudge the tempo only within the imperceptible band. Anything the
+    // cap can't absorb is handled by padding (too short) or a faded trim
+    // (too long) — never by making the narrator talk fast.
     const ratio = actual / safeTarget;
-    // FFmpeg atempo supports speed ratios between 0.5 and 2.0.
-    if (ratio >= 0.5 && ratio <= 2.0) {
-      const atempo = clamp(ratio, 0.5, 2.0); // output duration = input/atempo
-      const stretchedPath = path.join(context.dirs.audio, `voice_track_${normalizedGender}_stretched.mp3`);
-      if (logger) logger(`Syncing voice duration: actual=${actual.toFixed(2)}s, target=${safeTarget}s. Stretching with atempo=${atempo.toFixed(3)}`);
+    const atempo = clamp(ratio, AUDIO_MAX_SLOWDOWN, AUDIO_MAX_SPEEDUP);
+    const stretchedPath = path.join(context.dirs.audio, `voice_track_${normalizedGender}_stretched.mp3`);
+    const filters = [];
 
-      await runFfmpeg([
-        '-y',
-        '-i', finalVoicePath,
-        '-vn',
-        '-af', `atempo=${atempo.toFixed(3)}`,
-        '-c:a', 'libmp3lame',
-        '-q:a', '2',
-        stretchedPath
-      ]);
+    if (Math.abs(atempo - 1) > 0.005) filters.push(`atempo=${atempo.toFixed(3)}`);
 
-      await fs.promises.copyFile(stretchedPath, finalVoicePath);
-    } else {
-      // If way out of bounds, trim precisely to safeTarget
-      const stretchedPath = path.join(context.dirs.audio, `voice_track_${normalizedGender}_stretched.mp3`);
-      if (logger) logger(`Voice track out of bounds (${actual.toFixed(2)}s vs ${safeTarget}s). Trimming precisely.`);
-      await runFfmpeg([
-        '-y',
-        '-i', finalVoicePath,
-        '-vn',
-        '-t', String(safeTarget),
-        '-c:a', 'libmp3lame',
-        '-q:a', '2',
-        stretchedPath
-      ]);
-      await fs.promises.copyFile(stretchedPath, finalVoicePath);
+    // Duration after the capped tempo change.
+    const afterTempo = actual / atempo;
+
+    if (afterTempo > safeTarget + 0.05) {
+      // Script genuinely overruns the scene. Trim, but fade the last
+      // 0.35s so it tails off instead of chopping mid-word.
+      const fadeStart = Math.max(0, safeTarget - 0.35);
+      filters.push(`atrim=0:${safeTarget.toFixed(3)}`, `afade=t=out:st=${fadeStart.toFixed(3)}:d=0.35`);
+      if (logger) {
+        logger(`Voice overruns scene: ${actual.toFixed(2)}s vs ${safeTarget}s target. ` +
+          `Capped tempo at ${atempo.toFixed(3)} (limit ${AUDIO_MAX_SPEEDUP}) and trimmed ` +
+          `${(afterTempo - safeTarget).toFixed(2)}s with a fade. Shorten the script to avoid this.`);
+      }
+    } else if (afterTempo < safeTarget - 0.05) {
+      // Short script — pad with silence. Inaudible, unlike slowing speech.
+      filters.push('apad', `atrim=0:${safeTarget.toFixed(3)}`);
+      if (logger) {
+        logger(`Voice shorter than scene: ${actual.toFixed(2)}s vs ${safeTarget}s target. ` +
+          `Tempo ${atempo.toFixed(3)}, padding ${(safeTarget - afterTempo).toFixed(2)}s of silence.`);
+      }
+    } else if (logger) {
+      logger(`Syncing voice duration: actual=${actual.toFixed(2)}s, target=${safeTarget}s, atempo=${atempo.toFixed(3)}`);
     }
+
+    if (!filters.length) return;
+
+    await runFfmpeg([
+      '-y',
+      '-i', finalVoicePath,
+      '-vn',
+      '-af', filters.join(','),
+      '-c:a', 'libmp3lame',
+      '-q:a', '2',
+      stretchedPath
+    ]);
+
+    await fs.promises.copyFile(stretchedPath, finalVoicePath);
   };
 
   // Try single pass synthesis for ultra fast TTS performance
@@ -3985,8 +4065,11 @@ async function mergeFinalOutput({
     if (Number.isFinite(audioDuration) && audioDuration > 0 && targetDuration > 0) {
       const syncedPath = path.join(context.dirs.audio, 'final_audio_synced.m4a');
       const shouldRetempo = Math.abs(audioDuration - targetDuration) > AUDIO_SYNC_THRESHOLD_SECONDS;
-      const audioFilter = shouldRetempo
-        ? `atempo=${clamp(audioDuration / targetDuration, 0.5, 2.0).toFixed(3)},apad,atrim=0:${targetDuration.toFixed(3)}`
+      // Same cap as maybeStretchToTarget — apad/atrim absorbs whatever the
+      // tempo limit leaves over, so the mix never speeds the voice up.
+      const mixTempo = clamp(audioDuration / targetDuration, AUDIO_MAX_SLOWDOWN, AUDIO_MAX_SPEEDUP);
+      const audioFilter = shouldRetempo && Math.abs(mixTempo - 1) > 0.005
+        ? `atempo=${mixTempo.toFixed(3)},apad,atrim=0:${targetDuration.toFixed(3)}`
         : `apad,atrim=0:${targetDuration.toFixed(3)}`;
       await runFfmpeg([
         '-y',
@@ -4527,6 +4610,12 @@ DURATION RULES
 
 IMPORTANT RULES
 - Sound human. Sound emotional. Sound believable. Sound cinematic.
+- NEVER repeat a sentence, phrase or idea. Every line must say something
+  new. Do not restate the hook later, and do not echo the storyboard's
+  wording back — the storyboard is context, not script to copy.
+- hook, mainVoiceover and closingCta must not overlap in content.
+- Stay inside the word budget. If you run out of things to say, stop early
+  rather than padding with repetition.
 - Create pauses naturally with short sentences and line breaks.
 - Make every sentence easy to speak.
 - Match the emotion of the storyboard.
@@ -4574,12 +4663,16 @@ No markdown. No code fences. No prose outside the JSON.`;
       });
     }
     const parsed = parseGeminiJSON(raw);
-    const enrichedScript = String(parsed?.voiceScript || '').trim()
-      || [parsed?.hook, parsed?.mainVoiceover, parsed?.closingCta].filter(Boolean).join(' ').trim();
+    // hook/main/cta frequently restate each other even when the prompt says
+    // not to, and the joined form is the worst case — dedupe both paths.
+    const enrichedScript = dedupeRepeatedSentences(
+      String(parsed?.voiceScript || '').trim()
+        || [parsed?.hook, parsed?.mainVoiceover, parsed?.closingCta].filter(Boolean).join(' ')
+    );
     if (!enrichedScript) return { voiceScript: source, voiceType: null, speakingStyle: null };
     return {
       voiceScript: enrichedScript,
-      tanglishVoiceScript: String(parsed?.tanglishVoiceScript || '').trim() || null,
+      tanglishVoiceScript: dedupeRepeatedSentences(parsed?.tanglishVoiceScript) || null,
       voiceType: String(parsed?.voiceType || '').trim() || null,
       speakingStyle: String(parsed?.speakingStyle || '').trim() || null,
       hook: String(parsed?.hook || '').trim() || null,
@@ -4987,5 +5080,12 @@ module.exports = {
   // Low-level helpers exposed for the per-scene /generateSingleVideoClip route
   materializeSourceToFile,
   normalizeSceneVideoClip,
-  createJobContext
+  createJobContext,
+  // Pure text/timing helpers — exported so the narration rules (no repeated
+  // sentences, no duplicated scene lines, capped tempo) can be unit tested.
+  sentenceChunks,
+  dedupeRepeatedSentences,
+  buildFallbackSceneSkeleton,
+  AUDIO_MAX_SPEEDUP,
+  AUDIO_MAX_SLOWDOWN
 };

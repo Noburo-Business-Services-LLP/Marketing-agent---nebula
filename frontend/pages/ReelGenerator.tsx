@@ -1193,7 +1193,10 @@ setCharacterAge(nextDraft?.characterAge || '');
     setVoiceCatalogError('');
     try {
       const resp: any = await videoGenerationAPI.listElevenLabsVoices({
-        languageCode: languageCode || 'en',
+        // Must match the language TTS will actually speak (buildAudioPayload
+        // sends audioLanguageCode), not the Step 1 script language — otherwise
+        // picking Tamil here still lists English voices.
+        languageCode: audioLanguageCode || 'en',
         gender: voiceGender || undefined,
         includeMultilingual: !!opts.includeMultilingual
       });
@@ -1225,7 +1228,7 @@ setCharacterAge(nextDraft?.characterAge || '');
         voiceId: voice.voiceId,
         name: voice.name,
         gender: voice.gender,
-        language: languageCode,
+        language: audioLanguageCode,
         accent: voice.accent,
         previewUrl: voice.previewUrl,
         category: voice.category
@@ -1269,7 +1272,7 @@ setCharacterAge(nextDraft?.characterAge || '');
     setGeneratedTracks(null);
     setFinalAudioUrl('');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [languageCode]);
+  }, [audioLanguageCode]);
 
   // When the user picks a different voice, invalidate the last preview.
   // Prevents the "random voice plays on refresh" confusion — the audio
@@ -1288,7 +1291,7 @@ setCharacterAge(nextDraft?.characterAge || '');
     if (!audioEnabled || audioMode !== 'auto') return;
     loadElevenLabsVoices({ includeMultilingual: voiceIncludeMultilingual });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, languageCode, voiceGender, audioEnabled, audioMode, voiceIncludeMultilingual]);
+  }, [step, audioLanguageCode, voiceGender, audioEnabled, audioMode, voiceIncludeMultilingual]);
 
   const ensureDraftForAudioTest = async (fallbackDescription = '') => {
     if (jobId) return jobId;
@@ -4325,7 +4328,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <p className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>
-                          ElevenLabs Voices · {languageCode.toUpperCase()} · {voiceGender}
+                          ElevenLabs Voices · {audioLanguageCode.toUpperCase()} · {voiceGender}
                           {voiceCatalogNativeCount > 0 && (
                             <span className="ml-2 text-[10px] text-emerald-400 normal-case tracking-normal">
                               {voiceCatalogNativeCount} native
@@ -4333,9 +4336,9 @@ setCharacterAge(nextDraft?.characterAge || '');
                           )}
                         </p>
                         <p className={`text-[11px] mt-1 ${theme.textSecondary}`}>
-                          {languageCode === 'en'
+                          {audioLanguageCode === 'en'
                             ? 'Star a voice to save it to brand assets. Click a card to select it as your narrator.'
-                            : `Only voices native to ${languageCode.toUpperCase()} are shown. Star to save, click to select.`}
+                            : `Only voices native to ${audioLanguageCode.toUpperCase()} are shown. Star to save, click to select.`}
                         </p>
                       </div>
                       <button
@@ -4358,11 +4361,11 @@ setCharacterAge(nextDraft?.characterAge || '');
                     {!voiceCatalogLoading && voiceCatalog.length === 0 && voiceCatalogCanFallback && (
                       <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
                         <p className={`text-xs font-semibold ${theme.text}`}>
-                          No native {languageCode.toUpperCase()} voices found on your ElevenLabs account.
+                          No native {audioLanguageCode.toUpperCase()} voices found on your ElevenLabs account.
                         </p>
                         <p className={`text-[11px] mt-1 ${theme.textSecondary}`}>
                           You can enable multilingual fallback — voices that aren't native but can speak
-                          {' '}{languageCode.toUpperCase()} via ElevenLabs multilingual v2 (accent may not sound authentic).
+                          {' '}{audioLanguageCode.toUpperCase()} via ElevenLabs multilingual v2 (accent may not sound authentic).
                         </p>
                         <button
                           onClick={() => setVoiceIncludeMultilingual(true)}
@@ -4438,7 +4441,7 @@ setCharacterAge(nextDraft?.characterAge || '');
 
                     {voiceCatalog.length === 0 && !voiceCatalogLoading && !voiceCatalogError && !voiceCatalogCanFallback && (
                       <p className={`text-xs ${theme.textSecondary}`}>
-                        Click "Load Voices" to fetch ElevenLabs voices for {languageCode.toUpperCase()} · {voiceGender}.
+                        Click "Load Voices" to fetch ElevenLabs voices for {audioLanguageCode.toUpperCase()} · {voiceGender}.
                       </p>
                     )}
                   </div>
