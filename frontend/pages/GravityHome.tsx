@@ -103,20 +103,47 @@ const GravityHome: React.FC = () => {
     return { postedCount: posted.length, totalPosts, platforms: Array.from(platforms).slice(0, 4) };
   }, [campaigns]);
 
-  const draftsReadyCount = drafts.filter((d: any) => ['pending', 'ready', 'draft'].includes(String(d?.status || '').toLowerCase())).length;
-  const heroReadyCount = draftsReadyCount || Math.max(1, drafts.length);
+  // Must match what the Approve page counts, or the hero and the sidebar
+  // badge disagree. Anything already published/scheduled/rejected is done.
+  const AWAITING = new Set(['pending', 'draft', 'ready', 'processing', 'failed', 'completed']);
+  const heroReadyCount = drafts.filter((d: any) => {
+    const status = String(d?.status || 'draft').toLowerCase();
+    const source = String(d?.sourceType || d?.contentType || 'post').toLowerCase();
+    if (source === 'reel' || source === 'video') return false;
+    return AWAITING.has(status);
+  }).length;
 
   const now = new Date();
   const dateLabel = `${DAY_LABELS[now.getDay()]}, ${MONTH_LABELS[now.getMonth()]} ${now.getDate()}`;
 
-  // Card-stack images pulled from actual campaign thumbnails when available.
-  const stackImages = useMemo(() => {
-    const imgs: string[] = [];
-    campaigns.forEach((c: any) => {
-      if (c.creative?.imageUrls?.[0] && imgs.length < 4) imgs.push(c.creative.imageUrls[0]);
+  // Card stack — real artwork, real platform, real date. Previously the
+  // labels were hardcoded to "IG · TOMORROW/THU/FRI/SAT" regardless of what
+  // was actually scheduled, which made the whole panel decorative.
+  const stackCards = useMemo(() => {
+    const upcoming = campaigns
+      .map((c: any) => ({
+        img: c?.creative?.imageUrls?.[0] || '',
+        platform: (c?.platforms?.[0] || '').toString(),
+        when: c?.scheduling?.startDate || c?.scheduledDate || null,
+      }))
+      .filter((c: any) => c.img || c.when)
+      .sort((a: any, b: any) => new Date(a.when || 0).getTime() - new Date(b.when || 0).getTime())
+      .slice(0, 4);
+
+    return upcoming.map((c: any) => {
+      let label = '';
+      if (c.when) {
+        const d = new Date(c.when);
+        if (!isNaN(d.getTime())) {
+          const today = new Date(); today.setHours(0, 0, 0, 0);
+          const day = new Date(d); day.setHours(0, 0, 0, 0);
+          const diff = Math.round((day.getTime() - today.getTime()) / 86400000);
+          label = diff === 0 ? 'TODAY' : diff === 1 ? 'TOMORROW' : DAY_LABELS[d.getDay()];
+        }
+      }
+      const platform = c.platform ? c.platform.slice(0, 2).toUpperCase() : '';
+      return { img: c.img, tag: [platform, label].filter(Boolean).join(' · ') };
     });
-    while (imgs.length < 4) imgs.push(''); // placeholder slots
-    return imgs;
   }, [campaigns]);
 
   return (
@@ -147,7 +174,7 @@ const GravityHome: React.FC = () => {
 
           <h1 className="font-serif-display text-[64px] leading-[1.02] tracking-[-0.02em] text-[#F5F4F1] mb-6">
             <span className="tabular-nums">{heroReadyCount}</span> {heroReadyCount === 1 ? 'post' : 'posts'}<br />
-            <span>are ready for </span>
+            <span>{heroReadyCount === 1 ? 'is' : 'are'} ready for </span>
             <span className="italic text-[#F5A623]">your eye</span>
             <span>.</span>
           </h1>
@@ -178,7 +205,7 @@ const GravityHome: React.FC = () => {
         <div className="relative w-[440px] h-[300px] hidden lg:block">
           {/* Ambient glow */}
           <div className="absolute inset-[-40px] rounded-full blur-3xl opacity-70" style={{ background: 'radial-gradient(60% 50% at 50% 50%, rgba(245,166,35,0.20), transparent 70%)' }} />
-          {stackImages.map((img, i) => {
+          {stackCards.map(({ img, tag }, i) => {
             const angle = (i - 1.5) * 6;
             const offsetX = (i - 1.5) * 60;
             const z = i === 2 ? 4 : i === 1 ? 3 : i === 3 ? 2 : 1;
@@ -197,10 +224,12 @@ const GravityHome: React.FC = () => {
                 ) : (
                   <div className="w-full h-full bg-gradient-to-br from-white/[0.04] to-white/[0.01]" />
                 )}
-                <div className="absolute inset-x-0 bottom-0 flex items-center justify-between px-2 py-1.5 bg-gradient-to-t from-black/70 to-transparent">
-                  <span className="text-[9px] font-semibold tracking-widest text-white/80">IG · {['TOMORROW','THU','FRI','SAT'][i] || 'SUN'}</span>
-                  <span className="text-[9px] text-white/60 tabular-nums">{i + 1}/{stackImages.length}</span>
-                </div>
+                {tag && (
+                  <div className="absolute inset-x-0 bottom-0 flex items-center justify-between px-2 py-1.5 bg-gradient-to-t from-black/70 to-transparent">
+                    <span className="text-[9px] font-semibold tracking-widest text-white/80">{tag}</span>
+                    <span className="text-[9px] text-white/60 tabular-nums">{i + 1}/{stackCards.length}</span>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -259,20 +288,22 @@ const GravityHome: React.FC = () => {
           <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6 relative overflow-hidden">
             <div className="absolute -top-16 -right-10 w-40 h-40 rounded-full blur-3xl opacity-40" style={{ background: 'radial-gradient(circle, rgba(245,166,35,0.25), transparent 70%)' }} />
             <div className="relative">
-              <div className="gravity-label mb-3">Reach</div>
+              {/* Posts published — a number we can actually count. Reach and
+                  engagement need real analytics; inventing them (this used to
+                  render postedCount * 12.4 as "reach") is worse than blank. */}
+              <div className="gravity-label mb-3">Published this week</div>
               <div className="flex items-baseline gap-2">
                 <span className="font-serif-display text-[56px] leading-none text-[#F5F4F1] tabular-nums">
-                  {weeklyStats.totalPosts > 0 ? `${(weeklyStats.postedCount * 12.4).toFixed(1)}` : '—'}
+                  {weeklyStats.postedCount}
                 </span>
                 {weeklyStats.totalPosts > 0 && (
-                  <>
-                    <span className="text-[16px] text-white/50">K</span>
-                    <span className="text-[12px] text-[#4ADE80] font-semibold">+18%</span>
-                  </>
+                  <span className="text-[15px] text-white/45">of {weeklyStats.totalPosts} planned</span>
                 )}
               </div>
               <div className="text-[12px] text-white/45 mt-3">
-                across {weeklyStats.platforms.length > 0 ? weeklyStats.platforms.join(', ') : 'connected platforms'}
+                {weeklyStats.platforms.length > 0
+                  ? `across ${weeklyStats.platforms.join(', ')}`
+                  : 'No platforms connected yet'}
               </div>
             </div>
           </div>
@@ -285,30 +316,15 @@ const GravityHome: React.FC = () => {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-[13.5px] font-semibold text-[#F5F4F1] truncate">{c.name || 'Recent campaign'}</div>
-                  <div className="text-[11px] text-white/45">
-                    <span className="text-[#F5F4F1] font-semibold">24.8K</span> reach · <span className="text-[#F5F4F1] font-semibold">3,184</span> likes
+                  {/* Real fields only. This line used to read "24.8K reach ·
+                      3,184 likes" for every campaign — both hardcoded. */}
+                  <div className="text-[11px] text-white/45 capitalize">
+                    {[c.status, (c.platforms || []).join(', ')].filter(Boolean).join(' · ') || 'No platforms set'}
                   </div>
                 </div>
               </div>
             </Link>
           ))}
-
-          {draftsReadyCount > 0 && (
-            <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
-              <div className="gravity-label mb-2">Strategy Nudge</div>
-              <div className="text-[13.5px] text-[#F5F4F1] mb-3 leading-snug">
-                Your audience engages <span className="font-semibold text-[#F5A623]">2.3× more</span> on weekday mornings. Shift Thursday's post from 4 PM to 9 AM?
-              </div>
-              <div className="flex items-center gap-2">
-                <button className="h-8 px-3 rounded-md bg-white/[0.08] hover:bg-white/[0.14] text-[12px] font-semibold text-[#F5F4F1]">
-                  Yes, shift it
-                </button>
-                <button className="h-8 px-3 rounded-md text-[12px] font-medium text-white/50 hover:text-white/80">
-                  Not now
-                </button>
-              </div>
-            </div>
-          )}
         </section>
       </div>
     </div>
