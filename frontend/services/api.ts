@@ -3661,6 +3661,15 @@ export const videoGenerationAPI = {
     }, true);
   },
 
+  // Wizard stops after Scene Images — hand the storyboard to the Nebulaa
+  // team, who produce the clips, audio and final cut off-platform.
+  requestManualVideo: async (payload: { jobId: string }): Promise<any> => {
+    return apiCall('/video-generation/request-manual-video', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }, true);
+  },
+
   mixAudio: async (payload: any): Promise<any> => {
     return apiCall('/video-generation/mixAudio', {
       method: 'POST',

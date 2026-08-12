@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180" width="320" height="180" role="img" aria-label="storytelling">
+  <defs>
+    <radialGradient id="vig" cx="50%" cy="44%" r="78%">
+      <stop offset="0.5" stop-color="#000" stop-opacity="0"/>
+      <stop offset="1" stop-color="#000" stop-opacity="0.55"/>
+    </radialGradient>
+    <filter id="grain" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="3" stitchTiles="stitch"/>
+      <feColorMatrix type="saturate" values="0"/>
+    </filter>
+    <filter id="soft" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="7"/>
+    </filter>
+    <filter id="soft2" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="16"/>
+    </filter>
+    <filter id="tiny" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2.2"/>
+    </filter>
+    <linearGradient id="dusk" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2b1055"/><stop offset="0.5" stop-color="#7b2d5e"/>
+      <stop offset="0.82" stop-color="#c9553d"/><stop offset="1" stop-color="#3a1418"/>
+    </linearGradient>
+    <radialGradient id="fire" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#fff3c4"/><stop offset="0.45" stop-color="#ffb037" stop-opacity="0.85"/>
+      <stop offset="1" stop-color="#ff6a1f" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="320" height="180" fill="url(#dusk)"/>
+  <g fill="#fff" opacity="0.5"><circle cx="44" cy="26" r="1.2"/><circle cx="92" cy="16" r="1"/><circle cx="248" cy="22" r="1.3"/><circle cx="288" cy="40" r="1"/><circle cx="152" cy="12" r="0.9"/></g>
+  <path d="M0 122 Q80 104 160 118 Q240 132 320 110 L320 180 L0 180 Z" fill="#2a0f22" opacity="0.85"/>
+  <ellipse cx="160" cy="140" rx="80" ry="34" fill="url(#fire)" opacity="0.9"/>
+  <path d="M152 146 q8 -26 8 -30 q4 10 10 14 q2 -6 0 -10 q14 14 8 26 z" fill="#ffd257" filter="url(#tiny)"/>
+  <g stroke="#1b0a14" stroke-width="4" stroke-linecap="round"><path d="M138 150 L182 138"/><path d="M140 138 L180 150"/></g>
+  <g fill="#1b0a14">
+    <circle cx="96" cy="112" r="11"/><path d="M78 152 q18 -30 36 0 z"/>
+    <circle cx="226" cy="116" r="10"/><path d="M210 152 q16 -28 32 0 z"/>
+  </g>
+  <g fill="#ffc061"><circle cx="176" cy="92" r="1.8" opacity="0.9"/><circle cx="146" cy="74" r="1.4" opacity="0.75"/><circle cx="192" cy="62" r="1.6" opacity="0.6"/><circle cx="132" cy="50" r="1.1" opacity="0.45"/><circle cx="170" cy="40" r="1.3" opacity="0.35"/></g>
+  <rect width="320" height="180" fill="url(#vig)"/>
+  <rect width="320" height="180" filter="url(#grain)" opacity="0.14" style="mix-blend-mode:overlay"/>
+</svg>

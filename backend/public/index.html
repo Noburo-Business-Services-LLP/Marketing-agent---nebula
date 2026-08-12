@@ -20,7 +20,27 @@
                     dark: '#070A12',
                     gold: '#ffcc29',
                     silver: '#ededed',
+                  },
+                  // Gravity design system (v2 redesign)
+                  gravity: {
+                    bg:       '#0A0A0A',  // app background — deep warm black
+                    sidebar:  '#111111',  // slightly lifted sidebar
+                    surface:  '#151515',  // card / panel surface
+                    surface2: '#1A1A1A',  // elevated card
+                    border:   'rgba(255,255,255,0.06)',
+                    borderStrong: 'rgba(255,255,255,0.10)',
+                    gold:     '#F5A623',  // primary accent
+                    goldSoft: 'rgba(245,166,35,0.15)',
+                    text:     '#F5F4F1',  // warm off-white
+                    textMuted:'rgba(255,255,255,0.55)',
+                    textDim:  'rgba(255,255,255,0.35)',
+                    success:  '#4ADE80',
+                    info:     '#60A5FA',
                   }
+                },
+                fontFamily: {
+                  serif: ['"Playfair Display"', 'Georgia', 'serif'],
+                  sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
                 }
               }
             }
@@ -43,6 +63,155 @@
     <style>
       body {
         font-family: 'Inter', sans-serif;
+      }
+      /* Gravity redesign — applied when body has .gravity-shell class */
+      body.gravity-shell,
+      html.dark body.gravity-shell {
+        background-color: #0A0A0A !important;
+        color: #F5F4F1 !important;
+      }
+      /* Ambient gold radial glow for the Gravity shell — subtle, top-right */
+      body.gravity-shell::before {
+        content: '';
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        z-index: 0;
+        background: radial-gradient(60% 45% at 78% 12%, rgba(245,166,35,0.10) 0%, rgba(245,166,35,0) 60%);
+      }
+      /* Serif display utility */
+      .font-serif-display { font-family: 'Playfair Display', Georgia, serif; }
+
+      /* ============================================================
+         GRAVITY OVERRIDE LAYER
+         Auto-restyles common Tailwind patterns on ALL pages when the
+         Gravity shell is active — buttons, cards, inputs, borders,
+         old yellow #ffcc29 becomes gold #F5A623, etc. Non-breaking.
+         ============================================================ */
+      body.gravity-shell {
+        --grav-gold: #F5A623;
+        --grav-gold-hover: #ffb833;
+        --grav-bg: #0A0A0A;
+        --grav-surface: #151515;
+        --grav-surface-2: #1A1A1A;
+        --grav-border: rgba(255,255,255,0.06);
+        --grav-border-strong: rgba(255,255,255,0.12);
+        --grav-text: #F5F4F1;
+        --grav-text-muted: rgba(255,255,255,0.55);
+      }
+      /* Backgrounds — legacy dark tones become Gravity black */
+      body.gravity-shell [class*="bg-[#070A12]"],
+      body.gravity-shell [class*="bg-[#0d1117]"],
+      body.gravity-shell [class*="bg-[#0f1419]"],
+      body.gravity-shell [class*="bg-slate-900"],
+      body.gravity-shell [class*="bg-slate-950"] {
+        background-color: var(--grav-bg) !important;
+      }
+      body.gravity-shell [class*="bg-[#151515]"],
+      body.gravity-shell [class*="bg-slate-800"],
+      body.gravity-shell [class*="bg-gray-800"] {
+        background-color: var(--grav-surface) !important;
+      }
+      /* Legacy yellow → Gravity gold */
+      body.gravity-shell [class*="bg-[#ffcc29]"]:not(aside) {
+        background-color: var(--grav-gold) !important;
+        color: #1A1208 !important;
+      }
+      body.gravity-shell [class*="text-[#ffcc29]"],
+      body.gravity-shell [class*="text-[#d4a800]"],
+      body.gravity-shell [class*="text-[#e6b800]"],
+      body.gravity-shell [class*="text-[#e6b825]"] {
+        color: var(--grav-gold) !important;
+      }
+      body.gravity-shell [class*="border-[#ffcc29]"] {
+        border-color: var(--grav-gold) !important;
+      }
+      body.gravity-shell [class*="hover:text-[#ffcc29]"]:hover {
+        color: var(--grav-gold) !important;
+      }
+      /* Borders — soften harsh dark borders */
+      body.gravity-shell [class*="border-slate-700"],
+      body.gravity-shell [class*="border-slate-800"],
+      body.gravity-shell [class*="border-gray-700"],
+      body.gravity-shell [class*="border-gray-800"] {
+        border-color: var(--grav-border) !important;
+      }
+      body.gravity-shell [class*="divide-slate-700"] > *,
+      body.gravity-shell [class*="divide-slate-800"] > *,
+      body.gravity-shell [class*="divide-gray-700"] > * {
+        border-color: var(--grav-border) !important;
+      }
+      /* Text — muted grays become warm off-white shades */
+      body.gravity-shell [class*="text-slate-500"],
+      body.gravity-shell [class*="text-gray-500"] { color: rgba(255,255,255,0.45) !important; }
+      body.gravity-shell [class*="text-slate-400"],
+      body.gravity-shell [class*="text-gray-400"] { color: rgba(255,255,255,0.55) !important; }
+      body.gravity-shell [class*="text-slate-300"],
+      body.gravity-shell [class*="text-gray-300"] { color: rgba(255,255,255,0.70) !important; }
+      body.gravity-shell [class*="text-slate-200"],
+      body.gravity-shell [class*="text-gray-200"] { color: rgba(255,255,255,0.85) !important; }
+      body.gravity-shell [class*="text-white"] { color: var(--grav-text) !important; }
+      /* Card / panel wrappers — soften and warm */
+      body.gravity-shell [class*="rounded-xl"][class*="border"][class*="bg-"],
+      body.gravity-shell [class*="rounded-2xl"][class*="border"][class*="bg-"] {
+        border-color: var(--grav-border) !important;
+      }
+      /* Inputs — dark neutral bg with subtle border */
+      body.gravity-shell input[type="text"],
+      body.gravity-shell input[type="email"],
+      body.gravity-shell input[type="password"],
+      body.gravity-shell input[type="url"],
+      body.gravity-shell input[type="search"],
+      body.gravity-shell input[type="number"],
+      body.gravity-shell input[type="date"],
+      body.gravity-shell input[type="time"],
+      body.gravity-shell textarea,
+      body.gravity-shell select {
+        background-color: rgba(255,255,255,0.03) !important;
+        border-color: var(--grav-border) !important;
+        color: var(--grav-text) !important;
+      }
+      body.gravity-shell input:focus,
+      body.gravity-shell textarea:focus,
+      body.gravity-shell select:focus {
+        border-color: rgba(245,166,35,0.5) !important;
+        outline: none !important;
+        box-shadow: 0 0 0 3px rgba(245,166,35,0.10) !important;
+      }
+      /* Primary action buttons (gold in old code) — Gravity gold with shadow */
+      body.gravity-shell button[class*="bg-[#ffcc29]"],
+      body.gravity-shell a[class*="bg-[#ffcc29]"] {
+        background-color: var(--grav-gold) !important;
+        color: #1A1208 !important;
+        box-shadow: 0 4px 18px rgba(245,166,35,0.20) !important;
+      }
+      body.gravity-shell button[class*="bg-[#ffcc29]"]:hover,
+      body.gravity-shell a[class*="bg-[#ffcc29]"]:hover {
+        background-color: var(--grav-gold-hover) !important;
+      }
+      /* Focus rings — gold */
+      body.gravity-shell [class*="ring-[#ffcc29]"],
+      body.gravity-shell [class*="focus:ring-[#ffcc29]"]:focus {
+        --tw-ring-color: rgba(245,166,35,0.5) !important;
+      }
+      /* Scrollbar for Gravity shell */
+      body.gravity-shell ::-webkit-scrollbar { width: 8px; height: 8px; }
+      body.gravity-shell ::-webkit-scrollbar-track { background: transparent; }
+      body.gravity-shell ::-webkit-scrollbar-thumb {
+        background: rgba(255,255,255,0.08);
+        border-radius: 4px;
+      }
+      body.gravity-shell ::-webkit-scrollbar-thumb:hover {
+        background: rgba(255,255,255,0.16);
+      }
+      /* Small-caps meta label used across Gravity screens */
+      .gravity-label {
+        font-family: 'Inter', sans-serif;
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+        font-size: 10.5px;
+        font-weight: 600;
+        color: rgba(255,255,255,0.45);
       }
       /* Dark mode styles */
       .dark body {
@@ -130,6 +299,193 @@
         -webkit-text-fill-color: #111827 !important;
         transition: background-color 5000s ease-in-out 0s;
       }
+
+      /* ------------------------------------------------------------------
+         Metallic halo behind the Create prompt box.
+         The BorderBeam package lights the 1px edge; this supplies the soft
+         outward bloom that actually reads as "glowing". Cool white/steel so
+         it never drifts amber against the app's gold accents.
+         ------------------------------------------------------------------ */
+      .metalHalo {
+        position: absolute;
+        inset: -18px;
+        border-radius: 32px;
+        pointer-events: none;
+        z-index: 0;
+        background:
+          radial-gradient(60% 130% at 50% 0%,   rgba(245,166,35,0.30) 0%, rgba(245,166,35,0) 70%),
+          radial-gradient(75% 150% at 50% 100%, rgba(255,196,84,0.20) 0%, rgba(255,196,84,0) 72%);
+        filter: blur(26px);
+        animation: metal-breathe 5.5s ease-in-out infinite;
+      }
+      /* Tight inner rim-light so the edge itself looks like lit gold. */
+      .metalHalo::after {
+        content: '';
+        position: absolute;
+        inset: 16px;
+        border-radius: 18px;
+        box-shadow: 0 0 30px 3px rgba(245,166,35,0.22);
+      }
+      @keyframes metal-breathe {
+        0%, 100% { opacity: 0.60; }
+        50%      { opacity: 1; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .metalHalo { animation: none; opacity: 0.8; }
+      }
+
+      /* ------------------------------------------------------------------
+         ImageGeneration placeholder (components/ui/image-generation.tsx)
+         Shown in a post card's image area while the artwork renders.
+         Pure CSS — no WebGL, no JS animation loop, nothing to download.
+         ------------------------------------------------------------------ */
+      .igWrap {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        padding: 12px;
+      }
+      .igCanvas {
+        position: relative;
+        flex: 1;
+        min-height: 0;
+        overflow: hidden;
+        border-radius: 14px;
+        background: #0c0c0f;
+        border: 1px solid rgba(255,255,255,0.06);
+      }
+      /* Faint dot matrix covering the whole canvas. */
+      .igCanvas::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background-image: radial-gradient(circle, rgba(255,255,255,0.16) 1.1px, transparent 1.1px);
+        background-size: 15px 15px;
+      }
+      /* The SAME grid at full brightness, revealed only through two masks
+         that drift and resize — that is what ig-morph animates, and it is
+         what makes a cluster of dots appear to glow and wander. */
+      .igDots {
+        position: absolute;
+        inset: 0;
+        background-image: radial-gradient(circle, rgba(255,255,255,0.92) 1.5px, transparent 1.5px);
+        background-size: 15px 15px;
+        -webkit-mask-image:
+          radial-gradient(closest-side, #000 0%, rgba(0,0,0,0.35) 55%, transparent 100%),
+          radial-gradient(closest-side, #000 0%, rgba(0,0,0,0.25) 60%, transparent 100%);
+        mask-image:
+          radial-gradient(closest-side, #000 0%, rgba(0,0,0,0.35) 55%, transparent 100%),
+          radial-gradient(closest-side, #000 0%, rgba(0,0,0,0.25) 60%, transparent 100%);
+        -webkit-mask-repeat: no-repeat, no-repeat;
+        mask-repeat: no-repeat, no-repeat;
+        -webkit-mask-size: 52% 46%, 40% 40%;
+        mask-size: 52% 46%, 40% 40%;
+        -webkit-mask-position: 16% 20%, 30% 32%;
+        mask-position: 16% 20%, 30% 32%;
+        animation: ig-morph 9s ease-in-out infinite;
+      }
+      /* Soft halo sitting under the bright cluster, breathing in and out. */
+      .igGlow {
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(circle at 50% 50%, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0) 55%);
+        animation: ig-breathe 3.4s ease-in-out infinite;
+        pointer-events: none;
+      }
+      .igRes {
+        position: absolute;
+        top: 10px;
+        right: 12px;
+        font-family: 'Inter', sans-serif;
+        font-size: 10px;
+        letter-spacing: 0.08em;
+        font-variant-numeric: tabular-nums;
+        color: rgba(255,255,255,0.45);
+      }
+      .igMeta {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        flex: 0 0 auto;
+      }
+      /* Shimmer sweep across the label — that is ig-shine. */
+      .igLabel {
+        font-family: 'Inter', sans-serif;
+        font-size: 12.5px;
+        font-weight: 500;
+        letter-spacing: 0.01em;
+        background: linear-gradient(90deg,
+          rgba(255,255,255,0.30) 0%,
+          rgba(255,255,255,0.95) 50%,
+          rgba(255,255,255,0.30) 100%);
+        background-size: 220% 100%;
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        animation: ig-shine 2.6s linear infinite;
+      }
+      .igPrompt {
+        font-family: 'Inter', sans-serif;
+        font-size: 11px;
+        color: rgba(255,255,255,0.35);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      @keyframes ig-morph {
+        0% {
+          -webkit-mask-size: 52% 46%, 40% 40%;
+          mask-size: 52% 46%, 40% 40%;
+          -webkit-mask-position: 16% 20%, 30% 32%;
+          mask-position: 16% 20%, 30% 32%;
+        }
+        25% {
+          -webkit-mask-size: 46% 58%, 44% 38%;
+          mask-size: 46% 58%, 44% 38%;
+          -webkit-mask-position: 84% 16%, 66% 30%;
+          mask-position: 84% 16%, 66% 30%;
+        }
+        50% {
+          -webkit-mask-size: 60% 44%, 38% 46%;
+          mask-size: 60% 44%, 38% 46%;
+          -webkit-mask-position: 82% 84%, 62% 68%;
+          mask-position: 82% 84%, 62% 68%;
+        }
+        75% {
+          -webkit-mask-size: 48% 54%, 46% 40%;
+          mask-size: 48% 54%, 46% 40%;
+          -webkit-mask-position: 14% 82%, 34% 66%;
+          mask-position: 14% 82%, 34% 66%;
+        }
+        100% {
+          -webkit-mask-size: 52% 46%, 40% 40%;
+          mask-size: 52% 46%, 40% 40%;
+          -webkit-mask-position: 16% 20%, 30% 32%;
+          mask-position: 16% 20%, 30% 32%;
+        }
+      }
+
+      @keyframes ig-breathe {
+        0%, 100% { opacity: 0.55; }
+        50%      { opacity: 1; }
+      }
+
+      @keyframes ig-shine {
+        0%, 18%   { background-position: 100% 0; }
+        82%, 100% { background-position: 0% 0; }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .igDots, .igGlow, .igLabel { animation: none; }
+        .igLabel { -webkit-text-fill-color: rgba(255,255,255,0.9); }
+      }
+      /* Safari needs the -webkit- prefix to honour background-clip on text. */
+      @supports not ((-webkit-background-clip: text) or (background-clip: text)) {
+        .igLabel { color: rgba(255,255,255,0.9); background: none; animation: none; }
+      }
     </style>
 
   <script type="importmap">
@@ -144,7 +500,7 @@
   }
 }
 </script>
-  <script type="module" crossorigin src="/assets/index-fRxMXNji.js"></script>
+  <script type="module" crossorigin src="/assets/index-96bXngoz.js"></script>
 </head>
   <body>
     <div id="root"></div>    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>    

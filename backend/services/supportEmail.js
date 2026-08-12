@@ -39,5 +39,8 @@ ${message}
 
 module.exports = {
   sendSupportEmail,
+  // Shared so other outbound mail (e.g. the manual reel handoff) uses the
+  // same authenticated Zoho transport rather than duplicating SMTP config.
+  createTransporter,
 };
 

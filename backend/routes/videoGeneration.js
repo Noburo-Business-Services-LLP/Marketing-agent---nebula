@@ -79,6 +79,7 @@ const { callOpenAI } = require('../services/openAI');
 const User = require('../models/User');
 const { buildAIContext } = require('../services/aiContextBuilder');
 const { learnVideoStep } = require('../services/aiVideoLearning');
+const { sendReelHandoffEmail } = require('../services/reelHandoffEmail');
 
 // -----------------------------------------------------------------------------
 // Register persistent background handlers for queue tasks
@@ -3363,6 +3364,67 @@ router.post('/mixAudio', protect, checkTrial, videoAiWriteLimiter, async (req, r
     });
   } catch (error) {
     return responseError(res, error, 'Failed to mix audio');
+  }
+});
+
+// ============================================================
+// MANUAL VIDEO HANDOFF
+// POST /request-manual-video  { jobId }
+// Wizard stops after Scene Images — mail the whole storyboard
+// (user identity + steps 1-5 + rendered images) to the team, who
+// produce the clips, audio and final cut off-platform.
+// ============================================================
+router.post('/request-manual-video', protect, videoAiWriteLimiter, async (req, res) => {
+  try {
+    const { jobId } = req.body || {};
+    if (!jobId) {
+      return res.status(400).json({ success: false, message: 'jobId is required' });
+    }
+
+    const userId = toUserId(req.user);
+    const draft = await loadDraftForUser(jobId, userId);
+
+    const scenes = Array.isArray(draft?.scenes) ? draft.scenes : (draft?.scenes?.sceneData || []);
+    const rendered = (Array.isArray(scenes) ? scenes : []).filter((s) => String(s?.imageUrl || '').trim());
+    if (!rendered.length) {
+      return res.status(422).json({
+        success: false,
+        message: 'Generate the scene images before sending this to our team.'
+      });
+    }
+
+    // req.user may be a lean token payload — read the full record so the
+    // email carries the real username / business details.
+    const user = (await User.findById(userId).lean().catch(() => null)) || req.user || {};
+
+    const result = await sendReelHandoffEmail({
+      draft,
+      user,
+      baseUrl: reqBaseUrl(req)
+    });
+
+    const updated = await updateDraft(jobId, userId, (current) => ({
+      ...current,
+      currentStep: Math.max(Number(current.currentStep || 1), 6),
+      handoff: {
+        requestedAt: new Date().toISOString(),
+        recipient: result.recipient,
+        sceneCount: result.sceneCount,
+        imageCount: result.imageCount
+      }
+    }));
+
+    return res.json({
+      success: true,
+      jobId,
+      handoff: updated?.handoff || null,
+      sentTo: result.recipient,
+      imageCount: result.imageCount,
+      attachedCount: result.attachedCount,
+      draft: updated
+    });
+  } catch (error) {
+    return responseError(res, error, 'Failed to send your video request');
   }
 });
 

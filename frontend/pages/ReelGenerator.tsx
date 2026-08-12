@@ -52,21 +52,52 @@ const VIDEO_STYLES: { value: string; slug: string; blurb: string }[] = [
   { value: 'Luxury Advertisement', slug: 'luxury-advertisement', blurb: 'Restrained, premium, gold and black' }
 ];
 
-const WIZARD_STEPS = [
-  'Input',
-  'Character & Video Style Configuration',
-  'Environment',
-  'Script + Scenes',
-  'Scene Images',
-  'Video Clips',
-  'Audio Config',
-  'Audio Mix',
-  'Video Merge',
-  'Thumbnail + Content',
-  'Platform Select',
-  'Scheduling',
-  'Final Output'
+// Clips, audio and merge are produced by the Nebulaa team off-platform for
+// now, so those four steps are hidden and Scene Images hands off by email
+// instead. Set this to false to restore the self-serve pipeline — the step
+// 7-9 panels further down are left intact for exactly that.
+const MANUAL_VIDEO_HANDOFF = true;
+
+const HANDOFF_STEP = 6;        // replaces "Video Clips"
+const PIPELINE_STEPS = [7, 8, 9]; // Audio Config, Audio Mix, Video Merge
+const FINAL_OUTPUT_STEP = 13;
+
+// Internal step numbers stay stable so every `step === N` below keeps
+// working; only what the stepper shows (and what Next skips to) changes.
+const ALL_WIZARD_STEPS: { label: string; step: number }[] = [
+  { label: 'Input', step: 1 },
+  { label: 'Character & Video Style Configuration', step: 2 },
+  { label: 'Environment', step: 3 },
+  { label: 'Script + Scenes', step: 4 },
+  { label: 'Scene Images', step: 5 },
+  { label: 'Video Clips', step: HANDOFF_STEP },
+  { label: 'Audio Config', step: 7 },
+  { label: 'Audio Mix', step: 8 },
+  { label: 'Video Merge', step: 9 },
+  { label: 'Thumbnail + Content', step: 10 },
+  { label: 'Platform Select', step: 11 },
+  { label: 'Scheduling', step: 12 },
+  { label: 'Final Output', step: FINAL_OUTPUT_STEP }
 ];
+
+const WIZARD_STEPS = MANUAL_VIDEO_HANDOFF
+  ? ALL_WIZARD_STEPS
+    .filter((entry) => !PIPELINE_STEPS.includes(entry.step))
+    .map((entry) => (entry.step === HANDOFF_STEP ? { ...entry, label: 'Send to Our Team' } : entry))
+  : ALL_WIZARD_STEPS;
+
+// Where the handoff step continues to once the request is sent.
+const STEP_AFTER_HANDOFF = MANUAL_VIDEO_HANDOFF ? 10 : 7;
+
+// Walking back with `step - 1` would land on a hidden pipeline step (a blank
+// panel), so step back through the visible list instead.
+function previousVisibleStep(current: number): number {
+  const visible = WIZARD_STEPS.map((entry) => entry.step);
+  const index = visible.indexOf(current);
+  if (index > 0) return visible[index - 1];
+  const below = visible.filter((entry) => entry < current);
+  return below.length ? below[below.length - 1] : 1;
+}
 
 function fileToDataUrl(file: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -562,6 +593,9 @@ const ReelGenerator: React.FC = () => {
   const [finalVideoUrl, setFinalVideoUrl] = useState('');
   const [finalOutputUrl, setFinalOutputUrl] = useState('');
 
+  // Manual handoff: set once the storyboard has been mailed to the team.
+  const [handoffResult, setHandoffResult] = useState<{ sentTo: string; imageCount: number; attachedCount: number } | null>(null);
+
   const [thumbnailUrl, setThumbnailUrl] = useState('');
   const [caption, setCaption] = useState('');
   const [hashtagsText, setHashtagsText] = useState('');
@@ -663,7 +697,7 @@ const ReelGenerator: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const deriveStepFromDraft = (d: any) => {
+  const deriveRawStepFromDraft = (d: any) => {
     // With the new Environment step at position 3, everything downstream
     // shifts +1. Max step is now 13 (Final Output).
     const explicit = Number.parseInt(String(d?.currentStep || ''), 10);
@@ -681,6 +715,14 @@ const ReelGenerator: React.FC = () => {
     if (d?.environment && (d.environment.enabled !== undefined || d.environment.referenceImages?.length)) return 3;
     if (d?.characterEnabled !== undefined || d?.videoStyle) return 2;
     return 1;
+  };
+
+  // Drafts created before the manual handoff can point at a clips/audio/merge
+  // step that is no longer rendered. Snap those onto the handoff step so the
+  // wizard never restores into a blank panel.
+  const deriveStepFromDraft = (d: any) => {
+    const raw = deriveRawStepFromDraft(d);
+    return MANUAL_VIDEO_HANDOFF && PIPELINE_STEPS.includes(raw) ? HANDOFF_STEP : raw;
   };
 
   const resetActiveJobState = () => {
@@ -929,6 +971,14 @@ setCharacterAge(nextDraft?.characterAge || '');
     if (nextDraft?.mix?.finalAudioUrl) setFinalAudioUrl(nextDraft.mix.finalAudioUrl);
     if (nextDraft?.merge?.finalVideoUrl) setFinalVideoUrl(nextDraft.merge.finalVideoUrl);
     if (nextDraft?.merge?.finalOutputUrl) setFinalOutputUrl(nextDraft.merge.finalOutputUrl);
+    // Keeps the handoff step showing "Already Sent" after a refresh.
+    if (nextDraft?.handoff?.requestedAt) {
+      setHandoffResult({
+        sentTo: String(nextDraft.handoff.recipient || ''),
+        imageCount: Number(nextDraft.handoff.imageCount || 0),
+        attachedCount: 0
+      });
+    }
     if (nextDraft?.content?.thumbnailUrl) setThumbnailUrl(nextDraft.content.thumbnailUrl);
     if (nextDraft?.content?.caption) setCaption(nextDraft.content.caption);
     if (Array.isArray(nextDraft?.content?.hashtags)) setHashtagsText(nextDraft.content.hashtags.join(' '));
@@ -1852,6 +1902,20 @@ setCharacterAge(nextDraft?.characterAge || '');
     setStep(8);
   });
 
+  // Mails the whole storyboard — identity, steps 1-5 and the rendered scene
+  // images — to the Nebulaa team, who cut the video off-platform.
+  const sendToTeam = async () => withBusy(async () => {
+    if (!jobId) throw new Error('Draft missing');
+    const response = await videoGenerationAPI.requestManualVideo({ jobId });
+    if (!response?.success) throw new Error(response?.message || 'Could not send your request');
+    setHandoffResult({
+      sentTo: String(response.sentTo || ''),
+      imageCount: Number(response.imageCount || 0),
+      attachedCount: Number(response.attachedCount || 0)
+    });
+    setDraft(response.draft || draft);
+  });
+
   const mixAudio = async () => withBusy(async () => {
     if (!jobId) throw new Error('Draft missing');
     const response = await videoGenerationAPI.mixAudio({
@@ -1964,6 +2028,7 @@ setCharacterAge(nextDraft?.characterAge || '');
       setFinalAudioUrl('');
       setFinalVideoUrl('');
       setFinalOutputUrl('');
+      setHandoffResult(null);
       setThumbnailUrl('');
       setCaption('');
       setHashtagsText('');
@@ -2317,12 +2382,14 @@ setCharacterAge(nextDraft?.characterAge || '');
           <>
             <div className={`${panelClass} p-4`}>
               <div className="grid grid-cols-2 md:grid-cols-6 lg:grid-cols-11 gap-2">
-                {WIZARD_STEPS.map((label, idx) => {
-                  const stepNo = idx + 1;
+                {WIZARD_STEPS.map(({ label, step: stepNo }, idx) => {
+                  // Display position is sequential (1..n) so hiding the
+                  // pipeline steps doesn't leave gaps like "6, 10, 11".
+                  const displayNo = idx + 1;
                   const active = stepNo === step;
                   const done = stepNo < step;
-                  // Step 11 (Final Output) is also reachable any time the final video has been rendered
-                  const finalReady = stepNo === 11 && !!(finalOutputUrl || finalVideoUrl);
+                  // Final Output is also reachable any time the final video has been rendered
+                  const finalReady = stepNo === FINAL_OUTPUT_STEP && !!(finalOutputUrl || finalVideoUrl);
                   const clickable = done || finalReady;
                   return (
                     <button
@@ -2341,7 +2408,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                             : 'bg-slate-50 border-slate-200 text-slate-400')
                         }`}
                     >
-                      {stepNo}. {label}
+                      {displayNo}. {label}
                     </button>
                   );
                 })}
@@ -2351,7 +2418,7 @@ setCharacterAge(nextDraft?.characterAge || '');
             {step > 1 && step < 11 && (
               <button
                 type="button"
-                onClick={() => setStep((current) => Math.max(1, current - 1))}
+                onClick={() => setStep((current) => previousVisibleStep(current))}
                 disabled={busy}
                 className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-semibold transition-colors ${busy
                   ? (isDarkMode ? 'border-slate-800 text-slate-600 cursor-not-allowed' : 'border-slate-200 text-slate-400 cursor-not-allowed')
@@ -4125,7 +4192,89 @@ setCharacterAge(nextDraft?.characterAge || '');
               </div>
             )}
 
-            {step === 6 && (
+            {step === HANDOFF_STEP && MANUAL_VIDEO_HANDOFF && (() => {
+              const rendered = scenes.filter((s) => s.imageUrl);
+              const sent = Boolean(handoffResult);
+              return (
+                <div className={`${panelClass} p-6 space-y-5`}>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <h2 className={`font-bold text-lg ${theme.text}`}>Step 6: Send to Our Team</h2>
+                    <span className={`text-[11px] px-2 py-1 rounded-full border ${theme.textMuted} border-white/10`}>
+                      {rendered.length} of {scenes.length} scenes rendered
+                    </span>
+                  </div>
+
+                  <p className={`text-sm leading-relaxed ${theme.textSecondary}`}>
+                    Your storyboard is ready. Send it to our team and we'll produce the
+                    finished video for you — clips, voiceover, music and the final cut.
+                    We'll reply to your registered email once it's done.
+                  </p>
+
+                  <div className={`rounded-xl border ${isDarkMode ? 'border-white/10 bg-white/[0.02]' : 'border-slate-200 bg-slate-50'} p-4`}>
+                    <p className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>What we'll receive</p>
+                    <ul className={`mt-2 space-y-1 text-[13px] ${theme.textSecondary}`}>
+                      <li>· Your email address and username</li>
+                      <li>· The brief, duration, aspect ratio and language</li>
+                      <li>· Character and video style settings</li>
+                      <li>· Environment references and notes</li>
+                      <li>· The full script and every scene's direction</li>
+                      <li>· All {rendered.length} generated scene image{rendered.length === 1 ? '' : 's'}</li>
+                    </ul>
+                  </div>
+
+                  {rendered.length > 0 && (
+                    <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-6 gap-2">
+                      {rendered.map((scene, idx) => (
+                        <div key={scene.sceneId || idx} className="relative rounded-lg overflow-hidden border border-white/10">
+                          <img src={scene.imageUrl} alt={`Scene ${idx + 1}`} className="w-full h-20 object-cover" />
+                          <span className="absolute bottom-1 left-1 text-[10px] px-1.5 py-0.5 rounded bg-black/70 text-white">
+                            {idx + 1}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {sent ? (
+                    <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/5 p-4">
+                      <p className="text-sm font-semibold text-emerald-400">Request sent</p>
+                      <p className={`text-[13px] mt-1 ${theme.textSecondary}`}>
+                        We received your storyboard and {handoffResult?.imageCount} scene image
+                        {handoffResult?.imageCount === 1 ? '' : 's'}. Our team will get in touch
+                        on your registered email.
+                      </p>
+                    </div>
+                  ) : rendered.length === 0 && (
+                    <div className="rounded-xl border border-amber-500/40 bg-amber-500/5 p-3">
+                      <p className={`text-[13px] ${theme.text}`}>
+                        Generate your scene images first — go back to Step 5.
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-1">
+                    <button
+                      onClick={sendToTeam}
+                      disabled={busy || !rendered.length || sent}
+                      className="px-5 py-3 rounded-xl border border-[#ffcc29] text-[#ffcc29] font-semibold disabled:opacity-50"
+                    >
+                      {busy
+                        ? <Loader2 className="w-4 h-4 animate-spin inline" />
+                        : sent ? 'Already Sent' : 'Send to Our Team'}
+                    </button>
+                    <button
+                      onClick={() => setStep(STEP_AFTER_HANDOFF)}
+                      disabled={!sent}
+                      className={primaryButtonClass(!sent)}
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {step === 6 && !MANUAL_VIDEO_HANDOFF && (
               <div className={`${panelClass} p-6 space-y-4`}>
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <h2 className={`font-bold text-lg ${theme.text}`}>Step 4: Video Clip Generation</h2>
