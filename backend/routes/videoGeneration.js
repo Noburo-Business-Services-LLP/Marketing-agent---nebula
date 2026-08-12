@@ -3329,11 +3329,28 @@ router.post('/mixAudio', protect, checkTrial, videoAiWriteLimiter, async (req, r
       baseUrl: reqBaseUrl(req)
     });
 
+    // mergeAudioTracks returns null when no track resolved to a real file.
+    // Reporting success with a null URL left the UI rendering a player that
+    // could never load, which is indistinguishable from a broken mix.
+    if (!mixed?.finalAudioUrl) {
+      const present = Object.entries({
+        voice: mergedTracks?.voiceUrl,
+        music: mergedTracks?.backgroundUrl,
+        manual: mergedTracks?.manualUrl
+      }).filter(([, v]) => Boolean(v)).map(([k]) => k);
+      return res.status(422).json({
+        success: false,
+        message: present.length
+          ? `Audio mix produced no output from: ${present.join(', ')}. Re-generate the audio preview and try again.`
+          : 'No audio tracks to mix — generate the voice and music previews first.'
+      });
+    }
+
     const updated = await updateDraft(jobId, userId, (current) => ({
       ...current,
       currentStep: Math.max(Number(current.currentStep || 1), 6),
       mix: {
-        finalAudioUrl: mixed?.finalAudioUrl || null,
+        finalAudioUrl: mixed.finalAudioUrl,
         mixedAt: new Date().toISOString()
       }
     }));
@@ -3341,7 +3358,7 @@ router.post('/mixAudio', protect, checkTrial, videoAiWriteLimiter, async (req, r
     return res.json({
       success: true,
       jobId,
-      finalAudioUrl: updated?.mix?.finalAudioUrl || null,
+      finalAudioUrl: updated?.mix?.finalAudioUrl || mixed.finalAudioUrl,
       draft: updated
     });
   } catch (error) {

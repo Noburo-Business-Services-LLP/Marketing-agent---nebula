@@ -3946,6 +3946,19 @@ async function mergeAudioTracks({
   const inputTracks = ffmpegInputsForTracks(audioTracks, normalizedAudioOptions);
   if (!inputTracks.length) return null;
 
+  // ffmpeg can exit 0 having written nothing usable (bad filter graph, an
+  // input that resolved to a 0-byte file). Returning the URL anyway gave the
+  // UI a player it could never load — a silent 0:00 / 0:00. Verify instead.
+  const assertPlayableOutput = async (outPath) => {
+    const stat = await fs.promises.stat(outPath).catch(() => null);
+    if (!stat || stat.size < 1024) {
+      throw new Error(
+        `Audio mix produced an unplayable file (${stat ? `${stat.size} bytes` : 'missing'}). ` +
+        `Inputs: ${inputTracks.map((t) => `${t.label}=${path.basename(t.path)}`).join(', ')}`
+      );
+    }
+  };
+
   const outputPath = path.join(context.dirs.final, 'final_audio.mp3');
   const outputUrl = buildMediaUrl(context.baseUrl, context.jobId, ['final', 'final_audio.mp3']);
   const safeDuration = clamp(Number.parseInt(String(durationSeconds || 0), 10), 3, 1800);
@@ -3966,6 +3979,7 @@ async function mergeAudioTracks({
       outputPath
     );
     await runFfmpeg(args);
+    await assertPlayableOutput(outputPath);
     return { path: outputPath, url: outputUrl };
   }
 
@@ -3991,6 +4005,7 @@ async function mergeAudioTracks({
   );
 
   await runFfmpeg(args);
+  await assertPlayableOutput(outputPath);
   return { path: outputPath, url: outputUrl };
 }
 
