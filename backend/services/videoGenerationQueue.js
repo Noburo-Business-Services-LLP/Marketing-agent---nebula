@@ -137,38 +137,40 @@ class PersistentVideoGenerationQueue {
     const processingJobs = await VideoJob.find({ status: 'processing' });
     if (!processingJobs.length) return;
 
-    console.log(`Persistent Queue: Re-queueing ${processingJobs.length} interrupted processing job(s) after startup.`);
+    // NEVER re-queue on startup. Every restart and every redeploy used to
+    // re-run whatever was mid-flight, silently spending fal.ai credits with
+    // nobody asking for it. Mark them failed instead — the user decides.
+    console.log(`Persistent Queue: Marking ${processingJobs.length} interrupted job(s) failed after startup (no auto-retry).`);
     for (const job of processingJobs) {
-      const maxAttempts = Number(process.env.VIDEO_JOB_MAX_ATTEMPTS || '3');
-      if ((Number(job.attempts) || 0) >= maxAttempts) {
-        await VideoJob.updateOne(
-          { jobId: job.jobId },
-          {
-            $set: {
-              status: 'failed',
-              currentStep: 'stale_recovery_failed',
-              completedAt: new Date(),
-              updatedAt: new Date(),
-              error: { message: `Job interrupted and exceeded maximum attempts (${maxAttempts}).`, stack: null }
-            }
-          }
-        );
-        continue;
-      }
-
       await VideoJob.updateOne(
         { jobId: job.jobId },
         {
           $set: {
-            status: 'queued',
-            currentStep: 'stale_recovery_retry',
-            updatedAt: new Date()
+            status: 'failed',
+            currentStep: 'stale_recovery_failed',
+            completedAt: new Date(),
+            updatedAt: new Date(),
+            error: { message: 'The server restarted while this job was running. Press Retry to try again.', stack: null }
           },
           $push: {
-            logs: `[${new Date().toISOString()}] App restarted while job was processing. Re-queued automatically.`
+            logs: `[${new Date().toISOString()}] App restarted while job was processing. Marked failed — retries are manual only.`
           }
         }
       );
+
+      if (job.userId) {
+        try {
+          const { refundCredits } = require('../middleware/trialGuard');
+          await refundCredits(
+            job.userId,
+            'campaign_full',
+            1,
+            `Refund: AI video job ${job.jobId} interrupted by server restart`
+          );
+        } catch (refundError) {
+          console.error(`⚠️ Failed to refund credits for interrupted job ${job.jobId}:`, refundError.message);
+        }
+      }
     }
   }
 
@@ -203,56 +205,43 @@ class PersistentVideoGenerationQueue {
       console.log(`⚠️ Persistent Queue: Found ${staleJobs.length} stale/hung jobs in 'processing' state.`);
       
       for (const job of staleJobs) {
-        const maxAttempts = Number(process.env.VIDEO_JOB_MAX_ATTEMPTS || '3');
-        if (job.attempts < maxAttempts) {
-          console.log(`🔄 Resetting stale job ${job.jobId} to 'queued' (Attempts: ${job.attempts}/${maxAttempts})`);
-          await VideoJob.updateOne(
-            { jobId: job.jobId },
-            {
-              $set: {
-                status: 'queued',
-                currentStep: 'stale_recovery_retry',
-                updatedAt: new Date()
-              },
-              $push: {
-                logs: `[${new Date().toISOString()}] Job detected as stale/hung (no updates for ${Math.round(STALE_TIMEOUT_MS / 60000)}m). Automatically resetting to queued for retry.`
+        // NEVER re-queue a stale job. fal.subscribe has no timeout, so a
+        // "hung" job is often still running and still being billed —
+        // re-queueing started a second paid generation alongside the first.
+        // Mark it failed, refund, and let the user press Retry if they want
+        // to spend again.
+        console.log(`❌ Stale job ${job.jobId} marked failed (no auto-retry; user can retry manually).`);
+        await VideoJob.updateOne(
+          { jobId: job.jobId },
+          {
+            $set: {
+              status: 'failed',
+              currentStep: 'stale_recovery_failed',
+              completedAt: new Date(),
+              updatedAt: new Date(),
+              error: {
+                message: `Job stopped responding for ${Math.round(STALE_TIMEOUT_MS / 60000)} minutes and was stopped. Press Retry to try again.`,
+                stack: null
               }
+            },
+            $push: {
+              logs: `[${new Date().toISOString()}] Job detected as stale/hung (no updates for ${Math.round(STALE_TIMEOUT_MS / 60000)}m). Marked failed — retries are manual only.`
             }
-          );
-        } else {
-          console.log(`❌ Stale job ${job.jobId} exceeded max attempts (${job.attempts}/${maxAttempts}). Marking as failed.`);
-          await VideoJob.updateOne(
-            { jobId: job.jobId },
-            {
-              $set: {
-                status: 'failed',
-                currentStep: 'stale_recovery_failed',
-                completedAt: new Date(),
-                updatedAt: new Date(),
-                error: {
-                  message: `Job timed out and exceeded maximum recovery attempts (${maxAttempts}).`,
-                  stack: null
-                }
-              },
-              $push: {
-                logs: `[${new Date().toISOString()}] Job detected as stale/hung (no updates for ${Math.round(STALE_TIMEOUT_MS / 60000)}m). Exceeded max attempts (${maxAttempts}). Marking as failed.`
-              }
-            }
-          );
+          }
+        );
 
-          // Refund credits to user on stale failure
-          if (job.userId) {
-            try {
-              const { refundCredits } = require('../middleware/trialGuard');
-              await refundCredits(
-                job.userId,
-                'campaign_full',
-                1,
-                `Refund: Stale AI video generation job ${job.jobId} failed`
-              );
-            } catch (refundError) {
-              console.error(`⚠️ Failed to refund credits for stale job ${job.jobId}:`, refundError.message);
-            }
+        // Refund credits to user on stale failure
+        if (job.userId) {
+          try {
+            const { refundCredits } = require('../middleware/trialGuard');
+            await refundCredits(
+              job.userId,
+              'campaign_full',
+              1,
+              `Refund: Stale AI video generation job ${job.jobId} failed`
+            );
+          } catch (refundError) {
+            console.error(`⚠️ Failed to refund credits for stale job ${job.jobId}:`, refundError.message);
           }
         }
       }
@@ -502,20 +491,9 @@ class PersistentVideoGenerationQueue {
       }
     } catch (error) {
       console.error(`❌ Video job ${jobId} failed:`, error);
-      const maxAttempts = Number(process.env.VIDEO_JOB_MAX_ATTEMPTS || '3');
-      if ((Number(jobDoc.attempts) || 0) < maxAttempts) {
-        await this._updateJob(jobId, {
-          status: 'queued',
-          currentStep: 'retrying',
-          error: {
-            message: error?.message || 'Video generation job failed',
-            stack: null
-          }
-        });
-        await this._pushLog(jobId, `Retrying failed job automatically (${jobDoc.attempts}/${maxAttempts})`);
-        return;
-      }
-
+      // NO AUTOMATIC RETRY. Every retry re-runs paid fal.ai generation, so a
+      // failure must cost exactly one run. The job is left failed (credits are
+      // refunded below) and only the user can retry it, via retryJob().
       await this._updateJob(jobId, {
         status: 'failed',
         currentStep: 'failed',
