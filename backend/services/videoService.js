@@ -333,6 +333,13 @@ async function generateVideoClip(scene = {}) {
   const startTime = Date.now();
   let result;
   try {
+    // NO AUTOMATIC RETRY by default. Each attempt is a separately billed
+    // fal.ai generation, and a failure here often means the render already
+    // started on their side — so retrying pays twice for one clip. This used
+    // to be 2 (3 attempts per scene), which stacked on top of the queue's own
+    // retries. Retrying is the user's call: they press Generate again.
+    // Set FAL_VIDEO_MAX_RETRIES if you knowingly want to pay for retries.
+    const falMaxRetries = Math.max(0, Number.parseInt(String(process.env.FAL_VIDEO_MAX_RETRIES || '0'), 10) || 0);
     result = await retry(
       `Fal.ai video clip for ${scene.sceneId || scene.id || 'scene'}`,
       async (attempt) => {
@@ -343,7 +350,7 @@ async function generateVideoClip(scene = {}) {
         console.log(`Fal render attempt ${attempt + 1} completed in ${subDuration}ms. Status: Success`);
         return res;
       },
-      2
+      falMaxRetries
     );
     const durationMs = Date.now() - startTime;
     console.log(`Scene ${scene.sceneId || scene.id || 'unknown'} render duration: ${durationMs}ms`);
