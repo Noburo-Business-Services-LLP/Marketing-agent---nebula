@@ -126,7 +126,10 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
     { path: '/campaigns',        label: 'Create',   icon: Sparkles },
     { path: '/drafts',           label: 'Approve',  icon: PenTool, badge: 'drafts' as const },
     { path: '/content-calendar', label: 'Calendar', icon: CalendarDays },
-    { path: '/analytics',        label: 'Insights', icon: BarChart3 },
+    // Insights is hidden from navigation. Like the entries below, its route
+    // and page are left intact so nothing breaks and it can be restored by
+    // putting this line back:
+    //   { path: '/analytics', label: 'Insights', icon: BarChart3 },
   ];
   // Ad Campaigns, Influencer Portal, Inventory and Competitors are hidden
   // from navigation. Their routes and pages are left intact so nothing
