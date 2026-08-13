@@ -52,21 +52,27 @@ const VIDEO_STYLES: { value: string; slug: string; blurb: string }[] = [
   { value: 'Luxury Advertisement', slug: 'luxury-advertisement', blurb: 'Restrained, premium, gold and black' }
 ];
 
-const WIZARD_STEPS = [
-  'Input',
-  'Character & Video Style Configuration',
-  'Environment',
-  'Script + Scenes',
-  'Scene Images',
-  'Video Clips',
-  'Audio Config',
-  'Audio Mix',
-  'Video Merge',
-  'Thumbnail + Content',
-  'Platform Select',
-  'Scheduling',
-  'Final Output'
+const FINAL_OUTPUT_STEP = 13;
+
+// Platform Select (11) and Scheduling (12) are no longer part of the reel
+// wizard — publishing is handled from the library instead. Their internal
+// step numbers are left untouched so every `step === N` below still lines up;
+// they are simply not listed here, so the stepper never routes to them.
+const WIZARD_STEPS: { label: string; step: number }[] = [
+  { label: 'Input', step: 1 },
+  { label: 'Character & Video Style Configuration', step: 2 },
+  { label: 'Environment', step: 3 },
+  { label: 'Script + Scenes', step: 4 },
+  { label: 'Scene Images', step: 5 },
+  { label: 'Video Clips', step: 6 },
+  { label: 'Audio Config', step: 7 },
+  { label: 'Audio Mix', step: 8 },
+  { label: 'Video Merge', step: 9 },
+  { label: 'Thumbnail + Content', step: 10 },
+  { label: 'Final Output', step: FINAL_OUTPUT_STEP }
 ];
+
+const REMOVED_STEPS = [11, 12];
 
 function fileToDataUrl(file: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -663,7 +669,7 @@ const ReelGenerator: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const deriveStepFromDraft = (d: any) => {
+  const deriveRawStepFromDraft = (d: any) => {
     // With the new Environment step at position 3, everything downstream
     // shifts +1. Max step is now 13 (Final Output).
     const explicit = Number.parseInt(String(d?.currentStep || ''), 10);
@@ -681,6 +687,14 @@ const ReelGenerator: React.FC = () => {
     if (d?.environment && (d.environment.enabled !== undefined || d.environment.referenceImages?.length)) return 3;
     if (d?.characterEnabled !== undefined || d?.videoStyle) return 2;
     return 1;
+  };
+
+  // Older drafts can point at Platform Select or Scheduling, which no longer
+  // render. Send those to Final Output so the wizard never opens on a blank
+  // panel — by that point the video is finished anyway.
+  const deriveStepFromDraft = (d: any) => {
+    const raw = deriveRawStepFromDraft(d);
+    return REMOVED_STEPS.includes(raw) ? FINAL_OUTPUT_STEP : raw;
   };
 
   const resetActiveJobState = () => {
@@ -2317,12 +2331,14 @@ setCharacterAge(nextDraft?.characterAge || '');
           <>
             <div className={`${panelClass} p-4`}>
               <div className="grid grid-cols-2 md:grid-cols-6 lg:grid-cols-11 gap-2">
-                {WIZARD_STEPS.map((label, idx) => {
-                  const stepNo = idx + 1;
+                {WIZARD_STEPS.map(({ label, step: stepNo }, idx) => {
+                  // Position shown to the user stays 1..n so dropping the
+                  // publishing steps doesn't leave a gap before Final Output.
+                  const displayNo = idx + 1;
                   const active = stepNo === step;
                   const done = stepNo < step;
-                  // Step 11 (Final Output) is also reachable any time the final video has been rendered
-                  const finalReady = stepNo === 11 && !!(finalOutputUrl || finalVideoUrl);
+                  // Final Output is also reachable any time the final video has been rendered
+                  const finalReady = stepNo === FINAL_OUTPUT_STEP && !!(finalOutputUrl || finalVideoUrl);
                   const clickable = done || finalReady;
                   return (
                     <button
@@ -2341,7 +2357,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                             : 'bg-slate-50 border-slate-200 text-slate-400')
                         }`}
                     >
-                      {stepNo}. {label}
+                      {displayNo}. {label}
                     </button>
                   );
                 })}
@@ -4668,7 +4684,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                     </div>
                   </div>
                 </div>
-                <button onClick={() => setStep(11)} disabled={!canStep8Next} className={primaryButtonClass(!canStep8Next)}>Next</button>
+                <button onClick={() => setStep(FINAL_OUTPUT_STEP)} disabled={!canStep8Next} className={primaryButtonClass(!canStep8Next)}>Next</button>
               </div>
             )}
 

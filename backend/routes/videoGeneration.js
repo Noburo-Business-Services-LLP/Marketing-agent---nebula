@@ -79,6 +79,7 @@ const { callOpenAI } = require('../services/openAI');
 const User = require('../models/User');
 const { buildAIContext } = require('../services/aiContextBuilder');
 const { learnVideoStep } = require('../services/aiVideoLearning');
+const { overlayLogoAndUpload } = require('../services/logoOverlay');
 
 // -----------------------------------------------------------------------------
 // Register persistent background handlers for queue tasks
@@ -1182,14 +1183,40 @@ Rules:
   }
 }
 
+// Scenes live in different places depending on which wizard steps have run
+// (draft.scenes as an array, draft.scenes.sceneData, or draft.images.sceneData).
+// Reading only one of them is why the caption used to come out generic — the
+// summary was empty, so the model had nothing concrete to write about.
+function collectDraftScenes(draft = {}) {
+  const candidates = [
+    Array.isArray(draft?.scenes) ? draft.scenes : null,
+    Array.isArray(draft?.scenes?.sceneData) ? draft.scenes.sceneData : null,
+    Array.isArray(draft?.images?.sceneData) ? draft.images.sceneData : null,
+    Array.isArray(draft?.clips?.sceneData) ? draft.clips.sceneData : null
+  ].filter(Boolean);
+  return candidates.find((arr) => arr.length) || [];
+}
+
 async function generateCaptionAndHashtags({ draft, selectedPlatforms = [] }) {
-  const sceneSummary = Array.isArray(draft?.scenes?.sceneData)
-    ? draft.scenes.sceneData
-      .map((scene) => String(scene?.voiceLine || scene?.onScreenText || scene?.title || '').trim())
-      .filter(Boolean)
-      .slice(0, 5)
-      .join(' | ')
-    : '';
+  const scenes = collectDraftScenes(draft);
+  const beatByBeat = scenes
+    .map((scene, i) => {
+      const line = String(scene?.scriptLine || scene?.voiceLine || '').trim();
+      const visual = String(scene?.title || scene?.visualDescription || '').trim();
+      if (!line && !visual) return '';
+      return `  ${i + 1}. ${visual}${line ? ` — spoken: "${line}"` : ''}`;
+    })
+    .filter(Boolean)
+    .join('\n');
+
+  const voiceScript = String(
+    draft?.scenesMetadata?.voiceScript || draft?.scenes?.voiceScript || ''
+  ).trim();
+  const story = String(draft?.scenes?.story || '').trim();
+
+  const profile = draft?.userId
+    ? (await User.findById(draft.userId).lean().catch(() => null))?.businessProfile || {}
+    : {};
 
   const aiMemoryContext = await buildAIContext({
     userId: draft?.userId,
@@ -1198,23 +1225,45 @@ async function generateCaptionAndHashtags({ draft, selectedPlatforms = [] }) {
     category: draft?.input?.product?.category || ''
   });
 
-  const prompt = `Create social caption and hashtags.
+  const prompt = `Write the social caption for THIS specific video — not a generic one.
+
 Return STRICT JSON:
 {
   "caption": "string",
   "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5", "#tag6"]
 }
 
-Context:
-- Description: ${draft?.input?.description || ''}
-- Prompt: ${draft?.prompt?.promptText || ''}
-- Scene summary: ${sceneSummary || 'N/A'}
+THE BUSINESS
+- Name: ${profile?.name || 'N/A'}
+- Industry: ${profile?.industry || 'N/A'}
+- Audience: ${profile?.targetAudience || 'N/A'}
+- Product featured: ${draft?.input?.product?.name || 'N/A'}
+
+THE VIDEO (this is what the caption must be about)
+- Brief: ${draft?.input?.description || 'N/A'}
+- Story: ${story || 'N/A'}
+- Style: ${draft?.videoStyle || 'N/A'}
+${draft?.characterName ? `- Character on screen: ${draft.characterName}` : ''}
+- Narration: ${voiceScript || 'N/A'}
+- Scene by scene:
+${beatByBeat || '  (no scenes available)'}
+
 - Platforms: ${selectedPlatforms.join(', ') || 'instagram'}
 ${aiMemoryContext.reusablePromptText}
 
-Rules:
-- caption: 1-3 lines, conversion-aware, no markdown.
-- hashtags: 5 to 12 relevant tags, each starting with #.`;
+RULES
+- The caption MUST reference what actually happens in this video — the specific
+  product, the moment, the transformation, the feeling this story creates.
+  Someone who watched it should recognise it from the caption alone.
+- BANNED: "Discover our latest", "Elevate your", "Take your X to the next level",
+  "Unlock", "Game-changer", "Look no further", and any line that would fit an
+  unrelated business unchanged. If the caption would work for a different
+  company's video, rewrite it.
+- Name the business or product at least once where it reads naturally.
+- 1-3 lines, conversational, no markdown, no emoji spam (2 max).
+- End with a clear next step suited to the business (visit, DM, call, order).
+- hashtags: 5-12 tags. Mix specific (product, city, category) with reach tags.
+  No single-word generics like #love or #instagood.`;
 
   try {
     const raw = await callGemini(prompt, {
@@ -1237,14 +1286,64 @@ Rules:
     if (!caption) throw new Error('Caption missing');
     return { caption, hashtags };
   } catch (_) {
-    const fallbackCaption = String(draft?.input?.description || '').trim() || 'Discover our latest update.';
-    const fallbackTags = ['#Marketing', '#AIVideo', '#BrandGrowth', '#DigitalCampaign', '#ContentCreation'];
+    // Fall back to the user's own words about this video rather than filler —
+    // the brief or the narration is always more specific than a stock line.
+    const fallbackCaption =
+      String(draft?.input?.description || '').trim() ||
+      voiceScript.split(/(?<=[.!?])\s/).slice(0, 2).join(' ').trim() ||
+      story ||
+      'Watch how we do it.';
+    const productTag = String(draft?.input?.product?.name || '').replace(/[^A-Za-z0-9]/g, '');
+    const brandTag = String(profile?.name || '').replace(/[^A-Za-z0-9]/g, '');
+    const fallbackTags = [
+      brandTag ? `#${brandTag}` : '',
+      productTag ? `#${productTag}` : '',
+      profile?.industry ? `#${String(profile.industry).replace(/[^A-Za-z0-9]/g, '')}` : ''
+    ].filter(Boolean).slice(0, 3);
     return { caption: fallbackCaption, hashtags: fallbackTags };
   }
 }
 
-async function generateThumbnailFromDraft({ draft, baseUrl }) {
-  const prompt = String(
+// Resolves the account's brand logo the same way the scene renderer does:
+// primary BrandAsset first, then any logo asset, then the business profile.
+async function resolveBrandLogoUrl(userId) {
+  if (!userId) return '';
+  try {
+    const primaryLogo = await BrandAsset.findOne({ user: userId, type: 'logo', isPrimary: true }).sort({ createdAt: -1 }).lean();
+    const anyLogo = primaryLogo || await BrandAsset.findOne({ user: userId, type: 'logo' }).sort({ createdAt: -1 }).lean();
+    const url = String(anyLogo?.url || '').trim();
+    if (url) return url;
+  } catch (_) { /* fall through to the profile */ }
+  const u = await User.findById(userId).lean().catch(() => null);
+  return String(
+    u?.businessProfile?.brandAssets?.logoUrl ||
+    u?.businessProfile?.assets?.primaryLogoUrl ||
+    u?.businessProfile?.logoUrl ||
+    ''
+  ).trim();
+}
+
+async function generateThumbnailFromDraft({ draft, baseUrl, userId = null }) {
+  const scenes = collectDraftScenes(draft);
+  const sceneImages = scenes.map((s) => String(s?.imageUrlNoLogo || s?.imageUrl || '').trim()).filter(Boolean);
+  const heroSceneImage = sceneImages[0] || null;
+
+  // Same character references the scenes were rendered from, so the person on
+  // the thumbnail is the person in the video rather than a new stranger.
+  const characterReference = String(
+    draft?.characterSheet?.frontPortrait ||
+    draft?.characterImage ||
+    draft?.originalCharacterImage ||
+    ''
+  ).trim() || null;
+
+  const ownerId = userId || draft?.userId || null;
+  const brandLogoUrl = await resolveBrandLogoUrl(ownerId);
+  const profile = ownerId
+    ? (await User.findById(ownerId).lean().catch(() => null))?.businessProfile || {}
+    : {};
+
+  const basePrompt = String(
     draft?.scenesMetadata?.thumbnailPrompt ||
     draft?.scenes?.thumbnailPrompt ||
     draft?.prompt?.promptText ||
@@ -1252,11 +1351,30 @@ async function generateThumbnailFromDraft({ draft, baseUrl }) {
     'Marketing video thumbnail'
   ).trim();
 
+  const prompt = [
+    basePrompt,
+    characterReference
+      ? `Feature the SAME person from the character reference — identical face, hair and clothing. Do not invent a different person.`
+      : '',
+    heroSceneImage
+      ? `Match the look of the reference scene: same setting, lighting, colour grade and product styling, so the thumbnail clearly belongs to this video.`
+      : '',
+    draft?.input?.product?.name ? `Feature ${draft.input.product.name} prominently.` : '',
+    'Composition: single strong focal point, clear foreground subject, leave the lower-right area uncluttered for a logo. No text, no captions, no watermarks.'
+  ].filter(Boolean).join(' ');
+
+  let generatedUrl = null;
   try {
     const result = await generateCampaignImageNanoBanana(prompt, {
       aspectRatio: '16:9',
       linkedProduct: draft?.input?.product || null,
       productReferenceImage: draft?.input?.sourceImage?.url || draft?.input?.product?.imageUrl || null,
+      // Carry the video's cast and look into the thumbnail.
+      characterReferenceImage: characterReference,
+      originalCharacterImage: String(draft?.originalCharacterImage || '').trim() || characterReference,
+      previousSceneImage: heroSceneImage,
+      brandName: profile?.name || '',
+      industry: profile?.industry || '',
       tone: 'professional'
     });
     if (!result?.success || !result?.imageUrl) {
@@ -1270,16 +1388,33 @@ async function generateThumbnailFromDraft({ draft, baseUrl }) {
         folder: 'final',
         fileName: 'thumbnail'
       });
-      return buildMediaUrl(baseUrl, draft.jobId, saved.relativePath);
+      generatedUrl = buildMediaUrl(baseUrl, draft.jobId, saved.relativePath);
+    } else {
+      generatedUrl = result.imageUrl;
     }
-    return result.imageUrl;
   } catch (_) {
-    const firstSceneImage = (Array.isArray(draft?.scenes) && draft.scenes[0]?.imageUrl) ||
-      draft?.images?.sceneData?.[0]?.imageUrl ||
-      draft?.scenes?.sceneData?.[0]?.imageUrl ||
-      null;
-    return firstSceneImage;
+    // Fall back to a real frame from the video — already on-brand and on-cast.
+    generatedUrl = heroSceneImage
+      || (Array.isArray(draft?.scenes) && draft.scenes[0]?.imageUrl)
+      || draft?.images?.sceneData?.[0]?.imageUrl
+      || null;
   }
+
+  if (!generatedUrl || !brandLogoUrl) return generatedUrl;
+
+  // Composite the real logo rather than letting the image model draw one —
+  // AI-rendered logos come out smudged and misspelt.
+  try {
+    const overlaid = await overlayLogoAndUpload(generatedUrl, brandLogoUrl, {
+      position: 'bottom-right',
+      size: 'medium',
+      opacity: 0.9
+    });
+    if (overlaid?.success && overlaid?.url) return overlaid.url;
+  } catch (logoErr) {
+    console.warn('[thumbnail] logo overlay failed, returning un-branded thumbnail:', logoErr.message);
+  }
+  return generatedUrl;
 }
 
 // -----------------------------------------------------------------------------
@@ -3527,7 +3662,7 @@ router.post('/generateContent', protect, checkTrial, videoAiWriteLimiter, async 
     const userId = toUserId(req.user);
     const draft = await loadDraftForUser(jobId, userId);
     const platforms = normalizePlatforms(selectedPlatforms.length ? selectedPlatforms : (draft?.platform?.selectedPlatforms || []));
-    const thumbnailUrl = await generateThumbnailFromDraft({ draft, baseUrl: reqBaseUrl(req) });
+    const thumbnailUrl = await generateThumbnailFromDraft({ draft, baseUrl: reqBaseUrl(req), userId });
     const socialContent = await generateCaptionAndHashtags({ draft, selectedPlatforms: platforms });
 
     const updated = await updateDraft(jobId, userId, (current) => ({
