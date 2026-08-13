@@ -364,6 +364,10 @@ const GravityCreate: React.FC = () => {
         .map((p) => `[${p.toUpperCase()} CONTENT FORMAT]\n${description.trim()}`)
         .join('\n\n---\n\n'),
       duration: backendDuration,
+      // Without this the backend fell back to three hardcoded days and then
+      // multiplied by the platform count, so the cadence picker did nothing
+      // and every run produced (and charged for) far more posts than shown.
+      postsPerWeek: estimate.perWeek,
       startDate: new Date().toISOString().split('T')[0],
       preferredDays: [],
       targetAge: '18-35',
@@ -410,6 +414,28 @@ const GravityCreate: React.FC = () => {
               postCount += 1;
               setPostsGenerated(postCount);
               setProgressMsg(`Drafted ${postCount} post${postCount > 1 ? 's' : ''}…`);
+              // Render each post the moment it lands. The payload already
+              // carries the finished image; this used to be counted and
+              // thrown away, so nothing appeared until the whole run ended.
+              // The getDrafts() refresh below then swaps these for the saved
+              // records (real status, scheduling, etc).
+              if (data?.draftId) {
+                setResults((prev: any[]) => (
+                  prev.some((p) => p?._id === data.draftId)
+                    ? prev
+                    : [...prev, {
+                      _id: data.draftId,
+                      title: data.contentTheme || `Post ${postCount}`,
+                      caption: data.caption || '',
+                      imageUrl: data.imageUrl || '',
+                      // No image means Nano Banana failed for this slot —
+                      // surface it as failed so the card offers Regenerate.
+                      status: data.imageUrl ? 'draft' : 'failed',
+                      aspectRatio: backendAspect,
+                      platforms: data.platform ? [data.platform] : selectedPlatforms,
+                    }]
+                ));
+              }
             } else if (currentEvent === 'complete') {
               complete = true;
             } else if (currentEvent === 'error') {
@@ -451,6 +477,10 @@ const GravityCreate: React.FC = () => {
     setSubmitting(true);
     setPostsGenerated(0);
     setProgressMsg('');
+    // Posts now stream in as they finish, so clear the previous run's cards
+    // or the new ones would append underneath them.
+    setResults([]);
+    setActioned({});
     try {
       if (mode === 'single') {
         await handleDraftSinglePost();
@@ -478,6 +508,16 @@ const GravityCreate: React.FC = () => {
   // are swapped for the real drafts the moment those come back.
   const pendingCards = submitting && results.length === 0
     ? Array.from({ length: mode === 'campaign' ? Math.min(estimate.total, 4) : 1 })
+    : [];
+
+  // Posts now stream in one at a time, so once the first card lands the grid
+  // takes over from the placeholder screen. Keep the remaining slots animating
+  // inside that grid — otherwise the generating animation would vanish the
+  // moment the first image arrived, with more still on the way.
+  const remainingCards = submitting && results.length > 0
+    ? Array.from({
+      length: Math.max(0, (mode === 'campaign' ? estimate.total : 1) - results.length)
+    })
     : [];
 
   return (
@@ -784,10 +824,16 @@ const GravityCreate: React.FC = () => {
             </button>
 
             <div className="gravity-label text-[#F5A623] mb-3">
-              {results.length} variation{results.length !== 1 ? 's' : ''} · pick what you love
+              {submitting
+                ? `${results.length} of ${mode === 'campaign' ? estimate.total : 1} ready…`
+                : `${results.length} variation${results.length !== 1 ? 's' : ''} · pick what you love`}
             </div>
             <h2 className="text-[42px] leading-[1.1] font-semibold text-[#F5F4F1] tracking-[-0.02em]">
-              Here's what <em className="italic font-normal text-[#F5A623]">came back</em>.
+              {submitting ? (
+                <>Making something <em className="italic font-normal text-[#F5A623]">good</em>.</>
+              ) : (
+                <>Here's what <em className="italic font-normal text-[#F5A623]">came back</em>.</>
+              )}
             </h2>
             <p className="text-[13.5px] text-white/45 mt-3">
               {stillRendering
@@ -949,6 +995,21 @@ const GravityCreate: React.FC = () => {
                 </div>
               );
             })}
+
+            {/* Slots still rendering — same animation as the opening screen,
+                so the grid fills in one card at a time instead of the
+                animation disappearing after the first image lands. */}
+            {remainingCards.map((_, i) => (
+              <div key={`pending-${i}`} className="rounded-xl border border-white/[0.08] bg-white/[0.02] overflow-hidden">
+                <div className="relative bg-black" style={{ aspectRatio: backendAspect.replace(':', ' / ') }}>
+                  <GeneratingFill prompt={description.trim() || name.trim()} resolution={backendAspect} />
+                </div>
+                <div className="p-3.5">
+                  <div className="h-3 w-2/3 rounded bg-white/[0.07] animate-pulse" />
+                  <div className="h-2.5 w-1/3 rounded bg-white/[0.05] animate-pulse mt-2.5" />
+                </div>
+              </div>
+            ))}
           </div>
 
           {/* Footer actions */}

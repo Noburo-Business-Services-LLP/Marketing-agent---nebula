@@ -1530,7 +1530,10 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
       preferredDays: daysInput, targetAge, targetGender,
       targetLocation, targetInterests, productLogo,
       linkedProduct,
-      language: languageInput
+      language: languageInput,
+      // Cadence from the Create page ("2 posts / week"). Optional — callers
+      // that omit it keep the old preferredDays-driven behaviour.
+      postsPerWeek: postsPerWeekInput
     } = req.body;
 
     const normalizeCampaignLanguage = (value = '') => {
@@ -1618,9 +1621,22 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
     const preferredDays = Array.isArray(daysInput) ? daysInput : (daysInput ? daysInput.split(',') : ['monday', 'wednesday', 'friday']);
     const startDate = startDateParam || new Date().toISOString().split('T')[0];
     const weeks = duration === '2weeks' ? 2 : 1;
-    const numSlots = Math.min(preferredDays.length * weeks, 14);
-    // Support multi-platform: Generate posts for all platforms for every slot
-    const totalPosts = numSlots * platforms.length;
+
+    // The Create page's cadence picker ("2 posts / week") now reaches us. It
+    // used to be dropped on the floor, so the count fell back to the three
+    // hardcoded preferredDays and was then multiplied by the platform count —
+    // "2 posts/week" quietly became 3 x 4 = 12 posts, and 12 posts' worth of
+    // credits. Honour the requested cadence; fall back to preferredDays only
+    // when no cadence was sent.
+    const requestedPerWeek = Number.parseInt(String(postsPerWeekInput ?? ''), 10);
+    const hasExplicitCadence = Number.isFinite(requestedPerWeek) && requestedPerWeek > 0;
+    const postsPerWeek = hasExplicitCadence ? requestedPerWeek : preferredDays.length;
+    const numSlots = Math.min(Math.max(1, postsPerWeek * weeks), 14);
+
+    // One post per slot. The platform rotates across slots instead of every
+    // slot being fanned out to every platform.
+    const postsPerSlot = 1;
+    const totalPosts = numSlots * postsPerSlot;
 
     // Deduct credits: 7 per individual post generated
     const creditCost = totalPosts * 7; 
@@ -1658,31 +1674,42 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
     // Generate unique slot dates
     const slotDates = [];
     const start = new Date(startDate);
-    let dayIdx = 0;
-    while (slotDates.length < numSlots && dayIdx < 100) {
+    const pushSlot = (dayOffset) => {
       const checkDate = new Date(start);
-      checkDate.setDate(start.getDate() + dayIdx);
-      const dayName = checkDate.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
-      if (preferredDays.includes(dayName)) {
-        slotDates.push({
-          date: checkDate.toISOString().split('T')[0],
-          time: '10:00',
-          week: slotDates.length < preferredDays.length ? 1 : 2
-        });
+      checkDate.setDate(start.getDate() + dayOffset);
+      slotDates.push({
+        date: checkDate.toISOString().split('T')[0],
+        time: '10:00',
+        week: Math.floor(dayOffset / 7) + 1
+      });
+    };
+
+    if (hasExplicitCadence) {
+      // Spread the requested number of posts evenly across the campaign window.
+      // Keying off preferredDays here would either run short (fewer preferred
+      // days than posts) or spill past the end date (more posts than days).
+      const windowDays = weeks * 7;
+      const spacing = Math.max(1, Math.floor(windowDays / numSlots));
+      for (let i = 0; i < numSlots; i += 1) {
+        pushSlot(Math.min(i * spacing, windowDays - 1));
       }
-      dayIdx++;
+    } else {
+      let dayIdx = 0;
+      while (slotDates.length < numSlots && dayIdx < 100) {
+        const checkDate = new Date(start);
+        checkDate.setDate(start.getDate() + dayIdx);
+        const dayName = checkDate.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+        if (preferredDays.includes(dayName)) pushSlot(dayIdx);
+        dayIdx++;
+      }
     }
 
-    // Expand unique slots into per-post schedule mappings
-    const scheduleDates = [];
-    for (const slot of slotDates) {
-      for (const platform of platforms) {
-        scheduleDates.push({
-          ...slot,
-          platform: platform.trim().toLowerCase()
-        });
-      }
-    }
+    // One schedule entry per slot; the platform rotates so a multi-platform
+    // campaign still covers each network without multiplying the post count.
+    const scheduleDates = slotDates.map((slot, i) => ({
+      ...slot,
+      platform: String(platforms[i % platforms.length] || 'instagram').trim().toLowerCase()
+    }));
 
     // Step 1: Generate all captions via Gemini (ROCI format prompt)
     const captionPrompt = `ROLE: You are a senior social media strategist and copywriter at a leading digital marketing agency. You craft high-converting, scroll-stopping social media campaigns for premium brands.
@@ -2097,10 +2124,10 @@ Return ONLY valid JSON (no markdown, no backticks):
 
     // Enforce shared imageDescription per slot across platforms (best effort).
     for (let slotIndex = 0; slotIndex < numSlots; slotIndex += 1) {
-      const startIdx = slotIndex * platforms.length;
+      const startIdx = slotIndex * postsPerSlot;
       const canonical = String(parsed.posts?.[startIdx]?.imageDescription || '').trim();
       if (!canonical) continue;
-      for (let j = startIdx; j < startIdx + platforms.length && j < parsed.posts.length; j += 1) {
+      for (let j = startIdx; j < startIdx + postsPerSlot && j < parsed.posts.length; j += 1) {
         parsed.posts[j].imageDescription = canonical;
       }
     }
@@ -2139,7 +2166,7 @@ Return ONLY valid JSON (no markdown, no backticks):
       const schedule = scheduleDates[i] || { date: startDate, time: '10:00', week: 1, platform: platforms[i % platforms.length] };
       
       // Calculate which slot this belongs to (grouped by platforms per date)
-      const slotIndex = Math.floor(i / platforms.length);
+      const slotIndex = Math.floor(i / postsPerSlot);
 
       // Only generate a new image if we haven't created one for this slot yet
       let imageResult;
@@ -2167,6 +2194,14 @@ Return ONLY valid JSON (no markdown, no backticks):
           imageText: resolvedImageText
         });
         
+        // The failure reason used to be dropped entirely — a dead card in the
+        // UI with nothing in the logs explaining it. Record it.
+        if (!imageResult?.success) {
+          console.error(
+            `[CAMPAIGN_IMAGE] slot ${slotIndex + 1}/${numSlots} failed: ${imageResult?.error || 'unknown error'}`
+          );
+        }
+
         slotImageCache.set(slotIndex, imageResult);
       }
 
@@ -2255,7 +2290,7 @@ Return ONLY valid JSON (no markdown, no backticks):
       userInput: req.body,
       generatedPosts: postsToProcess.map((post, index) => ({
         ...post,
-        imageUrl: slotImageCache.get(Math.floor(index / platforms.length))?.imageUrl || ''
+        imageUrl: slotImageCache.get(Math.floor(index / postsPerSlot))?.imageUrl || ''
       })),
       cta: '',
       scheduling: { startDate, preferredDays, duration },
