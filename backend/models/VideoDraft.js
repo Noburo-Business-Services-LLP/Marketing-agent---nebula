@@ -20,9 +20,6 @@ const videoDraftSchema = new mongoose.Schema(
     platform: { type: mongoose.Schema.Types.Mixed, default: null },
     schedule: { type: mongoose.Schema.Types.Mixed, default: null },
     jobs: { type: mongoose.Schema.Types.Mixed, default: {} }, // Links background queue Job IDs (e.g. merge/clips)
-    // Set when the user hands the storyboard to the Nebulaa team to finish
-    // the video off-platform: { requestedAt, recipient, sceneCount }.
-    handoff: { type: mongoose.Schema.Types.Mixed, default: null },
     finalVideoUrl: { type: String, default: null },
     thumbnailUrl: { type: String, default: null },
     characterEnabled: { type: Boolean, default: false },
