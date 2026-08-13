@@ -152,6 +152,13 @@ const BASE_ALLOWED_ORIGINS = [
   'https://www.demo.nebulaa.ai',
   'https://main.nebulaa.ai',
   'https://www.main.nebulaa.ai',
+  // Production app (prod branch) and the test environment. Both were missing,
+  // so gravity rejected requests from its own frontend with
+  // "Not allowed by CORS" and served a 500 for its JS bundle.
+  'https://gravity.nebulaa.ai',
+  'https://www.gravity.nebulaa.ai',
+  'https://test.nebulaa.ai',
+  'https://www.test.nebulaa.ai',
   // AWS ALB (prod frontend) — HTTP + HTTPS for when TLS cert is added later
   'http://stratschool-prod-alb-59606506.ap-south-1.elb.amazonaws.com',
   'https://stratschool-prod-alb-59606506.ap-south-1.elb.amazonaws.com'
