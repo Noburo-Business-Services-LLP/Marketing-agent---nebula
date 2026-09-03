@@ -178,6 +178,20 @@
         outline: none !important;
         box-shadow: 0 0 0 3px rgba(245,166,35,0.10) !important;
       }
+      /* Opt-out for fields inside a GravityPanel. The panel already supplies
+         the surface, so the field styling above would draw a second, visibly
+         lighter box within the card. Tailwind's bg-transparent cannot win on
+         its own — the rule above carries !important AND higher specificity —
+         so this needs the element+class selector to override it. */
+      body.gravity-shell textarea.gravity-bare,
+      body.gravity-shell input.gravity-bare,
+      body.gravity-shell textarea.gravity-bare:focus,
+      body.gravity-shell input.gravity-bare:focus {
+        background-color: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        outline: none !important;
+      }
       /* Primary action buttons (gold in old code) — Gravity gold with shadow */
       body.gravity-shell button[class*="bg-[#ffcc29]"],
       body.gravity-shell a[class*="bg-[#ffcc29]"] {

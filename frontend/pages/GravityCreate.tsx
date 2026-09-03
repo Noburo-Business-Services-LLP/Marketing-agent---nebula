@@ -609,7 +609,7 @@ const GravityCreate: React.FC = () => {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder={mode === 'campaign' ? 'Monsoon menu launch' : 'Sunday pour-over ritual'}
-              className="flex-1 bg-transparent border-none outline-none text-[16px] font-semibold text-[#F5F4F1] placeholder:text-white/25"
+              className="gravity-bare flex-1 bg-transparent border-none outline-none text-[16px] font-semibold text-[#F5F4F1] placeholder:text-white/25"
             />
           </div>
           <textarea
@@ -619,7 +619,7 @@ const GravityCreate: React.FC = () => {
               ? 'e.g. Launch our monsoon menu over two weeks — tease, reveal, drive footfall to the Saturday launch event.'
               : 'e.g. Slow Sunday. Filter coffee, one hand pouring, room quiet — invite people to spend the morning with us.'}
             rows={4}
-            className="w-full bg-transparent border-none outline-none text-[14.5px] text-white/60 leading-relaxed resize-none placeholder:text-white/25"
+            className="gravity-bare w-full bg-transparent border-none outline-none text-[14.5px] text-white/60 leading-relaxed resize-none placeholder:text-white/25"
           />
         </div>
       </div>

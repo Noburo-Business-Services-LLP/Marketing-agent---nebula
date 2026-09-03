@@ -2644,7 +2644,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     rows={5}
-                    className="w-full bg-transparent border-none outline-none text-[14.5px] text-white/70 leading-relaxed resize-none placeholder:text-white/25"
+                    className="gravity-bare w-full bg-transparent border-none outline-none text-[14.5px] text-white/70 leading-relaxed resize-none placeholder:text-white/25"
                     placeholder={selectedItemId
                       ? 'Loaded from Smart Calendar — you can edit before continuing…'
                       : 'e.g. A 30-second walkthrough of our new filter coffee — close-ups of the pour, steam rising, ending on the storefront at golden hour.'}
