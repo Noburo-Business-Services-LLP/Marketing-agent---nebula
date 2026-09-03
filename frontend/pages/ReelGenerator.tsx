@@ -336,22 +336,11 @@ const ReelGenerator: React.FC = () => {
     }
   };
 
-  // Auto-fire character generation when the user enters Step 2 with an
-  // accepted concept (Path B — required flow). Skipping the concept step
-  // means no characters — the Character Designer needs approved story
-  // context to design specific, on-brief characters.
-  useEffect(() => {
-    if (
-      step === 2 &&
-      acceptedConcept &&
-      generatedCharacters.length === 0 &&
-      !generatingCharacters2 &&
-      !characterGenError
-    ) {
-      runCharacterGeneration();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, acceptedConcept]);
+  // Character generation is deliberately NOT auto-fired on entering Step 2.
+  // It costs credits and renders a cast reference image, so arriving at the
+  // step — including navigating back to re-read something — must not spend
+  // anything. The panel shows a Generate button instead; the Character
+  // Designer still requires an accepted concept for story context.
 
   // Pull the finished video URL from any of the fields the pipeline may
   // use — reel drafts write it into imageUrl/creative.videoUrl, video
@@ -3073,6 +3062,18 @@ setCharacterAge(nextDraft?.characterAge || '');
                     <div className="flex items-center gap-2 py-6 justify-center text-white/50 text-sm">
                       <Loader2 className="w-4 h-4 animate-spin" />
                       Designing characters that match your concept…
+                    </div>
+                  )}
+
+                  {!generatingCharacters2 && generatedCharacters.length === 0 && !characterGenError && (
+                    <div className="py-8 text-center">
+                      <Sparkles className="w-5 h-5 text-[#F5A623] mx-auto mb-2.5" />
+                      <div className="text-[13.5px] text-[#F5F4F1]">
+                        Ready to design your cast from “{acceptedConcept?.title || 'your concept'}”.
+                      </div>
+                      <div className="text-[12px] text-white/45 mt-1">
+                        Hit Generate above when you are — it costs credits, so nothing runs until you ask.
+                      </div>
                     </div>
                   )}
 
