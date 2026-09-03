@@ -136,7 +136,6 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
     { path: '/upload',            label: 'Upload & Schedule', icon: UploadCloud },
     { path: '/connect-socials',   label: 'Connect Socials',   icon: Link2 },
     { path: '/brand-assets',      label: 'Brand Assets',      icon: Palette },
-    { path: '/inventory',         label: 'Products & Services', icon: Package },
     { path: '/ai-memory',         label: 'AI Memory',         icon: Brain },
   ];
 
@@ -148,7 +147,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
     if (pathname.startsWith('/ad-campaigns')) return { title: 'Ad Campaigns', crumb: '' };
     if (pathname.startsWith('/connect-socials')) return { title: 'Connect Socials', crumb: '' };
     if (pathname.startsWith('/brand-assets')) return { title: 'Brand Assets', crumb: '' };
-    if (pathname.startsWith('/inventory')) return { title: 'Products & Services', crumb: '' };
+    if (pathname.startsWith('/inventory')) return { title: 'Brand Assets', crumb: 'Products & Services' };
     if (pathname.startsWith('/analytics')) return { title: 'Insights', crumb: '' };
     if (pathname.startsWith('/competitors')) return { title: 'Competitors', crumb: '' };
     if (pathname.startsWith('/ai-memory') || pathname.startsWith('/ai-history') || pathname.startsWith('/ai-performance')) return { title: 'AI Memory', crumb: '' };

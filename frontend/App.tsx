@@ -200,7 +200,9 @@ const App: React.FC = () => {
                     <Route path="/connect-socials" element={<ConnectSocials />} />
                     <Route path="/connect-socials/inbox" element={<ConnectSocials />} />
                     <Route path="/brand-assets" element={<BrandAssets />} />
-                    <Route path="/inventory" element={<Inventory />} />
+                    {/* Products & Services now lives inside Brand Assets. The old route is
+                        kept so existing links and bookmarks still land somewhere sensible. */}
+                    <Route path="/inventory" element={<Navigate to="/brand-assets?tab=products" replace />} />
                     <Route path="/analytics" element={<GravityInsights />} />
                     <Route path="/analytics-classic" element={<Analytics />} />
                     <Route path="/seo" element={<SEOAssistant />} />

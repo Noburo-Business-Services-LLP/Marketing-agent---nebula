@@ -17,6 +17,10 @@ import {
   X
 } from 'lucide-react';
 import { brandAssetsAPI } from '../services/api';
+// Rendered as a tab panel rather than merged in: Inventory is ~1,150 lines and
+// this file ~980, and one 2,100-line component would be a poor edit surface.
+import InventoryPanel from './Inventory';
+import EnvironmentPanel from './EnvironmentAssets';
 import {
   GravityHero,
   GravityEmphasis,
@@ -27,7 +31,7 @@ import {
 
 interface BrandAsset {
   _id: string;
-  type: 'logo' | 'template';
+  type: 'logo' | 'template' | 'environment';
   name: string;
   url: string;
   cloudinaryPublicId: string;
@@ -167,6 +171,14 @@ const BrandAssets: React.FC = () => {
   const [pastCaption, setPastCaption] = useState('');
   const [pastPlatform, setPastPlatform] = useState('instagram');
   const [pastImagePreview, setPastImagePreview] = useState<string | null>(null);
+
+  // Brand Assets is the single home for brand material: identity, what the
+  // business offers, the space it operates in, and how it writes.
+  type BrandTab = 'brand' | 'products' | 'environment' | 'voice';
+  const [activeTab, setActiveTab] = useState<BrandTab>(() => {
+    const t = new URLSearchParams(window.location.hash.split('?')[1] || '').get('tab');
+    return (['brand', 'products', 'environment', 'voice'] as const).includes(t as BrandTab) ? (t as BrandTab) : 'brand';
+  });
 
   const isDarkMode = document.documentElement.classList.contains('dark');
   const primaryLogo = useMemo(() => logos.find((l) => l.isPrimary) || logos[0] || null, [logos]);
@@ -511,6 +523,29 @@ const BrandAssets: React.FC = () => {
           </div>
         )}
 
+        <div className="flex flex-wrap gap-1.5 rounded-xl border border-white/[0.06] bg-white/[0.02] p-1.5">
+          {([
+            { id: 'brand', label: 'Brand' },
+            { id: 'products', label: 'Products & Services' },
+            { id: 'environment', label: 'Environment' },
+            { id: 'voice', label: 'Voice' },
+          ] as const).map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setActiveTab(t.id)}
+              className={`px-4 py-2 rounded-lg text-[13px] font-semibold transition-all ${
+                activeTab === t.id
+                  ? 'bg-[#F5A623] text-[#1A1208] shadow-[0_4px_18px_rgba(245,166,35,0.20)]'
+                  : 'text-white/55 hover:text-[#F5F4F1] hover:bg-white/[0.05]'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {activeTab === 'brand' && (
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
           <section className={`xl:col-span-1 rounded-2xl border p-5 border-white/[0.06] bg-white/[0.02]`}>
             <div className="flex items-center justify-between mb-4">
@@ -812,13 +847,25 @@ const BrandAssets: React.FC = () => {
 
           </section>
         </div>
+        )}
 
+        {activeTab === 'products' && <InventoryPanel embedded />}
+
+        {activeTab === 'environment' && <EnvironmentPanel />}
+
+        {activeTab === 'voice' && (
         <section className={`rounded-2xl border p-5 border-white/[0.06] bg-white/[0.02]`}>
           <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-            <h2 className={"font-serif-display text-[20px] text-[#F5F4F1] flex items-center gap-2"}>
-              <Sparkles className="w-5 h-5 text-[#F5A623]" />
-              Past Campaign Learning
-            </h2>
+            <div>
+              <h2 className={"font-serif-display text-[20px] text-[#F5F4F1] flex items-center gap-2"}>
+                <Sparkles className="w-5 h-5 text-[#F5A623]" />
+                Teach Gravity your voice
+              </h2>
+              <p className="text-[12.5px] text-white/45 mt-1 max-w-[560px]">
+                Paste captions from posts you have already published. Gravity reads them for your
+                recurring hashtags, openers, CTA phrasing and rhythm, and writes in that voice.
+              </p>
+            </div>
             <span className={`text-xs px-2 py-1 rounded-full ${isDarkMode ? 'bg-slate-800 text-gray-300' : 'bg-gray-100 text-gray-700'}`}>
               {(profile?.pastPosts || []).length} samples
             </span>
@@ -950,6 +997,7 @@ const BrandAssets: React.FC = () => {
             </div>
           </div>
         </section>
+        )}
 
         {!profile?.hasBrandAssets && !profile?.hasPastPosts && (
           <section className={`rounded-2xl border p-4 ${isDarkMode ? 'border-slate-700 bg-slate-800/30 text-gray-300' : 'border-gray-200 bg-gray-50 text-gray-700'}`}>

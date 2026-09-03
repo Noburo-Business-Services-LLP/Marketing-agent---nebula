@@ -2989,7 +2989,7 @@ export const apiService = {
 // ================================
 export const brandAssetsAPI = {
   // Get all brand assets
-  getAll: async (type?: 'logo' | 'template'): Promise<any> => {
+  getAll: async (type?: 'logo' | 'template' | 'environment'): Promise<any> => {
     const query = type ? `?type=${type}` : '';
     return await apiCall<any>(`/brand-assets${query}`, {}, true);
   },
@@ -3012,7 +3012,7 @@ export const brandAssetsAPI = {
   // Upload a new asset (logo or template)
   upload: async (data: {
     imageData: string;
-    type: 'logo' | 'template';
+    type: 'logo' | 'template' | 'environment';
     name: string;
     isPrimary?: boolean;
     defaultPosition?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'center';

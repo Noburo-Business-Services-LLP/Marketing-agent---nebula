@@ -9,7 +9,10 @@ const brandAssetSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['logo', 'template'],
+    // 'environment' = photos of the actual premises (shop, showroom,
+    // storefront). The Reels Environment step reads these from this same
+    // collection, so no extra plumbing is needed for it to pick them up.
+    enum: ['logo', 'template', 'environment'],
     required: true
   },
   name: {

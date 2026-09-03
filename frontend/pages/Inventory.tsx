@@ -12,7 +12,7 @@ import { Product } from '../types';
 import { useTheme, getThemeClasses } from '../context/ThemeContext';
 import { GravityHero, GravityEmphasis } from '../components/gravity';
 
-const Inventory: React.FC = () => {
+const Inventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const { isDarkMode } = useTheme();
   const theme = getThemeClasses(isDarkMode);
   
@@ -352,16 +352,26 @@ const Inventory: React.FC = () => {
   const labelClasses = `block text-xs font-bold uppercase tracking-wide mb-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`;
 
   return (
-    <div className={"p-6 min-h-screen"}>
-      {/* Header */}
+    <div className={embedded ? '' : 'p-6 min-h-screen'}>
+      {/* Header. When embedded as a Brand Assets tab the page already has a
+          hero, so this one is suppressed rather than stacking two. */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
-        <GravityHero
-          align="left"
-          eyebrow="Products & Services"
-          headline={<>Everything you <GravityEmphasis>offer</GravityEmphasis></>}
-          subcopy="Your products and services, with images and details Gravity draws on when it creates campaigns, images and videos."
-          className="!mb-0"
-        />
+        {embedded ? (
+          <div>
+            <h2 className="font-serif-display text-[22px] text-[#F5F4F1]">Products &amp; Services</h2>
+            <p className="text-[12.5px] text-white/45 mt-1 max-w-[560px]">
+              What the business offers, with images and details Gravity draws on when it creates campaigns.
+            </p>
+          </div>
+        ) : (
+          <GravityHero
+            align="left"
+            eyebrow="Products & Services"
+            headline={<>Everything you <GravityEmphasis>offer</GravityEmphasis></>}
+            subcopy="Your products and services, with images and details Gravity draws on when it creates campaigns, images and videos."
+            className="!mb-0"
+          />
+        )}
         
         <div className="flex items-center gap-3 flex-wrap">
           <button 
