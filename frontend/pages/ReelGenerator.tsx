@@ -21,8 +21,24 @@ import {
   ChevronDown,
   Star,
   Play,
-  Pause
+  Pause,
+  Clock,
+  Crop,
+  Languages,
+  Layers,
+  Target,
+  Megaphone,
+  Calendar as CalendarIcon
 } from 'lucide-react';
+import {
+  GravityHero,
+  GravityEmphasis,
+  GravityLabel,
+  GravityPanel,
+  GravityMetaBox,
+  GravityOptionPopover,
+  GravityButton,
+} from '../components/gravity';
 import { useSmartCalendarAutoFill } from '../hooks/useSmartCalendarAutoFill';
 import { getThemeClasses, useTheme } from '../context/ThemeContext';
 import { contentCalendarAPI, inventoryAPI, videoGenerationAPI, draftsAPI } from '../services/api';
@@ -83,6 +99,39 @@ function fileToDataUrl(file: Blob): Promise<string> {
   });
 }
 
+/* Step 1 settings — these were six side-by-side <select>s; they now feed
+   GravityMetaBox popovers, so each needs a display label as well as a value. */
+const DURATION_OPTIONS = [15, 30, 45, 60, 90, 120].map((n) => ({ value: String(n), label: `${n} sec` }));
+
+const ASPECT_RATIO_OPTIONS = [
+  { value: '9:16', label: '9:16 · Reels / Shorts (vertical)' },
+  { value: '16:9', label: '16:9 · YouTube (widescreen)' },
+  { value: '1:1', label: '1:1 · Instagram Square' },
+  { value: '4:5', label: '4:5 · Instagram Feed (portrait)' },
+];
+
+const LANGUAGE_OPTIONS = [
+  { value: 'en', label: 'English' },
+  { value: 'hi', label: 'Hindi (हिन्दी)' },
+  { value: 'ta', label: 'Tamil (தமிழ்)' },
+  { value: 'te', label: 'Telugu (తెలుగు)' },
+  { value: 'kn', label: 'Kannada (ಕನ್ನಡ)' },
+  { value: 'ml', label: 'Malayalam (മലയാളം)' },
+];
+
+const VOICE_GENDER_OPTIONS = [
+  { value: 'female', label: 'Female' },
+  { value: 'male', label: 'Male' },
+];
+
+const SCENE_COUNT_OPTIONS = [
+  { value: '', label: 'Auto — let Gravity decide' },
+  ...Array.from({ length: 10 }, (_, i) => ({ value: String(i + 1), label: `${i + 1} scene${i ? 's' : ''}` })),
+];
+
+const labelFor = (options: { value: string; label: string }[], value: string, fallback: string) =>
+  options.find((o) => o.value === String(value))?.label ?? fallback;
+
 const ReelGenerator: React.FC = () => {
   const [searchParams] = useSearchParams();
   const { isDarkMode } = useTheme();
@@ -92,6 +141,11 @@ const ReelGenerator: React.FC = () => {
     ? 'bg-slate-900 border-slate-700 text-white focus:border-[#ffcc29]'
     : 'bg-white border-slate-300 text-slate-900 focus:border-[#ffcc29]'
     }`;
+  // Which Step 1 MetaBox has its popover open (null = none). The settings that
+  // were six side-by-side <select>s are now MetaBoxes sharing this one slot.
+  const [openMetaBox, setOpenMetaBox] = useState<string | null>(null);
+  // Hidden file input driven by the Product MetaBox's "Upload image…" option.
+  const productImageInputRef = useRef<HTMLInputElement>(null);
 
   const [step, setStep] = useState(1);
   const {
@@ -2093,16 +2147,16 @@ setCharacterAge(nextDraft?.characterAge || '');
   return (
     <div className={`p-6 min-h-screen ${isDarkMode ? 'bg-[#070A12]' : 'bg-slate-50'}`}>
       <div className="max-w-6xl mx-auto space-y-6">
+        {/* Demoted to a meta line: the top bar already says "AI Reels", and
+            each step now carries its own GravityHero as the display headline.
+            Three competing titles was the stacking problem here. */}
         <div>
-          <h1 className={`text-2xl font-bold ${theme.text}`}>AI Video Manager</h1>
-          <p className={theme.textSecondary}>Create, schedule, and track your AI videos in one place.</p>
+          <GravityLabel>AI Video Manager</GravityLabel>
+          <p className="text-[13px] text-white/45 mt-1">Create, schedule, and track your AI videos in one place.</p>
         </div>
 
         {successMessage && (
-          <div className={`rounded-xl border px-4 py-3 text-sm font-medium ${isDarkMode
-            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200'
-            : 'bg-emerald-50 border-emerald-200 text-emerald-800'
-            }`}>
+          <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/[0.07] px-5 py-3.5 text-[13px] font-medium text-emerald-200">
             {successMessage}
           </div>
         )}
@@ -2132,9 +2186,9 @@ setCharacterAge(nextDraft?.characterAge || '');
                       setSuccessMessage('');
                     }
                   }}
-                  className={`pb-4 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${active
-                    ? 'border-[#ffcc29] text-[#ffcc29]'
-                    : `border-transparent ${theme.text} hover:text-[#ffcc29] hover:border-[#ffcc29]/30`
+                  className={`pb-4 text-[13px] font-medium border-b-2 transition-colors flex items-center gap-2 ${active
+                    ? 'border-[#F5A623] text-[#F5A623]'
+                    : `border-transparent text-white/55 hover:text-[#F5F4F1] hover:border-white/20`
                     }`}
                 >
                   {Icon && <Icon className="w-4 h-4" />}
@@ -2329,7 +2383,7 @@ setCharacterAge(nextDraft?.characterAge || '');
 
         {showWizard && (
           <>
-            <div className={`${panelClass} p-4`}>
+            <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
               <div className="grid grid-cols-2 md:grid-cols-6 lg:grid-cols-11 gap-2">
                 {WIZARD_STEPS.map(({ label, step: stepNo }, idx) => {
                   // Position shown to the user stays 1..n so dropping the
@@ -2346,15 +2400,11 @@ setCharacterAge(nextDraft?.characterAge || '');
                       type="button"
                       onClick={() => clickable && setStep(stepNo)}
                       disabled={!clickable && !active}
-                      className={`text-xs px-2 py-2 rounded-lg border transition ${active
-                        ? 'bg-[#ffcc29] text-black border-[#ffcc29] font-bold'
+                      className={`text-[11px] leading-snug px-2.5 py-2 rounded-lg border transition-all text-left ${active
+                        ? 'bg-[#F5A623] text-[#1A1208] border-[#F5A623] font-semibold shadow-[0_4px_18px_rgba(245,166,35,0.20)]'
                         : done
-                          ? (isDarkMode
-                            ? 'bg-slate-800 border-slate-700 text-slate-100'
-                            : 'bg-slate-100 border-slate-300 text-slate-800')
-                          : (isDarkMode
-                            ? 'bg-slate-900 border-slate-800 text-slate-500'
-                            : 'bg-slate-50 border-slate-200 text-slate-400')
+                          ? 'bg-white/[0.04] border-white/[0.10] text-[#F5F4F1] hover:bg-white/[0.07] hover:border-white/20'
+                          : 'bg-white/[0.02] border-white/[0.06] text-white/30'
                         }`}
                     >
                       {displayNo}. {label}
@@ -2471,45 +2521,52 @@ setCharacterAge(nextDraft?.characterAge || '');
             )}
 
             {step === 1 && (
-              <div className={`${panelClass} p-6 space-y-4`}>
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <h2 className={`font-bold text-lg ${theme.text}`}>Step 1: Input</h2>
-                  <div className="flex flex-col items-end gap-2">
-                    {isCalendarLoading && <span className="inline-flex items-center gap-1.5 text-[11px] text-white/60"><Loader2 className="w-3 h-3 animate-spin" /> Loading Smart Calendar…</span>}
+              <div className="space-y-6">
+                <GravityHero
+                  eyebrow={`AI Reels · Step 1 of ${WIZARD_STEPS.length}`}
+                  headline={<>What are we <GravityEmphasis>filming</GravityEmphasis>?</>}
+                  subcopy="Describe the video once. Gravity writes the script, casts the voice, and renders every scene."
+                />
+                {isCalendarLoading && (
+                  <div className="flex justify-center">
+                    <span className="inline-flex items-center gap-1.5 text-[11px] text-white/60">
+                      <Loader2 className="w-3 h-3 animate-spin" /> Loading Smart Calendar…
+                    </span>
                   </div>
-                </div>
+                )}
 
                 {/* Smart Calendar suggestions — always visible on Step 1 so
                     the user knows why tiles are/aren't showing. Four states:
                     loading, disabled (autoGenerate off), enabled-but-empty,
                     or tiles available. */}
                 {!isCalendarLoading && !isAutoFillEnabled && (
-                  <div className={`rounded-xl border border-white/10 bg-white/[0.02] p-4 flex items-start justify-between gap-3`}>
+                  <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 flex items-start justify-between gap-4">
                     <div className="flex-1">
-                      <p className={`text-[11px] font-semibold uppercase tracking-[0.16em] ${theme.textMuted}`}>Smart Calendar · off</p>
-                      <p className={`text-[13px] mt-1 ${theme.text}`}>
+                      <GravityLabel>Smart Calendar · off</GravityLabel>
+                      <p className="text-[13.5px] mt-1.5 text-[#F5F4F1]">
                         Turn on Smart Calendar to see AI-generated reel briefs as tiles here.
                       </p>
-                      <p className={`text-[11px] mt-1 ${theme.textSecondary}`}>
+                      <p className="text-[12px] mt-1 text-white/45">
                         Or just describe your video manually below.
                       </p>
                     </div>
                     <a
                       href="#/content-calendar"
-                      className="px-3 py-1.5 text-[11px] rounded-md border border-[#F5A623]/60 text-[#F5A623] hover:bg-[#F5A623]/10 font-semibold whitespace-nowrap"
+                      className="inline-flex items-center gap-1.5 px-4 py-2 text-[12px] rounded-lg border border-white/[0.12] text-[#F5F4F1] hover:bg-white/[0.05] hover:border-white/20 font-semibold whitespace-nowrap transition-all"
                     >
-                      Open Calendar →
+                      <CalendarIcon className="w-3.5 h-3.5 text-[#F5A623]" />
+                      Open Calendar
                     </a>
                   </div>
                 )}
                 {isAutoFillEnabled && availableItems.length > 0 && (
-                  <div className="rounded-xl border border-[#F5A623]/30 bg-[#F5A623]/[0.04] p-4 space-y-3">
+                  <div className="rounded-xl border border-[#F5A623]/20 bg-[#F5A623]/[0.03] p-5 space-y-4">
                     <div className="flex items-baseline justify-between gap-3">
                       <div>
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#F5A623]">
+                        <GravityLabel gold>
                           Smart Calendar · {availableItems.length} pending reel{availableItems.length > 1 ? 's' : ''} this week
-                        </p>
-                        <p className={`text-[12px] mt-1 ${theme.textSecondary}`}>
+                        </GravityLabel>
+                        <p className="text-[12.5px] mt-1.5 text-white/50">
                           Approve one to load its brief as your input. Or scroll down and write manually.
                         </p>
                       </div>
@@ -2544,29 +2601,41 @@ setCharacterAge(nextDraft?.characterAge || '');
                                 </span>
                               )}
                             </div>
-                            <h4 className={`font-semibold text-sm mt-2 line-clamp-2 ${theme.text}`}>
+                            <h4 className="font-semibold text-[13.5px] mt-2 line-clamp-2 text-[#F5F4F1]">
                               {item.headline || 'Untitled scene'}
                             </h4>
                             {item.creativeConcept && (
-                              <p className={`text-[12px] mt-1.5 line-clamp-3 ${theme.textSecondary}`}>
+                              <p className="text-[12px] mt-1.5 line-clamp-3 text-white/50 leading-relaxed">
                                 {item.creativeConcept}
                               </p>
                             )}
-                            <div className={`flex flex-wrap gap-2 mt-2.5 text-[10px] ${theme.textMuted}`}>
-                              {item.objective && <span>🎯 {item.objective}</span>}
-                              {item.cta && <span>📢 {item.cta}</span>}
-                              {item.productNeeded && <span>📦 {item.productNeeded}</span>}
+                            <div className="flex flex-wrap gap-x-3 gap-y-1.5 mt-3 text-[10.5px] text-white/40">
+                              {item.objective && (
+                                <span className="inline-flex items-center gap-1">
+                                  <Target className="w-3 h-3 text-[#F5A623]/70" /> {item.objective}
+                                </span>
+                              )}
+                              {item.cta && (
+                                <span className="inline-flex items-center gap-1">
+                                  <Megaphone className="w-3 h-3 text-[#F5A623]/70" /> {item.cta}
+                                </span>
+                              )}
+                              {item.productNeeded && (
+                                <span className="inline-flex items-center gap-1">
+                                  <Package className="w-3 h-3 text-[#F5A623]/70" /> {item.productNeeded}
+                                </span>
+                              )}
                             </div>
                             <button
                               onClick={() => setSelectedItemId(item._id)}
                               disabled={isSelected}
-                              className={`mt-3 w-full px-3 py-1.5 rounded-md text-[11px] font-semibold transition-colors ${
+                              className={`mt-3.5 w-full px-3 py-2 rounded-lg text-[11.5px] font-semibold transition-all ${
                                 isSelected
-                                  ? 'bg-[#F5A623] text-black cursor-default'
-                                  : 'border border-[#F5A623]/60 text-[#F5A623] hover:bg-[#F5A623]/10'
+                                  ? 'bg-[#F5A623] text-[#1A1208] cursor-default shadow-[0_4px_18px_rgba(245,166,35,0.20)]'
+                                  : 'border border-white/[0.12] text-[#F5F4F1] hover:bg-white/[0.05] hover:border-white/20'
                               }`}
                             >
-                              {isSelected ? '✓ Approved — loaded as input' : 'Approve & Use This'}
+                              {isSelected ? 'Approved — loaded as input' : 'Approve & Use This'}
                             </button>
                           </div>
                         );
@@ -2575,104 +2644,150 @@ setCharacterAge(nextDraft?.characterAge || '');
                   </div>
                 )}
                 {isAutoFillEnabled && availableItems.length === 0 && !isCalendarLoading && (
-                  <div className={`rounded-lg border border-white/10 bg-white/[0.02] p-3 text-[12px] ${theme.textSecondary}`}>
+                  <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-5 py-4 text-[12.5px] text-white/50">
                     No pending reels in the Smart Calendar for this week. Write your video description below to create manually.
                   </div>
                 )}
 
-                <textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  className={`${inputClass} min-h-[120px]`}
-                  placeholder={selectedItemId ? 'Loaded from Smart Calendar — you can edit before continuing…' : 'Or describe your own video here…'}
-                />
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-                  <div>
-                    <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Duration</label>
-                    <select value={durationSeconds} onChange={(e) => setDurationSeconds(Number(e.target.value))} className={`${inputClass} mt-2`}>
-                      {[15, 30, 45, 60, 90, 120].map((item) => <option key={item} value={item}>{item} sec</option>)}
-                    </select>
+                {/* The one hero moment on this page — halo + travelling beam.
+                    Every other panel here stays plain so this stays special. */}
+                <GravityPanel halo beam>
+                  <GravityLabel gold className="mb-2">Video brief</GravityLabel>
+                  <textarea
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    rows={5}
+                    className="w-full bg-transparent border-none outline-none text-[14.5px] text-white/70 leading-relaxed resize-none placeholder:text-white/25"
+                    placeholder={selectedItemId
+                      ? 'Loaded from Smart Calendar — you can edit before continuing…'
+                      : 'e.g. A 30-second walkthrough of our new filter coffee — close-ups of the pour, steam rising, ending on the storefront at golden hour.'}
+                  />
+                </GravityPanel>
+                {/* Settings. Previously six raw <select>s at xl:grid-cols-6;
+                    now MetaBoxes on the same two-column rhythm as Create. */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="relative">
+                    <GravityMetaBox
+                      label="Duration"
+                      value={`${durationSeconds} sec`}
+                      Icon={Clock}
+                      onClick={() => setOpenMetaBox(openMetaBox === 'duration' ? null : 'duration')}
+                    />
+                    <GravityOptionPopover
+                      open={openMetaBox === 'duration'}
+                      options={DURATION_OPTIONS}
+                      onPick={(v) => setDurationSeconds(Number(v))}
+                      onClose={() => setOpenMetaBox(null)}
+                    />
                   </div>
-                  <div>
-                    <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Aspect Ratio</label>
-                    <select
-                      value={aspectRatio}
-                      onChange={(e) => setAspectRatio(e.target.value as AspectRatio)}
-                      className={`${inputClass} mt-2`}
-                    >
-                      <option value="9:16">9:16 · Reels / Shorts (vertical)</option>
-                      <option value="16:9">16:9 · YouTube (widescreen)</option>
-                      <option value="1:1">1:1 · Instagram Square</option>
-                      <option value="4:5">4:5 · Instagram Feed (portrait)</option>
-                    </select>
-                    <p className={`text-[11px] mt-1 ${theme.textSecondary}`}>Images & clips render in this ratio.</p>
+
+                  <div className="relative">
+                    <GravityMetaBox
+                      label="Aspect Ratio"
+                      value={labelFor(ASPECT_RATIO_OPTIONS, aspectRatio, aspectRatio)}
+                      Icon={Crop}
+                      onClick={() => setOpenMetaBox(openMetaBox === 'aspect' ? null : 'aspect')}
+                    />
+                    <GravityOptionPopover
+                      open={openMetaBox === 'aspect'}
+                      options={ASPECT_RATIO_OPTIONS}
+                      onPick={(v) => setAspectRatio(v as AspectRatio)}
+                      onClose={() => setOpenMetaBox(null)}
+                    />
                   </div>
-                  <div>
-                    <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Video Language</label>
-                    <select
-                      value={languageCode}
-                      onChange={(e) => setLanguageCode(e.target.value as VideoLang)}
-                      className={`${inputClass} mt-2`}
-                    >
-                      <option value="en">English</option>
-                      <option value="hi">Hindi (हिन्दी)</option>
-                      <option value="ta">Tamil (தமிழ்)</option>
-                      <option value="te">Telugu (తెలుగు)</option>
-                      <option value="kn">Kannada (ಕನ್ನಡ)</option>
-                      <option value="ml">Malayalam (മലയാളം)</option>
-                    </select>
-                    <p className={`text-[11px] mt-1 ${theme.textSecondary}`}>Script + voiceover in this language.</p>
+
+                  <div className="relative">
+                    <GravityMetaBox
+                      label="Video Language"
+                      value={labelFor(LANGUAGE_OPTIONS, languageCode, 'English')}
+                      Icon={Languages}
+                      onClick={() => setOpenMetaBox(openMetaBox === 'language' ? null : 'language')}
+                    />
+                    <GravityOptionPopover
+                      open={openMetaBox === 'language'}
+                      options={LANGUAGE_OPTIONS}
+                      onPick={(v) => setLanguageCode(v as VideoLang)}
+                      onClose={() => setOpenMetaBox(null)}
+                    />
                   </div>
-                  <div>
-                    <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Voice Gender</label>
-                    <select
-                      value={voiceGender}
-                      onChange={(e) => {
-                        setVoiceGender(e.target.value as 'male' | 'female');
+
+                  <div className="relative">
+                    <GravityMetaBox
+                      label="Voice Gender"
+                      value={labelFor(VOICE_GENDER_OPTIONS, voiceGender, 'Female')}
+                      Icon={Mic}
+                      onClick={() => setOpenMetaBox(openMetaBox === 'voice' ? null : 'voice')}
+                    />
+                    <GravityOptionPopover
+                      open={openMetaBox === 'voice'}
+                      options={VOICE_GENDER_OPTIONS}
+                      onPick={(v) => {
+                        setVoiceGender(v as 'male' | 'female');
                         // Reset the selected voice so the user re-picks
                         // from the new gender's catalog on Step 6.
                         setSelectedVoiceId('');
                       }}
-                      className={`${inputClass} mt-2`}
-                    >
-                      <option value="female">Female</option>
-                      <option value="male">Male</option>
-                    </select>
-                    <p className={`text-[11px] mt-1 ${theme.textSecondary}`}>Filters the voice list on Audio Config.</p>
-                  </div>
-                  <div>
-                    <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Scene Count (Optional)</label>
-                    <input
-                      type="number"
-                      min={1}
-                      max={10}
-                      value={sceneCount}
-                      onChange={(e) => setSceneCount(e.target.value ? Number(e.target.value) : '')}
-                      className={`${inputClass} mt-2`}
+                      onClose={() => setOpenMetaBox(null)}
                     />
                   </div>
-                  <div>
-                    <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Upload Product Image (Optional)</label>
-                    <input type="file" accept="image/*" className="mt-2 text-sm" onChange={(e) => onInputImage(e.target.files?.[0])} />
-                    {inputImageName && <p className={`text-xs mt-1 ${theme.textSecondary}`}>{inputImageName}</p>}
+
+                  <div className="relative">
+                    <GravityMetaBox
+                      label="Scene Count"
+                      value={sceneCount ? `${sceneCount} scene${sceneCount === 1 ? '' : 's'}` : 'Auto'}
+                      Icon={Layers}
+                      onClick={() => setOpenMetaBox(openMetaBox === 'scenes' ? null : 'scenes')}
+                    />
+                    <GravityOptionPopover
+                      open={openMetaBox === 'scenes'}
+                      options={SCENE_COUNT_OPTIONS}
+                      onPick={(v) => setSceneCount(v ? Number(v) : '')}
+                      onClose={() => setOpenMetaBox(null)}
+                    />
                   </div>
-                </div>
-                <div>
-                  <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>OR Select Product</label>
-                  <select
-                    value={selectedProductId}
-                    onChange={(e) => {
-                      setSelectedProductId(e.target.value);
-                      if (e.target.value) {
-                        setInputImageData('');
-                        setInputImageName('');
+
+                  {/* Upload and product-pick were two adjacent controls, but the
+                      existing code already treats them as mutually exclusive —
+                      picking a product clears the upload. One box says that. */}
+                  <div className="relative">
+                    <GravityMetaBox
+                      label="Product"
+                      value={
+                        inputImageName
+                          || products.find((p) => p._id === selectedProductId)?.name
+                          || (loadingProducts ? 'Loading…' : 'None')
                       }
-                    }}
-                    className={`${inputClass} mt-2`}
-                  >
-                    <option value="">{loadingProducts ? 'Loading products...' : 'No product selected'}</option>
-                    {products.map((product) => <option key={product._id} value={product._id}>{product.name}</option>)}
-                  </select>
+                      Icon={Package}
+                      onClick={() => setOpenMetaBox(openMetaBox === 'product' ? null : 'product')}
+                    />
+                    <GravityOptionPopover
+                      open={openMetaBox === 'product'}
+                      options={[
+                        { value: '__upload__', label: 'Upload image…' },
+                        { value: '', label: 'No product selected' },
+                        ...products.map((p) => ({ value: p._id, label: p.name })),
+                      ]}
+                      onPick={(v) => {
+                        if (v === '__upload__') {
+                          productImageInputRef.current?.click();
+                          return;
+                        }
+                        setSelectedProductId(v);
+                        if (v) {
+                          setInputImageData('');
+                          setInputImageName('');
+                        }
+                      }}
+                      onClose={() => setOpenMetaBox(null)}
+                    />
+                    <input
+                      ref={productImageInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => onInputImage(e.target.files?.[0])}
+                    />
+                  </div>
                 </div>
 
                 <div className="flex flex-wrap gap-3">
@@ -2706,35 +2821,31 @@ setCharacterAge(nextDraft?.characterAge || '');
                       }
                     }}
                     disabled={generatingConcepts || !description.trim()}
-                    className={`px-6 py-3 rounded-xl font-bold transition-colors ${
-                      generatingConcepts || !description.trim()
-                        ? 'bg-[#F5A623]/40 text-[#1A1208]/50 cursor-not-allowed'
-                        : 'bg-[#F5A623] text-[#1A1208] hover:bg-[#ffb833]'
-                    }`}
+                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-[13px] font-semibold transition-all bg-[#F5A623] text-[#1A1208] hover:bg-[#ffb833] shadow-[0_4px_18px_rgba(245,166,35,0.20)] disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
                   >
                     {generatingConcepts ? (
-                      <><Loader2 className="w-4 h-4 animate-spin inline mr-2" />Generating concepts…</>
-                    ) : concepts.length > 0 ? '↻ Regenerate concepts' : '✨ Generate Concept'}
+                      <><Loader2 className="w-4 h-4 animate-spin" />Generating concepts…</>
+                    ) : concepts.length > 0 ? (
+                      <><RefreshCcw className="w-4 h-4" />Regenerate concepts</>
+                    ) : (
+                      <><Sparkles className="w-4 h-4" />Generate Concept</>
+                    )}
                   </button>
                   <button
                     onClick={step1Next}
                     disabled={!canStep1Next || (concepts.length > 0 && !acceptedConceptId)}
-                    className={primaryButtonClass(!canStep1Next || (concepts.length > 0 && !acceptedConceptId))}
+                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-[13px] font-semibold transition-all border border-white/[0.12] text-[#F5F4F1] hover:bg-white/[0.05] hover:border-white/20 disabled:opacity-40 disabled:cursor-not-allowed"
                     title={concepts.length > 0 && !acceptedConceptId ? 'Accept a concept first' : undefined}
                   >
-                    {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Next'}
+                    {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Next'}
                   </button>
                   <button
                     onClick={startAutoGenerate}
                     disabled={!canStep1Next || (concepts.length > 0 && !acceptedConceptId)}
-                    className={`px-6 py-3 rounded-xl font-bold transition-colors ${
-                      !canStep1Next || (concepts.length > 0 && !acceptedConceptId)
-                        ? 'bg-blue-900/50 text-blue-500/50 cursor-not-allowed'
-                        : 'bg-blue-500 text-white hover:bg-blue-600'
-                    }`}
+                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-[13px] font-semibold transition-all border border-white/[0.12] text-[#F5F4F1] hover:bg-white/[0.05] hover:border-white/20 disabled:opacity-40 disabled:cursor-not-allowed"
                     title={concepts.length > 0 && !acceptedConceptId ? 'Accept a concept first' : undefined}
                   >
-                    {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Auto-Generate Full Video'}
+                    {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Film className="w-4 h-4 text-[#F5A623]" />Auto-Generate Full Video</>}
                   </button>
                 </div>
 
