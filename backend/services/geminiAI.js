@@ -790,9 +790,7 @@ REQUIREMENTS:
 - Platform: ${platform} (optimized aspect ratio)
 - Objective: ${objective} campaign
 - Style: Modern, clean, vibrant colors, professional photography
-- NO text or words in image
-- NO babies, children, infants, or minors in the image
-- Focus on PRODUCTS and aesthetics only
+- TEXT: If the design calls for a headline, keep it SHORT (3-7 words max), as a punchy headline or tagline, never a paragraph. Use professional typography, at most 2 font styles, and never placeholder text like [Date] or [CTA]. If unsure of rendering the script correctly, render no text at all.
 - Commercial quality suitable for marketing
 
 Make the image specific to ${brandContext.companyName || 'the brand'}'s actual business and products.`;
