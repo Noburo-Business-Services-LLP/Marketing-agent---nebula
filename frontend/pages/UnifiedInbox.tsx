@@ -307,7 +307,7 @@ const UnifiedInbox: React.FC = () => {
           <div className={`shrink-0 p-4 border-b ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
             <div className="flex items-center justify-between gap-3 mb-4">
               <div>
-                <h2 className="text-lg font-semibold">Unified Inbox</h2>
+                <h2 className="font-serif-display text-[20px] text-[#F5F4F1]">Unified Inbox</h2>
                 <p className={`text-xs ${muted}`}>{unreadCount} unread conversations</p>
               </div>
               <div className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-xs ${live ? 'border-emerald-500/30 text-emerald-400 bg-emerald-500/10' : 'border-slate-500/20 text-slate-400'}`}>
@@ -350,7 +350,7 @@ const UnifiedInbox: React.FC = () => {
               <button
                 onClick={simulateTestEvent}
                 disabled={simulating}
-                className="px-3 py-2 rounded-lg bg-[#ffcc29] text-[#070A12] text-xs font-bold hover:bg-[#ffcc29]/80 disabled:opacity-50 flex items-center gap-1 shrink-0"
+                className="px-3 py-2 rounded-lg bg-[#F5A623] text-[#070A12] text-xs font-bold hover:bg-[#F5A623]/80 disabled:opacity-50 flex items-center gap-1 shrink-0"
               >
                 {simulating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
                 Simulate
@@ -360,14 +360,14 @@ const UnifiedInbox: React.FC = () => {
 
           <div className="flex-1 overflow-y-auto">
             {loading ? (
-              <div className="h-full flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-[#ffcc29]" /></div>
+              <div className="h-full flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-[#F5A623]" /></div>
             ) : error ? (
               <div className="h-full flex items-center justify-center p-6 text-center">
                 <div>
                   <AlertTriangle className="w-9 h-9 mx-auto text-amber-400 mb-3" />
                   <p className="font-semibold">Inbox unavailable</p>
                   <p className={`text-sm mt-1 ${muted}`}>{error}</p>
-                  <button onClick={loadConversations} className="mt-4 px-4 py-2 rounded-lg bg-[#ffcc29] text-[#070A12] text-sm font-bold">
+                  <button onClick={loadConversations} className="mt-4 px-4 py-2 rounded-lg bg-[#F5A623] text-[#070A12] text-sm font-bold">
                     Retry
                   </button>
                 </div>
@@ -388,7 +388,7 @@ const UnifiedInbox: React.FC = () => {
                 <button
                   key={item.id}
                   onClick={() => setSelectedId(item.id)}
-                  className={`w-full text-left p-4 border-b transition-colors ${isDarkMode ? 'border-slate-800 hover:bg-slate-900/80' : 'border-slate-100 hover:bg-slate-50'} ${active ? isDarkMode ? 'bg-slate-900' : 'bg-[#ffcc29]/10' : ''}`}
+                  className={`w-full text-left p-4 border-b transition-colors ${isDarkMode ? 'border-slate-800 hover:bg-slate-900/80' : 'border-slate-100 hover:bg-slate-50'} ${active ? isDarkMode ? 'bg-slate-900' : 'bg-[#F5A623]/10' : ''}`}
                 >
                   <div className="flex items-start gap-3">
                     <div className={`w-10 h-10 rounded-lg border flex items-center justify-center shrink-0 ${meta?.className}`}>
@@ -397,14 +397,14 @@ const UnifiedInbox: React.FC = () => {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <p className="font-semibold text-sm truncate">{item.participant_name || item.participant_username || 'Social user'}</p>
-                        {item.status === 'unread' && <span className="w-2 h-2 rounded-full bg-[#ffcc29] shrink-0" />}
+                        {item.status === 'unread' && <span className="w-2 h-2 rounded-full bg-[#F5A623] shrink-0" />}
                         <span className={`ml-auto text-[11px] ${muted}`}>{timeAgo(item.last_message_at)}</span>
                       </div>
                       <p className={`text-xs truncate mt-1 ${muted}`}>{item.last_message_preview}</p>
                       <div className="flex items-center gap-1.5 mt-2 flex-wrap">
                         <span className={`px-2 py-0.5 rounded-full text-[11px] capitalize ${item.priority === 'urgent' ? 'bg-red-500/15 text-red-400' : item.priority === 'high' ? 'bg-amber-500/15 text-amber-400' : 'bg-slate-500/10 text-slate-400'}`}>{item.priority}</span>
-                        {(item.unread_count || 0) > 0 && <span className="px-2 py-0.5 rounded-full text-[11px] bg-[#ffcc29]/10 text-[#d8ad20]">{item.unread_count} unread</span>}
-                        {item.tags?.slice(0, 2).map(tag => <span key={tag} className="px-2 py-0.5 rounded-full text-[11px] bg-[#ffcc29]/10 text-[#d8ad20]">{tag}</span>)}
+                        {(item.unread_count || 0) > 0 && <span className="px-2 py-0.5 rounded-full text-[11px] bg-[#F5A623]/10 text-[#d8ad20]">{item.unread_count} unread</span>}
+                        {item.tags?.slice(0, 2).map(tag => <span key={tag} className="px-2 py-0.5 rounded-full text-[11px] bg-[#F5A623]/10 text-[#d8ad20]">{tag}</span>)}
                       </div>
                     </div>
                   </div>
@@ -451,7 +451,7 @@ const UnifiedInbox: React.FC = () => {
                 <div className="flex flex-col min-h-0">
                   <div ref={messagesContainerRef} className={`flex-1 overflow-y-auto p-4 space-y-4 ${isDarkMode ? 'bg-[#080b12]' : 'bg-slate-50'}`}>
                     {threadLoading ? (
-                      <div className="h-full flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-[#ffcc29]" /></div>
+                      <div className="h-full flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-[#F5A623]" /></div>
                     ) : threadError ? (
                       <div className="h-full flex items-center justify-center text-center">
                         <div>
@@ -472,12 +472,12 @@ const UnifiedInbox: React.FC = () => {
                       const outbound = message.direction === 'outbound';
                       return (
                         <div key={message.id} className={`flex ${outbound ? 'justify-end' : 'justify-start'} group`}>
-                          <div className={`max-w-[78%] rounded-lg px-4 py-3 border ${outbound ? 'bg-[#ffcc29] text-[#070A12] border-[#ffcc29]' : panel}`}>
+                          <div className={`max-w-[78%] rounded-lg px-4 py-3 border ${outbound ? 'bg-[#F5A623] text-[#070A12] border-[#F5A623]' : panel}`}>
                             <div className="flex items-center flex-wrap gap-2 mb-1">
                               <span className="text-xs font-semibold">{message.sender_type === 'ai' ? 'AI' : outbound ? 'Nebulaa' : message.author_name}</span>
                               <span className="text-[11px] opacity-60">{timeAgo(message.created_at)}</span>
                               {message.message_type && message.message_type !== 'message' && (
-                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${outbound ? 'bg-black/10 text-black/70' : 'bg-[#ffcc29]/20 text-[#d8ad20]'}`}>
+                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${outbound ? 'bg-black/10 text-black/70' : 'bg-[#F5A623]/20 text-[#d8ad20]'}`}>
                                   {message.message_type}
                                 </span>
                               )}
@@ -497,7 +497,7 @@ const UnifiedInbox: React.FC = () => {
                               <div className="mt-2 text-right opacity-0 group-hover:opacity-100 transition-opacity">
                                 <button
                                   onClick={() => setReplyingToCommentId(message.provider_message_id || message.id)}
-                                  className={`text-[11px] font-semibold flex items-center gap-1 ml-auto ${muted} hover:text-[#ffcc29]`}
+                                  className={`text-[11px] font-semibold flex items-center gap-1 ml-auto ${muted} hover:text-[#F5A623]`}
                                 >
                                   <MessageCircle className="w-3 h-3" /> Reply
                                 </button>
@@ -532,7 +532,7 @@ const UnifiedInbox: React.FC = () => {
                         <button
                           onClick={sendReply}
                           disabled={sending || !reply.trim()}
-                          className="px-4 py-2 rounded-lg bg-[#ffcc29] text-[#070A12] font-semibold text-sm flex items-center gap-2 disabled:opacity-50"
+                          className="px-4 py-2 rounded-lg bg-[#F5A623] text-[#070A12] font-semibold text-sm flex items-center gap-2 disabled:opacity-50"
                         >
                           {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                           Send
@@ -544,7 +544,7 @@ const UnifiedInbox: React.FC = () => {
 
                 <aside className={`hidden xl:flex flex-col min-h-0 border-l ${isDarkMode ? 'border-slate-800 bg-[#0d1117]' : 'border-slate-200 bg-white'}`}>
                   <div className="shrink-0 p-4 border-b border-inherit">
-                    <h4 className="font-semibold flex items-center gap-2"><Sparkles className="w-4 h-4 text-[#ffcc29]" /> AI Assist</h4>
+                    <h4 className="font-semibold flex items-center gap-2"><Sparkles className="w-4 h-4 text-[#F5A623]" /> AI Assist</h4>
                     <p className={`text-xs mt-1 ${muted}`}>Reply suggestions, sentiment, spam risk, and priority tagging.</p>
                   </div>
                   <div className="flex-1 p-4 space-y-4 overflow-y-auto min-h-0">
@@ -576,8 +576,8 @@ const UnifiedInbox: React.FC = () => {
                       {selectedAutoReplyEnabled ? (
                         <div className={`rounded-lg border p-3 text-sm ${panel} ${muted}`}>Auto Reply is on for this {selectedChannelType === 'comment' ? 'comment channel' : 'message channel'}. AI replies are sent and saved in the thread.</div>
                       ) : suggestions.length ? suggestions.map(suggestion => (
-                        <button key={suggestion} onClick={() => setReply(suggestion)} className={`w-full text-left rounded-lg border p-3 text-sm leading-relaxed ${panel} hover:border-[#ffcc29]/60`}>
-                          <Bot className="w-4 h-4 text-[#ffcc29] mb-2" />
+                        <button key={suggestion} onClick={() => setReply(suggestion)} className={`w-full text-left rounded-lg border p-3 text-sm leading-relaxed ${panel} hover:border-[#F5A623]/60`}>
+                          <Bot className="w-4 h-4 text-[#F5A623] mb-2" />
                           {suggestion}
                         </button>
                       )) : (
