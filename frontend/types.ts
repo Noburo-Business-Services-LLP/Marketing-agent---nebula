@@ -175,6 +175,9 @@ export interface Draft {
   cta: string;
   imageUrl: string;
   imagePrompt?: string;
+  /** The exact text sent to the image model, as opposed to imagePrompt which
+      is only the seed description. Shown in the UI beside the image. */
+  imagePromptResolved?: string;
   platforms: string[];
   language: string;
   tone?: string;

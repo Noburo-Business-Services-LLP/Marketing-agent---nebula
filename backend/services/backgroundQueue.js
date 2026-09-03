@@ -72,6 +72,7 @@ Return ONLY a JSON object (no markdown, no backticks, no code blocks):
 
     // 2. Generate Image using Nano Banana Pro
     let imageUrl = '';
+    let calendarPromptUsed = '';
     try {
       const imageResult = await generateCampaignImageNanoBanana(parsed.imagePrompt || item.creativeConcept, {
         aspectRatio: '1:1',
@@ -81,6 +82,7 @@ Return ONLY a JSON object (no markdown, no backticks, no code blocks):
       });
       if (imageResult && imageResult.success) {
         imageUrl = imageResult.imageUrl;
+        calendarPromptUsed = imageResult.promptUsed || '';
       }
     } catch (imgErr) {
       console.error('[BackgroundQueue] Image generation failed:', imgErr.message);
@@ -92,6 +94,9 @@ Return ONLY a JSON object (no markdown, no backticks, no code blocks):
     draft.cta = item.cta || '';
     draft.imageUrl = imageUrl;
     draft.imagePrompt = parsed.imagePrompt || item.creativeConcept || '';
+    // Same for the Smart Calendar path — these are the auto-generated posts,
+    // so being able to see their prompt matters most here.
+    if (calendarPromptUsed) draft.imagePromptResolved = calendarPromptUsed;
     draft.platforms = ['instagram'];
     draft.language = calendar.language || 'English';
     draft.objective = item.objective || 'awareness';
@@ -265,6 +270,10 @@ async function processDraftImageGenerationJob(job) {
     }
 
     const finalImageUrl = typeof imageResult === 'string' ? imageResult : imageResult?.imageUrl;
+    // Keep the exact prompt that produced this image, for the UI to show.
+    if (typeof imageResult === 'object' && imageResult?.promptUsed) {
+      draft.imagePromptResolved = imageResult.promptUsed;
+    }
 
     if (finalImageUrl) {
       draft.imageUrl = finalImageUrl;

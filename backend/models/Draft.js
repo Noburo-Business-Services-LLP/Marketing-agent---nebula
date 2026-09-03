@@ -41,6 +41,13 @@ const draftSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  // The exact text sent to the image model, as opposed to imagePrompt above,
+  // which is only the seed description the caller supplied. Surfaced in the UI
+  // so you can see why an image came out the way it did.
+  imagePromptResolved: {
+    type: String,
+    default: ''
+  },
   platforms: [{
     type: String
   }],

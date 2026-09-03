@@ -4828,6 +4828,10 @@ FORBIDDEN:
 Treat this as an image editing task where the original person must remain identical.`;
   }
 
+  // Declared out here, not inside the try: the fallback model returns from the
+  // catch block below, and it needs to report the same prompt.
+  let promptUsed = prompt;
+
   try {
     console.log(`[NanoBananaPro] Generating post ${postIndex + 1}/${totalPosts} in ${aspectRatio}...`);
 
@@ -4943,11 +4947,14 @@ Do NOT invent new people not visible in earlier scenes.`);
       referenceNotes.push(`Image ${parts.length} is the environment reference — a photo of the user's actual physical space. The generated scene must take place inside this space. Match its walls, floor, ceiling, lighting, and material vocabulary.`);
     }
 
-    if (referenceNotes.length > 0) {
-      parts.push({ text: `${referenceNotes.join('\n\n')}\n\n${prompt}` });
-    } else {
-      parts.push({ text: prompt });
-    }
+    // The exact text sent to the model, kept so it can be surfaced in the UI
+    // alongside the image it produced. Previously this was discarded, which
+    // made it impossible to see why an image came out the way it did.
+    promptUsed = referenceNotes.length > 0
+      ? `${referenceNotes.join('\n\n')}\n\n${prompt}`
+      : prompt;
+
+    parts.push({ text: promptUsed });
 
     console.log("Gemini input parts:");
     console.log(JSON.stringify(parts.map((p, index) => ({
@@ -4990,13 +4997,13 @@ Do NOT invent new people not visible in earlier scenes.`);
           try {
             const uploadResult = await uploadBase64Image(base64Image, 'nebula-campaign-posts');
             if (uploadResult.success && uploadResult.url) {
-              return { success: true, imageUrl: uploadResult.url, model: 'nano-banana-2' };
+              return { success: true, imageUrl: uploadResult.url, model: 'nano-banana-2', promptUsed };
             }
           } catch (uploadErr) {
             console.warn('Cloudinary upload failed, returning base64:', uploadErr.message);
           }
 
-          return { success: true, imageUrl: base64Image, model: 'nano-banana-2' };
+          return { success: true, imageUrl: base64Image, model: 'nano-banana-2', promptUsed };
         }
       }
     }
@@ -5041,10 +5048,10 @@ Do NOT invent new people not visible in earlier scenes.`);
               try {
                 const uploadResult = await uploadBase64Image(base64Image, 'nebula-campaign-posts');
                 if (uploadResult.success && uploadResult.url) {
-                  return { success: true, imageUrl: uploadResult.url, model: 'gemini-2.5-flash-image' };
+                  return { success: true, imageUrl: uploadResult.url, model: 'gemini-2.5-flash-image', promptUsed };
                 }
               } catch (_) { }
-              return { success: true, imageUrl: base64Image, model: 'gemini-2.5-flash-image' };
+              return { success: true, imageUrl: base64Image, model: 'gemini-2.5-flash-image', promptUsed };
             }
           }
         }

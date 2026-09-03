@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, Layers, Calendar as CalendarIcon, Zap, Image as ImageIcon, Instagram, Facebook, Linkedin, ChevronRight, Loader2, Check, Clock, Save, AlertCircle, RotateCcw, Pencil, Trash2 } from 'lucide-react';
+import { Sparkles, Layers, Calendar as CalendarIcon, Zap, Image as ImageIcon, Instagram, Facebook, Linkedin, ChevronRight, Loader2, Check, Clock, Save, AlertCircle, RotateCcw, Pencil, Trash2, Code2, Copy, X } from 'lucide-react';
 import { draftsAPI, brandAssetsAPI, apiService } from '../services/api';
 import { Draft } from '../types';
 import GeneratingFill from '../components/GeneratingFill';
@@ -230,6 +230,46 @@ const GravityCreate: React.FC = () => {
       setError(e?.message || 'Could not save the caption');
     } finally {
       setCaptionBusy('');
+    }
+  };
+
+  // Prompt inspector: shows the exact text that produced this image, so a weak
+  // result can be diagnosed and re-run without leaving the card.
+  const [promptOpenFor, setPromptOpenFor] = useState<string>('');
+  const [promptDraft, setPromptDraft] = useState<string>('');
+  const [promptCopied, setPromptCopied] = useState(false);
+
+  const openPrompt = (d: Draft) => {
+    setPromptOpenFor(d._id);
+    setPromptDraft(d.imagePromptResolved || d.imagePrompt || '');
+    setPromptCopied(false);
+  };
+
+  const copyPrompt = async () => {
+    try {
+      await navigator.clipboard.writeText(promptDraft);
+      setPromptCopied(true);
+      window.setTimeout(() => setPromptCopied(false), 1400);
+    } catch { /* clipboard unavailable */ }
+  };
+
+  const resetPrompt = (d: Draft) => {
+    setPromptDraft(d.imagePromptResolved || d.imagePrompt || '');
+  };
+
+  const regenerateWithPrompt = async (d: Draft) => {
+    setActionBusy(d._id);
+    setError(null);
+    try {
+      await draftsAPI.updateDraft(d._id, { imagePrompt: promptDraft });
+      await draftsAPI.retryImageGeneration(d._id);
+      setResults((prev) => prev.map((x: any) =>
+        x._id === d._id ? { ...x, status: 'processing', imageUrl: '', imagePrompt: promptDraft } : x));
+      setPromptOpenFor('');
+    } catch (e: any) {
+      setError(e?.message || 'Could not regenerate');
+    } finally {
+      setActionBusy('');
     }
   };
 
@@ -916,6 +956,13 @@ const GravityCreate: React.FC = () => {
                               <Pencil className="w-3.5 h-3.5" />
                             </button>
                             <button
+                              onClick={() => openPrompt(d)}
+                              title="View the prompt that made this image"
+                              className="p-1.5 rounded-md text-white/40 hover:text-[#F5A623] hover:bg-white/[0.06]"
+                            >
+                              <Code2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
                               onClick={() => regenerateImage(d)}
                               disabled={busy || processing}
                               title="Regenerate image"
@@ -933,6 +980,63 @@ const GravityCreate: React.FC = () => {
                             </button>
                           </div>
                         </div>
+
+                        {/* The exact prompt that produced this image. Editing it
+                            and regenerating is the fastest way to find out why a
+                            result was weak. */}
+                        {promptOpenFor === d._id && (
+                          <div className="mt-3 rounded-xl border border-[#F5A623]/20 bg-[#F5A623]/[0.03] p-4">
+                            <div className="flex items-center justify-between gap-3 mb-2">
+                              <div className="gravity-label text-[#F5A623]">Prompt sent to the image model</div>
+                              <button
+                                onClick={() => setPromptOpenFor('')}
+                                className="p-1 rounded-md text-white/40 hover:text-white hover:bg-white/[0.06]"
+                                title="Close"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+
+                            {!(d.imagePromptResolved || d.imagePrompt) ? (
+                              <p className="text-[12px] text-white/45">
+                                No prompt was recorded for this image. Images generated from now on will show theirs here.
+                              </p>
+                            ) : (
+                              <>
+                                <textarea
+                                  value={promptDraft}
+                                  onChange={(e) => setPromptDraft(e.target.value)}
+                                  rows={10}
+                                  className="gravity-bare w-full bg-black/30 border border-white/[0.08] rounded-lg p-3 text-[12px] leading-relaxed text-white/75 font-mono resize-y"
+                                />
+                                <div className="flex flex-wrap items-center gap-2 mt-3">
+                                  <button
+                                    onClick={copyPrompt}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold border border-white/[0.12] text-[#F5F4F1] hover:bg-white/[0.05]"
+                                  >
+                                    <Copy className="w-3.5 h-3.5" />
+                                    {promptCopied ? 'Copied' : 'Copy'}
+                                  </button>
+                                  <button
+                                    onClick={() => regenerateWithPrompt(d)}
+                                    disabled={busy || processing || !promptDraft.trim()}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-[#F5A623] text-[#1A1208] hover:bg-[#ffb833] disabled:opacity-40 disabled:cursor-not-allowed"
+                                  >
+                                    <RotateCcw className="w-3.5 h-3.5" />
+                                    Regenerate with this
+                                  </button>
+                                  <button
+                                    onClick={() => resetPrompt(d)}
+                                    className="px-3 py-1.5 rounded-lg text-[12px] font-semibold text-white/50 hover:text-[#F5F4F1] hover:bg-white/[0.05]"
+                                  >
+                                    Reset
+                                  </button>
+                                  <span className="text-[11px] text-white/35 ml-auto">Regenerating costs credits.</span>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        )}
                       </>
                     )}
 
