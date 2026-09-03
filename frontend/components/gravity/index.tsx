@@ -31,24 +31,33 @@ export const GravityHero: React.FC<{
   headline: React.ReactNode;
   subcopy?: string;
   align?: 'center' | 'left';
+  /** 'lg' is the full entry-point hero; 'md' is a working step header. */
+  size?: 'lg' | 'md';
   className?: string;
-}> = ({ eyebrow, headline, subcopy, align = 'center', className = '' }) => (
-  <div className={`${align === 'center' ? 'text-center' : 'text-left'} mb-10 ${className}`}>
-    {eyebrow && <GravityLabel gold className="mb-4">{eyebrow}</GravityLabel>}
-    <h1 className="font-serif-display text-[clamp(34px,4.4vw,56px)] leading-[1.05] tracking-[-0.02em] text-[#F5F4F1] mb-5">
-      {headline}
-    </h1>
-    {subcopy && (
-      <p
-        className={`text-[15px] text-white/55 max-w-[560px] leading-relaxed ${
-          align === 'center' ? 'mx-auto' : ''
+}> = ({ eyebrow, headline, subcopy, align = 'center', size = 'lg', className = '' }) => {
+  const lg = size === 'lg';
+  return (
+    <div className={`${align === 'center' ? 'text-center' : 'text-left'} ${lg ? 'mb-10' : 'mb-6'} ${className}`}>
+      {eyebrow && <GravityLabel gold className={lg ? 'mb-4' : 'mb-2'}>{eyebrow}</GravityLabel>}
+      <h1
+        className={`font-serif-display leading-[1.1] tracking-[-0.02em] text-[#F5F4F1] ${
+          lg ? 'text-[clamp(34px,4.4vw,56px)] leading-[1.05] mb-5' : 'text-[26px] mb-2'
         }`}
       >
-        {subcopy}
-      </p>
-    )}
-  </div>
-);
+        {headline}
+      </h1>
+      {subcopy && (
+        <p
+          className={`text-white/55 leading-relaxed ${lg ? 'text-[15px] max-w-[560px]' : 'text-[13.5px] max-w-[620px]'} ${
+            align === 'center' ? 'mx-auto' : ''
+          }`}
+        >
+          {subcopy}
+        </p>
+      )}
+    </div>
+  );
+};
 
 /** The gold italic emphasis word used inside a GravityHero headline. */
 export const GravityEmphasis: React.FC<{ children: React.ReactNode }> = ({ children }) => (

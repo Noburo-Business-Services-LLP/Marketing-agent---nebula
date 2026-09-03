@@ -137,11 +137,10 @@ const ReelGenerator: React.FC = () => {
   const [searchParams] = useSearchParams();
   const { isDarkMode } = useTheme();
   const theme = getThemeClasses(isDarkMode);
-  const panelClass = `${theme.bgCard} border ${isDarkMode ? 'border-slate-800' : 'border-slate-200'} rounded-2xl`;
-  const inputClass = `w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition ${isDarkMode
-    ? 'bg-slate-900 border-slate-700 text-white focus:border-[#ffcc29]'
-    : 'bg-white border-slate-300 text-slate-900 focus:border-[#ffcc29]'
-    }`;
+  // Both are used throughout the wizard, so defining them in Gravity terms
+  // here restyles every panel and field on the page from one place.
+  const panelClass = 'rounded-2xl border border-white/[0.06] bg-white/[0.02]';
+  const inputClass = 'w-full rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-2.5 text-sm text-[#F5F4F1] outline-none transition placeholder:text-white/25 focus:border-[#F5A623]/50';
   // Which Step 1 MetaBox has its popover open (null = none). The settings that
   // were six side-by-side <select>s are now MetaBoxes sharing this one slot.
   const [openMetaBox, setOpenMetaBox] = useState<string | null>(null);
@@ -2110,7 +2109,7 @@ setCharacterAge(nextDraft?.characterAge || '');
   const statusPillClass = (status: string) => {
     if (status === 'posted') return 'bg-green-500/15 text-green-300 border-green-500/30';
     if (status === 'scheduled') return 'bg-blue-500/15 text-blue-300 border-blue-500/30';
-    if (status === 'created') return 'bg-[#ffcc29]/15 text-[#ffcc29] border-[#ffcc29]/30';
+    if (status === 'created') return 'bg-[#F5A623]/15 text-[#F5A623] border-[#F5A623]/30';
     return isDarkMode ? 'bg-slate-800 text-slate-300 border-slate-700' : 'bg-slate-100 text-slate-700 border-slate-300';
   };
 
@@ -2118,7 +2117,7 @@ setCharacterAge(nextDraft?.characterAge || '');
     ? (isDarkMode
       ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
       : 'bg-slate-200 text-slate-400 cursor-not-allowed')
-    : 'bg-[#ffcc29] text-black hover:bg-[#f0bd18]'
+    : 'bg-[#F5A623] text-black hover:bg-[#ffb833]'
     }`;
 
   const canStep1Next = !busy && !!description.trim();
@@ -2223,7 +2222,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                           else openVideoDraft(item.generationProgress?.jobId || item._id);
                         }
                       }}
-                      className={`text-left rounded-2xl border overflow-hidden shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg cursor-pointer ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 hover:border-[#ffcc29]/50' : 'bg-white border-slate-200 hover:border-[#ffcc29]/60'}`}
+                      className={`text-left rounded-2xl border overflow-hidden shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg cursor-pointer ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 hover:border-[#F5A623]/50' : 'bg-white border-slate-200 hover:border-[#F5A623]/60'}`}
                     >
                       <div className="relative">
                         {(() => {
@@ -2303,7 +2302,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                         else openVideoDraft(item.jobId);
                       }
                     }}
-                    className={`text-left rounded-2xl border overflow-hidden shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 hover:border-[#ffcc29]/50' : 'bg-white border-slate-200 hover:border-[#ffcc29]/60'
+                    className={`text-left rounded-2xl border overflow-hidden shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 hover:border-[#F5A623]/50' : 'bg-white border-slate-200 hover:border-[#F5A623]/60'
                       }`}
                   >
                     <div className="relative">
@@ -2374,7 +2373,7 @@ setCharacterAge(nextDraft?.characterAge || '');
               </div>
             ) : (
               <div className={`${panelClass} p-8 text-center`}>
-                <Film className="w-8 h-8 mx-auto text-[#ffcc29] mb-3" />
+                <Film className="w-8 h-8 mx-auto text-[#F5A623] mb-3" />
                 <p className={`font-semibold ${theme.text}`}>No AI videos in this tab yet.</p>
                 <p className={`text-sm mt-1 ${theme.textSecondary}`}>Create a new AI video to see it here.</p>
               </div>
@@ -2408,7 +2407,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                 disabled={busy}
                 className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-semibold transition-colors ${busy
                   ? (isDarkMode ? 'border-slate-800 text-slate-600 cursor-not-allowed' : 'border-slate-200 text-slate-400 cursor-not-allowed')
-                  : (isDarkMode ? 'border-slate-600 text-slate-200 hover:border-[#ffcc29] hover:text-[#ffcc29]' : 'border-slate-300 text-slate-700 hover:border-[#ffcc29] hover:text-[#b88f00]')
+                  : (isDarkMode ? 'border-slate-600 text-slate-200 hover:border-[#F5A623] hover:text-[#F5A623]' : 'border-slate-300 text-slate-700 hover:border-[#F5A623] hover:text-[#F5A623]')
                   }`}
               >
                 <ArrowLeft className="w-4 h-4" />
@@ -2427,21 +2426,21 @@ setCharacterAge(nextDraft?.characterAge || '');
                 }`}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <Loader2 className="w-5 h-5 text-[#ffcc29] animate-spin" />
+                    <Loader2 className="w-5 h-5 text-[#F5A623] animate-spin" />
                     <div>
                       <h3 className={`font-bold ${theme.text}`}>Background Worker Processing...</h3>
                       <p className={`text-xs ${theme.textSecondary}`}>
-                        Job: <span className="font-mono text-[#ffcc29]">{activeQueueJobId}</span> | Status: <span className="capitalize">{activeJobStatus}</span>
+                        Job: <span className="font-mono text-[#F5A623]">{activeQueueJobId}</span> | Status: <span className="capitalize">{activeJobStatus}</span>
                       </p>
                     </div>
                   </div>
-                  <span className="text-xl font-black text-[#ffcc29]">{activeJobProgress}%</span>
+                  <span className="text-xl font-black text-[#F5A623]">{activeJobProgress}%</span>
                 </div>
 
                 {/* Progress Bar */}
                 <div className={`w-full h-2 rounded-full overflow-hidden ${isDarkMode ? 'bg-slate-800' : 'bg-slate-100'}`}>
                   <div
-                    className="h-full bg-gradient-to-r from-[#ffcc29] to-[#f0bd18] transition-all duration-500 ease-out"
+                    className="h-full bg-gradient-to-r from-[#F5A623] to-[#ffb833] transition-all duration-500 ease-out"
                     style={{ width: `${activeJobProgress}%` }}
                   />
                 </div>
@@ -3181,7 +3180,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                   <span className={theme.text}>Preserve Character Identity</span>
                   <button
                     onClick={() => setPreserveIdentity(!preserveIdentity)}
-                    className={`flex-shrink-0 transition-colors ${preserveIdentity ? 'text-[#ffcc29]' : theme.textMuted}`}
+                    className={`flex-shrink-0 transition-colors ${preserveIdentity ? 'text-[#F5A623]' : theme.textMuted}`}
                     disabled={!characterEnabled}
                   >
                     {preserveIdentity ? <ToggleRight className="w-8 h-8" /> : <ToggleLeft className="w-8 h-8" />}
@@ -3191,7 +3190,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                   <span className={theme.text}>Include Brand Logo</span>
                   <button
                     onClick={() => setUseLogo(!useLogo)}
-                    className={`flex-shrink-0 transition-colors ${useLogo ? 'text-[#ffcc29]' : theme.textMuted}`}
+                    className={`flex-shrink-0 transition-colors ${useLogo ? 'text-[#F5A623]' : theme.textMuted}`}
                   >
                     {useLogo ? <ToggleRight className="w-8 h-8" /> : <ToggleLeft className="w-8 h-8" />}
                   </button>
@@ -3489,7 +3488,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                 <button
                   onClick={step2Next}
                   disabled={busy || (characterEnabled && !characterApproved && characterSource === 'generate')}
-                  className="px-6 py-2.5 bg-[#ffcc29] text-black font-semibold rounded-xl hover:bg-[#e6b825] transition disabled:opacity-50"
+                  className="px-6 py-2.5 bg-[#F5A623] text-black font-semibold rounded-xl hover:bg-[#ffb833] transition disabled:opacity-50"
                 >
                   {characterEnabled && !characterApproved && characterSource === 'generate' ? 'Approve Character to Continue' : 'Save & Next (Environment)'}
                 </button>
@@ -3501,7 +3500,7 @@ setCharacterAge(nextDraft?.characterAge || '');
             <div className={`${panelClass} p-6 space-y-5`}>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
-                  <h2 className={`font-bold text-lg ${theme.text}`}>Step 3: Environment</h2>
+                  <GravityHero size="md" align="left" eyebrow="AI Reels" headline="Environment" />
                   <p className={`text-[12px] mt-1 ${theme.textSecondary}`}>
                     Lock every scene to your actual space (shop, showroom, workshop, storefront). Every image + clip will render inside this exact environment.
                   </p>
@@ -3692,7 +3691,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                 {/* HEADER */}
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <h2 className={`font-bold text-lg ${theme.text}`}>Step 3: Script + Scenes</h2>
+                    <GravityHero size="md" align="left" eyebrow="AI Reels" headline="Script + Scenes" />
                     <p className={`text-xs mt-0.5 ${theme.textSecondary}`}>
                       Story arc · Voiceover · Scene-by-scene breakdown — production-ready and editable.
                     </p>
@@ -4074,7 +4073,7 @@ setCharacterAge(nextDraft?.characterAge || '');
             {step === 5 && (
               <div className={`${panelClass} p-6 space-y-4`}>
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <h2 className={`font-bold text-lg ${theme.text}`}>Step 5: Scene Images</h2>
+                  <GravityHero size="md" align="left" eyebrow="AI Reels" headline="Scene Images" />
                   <span className={`text-[11px] px-2 py-1 rounded-full border ${theme.textMuted} border-white/10`}>
                     Aspect: {aspectRatio} · Sequential render
                   </span>
@@ -4082,8 +4081,8 @@ setCharacterAge(nextDraft?.characterAge || '');
 
                 {/* Sequential progress banner while gen loop is running */}
                 {pendingSceneIndex !== null && totalScenesForRun > 0 && (
-                  <div className={`rounded-xl border border-[#ffcc29]/40 bg-[#ffcc29]/5 px-4 py-3 flex items-center gap-3`}>
-                    <Loader2 className="w-4 h-4 animate-spin text-[#ffcc29]" />
+                  <div className={`rounded-xl border border-[#F5A623]/40 bg-[#F5A623]/5 px-4 py-3 flex items-center gap-3`}>
+                    <Loader2 className="w-4 h-4 animate-spin text-[#F5A623]" />
                     <div className="flex-1">
                       <p className={`text-sm font-semibold ${theme.text}`}>
                         Rendering scene {pendingSceneIndex + 1} of {totalScenesForRun}…
@@ -4092,14 +4091,14 @@ setCharacterAge(nextDraft?.characterAge || '');
                         Nano Banana · consistent characters + locked environment
                       </p>
                     </div>
-                    <span className="text-xs text-[#ffcc29] font-semibold tabular-nums">
+                    <span className="text-xs text-[#F5A623] font-semibold tabular-nums">
                       {pendingSceneIndex + 1} / {totalScenesForRun}
                     </span>
                   </div>
                 )}
 
                 <div className="flex flex-wrap items-center gap-2">
-                  <button onClick={generateSceneImages} disabled={busy} className="px-4 py-2 rounded-xl border border-[#ffcc29] text-[#ffcc29] font-semibold">
+                  <button onClick={generateSceneImages} disabled={busy} className="px-4 py-2 rounded-xl border border-[#F5A623] text-[#F5A623] font-semibold">
                     {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : (scenes.some((s) => s.imageUrl) ? 'Regenerate All Scene Images' : 'Generate All Scene Images')}
                   </button>
                   {scenes.some((s) => s.imageUrl) && (
@@ -4138,7 +4137,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                         <div className="flex items-center justify-between gap-2">
                           <p className={`font-semibold ${theme.text}`}>{scene.title || `Scene ${idx + 1}`}</p>
                           {isRendering && (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-[#ffcc29]/15 border border-[#ffcc29]/40 text-[#ffcc29]">
+                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-[#F5A623]/15 border border-[#F5A623]/40 text-[#F5A623]">
                               <Loader2 className="w-3 h-3 animate-spin" /> Rendering
                             </span>
                           )}
@@ -4167,8 +4166,8 @@ setCharacterAge(nextDraft?.characterAge || '');
                             <div className="w-full h-full rounded-lg border border-dashed border-slate-600 flex items-center justify-center bg-black/10">
                               {isRendering ? (
                                 <div className="flex flex-col items-center gap-2">
-                                  <Loader2 className="w-8 h-8 text-[#ffcc29] animate-spin" />
-                                  <p className="text-xs font-semibold text-[#ffcc29] tracking-wide">Generating…</p>
+                                  <Loader2 className="w-8 h-8 text-[#F5A623] animate-spin" />
+                                  <p className="text-xs font-semibold text-[#F5A623] tracking-wide">Generating…</p>
                                 </div>
                               ) : isQueued ? (
                                 <div className="flex flex-col items-center gap-1 opacity-60">
@@ -4182,10 +4181,10 @@ setCharacterAge(nextDraft?.characterAge || '');
                           )}
                           {showSpinnerOverlay && scene.imageUrl && (
                             <div className="absolute inset-0 rounded-lg overflow-hidden pointer-events-none">
-                              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[#ffcc29]/15 to-transparent skeleton-shimmer" />
+                              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[#F5A623]/15 to-transparent skeleton-shimmer" />
                               <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/30 backdrop-blur-[2px]">
-                                <Sparkles className="w-6 h-6 text-[#ffcc29] animate-pulse" />
-                                <p className="text-xs font-semibold text-[#ffcc29] tracking-wide">
+                                <Sparkles className="w-6 h-6 text-[#F5A623] animate-pulse" />
+                                <p className="text-xs font-semibold text-[#F5A623] tracking-wide">
                                   {isRendering ? 'Generating…' : 'Regenerating…'}
                                 </p>
                               </div>
@@ -4196,7 +4195,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                           <button
                             onClick={() => regenerateSceneImage(scene)}
                             disabled={isRegen || isRendering}
-                            className="px-3 py-2 text-xs rounded-lg border border-[#ffcc29] text-[#ffcc29] hover:bg-[#ffcc29]/10 disabled:opacity-50 flex items-center gap-1.5"
+                            className="px-3 py-2 text-xs rounded-lg border border-[#F5A623] text-[#F5A623] hover:bg-[#F5A623]/10 disabled:opacity-50 flex items-center gap-1.5"
                           >
                             {isRegen ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCcw className="w-3 h-3" />}
                             {isRegen ? 'Regenerating' : 'Regenerate'}
@@ -4242,7 +4241,7 @@ setCharacterAge(nextDraft?.characterAge || '');
             {step === 6 && (
               <div className={`${panelClass} p-6 space-y-4`}>
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <h2 className={`font-bold text-lg ${theme.text}`}>Step 4: Video Clip Generation</h2>
+                  <GravityHero size="md" align="left" eyebrow="AI Reels" headline="Video Clips" />
                   <span className={`text-[11px] px-2 py-1 rounded-full border ${theme.textMuted} border-white/10`}>
                     Aspect: {aspectRatio} · Sequential render
                   </span>
@@ -4250,8 +4249,8 @@ setCharacterAge(nextDraft?.characterAge || '');
 
                 {/* Sequential progress banner */}
                 {pendingSceneIndex !== null && totalScenesForRun > 0 && (
-                  <div className={`rounded-xl border border-[#ffcc29]/40 bg-[#ffcc29]/5 px-4 py-3 flex items-center gap-3`}>
-                    <Loader2 className="w-4 h-4 animate-spin text-[#ffcc29]" />
+                  <div className={`rounded-xl border border-[#F5A623]/40 bg-[#F5A623]/5 px-4 py-3 flex items-center gap-3`}>
+                    <Loader2 className="w-4 h-4 animate-spin text-[#F5A623]" />
                     <div>
                       <p className={`text-sm font-semibold ${theme.text}`}>
                         Rendering scene {pendingSceneIndex + 1} of {totalScenesForRun}
@@ -4264,7 +4263,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                 )}
 
                 <div className="flex flex-wrap gap-2">
-                  <button onClick={generateClips} disabled={busy} className="px-4 py-2 rounded-xl border border-[#ffcc29] text-[#ffcc29] font-semibold">
+                  <button onClick={generateClips} disabled={busy} className="px-4 py-2 rounded-xl border border-[#F5A623] text-[#F5A623] font-semibold">
                     {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : (scenes.some((s) => s.clipUrl) ? 'Resume / Continue' : 'Generate All Clips')}
                   </button>
                   {scenes.some((s) => s.clipUrl) && (
@@ -4309,9 +4308,9 @@ setCharacterAge(nextDraft?.characterAge || '');
                         </div>
 
                         {isPending || isRegen ? (
-                          <div className="w-full aspect-video rounded-lg border border-[#ffcc29]/40 bg-black/40 flex flex-col items-center justify-center gap-2">
-                            <Loader2 className="w-6 h-6 animate-spin text-[#ffcc29]" />
-                            <p className="text-xs text-[#ffcc29] font-semibold">
+                          <div className="w-full aspect-video rounded-lg border border-[#F5A623]/40 bg-black/40 flex flex-col items-center justify-center gap-2">
+                            <Loader2 className="w-6 h-6 animate-spin text-[#F5A623]" />
+                            <p className="text-xs text-[#F5A623] font-semibold">
                               {isRegen ? 'Regenerating this scene…' : 'Rendering…'}
                             </p>
                           </div>
@@ -4326,7 +4325,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                           <button
                             onClick={() => regenerateSceneClip(idx, '')}
                             disabled={busy || isRegen || isPending || !scene.imageUrl}
-                            className="px-3 py-2 text-xs rounded-lg border border-[#ffcc29] text-[#ffcc29] hover:bg-[#ffcc29]/10 disabled:opacity-50 flex items-center gap-1.5"
+                            className="px-3 py-2 text-xs rounded-lg border border-[#F5A623] text-[#F5A623] hover:bg-[#F5A623]/10 disabled:opacity-50 flex items-center gap-1.5"
                           >
                             {isRegen ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCcw className="w-3 h-3" />}
                             {isRegen ? 'Regenerating' : 'Regenerate'}
@@ -4358,7 +4357,7 @@ setCharacterAge(nextDraft?.characterAge || '');
 
             {step === 7 && (
               <div className={`${panelClass} p-6 space-y-4`}>
-                <h2 className={`font-bold text-lg ${theme.text}`}>Step 5: Audio Configuration</h2>
+                <GravityHero size="md" align="left" eyebrow="AI Reels" headline="Audio Config" />
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
                     <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Audio</label>
@@ -4609,7 +4608,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                 )}
 
                 <div className="flex flex-wrap gap-3">
-                  <button onClick={generateAudioPreview} disabled={!canAudioPreview} className="px-4 py-2 rounded-xl border border-[#ffcc29] text-[#ffcc29] font-semibold disabled:opacity-60">
+                  <button onClick={generateAudioPreview} disabled={!canAudioPreview} className="px-4 py-2 rounded-xl border border-[#F5A623] text-[#F5A623] font-semibold disabled:opacity-60">
                     {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Generate Audio Preview'}
                   </button>
                   <button onClick={mixAudio} disabled={busy || !generatedTracks} className="px-4 py-2 rounded-xl border border-slate-500 text-slate-300 font-semibold disabled:opacity-60">
@@ -4693,7 +4692,7 @@ setCharacterAge(nextDraft?.characterAge || '');
 
             {step === 8 && (
               <div className={`${panelClass} p-6 space-y-4`}>
-                <h2 className={`font-bold text-lg ${theme.text}`}>Step 6: Audio Mixing Preview</h2>
+                <GravityHero size="md" align="left" eyebrow="AI Reels" headline="Audio Mix" />
                 {activeAudioScript && (
                   <div className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3`}>
                     <p className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Voice Script</p>
@@ -4722,7 +4721,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                 </div>
 
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                  <button onClick={mixAudio} disabled={busy} className="px-5 py-3 rounded-xl border border-[#ffcc29] text-[#ffcc29] font-semibold disabled:opacity-60">
+                  <button onClick={mixAudio} disabled={busy} className="px-5 py-3 rounded-xl border border-[#F5A623] text-[#F5A623] font-semibold disabled:opacity-60">
                     {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Mix Audio'}
                   </button>
                   <button onClick={() => setStep(9)} disabled={!canStep6Next} className={primaryButtonClass(!canStep6Next)}>Next</button>
@@ -4738,9 +4737,9 @@ setCharacterAge(nextDraft?.characterAge || '');
 
             {step === 9 && (
               <div className={`${panelClass} p-6 space-y-4`}>
-                <h2 className={`font-bold text-lg ${theme.text}`}>Step 7: Video + Audio Merge</h2>
+                <GravityHero size="md" align="left" eyebrow="AI Reels" headline="Video Merge" />
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                  <button onClick={mergeVideo} disabled={busy} className="px-5 py-3 rounded-xl border border-[#ffcc29] text-[#ffcc29] font-semibold disabled:opacity-60">
+                  <button onClick={mergeVideo} disabled={busy} className="px-5 py-3 rounded-xl border border-[#F5A623] text-[#F5A623] font-semibold disabled:opacity-60">
                     {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Merge Video + Audio'}
                   </button>
                   <button onClick={() => setStep(10)} disabled={!canStep7Next} className={primaryButtonClass(!canStep7Next)}>Next</button>
@@ -4756,8 +4755,8 @@ setCharacterAge(nextDraft?.characterAge || '');
 
             {step === 10 && (
               <div className={`${panelClass} p-6 space-y-4`}>
-                <h2 className={`font-bold text-lg ${theme.text}`}>Step 8: Thumbnail + Content Generation</h2>
-                <button onClick={generateContent} disabled={busy} className="px-4 py-2 rounded-xl border border-[#ffcc29] text-[#ffcc29] font-semibold">
+                <GravityHero size="md" align="left" eyebrow="AI Reels" headline="Thumbnail + Content" />
+                <button onClick={generateContent} disabled={busy} className="px-4 py-2 rounded-xl border border-[#F5A623] text-[#F5A623] font-semibold">
                   {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Generate Thumbnail + Caption + Hashtags'}
                 </button>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -4788,7 +4787,7 @@ setCharacterAge(nextDraft?.characterAge || '');
 
             {step === 11 && (
               <div className={`${panelClass} p-6 space-y-4`}>
-                <h2 className={`font-bold text-lg ${theme.text}`}>Step 9: Platform Selection</h2>
+                <GravityHero size="md" align="left" eyebrow="AI Reels" headline="Platform Selection" />
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   {['instagram', 'facebook', 'linkedin', 'youtube'].map((platform) => {
                     const active = selectedPlatforms.includes(platform);
@@ -4797,7 +4796,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                         key={platform}
                         onClick={() => togglePlatform(platform)}
                         className={`px-4 py-3 rounded-xl border text-sm font-semibold ${active
-                          ? 'bg-[#ffcc29] text-black border-[#ffcc29]'
+                          ? 'bg-[#F5A623] text-black border-[#F5A623]'
                           : isDarkMode
                             ? 'bg-slate-900 border-slate-700 text-slate-200'
                             : 'bg-white border-slate-300 text-slate-700'
@@ -4814,7 +4813,7 @@ setCharacterAge(nextDraft?.characterAge || '');
 
             {step === 12 && (
               <div className={`${panelClass} p-6 space-y-4`}>
-                <h2 className={`font-bold text-lg ${theme.text}`}>Step 10: Scheduling</h2>
+                <GravityHero size="md" align="left" eyebrow="AI Reels" headline="Scheduling" />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Date</label>
@@ -4881,7 +4880,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                 </div>
 
                 <div className="flex gap-3">
-                  <button onClick={() => schedulePost(true)} disabled={busy} className="px-6 py-3 rounded-xl bg-[#ffcc29] text-black font-bold">
+                  <button onClick={() => schedulePost(true)} disabled={busy} className="px-6 py-3 rounded-xl bg-[#F5A623] text-black font-bold">
                     Publish
                   </button>
                   <button
