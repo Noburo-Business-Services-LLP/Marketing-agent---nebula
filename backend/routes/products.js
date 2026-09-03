@@ -10,6 +10,7 @@ const XLSX = require('xlsx');
 const fetch = require('node-fetch');
 const fs = require('fs');
 const path = require('path');
+const { uploadBase64Image } = require('../services/imageUploader');
 const { buildAIContext } = require('../services/aiContextBuilder');
 const { learnCampaignGeneration } = require('../services/aiCampaignLearning');
 
@@ -250,6 +251,34 @@ router.post('/', protect, validateProduct, async (req, res) => {
 // @route   POST /api/products/bulk-import
 // @desc    Bulk import products from a CSV or Excel file
 // @access  Private
+// Upload a product/service image to Cloudinary and return its hosted URL.
+//
+// Pasting a remote URL also "works" — toDataUriFromImage fetches it at
+// generation time — but it refetches on every generation and returns null on
+// any failure, so a dead or slow link silently drops the product image from
+// the output. An uploaded image is stored once and always available.
+router.post('/upload-image', protect, async (req, res) => {
+  try {
+    const { imageData } = req.body;
+    if (!imageData || typeof imageData !== 'string') {
+      return res.status(400).json({ success: false, message: 'Image data is required' });
+    }
+    if (!imageData.startsWith('data:image/')) {
+      return res.status(400).json({ success: false, message: 'Only image files are supported' });
+    }
+
+    const result = await uploadBase64Image(imageData, 'nebula-product-images');
+    if (!result?.success) {
+      return res.status(500).json({ success: false, message: 'Failed to upload image to cloud storage' });
+    }
+
+    return res.json({ success: true, url: result.url, publicId: result.publicId });
+  } catch (error) {
+    console.error('Product image upload error:', error);
+    return res.status(500).json({ success: false, message: 'Failed to upload image' });
+  }
+});
+
 router.post('/bulk-import', protect, upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {

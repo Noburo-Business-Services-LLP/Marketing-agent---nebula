@@ -3242,6 +3242,16 @@ export const inventoryAPI = {
     }, true);
   },
 
+  // Upload one image and get back a hosted URL. Uploaded images are stored
+  // once; a pasted remote URL is refetched on every generation and silently
+  // dropped if it fails.
+  uploadProductImage: async (imageData: string): Promise<any> => {
+    return apiCall('/products/upload-image', {
+      method: 'POST',
+      body: JSON.stringify({ imageData })
+    }, true);
+  },
+
   // Update a product
   updateProduct: async (id: string, data: any): Promise<any> => {
     return apiCall(`/products/${id}`, {

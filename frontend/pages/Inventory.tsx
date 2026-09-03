@@ -63,6 +63,70 @@ const Inventory: React.FC = () => {
     tags: ''
   });
 
+  // ── Product images ──────────────────────────────────────────────────────
+  // imageUrl is the primary image and `images` holds the rest. They are kept
+  // separate in the model so existing consumers (Reels picker, campaign
+  // generation) keep reading imageUrl, but the form treats them as one list.
+  const productImagesInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingImages, setUploadingImages] = useState(false);
+  const [imageUploadError, setImageUploadError] = useState('');
+
+  const allFormImages = [formData.imageUrl, ...formData.images].filter(Boolean);
+
+  const setImageList = (list: string[]) => {
+    setFormData(prev => ({ ...prev, imageUrl: list[0] || '', images: list.slice(1) }));
+  };
+
+  const removeImageAt = (index: number) => {
+    setImageList(allFormImages.filter((_, i) => i !== index));
+  };
+
+  const makePrimaryImage = (index: number) => {
+    const next = [...allFormImages];
+    const [picked] = next.splice(index, 1);
+    setImageList([picked, ...next]);
+  };
+
+  const fileToDataUrl = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(new Error('Could not read file'));
+      reader.readAsDataURL(file);
+    });
+
+  const handleImageFiles = async (fileList: FileList | null) => {
+    const files = Array.from(fileList || []);
+    if (!files.length) return;
+    setImageUploadError('');
+    setUploadingImages(true);
+    const uploaded: string[] = [];
+    try {
+      for (const file of files) {
+        if (!file.type.startsWith('image/')) {
+          setImageUploadError(`${file.name} is not an image`);
+          continue;
+        }
+        if (file.size > 10 * 1024 * 1024) {
+          setImageUploadError(`${file.name} is larger than 10MB`);
+          continue;
+        }
+        const dataUrl = await fileToDataUrl(file);
+        const res = await inventoryAPI.uploadProductImage(dataUrl);
+        if (res?.success && res.url) {
+          uploaded.push(res.url);
+        } else {
+          setImageUploadError(res?.message || `Could not upload ${file.name}`);
+        }
+      }
+      if (uploaded.length) setImageList([...allFormImages, ...uploaded]);
+    } catch (err: any) {
+      setImageUploadError(err?.message || 'Image upload failed');
+    } finally {
+      setUploadingImages(false);
+    }
+  };
+
   const categories = ['all', ...Array.from(new Set(products.map(p => p.category)))].filter(Boolean);
 
   useEffect(() => {
@@ -525,7 +589,11 @@ const Inventory: React.FC = () => {
       {/* Add/Edit Product Modal */}
       {showAddModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-300">
-          <div className={`relative w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] ${theme.bgCard} animate-in slide-in-from-bottom-4 duration-500`}>
+          {/* gravity-glow sits on a wrapper, not the panel: the panel needs
+              overflow-hidden for its rounded header, which would clip the
+              glow's ::before at inset -14px. */}
+          <div className="gravity-glow w-full max-w-2xl rounded-3xl animate-in slide-in-from-bottom-4 duration-500">
+          <div className="relative w-full rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] bg-[#111111] border border-white/[0.08]">
             {/* Modal Header */}
             <div className={`px-8 py-6 border-b flex items-center justify-between ${isDarkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
               <div className="flex items-center gap-4">
@@ -651,23 +719,76 @@ const Inventory: React.FC = () => {
                   />
                 </div>
                 
+                {/* Images. The first one is the primary and is stored as
+                    `imageUrl`, so every existing consumer keeps working; the
+                    rest go to `images`. */}
                 <div className="md:col-span-2">
-                  <label className={labelClasses}>Product Image URL</label>
-                  <div className="flex gap-4">
-                    <div className="flex-1">
-                      <input 
-                        className={inputClasses} 
-                        placeholder="Paste image URL here..."
-                        value={formData.imageUrl}
-                        onChange={(e) => setFormData({...formData, imageUrl: e.target.value})}
-                      />
-                    </div>
-                    {formData.imageUrl && (
-                      <div className="w-12 h-12 rounded-xl overflow-hidden border border-slate-700">
-                        <img src={formData.imageUrl} className="w-full h-full object-cover" alt="Preview" />
+                  <label className={labelClasses}>Images</label>
+                  <p className="text-[11.5px] text-white/40 -mt-1 mb-3">
+                    The first image is the primary one. More angles and contexts give generation more to work with.
+                  </p>
+
+                  <div className="flex flex-wrap gap-3 mb-3">
+                    {allFormImages.map((src, i) => (
+                      <div key={`${src}-${i}`} className="relative group w-24 h-24 rounded-xl overflow-hidden border border-white/[0.10]">
+                        <img src={src} className="w-full h-full object-cover" alt={`Image ${i + 1}`} />
+                        {i === 0 && (
+                          <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-[0.1em] bg-[#F5A623] text-[#1A1208]">
+                            Primary
+                          </span>
+                        )}
+                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5">
+                          {i !== 0 && (
+                            <button type="button" title="Make primary" onClick={() => makePrimaryImage(i)}
+                              className="p-1.5 rounded-md bg-white/15 hover:bg-[#F5A623] hover:text-[#1A1208] text-white transition-colors">
+                              <Check className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          <button type="button" title="Remove" onClick={() => removeImageAt(i)}
+                            className="p-1.5 rounded-md bg-white/15 hover:bg-red-500 text-white transition-colors">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
-                    )}
+                    ))}
+
+                    <button
+                      type="button"
+                      onClick={() => productImagesInputRef.current?.click()}
+                      disabled={uploadingImages}
+                      className="w-24 h-24 rounded-xl border border-dashed border-white/[0.15] hover:border-[#F5A623]/50 hover:bg-white/[0.03] flex flex-col items-center justify-center gap-1 text-white/40 hover:text-[#F5A623] transition-all disabled:opacity-50"
+                    >
+                      {uploadingImages ? <Loader2 className="w-5 h-5 animate-spin" /> : <ImagePlus className="w-5 h-5" />}
+                      <span className="text-[10px] font-semibold">{uploadingImages ? 'Uploading' : 'Upload'}</span>
+                    </button>
+                    <input
+                      ref={productImagesInputRef}
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => { handleImageFiles(e.target.files); e.target.value = ''; }}
+                    />
                   </div>
+
+                  {imageUploadError && (
+                    <p className="text-[12px] text-red-300 mb-3">{imageUploadError}</p>
+                  )}
+
+                  <details className="group">
+                    <summary className="cursor-pointer text-[11.5px] text-white/40 hover:text-white/70 select-none">
+                      Or paste an image URL
+                    </summary>
+                    <input
+                      className={`${inputClasses} mt-2`}
+                      placeholder="https://..."
+                      value={formData.imageUrl.startsWith('data:') ? '' : formData.imageUrl}
+                      onChange={(e) => setFormData({...formData, imageUrl: e.target.value})}
+                    />
+                    <p className="text-[11px] text-white/35 mt-1.5">
+                      Fetched fresh each time something is generated. If the link is slow, private or dead, the image is skipped silently — uploading is more reliable.
+                    </p>
+                  </details>
                 </div>
               </div>
 
@@ -687,10 +808,11 @@ const Inventory: React.FC = () => {
                   disabled={isSaving}
                   className="px-8 py-3 bg-gradient-to-r from-[#F5A623] to-[#ffb833] text-black font-black rounded-xl shadow-lg shadow-[#F5A623]/20 hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 flex items-center gap-2"
                 >
-                  {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : editingProduct ? 'Update Product' : 'Create Product'}
+                  {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : editingProduct ? 'Save Changes' : (formData.type === 'service' ? 'Create Service' : 'Create Product')}
                 </button>
               </div>
             </form>
+          </div>
           </div>
         </div>
       )}
