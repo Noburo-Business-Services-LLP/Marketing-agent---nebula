@@ -176,6 +176,78 @@ export const GravityOptionPopover: React.FC<{
   );
 };
 
+export type GravityStep = {
+  label: string;
+  state: 'done' | 'active' | 'upcoming';
+  clickable: boolean;
+};
+
+/**
+ * Slim progress rail for multi-step flows — numbered nodes on a connecting
+ * line, rather than a grid of buttons.
+ *
+ * The parent computes each step's state and clickability; this only renders.
+ * Labels live in hover tooltips with the active step named underneath, so an
+ * 11-step flow stays one compact row instead of a wrapping keypad.
+ */
+export const GravityStepRail: React.FC<{
+  steps: GravityStep[];
+  onStepClick: (index: number) => void;
+  className?: string;
+}> = ({ steps, onStepClick, className = '' }) => {
+  const activeIndex = steps.findIndex((s) => s.state === 'active');
+  const activeLabel = activeIndex >= 0 ? steps[activeIndex].label : '';
+
+  return (
+    <div className={className}>
+      <div className="flex items-center">
+        {steps.map((s, i) => (
+          <React.Fragment key={`${s.label}-${i}`}>
+            <div className="relative group flex-shrink-0">
+              <button
+                type="button"
+                disabled={!s.clickable}
+                onClick={() => s.clickable && onStepClick(i)}
+                aria-label={s.label}
+                aria-current={s.state === 'active' ? 'step' : undefined}
+                className={`flex items-center justify-center rounded-full text-[11px] font-semibold transition-all ${
+                  s.state === 'active'
+                    ? 'w-8 h-8 bg-[#F5A623] text-[#1A1208] shadow-[0_0_18px_rgba(245,166,35,0.45)] ring-2 ring-[#F5A623]/25'
+                    : s.state === 'done'
+                      ? 'w-7 h-7 bg-[#F5A623]/85 text-[#1A1208] hover:bg-[#F5A623] cursor-pointer'
+                      : 'w-7 h-7 border border-white/[0.12] text-white/30'
+                } ${!s.clickable && s.state !== 'active' ? 'cursor-default' : ''}`}
+              >
+                {i + 1}
+              </button>
+              {/* Label on hover, above the node — below would collide with
+                  the active step's name printed under the rail. */}
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2.5 px-2.5 py-1.5 rounded-lg bg-[#151515] border border-white/[0.10] text-[11px] text-[#F5F4F1] whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-30 shadow-xl">
+                {s.label}
+              </div>
+            </div>
+            {i < steps.length - 1 && (
+              <div
+                className={`flex-1 h-px mx-1.5 sm:mx-2 ${
+                  steps[i].state === 'done' ? 'bg-[#F5A623]/35' : 'bg-white/[0.08]'
+                }`}
+              />
+            )}
+          </React.Fragment>
+        ))}
+      </div>
+      {activeLabel && (
+        <div className="mt-3.5 text-center">
+          <span className="gravity-label">
+            Step {activeIndex + 1} of {steps.length}
+          </span>
+          <div className="text-[13.5px] font-semibold text-[#F5F4F1] mt-0.5">{activeLabel}</div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 /** Primary (gold) and ghost buttons, matching Create's action styling. */
 export const GravityButton: React.FC<{
   children: React.ReactNode;

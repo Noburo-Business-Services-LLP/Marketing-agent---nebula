@@ -37,6 +37,7 @@ import {
   GravityPanel,
   GravityMetaBox,
   GravityOptionPopover,
+  GravityStepRail,
   GravityButton,
 } from '../components/gravity';
 import { useSmartCalendarAutoFill } from '../hooks/useSmartCalendarAutoFill';
@@ -2383,35 +2384,21 @@ setCharacterAge(nextDraft?.characterAge || '');
 
         {showWizard && (
           <>
-            <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
-              <div className="grid grid-cols-2 md:grid-cols-6 lg:grid-cols-11 gap-2">
-                {WIZARD_STEPS.map(({ label, step: stepNo }, idx) => {
-                  // Position shown to the user stays 1..n so dropping the
-                  // publishing steps doesn't leave a gap before Final Output.
-                  const displayNo = idx + 1;
-                  const active = stepNo === step;
-                  const done = stepNo < step;
-                  // Final Output is also reachable any time the final video has been rendered
+            <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] px-6 py-5">
+              <GravityStepRail
+                steps={WIZARD_STEPS.map(({ label, step: stepNo }) => {
+                  // Final Output is also reachable any time the final video
+                  // has been rendered, not just once you've walked past it.
                   const finalReady = stepNo === FINAL_OUTPUT_STEP && !!(finalOutputUrl || finalVideoUrl);
-                  const clickable = done || finalReady;
-                  return (
-                    <button
-                      key={label}
-                      type="button"
-                      onClick={() => clickable && setStep(stepNo)}
-                      disabled={!clickable && !active}
-                      className={`text-[11px] leading-snug px-2.5 py-2 rounded-lg border transition-all text-left ${active
-                        ? 'bg-[#F5A623] text-[#1A1208] border-[#F5A623] font-semibold shadow-[0_4px_18px_rgba(245,166,35,0.20)]'
-                        : done
-                          ? 'bg-white/[0.04] border-white/[0.10] text-[#F5F4F1] hover:bg-white/[0.07] hover:border-white/20'
-                          : 'bg-white/[0.02] border-white/[0.06] text-white/30'
-                        }`}
-                    >
-                      {displayNo}. {label}
-                    </button>
-                  );
+                  const done = stepNo < step;
+                  return {
+                    label,
+                    state: stepNo === step ? 'active' : done ? 'done' : 'upcoming',
+                    clickable: done || finalReady,
+                  };
                 })}
-              </div>
+                onStepClick={(idx) => setStep(WIZARD_STEPS[idx].step)}
+              />
             </div>
 
             {step > 1 && step < 11 && (
@@ -2523,7 +2510,7 @@ setCharacterAge(nextDraft?.characterAge || '');
             {step === 1 && (
               <div className="space-y-6">
                 <GravityHero
-                  eyebrow={`AI Reels · Step 1 of ${WIZARD_STEPS.length}`}
+                  eyebrow="AI Reels"
                   headline={<>What are we <GravityEmphasis>filming</GravityEmphasis>?</>}
                   subcopy="Describe the video once. Gravity writes the script, casts the voice, and renders every scene."
                 />
@@ -4907,13 +4894,6 @@ setCharacterAge(nextDraft?.characterAge || '');
               </div>
             )}
 
-            <div className={`${panelClass} p-3`}>
-              <p className={`text-xs ${theme.textMuted} flex items-center gap-2`}>
-                <Music2 className="w-4 h-4" />
-                APIs: createDraft, generatePrompt, generateScenes, generateImages, generateClips, generateAudio, mixAudio, mergeVideo, generateContent, schedulePost.
-              </p>
-              {jobId && <p className={`text-xs mt-1 ${theme.textSecondary}`}>Current jobId: {jobId}</p>}
-            </div>
           </>
         )}
       </div>
