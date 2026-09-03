@@ -1396,6 +1396,36 @@ setCharacterAge(nextDraft?.characterAge || '');
     return response.jobId;
   };
 
+  // Extracted from the button's inline handler: the concept action is now
+  // rendered in two places — above the concepts when there are none to
+  // generate, below them once they exist — so it needs a shared reference.
+  const runConceptGeneration = async () => {
+    if (!description.trim()) {
+      setConceptError('Describe the video first.');
+      return;
+    }
+    setConceptError('');
+    setGeneratingConcepts(true);
+    setAcceptedConceptId('');
+    setConcepts([]);
+    try {
+      const res = await videoGenerationAPI.generateConcepts({
+        description: description.trim(),
+        durationSeconds: Number(durationSeconds) || 30,
+      });
+      if (!res?.success || !Array.isArray(res.concepts) || res.concepts.length === 0) {
+        throw new Error(res?.message || 'No concepts returned. Try again.');
+      }
+      setConcepts(res.concepts as VideoConcept[]);
+      setConceptsRecommended(res.recommended || '');
+      setConceptsReason(res.recommendationReason || '');
+    } catch (e: any) {
+      setConceptError(e?.message || 'Failed to generate concepts.');
+    } finally {
+      setGeneratingConcepts(false);
+    }
+  };
+
   const step1Next = async () => withBusy(async () => {
     await ensureDraftForAudioTest();
     setStep(2);
@@ -2530,10 +2560,10 @@ setCharacterAge(nextDraft?.characterAge || '');
                     <div className="flex-1">
                       <GravityLabel>Smart Calendar · off</GravityLabel>
                       <p className="text-[13.5px] mt-1.5 text-[#F5F4F1]">
-                        Turn on Smart Calendar to see AI-generated reel briefs as tiles here.
+                        To see AI-generated reel briefs here, open a monthly plan in Calendar and switch on Auto Generation.
                       </p>
                       <p className="text-[12px] mt-1 text-white/45">
-                        Or just describe your video manually below.
+                        The toggle is inside a plan, not on the plans list. Or just describe your video manually below.
                       </p>
                     </div>
                     <a
@@ -2776,55 +2806,33 @@ setCharacterAge(nextDraft?.characterAge || '');
                   </div>
                 </div>
 
+                {/* Top row. Once concepts exist, Regenerate and Next move
+                    below them — otherwise you scroll through three long
+                    concept cards and the way forward is back up at the top.
+                    Auto-Generate stays here: it skips the concept step. */}
                 <div className="flex flex-wrap gap-3">
-                  {/* Generate Concept — creates 3 creative-director options
-                      the user must approve one before proceeding. */}
-                  <button
-                    onClick={async () => {
-                      if (!description.trim()) {
-                        setConceptError('Describe the video first.');
-                        return;
-                      }
-                      setConceptError('');
-                      setGeneratingConcepts(true);
-                      setAcceptedConceptId('');
-                      setConcepts([]);
-                      try {
-                        const res = await videoGenerationAPI.generateConcepts({
-                          description: description.trim(),
-                          durationSeconds: Number(durationSeconds) || 30,
-                        });
-                        if (!res?.success || !Array.isArray(res.concepts) || res.concepts.length === 0) {
-                          throw new Error(res?.message || 'No concepts returned. Try again.');
-                        }
-                        setConcepts(res.concepts as VideoConcept[]);
-                        setConceptsRecommended(res.recommended || '');
-                        setConceptsReason(res.recommendationReason || '');
-                      } catch (e: any) {
-                        setConceptError(e?.message || 'Failed to generate concepts.');
-                      } finally {
-                        setGeneratingConcepts(false);
-                      }
-                    }}
-                    disabled={generatingConcepts || !description.trim()}
-                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-[13px] font-semibold transition-all bg-[#F5A623] text-[#1A1208] hover:bg-[#ffb833] shadow-[0_4px_18px_rgba(245,166,35,0.20)] disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
-                  >
-                    {generatingConcepts ? (
-                      <><Loader2 className="w-4 h-4 animate-spin" />Generating concepts…</>
-                    ) : concepts.length > 0 ? (
-                      <><RefreshCcw className="w-4 h-4" />Regenerate concepts</>
-                    ) : (
-                      <><Sparkles className="w-4 h-4" />Generate Concept</>
-                    )}
-                  </button>
-                  <button
-                    onClick={step1Next}
-                    disabled={!canStep1Next || (concepts.length > 0 && !acceptedConceptId)}
-                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-[13px] font-semibold transition-all border border-white/[0.12] text-[#F5F4F1] hover:bg-white/[0.05] hover:border-white/20 disabled:opacity-40 disabled:cursor-not-allowed"
-                    title={concepts.length > 0 && !acceptedConceptId ? 'Accept a concept first' : undefined}
-                  >
-                    {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Next'}
-                  </button>
+                  {concepts.length === 0 && (
+                    <>
+                      <button
+                        onClick={runConceptGeneration}
+                        disabled={generatingConcepts || !description.trim()}
+                        className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-[13px] font-semibold transition-all bg-[#F5A623] text-[#1A1208] hover:bg-[#ffb833] shadow-[0_4px_18px_rgba(245,166,35,0.20)] disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
+                      >
+                        {generatingConcepts ? (
+                          <><Loader2 className="w-4 h-4 animate-spin" />Generating concepts…</>
+                        ) : (
+                          <><Sparkles className="w-4 h-4" />Generate Concept</>
+                        )}
+                      </button>
+                      <button
+                        onClick={step1Next}
+                        disabled={!canStep1Next}
+                        className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-[13px] font-semibold transition-all border border-white/[0.12] text-[#F5F4F1] hover:bg-white/[0.05] hover:border-white/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Next'}
+                      </button>
+                    </>
+                  )}
                   <button
                     onClick={startAutoGenerate}
                     disabled={!canStep1Next || (concepts.length > 0 && !acceptedConceptId)}
@@ -2970,6 +2978,34 @@ setCharacterAge(nextDraft?.characterAge || '');
                     )}
                   </div>
                 )}
+
+                {/* The way forward, at the end of the concepts you just read. */}
+                {concepts.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-3 pt-2">
+                    <button
+                      onClick={step1Next}
+                      disabled={!canStep1Next || !acceptedConceptId}
+                      className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-[13px] font-semibold transition-all bg-[#F5A623] text-[#1A1208] hover:bg-[#ffb833] shadow-[0_4px_18px_rgba(245,166,35,0.20)] disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
+                      title={!acceptedConceptId ? 'Accept a concept first' : undefined}
+                    >
+                      {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Next'}
+                    </button>
+                    <button
+                      onClick={runConceptGeneration}
+                      disabled={generatingConcepts || !description.trim()}
+                      className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-[13px] font-semibold transition-all border border-white/[0.12] text-[#F5F4F1] hover:bg-white/[0.05] hover:border-white/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {generatingConcepts ? (
+                        <><Loader2 className="w-4 h-4 animate-spin" />Generating concepts…</>
+                      ) : (
+                        <><RefreshCcw className="w-4 h-4" />Regenerate concepts</>
+                      )}
+                    </button>
+                    {!acceptedConceptId && (
+                      <span className="text-[12px] text-white/40">Accept a concept above to continue.</span>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
@@ -3015,7 +3051,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                         Character Bible · from your accepted concept
                       </div>
                       <div className={`text-xs mt-1 ${theme.textSecondary}`}>
-                        Pick a character to build the video around. You can regenerate for a fresh cast.
+                        The full cast is generated together in one reference image. Click a name below to make that character the lead the video follows — the rest stay in the cast for scene consistency.
                       </div>
                     </div>
                     <button
@@ -3505,20 +3541,24 @@ setCharacterAge(nextDraft?.characterAge || '');
                     Lock every scene to your actual space (shop, showroom, workshop, storefront). Every image + clip will render inside this exact environment.
                   </p>
                 </div>
-                {/* ON/OFF toggle */}
-                <div className="flex items-center gap-2">
-                  <span className={`text-xs uppercase tracking-wide ${environmentEnabled ? theme.textMuted : theme.text}`}>OFF</span>
+                {/* ON/OFF toggle. flex-shrink-0 throughout: the knob is
+                    absolutely positioned with a fixed translate, so if the
+                    flex row squeezes the track the knob overflows it. */}
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <span className={`text-[10px] font-semibold uppercase tracking-[0.16em] ${environmentEnabled ? 'text-white/35' : 'text-[#F5F4F1]'}`}>OFF</span>
                   <button
                     onClick={() => {
                       setEnvironmentEnabled((v) => !v);
                       if (!environmentEnabled) loadBrandAssetImages();
                     }}
-                    className={`relative w-12 h-6 rounded-full transition-colors ${environmentEnabled ? 'bg-[#F5A623]' : 'bg-slate-600'}`}
+                    role="switch"
+                    aria-checked={environmentEnabled}
+                    className={`relative flex-shrink-0 w-12 h-6 rounded-full transition-colors ${environmentEnabled ? 'bg-[#F5A623]' : 'bg-white/[0.15]'}`}
                     aria-label="Toggle environment lock"
                   >
-                    <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${environmentEnabled ? 'translate-x-6' : 'translate-x-0.5'}`} />
+                    <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${environmentEnabled ? 'translate-x-6' : 'translate-x-0'}`} />
                   </button>
-                  <span className={`text-xs uppercase tracking-wide ${environmentEnabled ? theme.text : theme.textMuted}`}>ON</span>
+                  <span className={`text-[10px] font-semibold uppercase tracking-[0.16em] ${environmentEnabled ? 'text-[#F5F4F1]' : 'text-white/35'}`}>ON</span>
                 </div>
               </div>
 
@@ -3782,7 +3822,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                         disabled={!voiceoverText}
                         className="text-[11px] font-semibold px-3 py-1.5 rounded-md border border-white/[0.10] hover:border-[#F5A623]/40 hover:text-[#F5A623] text-white/70 disabled:opacity-30"
                       >
-                        {voiceoverCopied ? '✓ Copied' : 'Copy for ElevenLabs'}
+                        {voiceoverCopied ? 'Copied' : 'Copy'}
                       </button>
                       <ChevronDown className={`w-4 h-4 text-white/50 transition-transform ${showVoiceover ? 'rotate-180' : ''}`} />
                     </div>
