@@ -1,25 +1,39 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Brain, Database, Hash, Megaphone, PlayCircle, TrendingUp, Copy, RefreshCw } from 'lucide-react';
+import { Brain, Database, Hash, Megaphone, PlayCircle, TrendingUp, Copy, RefreshCw, Loader2, ArrowRight } from 'lucide-react';
 import { aiMemoryAPI } from '../services/api';
-import { useTheme, getThemeClasses } from '../context/ThemeContext';
+import {
+  GravityHero,
+  GravityEmphasis,
+  GravityLabel,
+  GravityButton,
+} from '../components/gravity';
 
 const StatCard: React.FC<{ icon: React.ElementType; label: string; value: string | number }> = ({ icon: Icon, label, value }) => {
-  const { isDarkMode } = useTheme();
+  // Counts earn the display size; a status string like "metadata_ready" would
+  // just overflow the card at 26px, so it drops to body size instead.
+  const isCount = typeof value === 'number' || /^\d+$/.test(String(value));
   return (
-    <div className={`p-4 rounded-lg border ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-slate-200'}`}>
-      <div className="flex items-center justify-between">
-        <span className={isDarkMode ? 'text-slate-400' : 'text-slate-500'}>{label}</span>
-        <Icon className="w-5 h-5 text-[#ffcc29]" />
+    <div className="p-5 rounded-xl border border-white/[0.06] bg-white/[0.02] min-w-0">
+      <div className="flex items-center justify-between gap-3">
+        <GravityLabel>{label}</GravityLabel>
+        <Icon className="w-4 h-4 text-[#F5A623] flex-shrink-0" />
       </div>
-      <div className={`mt-3 text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{value}</div>
+      <div
+        className={`mt-3 text-[#F5F4F1] truncate ${isCount ? 'text-[26px] font-serif-display leading-none' : 'text-[14px] font-semibold'}`}
+        title={String(value)}
+      >
+        {value}
+      </div>
     </div>
   );
 };
 
+const Panel: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = '' }) => (
+  <section className={`rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 ${className}`}>{children}</section>
+);
+
 const AIMemory: React.FC = () => {
-  const { isDarkMode } = useTheme();
-  const tc = getThemeClasses(isDarkMode);
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any>(null);
   const [copied, setCopied] = useState(false);
@@ -48,80 +62,103 @@ const AIMemory: React.FC = () => {
   };
 
   if (loading) {
-    return <div className={`p-8 ${tc.text}`}>Loading AI memory...</div>;
+    return (
+      <div className="min-h-[50vh] flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-[#F5A623]" />
+      </div>
+    );
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className={`text-2xl font-bold ${tc.text}`}>AI Memory</h1>
-          <p className={tc.textMuted}>Create, store, learn, and reuse content intelligence across Nebulaa.</p>
-        </div>
-        <button onClick={load} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#ffcc29] px-4 py-2 font-semibold text-black">
-          <RefreshCw className="w-4 h-4" />
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <GravityHero
+          align="left"
+          eyebrow="AI Memory"
+          headline={<>What Gravity has <GravityEmphasis>learned</GravityEmphasis></>}
+          subcopy="Create, store, learn, and reuse content intelligence across Nebulaa."
+          className="!mb-0"
+        />
+        <GravityButton variant="ghost" onClick={load} className="flex-shrink-0">
+          <RefreshCw className="w-4 h-4 text-[#F5A623]" />
           Refresh
-        </button>
+        </GravityButton>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-3 md:grid-cols-4">
         <StatCard icon={Megaphone} label="Campaign memories" value={summary.campaignMemories || 0} />
         <StatCard icon={PlayCircle} label="Video memories" value={summary.videoMemories || 0} />
         <StatCard icon={TrendingUp} label="Performance records" value={summary.performanceMemories || 0} />
         <StatCard icon={Database} label="Vector status" value={summary.embeddingReady?.status || 'ready'} />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <section className={`rounded-lg border p-5 lg:col-span-2 ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-slate-200'}`}>
-          <div className="flex items-center justify-between gap-3">
-            <h2 className={`font-semibold ${tc.text}`}>Brand Intelligence</h2>
-            <Brain className="w-5 h-5 text-[#ffcc29]" />
+      <div className="grid gap-3 lg:grid-cols-3">
+        <Panel className="lg:col-span-2">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <GravityLabel gold>Brand Intelligence</GravityLabel>
+            <Brain className="w-4 h-4 text-[#F5A623]" />
           </div>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-2">
             {[
               ['Tone', summary.brandTone],
               ['Writing', summary.writingStyle || 'learning'],
               ['CTA style', summary.ctaStyle || 'learning'],
               ['Visual style', summary.visualStyle || 'learning']
             ].map(([label, value]) => (
-              <div key={label} className={`rounded-lg p-3 ${isDarkMode ? 'bg-slate-900/70' : 'bg-slate-50'}`}>
-                <div className={tc.textMuted}>{label}</div>
-                <div className={`mt-1 font-semibold ${tc.text}`}>{value || 'learning'}</div>
+              <div key={label as string} className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3.5">
+                <GravityLabel>{label}</GravityLabel>
+                <div className="mt-1 text-[14px] font-semibold text-[#F5F4F1]">{value || 'learning'}</div>
               </div>
             ))}
           </div>
-        </section>
+        </Panel>
 
-        <section className={`rounded-lg border p-5 ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-slate-200'}`}>
-          <h2 className={`font-semibold ${tc.text}`}>Best Hashtags</h2>
-          <div className="mt-4 flex flex-wrap gap-2">
+        <Panel>
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <GravityLabel gold>Best Hashtags</GravityLabel>
+            <Hash className="w-4 h-4 text-[#F5A623]" />
+          </div>
+          <div className="flex flex-wrap gap-2">
             {bestHashtags.length ? bestHashtags.slice(0, 18).map((tag: string) => (
-              <span key={tag} className="inline-flex items-center gap-1 rounded-full bg-[#ffcc29]/15 px-3 py-1 text-sm text-[#d4a800]">
+              <span key={tag} className="inline-flex items-center gap-1 rounded-full border border-[#F5A623]/25 bg-[#F5A623]/[0.08] px-2.5 py-1 text-[12px] text-[#F5A623]">
                 <Hash className="w-3 h-3" />
                 {tag.replace(/^#/, '')}
               </span>
-            )) : <p className={tc.textMuted}>Hashtag memory will appear after generation and analytics.</p>}
+            )) : (
+              <p className="text-[12.5px] text-white/45">Hashtag memory will appear after generation and analytics.</p>
+            )}
           </div>
-        </section>
+        </Panel>
       </div>
 
-      <section className={`rounded-lg border p-5 ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-slate-200'}`}>
-        <div className="flex items-center justify-between gap-3">
-          <h2 className={`font-semibold ${tc.text}`}>Reusable AI Context</h2>
-          <button onClick={copyContext} className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${isDarkMode ? 'border-slate-700 text-slate-200' : 'border-slate-200 text-slate-700'}`}>
-            <Copy className="w-4 h-4" />
+      <Panel>
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <GravityLabel gold>Reusable AI Context</GravityLabel>
+          <GravityButton variant="ghost" onClick={copyContext} className="!px-3 !py-1.5 !text-[12px]">
+            <Copy className="w-3.5 h-3.5" />
             {copied ? 'Copied' : 'Copy'}
-          </button>
+          </GravityButton>
         </div>
-        <pre className={`mt-4 max-h-56 overflow-auto rounded-lg p-4 text-sm whitespace-pre-wrap ${isDarkMode ? 'bg-slate-950 text-slate-300' : 'bg-slate-50 text-slate-700'}`}>
+        <pre className="max-h-56 overflow-auto rounded-lg border border-white/[0.06] bg-black/30 p-4 text-[12.5px] leading-relaxed text-white/70 whitespace-pre-wrap">
           {data?.reusableContext || 'No memory context generated yet.'}
         </pre>
-      </section>
+      </Panel>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <Link to="/ai-history" className="rounded-lg bg-[#ffcc29] p-4 font-semibold text-black">View campaign history</Link>
-        <Link to="/ai-history?type=video" className={`rounded-lg border p-4 font-semibold ${tc.text} ${isDarkMode ? 'border-slate-700' : 'border-slate-200'}`}>View video history</Link>
-        <Link to="/ai-performance" className={`rounded-lg border p-4 font-semibold ${tc.text} ${isDarkMode ? 'border-slate-700' : 'border-slate-200'}`}>View performance learning</Link>
+      <div className="grid gap-3 md:grid-cols-3">
+        {[
+          { to: '/ai-history', label: 'Campaign history' },
+          { to: '/ai-history?type=video', label: 'Video history' },
+          { to: '/ai-performance', label: 'Performance learning' },
+        ].map((link) => (
+          <Link
+            key={link.to}
+            to={link.to}
+            className="group flex items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] px-5 py-4 text-[13.5px] font-semibold text-[#F5F4F1] transition-all hover:bg-white/[0.05] hover:border-white/[0.12]"
+          >
+            {link.label}
+            <ArrowRight className="w-4 h-4 text-white/30 group-hover:text-[#F5A623] transition-colors" />
+          </Link>
+        ))}
       </div>
     </div>
   );
