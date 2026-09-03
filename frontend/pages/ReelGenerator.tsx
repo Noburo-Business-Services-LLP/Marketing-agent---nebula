@@ -683,7 +683,17 @@ const ReelGenerator: React.FC = () => {
     loadVideoDrafts();
   }, []);
 
+  // Skips the mount run. This effect is declared before the resume effect
+  // below, so on mount it fired with jobId still '' and deleted the stored
+  // id before the resume effect could read it — which is why resuming after
+  // a refresh never worked: you silently lost your place in the wizard.
+  // Clearing is still correct when jobId is emptied later (reset, delete).
+  const wizardJobIdPersisted = useRef(false);
   useEffect(() => {
+    if (!wizardJobIdPersisted.current) {
+      wizardJobIdPersisted.current = true;
+      if (!jobId) return;
+    }
     try {
       if (jobId) {
         localStorage.setItem('nebula_ai_video_wizard_jobId', jobId);
@@ -701,12 +711,27 @@ const ReelGenerator: React.FC = () => {
 
   useEffect(() => {
     // Resume last open draft after refresh.
+    //
+    // The stored id can outlive the draft it points at — deleting a draft
+    // never cleared it. Previously the failed load was swallowed and jobId
+    // was left set, so every later save 404'd and the wizard was stuck for
+    // good with no way to recover. A load failure must therefore clear the
+    // stored id and start clean.
     try {
       const savedJobId = localStorage.getItem('nebula_ai_video_wizard_jobId') || '';
       if (!savedJobId) return;
       setShowWizard(true);
       setJobId(savedJobId);
-      refreshDraft(savedJobId, { syncStep: true });
+      refreshDraft(savedJobId, { syncStep: true }).catch(() => {
+        try {
+          localStorage.removeItem('nebula_ai_video_wizard_jobId');
+          localStorage.removeItem('nebula_ai_video_wizard_step');
+        } catch (_) { }
+        setJobId('');
+        setDraft(null);
+        setStep(1);
+        setError('That draft is no longer available, so we started you on a new one.');
+      });
     } catch (_) {
       // ignore
     }

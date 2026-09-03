@@ -351,11 +351,27 @@ const videoJobReadLimiter = rateLimit({
   keyGenerator: (req) => String(req.user?._id || req.user?.id || ipKeyGenerator(req.ip))
 });
 
-function friendlyVideoMessage(message = '', fallbackMessage = 'Retrying video generation...') {
+// Messages the user can actually act on. These are checked BEFORE the
+// technical filter below, which would otherwise swallow them: its patterns
+// include /error/i and /failed/i, so almost any real message matched and was
+// replaced with "Retrying video generation..." — telling the user a retry was
+// under way when the request had simply failed. That cost real debugging time.
+const ACTIONABLE_MESSAGE_PATTERNS = [
+  /not found/i,
+  /no longer available/i,
+  /not authori[sz]ed/i,
+  /permission/i,
+  /insufficient credits/i,
+  /credits/i,
+  /required/i,
+  /invalid/i
+];
+
+function friendlyVideoMessage(message = '', fallbackMessage = 'Something went wrong. Please try again.') {
   const raw = String(message || '').trim();
+  if (raw && ACTIONABLE_MESSAGE_PATTERNS.some((pattern) => pattern.test(raw))) return raw;
+
   const technicalPatterns = [
-    /job not found/i,
-    /draft not found/i,
     /ffmpeg/i,
     /fal\.?ai/i,
     /queue/i,
@@ -364,14 +380,13 @@ function friendlyVideoMessage(message = '', fallbackMessage = 'Retrying video ge
     /internal server error/i,
     /timeout/i,
     /timed out/i,
-    /failed/i,
-    /error/i
+    /stack/i
   ];
   if (!raw || technicalPatterns.some((pattern) => pattern.test(raw))) {
     const fallback = String(fallbackMessage || '').trim();
     return fallback && !technicalPatterns.some((pattern) => pattern.test(fallback))
       ? fallback
-      : 'Retrying video generation...';
+      : 'Something went wrong. Please try again.';
   }
   return raw;
 }
@@ -383,7 +398,7 @@ function responseError(res, error, fallbackMessage) {
   if (error?.stack) console.error(error.stack);
   return res.status(statusCode).json({
     success: false,
-    message: friendlyVideoMessage(error?.message, fallbackMessage || 'Retrying video generation...')
+    message: friendlyVideoMessage(error?.message, fallbackMessage || 'Something went wrong. Please try again.')
   });
 }
 
@@ -1499,9 +1514,11 @@ router.get('/jobs/:jobId', protect, videoJobReadLimiter, async (req, res) => {
     const userId = req.user?._id ? String(req.user._id) : (req.user?.id ? String(req.user.id) : null);
     const job = await videoGenerationQueue.getJob(req.params.jobId, userId);
     if (!job) {
+      // A job that does not exist is not being retried — say so, so the
+      // client can stop polling and the user knows where they stand.
       return res.status(404).json({
         success: false,
-        message: 'Retrying video generation...'
+        message: 'That job is no longer available.'
       });
     }
     return res.json({
