@@ -358,7 +358,12 @@
          these panels are full-width and tall, so the same intensity would
          read as a glare rather than a glow.
          ------------------------------------------------------------------ */
-      .gravity-glow { position: relative; }
+      /* z-index:0 makes this its own stacking context, which matters inside a
+         modal: the overlay there has its own background (and a backdrop-filter,
+         which also creates a context), so a ::before at z-index:-1 painted
+         behind that black overlay and was invisible. Keeping the context local
+         means the glow stays behind the panel but above whatever is under it. */
+      .gravity-glow { position: relative; z-index: 0; }
       .gravity-glow::before {
         content: '';
         position: absolute;
