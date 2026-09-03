@@ -85,16 +85,22 @@ export const GravityPanel: React.FC<{
   halo?: boolean;
   beam?: boolean;
   className?: string;
+  /** Classes for the inner content wrapper — spacing utilities belong here,
+      since `className` lands on the outer surface whose children are the
+      glow layer and this wrapper, not the content itself. */
+  contentClassName?: string;
   padding?: string;
-}> = ({ children, halo = false, beam = false, className = '', padding = 'p-5' }) => {
+}> = ({ children, halo = false, beam = false, className = '', contentClassName = '', padding = 'p-5' }) => {
   const surface = (
-    <div className={`relative rounded-2xl ${padding} overflow-hidden ${beam ? '' : 'border border-white/[0.06]'} ${className}`} style={PANEL_SURFACE}>
-      {/* Ambient interior glow, warm to match the travelling beam. */}
+    <div className={`relative rounded-2xl ${padding} ${beam ? '' : 'border border-white/[0.06]'} ${className}`} style={PANEL_SURFACE}>
+      {/* Ambient interior glow, warm to match the travelling beam. Clipped to
+          the panel's radius here rather than with overflow-hidden on the
+          surface, which would cut off popovers and dropdowns in the content. */}
       <div
-        className="pointer-events-none absolute inset-0 -z-0"
+        className="pointer-events-none absolute inset-0 -z-0 rounded-2xl overflow-hidden"
         style={{ background: 'radial-gradient(60% 100% at 50% 100%, rgba(245,166,35,0.09) 0%, transparent 60%)' }}
       />
-      <div className="relative">{children}</div>
+      <div className={`relative ${contentClassName}`}>{children}</div>
     </div>
   );
 

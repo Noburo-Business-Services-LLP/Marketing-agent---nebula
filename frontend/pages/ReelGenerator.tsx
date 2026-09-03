@@ -2974,7 +2974,7 @@ setCharacterAge(nextDraft?.characterAge || '');
             )}
 
             {step === 2 && (
-            <div className={`p-6 space-y-6 ${panelClass}`}>
+            <div className={`p-6 space-y-6 gravity-glow ${panelClass}`}>
               <div className="flex items-center justify-between mb-4">
                 <GravityHero size="md" align="left" eyebrow="AI Reels" headline="Character & Video Style" className="!mb-0" />
                 {acceptedConcept && (
@@ -3497,7 +3497,7 @@ setCharacterAge(nextDraft?.characterAge || '');
           )}
 
           {step === 3 && (
-            <div className={`${panelClass} p-6 space-y-5`}>
+            <div className={`${panelClass} gravity-glow p-6 space-y-5`}>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <GravityHero size="md" align="left" eyebrow="AI Reels" headline="Environment" />
@@ -3687,7 +3687,7 @@ setCharacterAge(nextDraft?.characterAge || '');
               const castLookup = new Map(generatedCharacters.map((c) => [c.id, c]));
 
               return (
-              <div className={`${panelClass} p-6 space-y-6`}>
+              <div className={`${panelClass} gravity-glow p-6 space-y-6`}>
                 {/* HEADER */}
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
@@ -4071,7 +4071,7 @@ setCharacterAge(nextDraft?.characterAge || '');
             })()}
 
             {step === 5 && (
-              <div className={`${panelClass} p-6 space-y-4`}>
+              <div className={`${panelClass} gravity-glow p-6 space-y-4`}>
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <GravityHero size="md" align="left" eyebrow="AI Reels" headline="Scene Images" />
                   <span className={`text-[11px] px-2 py-1 rounded-full border ${theme.textMuted} border-white/10`}>
@@ -4239,7 +4239,7 @@ setCharacterAge(nextDraft?.characterAge || '');
             )}
 
             {step === 6 && (
-              <div className={`${panelClass} p-6 space-y-4`}>
+              <div className={`${panelClass} gravity-glow p-6 space-y-4`}>
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <GravityHero size="md" align="left" eyebrow="AI Reels" headline="Video Clips" />
                   <span className={`text-[11px] px-2 py-1 rounded-full border ${theme.textMuted} border-white/10`}>
@@ -4356,7 +4356,7 @@ setCharacterAge(nextDraft?.characterAge || '');
             )}
 
             {step === 7 && (
-              <div className={`${panelClass} p-6 space-y-4`}>
+              <div className={`${panelClass} gravity-glow p-6 space-y-4`}>
                 <GravityHero size="md" align="left" eyebrow="AI Reels" headline="Audio Config" />
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
@@ -4691,7 +4691,7 @@ setCharacterAge(nextDraft?.characterAge || '');
             )}
 
             {step === 8 && (
-              <div className={`${panelClass} p-6 space-y-4`}>
+              <div className={`${panelClass} gravity-glow p-6 space-y-4`}>
                 <GravityHero size="md" align="left" eyebrow="AI Reels" headline="Audio Mix" />
                 {activeAudioScript && (
                   <div className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3`}>
@@ -4736,7 +4736,7 @@ setCharacterAge(nextDraft?.characterAge || '');
             )}
 
             {step === 9 && (
-              <div className={`${panelClass} p-6 space-y-4`}>
+              <div className={`${panelClass} gravity-glow p-6 space-y-4`}>
                 <GravityHero size="md" align="left" eyebrow="AI Reels" headline="Video Merge" />
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <button onClick={mergeVideo} disabled={busy} className="px-5 py-3 rounded-xl border border-[#F5A623] text-[#F5A623] font-semibold disabled:opacity-60">
@@ -4754,7 +4754,7 @@ setCharacterAge(nextDraft?.characterAge || '');
             )}
 
             {step === 10 && (
-              <div className={`${panelClass} p-6 space-y-4`}>
+              <div className={`${panelClass} gravity-glow p-6 space-y-4`}>
                 <GravityHero size="md" align="left" eyebrow="AI Reels" headline="Thumbnail + Content" />
                 <button onClick={generateContent} disabled={busy} className="px-4 py-2 rounded-xl border border-[#F5A623] text-[#F5A623] font-semibold">
                   {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Generate Thumbnail + Caption + Hashtags'}
@@ -4786,7 +4786,7 @@ setCharacterAge(nextDraft?.characterAge || '');
             )}
 
             {step === 11 && (
-              <div className={`${panelClass} p-6 space-y-4`}>
+              <div className={`${panelClass} gravity-glow p-6 space-y-4`}>
                 <GravityHero size="md" align="left" eyebrow="AI Reels" headline="Platform Selection" />
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   {['instagram', 'facebook', 'linkedin', 'youtube'].map((platform) => {
@@ -4812,7 +4812,7 @@ setCharacterAge(nextDraft?.characterAge || '');
             )}
 
             {step === 12 && (
-              <div className={`${panelClass} p-6 space-y-4`}>
+              <div className={`${panelClass} gravity-glow p-6 space-y-4`}>
                 <GravityHero size="md" align="left" eyebrow="AI Reels" headline="Scheduling" />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -4836,7 +4836,7 @@ setCharacterAge(nextDraft?.characterAge || '');
             )}
 
             {step === 13 && (
-              <div className={`${panelClass} p-6 space-y-4`}>
+              <div className={`${panelClass} gravity-glow p-6 space-y-4`}>
                 <GravityHero size="md" align="left" eyebrow="AI Reels" headline="Final Output" />
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   <div className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3`}>
