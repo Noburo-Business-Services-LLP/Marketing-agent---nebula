@@ -47,14 +47,18 @@ const Inventory: React.FC = () => {
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Form State
+  // Form State. `keyFeatures` is newline-separated text in the form and split
+  // into an array on save; `images` holds additional images beyond imageUrl.
   const [formData, setFormData] = useState({
     name: '',
+    type: 'product' as 'product' | 'service',
     description: '',
     price: '',
+    priceNote: '',
     currency: 'USD',
     imageUrl: '',
-    stockQuantity: '',
+    images: [] as string[],
+    keyFeatures: '',
     category: '',
     tags: ''
   });
@@ -83,11 +87,14 @@ const Inventory: React.FC = () => {
     setEditingProduct(null);
     setFormData({
       name: '',
+      type: 'product',
       description: '',
       price: '',
+      priceNote: '',
       currency: 'USD',
       imageUrl: '',
-      stockQuantity: '',
+      images: [],
+      keyFeatures: '',
       category: '',
       tags: ''
     });
@@ -98,11 +105,16 @@ const Inventory: React.FC = () => {
     setEditingProduct(product);
     setFormData({
       name: product.name,
+      type: product.type === 'service' ? 'service' : 'product',
       description: product.description || '',
-      price: product.price.toString(),
+      // price is optional now. `.toString()` on it threw for any entry without
+      // one, and tsc cannot catch it here because strictNullChecks is off.
+      price: product.price === undefined || product.price === null ? '' : String(product.price),
+      priceNote: product.priceNote || '',
       currency: product.currency || 'USD',
       imageUrl: product.imageUrl || '',
-      stockQuantity: product.stockQuantity?.toString() || '',
+      images: Array.isArray(product.images) ? product.images : [],
+      keyFeatures: (product.keyFeatures || []).join('\n'),
       category: product.category || '',
       tags: product.tags?.join(', ') || ''
     });
@@ -129,8 +141,9 @@ const Inventory: React.FC = () => {
     
     const payload = {
       ...formData,
-      price: parseFloat(formData.price),
-      stockQuantity: parseInt(formData.stockQuantity) || 0,
+      // Blank stays blank rather than becoming NaN — services may have no price.
+      price: formData.price.trim() === '' ? undefined : parseFloat(formData.price),
+      keyFeatures: formData.keyFeatures.split('\n').map(f => f.trim()).filter(Boolean),
       tags: formData.tags.split(',').map(tag => tag.trim()).filter(Boolean)
     };
 
@@ -280,9 +293,9 @@ const Inventory: React.FC = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
         <GravityHero
           align="left"
-          eyebrow="Inventory"
-          headline={<>Everything you <GravityEmphasis>sell</GravityEmphasis></>}
-          subcopy="Manage your products and their stock levels for marketing campaigns."
+          eyebrow="Products & Services"
+          headline={<>Everything you <GravityEmphasis>offer</GravityEmphasis></>}
+          subcopy="Your products and services, with images and details Gravity draws on when it creates campaigns, images and videos."
           className="!mb-0"
         />
         
@@ -315,7 +328,7 @@ const Inventory: React.FC = () => {
             className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-[#F5A623] to-[#ffb833] text-black font-bold rounded-xl shadow-lg shadow-[#F5A623]/20 hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all"
           >
             <Plus className="w-5 h-5" />
-            Add Product
+            Add Entry
           </button>
         </div>
       </div>
@@ -323,10 +336,13 @@ const Inventory: React.FC = () => {
       {/* Stats Quick View */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
         {[
-          { label: 'Total Products', value: products.length, icon: Box, color: 'text-[#F5A623]', tint: 'bg-[#F5A623]/10 border-[#F5A623]/20' },
-          { label: 'In Stock', value: products.filter(p => p.stockStatus === 'in-stock').length, icon: Check, color: 'text-emerald-400', tint: 'bg-emerald-500/10 border-emerald-500/20' },
-          { label: 'Low Stock', value: products.filter(p => p.stockStatus === 'low-stock').length, icon: AlertCircle, color: 'text-amber-300', tint: 'bg-amber-400/10 border-amber-400/20' },
-          { label: 'Out of Stock', value: products.filter(p => p.stockStatus === 'out-of-stock').length, icon: X, color: 'text-red-400', tint: 'bg-red-500/10 border-red-500/20' },
+          // Counts that describe a catalogue, not a stock ledger. "With images"
+          // earns its place: an entry without images gives generation nothing
+          // to work from, so it is the number worth acting on.
+          { label: 'Total Entries', value: products.length, icon: Box, color: 'text-[#F5A623]', tint: 'bg-[#F5A623]/10 border-[#F5A623]/20' },
+          { label: 'Products', value: products.filter(p => p.type !== 'service').length, icon: Package, color: 'text-[#F5A623]', tint: 'bg-[#F5A623]/10 border-[#F5A623]/20' },
+          { label: 'Services', value: products.filter(p => p.type === 'service').length, icon: Sparkles, color: 'text-sky-300', tint: 'bg-sky-400/10 border-sky-400/20' },
+          { label: 'With Images', value: products.filter(p => (p.imageUrl && p.imageUrl.trim()) || (p.images && p.images.length)).length, icon: ImageIcon, color: 'text-emerald-400', tint: 'bg-emerald-500/10 border-emerald-500/20' },
         ].map((stat, i) => (
           <div key={i} className="p-5 rounded-xl border border-white/[0.06] bg-white/[0.02] flex items-start justify-between gap-4">
             <div className="min-w-0">
@@ -346,7 +362,7 @@ const Inventory: React.FC = () => {
           <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`} />
           <input 
             type="text" 
-            placeholder="Search within your inventory..."
+            placeholder="Search products and services..."
             className={`w-full pl-10 pr-4 py-2 text-sm rounded-xl outline-none border transition-all ${
               isDarkMode ? 'bg-slate-900 border-slate-700 text-white focus:border-[#F5A623]' : 'bg-slate-50 border-slate-200 text-slate-900 focus:border-[#F5A623]'
             }`}
@@ -385,15 +401,15 @@ const Inventory: React.FC = () => {
           <div className="inline-flex p-6 rounded-full bg-slate-100 dark:bg-slate-800 mb-6">
             <Package className="w-12 h-12 text-slate-400" />
           </div>
-          <h2 className={`text-xl font-bold ${theme.text}`}>Your inventory is empty</h2>
+          <h2 className={`text-xl font-bold ${theme.text}`}>Nothing here yet</h2>
           <p className={`text-sm mt-2 max-w-sm mx-auto ${theme.textSecondary}`}>
-            Start by adding your first product to link it with AI-powered marketing campaigns.
+            Add a product or service so Gravity has real images and details to build campaigns from.
           </p>
           <button 
             onClick={handleOpenAdd}
             className="mt-6 px-6 py-3 bg-[#F5A623] text-black font-bold rounded-xl hover:bg-[#F5A623]/90 transition-all active:scale-95"
           >
-            Add New Product
+            Add your first entry
           </button>
         </div>
       ) : (
@@ -413,10 +429,15 @@ const Inventory: React.FC = () => {
                   </div>
                 )}
                 
-                {/* Stock Status Badge */}
-                <div className={`absolute top-4 left-4 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border backdrop-blur-md shadow-lg ${getStockColor(product.stockStatus)}`}>
-                  {product.stockStatus.replace('-', ' ')}
-                </div>
+                {/* No stock badge: this is a catalogue of what a business
+                    offers, and Nebulaa has no way to know real stock levels.
+                    Missing images matter here instead — an entry without one
+                    gives generation nothing to work from. */}
+                {!(product.imageUrl && product.imageUrl.trim()) && !(product.images && product.images.length) && (
+                  <div className="absolute top-4 left-4 px-3 py-1 rounded-full text-[10px] font-semibold uppercase tracking-[0.12em] border border-amber-400/25 bg-amber-400/10 text-amber-300 backdrop-blur-md">
+                    No image
+                  </div>
+                )}
 
                 {/* Quick Actions Overlay */}
                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
@@ -430,7 +451,7 @@ const Inventory: React.FC = () => {
                   <button 
                     onClick={() => handleOpenEdit(product)}
                     className="p-3 bg-white rounded-xl text-slate-800 hover:bg-[#F5A623] transition-colors shadow-lg"
-                    title="Edit Product"
+                    title="Edit"
                   >
                     <Edit className="w-5 h-5" />
                   </button>
@@ -470,18 +491,30 @@ const Inventory: React.FC = () => {
                   ))}
                 </div>
 
-                <div className={`flex items-center justify-between pt-4 border-t ${isDarkMode ? 'border-slate-800' : 'border-slate-100'}`}>
-                  <div>
-                    <p className={`text-[10px] font-bold uppercase tracking-wider ${theme.textMuted}`}>PRICE</p>
-                    <p className="text-xl font-black text-[#F5A623]">
-                      <span className="text-xs font-bold mr-0.5">{product.currency || 'USD'}</span>
-                      {product.price}
-                    </p>
+                <div className="flex items-end justify-between gap-3 pt-4 border-t border-white/[0.06]">
+                  <div className="min-w-0">
+                    <div className="gravity-label">Pricing</div>
+                    {product.price !== undefined && product.price !== null ? (
+                      <p className="text-[18px] font-semibold text-[#F5A623] mt-0.5">
+                        <span className="text-[11px] font-medium mr-0.5">{product.currency || 'USD'}</span>
+                        {product.price}
+                      </p>
+                    ) : product.priceNote ? (
+                      <p className="text-[13px] font-medium text-[#F5A623] mt-0.5 truncate">{product.priceNote}</p>
+                    ) : (
+                      <p className="text-[13px] text-white/35 mt-0.5">Not set</p>
+                    )}
+                    {product.price !== undefined && product.price !== null && product.priceNote && (
+                      <p className="text-[11px] text-white/40 truncate">{product.priceNote}</p>
+                    )}
                   </div>
-                  <div className="text-right">
-                    <p className={`text-[10px] font-bold uppercase tracking-wider ${theme.textMuted}`}>STOCK</p>
-                    <p className={`text-sm font-black ${theme.text}`}>{product.stockQuantity || 0} pcs</p>
-                  </div>
+                  <span className={`flex-shrink-0 px-2.5 py-1 rounded-md text-[10px] font-semibold uppercase tracking-[0.12em] border ${
+                    product.type === 'service'
+                      ? 'border-sky-400/25 bg-sky-400/10 text-sky-300'
+                      : 'border-[#F5A623]/25 bg-[#F5A623]/10 text-[#F5A623]'
+                  }`}>
+                    {product.type === 'service' ? 'Service' : 'Product'}
+                  </span>
                 </div>
               </div>
             </div>
@@ -500,8 +533,8 @@ const Inventory: React.FC = () => {
                   {editingProduct ? <Edit className="w-6 h-6 text-[#F5A623]" /> : <Plus className="w-6 h-6 text-[#F5A623]" />}
                 </div>
                 <div>
-                  <h3 className={`text-xl font-black ${theme.text}`}>{editingProduct ? 'Edit Product' : 'Add New Product'}</h3>
-                  <p className={`text-xs font-medium ${theme.textSecondary}`}>Fill in the details to update your inventory catalogue.</p>
+                  <h3 className={`text-xl font-black ${theme.text}`}>{editingProduct ? 'Edit Entry' : (formData.type === 'service' ? 'Add New Service' : 'Add New Product')}</h3>
+                  <p className={`text-xs font-medium ${theme.textSecondary}`}>Details Gravity will draw on when generating campaigns.</p>
                 </div>
               </div>
               <button 
@@ -515,12 +548,33 @@ const Inventory: React.FC = () => {
             {/* Modal Form Content */}
             <form onSubmit={handleSave} className="flex-1 overflow-y-auto p-8 custom-scrollbar">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Type first: it changes what the rest of the form means. */}
                 <div className="md:col-span-2">
-                  <label className={labelClasses}>Product Name *</label>
-                  <input 
-                    required 
-                    className={inputClasses} 
-                    placeholder="e.g. Ultra Wireless Headphones"
+                  <label className={labelClasses}>Type</label>
+                  <div className="flex gap-2">
+                    {(['product', 'service'] as const).map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setFormData({ ...formData, type: t })}
+                        className={`flex-1 px-4 py-2.5 rounded-xl text-[13px] font-semibold capitalize transition-all border ${
+                          formData.type === t
+                            ? 'bg-[#F5A623] text-[#1A1208] border-[#F5A623] shadow-[0_4px_18px_rgba(245,166,35,0.20)]'
+                            : 'border-white/[0.12] text-[#F5F4F1] hover:bg-white/[0.05] hover:border-white/20'
+                        }`}
+                      >
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className={labelClasses}>{formData.type === 'service' ? 'Service Name *' : 'Product Name *'}</label>
+                  <input
+                    required
+                    className={inputClasses}
+                    placeholder={formData.type === 'service' ? 'e.g. Bridal Makeup Session' : 'e.g. Ultra Wireless Headphones'}
                     value={formData.name}
                     onChange={(e) => setFormData({...formData, name: e.target.value})}
                   />
@@ -531,37 +585,49 @@ const Inventory: React.FC = () => {
                   <textarea 
                     className={`${inputClasses} resize-none`} 
                     rows={3}
-                    placeholder="Provide a detailed description of the product..."
+                    placeholder={formData.type === 'service' ? 'What the service involves, who it is for, what the outcome is...' : 'Provide a detailed description of the product...'}
                     value={formData.description}
                     onChange={(e) => setFormData({...formData, description: e.target.value})}
                   />
                 </div>
+
+                {/* Concrete selling points. Generation uses these as copy source
+                    material, so one per line keeps them individually usable. */}
+                <div className="md:col-span-2">
+                  <label className={labelClasses}>Key Features / Benefits</label>
+                  <textarea
+                    className={`${inputClasses} resize-none`}
+                    rows={3}
+                    placeholder={'One per line, e.g.\nHandmade in small batches\nDelivered within 48 hours'}
+                    value={formData.keyFeatures}
+                    onChange={(e) => setFormData({...formData, keyFeatures: e.target.value})}
+                  />
+                </div>
                 
                 <div>
-                  <label className={labelClasses}>Price *</label>
+                  <label className={labelClasses}>Price</label>
                   <div className="relative">
                     <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-500">$</span>
-                    <input 
-                      required 
-                      type="number" 
+                    <input
+                      type="number"
                       step="0.01"
-                      className={`${inputClasses} pl-8`} 
-                      placeholder="0.00"
+                      className={`${inputClasses} pl-8`}
+                      placeholder="Optional"
                       value={formData.price}
                       onChange={(e) => setFormData({...formData, price: e.target.value})}
                     />
                   </div>
                 </div>
-                
+
+                {/* Replaces "Initial Stock". Stock is not something Nebulaa can
+                    know; a flexible pricing line is something a service needs. */}
                 <div>
-                  <label className={labelClasses}>Initial Stock *</label>
-                  <input 
-                    required
-                    type="number" 
-                    className={inputClasses} 
-                    placeholder="0"
-                    value={formData.stockQuantity}
-                    onChange={(e) => setFormData({...formData, stockQuantity: e.target.value})}
+                  <label className={labelClasses}>Pricing Note</label>
+                  <input
+                    className={inputClasses}
+                    placeholder="e.g. From ₹5,000/session, Quote on request"
+                    value={formData.priceNote}
+                    onChange={(e) => setFormData({...formData, priceNote: e.target.value})}
                   />
                 </div>
                 

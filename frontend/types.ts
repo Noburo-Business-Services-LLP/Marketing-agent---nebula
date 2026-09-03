@@ -487,12 +487,23 @@ export interface DashboardData {
 export interface Product {
   _id: string;
   name: string;
-  price: number;
+  /** A business may offer goods, services, or both. */
+  type?: 'product' | 'service';
+  /** Optional: a service often has no single price. */
+  price?: number;
+  /** Free text for cases a number cannot express — "From ₹5,000/session". */
+  priceNote?: string;
   currency: string;
+  /** Primary image. Kept alongside `images` so existing consumers still work. */
   imageUrl?: string;
+  /** Additional images — angles, contexts, lifestyle shots. */
+  images?: string[];
+  /** Concrete selling points, used as copy source material. */
+  keyFeatures?: string[];
   description?: string;
-  stockStatus: 'in-stock' | 'out-of-stock' | 'low-stock';
-  stockQuantity: number;
+  /** Retained for existing records; no longer written or shown. */
+  stockStatus?: 'in-stock' | 'out-of-stock' | 'low-stock';
+  stockQuantity?: number;
   category: string;
   tags?: string[];
   createdAt: string;
