@@ -4,6 +4,12 @@ import { apiService } from '../services/api';
 import { SocialConnection } from '../types';
 import { Loader2, RefreshCw, Check, X, Instagram, Facebook, Linkedin, Youtube, Video, AlertCircle, ShieldCheck, MessageCircle, Pin, ExternalLink, Inbox, Lock, Bell, Sparkles, Tag, Activity, KeyRound, RadioTower, ArrowRight, CheckCircle2, Clock3 } from 'lucide-react';
 import { useTheme, getThemeClasses } from '../context/ThemeContext';
+import {
+  GravityHero,
+  GravityEmphasis,
+  GravityLabel,
+  GravityButton,
+} from '../components/gravity';
 import UnifiedInbox from './UnifiedInbox';
 import AutoReplySettingsPage from './AutoReplySettingsPage';
 
@@ -571,33 +577,26 @@ const ConnectSocials: React.FC = () => {
         </div>
       )}
 
-      <div className="mb-8 flex justify-between items-end">
-        <div>
-            <h1 className={`text-2xl font-bold ${theme.text}`}>Connect Socials</h1>
-            <p className={theme.textSecondary}>Securely connect your platforms to enable auto-posting and analytics.</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => loadSocials()}
-            disabled={loading}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              isDarkMode
-                ? 'bg-slate-700 hover:bg-slate-600 text-slate-200 disabled:bg-slate-800 disabled:text-slate-500'
-                : 'bg-slate-100 hover:bg-slate-200 text-slate-700 disabled:bg-slate-50 disabled:text-slate-400'
-            }`}
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-start">
+        <GravityHero
+          align="left"
+          eyebrow="Connect Socials"
+          headline={<>Where should Gravity <GravityEmphasis>publish</GravityEmphasis>?</>}
+          subcopy="Securely connect your platforms to enable auto-posting and analytics."
+          className="!mb-0"
+        />
+        <div className="flex items-center gap-3 flex-shrink-0">
+          <GravityButton variant="ghost" onClick={() => loadSocials()} disabled={loading}>
+            <RefreshCw className={`w-4 h-4 text-[#F5A623] ${loading ? 'animate-spin' : ''}`} />
             Refresh Status
-          </button>
-          <div className={`rounded-full px-4 py-1.5 flex items-center gap-2 text-xs font-bold ${
-            isDarkMode ? 'bg-blue-500/20 border border-blue-400/30 text-blue-400' : 'bg-blue-50 border border-blue-200 text-blue-700'
-          }`}>
-              <ShieldCheck className="w-4 h-4" /> Secure OAuth 2.0 Connection
+          </GravityButton>
+          <div className="rounded-full px-3.5 py-1.5 flex items-center gap-2 text-[11px] font-semibold border border-white/[0.10] bg-white/[0.03] text-white/60">
+            <ShieldCheck className="w-3.5 h-3.5 text-[#F5A623]" /> Secure OAuth 2.0
           </div>
         </div>
       </div>
 
-      <div className={`mb-6 flex flex-wrap gap-2 rounded-xl border p-2 ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-slate-200'}`}>
+      <div className="mb-6 flex flex-wrap gap-1.5 rounded-xl border border-white/[0.06] bg-white/[0.02] p-1.5">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const active = activeTab === tab.id;
@@ -606,12 +605,10 @@ const ConnectSocials: React.FC = () => {
               key={tab.id}
               type="button"
               onClick={() => handleTabClick(tab)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-semibold transition-all ${
                 active
-                  ? 'bg-[#ffcc29] text-[#070A12]'
-                  : isDarkMode
-                    ? 'text-slate-300 hover:bg-slate-800'
-                    : 'text-slate-600 hover:bg-slate-100'
+                  ? 'bg-[#F5A623] text-[#1A1208] shadow-[0_4px_18px_rgba(245,166,35,0.20)]'
+                  : 'text-white/55 hover:text-[#F5F4F1] hover:bg-white/[0.05]'
               }`}
             >
               <Icon className="w-4 h-4" />
@@ -625,34 +622,34 @@ const ConnectSocials: React.FC = () => {
         <>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {socials.map((social) => (
-              <div key={social.platform} className={`rounded-xl p-5 shadow-sm border transition-all duration-200 relative overflow-hidden group ${theme.bgCard} ${
-                social.connected 
-                  ? isDarkMode ? 'border-green-500/30 ring-1 ring-green-500/20' : 'border-green-200 ring-1 ring-green-100' 
-                  : isDarkMode ? 'border-slate-700/50 hover:border-slate-600 hover:shadow-md' : 'border-slate-200 hover:border-[#ffcc29]/30 hover:shadow-md'
+              <div key={social.platform} className={`rounded-xl p-5 border transition-all duration-200 relative overflow-hidden group ${
+                social.connected
+                  ? 'border-emerald-500/25 bg-emerald-500/[0.04]'
+                  : 'border-white/[0.06] bg-white/[0.02] hover:border-white/[0.12] hover:bg-white/[0.04]'
               }`}>
                   {social.connected && (
-                      <div className="absolute top-0 right-0 bg-green-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-bl-lg">
-                          CONNECTED
+                      <div className="absolute top-0 right-0 bg-emerald-500/90 text-[#06210f] text-[9px] font-bold uppercase tracking-[0.12em] px-2.5 py-1 rounded-bl-lg">
+                          Connected
                       </div>
                   )}
-                  
+
                   {/* Real OAuth badge for YouTube */}
                   {social.platform === 'YouTube' && !social.connected && (
-                      <div className="absolute top-0 left-0 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-br-lg flex items-center gap-1">
-                          <ExternalLink className="w-2.5 h-2.5" /> REAL OAUTH
+                      <div className="absolute top-0 left-0 bg-white/[0.08] text-white/70 text-[9px] font-bold uppercase tracking-[0.12em] px-2.5 py-1 rounded-br-lg flex items-center gap-1">
+                          <ExternalLink className="w-2.5 h-2.5" /> Real OAuth
                       </div>
                   )}
-                  
+
                   <div className="flex items-start gap-4 mb-4">
                       <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-sm ${getBgColor(social.platform)}`}>
                           {getCustomIcon(social.platform)}
                       </div>
                       <div className="flex-1 min-w-0">
-                          <h3 className={`font-bold text-base ${theme.text}`}>{social.platform}</h3>
+                          <h3 className="font-semibold text-[15px] text-[#F5F4F1]">{social.platform}</h3>
                           {social.connected ? (
-                              <p className={`text-xs font-medium truncate ${theme.textSecondary}`}>{social.username}</p>
+                              <p className="text-[12px] font-medium truncate text-white/55">{social.username}</p>
                           ) : (
-                              <p className="text-xs text-slate-400">Not connected</p>
+                              <p className="text-[12px] text-white/35">Not connected</p>
                           )}
                           {/* Show analytics for connected accounts */}
                           {social.connected && social.analytics && (
@@ -707,7 +704,7 @@ const ConnectSocials: React.FC = () => {
                           <button 
                             onClick={() => initiateConnection(social.platform)}
                             disabled={loadingPlatform === social.platform}
-                            className="w-full py-2.5 bg-[#ffcc29] hover:bg-[#ffcc29]/80 disabled:opacity-50 disabled:cursor-wait text-black text-xs font-bold rounded-lg transition-all shadow-sm flex items-center justify-center gap-2"
+                            className="w-full py-2.5 bg-[#F5A623] hover:bg-[#F5A623]/80 disabled:opacity-50 disabled:cursor-wait text-black text-xs font-bold rounded-lg transition-all shadow-sm flex items-center justify-center gap-2"
                           >
                              {loadingPlatform === social.platform ? (
                                <>
@@ -727,11 +724,11 @@ const ConnectSocials: React.FC = () => {
         <div className={`p-5 border-b ${isDarkMode ? 'border-slate-700/50 bg-[#0d1117]' : 'border-slate-100 bg-slate-50'}`}>
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
             <div className="flex items-start gap-4">
-              <div className="w-12 h-12 rounded-xl bg-[#ffcc29] text-[#070A12] flex items-center justify-center shrink-0">
+              <div className="w-12 h-12 rounded-xl bg-[#F5A623] text-[#070A12] flex items-center justify-center shrink-0">
                 <Inbox className="w-6 h-6" />
               </div>
               <div>
-                <h2 className={`text-xl font-bold ${theme.text}`}>Social Inbox</h2>
+                <h2 className="font-serif-display text-[22px] text-[#F5F4F1]">Social Inbox</h2>
                 <p className={`mt-1 text-sm max-w-2xl ${theme.textSecondary}`}>
                   Manage messages, comments, mentions, and replies from all connected social platforms in one place.
                 </p>
@@ -741,7 +738,7 @@ const ConnectSocials: React.FC = () => {
               type="button"
               onClick={openInbox}
               disabled={!inboxEnabled}
-              className="px-5 py-3 rounded-lg bg-[#ffcc29] text-[#070A12] font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-5 py-3 rounded-lg bg-[#F5A623] text-[#070A12] font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {inboxEnabled ? <Inbox className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
               Open Unified Social Inbox
@@ -764,7 +761,7 @@ const ConnectSocials: React.FC = () => {
               </div>
               <div className={`rounded-xl border p-4 ${isDarkMode ? 'border-slate-700/50 bg-[#0f1419]' : 'border-slate-200 bg-white'}`}>
                 <p className={`text-xs font-semibold uppercase tracking-wide ${theme.textSecondary}`}>Unread Messages</p>
-                <p className={`mt-2 text-lg font-bold ${unreadMessageCount > 0 ? 'text-[#ffcc29]' : theme.text}`}>{unreadMessageCount}</p>
+                <p className={`mt-2 text-lg font-bold ${unreadMessageCount > 0 ? 'text-[#F5A623]' : theme.text}`}>{unreadMessageCount}</p>
               </div>
             </div>
 
@@ -778,19 +775,19 @@ const ConnectSocials: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className={`rounded-xl border p-4 ${isDarkMode ? 'border-slate-700/50 bg-[#0f1419]' : 'border-slate-200 bg-white'}`}>
                 <div className="flex items-center gap-2 text-sm font-semibold">
-                  <Sparkles className="w-4 h-4 text-[#ffcc29]" /> AI reply suggestions
+                  <Sparkles className="w-4 h-4 text-[#F5A623]" /> AI reply suggestions
                 </div>
                 <p className={`mt-1 text-xs ${theme.textSecondary}`}>Draft fast, on-brand responses for conversations.</p>
               </div>
               <div className={`rounded-xl border p-4 ${isDarkMode ? 'border-slate-700/50 bg-[#0f1419]' : 'border-slate-200 bg-white'}`}>
                 <div className="flex items-center gap-2 text-sm font-semibold">
-                  <Tag className="w-4 h-4 text-[#ffcc29]" /> Priority tagging
+                  <Tag className="w-4 h-4 text-[#F5A623]" /> Priority tagging
                 </div>
                 <p className={`mt-1 text-xs ${theme.textSecondary}`}>Spot urgent leads, complaints, and high-value messages.</p>
               </div>
               <div className={`rounded-xl border p-4 ${isDarkMode ? 'border-slate-700/50 bg-[#0f1419]' : 'border-slate-200 bg-white'}`}>
                 <div className="flex items-center gap-2 text-sm font-semibold">
-                  <Bell className="w-4 h-4 text-[#ffcc29]" /> Unread alerts
+                  <Bell className="w-4 h-4 text-[#F5A623]" /> Unread alerts
                 </div>
                 <p className={`mt-1 text-xs ${theme.textSecondary}`}>Never miss engagement that needs a response.</p>
               </div>
@@ -825,7 +822,7 @@ const ConnectSocials: React.FC = () => {
 
       {activeTab === 'permissions' && (
         <div className={`rounded-2xl border p-6 ${theme.bgCard} ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'}`}>
-          <h2 className={`text-xl font-bold ${theme.text}`}>Permissions</h2>
+          <h2 className="font-serif-display text-[22px] text-[#F5F4F1]">Permissions</h2>
           <p className={`mt-1 text-sm ${theme.textSecondary}`}>Nebulaa requests only the scopes needed for publishing, analytics, comments, mentions, webhooks, and inbox replies.</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-5">
             {[
@@ -852,28 +849,28 @@ const ConnectSocials: React.FC = () => {
         <div className={`rounded-2xl border p-6 ${theme.bgCard} ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'}`}>
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
-              <h2 className={`text-xl font-bold ${theme.text}`}>Sync Status</h2>
+              <h2 className="font-serif-display text-[22px] text-[#F5F4F1]">Sync Status</h2>
               <p className={`mt-1 text-sm ${theme.textSecondary}`}>Track social account syncs, webhook health, and inbox readiness.</p>
             </div>
-            <button onClick={() => { loadSocials(); loadInboxSummary(); }} className="px-4 py-2 rounded-lg bg-[#ffcc29] text-[#070A12] text-sm font-bold flex items-center gap-2">
+            <button onClick={() => { loadSocials(); loadInboxSummary(); }} className="px-4 py-2 rounded-lg bg-[#F5A623] text-[#070A12] text-sm font-bold flex items-center gap-2">
               <RefreshCw className="w-4 h-4" /> Refresh
             </button>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-5">
             <div className={`rounded-xl border p-4 ${isDarkMode ? 'border-slate-700/50 bg-[#0f1419]' : 'border-slate-200 bg-white'}`}>
-              <Activity className="w-5 h-5 text-[#ffcc29]" />
+              <Activity className="w-5 h-5 text-[#F5A623]" />
               <p className={`mt-3 text-xs font-semibold uppercase tracking-wide ${theme.textSecondary}`}>Sync</p>
               <p className={`mt-1 text-lg font-bold capitalize ${theme.text}`}>{inboxSummary?.syncStatus?.status || 'Not started'}</p>
               <p className={`text-xs mt-1 ${theme.textSecondary}`}>Last sync: {inboxSummary?.syncStatus?.lastSyncAt ? new Date(inboxSummary.syncStatus.lastSyncAt).toLocaleString() : 'Not available'}</p>
             </div>
             <div className={`rounded-xl border p-4 ${isDarkMode ? 'border-slate-700/50 bg-[#0f1419]' : 'border-slate-200 bg-white'}`}>
-              <RadioTower className="w-5 h-5 text-[#ffcc29]" />
+              <RadioTower className="w-5 h-5 text-[#F5A623]" />
               <p className={`mt-3 text-xs font-semibold uppercase tracking-wide ${theme.textSecondary}`}>Webhooks</p>
               <p className={`mt-1 text-lg font-bold ${inboxSummary?.webhookStatus?.registered ? 'text-green-400' : theme.text}`}>{inboxSummary?.webhookStatus?.registered ? 'Registered' : 'Pending'}</p>
               <p className={`text-xs mt-1 ${theme.textSecondary}`}>{inboxSummary?.webhookStatus?.activePlatforms?.length || 0} active platform hooks</p>
             </div>
             <div className={`rounded-xl border p-4 ${isDarkMode ? 'border-slate-700/50 bg-[#0f1419]' : 'border-slate-200 bg-white'}`}>
-              <Clock3 className="w-5 h-5 text-[#ffcc29]" />
+              <Clock3 className="w-5 h-5 text-[#F5A623]" />
               <p className={`mt-3 text-xs font-semibold uppercase tracking-wide ${theme.textSecondary}`}>Next Sync</p>
               <p className={`mt-1 text-lg font-bold ${theme.text}`}>{inboxSummary?.syncStatus?.nextSyncAt ? new Date(inboxSummary.syncStatus.nextSyncAt).toLocaleTimeString() : 'On demand'}</p>
               <p className={`text-xs mt-1 ${theme.textSecondary}`}>Background queue runs for connected platforms.</p>
@@ -887,7 +884,7 @@ const ConnectSocials: React.FC = () => {
           <div className="space-y-4">
             <div className={`rounded-2xl border p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3 ${theme.bgCard} ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'}`}>
               <div>
-                <h2 className={`text-lg font-bold ${theme.text}`}>Unified Social Inbox</h2>
+                <h2 className="font-serif-display text-[20px] text-[#F5F4F1]">Unified Social Inbox</h2>
                 <p className={`text-sm ${theme.textSecondary}`}>Real comments, DMs, mentions, and replies from connected social accounts.</p>
               </div>
               <div className="flex items-center gap-2 text-xs font-bold text-green-400">
@@ -899,9 +896,9 @@ const ConnectSocials: React.FC = () => {
         ) : (
           <div className={`rounded-2xl border p-8 text-center ${theme.bgCard} ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'}`}>
             <Lock className="w-10 h-10 mx-auto text-slate-400" />
-            <h2 className={`mt-3 text-xl font-bold ${theme.text}`}>Social Inbox is disabled</h2>
+            <h2 className="mt-3 font-serif-display text-[22px] text-[#F5F4F1]">Social Inbox is disabled</h2>
             <p className={`mt-1 text-sm ${theme.textSecondary}`}>Connect social accounts to enable inbox management.</p>
-            <button onClick={() => navigate('/connect-socials')} className="mt-5 px-5 py-3 rounded-lg bg-[#ffcc29] text-[#070A12] font-bold inline-flex items-center gap-2">
+            <button onClick={() => navigate('/connect-socials')} className="mt-5 px-5 py-3 rounded-lg bg-[#F5A623] text-[#070A12] font-bold inline-flex items-center gap-2">
               Connect Accounts <ArrowRight className="w-4 h-4" />
             </button>
           </div>
@@ -954,7 +951,7 @@ const ConnectSocials: React.FC = () => {
                                   {getCustomIcon(connectingPlatform || '')}
                               </div>
                               <div>
-                                  <h3 className={`text-xl font-bold ${theme.text}`}>Authorize Nebulaa Gravity</h3>
+                                  <h3 className="font-serif-display text-[20px] text-[#F5F4F1]">Authorize Nebulaa Gravity</h3>
                                   <p className={`text-sm mt-2 ${theme.textSecondary}`}>
                                       Nebulaa Gravity is requesting access to your {connectingPlatform} account to publish posts and view analytics.
                                   </p>
@@ -967,7 +964,7 @@ const ConnectSocials: React.FC = () => {
                                   <input 
                                     type="text" 
                                     autoFocus
-                                    className={`w-full p-2 border rounded focus:ring-2 focus:ring-[#ffcc29] outline-none ${
+                                    className={`w-full p-2 border rounded focus:ring-2 focus:ring-[#F5A623] outline-none ${
                                       isDarkMode ? 'bg-[#0f1419] border-slate-700/50 text-white' : 'bg-white border-slate-300 text-slate-900'
                                     }`}
                                     placeholder="e.g. gravity_official"
@@ -980,7 +977,7 @@ const ConnectSocials: React.FC = () => {
                                   <button 
                                     onClick={confirmFakeAuth}
                                     disabled={!usernameInput}
-                                    className="w-full bg-[#ffcc29] hover:bg-[#ffcc29]/80 disabled:opacity-50 disabled:cursor-not-allowed text-black font-bold py-3 rounded-lg shadow-md transition-colors"
+                                    className="w-full bg-[#F5A623] hover:bg-[#F5A623]/80 disabled:opacity-50 disabled:cursor-not-allowed text-black font-bold py-3 rounded-lg shadow-md transition-colors"
                                   >
                                       Authorize App
                                   </button>
@@ -994,7 +991,7 @@ const ConnectSocials: React.FC = () => {
                                   </button>
                               </div>
                               <p className="text-[10px] text-slate-400">
-                                  By authorizing, you agree to our <a href="/#/terms" className="text-[#ffcc29] hover:underline">Terms of Service</a>.
+                                  By authorizing, you agree to our <a href="/#/terms" className="text-[#F5A623] hover:underline">Terms of Service</a>.
                               </p>
                           </div>
                       )}
@@ -1005,7 +1002,7 @@ const ConnectSocials: React.FC = () => {
                                   <Check className="w-10 h-10" />
                               </div>
                               <div>
-                                <h3 className={`text-xl font-bold ${theme.text}`}>Successfully Connected!</h3>
+                                <h3 className="font-serif-display text-[20px] text-[#F5F4F1]">Successfully Connected!</h3>
                                 <p className={`mt-1 ${theme.textSecondary}`}>Redirecting you back to the dashboard...</p>
                               </div>
                           </div>
