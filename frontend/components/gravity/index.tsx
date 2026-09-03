@@ -9,6 +9,7 @@
  * Lifted from pages/GravityCreate.tsx — these are proven, not invented.
  */
 import React from 'react';
+import { Upload } from 'lucide-react';
 import { BorderBeam } from '../ui/border-beam';
 
 /** Small-caps meta label. Pairs with the `.gravity-label` class in index.html. */
@@ -259,6 +260,54 @@ export const GravityStepRail: React.FC<{
           <div className="text-[13.5px] font-semibold text-[#F5F4F1] mt-0.5">{activeLabel}</div>
         </div>
       )}
+    </div>
+  );
+};
+
+/**
+ * File picker.
+ *
+ * `<input type="file">` renders its button with native OS chrome that no
+ * amount of CSS can restyle — the reason uploads looked pasted-in against
+ * everything else. The only reliable fix is to hide the real input and drive
+ * it from a element we control, which is what this does.
+ */
+export const GravityFileInput: React.FC<{
+  accept?: string;
+  onFile: (file: File | undefined) => void;
+  disabled?: boolean;
+  buttonText?: string;
+  /** Name of the current selection, shown beside the button. */
+  fileName?: string;
+  className?: string;
+}> = ({ accept, onFile, disabled = false, buttonText = 'Choose file', fileName, className = '' }) => {
+  const ref = React.useRef<HTMLInputElement>(null);
+  return (
+    <div className={`flex items-center gap-3 ${className}`}>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => ref.current?.click()}
+        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-[12.5px] font-semibold transition-all border border-white/[0.12] text-[#F5F4F1] hover:bg-white/[0.05] hover:border-white/20 disabled:opacity-40 disabled:cursor-not-allowed"
+      >
+        <Upload className="w-3.5 h-3.5 text-[#F5A623]" />
+        {buttonText}
+      </button>
+      <span className="text-[12px] text-white/45 truncate">
+        {fileName || 'No file chosen'}
+      </span>
+      <input
+        ref={ref}
+        type="file"
+        accept={accept}
+        disabled={disabled}
+        className="hidden"
+        onChange={(e) => {
+          onFile(e.target.files?.[0]);
+          // Reset so picking the same file twice still fires onChange.
+          e.target.value = '';
+        }}
+      />
     </div>
   );
 };

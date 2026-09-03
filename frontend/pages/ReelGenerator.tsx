@@ -38,6 +38,7 @@ import {
   GravityMetaBox,
   GravityOptionPopover,
   GravityStepRail,
+  GravityFileInput,
   GravityButton,
 } from '../components/gravity';
 import { useSmartCalendarAutoFill } from '../hooks/useSmartCalendarAutoFill';
@@ -2435,8 +2436,24 @@ setCharacterAge(nextDraft?.characterAge || '');
             )}
 
             {error && (
-              <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-                {error}
+              <div className="rounded-xl border border-red-500/30 bg-red-500/[0.08] px-5 py-3.5 flex items-start justify-between gap-4">
+                <div className="flex-1">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-red-400/80 mb-1">
+                    Generation error
+                  </div>
+                  <div className="text-[13px] text-red-200/90">{error}</div>
+                </div>
+                {/* Dismissible rather than auto-clearing: this reports a real
+                    failure, so it should not vanish on its own — but it also
+                    must not follow you around the wizard forever. */}
+                <button
+                  type="button"
+                  onClick={() => setError('')}
+                  aria-label="Dismiss error"
+                  className="flex-shrink-0 p-1 rounded-md text-red-300/60 hover:text-red-200 hover:bg-red-500/10 transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               </div>
             )}
 
@@ -3256,12 +3273,12 @@ setCharacterAge(nextDraft?.characterAge || '');
 
                     {characterSource === 'upload' ? (
                       <div>
-                        <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Upload Character Image</label>
-                        <input 
-                          type="file" 
+                        <div className="gravity-label mb-2">Upload Character Image</div>
+                        <GravityFileInput
                           accept="image/*"
-                          onChange={async (e) => {
-                            const file = e.target.files?.[0];
+                          buttonText="Choose image"
+                          fileName={characterImage ? 'Image selected' : undefined}
+                          onFile={async (file) => {
                             if (file) {
                               const base64 = await fileToDataUrl(file);
                               if (base64) {
@@ -3271,7 +3288,6 @@ setCharacterAge(nextDraft?.characterAge || '');
                               }
                             }
                           }}
-                          className={inputClass}
                         />
                         {characterImage && (
                           <div className="mt-2 relative inline-block">
@@ -3581,12 +3597,13 @@ setCharacterAge(nextDraft?.characterAge || '');
                     <p className={`text-[11px] mt-1 ${theme.textSecondary}`}>
                       Wide shot of the space + a detail or two. Same lighting / angle-of-day as you want the video to feel like.
                     </p>
-                    <input
-                      type="file"
+                    <GravityFileInput
                       accept="image/*"
-                      className="mt-3 text-sm"
+                      className="mt-3"
                       disabled={environmentRefs.length >= 5}
-                      onChange={(e) => onEnvironmentUpload(e.target.files?.[0])}
+                      buttonText="Upload reference"
+                      fileName={environmentRefs.length ? `${environmentRefs.length} of 5 added` : undefined}
+                      onFile={(f) => onEnvironmentUpload(f)}
                     />
                     {environmentRefs.length >= 5 && (
                       <p className="text-[11px] mt-2 text-amber-400">Max 5 references. Remove one to add another.</p>
@@ -4631,8 +4648,12 @@ setCharacterAge(nextDraft?.characterAge || '');
 
                 {audioEnabled && audioMode === 'upload' && (
                   <div className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3 space-y-3`}>
-                    <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Upload Voice / Record Voice</label>
-                    <input type="file" accept="audio/*" onChange={(e) => onManualVoiceUpload(e.target.files?.[0])} className="text-sm" />
+                    <div className="gravity-label">Upload Voice / Record Voice</div>
+                    <GravityFileInput
+                      accept="audio/*"
+                      buttonText="Choose audio"
+                      onFile={(f) => onManualVoiceUpload(f)}
+                    />
                     <div className="flex gap-2">
                       {!isRecording ? (
                         <button onClick={startVoiceRecording} className="px-3 py-2 rounded-lg border border-slate-500 text-slate-200 text-sm">
