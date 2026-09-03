@@ -2976,7 +2976,7 @@ setCharacterAge(nextDraft?.characterAge || '');
             {step === 2 && (
             <div className={`p-6 space-y-6 ${panelClass}`}>
               <div className="flex items-center justify-between mb-4">
-                <h2 className={`text-xl font-bold ${theme.text}`}>Character & Video Style Configuration</h2>
+                <GravityHero size="md" align="left" eyebrow="AI Reels" headline="Character & Video Style" className="!mb-0" />
                 {acceptedConcept && (
                   <div className="text-right">
                     <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#F5A623]">
@@ -4837,7 +4837,7 @@ setCharacterAge(nextDraft?.characterAge || '');
 
             {step === 13 && (
               <div className={`${panelClass} p-6 space-y-4`}>
-                <h2 className={`font-bold text-lg ${theme.text}`}>Final Step: Output</h2>
+                <GravityHero size="md" align="left" eyebrow="AI Reels" headline="Final Output" />
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   <div className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3`}>
                     <p className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Final Video</p>
