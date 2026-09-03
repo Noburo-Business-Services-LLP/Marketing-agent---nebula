@@ -126,19 +126,17 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
     { path: '/campaigns',        label: 'Create',   icon: Sparkles },
     { path: '/drafts',           label: 'Approve',  icon: PenTool, badge: 'drafts' as const },
     { path: '/content-calendar', label: 'Calendar', icon: CalendarDays },
-    // Insights is hidden from navigation. Like the entries below, its route
-    // and page are left intact so nothing breaks and it can be restored by
-    // putting this line back:
-    //   { path: '/analytics', label: 'Insights', icon: BarChart3 },
+    { path: '/analytics',        label: 'Insights',  icon: BarChart3 },
   ];
-  // Ad Campaigns, Influencer Portal, Inventory and Competitors are hidden
-  // from navigation. Their routes and pages are left intact so nothing
-  // breaks and they can be restored by putting these entries back.
+  // Ad Campaigns, Influencer Portal and Competitors remain hidden from
+  // navigation. Their routes and pages are left intact so nothing breaks and
+  // they can be restored by adding entries here.
   const secondaryNav = [
     { path: '/reels',             label: 'AI Reels',          icon: PlayCircle },
     { path: '/upload',            label: 'Upload & Schedule', icon: UploadCloud },
     { path: '/connect-socials',   label: 'Connect Socials',   icon: Link2 },
     { path: '/brand-assets',      label: 'Brand Assets',      icon: Palette },
+    { path: '/inventory',         label: 'Inventory',         icon: Package },
     { path: '/ai-memory',         label: 'AI Memory',         icon: Brain },
   ];
 

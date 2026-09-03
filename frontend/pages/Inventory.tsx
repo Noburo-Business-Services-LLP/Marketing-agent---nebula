@@ -10,6 +10,7 @@ import {
 import { inventoryAPI } from '../services/api';
 import { Product } from '../types';
 import { useTheme, getThemeClasses } from '../context/ThemeContext';
+import { GravityHero, GravityEmphasis } from '../components/gravity';
 
 const Inventory: React.FC = () => {
   const { isDarkMode } = useTheme();
@@ -267,25 +268,23 @@ const Inventory: React.FC = () => {
     }
   };
 
-  const inputClasses = `w-full px-4 py-2.5 rounded-xl border outline-none focus:ring-2 focus:ring-[#ffcc29] transition-all ${
+  const inputClasses = `w-full px-4 py-2.5 rounded-xl border outline-none focus:ring-2 focus:ring-[#F5A623] transition-all ${
     isDarkMode ? 'bg-slate-900 border-slate-700 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-900'
   }`;
 
   const labelClasses = `block text-xs font-bold uppercase tracking-wide mb-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`;
 
   return (
-    <div className={`p-6 min-h-screen ${isDarkMode ? 'bg-[#070A12]' : 'bg-slate-50'}`}>
+    <div className={"p-6 min-h-screen"}>
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
-        <div>
-          <h1 className={`text-3xl font-black tracking-tight flex items-center gap-3 ${theme.text}`}>
-            <Package className="w-8 h-8 text-[#ffcc29]" />
-            Inventory <span className="text-slate-500 font-light">Management</span>
-          </h1>
-          <p className={`text-sm mt-1 font-medium ${theme.textSecondary}`}>
-            Manage your products and their stock levels for marketing campaigns.
-          </p>
-        </div>
+        <GravityHero
+          align="left"
+          eyebrow="Inventory"
+          headline={<>Everything you <GravityEmphasis>sell</GravityEmphasis></>}
+          subcopy="Manage your products and their stock levels for marketing campaigns."
+          className="!mb-0"
+        />
         
         <div className="flex items-center gap-3 flex-wrap">
           <button 
@@ -303,8 +302,8 @@ const Inventory: React.FC = () => {
             onClick={() => { setShowImportModal(true); setImportResult(null); setImportFile(null); }}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border font-bold text-sm transition-all hover:scale-[1.02] active:scale-[0.98] ${
               isDarkMode
-                ? 'bg-slate-800 border-slate-700 text-slate-200 hover:border-[#ffcc29]/50 hover:text-[#ffcc29]'
-                : 'bg-white border-slate-200 text-slate-700 hover:border-[#ffcc29] hover:text-[#ffcc29]'
+                ? 'bg-slate-800 border-slate-700 text-slate-200 hover:border-[#F5A623]/50 hover:text-[#F5A623]'
+                : 'bg-white border-slate-200 text-slate-700 hover:border-[#F5A623] hover:text-[#F5A623]'
             }`}
           >
             <FileSpreadsheet className="w-4 h-4" />
@@ -313,7 +312,7 @@ const Inventory: React.FC = () => {
 
           <button 
             onClick={handleOpenAdd}
-            className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-[#ffcc29] to-[#ffa500] text-black font-bold rounded-xl shadow-lg shadow-[#ffcc29]/20 hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all"
+            className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-[#F5A623] to-[#ffb833] text-black font-bold rounded-xl shadow-lg shadow-[#F5A623]/20 hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all"
           >
             <Plus className="w-5 h-5" />
             Add Product
@@ -322,34 +321,34 @@ const Inventory: React.FC = () => {
       </div>
 
       {/* Stats Quick View */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
         {[
-          { label: 'Total Products', value: products.length, icon: Box, color: 'text-blue-500' },
-          { label: 'In Stock', value: products.filter(p => p.stockStatus === 'in-stock').length, icon: Check, color: 'text-green-500' },
-          { label: 'Low Stock', value: products.filter(p => p.stockStatus === 'low-stock').length, icon: AlertCircle, color: 'text-yellow-500' },
-          { label: 'Out of Stock', value: products.filter(p => p.stockStatus === 'out-of-stock').length, icon: X, color: 'text-red-500' },
+          { label: 'Total Products', value: products.length, icon: Box, color: 'text-[#F5A623]', tint: 'bg-[#F5A623]/10 border-[#F5A623]/20' },
+          { label: 'In Stock', value: products.filter(p => p.stockStatus === 'in-stock').length, icon: Check, color: 'text-emerald-400', tint: 'bg-emerald-500/10 border-emerald-500/20' },
+          { label: 'Low Stock', value: products.filter(p => p.stockStatus === 'low-stock').length, icon: AlertCircle, color: 'text-amber-300', tint: 'bg-amber-400/10 border-amber-400/20' },
+          { label: 'Out of Stock', value: products.filter(p => p.stockStatus === 'out-of-stock').length, icon: X, color: 'text-red-400', tint: 'bg-red-500/10 border-red-500/20' },
         ].map((stat, i) => (
-          <div key={i} className={`p-4 rounded-2xl border shadow-sm flex items-center justify-between ${theme.bgCard} ${isDarkMode ? 'border-slate-800/50' : 'border-slate-200/50'}`}>
-            <div>
-              <p className={`text-[10px] font-bold uppercase tracking-wider ${theme.textMuted}`}>{stat.label}</p>
-              <p className={`text-xl font-black ${theme.text}`}>{stat.value}</p>
+          <div key={i} className="p-5 rounded-xl border border-white/[0.06] bg-white/[0.02] flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <div className="gravity-label">{stat.label}</div>
+              <p className="mt-1.5 text-[26px] font-serif-display leading-none text-[#F5F4F1]">{stat.value}</p>
             </div>
-            <div className={`p-3 rounded-xl bg-opacity-10 ${stat.color} bg-current`}>
-              <stat.icon className="w-5 h-5" />
+            <div className={`p-2.5 rounded-lg border flex-shrink-0 ${stat.tint}`}>
+              <stat.icon className={`w-4 h-4 ${stat.color}`} />
             </div>
           </div>
         ))}
       </div>
 
       {/* Filters & Search */}
-      <div className={`mb-6 p-4 rounded-2xl border shadow-sm flex flex-col md:flex-row items-center gap-4 ${theme.bgCard} ${isDarkMode ? 'border-slate-800/50' : 'border-slate-200/50'}`}>
+      <div className={`mb-6 p-4 rounded-2xl border shadow-sm flex flex-col md:flex-row items-center gap-4 border-white/[0.06] bg-white/[0.02]`}>
         <div className="relative flex-1 w-full">
           <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`} />
           <input 
             type="text" 
             placeholder="Search within your inventory..."
             className={`w-full pl-10 pr-4 py-2 text-sm rounded-xl outline-none border transition-all ${
-              isDarkMode ? 'bg-slate-900 border-slate-700 text-white focus:border-[#ffcc29]' : 'bg-slate-50 border-slate-200 text-slate-900 focus:border-[#ffcc29]'
+              isDarkMode ? 'bg-slate-900 border-slate-700 text-white focus:border-[#F5A623]' : 'bg-slate-50 border-slate-200 text-slate-900 focus:border-[#F5A623]'
             }`}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -376,8 +375,8 @@ const Inventory: React.FC = () => {
       {loading ? (
         <div className="flex flex-col items-center justify-center py-20 gap-4">
           <div className="relative">
-            <div className="w-16 h-16 rounded-full border-4 border-slate-700 border-t-[#ffcc29] animate-spin" />
-            <Package className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-6 text-[#ffcc29]" />
+            <div className="w-16 h-16 rounded-full border-4 border-slate-700 border-t-[#F5A623] animate-spin" />
+            <Package className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-6 text-[#F5A623]" />
           </div>
           <p className={`text-sm font-medium animate-pulse ${theme.textSecondary}`}>Syncing your inventory...</p>
         </div>
@@ -392,7 +391,7 @@ const Inventory: React.FC = () => {
           </p>
           <button 
             onClick={handleOpenAdd}
-            className="mt-6 px-6 py-3 bg-[#ffcc29] text-black font-bold rounded-xl hover:bg-[#ffcc29]/90 transition-all active:scale-95"
+            className="mt-6 px-6 py-3 bg-[#F5A623] text-black font-bold rounded-xl hover:bg-[#F5A623]/90 transition-all active:scale-95"
           >
             Add New Product
           </button>
@@ -402,7 +401,7 @@ const Inventory: React.FC = () => {
           {filteredProducts.map(product => (
             <div 
               key={product._id} 
-              className={`group rounded-2xl border shadow-sm overflow-hidden transition-all duration-300 hover:shadow-xl hover:translate-y-[-4px] ${theme.bgCard} ${isDarkMode ? 'border-slate-800/50 hover:border-[#ffcc29]/30' : 'border-slate-200/50 hover:border-[#ffcc29]/30'}`}
+              className={`group rounded-2xl border shadow-sm overflow-hidden transition-all duration-300 hover:shadow-xl hover:translate-y-[-4px] ${theme.bgCard} ${isDarkMode ? 'border-slate-800/50 hover:border-[#F5A623]/30' : 'border-slate-200/50 hover:border-[#F5A623]/30'}`}
             >
               {/* Product Image Container */}
               <div className="relative h-56 overflow-hidden bg-slate-100">
@@ -423,14 +422,14 @@ const Inventory: React.FC = () => {
                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
                   <button 
                     onClick={() => handleOpenAdGenerator(product)}
-                    className="p-3 bg-[#ffcc29] rounded-xl text-slate-900 hover:bg-white transition-colors shadow-lg group/btn"
+                    className="p-3 bg-[#F5A623] rounded-xl text-slate-900 hover:bg-white transition-colors shadow-lg group/btn"
                     title="Generate AI Ad Image"
                   >
                     <Sparkles className="w-5 h-5 group-hover/btn:animate-pulse" />
                   </button>
                   <button 
                     onClick={() => handleOpenEdit(product)}
-                    className="p-3 bg-white rounded-xl text-slate-800 hover:bg-[#ffcc29] transition-colors shadow-lg"
+                    className="p-3 bg-white rounded-xl text-slate-800 hover:bg-[#F5A623] transition-colors shadow-lg"
                     title="Edit Product"
                   >
                     <Edit className="w-5 h-5" />
@@ -465,7 +464,7 @@ const Inventory: React.FC = () => {
                     </span>
                   )}
                   {product.tags?.slice(0, 2).map((tag, i) => (
-                    <span key={i} className={`px-2 py-1 rounded-lg text-[10px] font-bold ${isDarkMode ? 'bg-slate-800 text-[#ffcc29]/70' : 'bg-slate-100 text-[#ffcc29]'}`}>
+                    <span key={i} className={`px-2 py-1 rounded-lg text-[10px] font-bold ${isDarkMode ? 'bg-slate-800 text-[#F5A623]/70' : 'bg-slate-100 text-[#F5A623]'}`}>
                       #{tag}
                     </span>
                   ))}
@@ -474,7 +473,7 @@ const Inventory: React.FC = () => {
                 <div className={`flex items-center justify-between pt-4 border-t ${isDarkMode ? 'border-slate-800' : 'border-slate-100'}`}>
                   <div>
                     <p className={`text-[10px] font-bold uppercase tracking-wider ${theme.textMuted}`}>PRICE</p>
-                    <p className="text-xl font-black text-[#ffcc29]">
+                    <p className="text-xl font-black text-[#F5A623]">
                       <span className="text-xs font-bold mr-0.5">{product.currency || 'USD'}</span>
                       {product.price}
                     </p>
@@ -497,8 +496,8 @@ const Inventory: React.FC = () => {
             {/* Modal Header */}
             <div className={`px-8 py-6 border-b flex items-center justify-between ${isDarkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
               <div className="flex items-center gap-4">
-                <div className="p-3 rounded-2xl bg-[#ffcc29]/10 border border-[#ffcc29]/20">
-                  {editingProduct ? <Edit className="w-6 h-6 text-[#ffcc29]" /> : <Plus className="w-6 h-6 text-[#ffcc29]" />}
+                <div className="p-3 rounded-2xl bg-[#F5A623]/10 border border-[#F5A623]/20">
+                  {editingProduct ? <Edit className="w-6 h-6 text-[#F5A623]" /> : <Plus className="w-6 h-6 text-[#F5A623]" />}
                 </div>
                 <div>
                   <h3 className={`text-xl font-black ${theme.text}`}>{editingProduct ? 'Edit Product' : 'Add New Product'}</h3>
@@ -620,7 +619,7 @@ const Inventory: React.FC = () => {
                 <button 
                   type="submit"
                   disabled={isSaving}
-                  className="px-8 py-3 bg-gradient-to-r from-[#ffcc29] to-[#ffa500] text-black font-black rounded-xl shadow-lg shadow-[#ffcc29]/20 hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 flex items-center gap-2"
+                  className="px-8 py-3 bg-gradient-to-r from-[#F5A623] to-[#ffb833] text-black font-black rounded-xl shadow-lg shadow-[#F5A623]/20 hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 flex items-center gap-2"
                 >
                   {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : editingProduct ? 'Update Product' : 'Create Product'}
                 </button>
@@ -642,8 +641,8 @@ const Inventory: React.FC = () => {
               isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200'
             }`}>
               <div className="flex items-center gap-4">
-                <div className="p-3 rounded-2xl bg-[#ffcc29]/10 border border-[#ffcc29]/20">
-                  <Upload className="w-5 h-5 text-[#ffcc29]" />
+                <div className="p-3 rounded-2xl bg-[#F5A623]/10 border border-[#F5A623]/20">
+                  <Upload className="w-5 h-5 text-[#F5A623]" />
                 </div>
                 <div>
                   <h3 className={`text-lg font-black ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
@@ -698,10 +697,10 @@ const Inventory: React.FC = () => {
                   onClick={() => fileInputRef.current?.click()}
                   className={`relative flex flex-col items-center justify-center gap-3 p-10 rounded-2xl border-2 border-dashed cursor-pointer transition-all duration-200 ${
                     isDragging
-                      ? 'border-[#ffcc29] bg-[#ffcc29]/5 scale-[1.01]'
+                      ? 'border-[#F5A623] bg-[#F5A623]/5 scale-[1.01]'
                       : importFile
                       ? isDarkMode ? 'border-green-500/40 bg-green-500/5' : 'border-green-400 bg-green-50'
-                      : isDarkMode ? 'border-slate-700 hover:border-[#ffcc29]/50 hover:bg-[#ffcc29]/5' : 'border-slate-200 hover:border-[#ffcc29] hover:bg-[#ffcc29]/5'
+                      : isDarkMode ? 'border-slate-700 hover:border-[#F5A623]/50 hover:bg-[#F5A623]/5' : 'border-slate-200 hover:border-[#F5A623] hover:bg-[#F5A623]/5'
                   }`}
                 >
                   <input
@@ -729,9 +728,9 @@ const Inventory: React.FC = () => {
                   ) : (
                     <>
                       <div className={`p-4 rounded-2xl border ${
-                        isDragging ? 'bg-[#ffcc29]/10 border-[#ffcc29]/30' : isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-200'
+                        isDragging ? 'bg-[#F5A623]/10 border-[#F5A623]/30' : isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-200'
                       }`}>
-                        <Upload className={`w-8 h-8 ${isDragging ? 'text-[#ffcc29]' : isDarkMode ? 'text-slate-500' : 'text-slate-400'}`} />
+                        <Upload className={`w-8 h-8 ${isDragging ? 'text-[#F5A623]' : isDarkMode ? 'text-slate-500' : 'text-slate-400'}`} />
                       </div>
                       <div className="text-center">
                         <p className={`font-bold text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>
@@ -852,7 +851,7 @@ const Inventory: React.FC = () => {
                   <button
                     onClick={() => { setImportFile(null); setImportResult(null); }}
                     className={`w-full py-2.5 rounded-xl border text-sm font-bold transition-all ${
-                      isDarkMode ? 'border-slate-700 text-slate-400 hover:border-[#ffcc29]/40 hover:text-[#ffcc29]' : 'border-slate-200 text-slate-500 hover:border-[#ffcc29] hover:text-[#ffcc29]'
+                      isDarkMode ? 'border-slate-700 text-slate-400 hover:border-[#F5A623]/40 hover:text-[#F5A623]' : 'border-slate-200 text-slate-500 hover:border-[#F5A623] hover:text-[#F5A623]'
                     }`}
                   >
                     Import another file
@@ -879,7 +878,7 @@ const Inventory: React.FC = () => {
                   type="button"
                   onClick={handleImport}
                   disabled={!importFile || isImporting}
-                  className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-[#ffcc29] to-[#ffa500] text-black font-black text-sm rounded-xl shadow-lg shadow-[#ffcc29]/20 hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100"
+                  className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-[#F5A623] to-[#ffb833] text-black font-black text-sm rounded-xl shadow-lg shadow-[#F5A623]/20 hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100"
                 >
                   {isImporting ? (
                     <><Loader2 className="w-4 h-4 animate-spin" /> Importing…</>
@@ -897,7 +896,7 @@ const Inventory: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleCloseImport}
-                  className="px-6 py-2.5 bg-gradient-to-r from-[#ffcc29] to-[#ffa500] text-black font-black text-sm rounded-xl shadow-lg shadow-[#ffcc29]/20 hover:shadow-xl transition-all"
+                  className="px-6 py-2.5 bg-gradient-to-r from-[#F5A623] to-[#ffb833] text-black font-black text-sm rounded-xl shadow-lg shadow-[#F5A623]/20 hover:shadow-xl transition-all"
                 >
                   Done
                 </button>
@@ -916,8 +915,8 @@ const Inventory: React.FC = () => {
             <div className={`w-full md:w-[380px] p-8 flex flex-col gap-8 border-r ${isDarkMode ? 'bg-slate-900/50 border-white/5' : 'bg-slate-50 border-slate-200'}`}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="p-2.5 rounded-2xl bg-[#ffcc29]/20 border border-[#ffcc29]/30">
-                    <Sparkles className="w-6 h-6 text-[#ffcc29]" />
+                  <div className="p-2.5 rounded-2xl bg-[#F5A623]/20 border border-[#F5A623]/30">
+                    <Sparkles className="w-6 h-6 text-[#F5A623]" />
                   </div>
                   <h3 className={`text-xl font-black ${theme.text}`}>AI Ad Studio</h3>
                 </div>
@@ -943,7 +942,7 @@ const Inventory: React.FC = () => {
                       onClick={() => setAdOptions(prev => ({ ...prev, platform: p.id }))}
                       className={`flex items-center gap-3 p-3 rounded-2xl border transition-all ${
                         adOptions.platform === p.id 
-                          ? 'bg-[#ffcc29]/10 border-[#ffcc29] text-[#ffcc29]' 
+                          ? 'bg-[#F5A623]/10 border-[#F5A623] text-[#F5A623]' 
                           : `${isDarkMode ? 'bg-slate-800/50 border-white/5 text-slate-400' : 'bg-white border-slate-200 text-slate-600'} hover:border-slate-400`
                       }`}
                     >
@@ -963,7 +962,7 @@ const Inventory: React.FC = () => {
                       onClick={() => setAdOptions(prev => ({ ...prev, tone: t.toLowerCase() }))}
                       className={`p-3 rounded-2xl border text-xs font-bold transition-all ${
                         adOptions.tone === t.toLowerCase() 
-                          ? 'bg-[#ffcc29]/10 border-[#ffcc29] text-[#ffcc29]' 
+                          ? 'bg-[#F5A623]/10 border-[#F5A623] text-[#F5A623]' 
                           : `${isDarkMode ? 'bg-slate-800/50 border-white/5 text-slate-400' : 'bg-white border-slate-200 text-slate-600'} hover:border-slate-400`
                       }`}
                     >
@@ -986,7 +985,7 @@ const Inventory: React.FC = () => {
                       onClick={() => setAdOptions(prev => ({ ...prev, aspectRatio: r.id }))}
                       className={`flex-1 flex flex-col items-center gap-2 p-4 rounded-2xl border transition-all ${
                         adOptions.aspectRatio === r.id 
-                          ? 'bg-[#ffcc29]/10 border-[#ffcc29] text-[#ffcc29]' 
+                          ? 'bg-[#F5A623]/10 border-[#F5A623] text-[#F5A623]' 
                           : `${isDarkMode ? 'bg-slate-800/50 border-white/5 text-slate-400' : 'bg-white border-slate-200 text-slate-600'} hover:border-slate-400`
                       }`}
                     >
@@ -1001,7 +1000,7 @@ const Inventory: React.FC = () => {
                 <button
                   onClick={handleGenerateAd}
                   disabled={isGeneratingAd}
-                  className="w-full h-14 bg-[#ffcc29] text-slate-900 rounded-2xl font-black text-sm shadow-xl shadow-[#ffcc29]/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 disabled:scale-100 flex items-center justify-center gap-2"
+                  className="w-full h-14 bg-[#F5A623] text-slate-900 rounded-2xl font-black text-sm shadow-xl shadow-[#F5A623]/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 disabled:scale-100 flex items-center justify-center gap-2"
                 >
                   {isGeneratingAd ? (
                     <>
@@ -1032,8 +1031,8 @@ const Inventory: React.FC = () => {
                   {isGeneratingAd ? (
                     <div className="absolute inset-0 flex flex-col items-center justify-center gap-6">
                       <div className="relative">
-                        <div className="w-20 h-20 border-4 border-[#ffcc29]/20 border-t-[#ffcc29] rounded-full animate-spin" />
-                        <Sparkles className="absolute inset-0 m-auto w-8 h-8 text-[#ffcc29] animate-pulse" />
+                        <div className="w-20 h-20 border-4 border-[#F5A623]/20 border-t-[#F5A623] rounded-full animate-spin" />
+                        <Sparkles className="absolute inset-0 m-auto w-8 h-8 text-[#F5A623] animate-pulse" />
                       </div>
                       <div className="text-center">
                         <p className={`text-sm font-black mb-1 ${theme.text}`}>Nano Banana 2 is working</p>
@@ -1053,7 +1052,7 @@ const Inventory: React.FC = () => {
                       </div>
                       <h4 className={`text-xl font-black mb-3 ${theme.text}`}>Ready to Launch?</h4>
                       <p className={`text-xs leading-relaxed max-w-xs ${theme.textSecondary}`}>
-                        Click generate to create an agency-grade marketing image for <span className="font-bold text-[#ffcc29]">{selectedAdProduct.name}</span>.
+                        Click generate to create an agency-grade marketing image for <span className="font-bold text-[#F5A623]">{selectedAdProduct.name}</span>.
                       </p>
                     </div>
                   )}
