@@ -54,9 +54,25 @@ All five are lifted from working code in `GravityCreate.tsx`, not invented.
 | `GravityMetaBox` | Labelled setting box: icon, label, value, EDIT affordance | GravityCreate:41-62 (`MetaBox`) |
 | `GravityOptionPopover` | Dropdown panel anchored under a MetaBox | GravityCreate:64-87 (`OptionPopover`) |
 
-`GravityPanel` defaults halo and beam to **off**. The glow reads as special
-because it is rare; a page should have at most one. This is a deliberate
-constraint, not an oversight.
+### The glow rule
+
+`GravityPanel` defaults halo and beam to **off**. Glow is opt-in, and the rule
+governing it is:
+
+> **One glow at a time, on the panel the current step is about.**
+
+In a single-screen page that is the primary input — the campaign prompt on
+Create, the video brief on Reels Step 1. In a multi-step flow the glow *follows
+the user*: whichever panel is the focus of the active step carries it, and the
+previous one drops back to a plain panel.
+
+The glow is an attention device, not decoration. If every card glows, none of
+them signals anything — it stops meaning "start here" and becomes noise, and
+several breathing halos on one screen compete with each other and with the
+content. Hence at most one, always on the thing you are meant to act on now.
+
+Note that Create never had to decide this: it has only one panel. The rule is
+chosen, not inherited.
 
 ## First application — ReelGenerator Step 1
 
