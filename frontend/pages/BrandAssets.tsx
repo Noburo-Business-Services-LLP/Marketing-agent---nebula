@@ -17,6 +17,13 @@ import {
   X
 } from 'lucide-react';
 import { brandAssetsAPI } from '../services/api';
+import {
+  GravityHero,
+  GravityEmphasis,
+  GravityLabel,
+  GravityButton,
+  GravityFileInput,
+} from '../components/gravity';
 
 interface BrandAsset {
   _id: string;
@@ -385,9 +392,10 @@ const BrandAssets: React.FC = () => {
     }
   };
 
-  const handlePastPostImageSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  // Takes the File directly rather than the change event, so it can be driven
+  // by GravityFileInput (which hides the real input to escape native chrome).
+  const handlePastPostImageSelect = async (file?: File) => {
     try {
-      const file = event.target.files?.[0];
       if (!file) return;
       if (!file.type.startsWith('image/')) {
         setError('Past post file must be an image');
@@ -464,56 +472,50 @@ const BrandAssets: React.FC = () => {
   if (loading) {
     return (
       <div className={`min-h-screen flex items-center justify-center ${isDarkMode ? 'bg-[#070A12]' : 'bg-gray-100'}`}>
-        <Loader2 className="w-8 h-8 animate-spin text-[#FFCC29]" />
+        <Loader2 className="w-8 h-8 animate-spin text-[#F5A623]" />
       </div>
     );
   }
 
   return (
-    <div className={`min-h-screen p-6 ${isDarkMode ? 'bg-[#070A12]' : 'bg-gray-100'}`}>
+    <div className="min-h-screen p-6">
       <div className="max-w-7xl mx-auto space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className={`text-3xl font-bold flex items-center gap-3 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-              <Palette className="w-8 h-8 text-[#FFCC29]" />
-              Brand Intelligence & Assets
-            </h1>
-            <p className={`mt-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-              Save your brand identity once and auto-apply it in every campaign.
-            </p>
-          </div>
-          <button
-            onClick={() => loadData(true)}
-            disabled={refreshing}
-            className="px-4 py-2 rounded-lg bg-[#FFCC29] text-[#070A12] font-semibold hover:bg-[#FFCC29]/90 disabled:opacity-60 flex items-center gap-2"
-          >
-            {refreshing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+        <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
+          <GravityHero
+            align="left"
+            eyebrow="Brand Assets"
+            headline={<>Teach Gravity your <GravityEmphasis>look</GravityEmphasis></>}
+            subcopy="Save your brand identity once and auto-apply it in every campaign."
+            className="!mb-0"
+          />
+          <GravityButton variant="ghost" onClick={() => loadData(true)} disabled={refreshing} className="flex-shrink-0">
+            {refreshing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4 text-[#F5A623]" />}
             Refresh
-          </button>
+          </GravityButton>
         </div>
 
         {error && (
-          <div className="p-4 rounded-lg border border-red-500/40 bg-red-500/10 text-red-400 flex items-center gap-3">
-            <AlertCircle className="w-5 h-5 flex-shrink-0" />
+          <div className="px-5 py-3.5 rounded-xl border border-red-500/30 bg-red-500/[0.08] text-[13px] text-red-200/90 flex items-center gap-3">
+            <AlertCircle className="w-4 h-4 flex-shrink-0 text-red-400/80" />
             <span>{error}</span>
-            <button onClick={() => setError(null)} className="ml-auto">
+            <button onClick={() => setError(null)} className="ml-auto p-1 rounded-md text-red-300/60 hover:text-red-200 hover:bg-red-500/10 transition-colors">
               <X className="w-4 h-4" />
             </button>
           </div>
         )}
 
         {success && (
-          <div className="p-4 rounded-lg border border-emerald-500/40 bg-emerald-500/10 text-emerald-400 flex items-center gap-3">
-            <CheckCircle className="w-5 h-5 flex-shrink-0" />
+          <div className="px-5 py-3.5 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.07] text-[13px] text-emerald-200 flex items-center gap-3">
+            <CheckCircle className="w-4 h-4 flex-shrink-0" />
             <span>{success}</span>
           </div>
         )}
 
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-          <section className={`xl:col-span-1 rounded-2xl border p-5 ${isDarkMode ? 'bg-[#0D1117] border-slate-700/60' : 'bg-white border-gray-200'}`}>
+          <section className={`xl:col-span-1 rounded-2xl border p-5 border-white/[0.06] bg-white/[0.02]`}>
             <div className="flex items-center justify-between mb-4">
-              <h2 className={`text-lg font-semibold flex items-center gap-2 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                <ImageIcon className="w-5 h-5 text-[#FFCC29]" />
+              <h2 className={"font-serif-display text-[20px] text-[#F5F4F1] flex items-center gap-2"}>
+                <ImageIcon className="w-5 h-5 text-[#F5A623]" />
                 Brand Logos
               </h2>
               <span className={`text-xs px-2 py-1 rounded-full ${isDarkMode ? 'bg-slate-800 text-gray-300' : 'bg-gray-100 text-gray-700'}`}>
@@ -524,7 +526,7 @@ const BrandAssets: React.FC = () => {
             <div
               onDragOver={(e) => e.preventDefault()}
               onDrop={handleLogoDrop}
-              className={`border-2 border-dashed rounded-xl p-4 text-center transition-colors ${isDarkMode ? 'border-slate-600 bg-slate-800/40 hover:border-[#FFCC29]/60' : 'border-gray-300 bg-gray-50 hover:border-[#FFCC29]'
+              className={`border-2 border-dashed rounded-xl p-4 text-center transition-colors ${isDarkMode ? 'border-slate-600 bg-slate-800/40 hover:border-[#F5A623]/60' : 'border-gray-300 bg-gray-50 hover:border-[#F5A623]'
                 }`}
             >
               {logoPreview ? (
@@ -566,7 +568,7 @@ const BrandAssets: React.FC = () => {
                 <button
                   onClick={uploadLogo}
                   disabled={uploadingLogo}
-                  className="w-full px-4 py-2 rounded-lg bg-[#FFCC29] text-[#070A12] font-semibold hover:bg-[#FFCC29]/90 disabled:opacity-60 flex items-center justify-center gap-2"
+                  className="w-full px-4 py-2 rounded-lg bg-[#F5A623] text-[#070A12] font-semibold hover:bg-[#F5A623]/90 disabled:opacity-60 flex items-center justify-center gap-2"
                 >
                   {uploadingLogo ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
                   {uploadingLogo ? 'Uploading...' : 'Upload Logo'}
@@ -584,7 +586,7 @@ const BrandAssets: React.FC = () => {
                     <div
                       key={logo._id}
                       className={`group border rounded-lg overflow-hidden ${isDarkMode ? 'border-slate-700 bg-slate-800/50' : 'border-gray-200 bg-gray-50'
-                        } ${logo.isPrimary ? 'ring-2 ring-[#FFCC29]' : ''}`}
+                        } ${logo.isPrimary ? 'ring-2 ring-[#F5A623]' : ''}`}
                     >
                       <div className="aspect-square p-3 flex items-center justify-center">
                         <img src={logo.url} alt={logo.name} className="max-w-full max-h-full object-contain" />
@@ -594,7 +596,7 @@ const BrandAssets: React.FC = () => {
                         <div className="flex items-center gap-1">
                           <button
                             onClick={() => setPrimaryLogo(logo._id)}
-                            className={`p-1 rounded ${logo.isPrimary ? 'bg-[#FFCC29] text-[#070A12]' : isDarkMode ? 'text-gray-300 hover:bg-slate-700' : 'text-gray-700 hover:bg-gray-200'}`}
+                            className={`p-1 rounded ${logo.isPrimary ? 'bg-[#F5A623] text-[#070A12]' : isDarkMode ? 'text-gray-300 hover:bg-slate-700' : 'text-gray-700 hover:bg-gray-200'}`}
                             title={logo.isPrimary ? 'Primary' : 'Set primary'}
                           >
                             {logo.isPrimary ? <Star className="w-3.5 h-3.5 fill-current" /> : <StarOff className="w-3.5 h-3.5" />}
@@ -615,10 +617,10 @@ const BrandAssets: React.FC = () => {
             </div>
           </section>
 
-          <section className={`xl:col-span-2 rounded-2xl border p-5 ${isDarkMode ? 'bg-[#0D1117] border-slate-700/60' : 'bg-white border-gray-200'}`}>
+          <section className={`xl:col-span-2 rounded-2xl border p-5 border-white/[0.06] bg-white/[0.02]`}>
             <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-              <h2 className={`text-lg font-semibold flex items-center gap-2 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                <BrainCircuit className="w-5 h-5 text-[#FFCC29]" />
+              <h2 className={"font-serif-display text-[20px] text-[#F5F4F1] flex items-center gap-2"}>
+                <BrainCircuit className="w-5 h-5 text-[#F5A623]" />
                 Brand Profile
               </h2>
               <div className="flex items-center gap-2">
@@ -634,7 +636,7 @@ const BrandAssets: React.FC = () => {
                 <button
                   onClick={saveProfile}
                   disabled={savingProfile}
-                  className="px-4 py-2 rounded-lg bg-[#FFCC29] text-[#070A12] font-semibold hover:bg-[#FFCC29]/90 disabled:opacity-60 flex items-center gap-2"
+                  className="px-4 py-2 rounded-lg bg-[#F5A623] text-[#070A12] font-semibold hover:bg-[#F5A623]/90 disabled:opacity-60 flex items-center gap-2"
                 >
                   {savingProfile ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
                   Save Profile
@@ -692,7 +694,7 @@ const BrandAssets: React.FC = () => {
                   <input
                     value={secondaryColor}
                     onChange={(e) => setSecondaryColor(e.target.value)}
-                    placeholder="#FFCC29"
+                    placeholder="#F5A623"
                     className={`flex-1 px-3 py-2 rounded-lg border ${isDarkMode ? 'bg-slate-800 border-slate-600 text-white' : 'bg-white border-gray-300 text-gray-900'
                       }`}
                   />
@@ -737,7 +739,7 @@ const BrandAssets: React.FC = () => {
             </div>
 
             <div className="mt-5">
-              <h3 className={`text-sm font-semibold uppercase tracking-wide mb-3 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+              <h3 className={"gravity-label mb-3"}>
                 Profile Overrides
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -811,10 +813,10 @@ const BrandAssets: React.FC = () => {
           </section>
         </div>
 
-        <section className={`rounded-2xl border p-5 ${isDarkMode ? 'bg-[#0D1117] border-slate-700/60' : 'bg-white border-gray-200'}`}>
+        <section className={`rounded-2xl border p-5 border-white/[0.06] bg-white/[0.02]`}>
           <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-            <h2 className={`text-lg font-semibold flex items-center gap-2 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-              <Sparkles className="w-5 h-5 text-[#FFCC29]" />
+            <h2 className={"font-serif-display text-[20px] text-[#F5F4F1] flex items-center gap-2"}>
+              <Sparkles className="w-5 h-5 text-[#F5A623]" />
               Past Campaign Learning
             </h2>
             <span className={`text-xs px-2 py-1 rounded-full ${isDarkMode ? 'bg-slate-800 text-gray-300' : 'bg-gray-100 text-gray-700'}`}>
@@ -848,10 +850,16 @@ const BrandAssets: React.FC = () => {
                   }`}
               />
 
-              <label className="block">
-                <span className={`text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Image Sample (Optional)</span>
-                <input type="file" accept="image/*" className="mt-2 block w-full text-sm" onChange={handlePastPostImageSelect} />
-              </label>
+              <div className="block">
+                <GravityLabel>Image Sample (Optional)</GravityLabel>
+                <GravityFileInput
+                  accept="image/*"
+                  className="mt-2"
+                  buttonText="Choose image"
+                  fileName={pastImagePreview ? 'Image selected' : undefined}
+                  onFile={handlePastPostImageSelect}
+                />
+              </div>
 
               {pastImagePreview && (
                 <div className="relative rounded-lg overflow-hidden border border-slate-600/50">
@@ -868,7 +876,7 @@ const BrandAssets: React.FC = () => {
               <button
                 onClick={addPastPost}
                 disabled={addingPastPost}
-                className="w-full px-4 py-2 rounded-lg bg-[#FFCC29] text-[#070A12] font-semibold hover:bg-[#FFCC29]/90 disabled:opacity-60 flex items-center justify-center gap-2"
+                className="w-full px-4 py-2 rounded-lg bg-[#F5A623] text-[#070A12] font-semibold hover:bg-[#F5A623]/90 disabled:opacity-60 flex items-center justify-center gap-2"
               >
                 {addingPastPost ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                 {addingPastPost ? 'Adding...' : 'Add Sample'}
@@ -877,7 +885,7 @@ const BrandAssets: React.FC = () => {
 
             <div className="lg:col-span-2 space-y-4">
               <div className={`rounded-xl border p-4 ${isDarkMode ? 'border-slate-700 bg-slate-800/30' : 'border-gray-200 bg-gray-50'}`}>
-                <h3 className={`text-sm font-semibold uppercase tracking-wide mb-3 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                <h3 className={"gravity-label mb-3"}>
                   Detected Pattern Summary
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
