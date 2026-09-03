@@ -719,7 +719,9 @@ async function generateAIImage(campaignTitle, campaignDescription, objective, pl
   if (brandContext.companyName) brandDetails.push(`Brand: ${brandContext.companyName}`);
   if (brandContext.products) brandDetails.push(`Products/Services: ${brandContext.products}`);
   if (brandContext.niche) brandDetails.push(`Business type: ${brandContext.niche}`);
-  if (brandContext.description) brandDetails.push(`About: ${brandContext.description.substring(0, 100)}`);
+  // 100 chars cut most brand descriptions mid-sentence, so the model saw a
+  // fragment. Still bounded to keep the prompt within model limits.
+  if (brandContext.description) brandDetails.push(`About: ${brandContext.description.substring(0, 400)}`);
 
   // Add brand colors if available
   const brandColors = brandContext.brandColors || [];
@@ -774,7 +776,7 @@ ${brandInfo}
 ${colorGuidance}
 
 CAMPAIGN: "${campaignTitle}"
-${campaignContext.substring(0, 200)}
+${campaignContext.substring(0, 1200)}
 
 ${safetyNote}
 ${logoInstruction}
