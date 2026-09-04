@@ -124,7 +124,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
   // it was previously under a "More" heading, below Insights, which ranked a
   // headline feature under a junk drawer.
   const primaryNav = [
-    { path: '/dashboard',        label: 'Home',              icon: LayoutDashboard },
+    { path: '/dashboard',        label: 'Dashboard',         icon: LayoutDashboard },
     { path: '/campaigns',        label: 'Create',            icon: Sparkles },
     { path: '/reels',            label: 'Videos',            icon: PlayCircle },
     { path: '/drafts',           label: 'Approve',           icon: PenTool, badge: 'drafts' as const },
@@ -158,7 +158,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
     if (pathname.startsWith('/ai-memory') || pathname.startsWith('/ai-history') || pathname.startsWith('/ai-performance')) return { title: 'AI Memory', crumb: '' };
     if (pathname.startsWith('/drafts')) return { title: 'Approve', crumb: '' };
     if (pathname.startsWith('/settings')) return { title: 'Settings', crumb: '' };
-    return { title: 'Home', crumb: '' };
+    return { title: 'Dashboard', crumb: '' };
   };
 
   const topBarMeta = resolveTopBarMeta(location.pathname);
