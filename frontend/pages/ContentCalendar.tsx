@@ -110,11 +110,14 @@ const ContentCalendar: React.FC = () => {
   const [coverBusy, setCoverBusy] = useState(false);
 
   useEffect(() => {
-    if (calendar?.coverStatus !== 'pending') return;
+    // Watches the open plan (detail view) and every card's thumbnail (list
+    // view) — either can be mid-render when this page loads.
+    const anyPending = calendar?.coverStatus === 'pending' || history.some((c) => c.coverStatus === 'pending');
+    if (!anyPending) return;
     const id = setInterval(() => { loadCalendar(); }, 6000);
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [calendar?.coverStatus, calendar?._id]);
+  }, [calendar?.coverStatus, calendar?._id, history]);
 
   const requestCover = async () => {
     if (!calendar) return;
@@ -326,13 +329,40 @@ const ContentCalendar: React.FC = () => {
             <div
               key={cal._id}
               onClick={() => { setCalendar(cal); setViewMode('detail'); }}
-              className="cursor-pointer group relative p-5 rounded-xl border border-white/[0.06] bg-white/[0.02] hover:border-white/[0.12] hover:bg-white/[0.04] transition-all"
+              className="cursor-pointer group relative rounded-xl border border-white/[0.06] bg-white/[0.02] hover:border-white/[0.12] hover:bg-white/[0.04] transition-all overflow-hidden"
             >
-              <div className="flex justify-between items-start mb-4">
-                <h3 className="font-serif-display text-[20px] text-[#F5F4F1] group-hover:text-[#F5A623] transition-colors">{cal.month}</h3>
-                {cal.approved && <span title="Approved"><Check className="w-5 h-5 text-emerald-400 bg-emerald-500/10 p-1 rounded-full" /></span>}
+              {/* Cover thumbnail. Same source as the detail banner, so a
+                  month reads the same whether you're browsing the grid or
+                  already inside it. */}
+              <div className="relative h-28 bg-[#151515]">
+                {cal.coverImageUrl ? (
+                  <img src={cal.coverImageUrl} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full bg-gradient-to-br from-[#F5A623]/[0.08] via-transparent to-transparent flex items-center justify-center">
+                    {cal.coverStatus === 'pending' ? (
+                      <Loader2 className="w-4 h-4 animate-spin text-[#F5A623]/60" />
+                    ) : (
+                      <ImageIcon className="w-5 h-5 text-white/15" />
+                    )}
+                  </div>
+                )}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
+                {cal.approved && (
+                  <span title="Approved" className="absolute top-2.5 right-2.5">
+                    <Check className="w-5 h-5 text-emerald-400 bg-emerald-500/20 backdrop-blur p-1 rounded-full" />
+                  </span>
+                )}
               </div>
-              <p className="text-[13px] text-white/50 mb-3">{cal.businessName || 'Business Plan'}</p>
+
+              <div className="p-5 pt-4">
+              <h3 className="font-serif-display text-[20px] text-[#F5F4F1] group-hover:text-[#F5A623] transition-colors">
+                {monthLabel(cal.month)}
+              </h3>
+              {cal.themeTitle ? (
+                <p className="text-[13px] text-[#F5A623]/90 mb-3 mt-0.5 line-clamp-1">{cal.themeTitle}</p>
+              ) : (
+                <p className="text-[13px] text-white/50 mb-3 mt-0.5">{cal.businessName || 'Business Plan'}</p>
+              )}
               <div className="flex items-center gap-2 text-[11px] text-white/45 mb-4">
                 <span className="px-2 py-1 rounded-md bg-white/[0.04]">{cal.language}</span>
                 <span className="px-2 py-1 rounded-md bg-white/[0.04]">{cal.weeks?.length || 0} Weeks</span>
@@ -363,6 +393,7 @@ const ContentCalendar: React.FC = () => {
                 >
                   <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${cal.autoGenerate ? 'translate-x-6' : 'translate-x-0'}`} />
                 </button>
+              </div>
               </div>
             </div>
           ))}
