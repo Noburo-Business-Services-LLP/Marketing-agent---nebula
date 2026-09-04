@@ -524,7 +524,13 @@ router.post('/:id/apply-logo', protect, async (req, res) => {
 router.post('/generate-image-bg', protect, async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
-    const { type, title, caption, hashtags, prompt, aspectRatio, platforms, referenceImage, linkedProduct, productReferenceImages } = req.body;
+    const {
+      type, title, caption, hashtags, prompt, aspectRatio, platforms, referenceImage,
+      linkedProduct, productReferenceImages,
+      // Context for the content-writing prompt — all optional, since a quick
+      // one-line brief with none of this is the common case.
+      contentPillar, contentType, campaignContext, objective
+    } = req.body;
 
     const draft = new Draft({
       userId,
@@ -556,6 +562,10 @@ router.post('/generate-image-bg', protect, async (req, res) => {
       draftId: draft._id,
       aspectRatio: aspectRatio || '1:1',
       referenceImage: referenceImage || null,
+      contentPillar: contentPillar || '',
+      contentType: contentType || (type === 'campaign' ? 'campaign' : 'post'),
+      campaignContext: campaignContext || '',
+      objective: objective || '',
       // Products chosen in Create. The linked one gives the model the name,
       // price and description; the image list is attached so each chosen item
       // actually appears rather than being described from memory.

@@ -9,8 +9,9 @@ import { promptsAPI, EditablePrompt } from '../services/api';
  * of its own: the point is to change a prompt, run it, look at the result and
  * change it again, and a separate page turns that loop into navigation.
  */
-const STAGE_ORDER = ['campaign', 'carousel', 'image', 'video'];
+const STAGE_ORDER = ['single', 'campaign', 'carousel', 'image', 'video'];
 const STAGE_LABELS: Record<string, string> = {
+  single: 'Single posts',
   campaign: 'Campaigns',
   carousel: 'Carousels',
   image: 'Images',

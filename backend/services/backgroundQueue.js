@@ -4,6 +4,11 @@ const Campaign = require('../models/Campaign');
 const User = require('../models/User');
 const { callGemini, parseGeminiJSON, generateCampaignImageNanoBanana, generatePosterFromReference } = require('./geminiAI');
 const { uploadBase64Image } = require('./imageUploader');
+const { buildPrompt } = require('./promptRegistry');
+const { buildBrandMemoryBlock } = require('./brandMemory');
+// Lazy to avoid a load-order cycle: contentCalendarService lazily requires
+// this module too, when auto-generation runs.
+const { normalizeLanguage } = require('./contentCalendarService');
 
 const queue = [];
 let processing = false;
@@ -220,8 +225,15 @@ async function processDraftImageGenerationJob(job) {
     const user = await User.findById(draft.userId);
     const bp = user?.businessProfile || {};
 
+    // generateCampaignImageNanoBanana retries once on a fallback model when the
+    // primary is busy, and each of the two calls carries its own 120s internal
+    // timeout — so their combined worst case comfortably exceeds the 60s this
+    // used to allow. That made single-post generation fail under exactly the
+    // "high demand" conditions the fallback exists to recover from — the race
+    // outside always lost before the retry inside had a chance to land.
+    const IMAGE_JOB_TIMEOUT_MS = 220_000;
     const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Image generation timed out after 60s')), 60000)
+      setTimeout(() => reject(new Error(`Image generation timed out after ${IMAGE_JOB_TIMEOUT_MS / 1000}s`)), IMAGE_JOB_TIMEOUT_MS)
     );
 
     // If the user uploaded a reference/inspiration image, use Nano Banana's
@@ -259,13 +271,56 @@ async function processDraftImageGenerationJob(job) {
       }
       imageResult = { imageUrl: upload.url };
     } else {
+      // Write the actual copy and image brief before rendering anything. The
+      // idea typed in Create is a one-liner; it is not what should become the
+      // caption or drive the image, only the seed for a real content-writing
+      // pass — the same two-step shape campaigns already use.
+      let contentPrompt = null;
+      try {
+        const brandContextBlock = await buildBrandMemoryBlock(draft.userId);
+        const planPrompt = await buildPrompt(draft.userId, 'single.content', {
+          idea: draft.imagePrompt || draft.caption || '',
+          contentPillar: job.contentPillar || '',
+          contentType: job.contentType || 'post',
+          campaignContext: job.campaignContext || '',
+          objective: job.objective || '',
+          platform: (job.platforms || draft.platforms || [])[0] || '',
+          language: normalizeLanguage(bp.contentLanguage),
+          brandContextBlock
+        });
+        const raw = await callGemini(planPrompt);
+        contentPrompt = parseGeminiJSON(raw);
+      } catch (err) {
+        console.error('[BackgroundQueue] Content-writing pass failed, using the raw idea instead:', err.message);
+      }
+
+      const imageDescription = String(contentPrompt?.imageDescription || '').trim() || draft.imagePrompt || draft.caption || 'A creative poster';
+
+      // Only overwrite what the content pass actually produced — a failed or
+      // partial result should not blank out what the user already had.
+      if (contentPrompt?.caption) {
+        draft.caption = contentPrompt.caption;
+        if (!draft.creative) draft.creative = {};
+        draft.creative.textContent = contentPrompt.caption;
+        draft.creative.captions = contentPrompt.caption;
+        draft.markModified('creative');
+      }
+      if (Array.isArray(contentPrompt?.hashtags) && contentPrompt.hashtags.length) {
+        draft.hashtags = contentPrompt.hashtags;
+      }
+      if (contentPrompt?.imageText) {
+        draft.imageText = contentPrompt.imageText;
+      }
+
       imageResult = await Promise.race([
-        generateCampaignImageNanoBanana(draft.imagePrompt || draft.caption || 'A creative poster', {
+        generateCampaignImageNanoBanana(imageDescription, {
           userId: draft.userId,
           aspectRatio: job.aspectRatio || '1:1',
           brandName: user?.companyName || 'Brand',
           industry: bp.industry || '',
           tone: bp.tone || 'professional',
+          targetLanguage: normalizeLanguage(bp.contentLanguage),
+          imageText: draft.imageText || '',
           // Products picked in Create, carried through the queue job.
           linkedProduct: job.linkedProduct || null,
           productReferenceImage: job.linkedProduct?.imageUrl || null,

@@ -8,6 +8,7 @@ const BrandAsset = require('../models/BrandAsset');
 const BrandIntelligenceProfile = require('../models/BrandIntelligenceProfile');
 const { callGemini, parseGeminiJSON, generateCampaignImageNanoBanana } = require('../services/geminiAI');
 const { buildPrompt } = require('../services/promptRegistry');
+const { buildBrandMemoryBlock } = require('../services/brandMemory');
 
 /**
  * Carousel generation.
@@ -49,7 +50,13 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
       language = 'English',
       aspectRatio = '4:5',
       linkedProduct = null,
-      productReferenceImages = []
+      productReferenceImages = [],
+      // Optional context, same as single-post: filled in when the brief came
+      // from a picked calendar idea, left blank for a freehand carousel.
+      contentPillar = '',
+      contentType = 'carousel',
+      campaignContext = '',
+      objective = ''
     } = req.body || {};
 
     const slides = Math.max(MIN_SLIDES, Math.min(MAX_SLIDES, Number(slideCount) || 5));
@@ -83,18 +90,17 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
 
     send('status', { message: 'Planning the story…' });
 
+    const brandContextBlock = await buildBrandMemoryBlock(req.user.id);
     const planPrompt = await buildPrompt(req.user.id, 'carousel.content', {
-      brandDisplayName,
-      industry: industry || 'General',
-      brief: cleanBrief,
+      idea: cleanBrief,
+      contentPillar,
+      contentType,
+      campaignContext,
+      objective,
       slideCount: slides,
-      tone: tone || 'professional',
-      language: language || 'English',
       platforms: (platforms || []).join(', '),
-      brandContextBlock: [
-        palette.length ? `- Brand palette: ${palette.join(', ')}` : '',
-        fontType ? `- Typography style: ${fontType}` : ''
-      ].filter(Boolean).join('\n')
+      language: language || 'English',
+      brandContextBlock
     });
 
     const raw = await callGemini(planPrompt);

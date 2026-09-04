@@ -657,6 +657,7 @@ module.exports = {
   generateMonthlyCalendar,
   generateCalendarCover,
   monthLabel,
+  normalizeLanguage,
   processAutoGeneration,
   startContentCalendarScheduler,
   createDraftsForItem,

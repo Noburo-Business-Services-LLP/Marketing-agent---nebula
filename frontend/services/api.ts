@@ -4275,6 +4275,12 @@ export const draftsAPI = {
     // image list is attached to the generation as visual references.
     linkedProduct?: { _id?: string; name: string; description?: string; imageUrl?: string } | null;
     productReferenceImages?: string[];
+    // Context for the content-writing prompt, carried from a picked calendar
+    // idea. All optional — a freehand brief has none of this.
+    contentPillar?: string;
+    contentType?: string;
+    campaignContext?: string;
+    objective?: string;
   }): Promise<{ success: boolean; draftId?: string; draft?: Draft; message?: string }> => {
     return apiCall('/drafts/generate-image-bg', {
       method: 'POST',

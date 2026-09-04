@@ -44,6 +44,12 @@ const draftSchema = new mongoose.Schema({
   // The exact text sent to the image model, as opposed to imagePrompt above,
   // which is only the seed description the caller supplied. Surfaced in the UI
   // so you can see why an image came out the way it did.
+  // The overlay text the content prompt asked for, kept alongside the caption
+  // so the image step and the UI agree on what was actually requested.
+  imageText: {
+    type: String,
+    default: ''
+  },
   imagePromptResolved: {
     type: String,
     default: ''

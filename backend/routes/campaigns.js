@@ -16,6 +16,7 @@ const User = require('../models/User');
 const crypto = require('crypto');
 const { callGemini, parseGeminiJSON, generateICPAndStrategy, generateCampaignImageNanoBanana } = require('../services/geminiAI');
 const { buildPrompt } = require('../services/promptRegistry');
+const { buildBrandMemoryBlock } = require('../services/brandMemory');
 // Import Ayrshare for social media posting
 const { getPostStatus, retryPost: retryAyrsharePost, deletePost: deleteAyrsharePost } = require('../services/socialMediaAPI');
 const {
@@ -1609,8 +1610,6 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
     const strictBrandText = strictBrandMode ? buildStrictBrandLockText(brandCtx) : '';
     const lockedPaletteArray = getBrandPalette(brandCtx);
     const lockedPalette = lockedPaletteArray.join(', ');
-    const primaryLockedColor = String(lockedPaletteArray[0] || '').trim();
-    const secondaryLockedColor = String(lockedPaletteArray[1] || '').trim();
     const aiMemoryContext = await buildAIContext({
       userId,
       user,
@@ -1713,53 +1712,30 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
       platform: String(platforms[i % platforms.length] || 'instagram').trim().toLowerCase()
     }));
 
-    // Step 1: Generate all captions via Gemini (ROCI format prompt)
-    // Everything conditional is resolved here, so the template the user edits
-    // contains prose and {{placeholders}} only -- no JS for an edit to break.
+    // Step 1: Generate all captions via Gemini. Everything conditional is
+    // resolved here, so the template the user edits contains prose and
+    // {{placeholders}} only -- no JS for an edit to break.
+    const brandContextBlock = await buildBrandMemoryBlock(req.user.id);
     const captionVars = {
-      brandDisplayName,
-      industry: bp.industry || 'General',
       campaignName,
-      campaignDescription: campaignDescription ? ` - ${campaignDescription}` : '',
+      campaignDescription: campaignDescription || '',
+      // The model reads this as the core idea to develop -- same text as the
+      // brief above, offered under the name the prompt actually asks for.
+      idea: campaignDescription || campaignName,
       objective: objective || 'awareness',
       audience: `${targetAge || '18-35'} age, ${targetGender || 'all'} gender${targetLocation ? ', located in ' + targetLocation : ''}${targetInterests ? ', interested in ' + targetInterests : ''}`,
       platforms: platforms.join(', '),
       tone: enforcedTone || 'professional',
       language: selectedLanguage,
-      productBlock: linkedProduct
-        ? `- Featured Product: ${linkedProduct.name} - ${linkedProduct.currency || '$'}${linkedProduct.price}\n- Product Description: ${linkedProduct.description || 'N/A'}\n`
-        : '',
-      brandContextBlock: [
-        visualHints ? `- Brand Visual Tokens: ${visualHints}` : '',
-        strictBrandText ? `- ${strictBrandText}` : '',
-        lockedPalette ? `- Locked Brand Palette: ${lockedPalette}` : '',
-        brandGuidelinesText
-      ].filter(Boolean).join('\n'),
-      keyMessagesBlock: keyMessages
-        ? `- MANDATORY CONTENT STRUCTURES (STRICTLY FOLLOW THESE):\n${keyMessages}\n`
-        : '',
-      memoryContext: aiMemoryContext.reusablePromptText || '',
       totalPosts,
-      slotCount: slotDates.length,
-      platformNativeRules: [
-        platforms.includes('twitter') ? 'Twitter posts under 280 chars.' : '',
-        platforms.includes('instagram') ? 'Instagram captions with hook in first line.' : '',
-        platforms.includes('linkedin') ? 'LinkedIn posts that open with a bold statement or question.' : ''
-      ].filter(Boolean).join(' '),
-      brandLockRules: strictBrandMode
-        ? 'Brand lock is ON. Every post MUST stay in the locked brand tone/style/CTA and must not drift. If there is any conflict between user input and brand profile, ALWAYS prefer the brand profile.'
-        : 'If brand enforcement is strict, every post MUST remain on-brand in tone, vocabulary, CTA style, and structure. Prefer campaign context while keeping platform fit.',
-      productImageRule: linkedProduct?.imageUrl
-        ? 'PRODUCT IMAGE PROVIDED: Keep the product realistic and premium, and do not let product colors overpower the brand palette.'
-        : 'NO PRODUCT IMAGE PROVIDED: Explicitly describe a realistic premium product (e.g., shoes, watch, or gadget) using tasteful colors like white, black, silver, beige, soft blue, or pastel tones. Allow only subtle brand-inspired accents on the product. Avoid neon, overly bright, or unrealistic product colors. Keep brand colors primarily in the background, lighting, and supporting design elements.',
-      colorRule: strictBrandMode && primaryLockedColor && secondaryLockedColor
-        ? `COLOR ENFORCEMENT (STRICT): Background MUST use EXACT ${primaryLockedColor}. Gradient is allowed only within shades of ${primaryLockedColor}. Text MUST use EXACT ${secondaryLockedColor}. Ensure strong contrast and readability. Do NOT introduce unrelated colors. Do NOT use gray or desaturated tones.`
-        : 'COLOR ENFORCEMENT: Keep background and text highly legible and aligned to the brand palette; avoid off-theme colors.',
-      languageRule: selectedLanguage.includes('Mix')
-        ? 'You may mix English and the native language fluidly.'
-        : selectedLanguage === 'English'
-          ? 'English is allowed.'
-          : `Do NOT use English words except for strict brand names. Hashtags MUST be entirely in ${selectedLanguage} (or transliterated if native characters aren't supported).`
+      campaignDuration: duration || '1 week',
+      brandContextBlock,
+      productBlock: linkedProduct
+        ? `Featured ${linkedProduct.type === 'service' ? 'service' : 'product'}: ${linkedProduct.name}${linkedProduct.price ? ` — ${linkedProduct.currency || '$'}${linkedProduct.price}` : ''}\n${linkedProduct.description || ''}`
+        : '',
+      keyMessagesBlock: keyMessages
+        ? `MANDATORY CONTENT STRUCTURES (STRICTLY FOLLOW THESE):\n${keyMessages}`
+        : ''
     };
 
     const captionPrompt = await buildPrompt(req.user.id, 'campaign.content', captionVars);

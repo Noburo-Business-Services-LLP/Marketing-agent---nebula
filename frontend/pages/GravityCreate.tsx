@@ -216,10 +216,21 @@ const GravityCreate: React.FC = () => {
   const [slideCount, setSlideCount] = useState(5);
   const [pickedIdea, setPickedIdea] = useState<string>('');
 
+  const [ideaContext, setIdeaContext] = useState<{ contentPillar: string; objective: string; format: string }>({
+    contentPillar: '', objective: '', format: ''
+  });
+
   const applyCalendarItem = (item: any) => {
     setName(item.headline || '');
     setDescription(item.creativeConcept || item.headline || '');
     setPickedIdea(item.headline || '');
+    // Carried into the content-writing prompt so it knows which pillar and
+    // objective this idea came from, rather than guessing from the brief alone.
+    setIdeaContext({
+      contentPillar: item.contentPillar || '',
+      objective: item.objective || '',
+      format: item.format || ''
+    });
   };
 
   useEffect(() => {
@@ -481,6 +492,9 @@ const GravityCreate: React.FC = () => {
       aspectRatio: backendAspect,
       linkedProduct: primaryProduct,
       productReferenceImages: productImageUrls,
+      contentPillar: ideaContext.contentPillar,
+      contentType: ideaContext.format || 'post',
+      objective: ideaContext.objective,
     });
     if (res?.draft) {
       setResults([res.draft]);
@@ -516,6 +530,9 @@ const GravityCreate: React.FC = () => {
         aspectRatio: backendAspect,
         linkedProduct: primaryProduct,
         productReferenceImages: productImageUrls,
+        contentPillar: ideaContext.contentPillar,
+        contentType: 'carousel',
+        objective: ideaContext.objective,
       }),
     });
     if (!response.ok) throw new Error(`Server responded ${response.status}`);
@@ -592,7 +609,7 @@ const GravityCreate: React.FC = () => {
     const body = {
       campaignName: name.trim(),
       campaignDescription: description.trim() || name.trim(),
-      objective: 'awareness',
+      objective: ideaContext.objective || 'awareness',
       platforms: selectedPlatforms,
       tone: (tone.split(',')[0] || 'professional').toLowerCase(),
       language: 'English',
@@ -918,7 +935,7 @@ const GravityCreate: React.FC = () => {
       <PromptStudio
         open={promptStudioOpen}
         onClose={() => setPromptStudioOpen(false)}
-        focus={mode === 'campaign' ? 'campaign.content' : mode === 'carousel' ? 'carousel.content' : 'image.creative'}
+        focus={mode === 'campaign' ? 'campaign.content' : mode === 'carousel' ? 'carousel.content' : 'single.content'}
       />
 
       {/* Name + Description card, wrapped in a travelling border beam.
