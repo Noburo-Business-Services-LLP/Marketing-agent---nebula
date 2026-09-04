@@ -41,7 +41,7 @@ import {
   GravityFileInput,
   GravityButton,
 } from '../components/gravity';
-import { useSmartCalendarAutoFill } from '../hooks/useSmartCalendarAutoFill';
+import CalendarIdeaPicker from '../components/CalendarIdeaPicker';
 import { getThemeClasses, useTheme } from '../context/ThemeContext';
 import { contentCalendarAPI, inventoryAPI, videoGenerationAPI, draftsAPI } from '../services/api';
 import { Product, Draft } from '../types';
@@ -149,35 +149,21 @@ const ReelGenerator: React.FC = () => {
   const productImageInputRef = useRef<HTMLInputElement>(null);
 
   const [step, setStep] = useState(1);
-  const {
-    isAutoFillEnabled,
-    availableItems,
-    selectedItemId,
-    setSelectedItemId,
-    selectedItem,
-    isLoading: isCalendarLoading,
-    getMappedData
-  } = useSmartCalendarAutoFill('reel');
+  // Browsing planned ideas is unrelated to autoGenerate — that flag is about
+  // unattended background generation, not whether someone may look at the
+  // ideas they already planned. The old hook gated one on the other and
+  // returned nothing at all when auto-generation was off.
+  const [ideaPickerOpen, setIdeaPickerOpen] = useState(false);
+  const [pickedIdea, setPickedIdea] = useState<string>('');
 
-  // Clear the hook's auto-selected FIFO pick on mount so the user
-  // starts with NO tile approved. They browse the Smart Calendar
-  // tiles in Step 1 and explicitly click "Approve & Use This" on the
-  // one they want — that click sets selectedItemId, which fires the
-  // effect below and populates the input fields.
-  useEffect(() => {
-    setSelectedItemId('');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    if (isAutoFillEnabled && selectedItem) {
-      const data = getMappedData(selectedItem);
-      setDescription(data.story || data.caption);
-      setPromptText(data.videoPrompt);
-      setCaption(data.caption);
-      setHashtagsText(data.hashtags);
-    }
-  }, [isAutoFillEnabled, selectedItem]);
+  const applyCalendarIdea = (idea: any) => {
+    const combined = `${idea.creativeConcept || ''}${idea.shootType ? ` (Style: ${idea.shootType})` : ''}`.trim();
+    setDescription(idea.creativeConcept || idea.headline || '');
+    setPromptText(combined || idea.headline || '');
+    setCaption(idea.creativeConcept || '');
+    setHashtagsText(`#${(idea.contentPillar || 'Content').replace(/\s+/g, '')} #${(idea.objective || 'Goal').replace(/\s+/g, '')}`);
+    setPickedIdea(idea.headline || '');
+  };
 
   const [busy, setBusy] = useState(false);
   const [regeneratingSceneIds, setRegeneratingSceneIds] = useState<Set<string>>(new Set());
@@ -2574,127 +2560,30 @@ setCharacterAge(nextDraft?.characterAge || '');
                   headline={<>What are we <GravityEmphasis>filming</GravityEmphasis>?</>}
                   subcopy="Describe the video once. Gravity writes the script, casts the voice, and renders every scene."
                 />
-                {isCalendarLoading && (
-                  <div className="flex justify-center">
-                    <span className="inline-flex items-center gap-1.5 text-[11px] text-white/60">
-                      <Loader2 className="w-3 h-3 animate-spin" /> Loading Smart Calendar…
+                {/* Ideas already planned in the calendar. A button, not a
+                    permanent tile wall — the brief is what this step is for. */}
+                <div className="flex flex-wrap items-center justify-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setIdeaPickerOpen(true)}
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-[13px] font-semibold border border-white/[0.12] text-[#F5F4F1] hover:bg-white/[0.05] hover:border-[#F5A623]/40 transition-all"
+                  >
+                    <CalendarIcon className="w-4 h-4 text-[#F5A623]" />
+                    Pull an idea from your calendar
+                  </button>
+                  {pickedIdea && (
+                    <span className="text-[12px] text-white/45">
+                      Loaded: <span className="text-[#F5A623]">{pickedIdea}</span>
                     </span>
-                  </div>
-                )}
+                  )}
+                </div>
 
-                {/* Smart Calendar suggestions — always visible on Step 1 so
-                    the user knows why tiles are/aren't showing. Four states:
-                    loading, disabled (autoGenerate off), enabled-but-empty,
-                    or tiles available. */}
-                {!isCalendarLoading && !isAutoFillEnabled && (
-                  <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 flex items-start justify-between gap-4">
-                    <div className="flex-1">
-                      <GravityLabel>Smart Calendar · off</GravityLabel>
-                      <p className="text-[13.5px] mt-1.5 text-[#F5F4F1]">
-                        To see AI-generated reel briefs here, open a monthly plan in Calendar and switch on Auto Generation.
-                      </p>
-                      <p className="text-[12px] mt-1 text-white/45">
-                        The toggle is inside a plan, not on the plans list. Or just describe your video manually below.
-                      </p>
-                    </div>
-                    <a
-                      href="#/content-calendar"
-                      className="inline-flex items-center gap-1.5 px-4 py-2 text-[12px] rounded-lg border border-white/[0.12] text-[#F5F4F1] hover:bg-white/[0.05] hover:border-white/20 font-semibold whitespace-nowrap transition-all"
-                    >
-                      <CalendarIcon className="w-3.5 h-3.5 text-[#F5A623]" />
-                      Open Calendar
-                    </a>
-                  </div>
-                )}
-                {isAutoFillEnabled && availableItems.length > 0 && (
-                  <div className="rounded-xl border border-[#F5A623]/20 bg-[#F5A623]/[0.03] p-5 space-y-4">
-                    <div className="flex items-baseline justify-between gap-3">
-                      <div>
-                        <GravityLabel gold>
-                          Smart Calendar · {availableItems.length} pending reel{availableItems.length > 1 ? 's' : ''} this week
-                        </GravityLabel>
-                        <p className="text-[12.5px] mt-1.5 text-white/50">
-                          Approve one to load its brief as your input. Or scroll down and write manually.
-                        </p>
-                      </div>
-                      {selectedItemId && (
-                        <button
-                          onClick={() => { setSelectedItemId(''); setDescription(''); setPromptText(''); }}
-                          className="text-[11px] text-white/50 hover:text-white/85"
-                        >
-                          Clear selection
-                        </button>
-                      )}
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                      {availableItems.map((item) => {
-                        const isSelected = selectedItemId === item._id;
-                        return (
-                          <div
-                            key={item._id}
-                            className={`relative rounded-lg border p-3 transition-all ${
-                              isSelected
-                                ? 'border-[#F5A623] bg-[#F5A623]/10 ring-1 ring-[#F5A623]/40'
-                                : 'border-white/[0.08] bg-white/[0.02] hover:border-white/20'
-                            }`}
-                          >
-                            <div className="flex items-baseline justify-between gap-2">
-                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide bg-[#F5A623]/20 text-[#F5A623]">
-                                {item.format || 'Reel'}
-                              </span>
-                              {item.contentPillar && (
-                                <span className={`text-[10px] uppercase tracking-wide ${theme.textMuted}`}>
-                                  {item.contentPillar}
-                                </span>
-                              )}
-                            </div>
-                            <h4 className="font-semibold text-[13.5px] mt-2 line-clamp-2 text-[#F5F4F1]">
-                              {item.headline || 'Untitled scene'}
-                            </h4>
-                            {item.creativeConcept && (
-                              <p className="text-[12px] mt-1.5 line-clamp-3 text-white/50 leading-relaxed">
-                                {item.creativeConcept}
-                              </p>
-                            )}
-                            <div className="flex flex-wrap gap-x-3 gap-y-1.5 mt-3 text-[10.5px] text-white/40">
-                              {item.objective && (
-                                <span className="inline-flex items-center gap-1">
-                                  <Target className="w-3 h-3 text-[#F5A623]/70" /> {item.objective}
-                                </span>
-                              )}
-                              {item.cta && (
-                                <span className="inline-flex items-center gap-1">
-                                  <Megaphone className="w-3 h-3 text-[#F5A623]/70" /> {item.cta}
-                                </span>
-                              )}
-                              {item.productNeeded && (
-                                <span className="inline-flex items-center gap-1">
-                                  <Package className="w-3 h-3 text-[#F5A623]/70" /> {item.productNeeded}
-                                </span>
-                              )}
-                            </div>
-                            <button
-                              onClick={() => setSelectedItemId(item._id)}
-                              disabled={isSelected}
-                              className={`mt-3.5 w-full px-3 py-2 rounded-lg text-[11.5px] font-semibold transition-all ${
-                                isSelected
-                                  ? 'bg-[#F5A623] text-[#1A1208] cursor-default shadow-[0_4px_18px_rgba(245,166,35,0.20)]'
-                                  : 'border border-white/[0.12] text-[#F5F4F1] hover:bg-white/[0.05] hover:border-white/20'
-                              }`}
-                            >
-                              {isSelected ? 'Approved — loaded as input' : 'Approve & Use This'}
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-                {isAutoFillEnabled && availableItems.length === 0 && !isCalendarLoading && (
-                  <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-5 py-4 text-[12.5px] text-white/50">
-                    No pending reels in the Smart Calendar for this week. Write your video description below to create manually.
-                  </div>
-                )}
+                <CalendarIdeaPicker
+                  open={ideaPickerOpen}
+                  onClose={() => setIdeaPickerOpen(false)}
+                  onPick={applyCalendarIdea}
+                  type="reel"
+                />
 
                 {/* The one hero moment on this page — halo + travelling beam.
                     Every other panel here stays plain so this stays special. */}
@@ -2705,8 +2594,8 @@ setCharacterAge(nextDraft?.characterAge || '');
                     onChange={(e) => setDescription(e.target.value)}
                     rows={5}
                     className="gravity-bare w-full bg-transparent border-none outline-none text-[14.5px] text-white/70 leading-relaxed resize-none placeholder:text-white/25"
-                    placeholder={selectedItemId
-                      ? 'Loaded from Smart Calendar — you can edit before continuing…'
+                    placeholder={pickedIdea
+                      ? 'Loaded from your calendar — edit before continuing…'
                       : 'e.g. A 30-second walkthrough of our new filter coffee — close-ups of the pour, steam rising, ending on the storefront at golden hour.'}
                   />
                 </GravityPanel>
