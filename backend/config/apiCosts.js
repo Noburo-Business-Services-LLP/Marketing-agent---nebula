@@ -358,9 +358,27 @@ function videoWallClockSeconds(scenes = 5, clipConcurrency = PIPELINE_SECONDS.sc
   // music composes in parallel with the scene work, so it is not on the path
 }
 
-// How many generations it takes on average to land one deliverable we ship.
-// Video is worse: scenes get re-rolled individually until the cut works.
-const RETRY_FACTOR = { image: 1.6, carousel: 1.6, video_scene: 2.2 };
+// How many generations it takes to land one deliverable we ship.
+//
+// image: 1.2 — MEASURED. Across 340 image-producing generations in the dev
+// database (excluding this session's test transactions) there were 59
+// edit/refine operations, i.e. 0.17 retries per generation. Rounded up to 1.2
+// because dev usage is lighter than a CSM working to a client brief.
+//
+// This replaces a guess of 1.6, which overstated machine cost by ~30%. Worth
+// re-measuring against production once real CSM volume exists.
+//
+// video_scene: 1.5 — STILL A GUESS. There are zero completed video generations
+// in the database to measure, so this is judgement: scene re-rolls are more
+// common than image retries because a clip can be technically fine and still
+// not cut together. It is the largest remaining invented number in this file.
+const RETRY_FACTOR = { image: 1.2, carousel: 1.2, video_scene: 1.5 };
+
+// Separately from retries: 20% of campaign_full generations were REFUNDED in
+// the same dataset (30 of 151), against 0% for image_generated. That is a
+// reliability problem on the campaign path, not a pricing input — it is not
+// modelled here, but it should be fixed rather than priced around.
+const OBSERVED_CAMPAIGN_FAILURE_RATE = 0.20;
 
 // True cost of one SHIPPED deliverable — machine (including the attempts that
 // did not make it) plus the human who drove it.
@@ -448,6 +466,6 @@ for (const [name, plan] of Object.entries(PLANS)) {
 module.exports = {
   PROVIDER_RATES, INFRA, ACTION_USD, QUARK_COSTS, ACTION_UNITS,
   MARGIN, marginFor, USD_PER_QUARK, INR_PER_USD, PLANS,
-  LABOUR, RETRY_FACTOR, DELIVERED, SERVICE_MARKUP,
+  LABOUR, RETRY_FACTOR, OBSERVED_CAMPAIGN_FAILURE_RATE, DELIVERED, SERVICE_MARKUP,
   PIPELINE_SECONDS, videoWallClockSeconds
 };
