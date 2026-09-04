@@ -281,21 +281,82 @@ const ACTION_UNITS = {
 // time is spent per DELIVERED item. Three attempts at one post costs 3x the
 // machine and roughly 1x the human, because the reviewing IS the working.
 const LABOUR = {
-  csm_monthly_inr: 60000,          // fully loaded: salary + benefits + tooling
-  productive_hours_per_month: 126, // 21 days x 8h at 75% productive
+  // Real figure from the business, not an estimate: CSMs are paid 25k/month.
+  csm_monthly_inr: 25000,
 
-  // Minutes of CSM time per DELIVERED item (not per attempt).
+  // 10am-6pm, 5 days a week. ~22 working days => 176 hours gross.
+  // 85% of that is production work; the rest is client calls, strategy,
+  // reporting and the ordinary friction of a working day.
+  gross_hours_per_month: 176,
+  production_ratio: 0.85,
+
+  // Minutes of ACTIVE CSM attention per delivered item — briefing, reviewing,
+  // tweaking, scheduling. This is not wall-clock: generation runs on a
+  // background queue, so waiting is only CSM time if they sit and watch it.
+  // See PIPELINE_SECONDS for what the machine takes.
   minutes_per: {
-    image_post: 12,
-    carousel_deck: 25,
-    reel: 75,
-    campaign_post: 8   // cheaper per item: planned and reviewed in a batch
-  }
+    // BEFORE Gravity — what the team actually does today.
+    before: { image_post: 15, reel: 180 },
+    // AFTER — the calendar is pre-filled and the ideas are already there, so
+    // the work becomes review-and-approve rather than create-from-scratch.
+    after:  { image_post: 3, reel: 25 }
+  },
+
+  // Hours per CUSTOMER per month that have nothing to do with volume: calls,
+  // approvals, strategy, reporting. This is what actually caps a CSM's book
+  // once Gravity has collapsed the production time — at 4.7 production hours
+  // per customer, account management becomes the binding constraint, not the
+  // work itself.
+  account_mgmt_hours_per_customer: 2
 };
 
+LABOUR.productive_hours_per_month = LABOUR.gross_hours_per_month * LABOUR.production_ratio;
 LABOUR.hourly_inr = LABOUR.csm_monthly_inr / LABOUR.productive_hours_per_month;
 LABOUR.hourly_usd = LABOUR.hourly_inr / INR_PER_USD;
 const labourUsd = (minutes) => (minutes / 60) * LABOUR.hourly_usd;
+
+// ---------------------------------------------------------------------------
+// 3c. How long the machine actually takes
+// ---------------------------------------------------------------------------
+// Wall-clock, which is what decides whether a CSM can run jobs in parallel or
+// sits watching a spinner.
+//
+// image_ready is MEASURED: median span from draft creation to image present,
+// across 46 real drafts in the dev database (p25 41s, p75 154s).
+// The rest are vendor-documented or structural.
+const PIPELINE_SECONDS = {
+  image_ready: 89,        // measured, median
+
+  kling_clip: 160,        // fal.ai documented average for v2.5 turbo pro,
+                          // and flat regardless of clip length
+  story_skeleton: 20,
+  character_sheet: 30,    // 4 pulid portraits, fired in parallel
+  scene_image: 40,        // per batch of SCENE_IMAGE_CONCURRENCY
+  music: 30,
+  narration: 20,
+  ffmpeg_merge: 90,
+  thumbnail: 15,
+  uploads: 60,
+
+  // THE BOTTLENECK. Mirrors SCENE_IMAGE_CONCURRENCY (3) and
+  // SCENE_CLIP_CONCURRENCY (1) in videoGenerationPipeline.js. Clips run ONE
+  // AT A TIME, so a 5-scene reel spends 5 x 160s = 13 minutes just queueing
+  // Kling — the single largest block of wall-clock in the product, and it is
+  // set by an env var (AI_VIDEO_SCENE_CLIP_CONCURRENCY), not by a vendor limit.
+  scene_image_concurrency: 3,
+  scene_clip_concurrency: 1
+};
+
+function videoWallClockSeconds(scenes = 5, clipConcurrency = PIPELINE_SECONDS.scene_clip_concurrency) {
+  const P = PIPELINE_SECONDS;
+  const imageBatches = Math.ceil(scenes / P.scene_image_concurrency);
+  const clipBatches = Math.ceil(scenes / clipConcurrency);
+  return P.story_skeleton + P.character_sheet +
+         (imageBatches * P.scene_image) +
+         (clipBatches * P.kling_clip) +
+         P.narration + P.ffmpeg_merge + P.thumbnail + P.uploads;
+  // music composes in parallel with the scene work, so it is not on the path
+}
 
 // How many generations it takes on average to land one deliverable we ship.
 // Video is worse: scenes get re-rolled individually until the cut works.
@@ -306,16 +367,16 @@ const RETRY_FACTOR = { image: 1.6, carousel: 1.6, video_scene: 2.2 };
 const DELIVERED = {
   image_post: {
     machine: ACTION_USD.image_generated * RETRY_FACTOR.image,
-    labour: labourUsd(LABOUR.minutes_per.image_post)
+    labour: labourUsd(LABOUR.minutes_per.after.image_post)
   },
   carousel_8: {
     machine: ACTION_USD.carousel_generated * 8 * RETRY_FACTOR.carousel,
-    labour: labourUsd(LABOUR.minutes_per.carousel_deck)
+    labour: labourUsd(25)
   },
   reel_5_scene: {
     // Setup happens once even across re-rolls; the scenes are what get redone.
     machine: ACTION_USD.video_base + (ACTION_USD.video_generated * 5 * RETRY_FACTOR.video_scene),
-    labour: labourUsd(LABOUR.minutes_per.reel)
+    labour: labourUsd(LABOUR.minutes_per.after.reel)
   }
 };
 for (const d of Object.values(DELIVERED)) {
@@ -376,5 +437,6 @@ for (const [name, plan] of Object.entries(PLANS)) {
 module.exports = {
   PROVIDER_RATES, INFRA, ACTION_USD, QUARK_COSTS, ACTION_UNITS,
   MARGIN, marginFor, USD_PER_QUARK, INR_PER_USD, PLANS,
-  LABOUR, RETRY_FACTOR, DELIVERED, SERVICE_MARKUP
+  LABOUR, RETRY_FACTOR, DELIVERED, SERVICE_MARKUP,
+  PIPELINE_SECONDS, videoWallClockSeconds
 };
