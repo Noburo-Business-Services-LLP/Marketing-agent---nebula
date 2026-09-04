@@ -87,6 +87,72 @@ const OptionPopover: React.FC<{
   );
 };
 
+
+// Native title= tooltips take 1-2s to appear and use OS styling, so these
+// labels were effectively invisible. This shows on hover immediately.
+const IconAction: React.FC<{
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  danger?: boolean;
+  children: React.ReactNode;
+}> = ({ label, onClick, disabled = false, danger = false, children }) => (
+  <div className="relative group/tip">
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      className={`p-1.5 rounded-md text-white/40 hover:bg-white/[0.06] disabled:opacity-30 transition-colors ${
+        danger ? 'hover:text-red-400' : 'hover:text-[#F5A623]'
+      }`}
+    >
+      {children}
+    </button>
+    <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-1 rounded-md bg-[#151515] border border-white/[0.10] text-[11px] text-[#F5F4F1] whitespace-nowrap opacity-0 group-hover/tip:opacity-100 transition-opacity z-30 shadow-xl">
+      {label}
+    </span>
+  </div>
+);
+
+
+/**
+ * A placeholder for an image that has not arrived yet.
+ *
+ * The backend streams posts one at a time, so exactly one is being made and
+ * the rest are waiting. Previously every pending card looked identical, which
+ * is why a run felt stalled: you could not tell which was actually moving.
+ */
+const PendingSlot: React.FC<{ position: number; active: boolean; etaSeconds: number | null; elapsed: number }>
+  = ({ position, active, etaSeconds, elapsed }) => {
+  const remaining = etaSeconds != null ? Math.max(0, etaSeconds - elapsed) : null;
+  const fmt = (s: number) => (s >= 60 ? `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s` : `${s}s`);
+  return (
+    <div className={`rounded-2xl border overflow-hidden flex flex-col ${
+      active ? 'border-[#F5A623]/30 bg-[#F5A623]/[0.03]' : 'border-white/[0.06] bg-white/[0.02]'
+    }`}>
+      <div className="aspect-[4/5] flex flex-col items-center justify-center gap-3 px-6 text-center">
+        {active ? (
+          <>
+            <Loader2 className="w-6 h-6 animate-spin text-[#F5A623]" />
+            <div className="gravity-label text-[#F5A623]">Generating</div>
+            <div className="text-[12px] text-white/45 tabular-nums">
+              {remaining != null
+                ? `about ${fmt(remaining)} left`
+                : `${fmt(elapsed)} elapsed`}
+            </div>
+          </>
+        ) : (
+          <>
+            <Clock className="w-5 h-5 text-white/25" />
+            <div className="gravity-label text-white/35">Queued</div>
+            <div className="text-[12px] text-white/30">Post {position}</div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const GravityCreate: React.FC = () => {
   const navigate = useNavigate();
   const [mode, setMode] = useState<CreateMode>('campaign');
@@ -102,6 +168,18 @@ const GravityCreate: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [progressMsg, setProgressMsg] = useState<string>('');
   const [postsGenerated, setPostsGenerated] = useState<number>(0);
+  // Timing for the queue display: when the run began, and how long each post
+  // took, so the one in flight can show a real estimate rather than a guess.
+  const [runStartedAt, setRunStartedAt] = useState<number | null>(null);
+  const [postDurations, setPostDurations] = useState<number[]>([]);
+  const [tick, setTick] = useState(0);
+
+  // Drives the elapsed counter while a run is in progress.
+  useEffect(() => {
+    if (!submitting) return;
+    const t = setInterval(() => setTick((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, [submitting]);
 
   // Results stay on this page instead of bouncing to /drafts. The image is
   // produced by a background worker, so we poll the draft(s) until the
@@ -112,6 +190,7 @@ const GravityCreate: React.FC = () => {
   const [scheduleFor, setScheduleFor] = useState<string>('');
   const [schedulingId, setSchedulingId] = useState<string>('');
   const pollRef = useRef<any>(null);
+  const runStartRef = useRef<number | null>(null);
 
   // Brand logo choice, pulled from Brand Assets. Applied AFTER the image is
   // generated — handing a logo to an image model gets it redrawn and smeared.
@@ -431,6 +510,9 @@ const GravityCreate: React.FC = () => {
       linkedProduct: null,
     };
 
+    runStartRef.current = Date.now();
+    setRunStartedAt(Date.now());
+    setPostDurations([]);
     setProgressMsg('Warming up the studio…');
     const response = await fetch(`${API_BASE}/campaigns/generate-campaign-stream`, {
       method: 'POST',
@@ -465,6 +547,13 @@ const GravityCreate: React.FC = () => {
               setProgressMsg(data.message || 'Drafting…');
             } else if (currentEvent === 'post') {
               postCount += 1;
+              // How long this one took, for estimating the next.
+              setPostDurations((prev) => {
+                const startedAt = runStartRef.current ?? Date.now();
+                const priorTotal = prev.reduce((a, b) => a + b, 0);
+                const thisOne = Math.max(1, Math.round((Date.now() - startedAt) / 1000) - priorTotal);
+                return [...prev, thisOne];
+              });
               setPostsGenerated(postCount);
               setProgressMsg(`Drafted ${postCount} post${postCount > 1 ? 's' : ''}…`);
               // Render each post the moment it lands. The payload already
@@ -572,6 +661,19 @@ const GravityCreate: React.FC = () => {
       length: Math.max(0, (mode === 'campaign' ? estimate.total : 1) - results.length)
     })
     : [];
+
+  // Estimate from this run's own completed posts rather than a fixed guess,
+  // so it reflects how the model is actually performing right now.
+  const avgPostSeconds = postDurations.length
+    ? Math.round(postDurations.reduce((a, b) => a + b, 0) / postDurations.length)
+    : null;
+  // `tick` is read so the counter re-renders every second.
+  const elapsedOnCurrent = (() => {
+    void tick;
+    if (!runStartedAt) return 0;
+    const spentOnFinished = postDurations.reduce((a, b) => a + b, 0);
+    return Math.max(0, Math.round((Date.now() - runStartedAt) / 1000) - spentOnFinished);
+  })();
 
   return (
     <div className="max-w-[900px] mx-auto pb-24">
@@ -901,23 +1003,29 @@ const GravityCreate: React.FC = () => {
               Start over
             </button>
 
+            {/* These are a series of posts in one campaign, not variations of
+                the same idea — there is nothing to pick between. */}
             <div className="gravity-label text-[#F5A623] mb-3">
               {submitting
                 ? `${results.length} of ${mode === 'campaign' ? estimate.total : 1} ready…`
-                : `${results.length} variation${results.length !== 1 ? 's' : ''} · pick what you love`}
+                : mode === 'campaign'
+                  ? `${results.length} post${results.length !== 1 ? 's' : ''} · your campaign`
+                  : 'Your post'}
             </div>
             <h2 className="text-[42px] leading-[1.1] font-semibold text-[#F5F4F1] tracking-[-0.02em]">
               {submitting ? (
                 <>Making something <em className="italic font-normal text-[#F5A623]">good</em>.</>
+              ) : mode === 'campaign' ? (
+                <>Your campaign is <em className="italic font-normal text-[#F5A623]">ready</em>.</>
               ) : (
-                <>Here's what <em className="italic font-normal text-[#F5A623]">came back</em>.</>
+                <>Your post is <em className="italic font-normal text-[#F5A623]">ready</em>.</>
               )}
             </h2>
-            <p className="text-[13.5px] text-white/45 mt-3">
-              {stillRendering
-                ? 'Still rendering — this updates on its own.'
-                : 'Edit or regenerate any of them. Approve to send to your queue. Discard to throw away.'}
-            </p>
+            {stillRendering && (
+              <p className="text-[13.5px] text-white/45 mt-3">
+                Still rendering — this updates on its own.
+              </p>
+            )}
           </div>
 
           <div className={`grid gap-4 ${results.length === 1 ? 'grid-cols-1 max-w-md' : 'sm:grid-cols-2 lg:grid-cols-3'}`}>
@@ -978,44 +1086,21 @@ const GravityCreate: React.FC = () => {
                             {backendAspect} · {mode === 'campaign' ? 'Campaign' : 'Editorial'}
                           </div>
                           <div className="flex items-center gap-1">
-                            <button
-                              onClick={() => generateCaption(d)}
-                              disabled={captionBusy === d._id || !img}
-                              title="Write a caption from this image"
-                              className="p-1.5 rounded-md text-white/40 hover:text-[#F5A623] hover:bg-white/[0.06] disabled:opacity-30"
-                            >
+                            <IconAction label="Write a caption" onClick={() => generateCaption(d)} disabled={captionBusy === d._id || !img}>
                               {captionBusy === d._id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                            </button>
-                            <button
-                              onClick={() => { setEditingCaption(d._id); setCaptionDraft(d.caption || ''); }}
-                              title="Edit caption"
-                              className="p-1.5 rounded-md text-white/40 hover:text-white hover:bg-white/[0.06]"
-                            >
+                            </IconAction>
+                            <IconAction label="Edit caption" onClick={() => { setEditingCaption(d._id); setCaptionDraft(d.caption || ''); }}>
                               <Pencil className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => openPrompt(d)}
-                              title="View the prompt that made this image"
-                              className="p-1.5 rounded-md text-white/40 hover:text-[#F5A623] hover:bg-white/[0.06]"
-                            >
+                            </IconAction>
+                            <IconAction label="See the prompt" onClick={() => openPrompt(d)}>
                               <Code2 className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => regenerateImage(d)}
-                              disabled={busy || processing}
-                              title="Regenerate image"
-                              className="p-1.5 rounded-md text-white/40 hover:text-white hover:bg-white/[0.06] disabled:opacity-30"
-                            >
+                            </IconAction>
+                            <IconAction label="Regenerate image" onClick={() => regenerateImage(d)} disabled={busy || processing}>
                               <RotateCcw className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => discard(d)}
-                              disabled={busy}
-                              title="Discard"
-                              className="p-1.5 rounded-md text-white/40 hover:text-red-400 hover:bg-white/[0.06] disabled:opacity-30"
-                            >
+                            </IconAction>
+                            <IconAction label="Delete this post" onClick={() => discard(d)} disabled={busy} danger>
                               <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                            </IconAction>
                           </div>
                         </div>
 
@@ -1138,19 +1223,18 @@ const GravityCreate: React.FC = () => {
               );
             })}
 
-            {/* Slots still rendering — same animation as the opening screen,
-                so the grid fills in one card at a time instead of the
-                animation disappearing after the first image lands. */}
+            {/* Slots still to come. Posts stream back one at a time, so only
+                the first of these is actually being made — the rest are
+                waiting. Showing them all as identical spinners was why a run
+                looked stalled. */}
             {remainingCards.map((_, i) => (
-              <div key={`pending-${i}`} className="rounded-xl border border-white/[0.08] bg-white/[0.02] overflow-hidden">
-                <div className="relative bg-black" style={{ aspectRatio: backendAspect.replace(':', ' / ') }}>
-                  <GeneratingFill prompt={description.trim() || name.trim()} resolution={backendAspect} />
-                </div>
-                <div className="p-3.5">
-                  <div className="h-3 w-2/3 rounded bg-white/[0.07] animate-pulse" />
-                  <div className="h-2.5 w-1/3 rounded bg-white/[0.05] animate-pulse mt-2.5" />
-                </div>
-              </div>
+              <PendingSlot
+                key={`pending-${i}`}
+                position={results.length + i + 1}
+                active={i === 0}
+                etaSeconds={avgPostSeconds}
+                elapsed={elapsedOnCurrent}
+              />
             ))}
           </div>
 
