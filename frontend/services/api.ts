@@ -3771,22 +3771,26 @@ export const contentCalendarAPI = {
     }, true);
   },
 
-  regenerate: async (month?: string): Promise<{ success: boolean; calendar: ContentCalendar }> => {
+  regenerate: async (month?: string, language?: string): Promise<{ success: boolean; calendar: ContentCalendar }> => {
     return apiCall('/content-calendar/regenerate', { 
       method: 'POST',
-      body: JSON.stringify(month ? { month } : {})
+      body: JSON.stringify({ ...(month ? { month } : {}), ...(language ? { language } : {}) })
     }, true);
   },
 
-  generateNextMonth: async (): Promise<{ success: boolean; calendar: ContentCalendar }> => {
-    return apiCall('/content-calendar/generate-next', { method: 'POST' }, true);
+  /** `language` overrides the account default for this plan only. */
+  generateNextMonth: async (language?: string): Promise<{ success: boolean; calendar: ContentCalendar }> => {
+    return apiCall('/content-calendar/generate-next', {
+      method: 'POST',
+      body: JSON.stringify(language ? { language } : {})
+    }, true);
   },
 
   today: async (): Promise<{ success: boolean; suggestion: ContentCalendarItem | null; calendarId?: string | null }> => {
     return apiCall('/content-calendar/today', { method: 'GET' }, true);
   },
 
-  updateSettings: async (data: { calendarId?: string; autoGenerate?: boolean; approved?: boolean }): Promise<{ success: boolean; calendar: ContentCalendar }> => {
+  updateSettings: async (data: { calendarId?: string; autoGenerate?: boolean; approved?: boolean; autoGenerateLimit?: number }): Promise<{ success: boolean; calendar: ContentCalendar }> => {
     return apiCall('/content-calendar/settings', { method: 'PATCH', body: JSON.stringify(data) }, true);
   },
 

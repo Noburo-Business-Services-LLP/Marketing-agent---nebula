@@ -3,6 +3,7 @@ import { Save, AlertCircle, Check, Loader2, Eye, EyeOff, Zap, RefreshCw, CreditC
 import { User, BillingData, BusinessProfile } from '../types';
 import { jsPDF } from 'jspdf';
 import { apiService } from '../services/api';
+import { CONTENT_LANGUAGES } from '../constants/languages';
 import { useTheme, getThemeClasses } from '../context/ThemeContext';
 import {
   GravityHero,
@@ -554,9 +555,9 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                             <Field label="Content Language">
                               <select className={inputCls} value={bizData.contentLanguage || ''} onChange={e => handleBizChange('contentLanguage', e.target.value)}>
                                 <option value="">Select...</option>
-                                <option value="english">English</option>
-                                <option value="tamil">Tamil</option>
-                                <option value="tamil_english_mix">Tamil + English Mix</option>
+                                {CONTENT_LANGUAGES.map((l) => (
+                                  <option key={l.value} value={l.value}>{l.label}</option>
+                                ))}
                               </select>
                             </Field>
                             <Field label="Brand Voice">

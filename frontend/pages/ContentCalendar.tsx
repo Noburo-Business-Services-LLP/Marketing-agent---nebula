@@ -27,6 +27,7 @@ const monthLabel = (month = '') => {
   return name ? `${name} ${m[1]}` : String(month);
 };
 import { contentCalendarAPI, draftsAPI } from '../services/api';
+import { CONTENT_LANGUAGES } from '../constants/languages';
 import { ContentCalendar as ContentCalendarType, ContentCalendarItem, Draft } from '../types';
 import { getThemeClasses, useTheme } from '../context/ThemeContext';
 import { GravityHero, GravityEmphasis } from '../components/gravity';
@@ -108,6 +109,7 @@ const ContentCalendar: React.FC = () => {
   // Covers render after the plan is saved, so a freshly generated month shows
   // the pending state and swaps in the art when it lands.
   const [coverBusy, setCoverBusy] = useState(false);
+  const [planLanguage, setPlanLanguage] = useState('');
 
   useEffect(() => {
     // Watches the open plan (detail view) and every card's thumbnail (list
@@ -158,7 +160,7 @@ const ContentCalendar: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      const response = await contentCalendarAPI.generateNextMonth();
+      const response = await contentCalendarAPI.generateNextMonth(planLanguage || undefined);
       await loadCalendar();
       setCalendar(response.calendar);
       setViewMode('detail');
@@ -202,6 +204,30 @@ const ContentCalendar: React.FC = () => {
       if (calendar?._id === plan._id && updated) setCalendar(updated);
     } catch (err: any) {
       setError(err?.message || 'Calendar update failed');
+    } finally {
+      setSaving('');
+    }
+  };
+
+  // A week's worth is the default. Anything above it is the user deliberately
+  // spending credits faster, so the warning fires there rather than nagging on
+  // every change.
+  const AUTO_GENERATE_DEFAULT = 7;
+
+  const setAutoGenerateLimit = async (plan: ContentCalendarType, limit: number) => {
+    const key = `limit-${plan._id}`;
+    setSaving(key);
+    setError('');
+    try {
+      const response = await contentCalendarAPI.updateSettings({
+        calendarId: plan._id,
+        autoGenerateLimit: limit,
+      });
+      const updated = response?.calendar;
+      setHistory((prev) => prev.map((c) => (c._id === plan._id ? { ...c, ...(updated || { autoGenerateLimit: limit }) } : c)));
+      if (calendar?._id === plan._id && updated) setCalendar(updated);
+    } catch (err: any) {
+      setError(err?.message || 'Could not update the limit');
     } finally {
       setSaving('');
     }
@@ -307,6 +333,20 @@ const ContentCalendar: React.FC = () => {
             subcopy="Manage your monthly content strategies."
             className="!mb-0"
           />
+          <div className="flex items-center gap-2">
+          {/* Per-plan language. Empty means "use my account setting", so this
+              does not force a choice on people happy with their default. */}
+          <select
+            value={planLanguage}
+            onChange={(e) => setPlanLanguage(e.target.value)}
+            className="gravity-bare px-3 py-2 rounded-lg bg-white/[0.04] border border-white/[0.10] text-[13px] text-[#F5F4F1] outline-none"
+            title="Language for the next plan"
+          >
+            <option value="">My default language</option>
+            {CONTENT_LANGUAGES.map((l) => (
+              <option key={l.value} value={l.value}>{l.label}</option>
+            ))}
+          </select>
           <button
             type="button"
             onClick={handleGenerateNextMonth}
@@ -316,6 +356,7 @@ const ContentCalendar: React.FC = () => {
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
             Generate Next Month Plan
           </button>
+          </div>
         </div>
         
         {history.length === 0 && !loading && (
@@ -379,14 +420,14 @@ const ContentCalendar: React.FC = () => {
                 <div className="min-w-0">
                   <div className="gravity-label">Auto Generation</div>
                   <div className={`text-[12px] mt-0.5 ${cal.autoGenerate ? 'text-emerald-400' : 'text-white/40'}`}>
-                    {cal.autoGenerate ? 'Drafting a post each day' : 'Off'}
+                    {cal.autoGenerate ? 'A draft a day, for review' : 'Off'}
                   </div>
                 </div>
                 <button
                   type="button"
                   role="switch"
                   aria-checked={!!cal.autoGenerate}
-                  aria-label={`Toggle auto generation for ${cal.month}`}
+                  aria-label={`Toggle auto generation for ${monthLabel(cal.month)}`}
                   disabled={saving === `auto-${cal._id}`}
                   onClick={() => toggleAutoGenerateForPlan(cal)}
                   className={`relative flex-shrink-0 w-12 h-6 rounded-full transition-colors disabled:opacity-50 ${cal.autoGenerate ? 'bg-[#F5A623]' : 'bg-white/[0.15]'}`}
@@ -394,6 +435,37 @@ const ContentCalendar: React.FC = () => {
                   <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${cal.autoGenerate ? 'translate-x-6' : 'translate-x-0'}`} />
                 </button>
               </div>
+
+              {/* How much it is allowed to make. Only worth showing once the
+                  switch is on — off, the number means nothing. */}
+              {cal.autoGenerate && (
+                <div className="mt-3 pt-3 border-t border-white/[0.06]" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="gravity-label">Limit</div>
+                      <div className="text-[12px] mt-0.5 text-white/45">
+                        {cal.autoGeneratedCount || 0} of {cal.autoGenerateLimit ?? AUTO_GENERATE_DEFAULT} made
+                      </div>
+                    </div>
+                    <select
+                      value={cal.autoGenerateLimit ?? AUTO_GENERATE_DEFAULT}
+                      disabled={saving === `limit-${cal._id}`}
+                      onChange={(e) => setAutoGenerateLimit(cal, Number(e.target.value))}
+                      className="gravity-bare flex-shrink-0 px-2.5 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.10] text-[12.5px] text-[#F5F4F1] outline-none disabled:opacity-50"
+                    >
+                      {[3, 5, 7, 10, 14, 20, 30].map((n) => (
+                        <option key={n} value={n}>{n} posts</option>
+                      ))}
+                    </select>
+                  </div>
+                  {(cal.autoGenerateLimit ?? AUTO_GENERATE_DEFAULT) > AUTO_GENERATE_DEFAULT && (
+                    <p className="mt-2 text-[11.5px] text-[#F5A623]/90 leading-relaxed">
+                      Above a week's worth. Each post generates an image, so this
+                      will use credits faster.
+                    </p>
+                  )}
+                </div>
+              )}
               </div>
             </div>
           ))}

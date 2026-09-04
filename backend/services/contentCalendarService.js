@@ -63,7 +63,9 @@ CONTENT RULES:
 7. Include local events, seasonal opportunities, and important festivals.
 8. Include industry-specific buying occasions.
 9. Content must be usable for both organic and paid ads.
-10. Headlines must strictly follow the selected language.
+10. LANGUAGE: Write every headline and creative concept in {{LANGUAGE}}.
+    - If that names a single language, use only that language. Do not fall back to English for convenience, and do not transliterate into Latin script unless the language is normally written that way.
+    - If it reads "<Language> + English Mix", blend both inside each headline the way people in that market actually speak — the natural code-switching of everyday speech, not one sentence per language and not alternating post by post. Keep brand and product names as they are.
 
 CONTENT PILLARS:
 Distribute among:
@@ -114,12 +116,61 @@ const REEL_DAYS = [4, 11, 18, 25];
 // A format counts as a reel if it implies motion.
 const isReelFormat = (value = '') => /reel|video/i.test(String(value || ''));
 
+// The regional languages the product supports, keyed by the value stored on
+// the user. Each may be requested on its own or blended with English via the
+// "<lang>_english_mix" suffix.
+const SUPPORTED_LANGUAGES = {
+  english: 'English',
+  tamil: 'Tamil',
+  telugu: 'Telugu',
+  hindi: 'Hindi',
+  kannada: 'Kannada',
+  malayalam: 'Malayalam',
+  marathi: 'Marathi',
+  bengali: 'Bengali',
+  gujarati: 'Gujarati',
+  punjabi: 'Punjabi',
+  odia: 'Odia',
+  urdu: 'Urdu'
+};
+
+const LANGUAGE_ALIASES = { ta: 'tamil', te: 'telugu', hi: 'hindi', kn: 'kannada',
+  ml: 'malayalam', mr: 'marathi', bn: 'bengali', gu: 'gujarati', pa: 'punjabi',
+  or: 'odia', ur: 'urdu', en: 'english' };
+
+/**
+ * Turn a stored language value into the label the prompts are given.
+ *
+ * The previous version matched the substring "tamil", so "tamil_english_mix"
+ * failed the exact-match check, fell through to the substring branch, and came
+ * back as plain "Tamil" — the mix option had never once reached a prompt. It
+ * also hard-coded Tamil as the only regional language, so any other selection
+ * silently became English.
+ */
 function normalizeLanguage(value = '') {
-  const normalized = String(value || '').trim().toLowerCase();
-  if (['tamil', 'ta'].includes(normalized)) return 'Tamil';
-  if (['english', 'en'].includes(normalized)) return 'English';
-  if (normalized.includes('tamil')) return 'Tamil';
-  return 'English';
+  // Accepts both the stored form ("tamil_english_mix") and the display label
+  // this function itself returns ("Tamil + English Mix"), so a value that has
+  // already been normalised once survives a second pass unchanged.
+  const raw = String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s+&-]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '');
+  if (!raw) return 'English';
+
+  const mix = /_english_mix$|_mix$/.test(raw);
+  const base = raw.replace(/_english_mix$|_mix$/, '');
+  const key = LANGUAGE_ALIASES[base] || base;
+  const label = SUPPORTED_LANGUAGES[key];
+
+  if (!label || label === 'English') return 'English';
+  return mix ? `${label} + English Mix` : label;
+}
+
+/** True when the label asks for two languages blended inside each post. */
+function isMixedLanguage(label = '') {
+  return /\+ English Mix$/i.test(String(label || ''));
 }
 
 function getBusinessProfile(userProfile = {}) {
@@ -157,9 +208,9 @@ function replacePromptVariable(prompt, key, value) {
   return prompt.replaceAll(`{{${key}}}`, String(value || ''));
 }
 
-function calendarPrompt(userProfile = {}) {
+function calendarPrompt(userProfile = {}, languageOverride = '') {
   const profile = getBusinessProfile(userProfile);
-  const language = normalizeLanguage(profile.language || profile.contentLanguage);
+  const language = languageOverride || normalizeLanguage(profile.language || profile.contentLanguage);
   const location = profile.location || profile.businessLocation || userProfile.location || '';
   const targetAudience = profile.targetCustomerProfile || profile.targetAudience || '';
   const businessName = profile.businessName || profile.name || userProfile.businessName || userProfile.companyName || '';
@@ -205,7 +256,10 @@ function fallbackCalendar(userProfile = {}) {
     const day = index + 1;
     const isReel = REEL_DAYS.includes(day);
     const format = isReel ? 'reel' : otherFormats[otherIndex++ % otherFormats.length];
-    const headline = language === 'Tamil'
+    // Only Tamil fallback copy exists, so it covers Tamil (pure or mixed) and
+    // English stands in for the rest — better than emitting Tamil headlines
+    // to a Telugu or Hindi account.
+    const headline = /^Tamil/.test(language)
       ? tamilFallbackHeadline(day, businessName, heroProduct)
       : `${businessName}: ${heroProduct} idea for day ${day}`;
     return {
@@ -415,21 +469,26 @@ async function generateCalendarCover(calendar, userProfile = {}) {
   }
 }
 
-async function generateMonthlyCalendar(userProfile = {}, targetMonth = null) {
+async function generateMonthlyCalendar(userProfile = {}, targetMonth = null, { language: languageOverride = '' } = {}) {
   const profile = getBusinessProfile(userProfile);
   const userId = userProfile._id || userProfile.userId || profile.userId;
   if (!userId) throw new Error('userId is required to generate a content calendar');
 
+  // A per-plan language beats the account default, so one month can be
+  // planned in Telugu without changing the setting for everything else.
+  const language = normalizeLanguage(
+    languageOverride || profile.language || profile.contentLanguage
+  );
+
   let aiCalendar = null;
   try {
-    const response = await llmRouter(calendarPrompt(userProfile));
+    const response = await llmRouter(calendarPrompt(userProfile, language));
     aiCalendar = parseGeminiJSON(response);
   } catch (error) {
     console.warn('[ContentCalendar] AI generation failed, using fallback:', error.message);
     aiCalendar = fallbackCalendar(userProfile);
   }
 
-  const language = normalizeLanguage(profile.language || profile.contentLanguage);
   const month = targetMonth || calendarMonth();
   const calendarData = {
     userId,
@@ -547,9 +606,34 @@ async function processAutoGeneration({ now = new Date(), limit = 20 } = {}) {
   }).limit(limit);
 
   for (const calendar of calendars) {
+    // Stop once the month's allowance is spent. Without this it worked
+    // through every planned day, and the only way to stop it was to notice
+    // and switch it off.
+    const cap = Number(calendar.autoGenerateLimit) || 7;
+    if (Number(calendar.autoGeneratedCount || 0) >= cap) continue;
+
     const item = todaySuggestion(calendar, now);
     if (!item || ['rejected', 'published', 'scheduled'].includes(String(item.status || '').toLowerCase())) continue;
-    await createDraftsForItem(calendar, item, { publish: true });
+
+    // Uses the same generator as "generate this week", which writes a caption
+    // and renders an image, then leaves the Draft in Approve for review.
+    //
+    // The old path built a text-only ContentDraft plus a Campaign marked
+    // scheduled, which the campaign scheduler then published to the connected
+    // accounts with no image and no review — while the toggle described itself
+    // as "drafting a post each day". Requiring lazily keeps the queue module,
+    // which pulls in image generation, out of this module's load path.
+    const { generateSingleCalendarItem } = require('./backgroundQueue');
+    const weekNumber = (calendar.weeks || []).find((w) =>
+      (w.items || []).some((i) => String(i._id) === String(item._id)))?.weekNumber || 1;
+
+    try {
+      await generateSingleCalendarItem(calendar, item, weekNumber);
+      calendar.autoGeneratedCount = Number(calendar.autoGeneratedCount || 0) + 1;
+    } catch (error) {
+      console.error('[ContentCalendar] auto-generation failed for item:', error.message);
+    }
+
     calendar.lastAutoRunAt = new Date();
     await calendar.save();
   }

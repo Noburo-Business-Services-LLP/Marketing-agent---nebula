@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { apiService } from '../services/api';
+import { CONTENT_LANGUAGES } from '../constants/languages';
 import { User, BusinessProfile, SocialConnection } from '../types';
 import { ChevronRight, Check, Users, Megaphone, Sparkles, Loader2, Building, AlertCircle, Share2, Instagram, Facebook, Linkedin, Youtube, Pin, MessageCircle, SkipForward, Sun, Moon, Globe, CheckCircle, XCircle, ExternalLink, ArrowLeft } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
@@ -1284,11 +1285,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                 <div>
                                     <label className={`block text-sm font-bold mb-2 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Content Language <span className="text-red-500">*</span></label>
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                        {[
-                                            { value: 'tamil', label: 'Tamil only' },
-                                            { value: 'english', label: 'English only' },
-                                            { value: 'tamil_english_mix', label: 'Tamil + English mix' },
-                                        ].map(option => (
+                                        {CONTENT_LANGUAGES.map(option => (
                                             <button
                                                 key={option.value}
                                                 type="button"
