@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, Layers, Calendar as CalendarIcon, Zap, Image as ImageIcon, Instagram, Facebook, Linkedin, ChevronRight, Loader2, Check, Clock, Save, AlertCircle, RotateCcw, Pencil, Trash2, Code2, Copy, X, SlidersHorizontal } from 'lucide-react';
+import { Sparkles, Layers, Calendar as CalendarIcon, Zap, Image as ImageIcon, Instagram, Facebook, Linkedin, ChevronRight, Loader2, Check, Clock, Save, AlertCircle, RotateCcw, Pencil, Trash2, Code2, Copy, X, SlidersHorizontal, GalleryHorizontalEnd } from 'lucide-react';
 import { draftsAPI, brandAssetsAPI, apiService } from '../services/api';
 import { Draft } from '../types';
 import GeneratingFill from '../components/GeneratingFill';
@@ -27,7 +27,7 @@ const getToken = () =>
 // Wires the primary CTA to apiService.createCampaign, then routes to
 // /drafts (Approve) so the user sees what got produced.
 
-type CreateMode = 'campaign' | 'single';
+type CreateMode = 'campaign' | 'single' | 'carousel';
 
 const DURATIONS = ['1 week', '2 weeks', '3 weeks', '4 weeks'];
 const CADENCES = ['2 posts / week', '3 posts / week', '5 posts / week', 'Daily'];
@@ -206,6 +206,9 @@ const GravityCreate: React.FC = () => {
   // look at ideas they already planned.
   const [ideaPickerOpen, setIdeaPickerOpen] = useState(false);
   const [promptStudioOpen, setPromptStudioOpen] = useState(false);
+  // Carousel length. Below three there is no story to tell; above ten the
+  // platforms stop showing every slide anyway.
+  const [slideCount, setSlideCount] = useState(5);
   const [pickedIdea, setPickedIdea] = useState<string>('');
 
   const applyCalendarItem = (item: any) => {
@@ -479,6 +482,97 @@ const GravityCreate: React.FC = () => {
     setProgressMsg('');
   };
 
+  // Carousel mode — one post told across several slides.
+  //
+  // The backend plans the whole arc first, then renders slides one at a time
+  // over SSE, so the shared look is decided once and every slide inherits it.
+  // Slides appear as they land rather than all at the end.
+  const handleDraftCarousel = async () => {
+    const token = getToken();
+    if (!token) throw new Error('Please log in again.');
+
+    runStartRef.current = Date.now();
+    setRunStartedAt(Date.now());
+    setPostDurations([]);
+    setProgressMsg('Planning the story…');
+
+    const response = await fetch(`${API_BASE}/carousels/generate-stream`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: name.trim(),
+        brief: description.trim() || name.trim(),
+        slideCount,
+        platforms: selectedPlatforms,
+        tone: (tone.split(',')[0] || 'professional').toLowerCase(),
+        language: 'English',
+        aspectRatio: backendAspect,
+      }),
+    });
+    if (!response.ok) throw new Error(`Server responded ${response.status}`);
+    if (!response.body) throw new Error('No response body from server.');
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let currentEvent = '';
+    let complete = false;
+    let landed = 0;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+      for (const line of lines) {
+        if (line.startsWith('event: ')) {
+          currentEvent = line.slice(7).trim();
+        } else if (line.startsWith('data: ') && currentEvent) {
+          try {
+            const data = JSON.parse(line.slice(6));
+            if (currentEvent === 'status' || currentEvent === 'generating') {
+              setProgressMsg(data.message || 'Rendering…');
+            } else if (currentEvent === 'slide') {
+              landed += 1;
+              setPostDurations((prev) => {
+                const startedAt = runStartRef.current ?? Date.now();
+                const priorTotal = prev.reduce((a, b) => a + b, 0);
+                const thisOne = Math.max(1, Math.round((Date.now() - startedAt) / 1000) - priorTotal);
+                return [...prev, thisOne];
+              });
+              setPostsGenerated(landed);
+              // Each slide is shown as its own card so progress is visible,
+              // but they are all one draft — hence the synthetic id, and the
+              // per-card actions being hidden for them.
+              setResults((prev: any[]) => [...prev, {
+                _id: `${data.draftId}::${data.order}`,
+                carouselDraftId: data.draftId,
+                isCarouselSlide: true,
+                slideLabel: `Slide ${data.order}${data.role ? ' · ' + data.role : ''}`,
+                title: data.headline || `Slide ${data.order}`,
+                caption: data.headline || '',
+                imageUrl: data.imageUrl || '',
+                status: data.imageUrl ? 'draft' : 'failed',
+                aspectRatio: backendAspect,
+                platforms: selectedPlatforms,
+              }]);
+            } else if (currentEvent === 'complete') {
+              complete = true;
+            } else if (currentEvent === 'error') {
+              throw new Error(data?.message || 'Generation failed');
+            }
+          } catch (parseErr) {
+            // Ignore malformed lines
+          }
+        }
+      }
+    }
+
+    if (!complete && landed === 0) throw new Error('Generation ended without any slides.');
+    setProgressMsg('');
+  };
+
   // Campaign mode — real AI generation via the streaming endpoint used
   // by the legacy Campaigns page. Streams posts as they're generated,
   // updates progress, then lands in Approve when done.
@@ -626,7 +720,9 @@ const GravityCreate: React.FC = () => {
     setResults([]);
     setActioned({});
     try {
-      if (mode === 'single') {
+      if (mode === 'carousel') {
+        await handleDraftCarousel();
+      } else if (mode === 'single') {
         await handleDraftSinglePost();
       } else {
         await handleDraftCampaign();
@@ -650,8 +746,11 @@ const GravityCreate: React.FC = () => {
   // While a request is in flight there is no draft record yet, so show
   // placeholder cards in the grid straight away. They animate in place and
   // are swapped for the real drafts the moment those come back.
+  // How many cards this run will produce, whichever mode is active.
+  const expectedCount = mode === 'campaign' ? estimate.total : mode === 'carousel' ? slideCount : 1;
+
   const pendingCards = submitting && results.length === 0
-    ? Array.from({ length: mode === 'campaign' ? Math.min(estimate.total, 4) : 1 })
+    ? Array.from({ length: Math.min(expectedCount, 4) })
     : [];
 
   // Posts now stream in one at a time, so once the first card lands the grid
@@ -660,7 +759,7 @@ const GravityCreate: React.FC = () => {
   // moment the first image arrived, with more still on the way.
   const remainingCards = submitting && results.length > 0
     ? Array.from({
-      length: Math.max(0, (mode === 'campaign' ? estimate.total : 1) - results.length)
+      length: Math.max(0, expectedCount - results.length)
     })
     : [];
 
@@ -700,17 +799,32 @@ const GravityCreate: React.FC = () => {
             <Sparkles className="w-3.5 h-3.5" />
             Single post
           </button>
+          <button
+            onClick={() => setMode('carousel')}
+            className={`flex items-center gap-2 h-9 px-5 rounded-full text-[13px] font-semibold transition-colors ${
+              mode === 'carousel' ? 'bg-white/[0.10] text-[#F5F4F1]' : 'text-white/55 hover:text-white/80'
+            }`}
+          >
+            <GalleryHorizontalEnd className="w-3.5 h-3.5" />
+            Carousel
+          </button>
         </div>
       </div>
 
       {/* Hero */}
       <div className="text-center mb-10">
         <div className="gravity-label text-[#F5A623] mb-4">
-          {mode === 'campaign' ? 'Plan a campaign · ' + duration : 'Draft a post · one shot'}
+          {mode === 'campaign'
+            ? 'Plan a campaign · ' + duration
+            : mode === 'carousel'
+              ? `Build a carousel · ${slideCount} slides`
+              : 'Draft a post · one shot'}
         </div>
         <h1 className="font-serif-display text-[56px] leading-[1.05] tracking-[-0.02em] text-[#F5F4F1] mb-5">
           {mode === 'campaign' ? (
             <>What are we <span className="italic text-[#F5A623]">working on</span>?</>
+          ) : mode === 'carousel' ? (
+            <>What's the <span className="italic text-[#F5A623]">story</span>?</>
           ) : (
             <>What's on your <span className="italic text-[#F5A623]">mind</span>?</>
           )}
@@ -718,7 +832,9 @@ const GravityCreate: React.FC = () => {
         <p className="text-[15px] text-white/55 max-w-[560px] mx-auto leading-relaxed">
           {mode === 'campaign'
             ? 'Describe the campaign once. Gravity drafts the full run — across platforms, spaced out, in your voice.'
-            : 'One sentence is enough. Gravity turns it into a scroll-stopping post.'}
+            : mode === 'carousel'
+              ? 'One idea, told across slides. Gravity plans the arc, then renders every slide in the same look.'
+              : 'One sentence is enough. Gravity turns it into a scroll-stopping post.'}
         </p>
       </div>
 
@@ -757,7 +873,7 @@ const GravityCreate: React.FC = () => {
       <PromptStudio
         open={promptStudioOpen}
         onClose={() => setPromptStudioOpen(false)}
-        focus={mode === 'campaign' ? 'campaign.content' : 'image.creative'}
+        focus={mode === 'campaign' ? 'campaign.content' : mode === 'carousel' ? 'carousel.content' : 'image.creative'}
       />
 
       {/* Name + Description card, wrapped in a travelling border beam.
@@ -820,6 +936,27 @@ const GravityCreate: React.FC = () => {
       </div>
       </BorderBeam>
       </div>
+
+      {/* How many slides. A carousel's length changes the shape of the story,
+          so it is picked before the brief is sent, not afterwards. */}
+      {mode === 'carousel' && (
+        <div className="flex flex-wrap items-center justify-center gap-2 mb-6">
+          <span className="gravity-label text-white/35 mr-1">Slides</span>
+          {[3, 4, 5, 6, 7, 8, 10].map((n) => (
+            <button
+              key={n}
+              onClick={() => setSlideCount(n)}
+              className={`h-9 w-9 rounded-full text-[13px] font-semibold transition-colors ${
+                slideCount === n
+                  ? 'bg-[#F5A623] text-[#1A1208]'
+                  : 'text-white/55 border border-white/[0.12] hover:text-[#F5F4F1] hover:bg-white/[0.05]'
+              }`}
+            >
+              {n}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Metadata grid — Campaign mode only */}
       {mode === 'campaign' && (
@@ -961,7 +1098,7 @@ const GravityCreate: React.FC = () => {
             ) : (
               <>
                 <Zap className="w-4 h-4" strokeWidth={2.5} />
-                {mode === 'campaign' ? 'Draft my campaign' : 'Draft this post'}
+                {mode === 'campaign' ? 'Draft my campaign' : mode === 'carousel' ? 'Build my carousel' : 'Draft this post'}
               </>
             )}
           </button>
@@ -983,7 +1120,7 @@ const GravityCreate: React.FC = () => {
         <div className="max-w-5xl mx-auto mt-14">
           <div className="text-center mb-10">
             <div className="gravity-label text-[#F5A623] mb-3">
-              {mode === 'campaign' ? 'Building your campaign' : 'Drafting your post'}
+              {mode === 'campaign' ? 'Building your campaign' : mode === 'carousel' ? 'Building your carousel' : 'Drafting your post'}
             </div>
             <h2 className="text-[42px] leading-[1.1] font-semibold text-[#F5F4F1] tracking-[-0.02em]">
               Making something <em className="italic font-normal text-[#F5A623]">good</em>.
@@ -1022,16 +1159,20 @@ const GravityCreate: React.FC = () => {
                 the same idea — there is nothing to pick between. */}
             <div className="gravity-label text-[#F5A623] mb-3">
               {submitting
-                ? `${results.length} of ${mode === 'campaign' ? estimate.total : 1} ready…`
+                ? `${results.length} of ${expectedCount} ready…`
                 : mode === 'campaign'
                   ? `${results.length} post${results.length !== 1 ? 's' : ''} · your campaign`
-                  : 'Your post'}
+                  : mode === 'carousel'
+                    ? `${results.length} slide${results.length !== 1 ? 's' : ''} · swipe in order`
+                    : 'Your post'}
             </div>
             <h2 className="text-[42px] leading-[1.1] font-semibold text-[#F5F4F1] tracking-[-0.02em]">
               {submitting ? (
                 <>Making something <em className="italic font-normal text-[#F5A623]">good</em>.</>
               ) : mode === 'campaign' ? (
                 <>Your campaign is <em className="italic font-normal text-[#F5A623]">ready</em>.</>
+              ) : mode === 'carousel' ? (
+                <>Your carousel is <em className="italic font-normal text-[#F5A623]">ready</em>.</>
               ) : (
                 <>Your post is <em className="italic font-normal text-[#F5A623]">ready</em>.</>
               )}
@@ -1098,24 +1239,31 @@ const GravityCreate: React.FC = () => {
                         </p>
                         <div className="flex items-center justify-between mt-2.5">
                           <div className="gravity-label text-white/35">
-                            {backendAspect} · {mode === 'campaign' ? 'Campaign' : 'Editorial'}
+                            {backendAspect} · {d.slideLabel || (mode === 'campaign' ? 'Campaign' : 'Editorial')}
                           </div>
                           <div className="flex items-center gap-1">
-                            <IconAction label="Write a caption" onClick={() => generateCaption(d)} disabled={captionBusy === d._id || !img}>
-                              {captionBusy === d._id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                            </IconAction>
-                            <IconAction label="Edit caption" onClick={() => { setEditingCaption(d._id); setCaptionDraft(d.caption || ''); }}>
-                              <Pencil className="w-3.5 h-3.5" />
-                            </IconAction>
-                            <IconAction label="See the prompt" onClick={() => openPrompt(d)}>
-                              <Code2 className="w-3.5 h-3.5" />
-                            </IconAction>
-                            <IconAction label="Regenerate image" onClick={() => regenerateImage(d)} disabled={busy || processing}>
-                              <RotateCcw className="w-3.5 h-3.5" />
-                            </IconAction>
-                            <IconAction label="Delete this post" onClick={() => discard(d)} disabled={busy} danger>
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </IconAction>
+                            {/* Every one of these addresses a single draft. A
+                                carousel slide is one image inside a shared
+                                draft, so none of them apply to it. */}
+                            {!d.isCarouselSlide && (
+                              <>
+                                <IconAction label="Write a caption" onClick={() => generateCaption(d)} disabled={captionBusy === d._id || !img}>
+                                  {captionBusy === d._id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                                </IconAction>
+                                <IconAction label="Edit caption" onClick={() => { setEditingCaption(d._id); setCaptionDraft(d.caption || ''); }}>
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </IconAction>
+                                <IconAction label="See the prompt" onClick={() => openPrompt(d)}>
+                                  <Code2 className="w-3.5 h-3.5" />
+                                </IconAction>
+                                <IconAction label="Regenerate image" onClick={() => regenerateImage(d)} disabled={busy || processing}>
+                                  <RotateCcw className="w-3.5 h-3.5" />
+                                </IconAction>
+                                <IconAction label="Delete this post" onClick={() => discard(d)} disabled={busy} danger>
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </IconAction>
+                              </>
+                            )}
                           </div>
                         </div>
 

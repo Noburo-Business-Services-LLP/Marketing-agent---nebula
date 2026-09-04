@@ -94,6 +94,66 @@ Return ONLY valid JSON (no markdown, no backticks):
 }`
   },
 
+  'carousel.content': {
+    label: 'Carousel',
+    summary:
+      'Plans a multi-slide carousel: one shared visual style, and a story that moves forward slide by slide. Change this if the slides feel disconnected or the narrative falls flat.',
+    stage: 'carousel',
+    variables: {
+      brandDisplayName: 'Your brand name',
+      industry: 'Your industry',
+      brief: 'The carousel brief you typed',
+      slideCount: 'How many slides to plan',
+      tone: 'Brand tone',
+      language: 'Output language',
+      platforms: 'Selected platforms, comma separated',
+      brandContextBlock: 'Brand visual tokens, palette and guidelines'
+    },
+    template: `ROLE: You are a senior social media strategist who plans carousels — the format where a reader swipes, and each swipe has to earn the next one.
+
+OBJECTIVE: Plan a {{slideCount}}-slide carousel for {{brandDisplayName}} ({{industry}} industry) on the brief below.
+
+BRIEF:
+{{brief}}
+
+CONTEXT:
+- Tone: {{tone}}
+- Language: {{language}}
+- Platforms: {{platforms}}
+{{brandContextBlock}}
+
+WHAT MAKES A CAROUSEL WORK:
+1. ONE IDEA, DEVELOPED. The whole carousel argues a single point. It is not {{slideCount}} separate posts, and it is not one point restated {{slideCount}} times.
+2. THE STORY MOVES. Each slide advances the idea — sets up a tension, deepens it, turns it, or lands it. A reader who stops halfway should feel they left something unfinished.
+3. SLIDE 1 IS THE HOOK. It earns the first swipe on its own: a sharp claim, a real tension, a question worth answering. It must not be a title card.
+4. THE LAST SLIDE PAYS OFF. Resolve what slide 1 opened, then give one clear next step. Do not end on a summary of what was already said.
+5. ONE VISUAL SYSTEM. Every slide must look like it came from the same set — the same palette, the same type treatment, the same kind of imagery, the same lighting. Progression happens in the CONTENT, never in the visual style. This is the single most common way carousels fail.
+
+FIRST, write a styleGuide: a concrete visual contract that every slide obeys. Name the palette, the lighting, the type treatment, the composition rule, and the kind of imagery. Be specific enough that two different slides described by it would look like siblings. Do not mention any slide-specific subject in it.
+
+THEN, for each slide give:
+- role: one of "hook", "build", "turn", "payoff"
+- headline: the words rendered on the image, 2-7 words, in {{language}}
+- imageDescription: what this slide shows. Describe subject, composition and mood ONLY — the styleGuide already fixes the look, so do not repeat palette or lighting here.
+
+Finally write one caption for the post as a whole (not per slide) and 3-5 hashtags mixing broad and niche.
+
+Return ONLY valid JSON (no markdown, no backticks):
+{
+  "styleGuide": "The visual contract every slide obeys",
+  "caption": "The caption for the whole post",
+  "hashtags": ["#tag1", "#tag2", "#tag3"],
+  "slides": [
+    {
+      "order": 1,
+      "role": "hook",
+      "headline": "Words on the image",
+      "imageDescription": "Subject, composition and mood for this slide"
+    }
+  ]
+}`
+  },
+
   'image.creative': {
     label: 'Image creative',
     summary:

@@ -2178,11 +2178,11 @@ setCharacterAge(nextDraft?.characterAge || '');
   return (
     <div className={`p-6 min-h-screen ${isDarkMode ? 'bg-[#070A12]' : 'bg-slate-50'}`}>
       <div className="max-w-6xl mx-auto space-y-6">
-        {/* Demoted to a meta line: the top bar already says "AI Reels", and
+        {/* Demoted to a meta line: the top bar already says "Videos", and
             each step now carries its own GravityHero as the display headline.
             Three competing titles was the stacking problem here. */}
         <div>
-          <GravityLabel>AI Video Manager</GravityLabel>
+          <GravityLabel>Videos</GravityLabel>
           <p className="text-[13px] text-white/45 mt-1">Create, schedule, and track your AI videos in one place.</p>
         </div>
 
@@ -2556,7 +2556,7 @@ setCharacterAge(nextDraft?.characterAge || '');
             {step === 1 && (
               <div className="space-y-6">
                 <GravityHero
-                  eyebrow="AI Reels"
+                  eyebrow="Videos"
                   headline={<>What are we <GravityEmphasis>filming</GravityEmphasis>?</>}
                   subcopy="Describe the video once. Gravity writes the script, casts the voice, and renders every scene."
                 />
@@ -2932,7 +2932,7 @@ setCharacterAge(nextDraft?.characterAge || '');
             {step === 2 && (
             <div className={`p-6 space-y-6 gravity-glow ${panelClass}`}>
               <div className="flex items-center justify-between mb-4">
-                <GravityHero size="md" align="left" eyebrow="AI Reels" headline="Character & Video Style" className="!mb-0" />
+                <GravityHero size="md" align="left" eyebrow="Videos" headline="Character & Video Style" className="!mb-0" />
                 {acceptedConcept && (
                   <div className="text-right">
                     <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#F5A623]">
@@ -3467,7 +3467,7 @@ setCharacterAge(nextDraft?.characterAge || '');
             <div className={`${panelClass} gravity-glow p-6 space-y-5`}>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
-                  <GravityHero size="md" align="left" eyebrow="AI Reels" headline="Environment" />
+                  <GravityHero size="md" align="left" eyebrow="Videos" headline="Environment" />
                   <p className={`text-[12px] mt-1 ${theme.textSecondary}`}>
                     Lock every scene to your actual space (shop, showroom, workshop, storefront). Every image + clip will render inside this exact environment.
                   </p>
@@ -3663,7 +3663,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                 {/* HEADER */}
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <GravityHero size="md" align="left" eyebrow="AI Reels" headline="Script + Scenes" />
+                    <GravityHero size="md" align="left" eyebrow="Videos" headline="Script + Scenes" />
                     <p className={`text-xs mt-0.5 ${theme.textSecondary}`}>
                       Story arc · Voiceover · Scene-by-scene breakdown — production-ready and editable.
                     </p>
@@ -4045,7 +4045,7 @@ setCharacterAge(nextDraft?.characterAge || '');
             {step === 5 && (
               <div className={`${panelClass} gravity-glow p-6 space-y-4`}>
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <GravityHero size="md" align="left" eyebrow="AI Reels" headline="Scene Images" />
+                  <GravityHero size="md" align="left" eyebrow="Videos" headline="Scene Images" />
                   <span className={`text-[11px] px-2 py-1 rounded-full border ${theme.textMuted} border-white/10`}>
                     Aspect: {aspectRatio} · Sequential render
                   </span>
@@ -4213,7 +4213,7 @@ setCharacterAge(nextDraft?.characterAge || '');
             {step === 6 && (
               <div className={`${panelClass} gravity-glow p-6 space-y-4`}>
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <GravityHero size="md" align="left" eyebrow="AI Reels" headline="Video Clips" />
+                  <GravityHero size="md" align="left" eyebrow="Videos" headline="Video Clips" />
                   <span className={`text-[11px] px-2 py-1 rounded-full border ${theme.textMuted} border-white/10`}>
                     Aspect: {aspectRatio} · Sequential render
                   </span>
@@ -4329,7 +4329,7 @@ setCharacterAge(nextDraft?.characterAge || '');
 
             {step === 7 && (
               <div className={`${panelClass} gravity-glow p-6 space-y-4`}>
-                <GravityHero size="md" align="left" eyebrow="AI Reels" headline="Audio Config" />
+                <GravityHero size="md" align="left" eyebrow="Videos" headline="Audio Config" />
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
                     <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Audio</label>
@@ -4668,7 +4668,7 @@ setCharacterAge(nextDraft?.characterAge || '');
 
             {step === 8 && (
               <div className={`${panelClass} gravity-glow p-6 space-y-4`}>
-                <GravityHero size="md" align="left" eyebrow="AI Reels" headline="Audio Mix" />
+                <GravityHero size="md" align="left" eyebrow="Videos" headline="Audio Mix" />
                 {activeAudioScript && (
                   <div className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3`}>
                     <p className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Voice Script</p>
@@ -4713,7 +4713,7 @@ setCharacterAge(nextDraft?.characterAge || '');
 
             {step === 9 && (
               <div className={`${panelClass} gravity-glow p-6 space-y-4`}>
-                <GravityHero size="md" align="left" eyebrow="AI Reels" headline="Video Merge" />
+                <GravityHero size="md" align="left" eyebrow="Videos" headline="Video Merge" />
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <button onClick={mergeVideo} disabled={busy} className="px-5 py-3 rounded-xl border border-[#F5A623] text-[#F5A623] font-semibold disabled:opacity-60">
                     {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Merge Video + Audio'}
@@ -4731,7 +4731,7 @@ setCharacterAge(nextDraft?.characterAge || '');
 
             {step === 10 && (
               <div className={`${panelClass} gravity-glow p-6 space-y-4`}>
-                <GravityHero size="md" align="left" eyebrow="AI Reels" headline="Thumbnail + Content" />
+                <GravityHero size="md" align="left" eyebrow="Videos" headline="Thumbnail + Content" />
                 <button onClick={generateContent} disabled={busy} className="px-4 py-2 rounded-xl border border-[#F5A623] text-[#F5A623] font-semibold">
                   {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Generate Thumbnail + Caption + Hashtags'}
                 </button>
@@ -4763,7 +4763,7 @@ setCharacterAge(nextDraft?.characterAge || '');
 
             {step === 11 && (
               <div className={`${panelClass} gravity-glow p-6 space-y-4`}>
-                <GravityHero size="md" align="left" eyebrow="AI Reels" headline="Platform Selection" />
+                <GravityHero size="md" align="left" eyebrow="Videos" headline="Platform Selection" />
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   {['instagram', 'facebook', 'linkedin', 'youtube'].map((platform) => {
                     const active = selectedPlatforms.includes(platform);
@@ -4789,7 +4789,7 @@ setCharacterAge(nextDraft?.characterAge || '');
 
             {step === 12 && (
               <div className={`${panelClass} gravity-glow p-6 space-y-4`}>
-                <GravityHero size="md" align="left" eyebrow="AI Reels" headline="Scheduling" />
+                <GravityHero size="md" align="left" eyebrow="Videos" headline="Scheduling" />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Date</label>
@@ -4813,7 +4813,7 @@ setCharacterAge(nextDraft?.characterAge || '');
 
             {step === 13 && (
               <div className={`${panelClass} gravity-glow p-6 space-y-4`}>
-                <GravityHero size="md" align="left" eyebrow="AI Reels" headline="Final Output" />
+                <GravityHero size="md" align="left" eyebrow="Videos" headline="Final Output" />
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   <div className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3`}>
                     <p className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Final Video</p>

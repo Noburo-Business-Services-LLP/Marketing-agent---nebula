@@ -1,0 +1,238 @@
+const express = require('express');
+const router = express.Router();
+const { protect } = require('../middleware/auth');
+const { checkTrial } = require('../middleware/trialGuard');
+const Draft = require('../models/Draft');
+const User = require('../models/User');
+const BrandAsset = require('../models/BrandAsset');
+const BrandIntelligenceProfile = require('../models/BrandIntelligenceProfile');
+const { callGemini, parseGeminiJSON, generateCampaignImageNanoBanana } = require('../services/geminiAI');
+const { buildPrompt } = require('../services/promptRegistry');
+
+/**
+ * Carousel generation.
+ *
+ * A carousel is one post made of several ordered images that tell a single
+ * story, so it is planned in one pass and rendered slide by slide. The plan
+ * step produces a styleGuide — a visual contract every slide inherits — which
+ * is what keeps the set looking like siblings. Without it, independently
+ * generated slides drift apart in palette and treatment, which is the usual
+ * way a generated carousel gives itself away.
+ *
+ * Images are generated sequentially rather than in parallel: the user watches
+ * them land one at a time, and a partial run still leaves a usable draft.
+ */
+
+const MIN_SLIDES = 3;
+const MAX_SLIDES = 10;
+
+router.post('/generate-stream', protect, checkTrial, async (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders?.();
+
+  const send = (event, data) => {
+    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  };
+
+  let draft = null;
+
+  try {
+    const {
+      title = '',
+      brief = '',
+      slideCount = 5,
+      platforms = ['instagram'],
+      tone = 'professional',
+      language = 'English',
+      aspectRatio = '4:5'
+    } = req.body || {};
+
+    const slides = Math.max(MIN_SLIDES, Math.min(MAX_SLIDES, Number(slideCount) || 5));
+    const cleanBrief = String(brief || title || '').trim();
+    if (!cleanBrief) {
+      send('error', { message: 'Tell me what the carousel is about first.' });
+      return res.end();
+    }
+
+    // Same sources campaign generation reads: the brand profile carries the
+    // palette and typography, the business profile the industry and name, and
+    // the logo lives as its own asset record.
+    const [user, brandProfile, logoAsset] = await Promise.all([
+      User.findById(req.user.id).lean(),
+      BrandIntelligenceProfile.findOne({ userId: req.user.id }).lean(),
+      BrandAsset.findOne({ user: req.user.id, type: 'logo' })
+        .sort({ isPrimary: -1, createdAt: -1 })
+        .lean()
+    ]);
+
+    const bp = user?.businessProfile || {};
+    const brandAssets = brandProfile?.assets || {};
+    const brandDisplayName =
+      String(brandProfile?.brandName || bp.companyName || bp.name || 'Brand').trim() || 'Brand';
+    const industry = bp.industry || '';
+    const fontType = String(brandAssets.fontType || '').trim();
+    const brandLogo = String(brandAssets.primaryLogoUrl || logoAsset?.url || '').trim() || null;
+    const palette = [brandAssets.primaryColor, brandAssets.secondaryColor]
+      .map((c) => String(c || '').trim())
+      .filter(Boolean);
+
+    send('status', { message: 'Planning the story…' });
+
+    const planPrompt = await buildPrompt(req.user.id, 'carousel.content', {
+      brandDisplayName,
+      industry: industry || 'General',
+      brief: cleanBrief,
+      slideCount: slides,
+      tone: tone || 'professional',
+      language: language || 'English',
+      platforms: (platforms || []).join(', '),
+      brandContextBlock: [
+        palette.length ? `- Brand palette: ${palette.join(', ')}` : '',
+        fontType ? `- Typography style: ${fontType}` : ''
+      ].filter(Boolean).join('\n')
+    });
+
+    const raw = await callGemini(planPrompt);
+    const plan = parseGeminiJSON(raw);
+
+    const planned = Array.isArray(plan?.slides) ? plan.slides.slice(0, slides) : [];
+    if (planned.length === 0) {
+      send('error', { message: 'Could not plan the carousel. Try rewording the brief.' });
+      return res.end();
+    }
+
+    const styleGuide = String(plan?.styleGuide || '').trim();
+
+    // Saved before any image exists so a dropped connection still leaves the
+    // plan recoverable rather than losing the whole run.
+    draft = await Draft.create({
+      userId: req.user.id,
+      title: String(title || cleanBrief).slice(0, 120),
+      caption: String(plan?.caption || '').trim(),
+      hashtags: Array.isArray(plan?.hashtags) ? plan.hashtags : [],
+      platforms,
+      tone,
+      language,
+      aspectRatio,
+      sourceType: 'carousel',
+      contentType: 'carousel',
+      status: 'processing',
+      carouselStyleGuide: styleGuide,
+      carouselSlides: planned.map((s, i) => ({
+        order: Number(s?.order) || i + 1,
+        role: String(s?.role || '').trim(),
+        headline: String(s?.headline || '').trim(),
+        imagePrompt: String(s?.imageDescription || '').trim(),
+        imageUrl: ''
+      }))
+    });
+
+    send('plan', {
+      draftId: draft._id,
+      styleGuide,
+      caption: draft.caption,
+      hashtags: draft.hashtags,
+      slides: draft.carouselSlides.map((s) => ({
+        order: s.order,
+        role: s.role,
+        headline: s.headline
+      }))
+    });
+
+    let rendered = 0;
+
+    for (let i = 0; i < draft.carouselSlides.length; i++) {
+      const slide = draft.carouselSlides[i];
+      send('generating', {
+        order: slide.order,
+        message: `Rendering slide ${slide.order} of ${draft.carouselSlides.length}…`
+      });
+
+      try {
+        // The styleGuide leads so the shared look is established before the
+        // slide's own subject, which is what holds the set together.
+        const description = [
+          styleGuide ? `SHARED VISUAL STYLE (identical across every slide in this set): ${styleGuide}` : '',
+          `THIS SLIDE (${slide.order} of ${draft.carouselSlides.length}, role: ${slide.role || 'build'}): ${slide.imagePrompt}`
+        ].filter(Boolean).join('\n\n');
+
+        const result = await generateCampaignImageNanoBanana(description, {
+          userId: req.user.id,
+          aspectRatio,
+          brandName: brandDisplayName,
+          brandLogo,
+          industry,
+          tone,
+          brandPalette: palette,
+          fontType,
+          targetLanguage: language,
+          imageText: slide.headline,
+          campaignTheme: cleanBrief,
+          postIndex: i,
+          totalPosts: draft.carouselSlides.length
+        });
+
+        // Image generation falls back to an inline base64 data URI when the
+        // Cloudinary upload fails. One of those is ~1MB; ten in a single
+        // document would approach Mongo's 16MB ceiling and bloat every later
+        // read of this draft. Treat it as a failed slide instead.
+        const rawUrl = String(result?.imageUrl || '');
+        const imageUrl = rawUrl.startsWith('http') ? rawUrl : '';
+        if (rawUrl && !imageUrl) {
+          console.warn(`[Carousel] slide ${slide.order} returned inline image data, not a URL — dropping it.`);
+        }
+        draft.carouselSlides[i].imageUrl = imageUrl;
+        // Written per slide, not once at the end: a run that dies halfway
+        // keeps the slides it already paid for.
+        await draft.save();
+
+        if (imageUrl) rendered += 1;
+        send('slide', {
+          draftId: draft._id,
+          order: slide.order,
+          role: slide.role,
+          headline: slide.headline,
+          imageUrl,
+          failed: !imageUrl
+        });
+      } catch (slideErr) {
+        console.error(`[Carousel] slide ${slide.order} failed:`, slideErr.message);
+        send('slide', {
+          draftId: draft._id,
+          order: slide.order,
+          role: slide.role,
+          headline: slide.headline,
+          imageUrl: '',
+          failed: true
+        });
+      }
+    }
+
+    draft.status = rendered > 0 ? 'draft' : 'failed';
+    if (rendered === 0) draft.errorMessage = 'No slides could be rendered.';
+    await draft.save();
+
+    send('complete', {
+      draftId: draft._id,
+      rendered,
+      total: draft.carouselSlides.length
+    });
+    res.end();
+  } catch (error) {
+    console.error('Carousel generation error:', error);
+    if (draft) {
+      try {
+        draft.status = 'failed';
+        draft.errorMessage = error.message || 'Generation failed.';
+        await draft.save();
+      } catch (_) { /* the stream error matters more than this bookkeeping */ }
+    }
+    send('error', { message: error.message || 'Something went wrong. Please try again.' });
+    res.end();
+  }
+});
+
+module.exports = router;

@@ -4303,3 +4303,41 @@ export const draftsAPI = {
   }
 };
 
+
+// ---------------------------------------------------------------------------
+// Prompts
+// ---------------------------------------------------------------------------
+
+export interface EditablePrompt {
+  id: string;
+  label: string;
+  summary: string;
+  stage: string;
+  /** Placeholder name -> what it means, for the reference list in the editor. */
+  variables: Record<string, string>;
+  /** What ships with the product. Kept so a reset needs no extra request. */
+  defaultTemplate: string;
+  /** What will actually be used: the edit if there is one, else the default. */
+  template: string;
+  isEdited: boolean;
+  updatedAt: string | null;
+}
+
+export const promptsAPI = {
+  list: async (): Promise<{ success: boolean; prompts: EditablePrompt[] }> => {
+    return apiCall('/prompts', { method: 'GET' }, true);
+  },
+
+  save: async (
+    id: string,
+    template: string
+  ): Promise<{ success: boolean; template: string; isEdited: boolean }> => {
+    return apiCall(`/prompts/${id}`, { method: 'PUT', body: JSON.stringify({ template }) }, true);
+  },
+
+  reset: async (
+    id: string
+  ): Promise<{ success: boolean; template: string; isEdited: boolean }> => {
+    return apiCall(`/prompts/${id}`, { method: 'DELETE' }, true);
+  }
+};

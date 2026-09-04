@@ -132,7 +132,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
   // navigation. Their routes and pages are left intact so nothing breaks and
   // they can be restored by adding entries here.
   const secondaryNav = [
-    { path: '/reels',             label: 'AI Reels',          icon: PlayCircle },
+    { path: '/reels',             label: 'Videos',            icon: PlayCircle },
     { path: '/upload',            label: 'Upload & Schedule', icon: UploadCloud },
     { path: '/connect-socials',   label: 'Connect Socials',   icon: Link2 },
     { path: '/brand-assets',      label: 'Brand Assets',      icon: Palette },
@@ -142,7 +142,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
   const resolveTopBarMeta = (pathname: string) => {
     if (pathname.startsWith('/campaigns')) return { title: 'Create', crumb: 'New campaign' };
     if (pathname.startsWith('/content-calendar')) return { title: 'Calendar', crumb: '' };
-    if (pathname.startsWith('/reels')) return { title: 'AI Reels', crumb: '' };
+    if (pathname.startsWith('/reels')) return { title: 'Videos', crumb: '' };
     if (pathname.startsWith('/influencer-portal')) return { title: 'Influencer Portal', crumb: '' };
     if (pathname.startsWith('/ad-campaigns')) return { title: 'Ad Campaigns', crumb: '' };
     if (pathname.startsWith('/connect-socials')) return { title: 'Connect Socials', crumb: '' };

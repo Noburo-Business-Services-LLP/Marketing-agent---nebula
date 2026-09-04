@@ -99,7 +99,7 @@ const EnvironmentAssets: React.FC = () => {
           </h2>
           <p className="text-[12.5px] text-white/45 mt-1 max-w-[600px]">
             Photos of your shop, showroom, workshop or storefront. Gravity renders scenes inside
-            your real space instead of inventing one — pick these in the AI Reels Environment step.
+            your real space instead of inventing one — pick these in the Videos Environment step.
           </p>
         </div>
         <span className="text-[11px] px-2.5 py-1 rounded-full border border-white/[0.10] bg-white/[0.03] text-white/55">
