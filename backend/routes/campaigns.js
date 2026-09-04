@@ -17,6 +17,7 @@ const crypto = require('crypto');
 const { callGemini, parseGeminiJSON, generateICPAndStrategy, generateCampaignImageNanoBanana } = require('../services/geminiAI');
 const { buildPrompt } = require('../services/promptRegistry');
 const { buildBrandMemoryBlock } = require('../services/brandMemory');
+const { decideCreative } = require('../services/creativeDirector');
 // Import Ayrshare for social media posting
 const { getPostStatus, retryPost: retryAyrsharePost, deletePost: deleteAyrsharePost } = require('../services/socialMediaAPI');
 const {
@@ -2108,6 +2109,9 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
     // Step 2: Generate images one by one and stream each
     const postsToProcess = parsed.posts.slice(0, totalPosts);
     const slotImageCache = new Map();
+    // What earlier slots in this campaign have already decided visually, so
+    // later ones can consciously vary rather than repeat.
+    const decidedSoFar = [];
     const fallbackImageTextByLanguage = {
       tamil: 'à®‡à®ªà¯à®ªà¯‹à®¤à¯‡ à®¤à¯Šà®Ÿà®™à¯à®•à¯à®™à¯à®•à®³à¯',
       telugu: 'à°‡à°ªà±à°ªà±à°¡à±‡ à°ªà±à°°à°¾à°°à°‚à°­à°¿à°‚à°šà°‚à°¡à°¿',
@@ -2137,29 +2141,51 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
       } else {
         sendEvent('generating', { index: i, total: postsToProcess.length, message: `Generating image for slot ${slotIndex + 1}...` });
         const resolvedImageText = String(post?.imageText || '').trim() || defaultImageText;
-        
-        imageResult = await generateCampaignImageNanoBanana(post.imageDescription, {
+
+        // What the visual should be is decided fresh for each slot, informed
+        // by what earlier slots in THIS campaign already decided — that is
+        // what gives the campaign creative variety (CAMPAIGN VARIETY) while
+        // staying one coherent run, rather than N independent single posts.
+        let creative = null;
+        try {
+          creative = await decideCreative(req.user.id, {
+            idea: post.imageDescription || post.caption,
+            contentType: 'campaign post',
+            contentPillar: post.contentTheme || '',
+            objective: objective || '',
+            platform: post.platform || schedule.platform || '',
+            campaignContext: `Campaign: "${campaignName}"${campaignDescription ? ' — ' + campaignDescription : ''}. This post's role: ${post.campaignRole || post.contentTheme || 'supporting'}.`,
+            previousCreatives: decidedSoFar
+          }, { aspectRatio: aspectRatio || '1:1', language: selectedLanguage });
+        } catch (err) {
+          console.error(`[CAMPAIGN_IMAGE] Creative Director failed for slot ${slotIndex + 1}, falling back to the plain image description:`, err.message);
+        }
+
+        if (creative?.creativeConcept) {
+          decidedSoFar.push({ concept: creative.creativeConcept, treatment: creative.visualTreatment });
+        }
+
+        const explicitProductImages = [
+          linkedProduct?.imageUrl,
+          ...(Array.isArray(productReferenceImages) ? productReferenceImages.slice(1) : [])
+        ].filter(Boolean);
+        const chosenProductImages = explicitProductImages.length ? explicitProductImages : (creative?.productImages || []);
+
+        imageResult = await generateCampaignImageNanoBanana(creative?.finalPrompt || post.imageDescription, {
           userId: req.user.id,
+          useRawPrompt: Boolean(creative?.finalPrompt),
           aspectRatio: aspectRatio || '1:1',
           brandName: brandDisplayName,
-          brandLogo: effectiveLogo || null,
+          brandLogo: creative?.logoUrl || effectiveLogo || null,
           industry: bp.industry || '',
           tone: enforcedTone || 'professional',
-          strictBrandLock: strictBrandMode,
-          brandPalette: getBrandPalette(brandCtx),
-          fontType: brandCtx?.profile?.assets?.fontType || '',
-          postIndex: slotIndex, // Use slot index for image context
+          postIndex: slotIndex,
           totalPosts: numSlots,
-          campaignTheme: campaignName,
-          keyMessages: [keyMessages || '', visualHints || '', strictBrandText || '', brandGuidelinesText || ''].filter(Boolean).join('\n'),
-          linkedProduct,
-          // Everything after the first: the first is already carried by
-          // linkedProduct.imageUrl as the primary reference.
-          productReferenceImages: Array.isArray(productReferenceImages)
-            ? productReferenceImages.slice(1)
-            : [],
+          environmentReferenceImage: creative?.environmentImage || null,
+          productReferenceImage: chosenProductImages[0] || null,
+          productReferenceImages: chosenProductImages.slice(1),
           targetLanguage: selectedLanguage,
-          imageText: resolvedImageText
+          imageText: creative?.imageText || resolvedImageText
         });
         
         // The failure reason used to be dropped entirely — a dead card in the
@@ -2203,6 +2229,10 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
           cta: '',
           imageUrl: postData.imageUrl || '',
           imagePrompt: postData.imageDescription || '',
+          // The prompt actually sent to the image model — was never
+          // persisted for campaign posts, so "see the prompt" in Create had
+          // nothing to show for anything generated through this route.
+          imagePromptResolved: imageResult?.promptUsed || '',
           platforms: [postData.platform],
           language: selectedLanguage,
           tone: enforcedTone || '',

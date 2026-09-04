@@ -9,6 +9,7 @@ const { buildBrandMemoryBlock } = require('./brandMemory');
 // Lazy to avoid a load-order cycle: contentCalendarService lazily requires
 // this module too, when auto-generation runs.
 const { normalizeLanguage } = require('./contentCalendarService');
+const { decideCreative } = require('./creativeDirector');
 
 const queue = [];
 let processing = false;
@@ -211,6 +212,22 @@ async function processQueue() {
   }
 }
 
+/**
+ * The last few standalone posts this account made, so a fresh single post
+ * does not land on the same visual idea as something generated yesterday. A
+ * carousel or campaign has its own siblings within the same run to compare
+ * against instead; this is specifically for the account-history case those
+ * two don't need.
+ */
+async function getRecentCreativeHistory(userId, limit = 4) {
+  const recent = await Draft.find({ userId, creativeConcept: { $ne: '' } })
+    .sort({ createdAt: -1 })
+    .limit(limit)
+    .select('creativeConcept visualTreatment')
+    .lean();
+  return recent.map((d) => ({ concept: d.creativeConcept, treatment: d.visualTreatment }));
+}
+
 async function processDraftImageGenerationJob(job) {
   const { draftId } = job;
   console.log(`[BackgroundQueue] Processing image generation for Draft ${draftId}`);
@@ -308,25 +325,62 @@ async function processDraftImageGenerationJob(job) {
       if (Array.isArray(contentPrompt?.hashtags) && contentPrompt.hashtags.length) {
         draft.hashtags = contentPrompt.hashtags;
       }
-      if (contentPrompt?.imageText) {
-        draft.imageText = contentPrompt.imageText;
+      // What the visual should actually be is a separate decision from what
+      // the post says. The Creative Director makes it — reading the brand's
+      // full asset library once, choosing only what this specific idea
+      // needs — then the Art Director turns that into the final instruction.
+      // The image model receives ONLY that instruction and the specific
+      // asset URLs chosen for it, never the brand context or this decision
+      // prompt itself.
+      let creative = null;
+      try {
+        creative = await decideCreative(draft.userId, {
+          idea: imageDescription,
+          contentType: job.contentType || 'post',
+          contentPillar: job.contentPillar || '',
+          objective: job.objective || '',
+          platform: (job.platforms || draft.platforms || [])[0] || '',
+          campaignContext: job.campaignContext || '',
+          previousCreatives: await getRecentCreativeHistory(draft.userId)
+        }, {
+          aspectRatio: job.aspectRatio || '1:1',
+          language: normalizeLanguage(bp.contentLanguage)
+        });
+      } catch (err) {
+        console.error('[BackgroundQueue] Creative Director pass failed, falling back to the plain image description:', err.message);
       }
 
+      if (creative?.creativeConcept) {
+        draft.creativeConcept = creative.creativeConcept;
+        draft.visualTreatment = creative.visualTreatment;
+      }
+      // The Creative Director's own imageText supersedes single.content's —
+      // it was chosen alongside the actual visual, not written blind.
+      if (creative?.imageText) draft.imageText = creative.imageText;
+
+      // Explicitly selected images take priority over the Creative Director's
+      // own picks — a user who picked a product in Create meant that product,
+      // whatever the model decides is relevant.
+      const explicitProductImages = [
+        job.linkedProduct?.imageUrl,
+        ...(Array.isArray(job.productReferenceImages) ? job.productReferenceImages.slice(1) : [])
+      ].filter(Boolean);
+      const chosenProductImages = explicitProductImages.length ? explicitProductImages : (creative?.productImages || []);
+
       imageResult = await Promise.race([
-        generateCampaignImageNanoBanana(imageDescription, {
+        generateCampaignImageNanoBanana(creative?.finalPrompt || imageDescription, {
           userId: draft.userId,
+          useRawPrompt: Boolean(creative?.finalPrompt),
           aspectRatio: job.aspectRatio || '1:1',
           brandName: user?.companyName || 'Brand',
           industry: bp.industry || '',
           tone: bp.tone || 'professional',
           targetLanguage: normalizeLanguage(bp.contentLanguage),
           imageText: draft.imageText || '',
-          // Products picked in Create, carried through the queue job.
-          linkedProduct: job.linkedProduct || null,
-          productReferenceImage: job.linkedProduct?.imageUrl || null,
-          productReferenceImages: Array.isArray(job.productReferenceImages)
-            ? job.productReferenceImages.slice(1)
-            : []
+          brandLogo: creative?.logoUrl || null,
+          environmentReferenceImage: creative?.environmentImage || null,
+          productReferenceImage: chosenProductImages[0] || null,
+          productReferenceImages: chosenProductImages.slice(1)
         }),
         timeoutPromise
       ]);

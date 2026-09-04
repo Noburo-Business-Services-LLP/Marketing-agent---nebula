@@ -50,6 +50,19 @@ const draftSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  // What the Creative Director decided before any image was rendered — the
+  // concept it chose and the visual treatment it picked. Shown in the UI so
+  // a weak result can be traced to a decision, not just a picture, and read
+  // back on the next generation so the account does not keep landing on the
+  // same idea.
+  creativeConcept: {
+    type: String,
+    default: ''
+  },
+  visualTreatment: {
+    type: String,
+    default: ''
+  },
   imagePromptResolved: {
     type: String,
     default: ''
@@ -92,7 +105,9 @@ const draftSchema = new mongoose.Schema({
     role: { type: String, default: '' },
     headline: { type: String, default: '' },
     imagePrompt: { type: String, default: '' },
-    imageUrl: { type: String, default: '' }
+    imageUrl: { type: String, default: '' },
+    creativeConcept: { type: String, default: '' },
+    visualTreatment: { type: String, default: '' }
   }],
   // The look every slide in a carousel shares. Held on the draft so a later
   // regeneration of one slide can match the others instead of drifting.

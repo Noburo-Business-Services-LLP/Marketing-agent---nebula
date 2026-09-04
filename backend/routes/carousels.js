@@ -9,6 +9,7 @@ const BrandIntelligenceProfile = require('../models/BrandIntelligenceProfile');
 const { callGemini, parseGeminiJSON, generateCampaignImageNanoBanana } = require('../services/geminiAI');
 const { buildPrompt } = require('../services/promptRegistry');
 const { buildBrandMemoryBlock } = require('../services/brandMemory');
+const { decideCreative } = require('../services/creativeDirector');
 
 /**
  * Carousel generation.
@@ -82,11 +83,7 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
     const brandDisplayName =
       String(brandProfile?.brandName || bp.companyName || bp.name || 'Brand').trim() || 'Brand';
     const industry = bp.industry || '';
-    const fontType = String(brandAssets.fontType || '').trim();
     const brandLogo = String(brandAssets.primaryLogoUrl || logoAsset?.url || '').trim() || null;
-    const palette = [brandAssets.primaryColor, brandAssets.secondaryColor]
-      .map((c) => String(c || '').trim())
-      .filter(Boolean);
 
     send('status', { message: 'Planning the story…' });
 
@@ -151,6 +148,12 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
     });
 
     let rendered = 0;
+    // Each slide's Creative Director call is told what earlier slides in
+    // THIS carousel already decided, so slide 3 can deliberately vary from
+    // slides 1-2 instead of inheriting one style fixed before any slide was
+    // seen. This replaces the old single styleGuide applied identically to
+    // every slide — the specific thing this refactor was asked to fix.
+    const decidedSoFar = [];
 
     for (let i = 0; i < draft.carouselSlides.length; i++) {
       const slide = draft.carouselSlides[i];
@@ -160,30 +163,42 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
       });
 
       try {
-        // The styleGuide leads so the shared look is established before the
-        // slide's own subject, which is what holds the set together.
-        const description = [
-          styleGuide ? `SHARED VISUAL STYLE (identical across every slide in this set): ${styleGuide}` : '',
-          `THIS SLIDE (${slide.order} of ${draft.carouselSlides.length}, role: ${slide.role || 'build'}): ${slide.imagePrompt}`
-        ].filter(Boolean).join('\n\n');
+        const explicitProductImages = [
+          linkedProduct?.imageUrl,
+          ...(Array.isArray(productReferenceImages) ? productReferenceImages.slice(1) : [])
+        ].filter(Boolean);
 
-        const result = await generateCampaignImageNanoBanana(description, {
+        const creative = await decideCreative(req.user.id, {
+          idea: slide.imagePrompt || slide.headline,
+          contentType: 'carousel slide',
+          contentPillar: '',
+          objective: '',
+          platform: (platforms || [])[0] || '',
+          campaignContext: `This is slide ${slide.order} of ${draft.carouselSlides.length} in a carousel about: ${cleanBrief}. This slide's role: ${slide.role || 'build'}.`,
+          previousCreatives: decidedSoFar
+        }, { aspectRatio, language });
+
+        if (creative?.creativeConcept) {
+          draft.carouselSlides[i].creativeConcept = creative.creativeConcept;
+          draft.carouselSlides[i].visualTreatment = creative.visualTreatment;
+          decidedSoFar.push({ concept: creative.creativeConcept, treatment: creative.visualTreatment });
+        }
+
+        const chosenProductImages = explicitProductImages.length ? explicitProductImages : (creative?.productImages || []);
+
+        const result = await generateCampaignImageNanoBanana(creative?.finalPrompt || slide.imagePrompt, {
           userId: req.user.id,
+          useRawPrompt: Boolean(creative?.finalPrompt),
           aspectRatio,
           brandName: brandDisplayName,
-          brandLogo,
+          brandLogo: creative?.logoUrl || brandLogo,
           industry,
           tone,
-          brandPalette: palette,
-          fontType,
           targetLanguage: language,
-          imageText: slide.headline,
-          campaignTheme: cleanBrief,
-          linkedProduct,
-          productReferenceImage: linkedProduct?.imageUrl || null,
-          productReferenceImages: Array.isArray(productReferenceImages)
-            ? productReferenceImages.slice(1)
-            : [],
+          imageText: creative?.imageText || slide.headline,
+          environmentReferenceImage: creative?.environmentImage || null,
+          productReferenceImage: chosenProductImages[0] || null,
+          productReferenceImages: chosenProductImages.slice(1),
           postIndex: i,
           totalPosts: draft.carouselSlides.length
         });

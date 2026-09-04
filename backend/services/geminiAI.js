@@ -4695,8 +4695,20 @@ async function generateCampaignImageNanoBanana(imageDescription, options = {}) {
   const isCinematic = Boolean(options.isCinematic);
   
   let prompt = '';
-  
-  if (isCinematic && characterReferenceImage) {
+
+  // The Creative Director / Art Director pipeline (single post, carousel,
+  // campaign) has already decided the concept, the visual treatment and
+  // exactly which real assets to use, and has already written the final
+  // image instruction itself. Wrapping that in this function's own giant
+  // "elite creative director" prompt below would mean the image model sees
+  // two different creative directors' instructions layered on top of each
+  // other, plus the full brand context a second time — precisely what that
+  // pipeline exists to avoid sending. useRawPrompt sends its instruction
+  // through untouched; every other caller (calendar covers, reels, product
+  // shots) is unaffected and keeps building its prompt exactly as before.
+  if (options.useRawPrompt) {
+    prompt = String(imageDescription || '').trim();
+  } else if (isCinematic && characterReferenceImage) {
     prompt = `SYSTEM ROLE:
 You are an image editing model, not an image generation model.
 
