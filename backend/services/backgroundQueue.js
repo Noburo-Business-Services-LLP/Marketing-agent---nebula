@@ -265,7 +265,13 @@ async function processDraftImageGenerationJob(job) {
           aspectRatio: job.aspectRatio || '1:1',
           brandName: user?.companyName || 'Brand',
           industry: bp.industry || '',
-          tone: bp.tone || 'professional'
+          tone: bp.tone || 'professional',
+          // Products picked in Create, carried through the queue job.
+          linkedProduct: job.linkedProduct || null,
+          productReferenceImage: job.linkedProduct?.imageUrl || null,
+          productReferenceImages: Array.isArray(job.productReferenceImages)
+            ? job.productReferenceImages.slice(1)
+            : []
         }),
         timeoutPromise
       ]);

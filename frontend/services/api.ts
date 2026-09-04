@@ -4256,6 +4256,10 @@ export const draftsAPI = {
     prompt: string;
     aspectRatio?: string;
     referenceImage?: string;  // base64 data URL — optional visual reference
+    // Products or services to feature. The linked one anchors the copy; the
+    // image list is attached to the generation as visual references.
+    linkedProduct?: { _id?: string; name: string; description?: string; imageUrl?: string } | null;
+    productReferenceImages?: string[];
   }): Promise<{ success: boolean; draftId?: string; draft?: Draft; message?: string }> => {
     return apiCall('/drafts/generate-image-bg', {
       method: 'POST',

@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, Layers, Calendar as CalendarIcon, Zap, Image as ImageIcon, Instagram, Facebook, Linkedin, ChevronRight, Loader2, Check, Clock, Save, AlertCircle, RotateCcw, Pencil, Trash2, Code2, Copy, X, SlidersHorizontal, GalleryHorizontalEnd } from 'lucide-react';
+import { Sparkles, Layers, Calendar as CalendarIcon, Zap, Image as ImageIcon, Instagram, Facebook, Linkedin, ChevronRight, Loader2, Check, Clock, Save, AlertCircle, RotateCcw, Pencil, Trash2, Code2, Copy, X, SlidersHorizontal, GalleryHorizontalEnd, Package } from 'lucide-react';
 import { draftsAPI, brandAssetsAPI, apiService } from '../services/api';
 import { Draft } from '../types';
 import GeneratingFill from '../components/GeneratingFill';
 import CalendarIdeaPicker from '../components/CalendarIdeaPicker';
 import PromptStudio from '../components/PromptStudio';
+import AssetPicker, { PickedAsset } from '../components/AssetPicker';
 import { BorderBeam } from '../components/ui/border-beam';
 
 const ASPECTS = [
@@ -206,6 +207,10 @@ const GravityCreate: React.FC = () => {
   // look at ideas they already planned.
   const [ideaPickerOpen, setIdeaPickerOpen] = useState(false);
   const [promptStudioOpen, setPromptStudioOpen] = useState(false);
+  // Products or services this creative should feature. Multiple, because a
+  // bundle or a range is one post, not several.
+  const [assetPickerOpen, setAssetPickerOpen] = useState(false);
+  const [pickedProducts, setPickedProducts] = useState<PickedAsset[]>([]);
   // Carousel length. Below three there is no story to tell; above ten the
   // platforms stop showing every slide anyway.
   const [slideCount, setSlideCount] = useState(5);
@@ -474,6 +479,8 @@ const GravityCreate: React.FC = () => {
       platforms: selectedPlatforms,
       prompt: description.trim() || name.trim() || 'A cinematic marketing poster',
       aspectRatio: backendAspect,
+      linkedProduct: primaryProduct,
+      productReferenceImages: productImageUrls,
     });
     if (res?.draft) {
       setResults([res.draft]);
@@ -507,6 +514,8 @@ const GravityCreate: React.FC = () => {
         tone: (tone.split(',')[0] || 'professional').toLowerCase(),
         language: 'English',
         aspectRatio: backendAspect,
+        linkedProduct: primaryProduct,
+        productReferenceImages: productImageUrls,
       }),
     });
     if (!response.ok) throw new Error(`Server responded ${response.status}`);
@@ -606,7 +615,11 @@ const GravityCreate: React.FC = () => {
       targetLocation: '',
       targetInterests: '',
       productLogo: null,
-      linkedProduct: null,
+      // The first selection anchors the copy (name, price, description); the
+      // rest ride along as extra reference images so every chosen item
+      // actually appears in the creative.
+      linkedProduct: primaryProduct,
+      productReferenceImages: productImageUrls,
     };
 
     runStartRef.current = Date.now();
@@ -749,6 +762,18 @@ const GravityCreate: React.FC = () => {
   // While a request is in flight there is no draft record yet, so show
   // placeholder cards in the grid straight away. They animate in place and
   // are swapped for the real drafts the moment those come back.
+  // Shapes the selection into what each backend expects: one linked product
+  // for the copy, and every image for the visual references.
+  const primaryProduct = pickedProducts.length
+    ? {
+      _id: pickedProducts[0].id || undefined,
+      name: pickedProducts[0].name,
+      description: pickedProducts[0].description || '',
+      imageUrl: pickedProducts[0].imageUrl
+    }
+    : null;
+  const productImageUrls = pickedProducts.map((p) => p.imageUrl).filter(Boolean);
+
   // How many cards this run will produce, whichever mode is active.
   const expectedCount = mode === 'campaign' ? estimate.total : mode === 'carousel' ? slideCount : 1;
 
@@ -859,6 +884,15 @@ const GravityCreate: React.FC = () => {
           <SlidersHorizontal className="w-4 h-4 text-[#F5A623]" />
           Edit the prompts
         </button>
+        <button
+          onClick={() => setAssetPickerOpen(true)}
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-[13px] font-semibold border border-white/[0.12] text-[#F5F4F1] hover:bg-white/[0.05] hover:border-[#F5A623]/40 transition-all"
+        >
+          <Package className="w-4 h-4 text-[#F5A623]" />
+          {pickedProducts.length === 0
+            ? 'Feature a product or service'
+            : `${pickedProducts.length} product${pickedProducts.length > 1 ? 's' : ''} selected`}
+        </button>
         {pickedIdea && (
           <span className="text-[12px] text-white/45">
             Loaded: <span className="text-[#F5A623]">{pickedIdea}</span>
@@ -871,6 +905,14 @@ const GravityCreate: React.FC = () => {
         onClose={() => setIdeaPickerOpen(false)}
         onPick={applyCalendarItem}
         type={mode === 'single' ? 'post' : undefined}
+      />
+
+      <AssetPicker
+        open={assetPickerOpen}
+        onClose={() => setAssetPickerOpen(false)}
+        source="products"
+        selected={pickedProducts}
+        onChange={setPickedProducts}
       />
 
       <PromptStudio

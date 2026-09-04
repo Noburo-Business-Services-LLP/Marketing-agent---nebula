@@ -4640,6 +4640,10 @@ async function generateCampaignImageNanoBanana(imageDescription, options = {}) {
     characterReferenceImage = null,
     previousSceneImage = null,
     productReferenceImage = null,
+    // Several products can feature in one creative (a bundle, a range, a
+    // comparison). The single productReferenceImage above stays for callers
+    // that only ever have one.
+    productReferenceImages = [],
     // NEW — environment reference image (locked physical space for
     // the whole video). Has a dedicated note that tells Nano Banana
     // this is a PLACE not a person; match walls/floor/lighting.
@@ -4664,7 +4668,17 @@ async function generateCampaignImageNanoBanana(imageDescription, options = {}) {
   } = options;
 
   const linkedProduct = options.linkedProduct && typeof options.linkedProduct === 'object' ? options.linkedProduct : null;
-  const hasProductReferenceImage = Boolean(String(productReferenceImage || linkedProduct?.imageUrl || '').trim());
+  // The linked product's own image counts as the primary reference. Campaign
+  // generation passed linkedProduct but never productReferenceImage, so
+  // hasProductReferenceImage went true — and the prompt announced "Product
+  // reference image: Provided" — while no image was ever attached.
+  const primaryProductImage =
+    String(productReferenceImage || '').trim() || String(linkedProduct?.imageUrl || '').trim() || null;
+
+  const extraProductImages = (Array.isArray(productReferenceImages) ? productReferenceImages : [])
+    .map((u) => String(u || '').trim())
+    .filter(Boolean);
+  const hasProductReferenceImage = Boolean(primaryProductImage || extraProductImages.length);
   const normalizedPalette = Array.isArray(brandPalette) ? brandPalette.filter(Boolean) : [];
   const primaryColor = String(normalizedPalette[0] || '').trim();
   const secondaryColor = String(normalizedPalette[1] || '').trim();
@@ -4892,12 +4906,19 @@ Treat this as an image editing task where the original person must remain identi
 
     const [logoInline, productInline, originalCharacterInline, characterInline, previousSceneInline, environmentInline] = await Promise.all([
       prepareInlineImage(brandLogo, 'brand logo'),
-      prepareInlineImage(productReferenceImage, 'product reference image'),
+      prepareInlineImage(primaryProductImage, 'product reference image'),
       prepareInlineImage(originalCharacterImage, 'original character image'),
       prepareInlineImage(characterReferenceImage, 'canonical character image'),
       prepareInlineImage(previousSceneImage, 'previous scene image'),
       prepareInlineImage(environmentReferenceImage, 'environment reference image')
     ]);
+
+    // Prepared separately so one unreadable product image cannot take the
+    // whole batch down with it — prepareInlineImage already returns null on
+    // failure, and those are dropped here.
+    const extraProductInline = (await Promise.all(
+      extraProductImages.map((url, i) => prepareInlineImage(url, `product reference image ${i + 2}`))
+    )).filter((img) => img?.data);
 
     const referenceNotes = [];
 
@@ -4949,6 +4970,16 @@ Do NOT invent new people not visible in earlier scenes.`);
         }
       });
       referenceNotes.push(`Image ${parts.length} is the exact product reference image. Preserve product form, materials, and key structure.`);
+    }
+
+    for (const extra of extraProductInline) {
+      parts.push({
+        inlineData: {
+          mimeType: extra.mimeType || 'image/png',
+          data: extra.data
+        }
+      });
+      referenceNotes.push(`Image ${parts.length} is another exact product reference image. Preserve its form, materials, and key structure. Every product reference supplied must appear in the final image, and they must sit together as one deliberate arrangement rather than a collage.`);
     }
 
     if (logoInline?.data) {

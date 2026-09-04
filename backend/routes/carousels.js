@@ -47,7 +47,9 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
       platforms = ['instagram'],
       tone = 'professional',
       language = 'English',
-      aspectRatio = '4:5'
+      aspectRatio = '4:5',
+      linkedProduct = null,
+      productReferenceImages = []
     } = req.body || {};
 
     const slides = Math.max(MIN_SLIDES, Math.min(MAX_SLIDES, Number(slideCount) || 5));
@@ -171,6 +173,11 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
           targetLanguage: language,
           imageText: slide.headline,
           campaignTheme: cleanBrief,
+          linkedProduct,
+          productReferenceImage: linkedProduct?.imageUrl || null,
+          productReferenceImages: Array.isArray(productReferenceImages)
+            ? productReferenceImages.slice(1)
+            : [],
           postIndex: i,
           totalPosts: draft.carouselSlides.length
         });

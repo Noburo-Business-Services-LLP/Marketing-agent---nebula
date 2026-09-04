@@ -42,6 +42,7 @@ import {
 } from '../components/gravity';
 import CalendarIdeaPicker from '../components/CalendarIdeaPicker';
 import PromptStudio from '../components/PromptStudio';
+import AssetPicker, { PickedAsset } from '../components/AssetPicker';
 import { getThemeClasses, useTheme } from '../context/ThemeContext';
 import { contentCalendarAPI, inventoryAPI, videoGenerationAPI, draftsAPI } from '../services/api';
 import { Product, Draft } from '../types';
@@ -345,6 +346,12 @@ const ReelGenerator: React.FC = () => {
     );
   };
   const [promptStudioOpen, setPromptStudioOpen] = useState(false);
+  // Products/services featured in the video, and the environment it is set
+  // in. Both now come from Brand Assets rather than upload-only.
+  const [productPickerOpen, setProductPickerOpen] = useState(false);
+  const [pickedProducts, setPickedProducts] = useState<PickedAsset[]>([]);
+  const [envPickerOpen, setEnvPickerOpen] = useState(false);
+  const [pickedEnvironment, setPickedEnvironment] = useState<PickedAsset[]>([]);
   const [successMessage, setSuccessMessage] = useState('');
 
   // Persistent Queue background worker progress states
@@ -1384,8 +1391,17 @@ setCharacterAge(nextDraft?.characterAge || '');
       durationSeconds,
       sceneCount: sceneCount || undefined,
       imageData: inputImageData || undefined,
-      productId: selectedProduct?._id || undefined,
-      product: selectedProduct || undefined,
+      productId: pickedProducts[0]?.id || undefined,
+      product: pickedProducts[0]
+        ? {
+          _id: pickedProducts[0].id,
+          name: pickedProducts[0].name,
+          description: pickedProducts[0].description || '',
+          imageUrl: pickedProducts[0].imageUrl
+        }
+        : undefined,
+      // Everything chosen, so a bundle or range all appears.
+      productReferenceImages: pickedProducts.map((x) => x.imageUrl).filter(Boolean),
       aspectRatio,
       languageCode,
       environment: environmentEnabled ? {
@@ -1534,8 +1550,17 @@ setCharacterAge(nextDraft?.characterAge || '');
       durationSeconds,
       sceneCount: sceneCount || undefined,
       imageData: inputImageData || undefined,
-      productId: selectedProduct?._id || undefined,
-      product: selectedProduct || undefined,
+      productId: pickedProducts[0]?.id || undefined,
+      product: pickedProducts[0]
+        ? {
+          _id: pickedProducts[0].id,
+          name: pickedProducts[0].name,
+          description: pickedProducts[0].description || '',
+          imageUrl: pickedProducts[0].imageUrl
+        }
+        : undefined,
+      // Everything chosen, so a bundle or range all appears.
+      productReferenceImages: pickedProducts.map((x) => x.imageUrl).filter(Boolean),
       videoType: 'reel',
       aspectRatio,
       languageCode,
@@ -2208,6 +2233,37 @@ setCharacterAge(nextDraft?.characterAge || '');
           </button>
         </div>
 
+        <AssetPicker
+          open={productPickerOpen}
+          onClose={() => setProductPickerOpen(false)}
+          source="products"
+          selected={pickedProducts}
+          onChange={setPickedProducts}
+        />
+
+        <AssetPicker
+          open={envPickerOpen}
+          onClose={() => setEnvPickerOpen(false)}
+          source="environment"
+          selected={pickedEnvironment}
+          onChange={(assets) => {
+            setPickedEnvironment(assets);
+            // Merge into the existing references rather than replacing them,
+            // so a catalogued space and an uploaded one can sit side by side.
+            setEnvironmentRefs((prev) => {
+              const uploads = prev.filter((r) => r.source === 'upload');
+              const fromAssets = assets.map((a) => ({
+                url: a.dataUrl ? '' : a.imageUrl,
+                dataUrl: a.dataUrl || '',
+                source: 'brand-asset' as const,
+                alt: a.name
+              }));
+              return [...uploads, ...fromAssets].slice(0, 5);
+            });
+          }}
+          max={5}
+        />
+
         <PromptStudio
           open={promptStudioOpen}
           onClose={() => setPromptStudioOpen(false)}
@@ -2717,32 +2773,14 @@ setCharacterAge(nextDraft?.characterAge || '');
                     <GravityMetaBox
                       label="Product"
                       value={
-                        inputImageName
-                          || products.find((p) => p._id === selectedProductId)?.name
-                          || (loadingProducts ? 'Loading…' : 'None')
+                        pickedProducts.length === 0
+                          ? 'None'
+                          : pickedProducts.length === 1
+                            ? pickedProducts[0].name
+                            : `${pickedProducts.length} selected`
                       }
                       Icon={Package}
-                      onClick={() => setOpenMetaBox(openMetaBox === 'product' ? null : 'product')}
-                    />
-                    <GravityOptionPopover
-                      open={openMetaBox === 'product'}
-                      options={[
-                        { value: '__upload__', label: 'Upload image…' },
-                        { value: '', label: 'No product selected' },
-                        ...products.map((p) => ({ value: p._id, label: p.name })),
-                      ]}
-                      onPick={(v) => {
-                        if (v === '__upload__') {
-                          productImageInputRef.current?.click();
-                          return;
-                        }
-                        setSelectedProductId(v);
-                        if (v) {
-                          setInputImageData('');
-                          setInputImageName('');
-                        }
-                      }}
-                      onClose={() => setOpenMetaBox(null)}
+                      onClick={() => setProductPickerOpen(true)}
                     />
                     <input
                       ref={productImageInputRef}
@@ -3539,14 +3577,25 @@ setCharacterAge(nextDraft?.characterAge || '');
                     <p className={`text-[11px] mt-1 ${theme.textSecondary}`}>
                       Wide shot of the space + a detail or two. Same lighting / angle-of-day as you want the video to feel like.
                     </p>
-                    <GravityFileInput
-                      accept="image/*"
-                      className="mt-3"
-                      disabled={environmentRefs.length >= 5}
-                      buttonText="Upload reference"
-                      fileName={environmentRefs.length ? `${environmentRefs.length} of 5 added` : undefined}
-                      onFile={(f) => onEnvironmentUpload(f)}
-                    />
+                    <div className="mt-3 flex flex-wrap items-center gap-2.5">
+                      <GravityFileInput
+                        accept="image/*"
+                        disabled={environmentRefs.length >= 5}
+                        buttonText="Upload reference"
+                        fileName={environmentRefs.length ? `${environmentRefs.length} of 5 added` : undefined}
+                        onFile={(f) => onEnvironmentUpload(f)}
+                      />
+                      {/* Spaces already photographed for the brand belong here
+                          too — uploading one again was the only option. */}
+                      <button
+                        onClick={() => setEnvPickerOpen(true)}
+                        disabled={environmentRefs.length >= 5}
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-[12.5px] font-semibold border border-white/[0.12] text-[#F5F4F1] hover:bg-white/[0.05] hover:border-[#F5A623]/40 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        <ImageIcon className="w-3.5 h-3.5 text-[#F5A623]" />
+                        Choose from Brand Assets
+                      </button>
+                    </div>
                     {environmentRefs.length >= 5 && (
                       <p className="text-[11px] mt-2 text-amber-400">Max 5 references. Remove one to add another.</p>
                     )}

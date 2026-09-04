@@ -524,7 +524,7 @@ router.post('/:id/apply-logo', protect, async (req, res) => {
 router.post('/generate-image-bg', protect, async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
-    const { type, title, caption, hashtags, prompt, aspectRatio, platforms, referenceImage } = req.body;
+    const { type, title, caption, hashtags, prompt, aspectRatio, platforms, referenceImage, linkedProduct, productReferenceImages } = req.body;
 
     const draft = new Draft({
       userId,
@@ -555,7 +555,12 @@ router.post('/generate-image-bg', protect, async (req, res) => {
       type: type === 'campaign' ? 'generate_campaign_image' : 'generate_post_image',
       draftId: draft._id,
       aspectRatio: aspectRatio || '1:1',
-      referenceImage: referenceImage || null
+      referenceImage: referenceImage || null,
+      // Products chosen in Create. The linked one gives the model the name,
+      // price and description; the image list is attached so each chosen item
+      // actually appears rather than being described from memory.
+      linkedProduct: linkedProduct || null,
+      productReferenceImages: Array.isArray(productReferenceImages) ? productReferenceImages : []
     });
 
     res.status(201).json({ success: true, draftId: draft._id, draft });

@@ -1531,6 +1531,7 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
       preferredDays: daysInput, targetAge, targetGender,
       targetLocation, targetInterests, productLogo,
       linkedProduct,
+      productReferenceImages,
       language: languageInput,
       // Cadence from the Create page ("2 posts / week"). Optional — callers
       // that omit it keep the old preferredDays-driven behaviour.
@@ -2176,6 +2177,11 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
           campaignTheme: campaignName,
           keyMessages: [keyMessages || '', visualHints || '', strictBrandText || '', brandGuidelinesText || ''].filter(Boolean).join('\n'),
           linkedProduct,
+          // Everything after the first: the first is already carried by
+          // linkedProduct.imageUrl as the primary reference.
+          productReferenceImages: Array.isArray(productReferenceImages)
+            ? productReferenceImages.slice(1)
+            : [],
           targetLanguage: selectedLanguage,
           imageText: resolvedImageText
         });
