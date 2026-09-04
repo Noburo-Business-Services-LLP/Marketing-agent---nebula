@@ -204,12 +204,23 @@ const ACTION_USD = {
 const MARGIN = { default: 2.5, video_base: 3.2, video_generated: 3.2 };
 const marginFor = (action) => MARGIN[action] || MARGIN.default;
 
-// What one Quark is worth. Anchored deliberately: at this value a single AI
-// image post prices out at almost exactly 5 Quarks, which is what it already
-// costs today. That keeps every existing balance, the 100-Quark starting
-// grant, and everyone's intuition intact, while letting the genuinely
-// mispriced actions (video above all) move to where they should be.
-const USD_PER_QUARK = 0.08;
+// What one Quark is worth.
+//
+// A Quark meters the MACHINE — API spend plus infrastructure, with margin on
+// top. It deliberately does NOT price the CSM who drives the tool: their time
+// scales with delivered items, while Quarks scale with attempts, and a currency
+// that tries to be both is wrong for both. Human cost is priced per deliverable
+// instead (see DELIVERED below).
+//
+// $0.02 rather than the $0.08 this model started with. At $0.08 five actions
+// priced in fractions (0.25 chat, 4.5 carousel, 5.5 rival post) and no credit
+// system in this market does that — Higgsfield, Magnific, OpenArt and Runway
+// are all whole numbers. At $0.02 every price is an integer and the monthly
+// allowances land in the same shape the market uses.
+//
+// MIGRATION: this multiplies every price by 4, so existing balances must be
+// multiplied by 4 too or they silently lose 75% of their purchasing power.
+const USD_PER_QUARK = 0.02;
 
 // For turning USD costs into the INR we actually price in. The original sheet
 // used a flat 100, which was a convenient round number rather than a rate.
@@ -217,16 +228,14 @@ const USD_PER_QUARK = 0.08;
 // about 3 points, not by anything structural.
 const INR_PER_USD = 88;
 
-// Prices are what users read off a table, so they get rounded to something
-// human: quarters under 1, halves under 10, whole numbers above. The 0.25
-// floor is load-bearing — chat rounds to 0.22, and without a floor the
-// cheapest actions round to literally free, which is a pricing bug that
-// looks like a rounding rule.
+// Prices are what people read off a table, so every one is a whole number
+// with a floor of 1 — the market convention (Higgsfield, Magnific, OpenArt,
+// Runway all bill in integers) and the reason the denomination moved to $0.02.
+// The floor matters: chat costs $0.007, which rounds to zero, and "free" is a
+// pricing decision that should be made deliberately rather than fall out of a
+// rounding rule.
 function toQuarks(usd, action) {
-  const raw = (usd * marginFor(action)) / USD_PER_QUARK;
-  if (raw < 1) return Math.max(0.25, Math.round(raw * 4) / 4);
-  if (raw < 10) return Math.round(raw * 2) / 2;
-  return Math.round(raw);
+  return Math.max(1, Math.round((usd * marginFor(action)) / USD_PER_QUARK));
 }
 
 const QUARK_COSTS = Object.fromEntries(
@@ -258,6 +267,72 @@ const ACTION_UNITS = {
 };
 
 // ---------------------------------------------------------------------------
+// 3b. The cost that dwarfs all of the above: people
+// ---------------------------------------------------------------------------
+// Gravity is sold as a managed service. A CSM sits in the tool, briefs it,
+// reviews what comes back, regenerates what missed, writes and fixes captions,
+// schedules and publishes. That person is cost of goods sold, not overhead —
+// their hours scale directly with delivered output — and they cost multiples
+// of the API bill.
+//
+// Ignoring them is how a 60%-gross-margin model turns out to be lossmaking.
+//
+// RETRY_FACTOR is separate and important: Quarks meter GENERATIONS, but a CSM's
+// time is spent per DELIVERED item. Three attempts at one post costs 3x the
+// machine and roughly 1x the human, because the reviewing IS the working.
+const LABOUR = {
+  csm_monthly_inr: 60000,          // fully loaded: salary + benefits + tooling
+  productive_hours_per_month: 126, // 21 days x 8h at 75% productive
+
+  // Minutes of CSM time per DELIVERED item (not per attempt).
+  minutes_per: {
+    image_post: 12,
+    carousel_deck: 25,
+    reel: 75,
+    campaign_post: 8   // cheaper per item: planned and reviewed in a batch
+  }
+};
+
+LABOUR.hourly_inr = LABOUR.csm_monthly_inr / LABOUR.productive_hours_per_month;
+LABOUR.hourly_usd = LABOUR.hourly_inr / INR_PER_USD;
+const labourUsd = (minutes) => (minutes / 60) * LABOUR.hourly_usd;
+
+// How many generations it takes on average to land one deliverable we ship.
+// Video is worse: scenes get re-rolled individually until the cut works.
+const RETRY_FACTOR = { image: 1.6, carousel: 1.6, video_scene: 2.2 };
+
+// True cost of one SHIPPED deliverable — machine (including the attempts that
+// did not make it) plus the human who drove it.
+const DELIVERED = {
+  image_post: {
+    machine: ACTION_USD.image_generated * RETRY_FACTOR.image,
+    labour: labourUsd(LABOUR.minutes_per.image_post)
+  },
+  carousel_8: {
+    machine: ACTION_USD.carousel_generated * 8 * RETRY_FACTOR.carousel,
+    labour: labourUsd(LABOUR.minutes_per.carousel_deck)
+  },
+  reel_5_scene: {
+    // Setup happens once even across re-rolls; the scenes are what get redone.
+    machine: ACTION_USD.video_base + (ACTION_USD.video_generated * 5 * RETRY_FACTOR.video_scene),
+    labour: labourUsd(LABOUR.minutes_per.reel)
+  }
+};
+for (const d of Object.values(DELIVERED)) {
+  d.total = d.machine + d.labour;
+  d.labourShare = d.labour / d.total;
+}
+
+// Markup on the FULL delivered cost. Agencies run 50-60% gross margin on
+// service work; pure SaaS runs 75-85%. An AI-native managed service should
+// sit between, and 2.5x (60%) is the target this model prices to.
+const SERVICE_MARKUP = 2.5;
+for (const d of Object.values(DELIVERED)) {
+  d.price_usd = d.total * SERVICE_MARKUP;
+  d.price_inr = d.price_usd * INR_PER_USD;
+}
+
+// ---------------------------------------------------------------------------
 // 4. Plans
 // ---------------------------------------------------------------------------
 // A plan is a monthly price, a set of deliverables we commit to, and a Quark
@@ -265,39 +340,41 @@ const ACTION_UNITS = {
 // service actually needs. The allowance is the cost ceiling, not a value meter:
 // it is what stops one runaway account from eating a month's margin.
 
+// How much room over the committed deliverables an allowance carries, for the
+// retries a managed service actually runs.
+const ALLOWANCE_HEADROOM = 1.67;
+
 const PLANS = {
   managed_10k: {
     inr: 10000,
     label: 'Managed — 10k',
-    // What we promise to ship.
-    commits: { image_generated: 60, reels: 4, scenesPerReel: 5 },
-    // Sized against the committed deliverables (see committedQuarks below)
-    // with roughly 1.7x left over for the retries a managed service actually
-    // runs, and landing near the fee's whole notional value
-    // (INR 10,000 / $0.08 per Quark = 1,420). We pass the value through and
-    // take margin from the multiplier baked into each price, rather than by
-    // quietly shorting the allowance.
-    quarks: 1400
+    commits: { image_generated: 60, reels: 4, scenesPerReel: 5 }
+    // `quarks` is DERIVED below, never written here. It used to be a literal,
+    // and when USD_PER_QUARK moved from $0.08 to $0.02 the literal stayed put
+    // and silently became a quarter of the allowance it was meant to be. The
+    // load-time check caught it; deriving it means there is nothing to catch.
   }
 };
 
-// Sanity: an allowance that cannot cover its own committed deliverables is a
-// plan that loses money by design. Cheap to check, so check it at load.
 for (const [name, plan] of Object.entries(PLANS)) {
   const c = plan.commits;
-  const committed =
+  plan.committedQuarks =
     (c.image_generated || 0) * QUARK_COSTS.image_generated +
     (c.reels || 0) * (QUARK_COSTS.video_base + (c.scenesPerReel || 0) * QUARK_COSTS.video_generated);
-  if (plan.quarks < committed) {
-    throw new Error(
-      `Plan "${name}" grants ${plan.quarks} Quarks but its committed deliverables ` +
-      `need ${committed}. Raise the allowance or cut the commitments.`
-    );
-  }
-  plan.committedQuarks = committed;
+
+  // Rounded to something a human would write on a pricing page.
+  plan.quarks = Math.round((plan.committedQuarks * ALLOWANCE_HEADROOM) / 100) * 100;
+
+  // The machine side of this plan is comfortable. The PEOPLE side is not:
+  // with a CSM in the loop this plan is lossmaking (see DELIVERED and the
+  // sensitivity work in the pricing artifact). Kept here as the record of
+  // what is currently sold, explicitly flagged, not as a recommendation.
+  plan.machineOnly = true;
+  plan.warning = 'Excludes CSM labour. Loss-making at this price once labour is counted.';
 }
 
 module.exports = {
   PROVIDER_RATES, INFRA, ACTION_USD, QUARK_COSTS, ACTION_UNITS,
-  MARGIN, marginFor, USD_PER_QUARK, INR_PER_USD, PLANS
+  MARGIN, marginFor, USD_PER_QUARK, INR_PER_USD, PLANS,
+  LABOUR, RETRY_FACTOR, DELIVERED, SERVICE_MARKUP
 };
