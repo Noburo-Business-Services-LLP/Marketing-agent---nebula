@@ -360,6 +360,95 @@ async function renderCarouselSlideImage(userId, plan, slideIndex) {
   return extractFinalPrompt(raw) || slide.imagePrompt;
 }
 
+
+/** A compact view of the campaign visual plan for a slot's Art Director call
+ * — the through-line and system, not every other post's full detail. */
+function summarizeCampaignPlanForArtDirector(plan) {
+  return JSON.stringify({
+    campaignVisualConcept: plan.campaignVisualConcept,
+    recurringDevice: plan.recurringDevice,
+    visualSystem: plan.visualSystem
+  }, null, 2);
+}
+
+/**
+ * Step 1 of two for a campaign: one call that plans the campaign's VISUAL
+ * system after the copy already exists. A campaign's posts have to relate
+ * to each other — a role each, variety across them, still recognizable as
+ * one campaign — which a per-slot decision made in isolation cannot
+ * reliably produce, the same problem the carousel's per-slide flow had.
+ *
+ * `posts` is the already-written copy (role, theme, caption, draft image
+ * description) for every slot; this plan does not rewrite it, only decides
+ * how each one should look and which real assets it needs.
+ */
+async function planCampaignVisuals(userId, {
+  idea, objective, audience, platforms, tone, language, posts
+}) {
+  const [brandContext, assets, previousCreatives] = await Promise.all([
+    buildBrandMemoryBlock(userId),
+    buildAvailableAssetsCatalogue(userId),
+    getRecentCreativeHistory(userId)
+  ]);
+
+  const prompt = await buildPrompt(userId, 'campaign.visualPlan', {
+    idea: idea || '',
+    objective: objective || '',
+    audience: audience || '',
+    platforms: platforms || '',
+    tone: tone || 'professional',
+    language: language || 'English',
+    brandContext,
+    availableAssets: assets.text,
+    previousCreatives: formatPreviousCreatives(previousCreatives),
+    posts: JSON.stringify(posts, null, 2)
+  });
+
+  const plan = await getJSONWithRetry(prompt, (p) => Array.isArray(p?.posts) && p.posts.length > 0, 'CampaignVisualPlan');
+
+  const byIndex = new Map((Array.isArray(plan.posts) ? plan.posts : []).map((p) => [Number(p.index), p]));
+
+  const slots = posts.map((original, index) => {
+    const decided = byIndex.get(index) || {};
+    return {
+      index,
+      imagePrompt: toText(decided.imagePrompt) || original.imageDescription || original.caption || '',
+      requiredAssets: resolveAssetNames(decided.requiredAssets, assets.catalogue),
+      optionalAssets: resolveAssetNames(decided.optionalAssets, assets.catalogue)
+    };
+  });
+
+  return {
+    campaignVisualConcept: toText(plan.campaignVisualConcept),
+    recurringDevice: toText(plan.recurringDevice),
+    visualSystem: toText(plan.visualSystem),
+    slots
+  };
+}
+
+/**
+ * Step 2 of two: turn one post's already-decided plan into the final image
+ * instruction, respecting the campaign's visual system rather than
+ * redesigning the post from scratch. Same "return only the final prompt"
+ * contract, same recovery when that is not followed literally.
+ */
+async function renderCampaignSlotImage(userId, plan, slotIndex, { aspectRatio, language }) {
+  const slot = plan.slots[slotIndex];
+  const brandAssets = await buildBrandGuidance(userId);
+
+  const prompt = await buildPrompt(userId, 'campaign.artDirector', {
+    campaignPlan: summarizeCampaignPlanForArtDirector(plan),
+    post: JSON.stringify({ imagePrompt: slot.imagePrompt }, null, 2),
+    postAssets: describeAssets([...slot.requiredAssets, ...slot.optionalAssets]),
+    brandAssets,
+    aspectRatio: aspectRatio || '1:1',
+    language: language || 'English'
+  });
+
+  const raw = await callGemini(prompt);
+  return extractFinalPrompt(raw) || slot.imagePrompt;
+}
+
 module.exports = {
   runCreativeDirector,
   runImageArtDirector,
@@ -368,5 +457,7 @@ module.exports = {
   getRecentCreativeHistory,
   planCarousel,
   renderCarouselSlideImage,
+  planCampaignVisuals,
+  renderCampaignSlotImage,
   assetsToImageOptions
 };

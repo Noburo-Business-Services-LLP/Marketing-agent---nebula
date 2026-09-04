@@ -538,6 +538,212 @@ Return ONLY valid JSON (no markdown, no backticks):
 `
   },
 
+  'campaign.visualPlan': {
+    label: 'Campaign — Visual Plan',
+    summary:
+      "Plans the whole campaign's visual system in one pass — a through-line, one creative world, and a focused image prompt for every post — after the copy is already written. Change this if posts look unrelated or too cloned.",
+    stage: 'campaign-v2',
+    variables: {
+      idea: 'The campaign brief',
+      objective: 'What the campaign is meant to achieve',
+      audience: 'Age, gender, location and interests, combined',
+      platforms: 'Selected platforms, comma separated',
+      tone: 'Brand tone',
+      language: 'Output language',
+      brandContext: 'The full brand memory — identity, tone, ICP, products, locations',
+      availableAssets: 'The real assets on file that could be used',
+      previousCreatives: 'Concepts already used recently, so this campaign does not repeat them',
+      posts: "Every post's role, theme and copy, already written"
+    },
+    template: `You are the Creative Director responsible for planning the VISUAL system of a social media campaign.
+
+The campaign's copy — captions, hashtags, roles, themes — has already been written. Your job is to decide how the campaign should LOOK: one creative world that every post's image belongs to, without forcing every post into the same picture.
+
+CAMPAIGN BRIEF:
+{{idea}}
+
+OBJECTIVE:
+{{objective}}
+
+AUDIENCE:
+{{audience}}
+
+PLATFORMS:
+{{platforms}}
+
+TONE:
+{{tone}}
+
+LANGUAGE:
+{{language}}
+
+BRAND MEMORY:
+{{brandContext}}
+
+AVAILABLE ASSETS:
+{{availableAssets}}
+
+PREVIOUS RELEVANT CREATIVES:
+{{previousCreatives}}
+
+ALREADY-WRITTEN POSTS (do not rewrite the copy — plan the visuals for these):
+{{posts}}
+
+
+YOUR JOB
+
+1. FIND THE CAMPAIGN'S VISUAL THROUGH-LINE
+
+Identify what should make someone recognize these posts as one campaign, even scrolling past them days apart. This might be a recurring visual device — a character, an object, a colour treatment, a photographic style, a layout habit — or it might simply be a consistent creative world with no single repeated element. Do not invent a recurring device the campaign does not need.
+
+2. DESIGN ONE VISUAL SYSTEM, NOT ONE TEMPLATE
+
+Decide the visual approach, imagery style, colour treatment and composition language the whole campaign shares.
+
+Posts within this system should feel related, not cloned. A campaign of five posts is not five copies of the same poster with different text — vary composition, image type, and visual weight according to each post's own role (awareness, education, social proof, conversion, and so on).
+
+Do not force every post to be product-led, every post to be an advertisement, or every post to use the same layout.
+
+3. PLAN EACH POST'S IMAGE
+
+For every post already written, using its contentTheme, caption and role, decide:
+
+- how this post's role should shape its visual (awareness reads differently from conversion)
+- required brand assets — the visual depends on them
+- optional brand assets — could help, not essential
+- a focused image-generation prompt for this specific post
+
+Select only the assets each post actually needs. Do not force the same asset into every post because it is available. If the same asset genuinely belongs in multiple posts (the hero product, say), reference it consistently rather than reinventing it each time.
+
+4. IMAGE-GENERATION PROMPTS
+
+Each prompt must contain only what is needed to generate that specific post's image: subject, composition, environment, relevant visual details, selected asset references, and image text placement.
+
+Do not copy the full brand context into the image prompt.
+
+Do not copy this instruction set into the image prompt.
+
+Do not make the image generator decide the creative direction again — that decision is yours, made here.
+
+
+FINAL CHECK
+
+Before returning the result, verify: does the campaign look like one coherent creative world, not five unrelated posts sharing a topic? Does each post's visual still make sense given its own role? Are real brand assets used where they genuinely help? Could this campaign belong to any brand, or does it feel specific to this one?
+
+Return ONLY valid JSON:
+
+{
+  "campaignVisualConcept": "",
+  "recurringDevice": "",
+  "visualSystem": "",
+  "posts": [
+    {
+      "index": 0,
+      "requiredAssets": [],
+      "optionalAssets": [],
+      "imagePrompt": ""
+    }
+  ]
+}
+`
+  },
+
+  'campaign.artDirector': {
+    label: 'Campaign — Post Art Director',
+    summary:
+      "Executes one post's already-decided image prompt, keeping it consistent with the campaign's visual system and the posts around it. Receives the plan and this post's assets — not the full brand context. Change this if posts don't look like they belong to the same campaign.",
+    stage: 'campaign-v2',
+    variables: {
+      campaignPlan: "The campaign's visual concept, recurring device and visual system",
+      post: "This post's own plan — role, theme, image text, draft prompt",
+      postAssets: 'The specific assets selected for this post',
+      brandAssets: 'A short brand note — palette, logo availability, tone',
+      aspectRatio: 'Output shape',
+      language: 'Language for any rendered text'
+    },
+    template: `You are the Image Art Director executing one post of a campaign that has already been creatively planned.
+
+CAMPAIGN VISUAL PLAN:
+{{campaignPlan}}
+
+THIS POST:
+{{post}}
+
+AVAILABLE ASSETS FOR THIS POST:
+{{postAssets}}
+
+BRAND GUIDANCE:
+{{brandAssets}}
+
+ASPECT RATIO:
+{{aspectRatio}}
+
+LANGUAGE:
+{{language}}
+
+
+YOUR JOB
+
+Create the image for this post by faithfully executing the creative direction already decided in the campaign visual plan.
+
+Do NOT redesign the concept.
+
+Do NOT invent a different creative direction.
+
+Do NOT reinterpret this post as an unrelated standalone piece — it must look like it belongs to the same campaign as the posts around it.
+
+
+VISUAL EXECUTION
+
+Follow the campaign's visual system — imagery style, colour treatment, composition language — and its recurring device, if it has one.
+
+This post's own role and content still decide what actually appears; the visual system decides how it is rendered, not what it is.
+
+
+ASSETS
+
+Use only the assets specified for this post.
+
+When an asset is supplied, treat it as the authoritative visual reference. Do not replace a real product, person, location or UI asset with a generic alternative unless the plan explicitly calls for one.
+
+Do not add assets that were not selected for this post.
+
+
+IMAGE TEXT
+
+Render only the image text specified in the post's plan, exactly as provided.
+
+Do not add extra headlines, slogans, captions, hashtags or CTAs unless explicitly specified.
+
+
+BRANDING
+
+Use only the branding specified by the plan or supplied assets. Do not add a duplicate logo if a supplied asset already carries one. Do not invent watermarks or additional brand marks.
+
+
+DESIGN QUALITY
+
+The final image should feel like a professionally art-directed campaign creative, not a generic AI-generated poster and not an unrelated one-off.
+
+Prioritize: strong composition, a clear focal point, visual hierarchy, realistic use of supplied assets, and premium execution.
+
+Avoid generic AI imagery — glowing effects, futuristic interfaces, stock-business people, abstract decorative graphics — unless the plan explicitly calls for them.
+
+
+IMPORTANT
+
+Do not add information that is not present in the campaign plan.
+
+Do not invent product claims or statistics.
+
+Do not invent brand assets.
+
+Execute the approved creative direction with precision.
+
+Return only the final image-generation prompt.
+`
+  },
+
   'campaign.content': {
     label: 'Campaign content',
     summary:

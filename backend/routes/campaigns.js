@@ -17,7 +17,7 @@ const crypto = require('crypto');
 const { callGemini, parseGeminiJSON, generateICPAndStrategy, generateCampaignImageNanoBanana } = require('../services/geminiAI');
 const { buildPrompt } = require('../services/promptRegistry');
 const { buildBrandMemoryBlock } = require('../services/brandMemory');
-const { decideCreative } = require('../services/creativeDirector');
+const { planCampaignVisuals, renderCampaignSlotImage, assetsToImageOptions } = require('../services/creativeDirector');
 // Import Ayrshare for social media posting
 const { getPostStatus, retryPost: retryAyrsharePost, deletePost: deleteAyrsharePost } = require('../services/socialMediaAPI');
 const {
@@ -2109,9 +2109,6 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
     // Step 2: Generate images one by one and stream each
     const postsToProcess = parsed.posts.slice(0, totalPosts);
     const slotImageCache = new Map();
-    // What earlier slots in this campaign have already decided visually, so
-    // later ones can consciously vary rather than repeat.
-    const decidedSoFar = [];
     const fallbackImageTextByLanguage = {
       tamil: 'à®‡à®ªà¯à®ªà¯‹à®¤à¯‡ à®¤à¯Šà®Ÿà®™à¯à®•à¯à®™à¯à®•à®³à¯',
       telugu: 'à°‡à°ªà±à°ªà±à°¡à±‡ à°ªà±à°°à°¾à°°à°‚à°­à°¿à°‚à°šà°‚à°¡à°¿',
@@ -2124,6 +2121,34 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
     const defaultImageText =
       fallbackImageTextByLanguage[selectedLanguageKey] ||
       fallbackImageTextByLanguage.english;
+
+    // One call plans the whole campaign's visual system — a through-line,
+    // one creative world, and a focused image plan for every post — after
+    // the copy above already exists. Replaces deciding each slot's visual
+    // in isolation, which could not reliably produce posts that relate to
+    // each other; the same fix the carousel got for the same reason.
+    sendEvent('status', { message: 'Planning the campaign\'s visual system...' });
+    let visualPlan = null;
+    try {
+      visualPlan = await planCampaignVisuals(req.user.id, {
+        idea: `${campaignName}${campaignDescription ? ' — ' + campaignDescription : ''}`,
+        objective: objective || '',
+        audience: `${targetAge || '18-35'} age, ${targetGender || 'all'} gender${targetLocation ? ', located in ' + targetLocation : ''}${targetInterests ? ', interested in ' + targetInterests : ''}`,
+        platforms: platforms.join(', '),
+        tone: enforcedTone || 'professional',
+        language: selectedLanguage,
+        posts: postsToProcess.map((p) => ({
+          caption: p.caption || '',
+          contentTheme: p.contentTheme || '',
+          campaignRole: p.campaignRole || '',
+          platform: p.platform || '',
+          imageDescription: p.imageDescription || '',
+          imageText: p.imageText || ''
+        }))
+      });
+    } catch (err) {
+      console.error('[CAMPAIGN_IMAGE] Visual plan failed, each slot will fall back to its own plain image description:', err.message);
+    }
 
     for (let i = 0; i < postsToProcess.length; i++) {
       // if (aborted) break; // Removed to allow background generation
@@ -2142,50 +2167,46 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
         sendEvent('generating', { index: i, total: postsToProcess.length, message: `Generating image for slot ${slotIndex + 1}...` });
         const resolvedImageText = String(post?.imageText || '').trim() || defaultImageText;
 
-        // What the visual should be is decided fresh for each slot, informed
-        // by what earlier slots in THIS campaign already decided — that is
-        // what gives the campaign creative variety (CAMPAIGN VARIETY) while
-        // staying one coherent run, rather than N independent single posts.
-        let creative = null;
-        try {
-          creative = await decideCreative(req.user.id, {
-            idea: post.imageDescription || post.caption,
-            contentType: 'campaign post',
-            contentPillar: post.contentTheme || '',
-            objective: objective || '',
-            platform: post.platform || schedule.platform || '',
-            campaignContext: `Campaign: "${campaignName}"${campaignDescription ? ' — ' + campaignDescription : ''}. This post's role: ${post.campaignRole || post.contentTheme || 'supporting'}.`,
-            previousCreatives: decidedSoFar
-          }, { aspectRatio: aspectRatio || '1:1', language: selectedLanguage });
-        } catch (err) {
-          console.error(`[CAMPAIGN_IMAGE] Creative Director failed for slot ${slotIndex + 1}, falling back to the plain image description:`, err.message);
-        }
-
-        if (creative?.creativeConcept) {
-          decidedSoFar.push({ concept: creative.creativeConcept, treatment: creative.visualTreatment });
+        // Executes what the visual plan above already decided for this
+        // slot, rather than deciding it fresh here.
+        let finalPrompt = null;
+        let slotAssets = { productImages: [], environmentImage: null, logoUrl: null };
+        if (visualPlan?.slots?.[slotIndex]) {
+          try {
+            finalPrompt = await renderCampaignSlotImage(req.user.id, visualPlan, slotIndex, {
+              aspectRatio: aspectRatio || '1:1',
+              language: selectedLanguage
+            });
+            slotAssets = assetsToImageOptions([
+              ...visualPlan.slots[slotIndex].requiredAssets,
+              ...visualPlan.slots[slotIndex].optionalAssets
+            ]);
+          } catch (err) {
+            console.error(`[CAMPAIGN_IMAGE] Art Director failed for slot ${slotIndex + 1}, falling back to the plain image description:`, err.message);
+          }
         }
 
         const explicitProductImages = [
           linkedProduct?.imageUrl,
           ...(Array.isArray(productReferenceImages) ? productReferenceImages.slice(1) : [])
         ].filter(Boolean);
-        const chosenProductImages = explicitProductImages.length ? explicitProductImages : (creative?.productImages || []);
+        const chosenProductImages = explicitProductImages.length ? explicitProductImages : slotAssets.productImages;
 
-        imageResult = await generateCampaignImageNanoBanana(creative?.finalPrompt || post.imageDescription, {
+        imageResult = await generateCampaignImageNanoBanana(finalPrompt || post.imageDescription, {
           userId: req.user.id,
-          useRawPrompt: Boolean(creative?.finalPrompt),
+          useRawPrompt: Boolean(finalPrompt),
           aspectRatio: aspectRatio || '1:1',
           brandName: brandDisplayName,
-          brandLogo: creative?.logoUrl || effectiveLogo || null,
+          brandLogo: slotAssets.logoUrl || effectiveLogo || null,
           industry: bp.industry || '',
           tone: enforcedTone || 'professional',
           postIndex: slotIndex,
           totalPosts: numSlots,
-          environmentReferenceImage: creative?.environmentImage || null,
+          environmentReferenceImage: slotAssets.environmentImage || null,
           productReferenceImage: chosenProductImages[0] || null,
           productReferenceImages: chosenProductImages.slice(1),
           targetLanguage: selectedLanguage,
-          imageText: creative?.imageText || resolvedImageText
+          imageText: resolvedImageText
         });
         
         // The failure reason used to be dropped entirely — a dead card in the
