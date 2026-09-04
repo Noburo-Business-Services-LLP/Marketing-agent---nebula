@@ -118,24 +118,29 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showCreditPanel]);
 
-  // Nav grouping — the primary group mirrors the Gravity prototype's 5
-  // top-level items; secondary group holds the extra Nebulaa features so
-  // no functionality is lost.
+  // Nav grouping follows the order the work actually happens in: look at
+  // where things stand, make something, review it, schedule it, see how it
+  // did. Videos sits beside Create because it is the other thing you make —
+  // it was previously under a "More" heading, below Insights, which ranked a
+  // headline feature under a junk drawer.
   const primaryNav = [
-    { path: '/dashboard',        label: 'Home',     icon: LayoutDashboard },
-    { path: '/campaigns',        label: 'Create',   icon: Sparkles },
-    { path: '/drafts',           label: 'Approve',  icon: PenTool, badge: 'drafts' as const },
-    { path: '/content-calendar', label: 'Calendar', icon: CalendarDays },
-    { path: '/analytics',        label: 'Insights',  icon: BarChart3 },
+    { path: '/dashboard',        label: 'Home',              icon: LayoutDashboard },
+    { path: '/campaigns',        label: 'Create',            icon: Sparkles },
+    { path: '/reels',            label: 'Videos',            icon: PlayCircle },
+    { path: '/drafts',           label: 'Approve',           icon: PenTool, badge: 'drafts' as const },
+    { path: '/content-calendar', label: 'Calendar',          icon: CalendarDays },
+    { path: '/upload',           label: 'Upload & Schedule', icon: UploadCloud },
+    { path: '/analytics',        label: 'Insights',          icon: BarChart3 },
   ];
+  // What is left is genuinely set-once configuration, which is a real
+  // grouping rather than "everything else".
+  //
   // Ad Campaigns, Influencer Portal and Competitors remain hidden from
   // navigation. Their routes and pages are left intact so nothing breaks and
   // they can be restored by adding entries here.
   const secondaryNav = [
-    { path: '/reels',             label: 'Videos',            icon: PlayCircle },
-    { path: '/upload',            label: 'Upload & Schedule', icon: UploadCloud },
-    { path: '/connect-socials',   label: 'Connect Socials',   icon: Link2 },
     { path: '/brand-assets',      label: 'Brand Assets',      icon: Palette },
+    { path: '/connect-socials',   label: 'Connect Socials',   icon: Link2 },
     { path: '/ai-memory',         label: 'AI Memory',         icon: Brain },
   ];
 
@@ -268,7 +273,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
                 ))}
               </nav>
               <div className="my-4 mx-1 border-t border-white/[0.06]" />
-              <div className="px-4 mb-2 gravity-label">More</div>
+              <div className="px-4 mb-2 gravity-label">Setup</div>
               <nav className="space-y-0.5">
                 {secondaryNav.map((item) => (
                   <NavLink key={item.path} {...item} />
