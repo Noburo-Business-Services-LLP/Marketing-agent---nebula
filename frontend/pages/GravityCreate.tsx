@@ -588,9 +588,12 @@ const GravityCreate: React.FC = () => {
       tone: (tone.split(',')[0] || 'professional').toLowerCase(),
       language: 'English',
       aspectRatio: backendAspect,
-      keyMessages: selectedPlatforms
-        .map((p) => `[${p.toUpperCase()} CONTENT FORMAT]\n${description.trim()}`)
-        .join('\n\n---\n\n'),
+      // No keyMessages. The brief already travels as campaignDescription
+      // above; sending it here as well presented it to the model as a
+      // MANDATORY CONTENT STRUCTURE — a template to reproduce exactly, under
+      // rules forbidding any change or added commentary. The model obeyed,
+      // and captions came back as the brief typed verbatim. This field is for
+      // real content templates, which Create does not collect.
       duration: backendDuration,
       // Without this the backend fell back to three hardcoded days and then
       // multiplied by the platform count, so the cadence picker did nothing
