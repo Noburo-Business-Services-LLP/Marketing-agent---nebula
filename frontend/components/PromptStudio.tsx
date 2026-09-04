@@ -9,6 +9,14 @@ import { promptsAPI, EditablePrompt } from '../services/api';
  * of its own: the point is to change a prompt, run it, look at the result and
  * change it again, and a separate page turns that loop into navigation.
  */
+const STAGE_ORDER = ['campaign', 'carousel', 'image', 'video'];
+const STAGE_LABELS: Record<string, string> = {
+  campaign: 'Campaigns',
+  carousel: 'Carousels',
+  image: 'Images',
+  video: 'Videos'
+};
+
 const PromptStudio: React.FC<{
   open: boolean;
   onClose: () => void;
@@ -143,25 +151,32 @@ const PromptStudio: React.FC<{
             </div>
           ) : (
             <>
-              <div className="px-6 py-3.5 border-b border-white/[0.06] flex flex-wrap gap-2">
-                {prompts.map((p) => (
-                  <button
-                    key={p.id}
-                    onClick={() => setActiveId(p.id)}
-                    className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all ${
-                      p.id === activeId
-                        ? 'bg-[#F5A623] text-[#1A1208]'
-                        : 'text-white/55 hover:text-[#F5F4F1] hover:bg-white/[0.05] border border-white/[0.08]'
-                    }`}
-                  >
-                    {p.label}
-                    {p.isEdited && (
-                      <span className={p.id === activeId ? 'ml-1.5 opacity-70' : 'ml-1.5 text-[#F5A623]'}>· edited</span>
-                    )}
-                  </button>
-                ))}
-              </div>
+              <div className="flex-1 flex min-h-0">
+                {/* Grouped rail. Sixteen prompts do not fit a chip strip, and
+                    the grouping also answers "which stage does this affect?" */}
+                <div className="w-52 shrink-0 border-r border-white/[0.06] overflow-y-auto py-3">
+                  {STAGE_ORDER.filter((st) => prompts.some((p) => p.stage === st)).map((st) => (
+                    <div key={st} className="mb-3">
+                      <div className="gravity-label text-white/30 px-4 mb-1.5">{STAGE_LABELS[st] || st}</div>
+                      {prompts.filter((p) => p.stage === st).map((p) => (
+                        <button
+                          key={p.id}
+                          onClick={() => setActiveId(p.id)}
+                          className={`w-full text-left px-4 py-2 text-[12.5px] transition-colors border-l-2 ${
+                            p.id === activeId
+                              ? 'border-[#F5A623] text-[#F5F4F1] bg-white/[0.05] font-semibold'
+                              : 'border-transparent text-white/55 hover:text-[#F5F4F1] hover:bg-white/[0.03]'
+                          }`}
+                        >
+                          {p.label}
+                          {p.isEdited && <span className="ml-1.5 text-[#F5A623]">·</span>}
+                        </button>
+                      ))}
+                    </div>
+                  ))}
+                </div>
 
+                <div className="flex-1 min-w-0 overflow-y-auto">
               {active && (
                 <div className="flex-1 overflow-y-auto p-6 space-y-4">
                   <p className="text-[12.5px] text-white/55 leading-relaxed">{active.summary}</p>
@@ -207,6 +222,9 @@ const PromptStudio: React.FC<{
                   {error && <p className="text-[12px] text-red-400">{error}</p>}
                 </div>
               )}
+
+                </div>
+              </div>
 
               <div className="px-6 py-4 border-t border-white/[0.06] flex items-center gap-3">
                 <button

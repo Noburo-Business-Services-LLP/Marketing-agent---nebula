@@ -12,7 +12,15 @@
  * nothing else is evaluated. An edited template cannot execute anything.
  */
 
+// The video pipeline's prompts are large enough to drown this file, so they
+// live next door and are merged in here. Same contract either way.
+const VIDEO_PROMPTS = require('./promptRegistry.video');
+const VIDEO_PROMPTS_2 = require('./promptRegistry.video2');
+
 const PROMPTS = {
+  ...VIDEO_PROMPTS,
+  ...VIDEO_PROMPTS_2,
+
   'campaign.content': {
     label: 'Campaign content',
     // Shown in the UI so it is clear which prompt to reach for.

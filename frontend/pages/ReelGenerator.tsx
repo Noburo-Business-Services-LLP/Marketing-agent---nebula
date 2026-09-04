@@ -28,8 +28,7 @@ import {
   Layers,
   Target,
   Megaphone,
-  Calendar as CalendarIcon
-} from 'lucide-react';
+  Calendar as CalendarIcon, SlidersHorizontal } from 'lucide-react';
 import {
   GravityHero,
   GravityEmphasis,
@@ -42,6 +41,7 @@ import {
   GravityButton,
 } from '../components/gravity';
 import CalendarIdeaPicker from '../components/CalendarIdeaPicker';
+import PromptStudio from '../components/PromptStudio';
 import { getThemeClasses, useTheme } from '../context/ThemeContext';
 import { contentCalendarAPI, inventoryAPI, videoGenerationAPI, draftsAPI } from '../services/api';
 import { Product, Draft } from '../types';
@@ -344,6 +344,7 @@ const ReelGenerator: React.FC = () => {
       ''
     );
   };
+  const [promptStudioOpen, setPromptStudioOpen] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
 
   // Persistent Queue background worker progress states
@@ -2181,10 +2182,28 @@ setCharacterAge(nextDraft?.characterAge || '');
         {/* Demoted to a meta line: the top bar already says "Videos", and
             each step now carries its own GravityHero as the display headline.
             Three competing titles was the stacking problem here. */}
-        <div>
-          <GravityLabel>Videos</GravityLabel>
-          <p className="text-[13px] text-white/45 mt-1">Create, schedule, and track your AI videos in one place.</p>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <GravityLabel>Videos</GravityLabel>
+            <p className="text-[13px] text-white/45 mt-1">Create, schedule, and track your AI videos in one place.</p>
+          </div>
+          {/* Every step of this wizard runs on a prompt. They are reachable
+              from here so a weak result can be traced to the prompt that
+              produced it without leaving the page. */}
+          <button
+            onClick={() => setPromptStudioOpen(true)}
+            className="shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-[13px] font-semibold border border-white/[0.12] text-[#F5F4F1] hover:bg-white/[0.05] hover:border-[#F5A623]/40 transition-all"
+          >
+            <SlidersHorizontal className="w-4 h-4 text-[#F5A623]" />
+            Edit the prompts
+          </button>
         </div>
+
+        <PromptStudio
+          open={promptStudioOpen}
+          onClose={() => setPromptStudioOpen(false)}
+          focus="video.story"
+        />
 
         {successMessage && (
           <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/[0.07] px-5 py-3.5 text-[13px] font-medium text-emerald-200">

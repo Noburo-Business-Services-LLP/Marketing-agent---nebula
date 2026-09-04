@@ -1,4 +1,5 @@
 const express = require('express');
+const { buildPrompt } = require('../services/promptRegistry');
 const router = express.Router();
 const rateLimit = require('express-rate-limit');
 const { ipKeyGenerator } = rateLimit;
@@ -944,26 +945,18 @@ function audioScriptLabel(code = 'en') {
   return labels[normalizeAudioLanguageCode(code)] || labels.en;
 }
 
-async function localizeAudioScript({ text, languageCode }) {
+async function localizeAudioScript({ text, languageCode, userId = null }) {
   const source = String(text || '').replace(/\s+/g, ' ').trim();
   const normalizedLanguage = normalizeAudioLanguageCode(languageCode);
   if (!source || normalizedLanguage.startsWith('en')) return source;
 
   const language = audioLanguageLabel(normalizedLanguage);
   const script = audioScriptLabel(normalizedLanguage);
-  const prompt = `Translate and adapt this short reel voiceover for text-to-speech.
-
-Target language: ${language}
-Target script: ${script}
-
-Rules:
-- Return only the final voiceover text. No markdown, labels, or quotes.
-- Translate the narration into ${language}; do not return English for this target language.
-- Keep brand names, product names, prices, URLs, and technical model names unchanged when needed.
-- Keep it natural for a short social media reel.
-
-Voiceover:
-${source}`;
+  const prompt = await buildPrompt(userId, 'video.ttsTranslate', {
+    language: (language),
+    script: (script),
+    source: (source)
+  });
 
   try {
     const localized = await callGemini(prompt, {
@@ -1146,28 +1139,13 @@ async function generateStructuredPrompt(draft) {
     category: draft?.input?.product?.category || ''
   });
 
-  const prompt = `You are an AI video strategist.
-Return STRICT JSON:
-{
-  "structuredPrompt": "string",
-  "creativeDirection": {
-    "targetAudience": "string",
-    "tone": "string",
-    "visualStyle": "string",
-    "cta": "string"
-  }
-}
-
-Context:
-- Description: ${description}
-- Product Name: ${productName || 'N/A'}
-- Product Description: ${productDescription || 'N/A'}
-- Reference: ${sourceHint}
-${aiMemoryContext.reusablePromptText}
-
-Rules:
-- structuredPrompt must be concise but actionable for scene generation.
-- Keep ad-ready language with clear call-to-action.`;
+  const prompt = await buildPrompt(draft?.userId, 'video.brief', {
+    description: (description),
+    productName: (productName || 'N/A'),
+    productDescription: (productDescription || 'N/A'),
+    sourceHint: (sourceHint),
+    reusablePromptText: (aiMemoryContext.reusablePromptText)
+  });
 
   try {
     const raw = await callGemini(prompt, {
@@ -1240,45 +1218,20 @@ async function generateCaptionAndHashtags({ draft, selectedPlatforms = [] }) {
     category: draft?.input?.product?.category || ''
   });
 
-  const prompt = `Write the social caption for THIS specific video — not a generic one.
-
-Return STRICT JSON:
-{
-  "caption": "string",
-  "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5", "#tag6"]
-}
-
-THE BUSINESS
-- Name: ${profile?.name || 'N/A'}
-- Industry: ${profile?.industry || 'N/A'}
-- Audience: ${profile?.targetAudience || 'N/A'}
-- Product featured: ${draft?.input?.product?.name || 'N/A'}
-
-THE VIDEO (this is what the caption must be about)
-- Brief: ${draft?.input?.description || 'N/A'}
-- Story: ${story || 'N/A'}
-- Style: ${draft?.videoStyle || 'N/A'}
-${draft?.characterName ? `- Character on screen: ${draft.characterName}` : ''}
-- Narration: ${voiceScript || 'N/A'}
-- Scene by scene:
-${beatByBeat || '  (no scenes available)'}
-
-- Platforms: ${selectedPlatforms.join(', ') || 'instagram'}
-${aiMemoryContext.reusablePromptText}
-
-RULES
-- The caption MUST reference what actually happens in this video — the specific
-  product, the moment, the transformation, the feeling this story creates.
-  Someone who watched it should recognise it from the caption alone.
-- BANNED: "Discover our latest", "Elevate your", "Take your X to the next level",
-  "Unlock", "Game-changer", "Look no further", and any line that would fit an
-  unrelated business unchanged. If the caption would work for a different
-  company's video, rewrite it.
-- Name the business or product at least once where it reads naturally.
-- 1-3 lines, conversational, no markdown, no emoji spam (2 max).
-- End with a clear next step suited to the business (visit, DM, call, order).
-- hashtags: 5-12 tags. Mix specific (product, city, category) with reach tags.
-  No single-word generics like #love or #instagood.`;
+  const prompt = await buildPrompt(draft?.userId, 'video.caption', {
+    name: (profile?.name || 'N/A'),
+    industry: (profile?.industry || 'N/A'),
+    targetAudience: (profile?.targetAudience || 'N/A'),
+    name2: (draft?.input?.product?.name || 'N/A'),
+    description: (draft?.input?.description || 'N/A'),
+    story: (story || 'N/A'),
+    videoStyle: (draft?.videoStyle || 'N/A'),
+    block8: (draft?.characterName ? `- Character on screen: ${draft.characterName}` : ''),
+    voiceScript: (voiceScript || 'N/A'),
+    beatByBeat: (beatByBeat || '  (no scenes available)'),
+    block11: (selectedPlatforms.join(', ') || 'instagram'),
+    reusablePromptText: (aiMemoryContext.reusablePromptText)
+  });
 
   try {
     const raw = await callGemini(prompt, {
@@ -1653,65 +1606,17 @@ router.post('/generateConcepts', protect, checkTrial, videoAiWriteLimiter, async
     // Prompt sourced from Video Concept Prompt.docx, with brand slots
     // filled dynamically and a STRICT JSON output wrapper added so the
     // frontend can render each concept in a card without parsing prose.
-    const systemPrompt = `You are an award-winning Creative Director from Ogilvy, Wieden+Kennedy and Apple.
-Your job is NOT to create an advertisement.
-Your job is to create a commercial that people remember.
-
-You are creating a premium social media reel (${durationSeconds} seconds) for the following brand.
-
-BRAND DETAILS
-Business Name: ${brandName}
-Industry: ${industry}
-Brand Summary: ${brandSummary}
-Target Audience: ${targetAudience}
-Target Location / Region: ${conceptRegionHint}
-Brand Tone: ${brandTone}
-Competitors: ${competitors || 'N/A'}
-
-REGIONAL AUTHENTICITY (mandatory)
-Every concept must be culturally authentic to "${conceptRegionHint}".
-- People described in the story must be of that region's ethnicity (e.g. South Indian for Tamil Nadu brands — NOT Western characters).
-- Names, settings, wardrobe, festivals, and cultural touchpoints must match.
-- Do NOT default to Western/generic scenarios. Draw from regional life, cuisine, family structure, celebrations.
-
-USER'S CREATIVE BRIEF
-${description}
-
-Your task is to come up with THREE completely different commercial concepts.
-Each concept should be emotionally powerful, memorable and capable of becoming a viral premium brand film.
-Avoid clichés.
-Avoid direct selling.
-Avoid explaining the product.
-Do not start with the product.
-Think like Apple, Nike, Tanishq or Google commercials.
-
-The three concepts MUST be completely different from one another:
-- Concept 1 → Emotional
-- Concept 2 → Inspirational
-- Concept 3 → Unexpected or highly creative
-
-OUTPUT FORMAT — STRICT JSON ONLY, no markdown, no code fences, no prose outside the JSON:
-{
-  "concepts": [
-    {
-      "id": "concept_1",
-      "type": "emotional",
-      "title": "Memorable campaign title",
-      "coreEmotion": "What the audience should feel — one short phrase",
-      "bigIdea": "One paragraph explaining the central idea",
-      "storySummary": "Beginning → Emotion → Brand → Ending, one paragraph",
-      "whyItWorks": "Why this works psychologically, one paragraph",
-      "visualStyle": "Cinematography, palette, mood direction",
-      "musicStyle": "Suggested background music style",
-      "endingMessage": "The final line or brand payoff"
-    },
-    { "id": "concept_2", "type": "inspirational", ... same schema ... },
-    { "id": "concept_3", "type": "unexpected", ... same schema ... }
-  ],
-  "recommended": "concept_1 | concept_2 | concept_3",
-  "recommendationReason": "One paragraph explaining why the recommended concept is strongest."
-}
-Return exactly 3 concepts in the array.`;
+    const systemPrompt = await buildPrompt(req.user.id, 'video.concepts', {
+      durationSeconds: (durationSeconds),
+      brandName: (brandName),
+      industry: (industry),
+      brandSummary: (brandSummary),
+      targetAudience: (targetAudience),
+      conceptRegionHint: (conceptRegionHint),
+      brandTone: (brandTone),
+      competitors: (competitors || 'N/A'),
+      description: (description)
+    });
 
     let raw;
     try {
@@ -1791,57 +1696,18 @@ router.post('/generateCharacters', protect, checkTrial, videoAiWriteLimiter, asy
     // Prompt sourced verbatim from Character Prompt.docx, generalized
     // with brand + approved-concept slots and wrapped in a strict JSON
     // schema so the frontend can render cards + numbered chips.
-    const systemPrompt = `Based on the approved story, determine whether recurring characters are required.
-If characters appear in multiple scenes, create a MASTER CHARACTER REFERENCE prompt.
-Generate one production-ready prompt that creates a single cast reference image containing all recurring characters with unique IDs.
-The reference should maintain family resemblance, identical facial identity and realistic age progression.
-Return only the character reference prompt.
-
---- CONTEXT ---
-APPROVED STORY / CONCEPT
-Title: ${conceptTitle || '(from user description)'}
-Core Emotion: ${conceptEmotion || 'n/a'}
-Story Summary: ${conceptStory || description}
-Visual Style: ${conceptVisualStyle || 'Premium cinematic'}
-
-BRAND
-Business: ${brandName}
-Industry: ${industry}
-Target Audience: ${targetAudience}
-Target Location / Region: ${regionHint}
-${businessLanguage ? 'Business Language(s): ' + businessLanguage : ''}
-Brand Tone: ${brandTone}
-
---- REGIONAL AUTHENTICITY (MANDATORY) ---
-Every character MUST look like a real member of the brand's actual target market.
-- Ethnicity, skin tone, facial features, body type, and age markers must match "${regionHint}".
-- Names MUST be authentic to that region (e.g. Tamil / Hindi / Kannada / regional Indian names for an Indian brand — NOT Western names like John, Emma, David, Sarah).
-- Clothing must match the region and business context (e.g. saree, kurta, veshti, sherwani, dupatta for South Indian brands — NOT generic Western casualwear unless the concept explicitly demands it).
-- Do NOT default to White/European appearance. Do NOT produce generic "Western-looking" characters unless the target region is explicitly Western.
-- Cultural touches (jewellery, bindi, mangalsutra, henna, footwear) should reflect the region where relevant.
-The single most important rule: viewers from the target region must recognize these as their people.
-
---- OUTPUT ---
-Return STRICT JSON ONLY (no markdown, no code fences, no prose outside the JSON) matching this schema:
-{
-  "characters": [
-    {
-      "id": "01",
-      "name": "Full realistic name",
-      "age": "e.g. 34",
-      "gender": "Male | Female | Non-binary",
-      "role": "Their role in the story",
-      "personality": "One short sentence",
-      "appearance": "Facial features, build, ethnicity",
-      "clothing": "Specific outfit matching the story",
-      "hairStyle": "Specific haircut/style",
-      "hairColor": "Natural hair color"
-    }
-  ],
-  "castReferencePrompt": "The single MASTER CHARACTER REFERENCE prompt — one clean horizontal photograph, plain off-white / neutral studio backdrop, all characters standing side-by-side in a single row, evenly spaced, full-body visible, facing camera, natural warm cinematic lighting, photorealistic commercial studio quality. EVERY character must authentically look like a real person from ${regionHint} — correct ethnicity, skin tone, facial features, and regional wardrobe (saree/kurta/veshti/salwar for Indian brands). Do NOT render Western/European-looking people unless the concept explicitly demands it. Directly UNDER each character render a small clean text label in this exact format on TWO lines: line 1 = '01', '02', '03' ... (the zero-padded 2-digit number in a small warm-gold color), line 2 = 'FULLNAME · AGE XX' (in black or dark grey, all uppercase). Match the characters array order left to right. STRICT PROHIBITIONS: do NOT render any headline text, tagline, brand name banner, marketing copy, decorative typography, or slogans anywhere in the image — only the numbered character labels described above are allowed. Do NOT add background props, furniture, or a floor plate. Do NOT put the brand name anywhere in the frame. Keep the background as clean empty studio wall. Maintain family resemblance if applicable, identical facial identity, realistic age progression."
-}
-Character IDs MUST be zero-padded 2-digit strings: "01", "02", "03" ... matching the order they appear in the master image.
-Return only what the story genuinely needs (up to 8 characters).`;
+    const systemPrompt = await buildPrompt(req.user.id, 'video.casting', {
+      conceptTitle: (conceptTitle || '(from user description)'),
+      conceptEmotion: (conceptEmotion || 'n/a'),
+      conceptStory: (conceptStory || description),
+      conceptVisualStyle: (conceptVisualStyle || 'Premium cinematic'),
+      brandName: (brandName),
+      industry: (industry),
+      targetAudience: (targetAudience),
+      regionHint: (regionHint),
+      block9: (businessLanguage ? 'Business Language(s): ' + businessLanguage : ''),
+      brandTone: (brandTone)
+    });
 
     let raw;
     try {
@@ -2031,28 +1897,10 @@ router.post('/generateCharacterPreview', protect, checkTrial, videoAiWriteLimite
     
     const resolvedArtStyle = artStyle || 'Realistic / Photography';
     
-    let prompt = `Create a professional Master Character Reference Sheet.
-The sheet must show the exact same person in all views and preserve the identical face, hairstyle, beard, skin tone, body proportions, and age.
-
-Include the following sections:
-1. Face Views: Front view, Left profile, Right profile, 45-degree angle.
-2. Body Views: Full body front, Full body side, Full body back.
-3. Expression Sheet: Neutral, Happy, Serious, Thinking.
-4. Pose Sheet: Standing, Walking, Sitting, Pointing.
-
-Requirements:
-- Use the exact same person in every image.
-- Maintain identical facial geometry.
-- Maintain identical beard style.
-- Maintain identical hairstyle and hairline.
-- Maintain identical skin tone and ethnicity.
-- Maintain identical body proportions.
-- Use a clean studio background.
-- Arrange everything in a professional character reference sheet layout.
-- Art Style / Format: ${resolvedArtStyle}.
-- Video Theme Style: ${videoStyle || 'Cinematic, extremely high quality.'}
-- CRITICAL: Do not add glasses, hats, or other face-obscuring accessories unless explicitly specified.
-`;
+    const prompt = await buildPrompt(req.user.id, 'video.characterSheet', {
+      resolvedArtStyle: (resolvedArtStyle),
+      videoStyle: (videoStyle || 'Cinematic, extremely high quality.')
+    });
 
     if (description) {
         prompt += `\nSubject details to enforce: ${description}`;
@@ -3388,6 +3236,9 @@ router.post('/generateAudio', protect, checkTrial, videoAiWriteLimiter, async (r
     const generated = await runGenerateAudio({
       payload: {
         jobId,
+        // Carried so the voiceover and music prompts can pick up this user's
+        // edited versions rather than always using the shipped defaults.
+        userId: req.user?.id || null,
         skipMix: true,
         description: String(sourceVoiceScript || draft?.input?.description || ''),
         // Always pass the *source* (English) script; the pipeline will translate
