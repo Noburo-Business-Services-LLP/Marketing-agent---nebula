@@ -441,12 +441,21 @@ const ReelGenerator: React.FC = () => {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return;
       const saved = JSON.parse(raw);
-      if (saved.description) setDescription(saved.description);
-      if (Array.isArray(saved.concepts) && saved.concepts.length) setConcepts(saved.concepts);
-      if (saved.conceptsRecommended) setConceptsRecommended(saved.conceptsRecommended);
-      if (saved.conceptsReason) setConceptsReason(saved.conceptsReason);
-      if (saved.acceptedConceptId) setAcceptedConceptId(saved.acceptedConceptId);
-      if (saved.acceptedConcept) setAcceptedConcept(saved.acceptedConcept);
+      const savedBrief = String(saved.description || '').trim();
+      if (savedBrief) setDescription(savedBrief);
+
+      // Concepts are derived from the brief, so they are only restored
+      // alongside it. Restoring them on their own left three concepts sitting
+      // above an empty brief with no way to replace them: the Generate button
+      // hides once concepts exist, and Regenerate is disabled while the brief
+      // is empty — a dead end you could only escape by clearing storage.
+      if (savedBrief && Array.isArray(saved.concepts) && saved.concepts.length) {
+        setConcepts(saved.concepts);
+        if (saved.conceptsRecommended) setConceptsRecommended(saved.conceptsRecommended);
+        if (saved.conceptsReason) setConceptsReason(saved.conceptsReason);
+        if (saved.acceptedConceptId) setAcceptedConceptId(saved.acceptedConceptId);
+        if (saved.acceptedConcept) setAcceptedConcept(saved.acceptedConcept);
+      }
       if (Array.isArray(saved.generatedCharacters) && saved.generatedCharacters.length) {
         setGeneratedCharacters(saved.generatedCharacters);
       }
