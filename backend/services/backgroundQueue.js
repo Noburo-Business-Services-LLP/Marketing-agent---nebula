@@ -75,6 +75,7 @@ Return ONLY a JSON object (no markdown, no backticks, no code blocks):
     let calendarPromptUsed = '';
     try {
       const imageResult = await generateCampaignImageNanoBanana(parsed.imagePrompt || item.creativeConcept, {
+        userId: calendar.userId,
         aspectRatio: '1:1',
         brandName: calendar.businessName,
         industry: calendar.businessVertical || '',
@@ -260,6 +261,7 @@ async function processDraftImageGenerationJob(job) {
     } else {
       imageResult = await Promise.race([
         generateCampaignImageNanoBanana(draft.imagePrompt || draft.caption || 'A creative poster', {
+          userId: draft.userId,
           aspectRatio: job.aspectRatio || '1:1',
           brandName: user?.companyName || 'Brand',
           industry: bp.industry || '',

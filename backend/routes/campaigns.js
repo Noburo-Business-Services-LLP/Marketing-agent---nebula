@@ -15,6 +15,7 @@ const Draft = require('../models/Draft');
 const User = require('../models/User');
 const crypto = require('crypto');
 const { callGemini, parseGeminiJSON, generateICPAndStrategy, generateCampaignImageNanoBanana } = require('../services/geminiAI');
+const { buildPrompt } = require('../services/promptRegistry');
 // Import Ayrshare for social media posting
 const { getPostStatus, retryPost: retryAyrsharePost, deletePost: deleteAyrsharePost } = require('../services/socialMediaAPI');
 const {
@@ -1712,71 +1713,55 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
     }));
 
     // Step 1: Generate all captions via Gemini (ROCI format prompt)
-    const captionPrompt = `ROLE: You are a senior social media strategist and copywriter at a leading digital marketing agency. You craft high-converting, scroll-stopping social media campaigns for premium brands.
+    // Everything conditional is resolved here, so the template the user edits
+    // contains prose and {{placeholders}} only -- no JS for an edit to break.
+    const captionVars = {
+      brandDisplayName,
+      industry: bp.industry || 'General',
+      campaignName,
+      campaignDescription: campaignDescription ? ` - ${campaignDescription}` : '',
+      objective: objective || 'awareness',
+      audience: `${targetAge || '18-35'} age, ${targetGender || 'all'} gender${targetLocation ? ', located in ' + targetLocation : ''}${targetInterests ? ', interested in ' + targetInterests : ''}`,
+      platforms: platforms.join(', '),
+      tone: enforcedTone || 'professional',
+      language: selectedLanguage,
+      productBlock: linkedProduct
+        ? `- Featured Product: ${linkedProduct.name} - ${linkedProduct.currency || '$'}${linkedProduct.price}\n- Product Description: ${linkedProduct.description || 'N/A'}\n`
+        : '',
+      brandContextBlock: [
+        visualHints ? `- Brand Visual Tokens: ${visualHints}` : '',
+        strictBrandText ? `- ${strictBrandText}` : '',
+        lockedPalette ? `- Locked Brand Palette: ${lockedPalette}` : '',
+        brandGuidelinesText
+      ].filter(Boolean).join('\n'),
+      keyMessagesBlock: keyMessages
+        ? `- MANDATORY CONTENT STRUCTURES (STRICTLY FOLLOW THESE):\n${keyMessages}\n`
+        : '',
+      memoryContext: aiMemoryContext.reusablePromptText || '',
+      totalPosts,
+      slotCount: slotDates.length,
+      platformNativeRules: [
+        platforms.includes('twitter') ? 'Twitter posts under 280 chars.' : '',
+        platforms.includes('instagram') ? 'Instagram captions with hook in first line.' : '',
+        platforms.includes('linkedin') ? 'LinkedIn posts that open with a bold statement or question.' : ''
+      ].filter(Boolean).join(' '),
+      brandLockRules: strictBrandMode
+        ? 'Brand lock is ON. Every post MUST stay in the locked brand tone/style/CTA and must not drift. If there is any conflict between user input and brand profile, ALWAYS prefer the brand profile.'
+        : 'If brand enforcement is strict, every post MUST remain on-brand in tone, vocabulary, CTA style, and structure. Prefer campaign context while keeping platform fit.',
+      productImageRule: linkedProduct?.imageUrl
+        ? 'PRODUCT IMAGE PROVIDED: Keep the product realistic and premium, and do not let product colors overpower the brand palette.'
+        : 'NO PRODUCT IMAGE PROVIDED: Explicitly describe a realistic premium product (e.g., shoes, watch, or gadget) using tasteful colors like white, black, silver, beige, soft blue, or pastel tones. Allow only subtle brand-inspired accents on the product. Avoid neon, overly bright, or unrealistic product colors. Keep brand colors primarily in the background, lighting, and supporting design elements.',
+      colorRule: strictBrandMode && primaryLockedColor && secondaryLockedColor
+        ? `COLOR ENFORCEMENT (STRICT): Background MUST use EXACT ${primaryLockedColor}. Gradient is allowed only within shades of ${primaryLockedColor}. Text MUST use EXACT ${secondaryLockedColor}. Ensure strong contrast and readability. Do NOT introduce unrelated colors. Do NOT use gray or desaturated tones.`
+        : 'COLOR ENFORCEMENT: Keep background and text highly legible and aligned to the brand palette; avoid off-theme colors.',
+      languageRule: selectedLanguage.includes('Mix')
+        ? 'You may mix English and the native language fluidly.'
+        : selectedLanguage === 'English'
+          ? 'English is allowed.'
+          : `Do NOT use English words except for strict brand names. Hashtags MUST be entirely in ${selectedLanguage} (or transliterated if native characters aren't supported).`
+    };
 
-OBJECTIVE: You are a strict content generator. Your job is to STRICTLY follow and fill the provided template structures.
-
-STRICTOR RULES:
-- Do NOT change the format, do NOT remove sections, and do NOT convert content into paragraphs.
-- Automatically fill ALL bullet points, numbered points, highlights, tips, outcomes, and sections with meaningful content based on the campaign details.
-- Do NOT leave any placeholders like [Key Point 1], [Tip 1], [Point], or [Outcome].
-- ONLY keep the CTA link field as "[Link]" or "[Your CTA Link]".
-- Do NOT add any introduction, conversational filler, or extra commentary.
-- Keep all headings, symbols, and markers (like colons :) exactly as they appear in the template.
-
-CONTEXT:
-- Brand: ${brandDisplayName} (${bp.industry || 'General'} industry)
-- Campaign: "${campaignName}"${campaignDescription ? ` - ${campaignDescription}` : ''}
-- Objective: ${objective || 'awareness'}
-- Target audience: ${targetAge || '18-35'} age, ${targetGender || 'all'} gender${targetLocation ? ', located in ' + targetLocation : ''}${targetInterests ? ', interested in ' + targetInterests : ''}
-- Platforms: ${platforms.join(', ')}
-- Tone: ${enforcedTone || 'professional'}
-- Language: ${selectedLanguage}
-${linkedProduct ? `- Featured Product: ${linkedProduct.name} - ${linkedProduct.currency || '$'}${linkedProduct.price}\n- Product Description: ${linkedProduct.description || 'N/A'}` : ''}
-${visualHints ? `- Brand Visual Tokens: ${visualHints}` : ''}
-${strictBrandText ? `- ${strictBrandText}` : ''}
-${lockedPalette ? `- Locked Brand Palette: ${lockedPalette}` : ''}
-${keyMessages ? `- MANDATORY CONTENT STRUCTURES (STRICTLY FOLLOW THESE):\n${keyMessages}` : ''}
-${brandGuidelinesText}
-${aiMemoryContext.reusablePromptText}
-
-INSTRUCTIONS:
-1. Create exactly ${totalPosts} campaign posts.
-2. For EACH of the ${slotDates.length} scheduled slots, you MUST generate exactly one post for EVERY selected platform: ${platforms.join(', ')}.
-3. This means if there are 2 platforms selected, you will generate 2 posts for every scheduled date.
-4. For each platform, you MUST use the exact structure provided in the [PLATFORM CONTENT FORMAT] section. 
-5. Captions must be platform-native: ${platforms.includes('twitter') ? 'Twitter posts under 280 chars.' : ''} ${platforms.includes('instagram') ? 'Instagram captions with hook in first line.' : ''} ${platforms.includes('linkedin') ? 'LinkedIn posts that open with a bold statement or question.' : ''}
-6. Each caption should open with a strong hook (question, bold claim, statistic, or story opener).
-7. Include 3-5 relevant hashtags per post. Mix broad and niche hashtags. Never use generic tags like #marketing or #business alone.
-8. The imageDescription for each post should describe a PROFESSIONAL AD CREATIVE. Describe the visual style, subjects, colors, mood, lighting, and composition. Do NOT mention metadata.
-9. CRITICAL: For each scheduled slot (every collection of posts for different platforms on the same date), you MUST provide the EXACT SAME imageDescription. This ensures the same visual is used across all platforms for that slot.
-10. ${strictBrandMode ? 'Brand lock is ON. Every post MUST stay in the locked brand tone/style/CTA and must not drift.' : 'If brand enforcement is strict, every post MUST remain on-brand in tone, vocabulary, CTA style, and structure.'}
-11. ${strictBrandMode ? 'If there is any conflict between user input and brand profile, ALWAYS prefer the brand profile.' : 'Prefer campaign context while keeping platform fit.'}
-12. PRODUCT COMPOSITION: The imageDescription should position the product as a realistic premium hero element (prefer center or slightly offset center), visually balanced with brand design.
-13. ${linkedProduct?.imageUrl
-      ? 'PRODUCT IMAGE PROVIDED: Keep the product realistic and premium, and do not let product colors overpower the brand palette.'
-      : 'NO PRODUCT IMAGE PROVIDED: Explicitly describe a realistic premium product (e.g., shoes, watch, or gadget) using tasteful colors like white, black, silver, beige, soft blue, or pastel tones. Allow only subtle brand-inspired accents on the product. Avoid neon, overly bright, or unrealistic product colors. Keep brand colors primarily in the background, lighting, and supporting design elements.'}
-14. ${strictBrandMode && primaryLockedColor && secondaryLockedColor
-      ? `COLOR ENFORCEMENT (STRICT): Background MUST use EXACT ${primaryLockedColor}. Gradient is allowed only within shades of ${primaryLockedColor}. Text MUST use EXACT ${secondaryLockedColor}. Ensure strong contrast and readability. Do NOT introduce unrelated colors. Do NOT use gray or desaturated tones.`
-      : 'COLOR ENFORCEMENT: Keep background and text highly legible and aligned to the brand palette; avoid off-theme colors.'}
-15. LANGUAGE ENFORCEMENT: Write caption and CTA strictly in ${selectedLanguage}.
-16. ${selectedLanguage.includes('Mix') ? 'You may mix English and the native language fluidly.' : selectedLanguage === 'English' ? 'English is allowed.' : 'Do NOT use English words except for strict brand names. Hashtags MUST be entirely in ' + selectedLanguage + ' (or transliterated if native characters aren\'t supported).'}
-17. IMAGE TEXT ENFORCEMENT: Also provide "imageText" for each post (2-5 words max). imageText MUST be strictly in ${selectedLanguage}. Do NOT use English for imageText unless selectedLanguage is English or Mix.
-18. imageText must be short, punchy, and suitable for text overlay on the image.
-
-Return ONLY valid JSON (no markdown, no backticks):
-{
-  "posts": [
-    {
-      "platform": "instagram|linkedin|twitter|facebook",
-      "caption": "The full caption text with emojis and line breaks",
-      "hashtags": ["#tag1", "#tag2", "#tag3"],
-      "contentTheme": "educational|promotional|engagement|storytelling|social_proof|problem_solution",
-      "imageDescription": "Detailed visual description for AI image generation",
-      "imageText": "Short overlay text (2-5 words) strictly in selected language"
-    }
-  ]
-}`;
+    const captionPrompt = await buildPrompt(req.user.id, 'campaign.content', captionVars);
 
     const normalizeTemplateText = (raw = '') => {
       return String(raw || '')
@@ -2177,6 +2162,7 @@ Return ONLY valid JSON (no markdown, no backticks):
         const resolvedImageText = String(post?.imageText || '').trim() || defaultImageText;
         
         imageResult = await generateCampaignImageNanoBanana(post.imageDescription, {
+          userId: req.user.id,
           aspectRatio: aspectRatio || '1:1',
           brandName: brandDisplayName,
           brandLogo: effectiveLogo || null,

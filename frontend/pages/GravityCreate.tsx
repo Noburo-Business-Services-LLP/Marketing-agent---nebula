@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, Layers, Calendar as CalendarIcon, Zap, Image as ImageIcon, Instagram, Facebook, Linkedin, ChevronRight, Loader2, Check, Clock, Save, AlertCircle, RotateCcw, Pencil, Trash2, Code2, Copy, X } from 'lucide-react';
+import { Sparkles, Layers, Calendar as CalendarIcon, Zap, Image as ImageIcon, Instagram, Facebook, Linkedin, ChevronRight, Loader2, Check, Clock, Save, AlertCircle, RotateCcw, Pencil, Trash2, Code2, Copy, X, SlidersHorizontal } from 'lucide-react';
 import { draftsAPI, brandAssetsAPI, apiService } from '../services/api';
 import { Draft } from '../types';
 import GeneratingFill from '../components/GeneratingFill';
 import CalendarIdeaPicker from '../components/CalendarIdeaPicker';
+import PromptStudio from '../components/PromptStudio';
 import { BorderBeam } from '../components/ui/border-beam';
 
 const ASPECTS = [
@@ -204,6 +205,7 @@ const GravityCreate: React.FC = () => {
   // flag controls unattended background generation, not whether a person may
   // look at ideas they already planned.
   const [ideaPickerOpen, setIdeaPickerOpen] = useState(false);
+  const [promptStudioOpen, setPromptStudioOpen] = useState(false);
   const [pickedIdea, setPickedIdea] = useState<string>('');
 
   const applyCalendarItem = (item: any) => {
@@ -731,6 +733,13 @@ const GravityCreate: React.FC = () => {
           <CalendarIcon className="w-4 h-4 text-[#F5A623]" />
           Pull an idea from your calendar
         </button>
+        <button
+          onClick={() => setPromptStudioOpen(true)}
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-[13px] font-semibold border border-white/[0.12] text-[#F5F4F1] hover:bg-white/[0.05] hover:border-[#F5A623]/40 transition-all"
+        >
+          <SlidersHorizontal className="w-4 h-4 text-[#F5A623]" />
+          Edit the prompts
+        </button>
         {pickedIdea && (
           <span className="text-[12px] text-white/45">
             Loaded: <span className="text-[#F5A623]">{pickedIdea}</span>
@@ -743,6 +752,12 @@ const GravityCreate: React.FC = () => {
         onClose={() => setIdeaPickerOpen(false)}
         onPick={applyCalendarItem}
         type={mode === 'single' ? 'post' : undefined}
+      />
+
+      <PromptStudio
+        open={promptStudioOpen}
+        onClose={() => setPromptStudioOpen(false)}
+        focus={mode === 'campaign' ? 'campaign.content' : 'image.creative'}
       />
 
       {/* Name + Description card, wrapped in a travelling border beam.

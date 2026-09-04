@@ -4,6 +4,7 @@
  */
 
 const { GoogleAuth } = require('google-auth-library');
+const { buildPrompt } = require('./promptRegistry');
 const { uploadBase64Image } = require('./imageUploader');
 const fs = require('fs/promises');
 const path = require('path');
@@ -4657,6 +4658,9 @@ async function generateCampaignImageNanoBanana(imageDescription, options = {}) {
     characterSource = 'system',
     preserveCharacterIdentity = false,
     consistencyStrength = 'normal',
+    // Present when generation runs for a signed-in user, so their edited
+    // prompt is used; absent for internal calls, which get the default.
+    userId = null,
   } = options;
 
   const linkedProduct = options.linkedProduct && typeof options.linkedProduct === 'object' ? options.linkedProduct : null;
@@ -4730,51 +4734,71 @@ ASPECT RATIO: ${aspectRatio}
 INSTRUCTIONS:
 1. DESIGN QUALITY: Purely cinematic, photorealistic, no text overlays, no UI elements, no borders, no graphic design elements.`;
   } else {
-    prompt = `ROLE: You are an elite creative director at a top-tier advertising agency. You create award-winning social media ad creatives that drive engagement and conversions for global brands.
-
-OBJECTIVE: Generate a single, publication-ready social media ad image that looks like it was produced by a professional design team. The image must be visually stunning, immediately attention-grabbing in a social feed, and communicate the brand message through design, not through literal text dumps.
-
-CONTEXT:
-- Brand: ${brandName || 'The brand'}${industry ? ` (${industry} industry)` : ''}
-- Campaign theme: ${campaignTheme || 'Marketing campaign'}
-${linkedProduct ? `- Featured Product: ${linkedProduct.name}
-- Product description: ${linkedProduct.description || 'N/A'}
-- Product reference image: ${hasProductReferenceImage ? 'Provided' : 'Not provided'}` : ''}
-- Visual direction: ${imageDescription}
-- Tone & mood: ${tone || 'professional'}
-${normalizedPalette.length ? `- Locked brand palette: ${normalizedPalette.join(', ')}` : ''}
-${fontType ? `- Preferred typography style: ${fontType}` : ''}
-${keyMessages ? `- Campaign messaging (for design inspiration, NOT to be written verbatim on the image): ${keyMessages}` : ''}
-
-INSTRUCTIONS:
-1. DESIGN QUALITY: ${strictBrandLock
-      ? 'Create a polished, agency-grade ad creative with a clean luxury layout. Keep rendering photorealistic and minimal. Do NOT use cinematic color grading, auto color enhancement, random overlays, or multi-color effects.'
-      : 'Create a polished, agency-grade ad creative. Think Canva Pro templates, not PowerPoint slides. Use professional color grading, balanced composition, and modern design trends (gradients, glassmorphism, bold typography, lifestyle photography style, etc.)'}
-2. ASPECT RATIO: The image MUST be in exactly ${aspectRatio} aspect ratio. This is critical.
-3. RESOLUTION: Output at 1024px on the longest edge maximum. Do not exceed 1K resolution.
-4. TEXT ON IMAGE: If the design calls for text overlays, keep them SHORT (3-7 words max). Use professional typography and no more than 2 font styles. The text should be a punchy headline or tagline, NOT a paragraph. Never put placeholder text like [Date], [Name], [CTA], etc.
-4A. LANGUAGE LOCK FOR IMAGE TEXT: Any visible text rendered on the image MUST be strictly in ${resolvedTargetLanguage}. ${resolvedTargetLanguage.toLowerCase().includes('mix') ? 'You may mix English and native script fluidly.' : resolvedTargetLanguage === 'English' ? 'English is allowed.' : 'Do NOT render English text on the image (except unavoidable brand names/logos).'}
-4B. TEXT SAFETY RULE: If you are not confident rendering ${resolvedTargetLanguage} script correctly, do NOT render any extra text overlay instead of falling back to English.
-${preferredImageText ? `4C. REQUIRED OVERLAY TEXT: Render this exact text on the image as the main headline: "${preferredImageText}". Do not translate it and do not replace it with English.` : ''}
-5. BRAND IDENTITY: ${brandName ? `Subtly incorporate "${brandName}" as real brand craft.` : 'Make the design look professionally branded.'}
-6. NO METADATA: Do NOT include post numbers, aspect ratio labels, generic "Brand" labels, campaign names, watermark text, frame borders, or UI-like editor elements.
-7. VISUAL STORYTELLING: Let imagery communicate the message with strong focal points and emotional resonance.
-8. COLOR PALETTE: ${normalizedPalette.length
-      ? `STRICT: Use only this brand palette and avoid off-brand colors: ${normalizedPalette.join(', ')}.`
-      : `Use a cohesive, premium color palette. ${tone === 'luxurious' || tone === 'luxury' ? 'Think dark tones with gold/silver accents.' : tone === 'playful' || tone === 'fun' ? 'Use vibrant, energetic colors.' : 'Use modern, clean colors that feel trustworthy and professional.'}`}
-9. STRICT BRAND PRIORITY: ${strictBrandLock ? 'ENFORCED. Brand identity overrides product color influence.' : 'Keep brand consistency high.'}
-${strictBrandLock && primaryColor && secondaryColor ? `10. COLOR ENFORCEMENT (STRICT): Background MUST use EXACT brand primary color ${primaryColor}. Gradient allowed only within shades/tints of ${primaryColor}. Text MUST use EXACT brand secondary color ${secondaryColor}. Do NOT introduce any extra color family. Remove blue/pink/violet/neon looks. No mixed-tone gradients and no texture noise.` : ''}
-${strictBrandLock && brandLogo ? '11. LOGO RULE: Use the exact uploaded logo only. Do not recreate or alter it. Keep proportions and original colors.' : ''}
-${strictBrandLock && linkedProduct ? '12. PRODUCT RULE: Keep product centered or slightly offset. Any visible product UI/screen elements must use brand-primary shades only.' : ''}
-${linkedProduct ? `13. PRODUCT REALISM & COLOR CONTROL: ${strictBrandLock
-      ? (hasProductReferenceImage
-        ? `Use the provided product reference to preserve shape/materials. Keep composition color-locked to ${primaryColor} and ${secondaryColor}.`
-        : `No product reference image is available. Generate a premium smartwatch/fitness hero product and keep the full composition color-locked to ${primaryColor} and ${secondaryColor} only.`)
-      : (hasProductReferenceImage
-        ? 'Use the provided product reference to preserve realistic product form/materials. Keep product tones premium and believable (avoid neon or over-saturated rendering).'
-        : 'No product reference image is available. Generate a realistic premium hero product with tasteful tones and subtle brand-inspired accents.')} Keep brand colors primarily in background, lighting, and supporting design elements.` : '13. PRODUCT REALISM & COLOR CONTROL: If a hero product appears, keep it realistic and premium with restrained tones; avoid unrealistic bright colors.'}
-${fontType ? `14. TYPOGRAPHY: Any rendered text should align with a "${fontType}" style and remain minimal.` : '14. TYPOGRAPHY: Keep text overlays minimal and premium.'}
-${totalPosts > 1 ? `15. SERIES CONSISTENCY: This is part of a ${totalPosts}-post campaign series. Maintain a consistent visual style and design language across posts.` : ''}`;
+    // The standard ad-creative path is user-editable through the prompt
+    // registry. Every conditional is resolved here, so the stored template
+    // holds prose and {{placeholders}} only. The character-identity and
+    // cinematic branches above stay in code: an accidental edit there would
+    // silently break identity preservation across a video's scenes.
+    prompt = await buildPrompt(userId, 'image.creative', {
+      brandLine: `${brandName || 'The brand'}${industry ? ` (${industry} industry)` : ''}`,
+      campaignTheme: campaignTheme || 'Marketing campaign',
+      productBlock: linkedProduct
+        ? `- Featured Product: ${linkedProduct.name}\n- Product description: ${linkedProduct.description || 'N/A'}\n- Product reference image: ${hasProductReferenceImage ? 'Provided' : 'Not provided'}`
+        : '',
+      imageDescription,
+      tone: tone || 'professional',
+      paletteLine: normalizedPalette.length ? `- Locked brand palette: ${normalizedPalette.join(', ')}\n` : '',
+      fontLine: fontType ? `- Preferred typography style: ${fontType}\n` : '',
+      keyMessagesLine: keyMessages
+        ? `- Campaign messaging (for design inspiration, NOT to be written verbatim on the image): ${keyMessages}\n`
+        : '',
+      designQuality: strictBrandLock
+        ? 'Create a polished, agency-grade ad creative with a clean luxury layout. Keep rendering photorealistic and minimal. Do NOT use cinematic color grading, auto color enhancement, random overlays, or multi-color effects.'
+        : 'Create a polished, agency-grade ad creative. Think Canva Pro templates, not PowerPoint slides. Use professional color grading, balanced composition, and modern design trends (gradients, glassmorphism, bold typography, lifestyle photography style, etc.)',
+      aspectRatio,
+      language: resolvedTargetLanguage,
+      languageRule: resolvedTargetLanguage.toLowerCase().includes('mix')
+        ? 'You may mix English and native script fluidly.'
+        : resolvedTargetLanguage === 'English'
+          ? 'English is allowed.'
+          : 'Do NOT render English text on the image (except unavoidable brand names/logos).',
+      overlayTextRule: preferredImageText
+        ? `4C. REQUIRED OVERLAY TEXT: Render this exact text on the image as the main headline: "${preferredImageText}". Do not translate it and do not replace it with English.`
+        : '',
+      brandIdentityRule: brandName
+        ? `Subtly incorporate "${brandName}" as real brand craft.`
+        : 'Make the design look professionally branded.',
+      colorPaletteRule: normalizedPalette.length
+        ? `STRICT: Use only this brand palette and avoid off-brand colors: ${normalizedPalette.join(', ')}.`
+        : `Use a cohesive, premium color palette. ${tone === 'luxurious' || tone === 'luxury' ? 'Think dark tones with gold/silver accents.' : tone === 'playful' || tone === 'fun' ? 'Use vibrant, energetic colors.' : 'Use modern, clean colors that feel trustworthy and professional.'}`,
+      strictBrandPriorityRule: strictBrandLock
+        ? 'ENFORCED. Brand identity overrides product color influence.'
+        : 'Keep brand consistency high.',
+      colorEnforcementRule: strictBrandLock && primaryColor && secondaryColor
+        ? `10. COLOR ENFORCEMENT (STRICT): Background MUST use EXACT brand primary color ${primaryColor}. Gradient allowed only within shades/tints of ${primaryColor}. Text MUST use EXACT brand secondary color ${secondaryColor}. Do NOT introduce any extra color family. Remove blue/pink/violet/neon looks. No mixed-tone gradients and no texture noise.`
+        : '',
+      logoRule: strictBrandLock && brandLogo
+        ? '11. LOGO RULE: Use the exact uploaded logo only. Do not recreate or alter it. Keep proportions and original colors.'
+        : '',
+      productRule: strictBrandLock && linkedProduct
+        ? '12. PRODUCT RULE: Keep product centered or slightly offset. Any visible product UI/screen elements must use brand-primary shades only.'
+        : '',
+      productRealismRule: linkedProduct
+        ? `13. PRODUCT REALISM & COLOR CONTROL: ${strictBrandLock
+            ? (hasProductReferenceImage
+              ? `Use the provided product reference to preserve shape/materials. Keep composition color-locked to ${primaryColor} and ${secondaryColor}.`
+              : `No product reference image is available. Generate a premium smartwatch/fitness hero product and keep the full composition color-locked to ${primaryColor} and ${secondaryColor} only.`)
+            : (hasProductReferenceImage
+              ? 'Use the provided product reference to preserve realistic product form/materials. Keep product tones premium and believable (avoid neon or over-saturated rendering).'
+              : 'No product reference image is available. Generate a realistic premium hero product with tasteful tones and subtle brand-inspired accents.')} Keep brand colors primarily in background, lighting, and supporting design elements.`
+        : '13. PRODUCT REALISM & COLOR CONTROL: If a hero product appears, keep it realistic and premium with restrained tones; avoid unrealistic bright colors.',
+      typographyRule: fontType
+        ? `14. TYPOGRAPHY: Any rendered text should align with a "${fontType}" style and remain minimal.`
+        : '14. TYPOGRAPHY: Keep text overlays minimal and premium.',
+      seriesConsistencyRule: totalPosts > 1
+        ? `15. SERIES CONSISTENCY: This is part of a ${totalPosts}-post campaign series. Maintain a consistent visual style and design language across posts.`
+        : ''
+    });
   }
 
   if (
