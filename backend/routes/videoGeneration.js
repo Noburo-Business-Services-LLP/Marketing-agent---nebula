@@ -76,7 +76,7 @@ const {
   saveDataUrlToJob
 } = require('../services/videoDraftStore');
 const { callGemini, parseGeminiJSON, generateCampaignImageNanoBanana } = require('../services/geminiAI');
-const { callOpenAI } = require('../services/openAI');
+const { callOpenAI, callTextLLM } = require('../services/openAI');
 const User = require('../models/User');
 const { buildAIContext } = require('../services/aiContextBuilder');
 const { learnVideoStep } = require('../services/aiVideoLearning');
@@ -959,7 +959,7 @@ async function localizeAudioScript({ text, languageCode, userId = null }) {
   });
 
   try {
-    const localized = await callGemini(prompt, {
+    const localized = await callTextLLM(prompt, {
       skipCache: true,
       temperature: 0.25,
       maxTokens: 900,
@@ -1148,7 +1148,8 @@ async function generateStructuredPrompt(draft) {
   });
 
   try {
-    const raw = await callGemini(prompt, {
+    const raw = await callTextLLM(prompt, {
+      jsonMode: true,
       skipCache: true,
       temperature: 0.55,
       maxTokens: 900,
@@ -1234,7 +1235,8 @@ async function generateCaptionAndHashtags({ draft, selectedPlatforms = [] }) {
   });
 
   try {
-    const raw = await callGemini(prompt, {
+    const raw = await callTextLLM(prompt, {
+      jsonMode: true,
       skipCache: true,
       temperature: 0.7,
       maxTokens: 900,

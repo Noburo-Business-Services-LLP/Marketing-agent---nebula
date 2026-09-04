@@ -12,7 +12,7 @@ const Product = require('../models/Product');
 const VideoDraft = require('../models/VideoDraft');
 const User = require('../models/User');
 const { callGemini, parseGeminiJSON, generateCampaignImageNanoBanana, extractCharacterVisualTraits } = require('./geminiAI');
-const { callOpenAI } = require('./openAI');
+const { callOpenAI, callTextLLM } = require('./openAI');
 const { getPublicBaseUrl, normalizeTone, audioFilePathForTone } = require('../utils/toneAudio');
 const { generateVideoClip, getKlingDuration, generateCharacterImageFal, generateCharacterSheetFal, applyFaceSwapFal, extractFaceEmbedding } = require('./videoService');
 const { uploadVideoFile } = require('./imageUploader');
@@ -2494,7 +2494,8 @@ ${source}
 Scene timing (English per scene when available):
 ${sceneBrief || '(no per-scene lines provided; still keep full-length pacing)'}\n`;
 
-  const localized = await callGemini(prompt, {
+  const localized = await callTextLLM(prompt, {
+    jsonMode: true,
     skipCache: true,
     temperature: 0.4,
     maxTokens: 2000,
@@ -2568,7 +2569,7 @@ Current translation (too short):
 ${String(localizedText || '').replace(/\\s+/g, ' ').trim()}\n`;
 
   try {
-    const improved = await callGemini(prompt, {
+    const improved = await callTextLLM(prompt, {
       skipCache: true,
       temperature: 0.45,
       maxTokens: 1800,

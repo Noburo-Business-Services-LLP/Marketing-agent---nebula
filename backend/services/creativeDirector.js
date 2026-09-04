@@ -1,5 +1,5 @@
-const { callGemini, parseGeminiJSON } = require('./geminiAI');
-const { callOpenAI } = require('./openAI');
+const { parseGeminiJSON } = require('./geminiAI');
+const { callTextLLM } = require('./openAI');
 const { buildPrompt } = require('./promptRegistry');
 const {
   buildBrandMemoryBlock,
@@ -128,23 +128,8 @@ function toText(value) {
  * object in the prompt itself causes OpenAI to error), so callers must say
  * which they need rather than this guessing from the prompt text.
  */
-async function callCreativeLLM(prompt, { jsonMode = false, maxTokens = 3000, skipCache = false } = {}) {
-  try {
-    return await callOpenAI(prompt, {
-      model: 'gpt-4o',
-      temperature: 0.7,
-      maxTokens,
-      timeout: 120000,
-      jsonMode
-    });
-  } catch (openAiErr) {
-    console.warn(`[CreativeDirector] OpenAI call failed, falling back to Gemini: ${openAiErr.message}`);
-    return callGemini(prompt, { skipCache });
-  }
-}
-
 async function getJSONWithRetry(prompt, isUsable, label = 'CreativeDirector') {
-  const attempt1 = await callCreativeLLM(prompt, { jsonMode: true });
+  const attempt1 = await callTextLLM(prompt, { jsonMode: true });
   let result = parseGeminiJSON(attempt1) || {};
   if (isUsable(result)) return result;
 
@@ -158,7 +143,7 @@ async function getJSONWithRetry(prompt, isUsable, label = 'CreativeDirector') {
   }
 
   console.warn(`[${label}] First attempt returned no usable JSON, retrying once.`);
-  const attempt2 = await callCreativeLLM(
+  const attempt2 = await callTextLLM(
     `${prompt}\n\nReturn ONLY the JSON object. No explanation, no reasoning, no markdown — the response must start with { and end with }.`,
     { jsonMode: true, skipCache: true }
   );
@@ -197,7 +182,7 @@ async function runImageArtDirector(userId, decision, { aspectRatio, language }) 
     language: language || 'English'
   });
 
-  const raw = await callCreativeLLM(prompt, { jsonMode: false, maxTokens: 1200 });
+  const raw = await callTextLLM(prompt, { jsonMode: false, maxTokens: 1200 });
   return extractFinalPrompt(raw);
 }
 
@@ -383,7 +368,7 @@ async function renderCarouselSlideImage(userId, plan, slideIndex) {
     brandAssets
   });
 
-  const raw = await callCreativeLLM(prompt, { jsonMode: false, maxTokens: 1200 });
+  const raw = await callTextLLM(prompt, { jsonMode: false, maxTokens: 1200 });
   return extractFinalPrompt(raw) || slide.imagePrompt;
 }
 
@@ -472,7 +457,7 @@ async function renderCampaignSlotImage(userId, plan, slotIndex, { aspectRatio, l
     language: language || 'English'
   });
 
-  const raw = await callCreativeLLM(prompt, { jsonMode: false, maxTokens: 1200 });
+  const raw = await callTextLLM(prompt, { jsonMode: false, maxTokens: 1200 });
   return extractFinalPrompt(raw) || slot.imagePrompt;
 }
 

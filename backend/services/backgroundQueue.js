@@ -2,7 +2,8 @@ const Draft = require('../models/Draft');
 const ContentCalendar = require('../models/ContentCalendar');
 const Campaign = require('../models/Campaign');
 const User = require('../models/User');
-const { callGemini, parseGeminiJSON, generateCampaignImageNanoBanana, generatePosterFromReference } = require('./geminiAI');
+const { parseGeminiJSON, generateCampaignImageNanoBanana, generatePosterFromReference } = require('./geminiAI');
+const { callTextLLM } = require('./openAI');
 const { uploadBase64Image } = require('./imageUploader');
 const { buildPrompt } = require('./promptRegistry');
 const { buildBrandMemoryBlock } = require('./brandMemory');
@@ -65,7 +66,7 @@ Return ONLY a JSON object (no markdown, no backticks, no code blocks):
   "imagePrompt": "Detailed prompt for generating the image"
 }`;
 
-    const llmResponse = await callGemini(prompt);
+    const llmResponse = await callTextLLM(prompt, { jsonMode: true, maxTokens: 2000 });
     let parsed = { caption: item.headline, hashtags: [], imagePrompt: item.creativeConcept };
     try {
       parsed = parseGeminiJSON(llmResponse);
@@ -289,7 +290,7 @@ async function processDraftImageGenerationJob(job) {
           language: normalizeLanguage(bp.contentLanguage),
           brandContextBlock
         });
-        const raw = await callGemini(planPrompt);
+        const raw = await callTextLLM(planPrompt, { jsonMode: true, maxTokens: 2000 });
         contentPrompt = parseGeminiJSON(raw);
       } catch (err) {
         console.error('[BackgroundQueue] Content-writing pass failed, using the raw idea instead:', err.message);

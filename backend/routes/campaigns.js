@@ -14,7 +14,8 @@ const MentionLog = require('../models/MentionLog');
 const Draft = require('../models/Draft');
 const User = require('../models/User');
 const crypto = require('crypto');
-const { callGemini, parseGeminiJSON, generateICPAndStrategy, generateCampaignImageNanoBanana } = require('../services/geminiAI');
+const { parseGeminiJSON, generateICPAndStrategy, generateCampaignImageNanoBanana } = require('../services/geminiAI');
+const { callTextLLM } = require('../services/openAI');
 const { buildPrompt } = require('../services/promptRegistry');
 const { buildBrandMemoryBlock } = require('../services/brandMemory');
 const { planCampaignVisuals, renderCampaignSlotImage, assetsToImageOptions } = require('../services/creativeDirector');
@@ -864,7 +865,7 @@ POSTS TO ALIGN:
 ${JSON.stringify(posts)}`;
 
   try {
-    const refinedRaw = await callGemini(prompt, { temperature: 0.3, maxTokens: 8000, skipCache: true });
+    const refinedRaw = await callTextLLM(prompt, { jsonMode: true, temperature: 0.3, maxTokens: 8000, skipCache: true });
     const refined = parseGeminiJSON(refinedRaw);
     if (!Array.isArray(refined?.posts) || refined.posts.length !== posts.length) {
       return posts;
@@ -1335,7 +1336,7 @@ Return JSON only with this schema:
   "ctaText": "single CTA sentence"
 }`;
 
-    const aiRaw = await callGemini(prompt, { temperature: 0.65, maxTokens: 1600, skipCache: true });
+    const aiRaw = await callTextLLM(prompt, { jsonMode: true, temperature: 0.65, maxTokens: 1600, skipCache: true });
     const aiData = parseGeminiJSON(aiRaw) || {};
     const sectionParagraphs = aiData?.sectionParagraphs && typeof aiData.sectionParagraphs === 'object' ? aiData.sectionParagraphs : {};
     const sectionBullets = aiData?.sectionBullets && typeof aiData.sectionBullets === 'object' ? aiData.sectionBullets : {};
@@ -1879,14 +1880,12 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
       // if (aborted) return res.end(); // Removed to allow background generation
       attempts++;
       
-      console.log(` [CAMPAIGN_CONTENT] ${campaignContentGenerationId} Gemini call #${attempts}`, { userId, totalPosts });
-      const textRes = await callGemini(currentPrompt, {
+      console.log(` [CAMPAIGN_CONTENT] ${campaignContentGenerationId} call #${attempts}`, { userId, totalPosts });
+      const textRes = await callTextLLM(currentPrompt, {
+        jsonMode: true,
         maxTokens: 8000,
         temperature: 0.85,
-        skipCache: true,
-        // Enforce a single provider request for this workflow.
-        maxRetries: 1,
-        models: ['gemini-2.5-pro']
+        skipCache: true
       });
       parsed = parseGeminiJSON(textRes);
 
@@ -4413,14 +4412,12 @@ Return ONLY valid JSON (no markdown, no code blocks):
 }`;
 
     const campaignPostsGenerationId = `campaign_posts_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    console.log(`[CAMPAIGN_POSTS] ${campaignPostsGenerationId} Gemini call #1`, { userId, totalPosts });
-    const response = await callGemini(prompt, {
+    console.log(`[CAMPAIGN_POSTS] ${campaignPostsGenerationId} call #1`, { userId, totalPosts });
+    const response = await callTextLLM(prompt, {
+      jsonMode: true,
       maxTokens: 4000,
       temperature: 0.8,
-      skipCache: true,
-      // Enforce a single provider request for this workflow.
-      maxRetries: 1,
-      models: ['gemini-2.5-pro']
+      skipCache: true
     });
     const parsed = parseGeminiJSON(response);
     const fallbackPost = {

@@ -3,7 +3,7 @@ const Campaign = require('../models/Campaign');
 const ContentDraft = require('../models/ContentDraft');
 const { parseGeminiJSON, generateCampaignImageNanoBanana } = require('./geminiAI');
 const { buildPrompt } = require('./promptRegistry');
-const { generateWithLLM } = require('./llmRouter');
+const { callTextLLM } = require('./openAI');
 
 const CONTENT_CALENDAR_PROMPT = `
 You are a Senior Social Media Strategist, Brand Consultant, Content Marketing Expert, Consumer Psychologist, and Performance Marketing Specialist.
@@ -182,13 +182,9 @@ function calendarMonth(date = new Date()) {
 }
 
 async function llmRouter(prompt) {
-  return generateWithLLM({
-    provider: 'gemini',
-    taskType: 'content_calendar',
-    prompt,
-    temperature: 0.75,
-    maxTokens: 12000
-  });
+  // The monthly plan and the cover's theme-naming pass both go through
+  // here — copy/planning text, so OpenAI first, Gemini as the fallback.
+  return callTextLLM(prompt, { jsonMode: true, temperature: 0.75, maxTokens: 12000, skipCache: true });
 }
 
 function deriveBusinessGoal(profile = {}) {

@@ -69,6 +69,34 @@ async function callOpenAI(prompt, options = {}) {
   return content;
 }
 
+/**
+ * The shared text-generation entry point for the whole content/creative
+ * pipeline — copy, captions, prompts, scripts. OpenAI first, Gemini only if
+ * OpenAI errors or is unconfigured. Lives here, not in geminiAI.js, so it
+ * reads as what it is: OpenAI is the primary provider for text, Gemini is
+ * the safety net, not the other way around.
+ *
+ * Deliberately does NOT cover every callGemini() in the codebase — dashboard
+ * analytics, social-listening analysis, translation utilities and ICP/
+ * strategy generation are a different job (understanding/analyzing existing
+ * data) from writing new copy or prompts, and were left on Gemini directly
+ * rather than swept in along with this.
+ *
+ * `jsonMode` must be set correctly by the caller: OpenAI errors on a
+ * JSON-mode request whose prompt doesn't itself ask for JSON, so this
+ * can't safely guess it from the prompt text.
+ */
+async function callTextLLM(prompt, { jsonMode = false, maxTokens = 3000, temperature = 0.7, timeout = 120000, skipCache = false } = {}) {
+  try {
+    return await callOpenAI(prompt, { model: OPENAI_MODEL, temperature, maxTokens, timeout, jsonMode });
+  } catch (openAiErr) {
+    console.warn(`[TextLLM] OpenAI call failed, falling back to Gemini: ${openAiErr.message}`);
+    const { callGemini } = require('./geminiAI');
+    return callGemini(prompt, { skipCache });
+  }
+}
+
 module.exports = {
-  callOpenAI
+  callOpenAI,
+  callTextLLM
 };
