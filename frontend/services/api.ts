@@ -407,7 +407,7 @@ export const apiService = {
   },
 
   // Credits & Trial
-  getCredits: async (): Promise<{ success: boolean; credits?: { balance: number; totalUsed: number; history?: any[] }; trial?: { startDate: string; expiresAt: string; daysLeft: number; isExpired: boolean }; costs?: Record<string, number> }> => {
+  getCredits: async (): Promise<{ success: boolean; credits?: { balance: number; totalUsed: number; history?: any[] }; trial?: { startDate: string; expiresAt: string; daysLeft: number; isExpired: boolean }; costs?: Record<string, number>; units?: Record<string, string> }> => {
     try {
       return await apiCall('/credits', { method: 'GET' }, true);
     } catch (error) {

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Save, AlertCircle, Check, Loader2, Eye, EyeOff, Zap, RefreshCw, CreditCard, Download, ExternalLink } from 'lucide-react';
 import { User, BillingData, BusinessProfile } from '../types';
 import { ACTION_LABELS } from '../constants/quarks';
-import { useQuarkCosts } from '../hooks/useQuarkCosts';
+import { useQuarkPricing } from '../hooks/useQuarkCosts';
 import { jsPDF } from 'jspdf';
 import { apiService } from '../services/api';
 import { CONTENT_LANGUAGES } from '../constants/languages';
@@ -56,7 +56,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
 
   // Billing State
   const [billingData, setBillingData] = useState<BillingData | null>(null);
-  const quarkCosts = useQuarkCosts();
+  const { costs: quarkCosts, units: quarkUnits } = useQuarkPricing();
   const [loadingBilling, setLoadingBilling] = useState(false);
 
   // Business Profile Form State (full onboarding questionnaire)
@@ -811,7 +811,11 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                               <div className={`p-5 rounded-lg border ${
                                 isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-slate-50 border-slate-200'
                               }`}>
-                                <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3">Quark Costs</p>
+                                <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-1">Quark Costs</p>
+                                <p className={`text-xs mb-3 ${theme.textSecondary}`}>
+                                  Charged per unit of work. A carousel is billed per slide and a
+                                  video per scene, so a bigger one costs proportionally more.
+                                </p>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                   {Object.entries(quarkCosts).filter(([, v]) => v > 0).map(([action, cost]) => (
                                     <div
@@ -823,7 +827,14 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                       <span className={`text-sm truncate ${theme.textSecondary}`}>
                                         {ACTION_LABELS[action]?.icon} {ACTION_LABELS[action]?.label || action}
                                       </span>
-                                      <span className={`text-sm font-semibold tabular-nums shrink-0 ${theme.text}`}>{cost}</span>
+                                      <span className="flex items-baseline gap-1 shrink-0">
+                                        <span className={`text-sm font-semibold tabular-nums ${theme.text}`}>{cost}</span>
+                                        {/* The unit is the whole point: "4.5" next to "Carousel"
+                                            reads as the price of a carousel, which it isn't. */}
+                                        {quarkUnits[action] && (
+                                          <span className="text-[11px] text-slate-500">{quarkUnits[action]}</span>
+                                        )}
+                                      </span>
                                     </div>
                                   ))}
                                 </div>

@@ -10,31 +10,48 @@ import { apiService } from '../services/api';
  * it changes only when CREDIT_COSTS itself changes on the backend, so one
  * fetch per session is enough rather than one per page mount.
  */
-let cache: Record<string, number> | null = null;
-let inFlight: Promise<Record<string, number>> | null = null;
+export interface QuarkPricing {
+  costs: Record<string, number>;
+  /** What one unit of each action is: "per slide", "per scene", "per post". */
+  units: Record<string, string>;
+}
 
-async function loadCosts(): Promise<Record<string, number>> {
+const EMPTY: QuarkPricing = { costs: {}, units: {} };
+
+let cache: QuarkPricing | null = null;
+let inFlight: Promise<QuarkPricing> | null = null;
+
+async function loadCosts(): Promise<QuarkPricing> {
   if (cache) return cache;
   if (!inFlight) {
     inFlight = apiService.getCredits()
       .then((res) => {
-        cache = res?.costs || {};
+        cache = { costs: res?.costs || {}, units: res?.units || {} };
         return cache;
       })
-      .catch(() => ({}))
+      .catch(() => EMPTY)
       .finally(() => { inFlight = null; });
   }
   return inFlight;
 }
 
+/**
+ * Just the per-unit numbers, for the small badges on generate buttons.
+ * Those already multiply by slide/scene count themselves.
+ */
 export function useQuarkCosts() {
-  const [costs, setCosts] = useState<Record<string, number>>(cache || {});
+  return useQuarkPricing().costs;
+}
+
+/** Numbers AND their units, for anywhere that shows a price list. */
+export function useQuarkPricing(): QuarkPricing {
+  const [pricing, setPricing] = useState<QuarkPricing>(cache || EMPTY);
 
   useEffect(() => {
     let cancelled = false;
-    loadCosts().then((c) => { if (!cancelled) setCosts(c); });
+    loadCosts().then((p) => { if (!cancelled) setPricing(p); });
     return () => { cancelled = true; };
   }, []);
 
-  return costs;
+  return pricing;
 }

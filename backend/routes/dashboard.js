@@ -6,7 +6,7 @@
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
-const { deductCredits } = require('../middleware/trialGuard');
+const { deductCredits, CREDIT_COSTS } = require('../middleware/trialGuard');
 const { ensureCreditCycle } = require('../middleware/creditGuard');
 const User = require('../models/User');
 const Campaign = require('../models/Campaign');
@@ -791,7 +791,9 @@ router.get('/campaign-suggestions', protect, async (req, res) => {
     if (!isFirstGeneration) {
       await ensureCreditCycle(user);
       const campaignCount = count || 6;
-      const creditCost = campaignCount * 7; // 5 (image) + 2 (caption) per campaign
+      // Per post, at the live campaign_full rate — a hardcoded 7 here would
+      // let the pre-flight check disagree with what deductCredits actually takes.
+      const creditCost = campaignCount * CREDIT_COSTS.campaign_full;
       if (user.credits.balance < creditCost) {
         return res.status(403).json({
           success: false,
@@ -946,7 +948,7 @@ router.get('/campaign-suggestions-stream', protect, async (req, res) => {
     // Credit check before generation (skip for first-time onboarding generation)
     if (!isFirstStreamGen) {
       await ensureCreditCycle(user);
-      const creditCostStream = count * 7; // 5 (image) + 2 (caption) per campaign
+      const creditCostStream = count * CREDIT_COSTS.campaign_full;
       if (user.credits.balance < creditCostStream) {
         res.write(`data: ${JSON.stringify({ type: 'error', message: 'Insufficient credits', creditsRemaining: user.credits.balance, required: creditCostStream })}\n\n`);
         res.end();

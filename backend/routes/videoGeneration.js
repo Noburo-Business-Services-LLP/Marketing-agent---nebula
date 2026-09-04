@@ -8,7 +8,7 @@ const path = require('path');
 
 const Product = require('../models/Product');
 const { protect } = require('../middleware/auth');
-const { checkTrial, deductCredits, refundCredits } = require('../middleware/trialGuard');
+const { checkTrial, deductCredits, refundCredits, CREDIT_COSTS } = require('../middleware/trialGuard');
 const { getPublicBaseUrl } = require('../utils/toneAudio');
 const { videoGenerationQueue } = require('../services/videoGenerationQueue');
 const {
@@ -1412,7 +1412,7 @@ router.post('/createVideo', protect, checkTrial, videoAiWriteLimiter, async (req
     return res.status(403).json({
       success: false,
       creditsExhausted: true,
-      message: creditResult.error || `Insufficient Quarks. Need ${sceneCount * 7} Quarks for a ${sceneCount}-scene video.`
+      message: creditResult.error || `Insufficient Quarks. Need ${sceneCount * CREDIT_COSTS.video_generated} Quarks for a ${sceneCount}-scene video.`
     });
   }
 

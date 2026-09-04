@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
-const { checkTrial, deductCredits, refundCredits } = require('../middleware/trialGuard');
+const { checkTrial, deductCredits, refundCredits, CREDIT_COSTS } = require('../middleware/trialGuard');
 const Draft = require('../models/Draft');
 const { generateCampaignImageNanoBanana } = require('../services/geminiAI');
 const { planCarousel, renderCarouselSlideImage, assetsToImageOptions } = require('../services/creativeDirector');
@@ -86,7 +86,7 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
     // starts, same as campaign charges against its own post count.
     const creditResult = await deductCredits(req.user.id, 'carousel_generated', requestedSlides, 'AI carousel generation');
     if (!creditResult.success) {
-      send('error', { message: creditResult.error || `Insufficient Quarks. Need ${requestedSlides * 7} Quarks for a ${requestedSlides}-slide carousel.` });
+      send('error', { message: creditResult.error || `Insufficient Quarks. Need ${requestedSlides * CREDIT_COSTS.carousel_generated} Quarks for a ${requestedSlides}-slide carousel.` });
       return res.end();
     }
 

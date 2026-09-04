@@ -2,7 +2,7 @@ const express = require('express');
 const path = require('path');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
-const { checkTrial, deductCredits, refundCredits } = require('../middleware/trialGuard');
+const { checkTrial, deductCredits, refundCredits, CREDIT_COSTS } = require('../middleware/trialGuard');
 const Draft = require('../models/Draft');
 const Campaign = require('../models/Campaign');
 const User = require('../models/User');
@@ -548,7 +548,7 @@ router.post('/generate-image-bg', protect, checkTrial, async (req, res) => {
         return res.status(403).json({
           success: false,
           creditsExhausted: true,
-          message: creditResult.error || 'Insufficient Quarks. Need 5 Quarks to generate a post.'
+          message: creditResult.error || `Insufficient Quarks. Need ${CREDIT_COSTS.image_generated} Quarks to generate a post.`
         });
       }
       creditsDeducted = true;

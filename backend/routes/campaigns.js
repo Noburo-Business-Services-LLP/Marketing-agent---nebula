@@ -1641,8 +1641,9 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
     const postsPerSlot = 1;
     const totalPosts = numSlots * postsPerSlot;
 
-    // Deduct credits: 7 per individual post generated
-    const creditCost = totalPosts * 7; 
+    // Charged per post, at whatever campaign_full currently costs — the rate
+    // lives in config/apiCosts.js, not here. (A local `creditCost = totalPosts * 7`
+    // used to sit here: unused, and already wrong once the rate moved.)
     const creditResult = await deductCredits(userId, 'campaign_full', totalPosts, `AI campaign generation (${totalPosts} posts across ${platforms.length} platforms)`);
     if (!creditResult.success) {
       sendEvent('error', { message: creditResult.error, creditsExhausted: true });
