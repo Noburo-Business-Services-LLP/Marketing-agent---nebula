@@ -544,6 +544,12 @@ const GravityCreate: React.FC = () => {
     let currentEvent = '';
     let complete = false;
     let landed = 0;
+    // Set from an 'error' SSE event and thrown after the loop. Throwing it
+    // immediately, inline, landed inside the same try that parses each SSE
+    // line — whose catch exists only to skip a malformed line — so the
+    // backend's actual reason ("Could not plan the carousel...") was
+    // silently discarded and replaced by the generic fallback below.
+    let serverError = '';
 
     while (true) {
       const { done, value } = await reader.read();
@@ -586,7 +592,7 @@ const GravityCreate: React.FC = () => {
             } else if (currentEvent === 'complete') {
               complete = true;
             } else if (currentEvent === 'error') {
-              throw new Error(data?.message || 'Generation failed');
+              serverError = data?.message || 'Generation failed';
             }
           } catch (parseErr) {
             // Ignore malformed lines
@@ -595,6 +601,7 @@ const GravityCreate: React.FC = () => {
       }
     }
 
+    if (serverError) throw new Error(serverError);
     if (!complete && landed === 0) throw new Error('Generation ended without any slides.');
     setProgressMsg('');
   };
@@ -660,6 +667,10 @@ const GravityCreate: React.FC = () => {
     let currentEvent = '';
     let complete = false;
     let postCount = 0;
+    // Same reasoning as the carousel loop: captured here and thrown after
+    // the loop, not inline, so it survives the surrounding catch instead of
+    // being treated as a malformed line and discarded.
+    let serverError = '';
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -710,7 +721,7 @@ const GravityCreate: React.FC = () => {
             } else if (currentEvent === 'complete') {
               complete = true;
             } else if (currentEvent === 'error') {
-              throw new Error(data?.message || 'Generation failed');
+              serverError = data?.message || 'Generation failed';
             }
           } catch (parseErr) {
             // Ignore malformed lines
@@ -718,6 +729,7 @@ const GravityCreate: React.FC = () => {
         }
       }
     }
+    if (serverError) throw new Error(serverError);
     if (!complete && postCount === 0) {
       throw new Error('Generation ended without any posts.');
     }
