@@ -154,6 +154,7 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
     // seen. This replaces the old single styleGuide applied identically to
     // every slide — the specific thing this refactor was asked to fix.
     const decidedSoFar = [];
+    let previousSlideImageUrl = null;
 
     for (let i = 0; i < draft.carouselSlides.length; i++) {
       const slide = draft.carouselSlides[i];
@@ -197,6 +198,10 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
           targetLanguage: language,
           imageText: creative?.imageText || slide.headline,
           environmentReferenceImage: creative?.environmentImage || null,
+          // The previous slide's own rendered image — so this one can carry
+          // its palette, lighting and composition style forward rather than
+          // only sharing a text description of what that slide decided.
+          previousSlideImage: previousSlideImageUrl,
           productReferenceImage: chosenProductImages[0] || null,
           productReferenceImages: chosenProductImages.slice(1),
           postIndex: i,
@@ -213,6 +218,11 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
           console.warn(`[Carousel] slide ${slide.order} returned inline image data, not a URL — dropping it.`);
         }
         draft.carouselSlides[i].imageUrl = imageUrl;
+        // Feeds the NEXT slide's call — a slide with no image (failed
+        // render) is skipped as a reference rather than passing along an
+        // empty string, so continuity just carries from the last one that
+        // actually rendered.
+        if (imageUrl) previousSlideImageUrl = imageUrl;
         // Written per slide, not once at the end: a run that dies halfway
         // keeps the slides it already paid for.
         await draft.save();

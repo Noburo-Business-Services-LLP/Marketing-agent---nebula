@@ -4639,6 +4639,14 @@ async function generateCampaignImageNanoBanana(imageDescription, options = {}) {
     originalCharacterImage = null,
     characterReferenceImage = null,
     previousSceneImage = null,
+    // Carousel-specific: the immediately preceding slide's own rendered
+    // image, so slide 2 can visually continue slide 1 rather than only
+    // sharing a text description of what slide 1 decided. Kept separate
+    // from previousSceneImage (video continuity) — that note talks about
+    // people/clothing/props carrying across a scene cut, which fits a video
+    // frame but not a designed still; a carousel wants shared palette,
+    // lighting and composition language, not "the same clothing".
+    previousSlideImage = null,
     productReferenceImage = null,
     // Several products can feature in one creative (a bundle, a range, a
     // comparison). The single productReferenceImage above stays for callers
@@ -4922,12 +4930,13 @@ Treat this as an image editing task where the original person must remain identi
       return null;
     };
 
-    const [logoInline, productInline, originalCharacterInline, characterInline, previousSceneInline, environmentInline] = await Promise.all([
+    const [logoInline, productInline, originalCharacterInline, characterInline, previousSceneInline, previousSlideInline, environmentInline] = await Promise.all([
       prepareInlineImage(brandLogo, 'brand logo'),
       prepareInlineImage(primaryProductImage, 'product reference image'),
       prepareInlineImage(originalCharacterImage, 'original character image'),
       prepareInlineImage(characterReferenceImage, 'canonical character image'),
       prepareInlineImage(previousSceneImage, 'previous scene image'),
+      prepareInlineImage(previousSlideImage, 'previous carousel slide image'),
       prepareInlineImage(environmentReferenceImage, 'environment reference image')
     ]);
 
@@ -4978,6 +4987,19 @@ IMPORTANT: If an ENVIRONMENT REFERENCE image is also attached (see notes below),
 If it contains people, keep their exact identity, clothing, and props consistent in this next frame.
 If it is a backdrop / interior only, match its lighting palette and material vocabulary in this next frame.
 Do NOT invent new people not visible in earlier scenes.`);
+    }
+
+    if (previousSlideInline?.data) {
+      parts.push({
+        inlineData: {
+          mimeType: previousSlideInline.mimeType || 'image/png',
+          data: previousSlideInline.data
+        }
+      });
+      referenceNotes.push(`Image ${parts.length} is the PREVIOUS SLIDE in this same carousel.
+Continue the same visual family: palette, lighting, composition style and material treatment.
+The subject and content of this slide should be different, as directed by this slide's own concept — do not repeat the previous slide's subject or composition.
+Only the visual language should carry over, not the specific scene.`);
     }
 
     if (productInline?.data) {
