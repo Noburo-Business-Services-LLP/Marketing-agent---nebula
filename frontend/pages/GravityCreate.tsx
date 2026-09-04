@@ -4,6 +4,7 @@ import { Sparkles, Layers, Calendar as CalendarIcon, Zap, Image as ImageIcon, In
 import { draftsAPI, brandAssetsAPI, apiService } from '../services/api';
 import { Draft } from '../types';
 import GeneratingFill from '../components/GeneratingFill';
+import { useSmartCalendarAutoFill } from '../hooks/useSmartCalendarAutoFill';
 import { BorderBeam } from '../components/ui/border-beam';
 
 const ASPECTS = [
@@ -119,6 +120,21 @@ const GravityCreate: React.FC = () => {
   const [captionBusy, setCaptionBusy] = useState<string>('');
   const [editingCaption, setEditingCaption] = useState<string>('');
   const [captionDraft, setCaptionDraft] = useState<string>('');
+
+  // Smart Calendar briefs, the same source AI Reels Step 1 uses. Passing the
+  // mode filters to post-shaped formats for a single post; campaign shows all.
+  const {
+    isAutoFillEnabled: calendarOn,
+    availableItems: calendarItems,
+    isLoading: calendarLoading,
+  } = useSmartCalendarAutoFill(mode === 'single' ? 'post' : 'campaign');
+  const [usedCalendarItem, setUsedCalendarItem] = useState<string>('');
+
+  const applyCalendarItem = (item: any) => {
+    setName(item.headline || '');
+    setDescription(item.creativeConcept || item.headline || '');
+    setUsedCalendarItem(item._id);
+  };
 
   useEffect(() => {
     (async () => {
@@ -604,6 +620,93 @@ const GravityCreate: React.FC = () => {
             : 'One sentence is enough. Gravity turns it into a scroll-stopping post.'}
         </p>
       </div>
+
+      {/* Smart Calendar briefs. AI Reels has had these since it was built;
+          Create is the more obvious place to want them, and it had none. */}
+      {calendarLoading && (
+        <div className="flex justify-center mb-5">
+          <span className="inline-flex items-center gap-1.5 text-[11px] text-white/60">
+            <Loader2 className="w-3 h-3 animate-spin" /> Loading Smart Calendar…
+          </span>
+        </div>
+      )}
+
+      {!calendarLoading && calendarOn && calendarItems.length > 0 && (
+        <div className="mb-6 rounded-xl border border-[#F5A623]/20 bg-[#F5A623]/[0.03] p-5">
+          <div className="flex items-baseline justify-between gap-3 mb-3">
+            <div>
+              <div className="gravity-label text-[#F5A623]">
+                Smart Calendar · {calendarItems.length} idea{calendarItems.length > 1 ? 's' : ''} this week
+              </div>
+              <p className="text-[12.5px] mt-1 text-white/50">
+                Pick one to fill the brief below, or ignore these and write your own.
+              </p>
+            </div>
+            {usedCalendarItem && (
+              <button
+                onClick={() => { setUsedCalendarItem(''); setName(''); setDescription(''); }}
+                className="text-[11px] text-white/50 hover:text-white/85"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {calendarItems.map((item: any) => {
+              const picked = usedCalendarItem === item._id;
+              return (
+                <button
+                  key={item._id}
+                  onClick={() => applyCalendarItem(item)}
+                  className={`text-left rounded-lg border p-3 transition-all ${
+                    picked
+                      ? 'border-[#F5A623] bg-[#F5A623]/10 ring-1 ring-[#F5A623]/40'
+                      : 'border-white/[0.08] bg-white/[0.02] hover:border-white/20'
+                  }`}
+                >
+                  <div className="flex items-baseline justify-between gap-2 mb-1.5">
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide bg-[#F5A623]/20 text-[#F5A623]">
+                      {item.format || 'Post'}
+                    </span>
+                    {item.contentPillar && (
+                      <span className="text-[10px] uppercase tracking-wide text-white/35">{item.contentPillar}</span>
+                    )}
+                  </div>
+                  <div className="font-semibold text-[13px] text-[#F5F4F1] line-clamp-2">
+                    {item.headline || 'Untitled idea'}
+                  </div>
+                  {item.creativeConcept && (
+                    <p className="text-[11.5px] mt-1 text-white/45 line-clamp-2 leading-relaxed">
+                      {item.creativeConcept}
+                    </p>
+                  )}
+                  <span className={`inline-block mt-2 text-[10.5px] font-semibold ${picked ? 'text-[#F5A623]' : 'text-white/35'}`}>
+                    {picked ? 'Loaded into the brief' : 'Use this'}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {!calendarLoading && !calendarOn && (
+        <div className="mb-6 rounded-xl border border-white/[0.06] bg-white/[0.02] px-5 py-4 flex items-start justify-between gap-4">
+          <div>
+            <div className="gravity-label">Smart Calendar · off</div>
+            <p className="text-[12.5px] mt-1 text-white/50">
+              Turn on Auto Generation inside a monthly plan to see AI-planned ideas here.
+            </p>
+          </div>
+          <button
+            onClick={() => navigate('/content-calendar')}
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-[12px] rounded-lg border border-white/[0.12] text-[#F5F4F1] hover:bg-white/[0.05] font-semibold whitespace-nowrap"
+          >
+            <CalendarIcon className="w-3.5 h-3.5 text-[#F5A623]" />
+            Open Calendar
+          </button>
+        </div>
+      )}
 
       {/* Name + Description card, wrapped in a travelling border beam.
           `mono` is the greyscale variant — desaturated and brightened it
