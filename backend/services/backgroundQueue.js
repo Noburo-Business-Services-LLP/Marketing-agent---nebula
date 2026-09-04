@@ -9,7 +9,7 @@ const { buildBrandMemoryBlock } = require('./brandMemory');
 // Lazy to avoid a load-order cycle: contentCalendarService lazily requires
 // this module too, when auto-generation runs.
 const { normalizeLanguage } = require('./contentCalendarService');
-const { decideCreative } = require('./creativeDirector');
+const { decideCreative, getRecentCreativeHistory } = require('./creativeDirector');
 
 const queue = [];
 let processing = false;
@@ -210,22 +210,6 @@ async function processQueue() {
     processing = false;
     setTimeout(processQueue, 1000);
   }
-}
-
-/**
- * The last few standalone posts this account made, so a fresh single post
- * does not land on the same visual idea as something generated yesterday. A
- * carousel or campaign has its own siblings within the same run to compare
- * against instead; this is specifically for the account-history case those
- * two don't need.
- */
-async function getRecentCreativeHistory(userId, limit = 4) {
-  const recent = await Draft.find({ userId, creativeConcept: { $ne: '' } })
-    .sort({ createdAt: -1 })
-    .limit(limit)
-    .select('creativeConcept visualTreatment')
-    .lean();
-  return recent.map((d) => ({ concept: d.creativeConcept, treatment: d.visualTreatment }));
 }
 
 async function processDraftImageGenerationJob(job) {

@@ -944,10 +944,461 @@ Return JSON only:
 }
 `
   },
+  'carousel.masterPlan': {
+    label: 'Carousel — Master Plan',
+    summary:
+      'Plans the whole carousel as one experience — core idea, narrative, one visual world, a swipe mechanism, and a first-draft image prompt for every slide. Change this if slides feel disconnected or the story does not build.',
+    stage: 'carousel-v2',
+    variables: {
+      idea: 'The carousel brief',
+      contentType: 'The kind of post this is',
+      contentPillar: 'Which content pillar this belongs to, if known',
+      objective: 'What this carousel is meant to achieve',
+      platform: 'The platform this is for',
+      campaignContext: 'The wider campaign this sits inside, if any',
+      brandContext: 'The full brand memory — identity, tone, ICP, products, locations',
+      availableAssets: 'The real assets on file that could be used',
+      previousCreatives: 'Concepts already used recently, so this one does not repeat them'
+    },
+    template: `You are the Creative Director responsible for planning a social media carousel.
+
+CONTENT IDEA:
+{{idea}}
+
+CONTENT TYPE:
+{{contentType}}
+
+CONTENT PILLAR:
+{{contentPillar}}
+
+OBJECTIVE:
+{{objective}}
+
+PLATFORM:
+{{platform}}
+
+BRAND MEMORY:
+{{brandContext}}
+
+AVAILABLE ASSETS:
+{{availableAssets}}
+
+PREVIOUS RELEVANT CREATIVES:
+{{previousCreatives}}
+
+
+YOUR JOB
+
+Turn the content idea into a strong, publication-ready carousel concept.
+
+Do NOT think of the slides as separate social media posts.
+
+Design ONE carousel experience in which every slide contributes to the same idea and earns the next swipe.
+
+
+1. FIND THE CORE IDEA
+
+Identify the single strongest message, tension, story, insight, question, transformation or takeaway behind the content idea.
+
+Do not try to communicate everything at once.
+
+Choose the most compelling angle for the audience and objective.
+
+
+2. CHOOSE THE NARRATIVE
+
+Choose the structure that naturally fits the idea.
+
+Examples:
+
+- Hook → Problem → Solution
+- Before → Transformation → After
+- Question → Exploration → Answer
+- Myth → Reality → Takeaway
+- Problem → Insight → Action
+- Story → Turning Point → Outcome
+- Step 1 → Step 2 → Step 3
+- Comparison → Difference → Conclusion
+- Customer situation → Challenge → Result
+- Product problem → Product demonstration → Benefit
+- Or another structure that better fits the idea.
+
+Do not force every carousel into Before → After.
+
+The content determines the narrative.
+
+
+3. DESIGN ONE MASTER CREATIVE CONCEPT
+
+Before planning individual slides, establish one visual concept for the entire carousel.
+
+Decide:
+
+- visual approach
+- visual world
+- imagery style
+- main subject or character
+- environment
+- composition language
+- recurring visual elements
+- colour treatment
+- typography approach
+- how visual progression will happen across slides
+
+The slides may vary in composition, but they must clearly belong to the same creative world.
+
+Think:
+
+ONE CREATIVE CONCEPT → MULTIPLE SLIDES
+
+NOT:
+
+MULTIPLE IMAGES → SAME TOPIC.
+
+
+4. DESIGN THE SWIPE EXPERIENCE
+
+A carousel should visually encourage progression from one slide to the next.
+
+Choose appropriate continuity devices for this specific concept.
+
+These may include:
+
+- slide numbering
+- progress indicators
+- arrows
+- directional movement
+- connecting lines
+- recurring objects
+- a visual element that continues across slides
+- progressive transformation
+- repeated framing
+- split-screen evolution
+- step indicators
+- changing visual states
+- other deliberate swipe cues
+
+Do not force these devices into every carousel.
+
+Choose them only when they improve the story.
+
+The reader should understand why there is another slide to see.
+
+
+5. PLAN EACH SLIDE
+
+For every slide determine:
+
+- role in the story
+- what the audience should understand or feel
+- visual concept
+- composition
+- subjects
+- environment
+- continuity with the overall concept
+- text that appears on the image
+- required brand assets
+- optional brand assets
+- how this slide connects to the next slide
+
+Slide 1 must earn the first swipe.
+
+Middle slides must develop the idea.
+
+The final slide must provide the payoff, resolution, takeaway or appropriate next action.
+
+Do not repeat the same message in different images.
+
+
+6. VISUAL CONTINUITY
+
+When the concept involves a story, journey, transformation or Before → After:
+
+Maintain continuity wherever appropriate.
+
+If a character is central to the story, keep the same character.
+
+If an environment is central, keep the same environment.
+
+If an object or visual element is important, allow it to continue, transform or move logically.
+
+The audience should feel that they are watching the same story evolve.
+
+For Before → After concepts, the AFTER must be a visual consequence of the BEFORE.
+
+Do not simply use an unrelated "successful professional" image to represent the outcome.
+
+
+7. BRAND ASSETS
+
+Gravity has access to the brand's approved assets.
+
+Use real assets when they materially improve the creative.
+
+Possible assets include:
+
+- product images
+- product screenshots/UI
+- founder/team images
+- customer images
+- store/showroom/outlet images
+- office/factory/location images
+- packaging
+- other approved brand assets
+
+Select only the assets required for each slide.
+
+Do not use the entire asset library.
+
+If the same asset is needed across multiple slides, reference the same asset consistently.
+
+If no real asset is needed, do not force one into the creative.
+
+
+8. BRANDING
+
+Use the brand identity naturally.
+
+Do not automatically place the logo on every slide.
+
+Never repeat the same logo multiple times on one slide unless specifically required.
+
+If a supplied product image or UI already contains the logo, do not add another separate logo.
+
+Do not invent logos, watermarks or brand marks.
+
+
+9. IMAGE TEXT
+
+Keep image text concise and intentional.
+
+Use text only when it strengthens the visual communication.
+
+Do not turn every slide into a giant headline poster.
+
+Do not put the entire caption or explanation on the image.
+
+Use the selected language.
+
+Do not invent unnecessary claims, statistics or product features.
+
+
+10. IMAGE-GENERATION PROMPTS
+
+After completing the creative planning, write a focused image-generation prompt for every slide.
+
+Each prompt must contain ONLY the information needed to generate that specific slide.
+
+Include:
+
+- subject
+- action/state
+- composition
+- environment
+- relevant visual details
+- selected asset references
+- image text and its placement
+- visual continuity requirements
+- any important technical direction
+
+Do not copy the entire brand context into the image prompt.
+
+Do not copy this instruction set into the image prompt.
+
+Do not make the image generator decide the creative concept again.
+
+The creative decisions have already been made by you.
+
+
+11. FINAL CREATIVE CHECK
+
+Before returning the result, internally verify:
+
+- The carousel communicates ONE idea.
+- Every slide advances the story.
+- The slides look like part of the same creative.
+- There is a clear reason to swipe.
+- The final slide pays off the opening.
+- The visual treatment fits the actual content.
+- The selected assets are genuinely useful.
+- Branding is restrained.
+- The creative does not feel like a generic template that could belong to any brand.
+
+Return ONLY valid JSON:
+
+{
+  "creativeConcept": "",
+  "narrativeApproach": "",
+  "visualSystem": "",
+  "swipeMechanism": "",
+  "slides": [
+    {
+      "order": 1,
+      "role": "",
+      "storyPurpose": "",
+      "creativeConcept": "",
+      "requiredAssets": [],
+      "optionalAssets": [],
+      "imageText": "",
+      "imagePrompt": ""
+    }
+  ],
+  "caption": "",
+  "hashtags": []
+}
+`
+  },
+
+  'carousel.artDirector': {
+    label: 'Carousel — Slide Art Director',
+    summary:
+      "Executes one slide's already-decided image prompt, keeping it visually consistent with the master plan and the slides around it. Receives the plan and this slide's assets — not the full brand context. Change this if slides don't look like they belong together.",
+    stage: 'carousel-v2',
+    variables: {
+      carouselPlan: "The master plan's concept, narrative, visual system and every slide's role",
+      slide: "This slide's own plan — role, purpose, concept, image text, draft prompt",
+      slideAssets: 'The specific assets selected for this slide',
+      brandAssets: 'A short brand note — palette, logo availability, tone'
+    },
+    template: `You are the Image Art Director executing a social media carousel that has already been creatively planned.
+
+MASTER CAROUSEL PLAN:
+{{carouselPlan}}
+
+CURRENT SLIDE:
+{{slide}}
+
+AVAILABLE ASSETS FOR THIS SLIDE:
+{{slideAssets}}
+
+BRAND ASSETS:
+{{brandAssets}}
+
+
+YOUR JOB
+
+Create the image for the current slide by faithfully executing the creative direction provided in the carousel plan.
+
+Do NOT redesign the concept.
+
+Do NOT invent a different creative direction.
+
+Do NOT reinterpret the carousel as a standalone social media poster.
+
+The current slide must look like part of the SAME carousel.
+
+
+VISUAL EXECUTION
+
+Follow the master visual concept, visual world and continuity established by the carousel plan.
+
+Maintain consistency with the other slides in:
+
+- visual style
+- character appearance
+- environment
+- important objects
+- composition language
+- lighting
+- colour treatment
+- typography treatment
+- recurring visual elements
+
+If the slide is part of a transformation or story, preserve the visual continuity specified in the plan.
+
+
+ASSETS
+
+Use only the assets specified for this slide.
+
+When an asset is supplied, treat it as the authoritative visual reference.
+
+Do not replace an available real product, person, location or UI asset with a generic alternative unless the plan explicitly asks for one.
+
+Do not add unnecessary assets.
+
+
+IMAGE TEXT
+
+Render only the image text specified in the slide plan.
+
+Keep it exactly as provided.
+
+Do not add extra headlines, slogans, captions, hashtags, CTAs or explanatory text unless explicitly specified.
+
+Place text according to the planned composition.
+
+Do not create dense text-heavy layouts unless the creative specifically requires them.
+
+
+BRANDING
+
+Use only the branding specified by the creative plan or supplied assets.
+
+Do not add duplicate logos.
+
+If a supplied asset already contains the brand logo, do not add another logo.
+
+Do not create additional watermarks or brand marks.
+
+
+DESIGN QUALITY
+
+The final image should feel like a professionally art-directed social media creative, not a generic AI-generated poster.
+
+Prioritize:
+
+- strong composition
+- clear focal point
+- visual hierarchy
+- intentional negative space
+- readable typography
+- realistic use of supplied assets
+- visual storytelling
+- premium execution
+
+Avoid unnecessary decorative elements.
+
+Do not add generic AI imagery, glowing effects, futuristic interfaces, stock-business imagery or abstract graphics unless they are explicitly part of the creative plan.
+
+
+CAROUSEL CONTINUITY
+
+This image is one frame in a larger carousel.
+
+Respect the planned relationship between this slide and the surrounding slides.
+
+If a visual element is supposed to continue from another slide, continue it.
+
+If something is supposed to transform, show the appropriate state.
+
+If the slide uses numbering, arrows, progress indicators or another swipe mechanism, execute it exactly as planned.
+
+The image should feel incomplete or connected in the intended way when appropriate, encouraging the viewer to continue to the next slide.
+
+
+IMPORTANT
+
+Do not add information that is not present in the carousel plan.
+
+Do not invent product claims.
+
+Do not invent statistics.
+
+Do not invent brand assets.
+
+Do not add unnecessary branding.
+
+Do not turn the image into a generic advertisement.
+
+Execute the approved creative concept with precision.
+`
+  },
+
   'carousel.content': {
     label: 'Carousel',
     summary:
-      "Plans a multi-slide carousel: one shared visual style, and a story that moves forward slide by slide. This is the account's own creative-director prompt.",
+      "No longer used — carousel generation now runs through Carousel \u2014 Master Plan and Carousel \u2014 Slide Art Director instead. Kept only so nothing breaks if something still references it.",
     stage: 'carousel',
     variables: {
       idea: 'The carousel brief you typed',

@@ -3,30 +3,28 @@ const router = express.Router();
 const { protect } = require('../middleware/auth');
 const { checkTrial } = require('../middleware/trialGuard');
 const Draft = require('../models/Draft');
-const User = require('../models/User');
-const BrandAsset = require('../models/BrandAsset');
-const BrandIntelligenceProfile = require('../models/BrandIntelligenceProfile');
-const { callGemini, parseGeminiJSON, generateCampaignImageNanoBanana } = require('../services/geminiAI');
-const { buildPrompt } = require('../services/promptRegistry');
-const { buildBrandMemoryBlock } = require('../services/brandMemory');
-const { decideCreative } = require('../services/creativeDirector');
+const { generateCampaignImageNanoBanana } = require('../services/geminiAI');
+const { planCarousel, renderCarouselSlideImage, assetsToImageOptions } = require('../services/creativeDirector');
 
 /**
- * Carousel generation.
+ * Carousel generation, in two steps.
  *
- * A carousel is one post made of several ordered images that tell a single
- * story, so it is planned in one pass and rendered slide by slide. The plan
- * step produces a styleGuide — a visual contract every slide inherits — which
- * is what keeps the set looking like siblings. Without it, independently
- * generated slides drift apart in palette and treatment, which is the usual
- * way a generated carousel gives itself away.
+ * Step 1 (planCarousel) plans the WHOLE carousel as one experience in a
+ * single call: the core idea, the narrative arc, one shared visual world, a
+ * swipe mechanism, and a first-draft image prompt for every slide. This
+ * replaced an earlier design that decided each slide's visual independently
+ * (informed only by a text summary of the slides before it) — that produced
+ * slides that shared a topic without actually cohering into one story,
+ * which is what this two-step design exists to fix.
  *
- * Images are generated sequentially rather than in parallel: the user watches
- * them land one at a time, and a partial run still leaves a usable draft.
+ * Step 2 (renderCarouselSlideImage) executes one slide at a time: it does
+ * not redesign the concept, only turns that slide's already-decided plan
+ * into the final image instruction, with the whole plan available so it can
+ * keep this slide consistent with the ones around it.
+ *
+ * Images still render sequentially, one call at a time: the user watches
+ * them land as they finish, and a partial run still leaves a usable draft.
  */
-
-const MIN_SLIDES = 3;
-const MAX_SLIDES = 10;
 
 router.post('/generate-stream', protect, checkTrial, async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -42,6 +40,9 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
   let draft = null;
 
   try {
+    const MIN_SLIDES = 3;
+    const MAX_SLIDES = 10;
+
     const {
       title = '',
       brief = '',
@@ -60,64 +61,54 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
       objective = ''
     } = req.body || {};
 
-    const slides = Math.max(MIN_SLIDES, Math.min(MAX_SLIDES, Number(slideCount) || 5));
     const cleanBrief = String(brief || title || '').trim();
     if (!cleanBrief) {
       send('error', { message: 'Tell me what the carousel is about first.' });
       return res.end();
     }
 
-    // Same sources campaign generation reads: the brand profile carries the
-    // palette and typography, the business profile the industry and name, and
-    // the logo lives as its own asset record.
-    const [user, brandProfile, logoAsset] = await Promise.all([
-      User.findById(req.user.id).lean(),
-      BrandIntelligenceProfile.findOne({ userId: req.user.id }).lean(),
-      BrandAsset.findOne({ user: req.user.id, type: 'logo' })
-        .sort({ isPrimary: -1, createdAt: -1 })
-        .lean()
-    ]);
-
-    const bp = user?.businessProfile || {};
-    const brandAssets = brandProfile?.assets || {};
-    const brandDisplayName =
-      String(brandProfile?.brandName || bp.companyName || bp.name || 'Brand').trim() || 'Brand';
-    const industry = bp.industry || '';
-    const brandLogo = String(brandAssets.primaryLogoUrl || logoAsset?.url || '').trim() || null;
-
     send('status', { message: 'Planning the story…' });
 
-    const brandContextBlock = await buildBrandMemoryBlock(req.user.id);
-    const planPrompt = await buildPrompt(req.user.id, 'carousel.content', {
+    // The master-plan prompt has no slide-count field of its own — the
+    // Creative Director deciding how many slides a story needs is part of
+    // its own design. The Create-tab slide picker is a real product
+    // constraint the user actively set, though, so it is passed as context
+    // rather than dropped, and the result is clamped to it afterwards.
+    const requestedSlides = Math.max(MIN_SLIDES, Math.min(MAX_SLIDES, Number(slideCount) || 5));
+    const plan = await planCarousel(req.user.id, {
       idea: cleanBrief,
-      contentPillar,
       contentType,
-      campaignContext,
+      contentPillar,
       objective,
-      slideCount: slides,
-      platforms: (platforms || []).join(', '),
-      language: language || 'English',
-      brandContextBlock
+      platform: (platforms || [])[0] || '',
+      campaignContext: [campaignContext, `Plan this as a ${requestedSlides}-slide carousel.`].filter(Boolean).join(' ')
     });
 
-    const raw = await callGemini(planPrompt);
-    const plan = parseGeminiJSON(raw);
-
-    const planned = Array.isArray(plan?.slides) ? plan.slides.slice(0, slides) : [];
-    if (planned.length === 0) {
+    if (plan.slides.length === 0) {
       send('error', { message: 'Could not plan the carousel. Try rewording the brief.' });
       return res.end();
     }
+    if (plan.slides.length > requestedSlides) {
+      plan.slides = plan.slides.slice(0, requestedSlides);
+    }
 
-    const styleGuide = String(plan?.styleGuide || '').trim();
+    // The four master-plan fields combined into one readable summary — the
+    // closest existing field to show it in ('plan' below, and anywhere else
+    // that already reads carouselStyleGuide).
+    const styleGuide = [
+      plan.creativeConcept && `Concept: ${plan.creativeConcept}`,
+      plan.narrativeApproach && `Narrative: ${plan.narrativeApproach}`,
+      plan.visualSystem && `Visual system: ${plan.visualSystem}`,
+      plan.swipeMechanism && `Swipe mechanism: ${plan.swipeMechanism}`
+    ].filter(Boolean).join('\n\n');
 
     // Saved before any image exists so a dropped connection still leaves the
     // plan recoverable rather than losing the whole run.
     draft = await Draft.create({
       userId: req.user.id,
       title: String(title || cleanBrief).slice(0, 120),
-      caption: String(plan?.caption || '').trim(),
-      hashtags: Array.isArray(plan?.hashtags) ? plan.hashtags : [],
+      caption: plan.caption,
+      hashtags: plan.hashtags,
       platforms,
       tone,
       language,
@@ -126,11 +117,14 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
       contentType: 'carousel',
       status: 'processing',
       carouselStyleGuide: styleGuide,
-      carouselSlides: planned.map((s, i) => ({
-        order: Number(s?.order) || i + 1,
-        role: String(s?.role || '').trim(),
-        headline: String(s?.headline || '').trim(),
-        imagePrompt: String(s?.imageDescription || '').trim(),
+      carouselSlides: plan.slides.map((s, i) => ({
+        order: s.order || i + 1,
+        role: s.role,
+        headline: s.storyPurpose,
+        storyPurpose: s.storyPurpose,
+        imagePrompt: s.imagePrompt,
+        imageText: s.imageText,
+        creativeConcept: s.creativeConcept,
         imageUrl: ''
       }))
     });
@@ -148,64 +142,49 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
     });
 
     let rendered = 0;
-    // Each slide's Creative Director call is told what earlier slides in
-    // THIS carousel already decided, so slide 3 can deliberately vary from
-    // slides 1-2 instead of inheriting one style fixed before any slide was
-    // seen. This replaces the old single styleGuide applied identically to
-    // every slide — the specific thing this refactor was asked to fix.
-    const decidedSoFar = [];
+    // The previous slide's own rendered image, chained forward — pixel-level
+    // continuity alongside the plan's text-level continuity, so a character
+    // or environment the plan says should persist actually looks the same
+    // from one slide to the next, not just described the same way.
     let previousSlideImageUrl = null;
 
-    for (let i = 0; i < draft.carouselSlides.length; i++) {
-      const slide = draft.carouselSlides[i];
+    // Explicitly chosen in Create takes priority over whatever the plan
+    // itself selected — a user who picked a product meant that product,
+    // whatever the plan decided was relevant.
+    const explicitProductImages = [
+      linkedProduct?.imageUrl,
+      ...(Array.isArray(productReferenceImages) ? productReferenceImages.slice(1) : [])
+    ].filter(Boolean);
+
+    for (let i = 0; i < plan.slides.length; i++) {
+      const slide = plan.slides[i];
       send('generating', {
         order: slide.order,
-        message: `Rendering slide ${slide.order} of ${draft.carouselSlides.length}…`
+        message: `Rendering slide ${slide.order} of ${plan.slides.length}…`
       });
 
       try {
-        const explicitProductImages = [
-          linkedProduct?.imageUrl,
-          ...(Array.isArray(productReferenceImages) ? productReferenceImages.slice(1) : [])
-        ].filter(Boolean);
+        const finalPrompt = await renderCarouselSlideImage(req.user.id, plan, i);
+        const { productImages, environmentImage, logoUrl } = assetsToImageOptions([
+          ...slide.requiredAssets,
+          ...slide.optionalAssets
+        ]);
+        const chosenProductImages = explicitProductImages.length ? explicitProductImages : productImages;
 
-        const creative = await decideCreative(req.user.id, {
-          idea: slide.imagePrompt || slide.headline,
-          contentType: 'carousel slide',
-          contentPillar: '',
-          objective: '',
-          platform: (platforms || [])[0] || '',
-          campaignContext: `This is slide ${slide.order} of ${draft.carouselSlides.length} in a carousel about: ${cleanBrief}. This slide's role: ${slide.role || 'build'}.`,
-          previousCreatives: decidedSoFar
-        }, { aspectRatio, language });
-
-        if (creative?.creativeConcept) {
-          draft.carouselSlides[i].creativeConcept = creative.creativeConcept;
-          draft.carouselSlides[i].visualTreatment = creative.visualTreatment;
-          decidedSoFar.push({ concept: creative.creativeConcept, treatment: creative.visualTreatment });
-        }
-
-        const chosenProductImages = explicitProductImages.length ? explicitProductImages : (creative?.productImages || []);
-
-        const result = await generateCampaignImageNanoBanana(creative?.finalPrompt || slide.imagePrompt, {
+        const result = await generateCampaignImageNanoBanana(finalPrompt, {
           userId: req.user.id,
-          useRawPrompt: Boolean(creative?.finalPrompt),
+          useRawPrompt: true,
           aspectRatio,
-          brandName: brandDisplayName,
-          brandLogo: creative?.logoUrl || brandLogo,
-          industry,
           tone,
           targetLanguage: language,
-          imageText: creative?.imageText || slide.headline,
-          environmentReferenceImage: creative?.environmentImage || null,
-          // The previous slide's own rendered image — so this one can carry
-          // its palette, lighting and composition style forward rather than
-          // only sharing a text description of what that slide decided.
+          imageText: slide.imageText,
+          brandLogo: logoUrl,
+          environmentReferenceImage: environmentImage,
           previousSlideImage: previousSlideImageUrl,
           productReferenceImage: chosenProductImages[0] || null,
           productReferenceImages: chosenProductImages.slice(1),
           postIndex: i,
-          totalPosts: draft.carouselSlides.length
+          totalPosts: plan.slides.length
         });
 
         // Image generation falls back to an inline base64 data URI when the
@@ -232,7 +211,7 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
           draftId: draft._id,
           order: slide.order,
           role: slide.role,
-          headline: slide.headline,
+          headline: draft.carouselSlides[i].headline,
           imageUrl,
           failed: !imageUrl
         });
@@ -242,7 +221,7 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
           draftId: draft._id,
           order: slide.order,
           role: slide.role,
-          headline: slide.headline,
+          headline: draft.carouselSlides[i].headline,
           imageUrl: '',
           failed: true
         });

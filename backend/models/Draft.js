@@ -104,7 +104,14 @@ const draftSchema = new mongoose.Schema({
     // What this slide does in the narrative: hook, build or payoff.
     role: { type: String, default: '' },
     headline: { type: String, default: '' },
+    // What this slide needs to make the audience understand or feel, from
+    // the master plan — distinct from headline, which is the on-image text.
+    storyPurpose: { type: String, default: '' },
     imagePrompt: { type: String, default: '' },
+    // The text actually rendered on this slide's image. headline doubled as
+    // this before the master-plan flow existed; now the plan writes both
+    // separately, so they are stored separately.
+    imageText: { type: String, default: '' },
     imageUrl: { type: String, default: '' },
     creativeConcept: { type: String, default: '' },
     visualTreatment: { type: String, default: '' }
