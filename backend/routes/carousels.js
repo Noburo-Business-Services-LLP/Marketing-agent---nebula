@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
-const { checkTrial } = require('../middleware/trialGuard');
+const { checkTrial, deductCredits, refundCredits } = require('../middleware/trialGuard');
 const Draft = require('../models/Draft');
 const { generateCampaignImageNanoBanana } = require('../services/geminiAI');
 const { planCarousel, renderCarouselSlideImage, assetsToImageOptions } = require('../services/creativeDirector');
@@ -67,6 +67,15 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
       return res.end();
     }
 
+    // Deducted once per run, same as a full campaign or video — a carousel
+    // renders 3-10 images the same way those do, and previously deducted
+    // nothing at all, unlike either of them.
+    const creditResult = await deductCredits(req.user.id, 'carousel_generated', 1, 'AI carousel generation');
+    if (!creditResult.success) {
+      send('error', { message: creditResult.error || 'Insufficient Quarks. Need 7 Quarks for a carousel.' });
+      return res.end();
+    }
+
     send('status', { message: 'Planning the story…' });
 
     // The master-plan prompt has no slide-count field of its own — the
@@ -85,6 +94,13 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
     });
 
     if (plan.slides.length === 0) {
+      // Nothing was produced — refund, same as the video pipeline does when
+      // it fails before any real work happens.
+      try {
+        await refundCredits(req.user.id, 'carousel_generated', 1, 'Refund: carousel planning failed');
+      } catch (refundErr) {
+        console.error('⚠️ Failed to refund Quarks after carousel planning error:', refundErr.message);
+      }
       send('error', { message: 'Could not plan the carousel. Try rewording the brief.' });
       return res.end();
     }
@@ -246,6 +262,15 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
         draft.errorMessage = error.message || 'Generation failed.';
         await draft.save();
       } catch (_) { /* the stream error matters more than this bookkeeping */ }
+    } else {
+      // Failed before any draft existed — planning itself threw, so nothing
+      // was produced. Once a draft exists, slides may already have rendered,
+      // so the charge stays — same flat-per-run model as campaigns and video.
+      try {
+        await refundCredits(req.user.id, 'carousel_generated', 1, 'Refund: carousel generation failed before any slide rendered');
+      } catch (refundErr) {
+        console.error('⚠️ Failed to refund Quarks after carousel error:', refundErr.message);
+      }
     }
     send('error', { message: error.message || 'Something went wrong. Please try again.' });
     res.end();

@@ -1397,13 +1397,13 @@ router.post('/createVideo', protect, checkTrial, videoAiWriteLimiter, async (req
     return res.status(401).json({ success: false, message: 'Authentication required' });
   }
 
-  // Deduct 7 credits synchronously before enqueuing
-  const creditResult = await deductCredits(userId, 'campaign_full', 1, 'AI video generation pipeline');
+  // Deduct 7 Quarks synchronously before enqueuing
+  const creditResult = await deductCredits(userId, 'video_generated', 1, 'AI video generation pipeline');
   if (!creditResult.success) {
     return res.status(403).json({
       success: false,
       creditsExhausted: true,
-      message: creditResult.error || 'Insufficient credits. Need 7 credits for full campaign.'
+      message: creditResult.error || 'Insufficient Quarks. Need 7 Quarks for a full video.'
     });
   }
 
@@ -1456,7 +1456,7 @@ router.post('/createVideo', protect, checkTrial, videoAiWriteLimiter, async (req
   } catch (error) {
     // Refund credits immediately if enqueuing fails
     try {
-      await refundCredits(userId, 'campaign_full', 1, 'Refund: AI video enqueuing failed');
+      await refundCredits(userId, 'video_generated', 1, 'Refund: AI video enqueuing failed');
     } catch (refundErr) {
       console.error('⚠️ Failed to refund credits after enqueuing error:', refundErr.message);
     }

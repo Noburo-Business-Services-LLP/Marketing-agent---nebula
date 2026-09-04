@@ -480,7 +480,7 @@ const Dashboard: React.FC = () => {
       const creditData = await apiService.getCredits();
       const balance = creditData?.credits?.balance ?? 0;
       if (balance < 7) {
-        alert(`Insufficient credits. You need 7 credits to create a post but you only have ${balance}. Please wait for your next credit cycle or upgrade your plan.`);
+        alert(`Insufficient Quarks. You need 7 Quarks to create a post but you only have ${balance}. Please wait for your next Quark cycle or upgrade your plan.`);
         return;
       }
     } catch (e) {
@@ -521,7 +521,7 @@ const Dashboard: React.FC = () => {
       const creditData = await apiService.getCredits();
       const balance = creditData?.credits?.balance ?? 0;
       if (balance < 3) {
-        alert(`Insufficient credits. You need 3 credits to refine an image but you only have ${balance}. Please wait for your next credit cycle or upgrade your plan.`);
+        alert(`Insufficient Quarks. You need 3 Quarks to refine an image but you only have ${balance}. Please wait for your next Quark cycle or upgrade your plan.`);
         return;
       }
     } catch (e) {
@@ -672,7 +672,7 @@ const Dashboard: React.FC = () => {
       const creditData = await apiService.getCredits();
       const balance = creditData?.credits?.balance ?? 0;
       if (balance < 7) {
-        alert(`Insufficient credits. You need 7 credits to create a rival post but you only have ${balance}. Please wait for your next credit cycle or upgrade your plan.`);
+        alert(`Insufficient Quarks. You need 7 Quarks to create a rival post but you only have ${balance}. Please wait for your next Quark cycle or upgrade your plan.`);
         return;
       }
     } catch (e) {

@@ -188,7 +188,7 @@ const Competitors: React.FC = () => {
   // Close rival post modal with credit warning
   const handleCloseRivalModal = () => {
     if (rivalPostLoading || rivalPost) {
-      const shouldClose = window.confirm('⚡ 7 credits have already been consumed. Do you want to close?');
+      const shouldClose = window.confirm('⚡ 7 Quarks have already been consumed. Do you want to close?');
       if (!shouldClose) return;
     }
     setShowRivalPostModal(false);

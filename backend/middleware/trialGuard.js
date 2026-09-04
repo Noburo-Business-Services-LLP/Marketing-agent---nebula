@@ -14,6 +14,11 @@ const CREDIT_COSTS = {
   strategic_post: 7,     // Strategic advisor post (image + text)
   event_post: 7,         // Event post (image + text)
   refine_image: 3,       // Refine/edit image with AI
+  // Previously unmetered/mislabelled — video reused campaign_full's key
+  // (same 7, now just correctly attributed), carousel deducted nothing at
+  // all despite rendering 3-10 images per run same as a campaign does.
+  video_generated: 7,    // Full AI video (script + scenes + clips + audio)
+  carousel_generated: 7, // Full carousel, any slide count (image + text)
 };
 
 /**

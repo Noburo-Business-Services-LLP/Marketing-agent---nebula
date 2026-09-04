@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Save, AlertCircle, Check, Loader2, Eye, EyeOff, Zap, RefreshCw, CreditCard, Download, ExternalLink } from 'lucide-react';
 import { User, BillingData, BusinessProfile } from '../types';
+import { ACTION_LABELS } from '../constants/quarks';
+import { useQuarkCosts } from '../hooks/useQuarkCosts';
 import { jsPDF } from 'jspdf';
 import { apiService } from '../services/api';
 import { CONTENT_LANGUAGES } from '../constants/languages';
@@ -54,6 +56,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
 
   // Billing State
   const [billingData, setBillingData] = useState<BillingData | null>(null);
+  const quarkCosts = useQuarkCosts();
   const [loadingBilling, setLoadingBilling] = useState(false);
 
   // Business Profile Form State (full onboarding questionnaire)
@@ -786,11 +789,11 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                 </div>
                               </div>
 
-                              {/* Credits */}
+                              {/* Quarks */}
                               <div className={`p-5 rounded-lg border ${
                                 isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-slate-50 border-slate-200'
                               }`}>
-                                <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3">Credits</p>
+                                <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3">Quarks</p>
                                 <div className="grid grid-cols-2 gap-4">
                                   <div>
                                     <p className={`text-2xl font-bold ${theme.text}`}>{billingData.credits.balance}</p>
@@ -800,6 +803,29 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                     <p className={`text-2xl font-bold ${theme.text}`}>{billingData.credits.totalUsed}</p>
                                     <p className={`text-xs ${theme.textSecondary}`}>Used</p>
                                   </div>
+                                </div>
+                              </div>
+
+                              {/* What each action costs — moved here from the header dropdown,
+                                  where ten items in a 320px popover was the clumsy part. */}
+                              <div className={`p-5 rounded-lg border ${
+                                isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-slate-50 border-slate-200'
+                              }`}>
+                                <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3">Quark Costs</p>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                  {Object.entries(quarkCosts).filter(([, v]) => v > 0).map(([action, cost]) => (
+                                    <div
+                                      key={action}
+                                      className={`flex items-center justify-between gap-3 px-3 py-2 rounded-lg ${
+                                        isDarkMode ? 'bg-white/[0.03]' : 'bg-white'
+                                      }`}
+                                    >
+                                      <span className={`text-sm truncate ${theme.textSecondary}`}>
+                                        {ACTION_LABELS[action]?.icon} {ACTION_LABELS[action]?.label || action}
+                                      </span>
+                                      <span className={`text-sm font-semibold tabular-nums shrink-0 ${theme.text}`}>{cost}</span>
+                                    </div>
+                                  ))}
                                 </div>
                               </div>
 
@@ -815,7 +841,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                         <tr className={isDarkMode ? 'bg-slate-800/50' : 'bg-slate-50'}>
                                           <th className={`text-left px-4 py-3 font-medium ${theme.textSecondary}`}>Date</th>
                                           <th className={`text-left px-4 py-3 font-medium ${theme.textSecondary}`}>Amount</th>
-                                          <th className={`text-left px-4 py-3 font-medium ${theme.textSecondary}`}>Credits</th>
+                                          <th className={`text-left px-4 py-3 font-medium ${theme.textSecondary}`}>Quarks</th>
                                           <th className={`text-left px-4 py-3 font-medium ${theme.textSecondary}`}>Status</th>
                                           <th className={`text-left px-4 py-3 font-medium ${theme.textSecondary}`}>Invoice</th>
                                         </tr>

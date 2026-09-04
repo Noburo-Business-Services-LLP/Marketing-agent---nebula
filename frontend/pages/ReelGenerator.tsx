@@ -42,6 +42,7 @@ import {
 } from '../components/gravity';
 import CalendarIdeaPicker from '../components/CalendarIdeaPicker';
 import PromptStudio from '../components/PromptStudio';
+import { useQuarkCosts } from '../hooks/useQuarkCosts';
 import AssetPicker, { PickedAsset } from '../components/AssetPicker';
 import { getThemeClasses, useTheme } from '../context/ThemeContext';
 import { contentCalendarAPI, inventoryAPI, videoGenerationAPI, draftsAPI } from '../services/api';
@@ -346,6 +347,7 @@ const ReelGenerator: React.FC = () => {
     );
   };
   const [promptStudioOpen, setPromptStudioOpen] = useState(false);
+  const quarkCosts = useQuarkCosts();
   // Products/services featured in the video, and the environment it is set
   // in. Both now come from Brand Assets rather than upload-only.
   const [productPickerOpen, setProductPickerOpen] = useState(false);
@@ -2825,7 +2827,17 @@ setCharacterAge(nextDraft?.characterAge || '');
                     className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-[13px] font-semibold transition-all border border-white/[0.12] text-[#F5F4F1] hover:bg-white/[0.05] hover:border-white/20 disabled:opacity-40 disabled:cursor-not-allowed"
                     title={concepts.length > 0 && !acceptedConceptId ? 'Accept a concept first' : undefined}
                   >
-                    {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Film className="w-4 h-4 text-[#F5A623]" />Auto-Generate Full Video</>}
+                    {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : (
+                      <>
+                        <Film className="w-4 h-4 text-[#F5A623]" />
+                        Auto-Generate Full Video
+                        {quarkCosts.video_generated > 0 && (
+                          <span className="ml-0.5 px-1.5 py-0.5 rounded-md bg-white/[0.08] text-[11.5px] font-semibold tabular-nums">
+                            {quarkCosts.video_generated}
+                          </span>
+                        )}
+                      </>
+                    )}
                   </button>
                 </div>
 
@@ -3069,7 +3081,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                         Ready to design your cast from “{acceptedConcept?.title || 'your concept'}”.
                       </div>
                       <div className="text-[12px] text-white/45 mt-1">
-                        Hit Generate above when you are — it costs credits, so nothing runs until you ask.
+                        Hit Generate above when you are — it costs Quarks, so nothing runs until you ask.
                       </div>
                     </div>
                   )}

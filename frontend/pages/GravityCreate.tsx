@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Sparkles, Layers, Calendar as CalendarIcon, Zap, Image as ImageIcon, Instagram, Facebook, Linkedin, ChevronRight, Loader2, Check, Clock, Save, AlertCircle, RotateCcw, Pencil, Trash2, Code2, Copy, X, SlidersHorizontal, GalleryHorizontalEnd, Package } from 'lucide-react';
 import { draftsAPI, brandAssetsAPI, apiService } from '../services/api';
+import { useQuarkCosts } from '../hooks/useQuarkCosts';
 import { Draft } from '../types';
 import GeneratingFill from '../components/GeneratingFill';
 import CalendarIdeaPicker from '../components/CalendarIdeaPicker';
@@ -449,6 +450,15 @@ const GravityCreate: React.FC = () => {
     setSelectedPlatforms((prev) => prev.includes(key) ? prev.filter((p) => p !== key) : [...prev, key]);
 
   // Post count estimate (matches prototype text "~6 posts · 2 per week")
+  const quarkCosts = useQuarkCosts();
+  // Campaign charges per post (numSlots posts, each 7) since each is its own
+  // image; carousel and single post are one flat charge per run regardless
+  // of slide count, matching how the backend actually deducts each.
+  const currentActionCost =
+    mode === 'campaign' ? (quarkCosts.campaign_full || 0)
+    : mode === 'carousel' ? (quarkCosts.carousel_generated || 0)
+    : (quarkCosts.image_generated || 0);
+
   const estimate = useMemo(() => {
     const weeks = parseInt(duration, 10) || 1;
     const perWeek = parseInt(cadence, 10) || 1;
@@ -1173,6 +1183,11 @@ const GravityCreate: React.FC = () => {
               <>
                 <Zap className="w-4 h-4" strokeWidth={2.5} />
                 {mode === 'campaign' ? 'Draft my campaign' : mode === 'carousel' ? 'Build my carousel' : 'Draft this post'}
+                {currentActionCost > 0 && (
+                  <span className="ml-0.5 px-1.5 py-0.5 rounded-md bg-black/15 text-[11.5px] font-semibold tabular-nums">
+                    {mode === 'campaign' ? currentActionCost * estimate.total : currentActionCost}
+                  </span>
+                )}
               </>
             )}
           </button>

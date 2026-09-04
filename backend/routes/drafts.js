@@ -2,6 +2,7 @@ const express = require('express');
 const path = require('path');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
+const { checkTrial, deductCredits, refundCredits } = require('../middleware/trialGuard');
 const Draft = require('../models/Draft');
 const Campaign = require('../models/Campaign');
 const User = require('../models/User');
@@ -521,7 +522,11 @@ router.post('/:id/apply-logo', protect, async (req, res) => {
 });
 
 // 10. POST /generate-image-bg - Create a draft immediately with status 'processing' and enqueue background image generation
-router.post('/generate-image-bg', protect, async (req, res) => {
+router.post('/generate-image-bg', protect, checkTrial, async (req, res) => {
+  // Declared out here, not inside the try: the catch block below needs to
+  // read it to decide whether to refund, and a variable declared inside a
+  // try is not visible in its own catch.
+  let creditsDeducted = false;
   try {
     const userId = req.user.userId || req.user.id;
     const {
@@ -531,6 +536,23 @@ router.post('/generate-image-bg', protect, async (req, res) => {
       // one-line brief with none of this is the common case.
       contentPillar, contentType, campaignContext, objective
     } = req.body;
+
+    // Single-post generation had no deduction at all — free, unlike every
+    // other generation path in the app. The type:'campaign' branch here is
+    // the older Campaigns.tsx page, which charges campaign_full through its
+    // own flow already; only the post case is uncharged, so only it is
+    // metered here.
+    if (type !== 'campaign') {
+      const creditResult = await deductCredits(userId, 'image_generated', 1, 'AI post generation');
+      if (!creditResult.success) {
+        return res.status(403).json({
+          success: false,
+          creditsExhausted: true,
+          message: creditResult.error || 'Insufficient Quarks. Need 5 Quarks to generate a post.'
+        });
+      }
+      creditsDeducted = true;
+    }
 
     const draft = new Draft({
       userId,
@@ -576,6 +598,13 @@ router.post('/generate-image-bg', protect, async (req, res) => {
     res.status(201).json({ success: true, draftId: draft._id, draft });
   } catch (error) {
     console.error('Generate image bg error:', error);
+    if (creditsDeducted) {
+      try {
+        await refundCredits(req.user.userId || req.user.id, 'image_generated', 1, 'Refund: post enqueuing failed');
+      } catch (refundErr) {
+        console.error('⚠️ Failed to refund Quarks after enqueuing error:', refundErr.message);
+      }
+    }
     res.status(500).json({ success: false, message: 'Failed to queue image generation', error: error.message });
   }
 });
