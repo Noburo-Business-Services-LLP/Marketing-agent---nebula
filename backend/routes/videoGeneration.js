@@ -1406,13 +1406,32 @@ router.post('/createVideo', protect, checkTrial, videoAiWriteLimiter, async (req
   // possibly different, guess.
   const sceneCount = estimateSceneCount(payload.durationSeconds, payload.sceneCount);
 
-  // Deduct Quarks synchronously before enqueuing
-  const creditResult = await deductCredits(userId, 'video_generated', sceneCount, 'AI video generation pipeline');
-  if (!creditResult.success) {
+  // A video costs money in two shapes, so it is charged in two. The per-scene
+  // part scales (image + face swap + Kling clip + narration). The base part
+  // does not: the 4-portrait character sheet, one music track sized to the
+  // whole runtime, the thumbnail and the story pass all happen exactly once
+  // however long the video is. Folding the base into the per-scene rate would
+  // overcharge a 10-scene video and undercharge a 3-scene one.
+  const videoTotal = CREDIT_COSTS.video_base + sceneCount * CREDIT_COSTS.video_generated;
+
+  const baseCharge = await deductCredits(userId, 'video_base', 1, 'AI video — character sheet, music, thumbnail, story');
+  if (!baseCharge.success) {
     return res.status(403).json({
       success: false,
       creditsExhausted: true,
-      message: creditResult.error || `Insufficient Quarks. Need ${sceneCount * CREDIT_COSTS.video_generated} Quarks for a ${sceneCount}-scene video.`
+      message: baseCharge.error || `Insufficient Quarks. Need ${videoTotal} Quarks for a ${sceneCount}-scene video.`
+    });
+  }
+
+  const creditResult = await deductCredits(userId, 'video_generated', sceneCount, 'AI video generation pipeline');
+  if (!creditResult.success) {
+    // The base already landed; give it back rather than keeping payment for
+    // a video that never got enqueued.
+    await refundCredits(userId, 'video_base', 1, 'Refund: video scenes could not be charged');
+    return res.status(403).json({
+      success: false,
+      creditsExhausted: true,
+      message: creditResult.error || `Insufficient Quarks. Need ${videoTotal} Quarks for a ${sceneCount}-scene video.`
     });
   }
 
@@ -1465,6 +1484,7 @@ router.post('/createVideo', protect, checkTrial, videoAiWriteLimiter, async (req
     // Refund credits immediately if enqueuing fails
     try {
       await refundCredits(userId, 'video_generated', sceneCount, 'Refund: AI video enqueuing failed');
+      await refundCredits(userId, 'video_base', 1, 'Refund: AI video enqueuing failed');
     } catch (refundErr) {
       console.error('⚠️ Failed to refund credits after enqueuing error:', refundErr.message);
     }

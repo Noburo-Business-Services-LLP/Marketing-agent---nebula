@@ -16,6 +16,7 @@ export const ACTION_LABELS: Record<string, { label: string; icon: string }> = {
   strategic_post: { label: 'Strategic Post', icon: '🧭' },
   event_post: { label: 'Event Post', icon: '🎉' },
   refine_image: { label: 'Refine Image', icon: '🎨' },
-  video_generated: { label: 'AI Video', icon: '🎬' },
+  video_base: { label: 'Video Setup', icon: '🎬' },
+  video_generated: { label: 'Video Scene', icon: '🎞️' },
   carousel_generated: { label: 'Carousel', icon: '🖼️' },
 };

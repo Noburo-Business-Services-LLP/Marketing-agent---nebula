@@ -2841,7 +2841,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                         Auto-Generate Full Video
                         {quarkCosts.video_generated > 0 && (
                           <span className="ml-0.5 px-1.5 py-0.5 rounded-md bg-white/[0.08] text-[11.5px] font-semibold tabular-nums">
-                            {quarkCosts.video_generated * estimatedSceneCount}
+                            {(quarkCosts.video_base || 0) + quarkCosts.video_generated * estimatedSceneCount}
                           </span>
                         )}
                       </>
