@@ -568,6 +568,14 @@ const ReelGenerator: React.FC = () => {
   }, [languageCode]);
 
   const [sceneCount, setSceneCount] = useState<number | ''>('');
+
+  // Mirrors estimateSceneCount() in services/videoGenerationPipeline.js —
+  // that is the actual scene count the backend charges for, so the badge
+  // on the generate button reflects the same formula rather than a
+  // client-side guess that could drift from it.
+  const estimatedSceneCount = Math.max(1, Math.min(10,
+    Number(sceneCount) || Math.round(durationSeconds / 6)
+  ));
   const [selectedProductId, setSelectedProductId] = useState('');
   const [inputImageData, setInputImageData] = useState('');
   const [inputImageName, setInputImageName] = useState('');
@@ -2833,7 +2841,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                         Auto-Generate Full Video
                         {quarkCosts.video_generated > 0 && (
                           <span className="ml-0.5 px-1.5 py-0.5 rounded-md bg-white/[0.08] text-[11.5px] font-semibold tabular-nums">
-                            {quarkCosts.video_generated}
+                            {quarkCosts.video_generated * estimatedSceneCount}
                           </span>
                         )}
                       </>

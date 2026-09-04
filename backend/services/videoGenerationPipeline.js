@@ -4723,6 +4723,10 @@ module.exports = {
   // Low-level helpers exposed for the per-scene /generateSingleVideoClip route
   materializeSourceToFile,
   normalizeSceneVideoClip,
+  // Exposed so the credit deduction can charge for the same scene count the
+  // pipeline will actually generate, rather than a second, possibly
+  // different, guess.
+  estimateSceneCount,
   createJobContext,
   // Pure text/timing helpers — exported so the narration rules (no repeated
   // sentences, no duplicated scene lines, capped tempo) can be unit tested.

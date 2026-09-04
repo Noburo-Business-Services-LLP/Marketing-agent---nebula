@@ -451,9 +451,9 @@ const GravityCreate: React.FC = () => {
 
   // Post count estimate (matches prototype text "~6 posts · 2 per week")
   const quarkCosts = useQuarkCosts();
-  // Campaign charges per post (numSlots posts, each 7) since each is its own
-  // image; carousel and single post are one flat charge per run regardless
-  // of slide count, matching how the backend actually deducts each.
+  // Campaign charges per post, carousel charges per slide — both scale with
+  // how much is actually generated, matching how the backend deducts each.
+  // Single post is the one true flat rate: it always makes exactly one image.
   const currentActionCost =
     mode === 'campaign' ? (quarkCosts.campaign_full || 0)
     : mode === 'carousel' ? (quarkCosts.carousel_generated || 0)
@@ -464,6 +464,11 @@ const GravityCreate: React.FC = () => {
     const perWeek = parseInt(cadence, 10) || 1;
     return { total: weeks * perWeek, perWeek };
   }, [duration, cadence]);
+
+  const currentActionTotal =
+    mode === 'campaign' ? currentActionCost * estimate.total
+    : mode === 'carousel' ? currentActionCost * slideCount
+    : currentActionCost;
 
   // Map friendly duration/aspect labels to backend enum values used by
   // /generate-campaign-stream.
@@ -1185,7 +1190,7 @@ const GravityCreate: React.FC = () => {
                 {mode === 'campaign' ? 'Draft my campaign' : mode === 'carousel' ? 'Build my carousel' : 'Draft this post'}
                 {currentActionCost > 0 && (
                   <span className="ml-0.5 px-1.5 py-0.5 rounded-md bg-black/15 text-[11.5px] font-semibold tabular-nums">
-                    {mode === 'campaign' ? currentActionCost * estimate.total : currentActionCost}
+                    {currentActionTotal}
                   </span>
                 )}
               </>

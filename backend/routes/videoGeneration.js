@@ -24,7 +24,8 @@ const {
   normalizeCreateInput,
   materializeSourceToFile,
   normalizeSceneVideoClip,
-  createJobContext
+  createJobContext,
+  estimateSceneCount
 } = require('../services/videoGenerationPipeline');
 const { generateVideoClip, getKlingDuration } = require('../services/videoService');
 const { uploadVideoFile } = require('../services/imageUploader');
@@ -1397,18 +1398,25 @@ router.post('/createVideo', protect, checkTrial, videoAiWriteLimiter, async (req
     return res.status(401).json({ success: false, message: 'Authentication required' });
   }
 
-  // Deduct 7 Quarks synchronously before enqueuing
-  const creditResult = await deductCredits(userId, 'video_generated', 1, 'AI video generation pipeline');
+  const payload = req.body || {};
+  // Per scene, not flat — a video renders an image plus a clip per scene,
+  // real work a shorter video doesn't do. estimateSceneCount is the exact
+  // function the pipeline itself uses to decide scene count, so what gets
+  // charged here matches what actually gets generated rather than a second,
+  // possibly different, guess.
+  const sceneCount = estimateSceneCount(payload.durationSeconds, payload.sceneCount);
+
+  // Deduct Quarks synchronously before enqueuing
+  const creditResult = await deductCredits(userId, 'video_generated', sceneCount, 'AI video generation pipeline');
   if (!creditResult.success) {
     return res.status(403).json({
       success: false,
       creditsExhausted: true,
-      message: creditResult.error || 'Insufficient Quarks. Need 7 Quarks for a full video.'
+      message: creditResult.error || `Insufficient Quarks. Need ${sceneCount * 7} Quarks for a ${sceneCount}-scene video.`
     });
   }
 
   try {
-    const payload = req.body || {};
     const baseUrl = reqBaseUrl(req);
 
     const queued = await videoGenerationQueue.enqueue({
@@ -1456,7 +1464,7 @@ router.post('/createVideo', protect, checkTrial, videoAiWriteLimiter, async (req
   } catch (error) {
     // Refund credits immediately if enqueuing fails
     try {
-      await refundCredits(userId, 'video_generated', 1, 'Refund: AI video enqueuing failed');
+      await refundCredits(userId, 'video_generated', sceneCount, 'Refund: AI video enqueuing failed');
     } catch (refundErr) {
       console.error('⚠️ Failed to refund credits after enqueuing error:', refundErr.message);
     }

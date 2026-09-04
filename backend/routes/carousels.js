@@ -38,6 +38,11 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
   };
 
   let draft = null;
+  // Declared out here, not inside the try: the outer catch below needs it
+  // to refund the right amount, and a variable declared inside a try is not
+  // visible in its own catch (the exact bug already fixed once in
+  // drafts.js's generate-image-bg this session).
+  let requestedSlides = 5;
 
   try {
     const MIN_SLIDES = 3;
@@ -67,23 +72,26 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
       return res.end();
     }
 
-    // Deducted once per run, same as a full campaign or video — a carousel
-    // renders 3-10 images the same way those do, and previously deducted
-    // nothing at all, unlike either of them.
-    const creditResult = await deductCredits(req.user.id, 'carousel_generated', 1, 'AI carousel generation');
-    if (!creditResult.success) {
-      send('error', { message: creditResult.error || 'Insufficient Quarks. Need 7 Quarks for a carousel.' });
-      return res.end();
-    }
-
-    send('status', { message: 'Planning the story…' });
-
     // The master-plan prompt has no slide-count field of its own — the
     // Creative Director deciding how many slides a story needs is part of
     // its own design. The Create-tab slide picker is a real product
     // constraint the user actively set, though, so it is passed as context
     // rather than dropped, and the result is clamped to it afterwards.
-    const requestedSlides = Math.max(MIN_SLIDES, Math.min(MAX_SLIDES, Number(slideCount) || 5));
+    requestedSlides = Math.max(MIN_SLIDES, Math.min(MAX_SLIDES, Number(slideCount) || 5));
+
+    // Per slide, not flat — a carousel renders one image per slide the same
+    // way a campaign renders one per post, and a 10-slide carousel costs
+    // real generation work a 3-slide one does not. Charged against what the
+    // user actually asked for (the slide picker), known before generation
+    // starts, same as campaign charges against its own post count.
+    const creditResult = await deductCredits(req.user.id, 'carousel_generated', requestedSlides, 'AI carousel generation');
+    if (!creditResult.success) {
+      send('error', { message: creditResult.error || `Insufficient Quarks. Need ${requestedSlides * 7} Quarks for a ${requestedSlides}-slide carousel.` });
+      return res.end();
+    }
+
+    send('status', { message: 'Planning the story…' });
+
     const plan = await planCarousel(req.user.id, {
       idea: cleanBrief,
       contentType,
@@ -97,7 +105,7 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
       // Nothing was produced — refund, same as the video pipeline does when
       // it fails before any real work happens.
       try {
-        await refundCredits(req.user.id, 'carousel_generated', 1, 'Refund: carousel planning failed');
+        await refundCredits(req.user.id, 'carousel_generated', requestedSlides, 'Refund: carousel planning failed');
       } catch (refundErr) {
         console.error('⚠️ Failed to refund Quarks after carousel planning error:', refundErr.message);
       }
@@ -267,7 +275,7 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
       // was produced. Once a draft exists, slides may already have rendered,
       // so the charge stays — same flat-per-run model as campaigns and video.
       try {
-        await refundCredits(req.user.id, 'carousel_generated', 1, 'Refund: carousel generation failed before any slide rendered');
+        await refundCredits(req.user.id, 'carousel_generated', requestedSlides, 'Refund: carousel generation failed before any slide rendered');
       } catch (refundErr) {
         console.error('⚠️ Failed to refund Quarks after carousel error:', refundErr.message);
       }
