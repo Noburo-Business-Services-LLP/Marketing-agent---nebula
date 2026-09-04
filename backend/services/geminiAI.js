@@ -4870,12 +4870,18 @@ Treat this as an image editing task where the original person must remain identi
   // catch block below, and it needs to report the same prompt.
   let promptUsed = prompt;
 
+  // Out here with promptUsed, and for the same reason: the catch block below
+  // retries on the fallback model and reuses this exact array (character,
+  // environment and logo references plus the text prompt). Declared inside
+  // the try, it was out of scope there — so every fallback attempt threw
+  // "parts is not defined" instead of retrying, and the primary model being
+  // busy meant no image at all.
+  let parts = [];
+
   try {
     console.log(`[NanoBananaPro] Generating post ${postIndex + 1}/${totalPosts} in ${aspectRatio}...`);
 
     const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/nano-banana-pro-preview:generateContent';
-
-    const parts = [];
 
     const prepareInlineImage = async (imageValue, label) => {
       if (!imageValue) return null;

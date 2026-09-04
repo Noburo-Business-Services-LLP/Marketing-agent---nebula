@@ -10,7 +10,8 @@ const {
   createDraftsForItem,
   findItem,
   todaySuggestion,
-  calendarMonth
+  calendarMonth,
+  generateCalendarCover
 } = require('../services/contentCalendarService');
 
 // A calendar row is a reel if its format implies motion.
@@ -76,6 +77,31 @@ router.post('/regenerate', protect, async (req, res) => {
   } catch (error) {
     console.error('Content calendar regenerate error:', error);
     res.status(500).json({ success: false, message: 'Failed to regenerate content calendar' });
+  }
+});
+
+// Covers arrive after the plan, and every calendar made before this feature
+// has none. This lets the UI ask for one without regenerating the whole month.
+router.post('/cover', protect, async (req, res) => {
+  try {
+    const month = req.body?.month || calendarMonth();
+    const calendar = await ContentCalendar.findOne({ userId: req.user._id, month });
+    if (!calendar) {
+      return res.status(404).json({ success: false, message: 'No calendar for that month yet.' });
+    }
+    if (calendar.coverStatus === 'pending') {
+      return res.json({ success: true, status: 'pending' });
+    }
+
+    const user = await User.findById(req.user._id);
+    // Not awaited: rendering takes long enough to time out the request, and
+    // the client polls the calendar for the finished cover.
+    generateCalendarCover(calendar, user).catch(() => { /* recorded on the document */ });
+
+    res.json({ success: true, status: 'pending' });
+  } catch (error) {
+    console.error('Content calendar cover error:', error);
+    res.status(500).json({ success: false, message: 'Could not start the cover image.' });
   }
 });
 

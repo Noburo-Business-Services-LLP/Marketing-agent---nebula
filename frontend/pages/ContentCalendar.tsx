@@ -11,9 +11,21 @@ import {
   Sparkles,
   ToggleLeft,
   ToggleRight,
+  ImageIcon,
   X
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'];
+
+/** "2026-06" -> "June 2026". The stored value is not meant to be read raw. */
+const monthLabel = (month = '') => {
+  const m = /^(\d{4})-(\d{2})$/.exec(String(month || '').trim());
+  if (!m) return String(month || '');
+  const name = MONTH_NAMES[parseInt(m[2], 10) - 1];
+  return name ? `${name} ${m[1]}` : String(month);
+};
 import { contentCalendarAPI, draftsAPI } from '../services/api';
 import { ContentCalendar as ContentCalendarType, ContentCalendarItem, Draft } from '../types';
 import { getThemeClasses, useTheme } from '../context/ThemeContext';
@@ -92,6 +104,30 @@ const ContentCalendar: React.FC = () => {
     }
   };
 
+
+  // Covers render after the plan is saved, so a freshly generated month shows
+  // the pending state and swaps in the art when it lands.
+  const [coverBusy, setCoverBusy] = useState(false);
+
+  useEffect(() => {
+    if (calendar?.coverStatus !== 'pending') return;
+    const id = setInterval(() => { loadCalendar(); }, 6000);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [calendar?.coverStatus, calendar?._id]);
+
+  const requestCover = async () => {
+    if (!calendar) return;
+    setCoverBusy(true);
+    try {
+      await contentCalendarAPI.generateCover(calendar.month);
+      setCalendar({ ...calendar, coverStatus: 'pending' });
+    } catch (err: any) {
+      setError(err?.message || 'Could not start the cover image.');
+    } finally {
+      setCoverBusy(false);
+    }
+  };
 
   const allItems = useMemo(
     () => (calendar?.weeks || []).flatMap((week) => week.items || []),
@@ -484,15 +520,65 @@ const ContentCalendar: React.FC = () => {
 
       {activeDetailTab === 'calendar' && (
         <>
+      {/* Month banner. The cover is art for the month's own theme, so it sits
+          behind the month name rather than beside it — and the scrim keeps the
+          type readable whatever the image turns out to be. */}
+      <div className="relative rounded-2xl overflow-hidden border border-white/[0.08] bg-[#141414] mb-5">
+        <div className="absolute inset-0">
+          {calendar.coverImageUrl ? (
+            <img src={calendar.coverImageUrl} alt="" className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full bg-gradient-to-br from-[#F5A623]/[0.10] via-transparent to-transparent" />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/70 to-black/40" />
+        </div>
+
+        <div className="relative px-6 py-7 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+          <div className="min-w-0">
+            <div className="gravity-label text-[#F5A623] mb-1.5">Smart Calendar</div>
+            <h2 className="font-serif-display text-[34px] leading-[1.05] text-[#F5F4F1]">
+              {monthLabel(calendar.month)}
+            </h2>
+            {calendar.themeTitle && (
+              <div className="mt-2 text-[14px] font-semibold text-[#F5A623]">{calendar.themeTitle}</div>
+            )}
+            {calendar.themeSummary && (
+              <p className="mt-1 text-[12.5px] text-white/60 max-w-[440px] leading-relaxed">
+                {calendar.themeSummary}
+              </p>
+            )}
+            <p className="mt-2.5 text-[11.5px] text-white/40">
+              {calendar.businessName || 'Your business'} · {calendar.businessVertical || 'Content'} · {calendar.language}
+            </p>
+          </div>
+
+          <div className="shrink-0">
+            {calendar.coverStatus === 'pending' ? (
+              <span className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-[12px] text-white/55 border border-white/[0.12]">
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-[#F5A623]" />
+                Making the cover…
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={requestCover}
+                disabled={coverBusy}
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-[12px] font-semibold border border-white/[0.12] text-[#F5F4F1] hover:bg-white/[0.06] hover:border-[#F5A623]/40 transition-all disabled:opacity-40"
+              >
+                <ImageIcon className="w-3.5 h-3.5 text-[#F5A623]" />
+                {calendar.coverImageUrl ? 'New cover' : 'Make a cover'}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-[#F5A623]" />
-            <h2 className="font-serif-display text-[22px] text-[#F5F4F1]">Gravity Smart Calendar</h2>
+            <h2 className="font-serif-display text-[18px] text-[#F5F4F1]">This month's plan</h2>
           </div>
-          <p className={`mt-1 text-sm ${theme.textSecondary}`}>
-            {calendar.businessName || 'Your business'} · {calendar.businessVertical || 'Content'} · {calendar.month} · {calendar.language}
-          </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">

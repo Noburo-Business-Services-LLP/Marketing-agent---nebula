@@ -3760,6 +3760,17 @@ export const contentCalendarAPI = {
     return apiCall('/content-calendar/history', { method: 'GET' }, true);
   },
 
+  /**
+   * Ask for the month's cover art. Returns immediately with status 'pending' —
+   * rendering outlives the request, so the caller polls get() for the result.
+   */
+  generateCover: async (month?: string): Promise<{ success: boolean; status: string }> => {
+    return apiCall('/content-calendar/cover', {
+      method: 'POST',
+      body: JSON.stringify({ month })
+    }, true);
+  },
+
   regenerate: async (month?: string): Promise<{ success: boolean; calendar: ContentCalendar }> => {
     return apiCall('/content-calendar/regenerate', { 
       method: 'POST',

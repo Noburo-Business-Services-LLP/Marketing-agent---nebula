@@ -239,6 +239,12 @@ export interface ContentCalendar {
   autoGenerate: boolean;
   approved: boolean;
   weeks: ContentCalendarWeek[];
+  /** The month's editorial through-line and its cover art, made after the plan. */
+  themeTitle?: string;
+  themeSummary?: string;
+  coverImageUrl?: string;
+  coverImagePrompt?: string;
+  coverStatus?: 'none' | 'pending' | 'ready' | 'failed';
   generatedAt?: string;
   lastAutoRunAt?: string | null;
   createdAt?: string;

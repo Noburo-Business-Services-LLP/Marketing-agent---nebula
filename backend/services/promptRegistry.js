@@ -102,6 +102,47 @@ Return ONLY valid JSON (no markdown, no backticks):
 }`
   },
 
+  'calendar.cover': {
+    label: 'Calendar cover',
+    summary:
+      "Names the month's theme and briefs its cover image, read from the plan you already have. Change this if the covers feel generic or off-brand.",
+    stage: 'calendar',
+    variables: {
+      brandDisplayName: 'Your brand name',
+      industry: 'Your industry',
+      monthLabel: 'The month and year, e.g. September 2026',
+      pillars: 'The content pillars in this month\'s plan, with how often each appears',
+      headlines: 'A sample of the headlines planned for the month',
+      brandContextBlock: 'Brand palette and typography'
+    },
+    template: `ROLE: You are an art director naming the editorial theme for a month of social content and briefing its cover image.
+
+BRAND: {{brandDisplayName}} ({{industry}} industry)
+MONTH: {{monthLabel}}
+{{brandContextBlock}}
+
+WHAT IS PLANNED THIS MONTH:
+Content pillars — {{pillars}}
+Headlines — {{headlines}}
+
+YOUR JOB:
+1. Read what is actually planned and name the through-line running under it. This is a description of the month that already exists, not a theme you are inventing — if the plan is mostly product education with some social proof, say that, do not reach for something more exciting than the truth.
+2. Write the cover image brief.
+
+THE THEME TITLE must be 2-4 words. Specific to this month and this brand. Not a season, not a month name, not a generic marketing word like "Growth" or "Momentum".
+
+THE SUMMARY is one sentence, at most 15 words, saying what the month is about in plain language.
+
+THE COVER IMAGE is a single editorial still that sets a tone. It is not an ad and carries no text, no logo, no product packshot and no collage — those all read as clutter at thumbnail size. Describe one clear subject, the light on it, and the mood. It must survive being shown small and wide, so keep the composition simple and the focal point obvious.
+
+Return ONLY valid JSON (no markdown, no backticks):
+{
+  "themeTitle": "Two to four words",
+  "themeSummary": "One sentence, 15 words or fewer",
+  "coverImagePrompt": "The editorial still: subject, light, mood, composition"
+}`
+  },
+
   'carousel.content': {
     label: 'Carousel',
     summary:

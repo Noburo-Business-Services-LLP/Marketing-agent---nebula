@@ -1,7 +1,8 @@
 const ContentCalendar = require('../models/ContentCalendar');
 const Campaign = require('../models/Campaign');
 const ContentDraft = require('../models/ContentDraft');
-const { parseGeminiJSON } = require('./geminiAI');
+const { parseGeminiJSON, generateCampaignImageNanoBanana } = require('./geminiAI');
+const { buildPrompt } = require('./promptRegistry');
 const { generateWithLLM } = require('./llmRouter');
 
 const CONTENT_CALENDAR_PROMPT = `
@@ -303,6 +304,117 @@ function normalizeCalendarItems(rawCalendar, userProfile = {}) {
   }));
 }
 
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'];
+
+/** "2026-06" -> "June 2026". Falls back to the raw value if it is not that shape. */
+function monthLabel(month = '') {
+  const m = /^(\d{4})-(\d{2})$/.exec(String(month || '').trim());
+  if (!m) return String(month || '');
+  const idx = parseInt(m[2], 10) - 1;
+  return MONTH_NAMES[idx] ? `${MONTH_NAMES[idx]} ${m[1]}` : String(month);
+}
+
+/**
+ * Name the month's theme and render a cover image for it.
+ *
+ * Runs after the calendar is saved and is never awaited by the caller: a
+ * calendar with no cover is fine, a calendar the user waited an extra minute
+ * for is not. Failure is recorded on the document rather than thrown.
+ */
+async function generateCalendarCover(calendar, userProfile = {}) {
+  if (!calendar?._id) return null;
+
+  try {
+    await ContentCalendar.updateOne({ _id: calendar._id }, { $set: { coverStatus: 'pending' } });
+
+    const items = (calendar.weeks || []).flatMap((w) => w.items || []);
+    if (items.length === 0) {
+      await ContentCalendar.updateOne({ _id: calendar._id }, { $set: { coverStatus: 'none' } });
+      return null;
+    }
+
+    // The theme is read off what is actually planned, so it describes the
+    // month rather than being invented alongside it.
+    const pillarCounts = new Map();
+    items.forEach((i) => {
+      const p = String(i.contentPillar || '').trim();
+      if (p) pillarCounts.set(p, (pillarCounts.get(p) || 0) + 1);
+    });
+    const pillars = Array.from(pillarCounts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, n]) => `${name} (${n})`)
+      .join(', ') || 'none recorded';
+
+    const headlines = items
+      .map((i) => String(i.headline || '').trim())
+      .filter(Boolean)
+      .slice(0, 12)
+      .map((h) => `- ${h}`)
+      .join('\n') || '- none recorded';
+
+    const profile = getBusinessProfile(userProfile);
+    const brandDisplayName =
+      calendar.businessName || profile.businessName || profile.name || 'The brand';
+    const industry = calendar.businessVertical || profile.industry || 'General';
+
+    const planPrompt = await buildPrompt(calendar.userId, 'calendar.cover', {
+      brandDisplayName,
+      industry,
+      monthLabel: monthLabel(calendar.month),
+      pillars,
+      headlines,
+      brandContextBlock: ''
+    });
+
+    const raw = await llmRouter(planPrompt);
+    const parsed = parseGeminiJSON(raw) || {};
+
+    const themeTitle = String(parsed.themeTitle || '').trim().slice(0, 60);
+    const themeSummary = String(parsed.themeSummary || '').trim().slice(0, 200);
+    const coverImagePrompt = String(parsed.coverImagePrompt || '').trim();
+
+    if (!coverImagePrompt) {
+      await ContentCalendar.updateOne({ _id: calendar._id }, { $set: { coverStatus: 'failed' } });
+      return null;
+    }
+
+    // 16:9 — the cover is shown as a wide banner, and generating it square
+    // would mean cropping away the composition that was just briefed.
+    const result = await generateCampaignImageNanoBanana(coverImagePrompt, {
+      userId: calendar.userId,
+      aspectRatio: '16:9',
+      brandName: brandDisplayName,
+      industry,
+      tone: 'editorial',
+      campaignTheme: themeTitle || monthLabel(calendar.month)
+    });
+
+    // An inline data URI would be roughly a megabyte inside a document that
+    // is read on every calendar view. Only a hosted URL is worth keeping.
+    const url = String(result?.imageUrl || '');
+    const coverImageUrl = url.startsWith('http') ? url : '';
+
+    await ContentCalendar.updateOne({ _id: calendar._id }, {
+      $set: {
+        themeTitle,
+        themeSummary,
+        coverImagePrompt,
+        coverImageUrl,
+        coverStatus: coverImageUrl ? 'ready' : 'failed'
+      }
+    });
+
+    return coverImageUrl;
+  } catch (error) {
+    console.error('[ContentCalendar] cover generation failed:', error.message);
+    try {
+      await ContentCalendar.updateOne({ _id: calendar._id }, { $set: { coverStatus: 'failed' } });
+    } catch (_) { /* the original failure is the one that matters */ }
+    return null;
+  }
+}
+
 async function generateMonthlyCalendar(userProfile = {}, targetMonth = null) {
   const profile = getBusinessProfile(userProfile);
   const userId = userProfile._id || userProfile.userId || profile.userId;
@@ -331,11 +443,17 @@ async function generateMonthlyCalendar(userProfile = {}, targetMonth = null) {
     generatedAt: new Date()
   };
 
-  return ContentCalendar.findOneAndUpdate(
+  const calendar = await ContentCalendar.findOneAndUpdate(
     { userId, month },
     { $setOnInsert: { autoGenerate: false, approved: false }, $set: calendarData },
     { upsert: true, new: true }
   );
+
+  // Deliberately not awaited. The plan is what the user is waiting for; the
+  // cover arrives a little later and the UI polls for it.
+  generateCalendarCover(calendar, userProfile).catch(() => { /* recorded on the document */ });
+
+  return calendar;
 }
 
 function findItem(calendar, itemId) {
@@ -453,6 +571,8 @@ function startContentCalendarScheduler({ intervalMs = 60_000, logger = console }
 
 module.exports = {
   generateMonthlyCalendar,
+  generateCalendarCover,
+  monthLabel,
   processAutoGeneration,
   startContentCalendarScheduler,
   createDraftsForItem,

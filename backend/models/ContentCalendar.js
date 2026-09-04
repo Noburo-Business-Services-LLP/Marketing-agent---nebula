@@ -46,6 +46,18 @@ const contentCalendarSchema = new mongoose.Schema({
   autoGenerate: { type: Boolean, default: false },
   approved: { type: Boolean, default: false },
   weeks: [calendarWeekSchema],
+  // The month's editorial through-line, read off the pillars the plan
+  // actually contains, plus a cover image made to match it. Generated after
+  // the plan itself so a slow or failed image never blocks the calendar.
+  themeTitle: { type: String, default: '', trim: true },
+  themeSummary: { type: String, default: '', trim: true },
+  coverImageUrl: { type: String, default: '' },
+  coverImagePrompt: { type: String, default: '' },
+  coverStatus: {
+    type: String,
+    enum: ['none', 'pending', 'ready', 'failed'],
+    default: 'none'
+  },
   generatedAt: { type: Date, default: Date.now },
   lastAutoRunAt: { type: Date, default: null }
 }, {
