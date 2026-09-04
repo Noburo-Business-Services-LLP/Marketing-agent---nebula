@@ -401,9 +401,9 @@ for (const d of Object.values(DELIVERED)) {
 // service actually needs. The allowance is the cost ceiling, not a value meter:
 // it is what stops one runaway account from eating a month's margin.
 
-// How much room over the committed deliverables an allowance carries, for the
-// retries a managed service actually runs.
-const ALLOWANCE_HEADROOM = 1.67;
+// Safety margin on top of EXPECTED burn. The retry factors are averages, so
+// without this roughly half of all months would hit the ceiling.
+const ALLOWANCE_SAFETY = 1.15;
 
 const PLANS = {
   managed_10k: {
@@ -412,26 +412,37 @@ const PLANS = {
     commits: { image_generated: 60, reels: 4, scenesPerReel: 5 }
     // `quarks` is DERIVED below, never written here. It used to be a literal,
     // and when USD_PER_QUARK moved from $0.08 to $0.02 the literal stayed put
-    // and silently became a quarter of the allowance it was meant to be. The
-    // load-time check caught it; deriving it means there is nothing to catch.
+    // and silently became a quarter of the allowance it was meant to be.
   }
 };
 
 for (const [name, plan] of Object.entries(PLANS)) {
   const c = plan.commits;
+
+  // What the deliverables cost if every generation landed first time.
   plan.committedQuarks =
     (c.image_generated || 0) * QUARK_COSTS.image_generated +
     (c.reels || 0) * (QUARK_COSTS.video_base + (c.scenesPerReel || 0) * QUARK_COSTS.video_generated);
 
-  // Rounded to something a human would write on a pricing page.
-  plan.quarks = Math.round((plan.committedQuarks * ALLOWANCE_HEADROOM) / 100) * 100;
+  // What they actually cost, because generations do not land first time.
+  // Sizing the allowance off committedQuarks was wrong: it granted 5,500
+  // against a real burn of 6,180, so a CSM doing nothing unusual would hit
+  // the ceiling before month end. Video setup is NOT retried — the character
+  // sheet and music survive a scene re-roll — so only the scenes carry the
+  // video retry factor.
+  plan.expectedQuarks = Math.round(
+    (c.image_generated || 0) * QUARK_COSTS.image_generated * RETRY_FACTOR.image +
+    (c.reels || 0) * (
+      QUARK_COSTS.video_base +
+      (c.scenesPerReel || 0) * QUARK_COSTS.video_generated * RETRY_FACTOR.video_scene
+    )
+  );
 
-  // The machine side of this plan is comfortable. The PEOPLE side is not:
-  // with a CSM in the loop this plan is lossmaking (see DELIVERED and the
-  // sensitivity work in the pricing artifact). Kept here as the record of
-  // what is currently sold, explicitly flagged, not as a recommendation.
-  plan.machineOnly = true;
-  plan.warning = 'Excludes CSM labour. Loss-making at this price once labour is counted.';
+  plan.quarks = Math.round((plan.expectedQuarks * ALLOWANCE_SAFETY) / 100) * 100;
+
+  if (plan.quarks < plan.expectedQuarks) {
+    throw new Error(`Plan "${name}" grants ${plan.quarks} Quarks against an expected burn of ${plan.expectedQuarks}.`);
+  }
 }
 
 module.exports = {
