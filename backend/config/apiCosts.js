@@ -456,10 +456,17 @@ for (const [name, plan] of Object.entries(PLANS)) {
     )
   );
 
-  plan.quarks = Math.round((plan.expectedQuarks * ALLOWANCE_SAFETY) / 100) * 100;
+  // A round number, chosen rather than derived — 5,000 is what a paid account
+  // gets. The derived figure (expectedQuarks x safety) is kept alongside it so
+  // the check below still bites if costs ever rise past what 5,000 covers.
+  plan.derivedQuarks = Math.round((plan.expectedQuarks * ALLOWANCE_SAFETY) / 100) * 100;
+  plan.quarks = 5000;
 
   if (plan.quarks < plan.expectedQuarks) {
-    throw new Error(`Plan "${name}" grants ${plan.quarks} Quarks against an expected burn of ${plan.expectedQuarks}.`);
+    throw new Error(
+      `Plan "${name}" grants ${plan.quarks} Quarks against an expected burn of ` +
+      `${plan.expectedQuarks}. Raise the grant or cut the commitments.`
+    );
   }
 }
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Save, AlertCircle, Check, Loader2, Eye, EyeOff, Zap, RefreshCw, CreditCard, Download, ExternalLink } from 'lucide-react';
 import { User, BillingData, BusinessProfile } from '../types';
-import { ACTION_LABELS } from '../constants/quarks';
+import { ACTION_LABELS, QUARK_GROUPS } from '../constants/quarks';
 import { useQuarkPricing } from '../hooks/useQuarkCosts';
 import { jsPDF } from 'jspdf';
 import { apiService } from '../services/api';
@@ -806,38 +806,71 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                 </div>
                               </div>
 
-                              {/* What each action costs — moved here from the header dropdown,
-                                  where ten items in a 320px popover was the clumsy part. */}
+                              {/* What each action costs. Grouped the way the work is
+                                  actually thought about — posts, carousels, video, edits —
+                                  because a flat list of twelve keys is what made the old
+                                  header popover unreadable. */}
                               <div className={`p-5 rounded-lg border ${
                                 isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-slate-50 border-slate-200'
                               }`}>
                                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-1">Quark Costs</p>
-                                <p className={`text-xs mb-3 ${theme.textSecondary}`}>
-                                  Charged per unit of work. A carousel is billed per slide and a
-                                  video per scene, so a bigger one costs proportionally more.
+                                <p className={`text-xs mb-4 ${theme.textSecondary}`}>
+                                  Every price is per unit of work, so bigger jobs cost proportionally more.
                                 </p>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                  {Object.entries(quarkCosts).filter(([, v]) => v > 0).map(([action, cost]) => (
-                                    <div
-                                      key={action}
-                                      className={`flex items-center justify-between gap-3 px-3 py-2 rounded-lg ${
-                                        isDarkMode ? 'bg-white/[0.03]' : 'bg-white'
-                                      }`}
-                                    >
-                                      <span className={`text-sm truncate ${theme.textSecondary}`}>
-                                        {ACTION_LABELS[action]?.icon} {ACTION_LABELS[action]?.label || action}
-                                      </span>
-                                      <span className="flex items-baseline gap-1 shrink-0">
-                                        <span className={`text-sm font-semibold tabular-nums ${theme.text}`}>{cost}</span>
-                                        {/* The unit is the whole point: "4.5" next to "Carousel"
-                                            reads as the price of a carousel, which it isn't. */}
-                                        {quarkUnits[action] && (
-                                          <span className="text-[11px] text-slate-500">{quarkUnits[action]}</span>
-                                        )}
-                                      </span>
-                                    </div>
-                                  ))}
+
+                                <div className="space-y-4">
+                                  {QUARK_GROUPS.map((group) => {
+                                    const rows = group.actions.filter((a) => (quarkCosts[a] || 0) > 0);
+                                    if (!rows.length) return null;
+                                    return (
+                                      <div key={group.title}>
+                                        <div className="flex items-baseline justify-between gap-3 mb-1.5">
+                                          <p className={`text-[13px] font-semibold ${theme.text}`}>{group.title}</p>
+                                          {group.example && (
+                                            <p className="text-[11px] text-slate-500 tabular-nums shrink-0">
+                                              {group.example(quarkCosts)}
+                                            </p>
+                                          )}
+                                        </div>
+                                        <p className="text-[11.5px] text-slate-500 mb-2 leading-snug">{group.blurb}</p>
+                                        <div className={`rounded-lg overflow-hidden border ${
+                                          isDarkMode ? 'border-white/[0.06]' : 'border-slate-200'
+                                        }`}>
+                                          {rows.map((action, i) => (
+                                            <div
+                                              key={action}
+                                              className={`flex items-center justify-between gap-3 px-3 py-2 ${
+                                                isDarkMode ? 'bg-white/[0.03]' : 'bg-white'
+                                              } ${i > 0 ? (isDarkMode ? 'border-t border-white/[0.06]' : 'border-t border-slate-100') : ''}`}
+                                            >
+                                              <span className={`text-[13px] truncate ${theme.textSecondary}`}>
+                                                {ACTION_LABELS[action]?.icon} {ACTION_LABELS[action]?.label || action}
+                                              </span>
+                                              <span className="flex items-baseline gap-1.5 shrink-0">
+                                                <span className={`text-[13px] font-semibold tabular-nums ${theme.text}`}>
+                                                  {quarkCosts[action]}
+                                                </span>
+                                                {/* The unit is the whole point: "19" next to "Carousel"
+                                                    reads as the price of a carousel, which it isn't. */}
+                                                {quarkUnits[action] && (
+                                                  <span className="text-[11px] text-slate-500 w-[62px] text-left">
+                                                    {quarkUnits[action]}
+                                                  </span>
+                                                )}
+                                              </span>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
                                 </div>
+
+                                {(quarkCosts.competitor_scrape === 0) && (
+                                  <p className="text-[11.5px] text-slate-500 mt-4 pt-3 border-t border-slate-200/40">
+                                    🔍 Competitor Intel is free.
+                                  </p>
+                                )}
                               </div>
 
                               {/* Payment History */}
