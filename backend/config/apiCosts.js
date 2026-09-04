@@ -116,12 +116,19 @@ const ACTION_USD = {
 // 3. Cost -> price
 // ---------------------------------------------------------------------------
 
-// Gross margin multiplier on raw API spend. 2.5x means the API bill is 40% of
-// Quark revenue, leaving the rest for infrastructure, storage, Cloudinary,
-// failed/retried generations (which we eat, since we refund the user) and
-// actual profit. Retries matter more than they look: a refunded failure is
-// spend with zero revenue against it.
-const MARGIN = 2.5;
+// Gross margin multiplier on raw API spend, per action.
+//
+// The default 2.5x means the API bill is 40% of Quark revenue, leaving the
+// rest for infra, storage, Cloudinary and — the expensive part — generations
+// that fail and get refunded, which is spend with zero revenue against it.
+//
+// Video carries more because its failure profile is worse in both directions:
+// a Kling clip fails or comes back unusable far more often than an image does,
+// and each miss costs 3.3x what an image miss costs. The old model (see the
+// original ai_feature_costs sheet) used a flat 2.2x across the board, but that
+// sheet had no video in it at all — every line was an image or a text call.
+const MARGIN = { default: 2.5, video_generated: 3.2 };
+const marginFor = (action) => MARGIN[action] || MARGIN.default;
 
 // What one Quark is worth. Anchored deliberately: at this value a single AI
 // image post prices out at almost exactly 5 Quarks, which is what it already
@@ -130,20 +137,26 @@ const MARGIN = 2.5;
 // mispriced actions (video above all) move to where they should be.
 const USD_PER_QUARK = 0.08;
 
+// For turning USD API costs into the INR we actually price in. The original
+// sheet used a flat 100, which was a convenient round number rather than a
+// rate. This is margin-dominated anyway — a 10% FX move shifts gross margin
+// by about 3 points, not by anything structural.
+const INR_PER_USD = 88;
+
 // Prices are what users read off a table, so they get rounded to something
 // human: quarters under 1, halves under 10, whole numbers above. The 0.25
 // floor is load-bearing — chat rounds to 0.22, and without a floor the
 // cheapest actions round to literally free, which is a pricing bug that
 // looks like a rounding rule.
-function toQuarks(usd) {
-  const raw = (usd * MARGIN) / USD_PER_QUARK;
+function toQuarks(usd, action) {
+  const raw = (usd * marginFor(action)) / USD_PER_QUARK;
   if (raw < 1) return Math.max(0.25, Math.round(raw * 4) / 4);
   if (raw < 10) return Math.round(raw * 2) / 2;
   return Math.round(raw);
 }
 
 const QUARK_COSTS = Object.fromEntries(
-  Object.entries(ACTION_USD).map(([action, usd]) => [action, toQuarks(usd)])
+  Object.entries(ACTION_USD).map(([action, usd]) => [action, toQuarks(usd, action)])
 );
 
 // Competitor intel stays free on purpose: it is the hook that gets people to
@@ -169,4 +182,52 @@ const ACTION_UNITS = {
   competitor_scrape: 'free'
 };
 
-module.exports = { PROVIDER_RATES, ACTION_USD, QUARK_COSTS, ACTION_UNITS, MARGIN, USD_PER_QUARK };
+// ---------------------------------------------------------------------------
+// 4. Plans
+// ---------------------------------------------------------------------------
+// A plan is a monthly price, a set of deliverables we commit to, and a Quark
+// allowance sized to cover those deliverables PLUS the retries a managed
+// service actually needs. The allowance is the cost ceiling, not a value meter:
+// it is what stops one runaway account from eating a month's margin.
+
+const PLANS = {
+  managed_10k: {
+    inr: 10000,
+    label: 'Managed — 10k',
+    // What we promise to ship.
+    commits: { image_generated: 60, reels: 4, scenesPerReel: 5 },
+    // 1,400 lands on two useful numbers at once: ~1.94x the Quarks the
+    // committed deliverables consume (so roughly two full attempts at
+    // everything), and essentially the entire notional value of the fee
+    // (INR 10,000 / $0.08 per Quark = 1,420). We pass the value through and
+    // take margin from the multiplier baked into each price, rather than by
+    // quietly shorting the allowance.
+    //
+    // Gross margin at FULL burn, by what they spend it on:
+    //   all images  60.6%   plan mix  65.7%   all video  69.3%
+    // So 60% is the floor, not the target. A month that runs hot and needs
+    // ~1,800 Quarks still clears ~55%, which is the signal to go look at
+    // that account rather than a reason to refuse the work.
+    quarks: 1400
+  }
+};
+
+// Sanity: an allowance that cannot cover its own committed deliverables is a
+// plan that loses money by design. Cheap to check, so check it at load.
+for (const [name, plan] of Object.entries(PLANS)) {
+  const committed =
+    (plan.commits.image_generated || 0) * QUARK_COSTS.image_generated +
+    (plan.commits.reels || 0) * (plan.commits.scenesPerReel || 0) * QUARK_COSTS.video_generated;
+  if (plan.quarks < committed) {
+    throw new Error(
+      `Plan "${name}" grants ${plan.quarks} Quarks but its committed deliverables ` +
+      `need ${committed}. Raise the allowance or cut the commitments.`
+    );
+  }
+  plan.committedQuarks = committed;
+}
+
+module.exports = {
+  PROVIDER_RATES, ACTION_USD, QUARK_COSTS, ACTION_UNITS,
+  MARGIN, marginFor, USD_PER_QUARK, INR_PER_USD, PLANS
+};
