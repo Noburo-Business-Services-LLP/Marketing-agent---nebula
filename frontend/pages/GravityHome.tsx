@@ -135,6 +135,18 @@ const GravityHome: React.FC = () => {
   // four empty gradient blocks for anyone who had made posts but not yet run
   // a scheduled campaign.
   const stackCards = useMemo(() => {
+    // While the fetch is still in flight, drafts/campaigns are both still
+    // their initial empty arrays — indistinguishable from a genuinely empty
+    // account. Rendering SAMPLE_STACK here was a real bug, not the
+    // documented empty-state fallback: on every mount (including navigating
+    // back to this tab, which remounts the component and resets this state
+    // to []) it flashed real stock photography for however long the fetch
+    // took, before snapping to the actual state. Four blank placeholder
+    // cards keep the layout stable without claiming to be anyone's content.
+    if (loading) {
+      return [{ img: '', tag: '', sample: false }, { img: '', tag: '', sample: false }, { img: '', tag: '', sample: false }, { img: '', tag: '', sample: false }];
+    }
+
     const fromDrafts = drafts
       .map((d: any) => ({
         img: d?.imageUrl || d?.creative?.imageUrls?.[0] || '',
@@ -175,7 +187,7 @@ const GravityHome: React.FC = () => {
       const platform = c.platform ? c.platform.slice(0, 2).toUpperCase() : '';
       return { img: c.img, tag: [platform, label].filter(Boolean).join(' · '), sample: false };
     });
-  }, [drafts, campaigns]);
+  }, [drafts, campaigns, loading]);
 
   return (
     <div className="max-w-[1240px] mx-auto pb-16">
