@@ -3149,6 +3149,39 @@ export const brandAssetsAPI = {
   },
 };
 
+export const ideasAPI = {
+  // Everything not dismissed, unless a specific status is asked for.
+  getAll: async (status?: 'new' | 'expanded' | 'dismissed'): Promise<any> => {
+    const query = status ? `?status=${status}` : '';
+    return await apiCall<any>(`/ideas${query}`, {}, true);
+  },
+
+  create: async (data: {
+    text: string;
+    imageData?: string;
+    sourceUrl?: string;
+    targetDate?: string;
+  }): Promise<any> => {
+    return await apiCall<any>('/ideas', { method: 'POST', body: JSON.stringify(data) }, true);
+  },
+
+  bulkCreate: async (items: string[], source: 'bulk_paste' | 'bulk_file'): Promise<any> => {
+    return await apiCall<any>(
+      '/ideas/bulk',
+      { method: 'POST', body: JSON.stringify({ items, source }) },
+      true
+    );
+  },
+
+  update: async (id: string, data: { status?: 'new' | 'expanded' | 'dismissed'; draftId?: string }): Promise<any> => {
+    return await apiCall<any>(`/ideas/${id}`, { method: 'PATCH', body: JSON.stringify(data) }, true);
+  },
+
+  remove: async (id: string): Promise<any> => {
+    return await apiCall<any>(`/ideas/${id}`, { method: 'DELETE' }, true);
+  },
+};
+
 export const adCampaignsAPI = {
   getAll: async (): Promise<any> => {
     return await apiCall<any>('/ad-campaigns', { method: 'GET' }, true);

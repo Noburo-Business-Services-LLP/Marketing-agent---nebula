@@ -73,6 +73,7 @@ const notificationRoutes = require('./routes/notifications');
 
 // Brand Assets routes
 const brandAssetsRoutes = require('./routes/brandAssets');
+const ideasRoutes = require('./routes/ideas');
 
 // Ads / Boost routes
 const adsRoutes = require('./routes/ads');
@@ -422,6 +423,7 @@ app.use('/api/notifications', notificationRoutes);
 
 // Routes - Brand Assets
 app.use('/api/brand-assets', brandAssetsRoutes);
+app.use('/api/ideas', ideasRoutes);
 
 // Routes - Ads / Boost
 app.use('/api/ads', adsRoutes);

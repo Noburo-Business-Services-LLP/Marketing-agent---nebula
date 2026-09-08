@@ -18,6 +18,7 @@ import GravityInsights from './pages/GravityInsights';
 import Campaigns from './pages/Campaigns';
 import ContentCalendar from './pages/ContentCalendar';
 import CalendarHome from './pages/CalendarHome';
+import IdeaInbox from './pages/IdeaInbox';
 import ReelGenerator from './pages/ReelGenerator';
 import AdCampaigns from './pages/AdCampaigns';
 import Competitors from './pages/Competitors';
@@ -192,6 +193,7 @@ const App: React.FC = () => {
                     <Route path="/content-calendar" element={<CalendarHome />} />
                     <Route path="/content-calendar-grid" element={<GravityCalendar />} />
                     <Route path="/content-calendar-classic" element={<ContentCalendar />} />
+                    <Route path="/idea-inbox" element={<IdeaInbox />} />
                     <Route path="/campaigns" element={<GravityCreate />} />
                     <Route path="/campaigns-classic" element={<Campaigns />} />
                     <Route path="/drafts" element={<GravityApprove />} />

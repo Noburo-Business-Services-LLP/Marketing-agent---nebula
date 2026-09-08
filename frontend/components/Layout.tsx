@@ -25,7 +25,8 @@ import {
   CalendarDays,
   Search,
   HelpCircle,
-  Plus
+  Plus,
+  Lightbulb
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { User } from '../types';
@@ -121,6 +122,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
     { path: '/reels',            label: 'Videos',            icon: PlayCircle },
     { path: '/drafts',           label: 'Approve',           icon: PenTool, badge: 'drafts' as const },
     { path: '/content-calendar', label: 'Calendar',          icon: CalendarDays },
+    { path: '/idea-inbox',       label: 'Idea Inbox',        icon: Lightbulb },
     { path: '/upload',           label: 'Upload & Schedule', icon: UploadCloud },
     { path: '/analytics',        label: 'Insights',          icon: BarChart3 },
   ];
