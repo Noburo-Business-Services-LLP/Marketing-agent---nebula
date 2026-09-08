@@ -402,6 +402,33 @@ const GravityCreate: React.FC = () => {
     }
   };
 
+  // Targeted fix — keep the existing image, change only what the instruction
+  // describes. Separate from Regenerate, which redraws the whole thing.
+  const [editImageFor, setEditImageFor] = useState<string>('');
+  const [editImageInstruction, setEditImageInstruction] = useState<string>('');
+  const [editImageBusy, setEditImageBusy] = useState<string>('');
+
+  const openEditImage = (d: Draft) => {
+    setEditImageFor(d._id);
+    setEditImageInstruction('');
+  };
+
+  const applyImageEdit = async (d: Draft) => {
+    if (!editImageInstruction.trim()) return;
+    setEditImageBusy(d._id);
+    setError(null);
+    try {
+      const res = await draftsAPI.editImage(d._id, editImageInstruction.trim());
+      setResults((prev) => prev.map((x: any) => x._id === d._id ? { ...x, imageUrl: res.draft.imageUrl, imagePromptResolved: res.draft.imagePromptResolved } : x));
+      setEditImageFor('');
+      setEditImageInstruction('');
+    } catch (e: any) {
+      setError(e?.message || 'Could not apply that edit');
+    } finally {
+      setEditImageBusy('');
+    }
+  };
+
   const discard = async (d: Draft) => {
     setActionBusy(d._id);
     try {
@@ -1355,6 +1382,9 @@ const GravityCreate: React.FC = () => {
                                 <IconAction label="Regenerate" onClick={() => regenerateImage(d)} disabled={busy || processing}>
                                   <RotateCcw className="w-3.5 h-3.5" />
                                 </IconAction>
+                                <IconAction label="Edit image" onClick={() => openEditImage(d)} disabled={busy || processing || !img}>
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </IconAction>
                                 <IconAction label="Delete this post" onClick={() => discard(d)} disabled={busy} danger>
                                   <Trash2 className="w-3.5 h-3.5" />
                                 </IconAction>
@@ -1417,6 +1447,43 @@ const GravityCreate: React.FC = () => {
                                 </div>
                               </>
                             )}
+                          </div>
+                        )}
+
+                        {/* Small targeted fix — keeps the current image,
+                            changes only what the instruction describes.
+                            Separate from "See the prompt" above, which
+                            redraws the whole image from a full prompt. */}
+                        {editImageFor === d._id && (
+                          <div className="mt-3 rounded-xl border border-[#F5A623]/20 bg-[#F5A623]/[0.03] p-4">
+                            <div className="flex items-center justify-between gap-3 mb-2">
+                              <div className="gravity-label text-[#F5A623]">Describe the change</div>
+                              <button
+                                onClick={() => setEditImageFor('')}
+                                className="p-1 rounded-md text-white/40 hover:text-white hover:bg-white/[0.06]"
+                                title="Close"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                            <textarea
+                              value={editImageInstruction}
+                              onChange={(e) => setEditImageInstruction(e.target.value)}
+                              placeholder="e.g. fix the spelling in the headline, make the sky darker, remove the coffee cup"
+                              rows={2}
+                              className="gravity-bare w-full bg-black/30 border border-white/[0.08] rounded-lg p-3 text-[12px] leading-relaxed text-white/75 resize-y"
+                            />
+                            <div className="flex items-center justify-between mt-3">
+                              <span className="text-[11px] text-white/35">Keeps the rest of the image as-is.</span>
+                              <button
+                                onClick={() => applyImageEdit(d)}
+                                disabled={editImageBusy === d._id || !editImageInstruction.trim()}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-[#F5A623] text-[#1A1208] hover:bg-[#ffb833] disabled:opacity-40 disabled:cursor-not-allowed"
+                              >
+                                {editImageBusy === d._id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Pencil className="w-3.5 h-3.5" />}
+                                Apply edit
+                              </button>
+                            </div>
                           </div>
                         )}
                       </>

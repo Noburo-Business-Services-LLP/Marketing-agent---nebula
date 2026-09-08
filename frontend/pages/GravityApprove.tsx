@@ -309,6 +309,31 @@ const GravityApprove: React.FC = () => {
     try { await redoDraft(current, promptDraft.trim() || undefined); } catch { /* error already set */ } finally { setBusy(false); }
   };
 
+  // Targeted fix — keep the current image, change only what the instruction
+  // describes. Separate from Regenerate, which redraws from the prompt above.
+  const [editOpen, setEditOpen] = useState(false);
+  const [editInstruction, setEditInstruction] = useState('');
+  const [isEditingImage, setIsEditingImage] = useState(false);
+  useEffect(() => {
+    setEditOpen(false);
+    setEditInstruction('');
+  }, [current?._id]);
+
+  const handleEditImage = async () => {
+    if (!current || !editInstruction.trim()) return;
+    setIsEditingImage(true);
+    try {
+      await draftsAPI.editImage(String(current._id), editInstruction.trim());
+      setEditOpen(false);
+      setEditInstruction('');
+      await loadDrafts();
+    } catch (e: any) {
+      setError(e?.message || 'Could not apply that edit.');
+    } finally {
+      setIsEditingImage(false);
+    }
+  };
+
   // Grid-card versions — track busy state per-card instead of the single
   // page-wide `busy` flag, and open the full detail view on approve failure
   // so the reason (e.g. no platforms selected) isn't invisible in a small card.
@@ -730,6 +755,33 @@ const GravityApprove: React.FC = () => {
             </p>
           </div>
 
+          {/* Small targeted fix — keeps the current image, changes only what
+              the instruction describes. Distinct from Regenerate above,
+              which redraws the whole image from the prompt. */}
+          {editOpen && (
+            <div className="mb-6 p-3 rounded-xl bg-[#F5A623]/[0.04] border border-[#F5A623]/20">
+              <label className="gravity-label block mb-1.5 text-[#F5A623]">Describe the change</label>
+              <textarea
+                value={editInstruction}
+                onChange={(e) => setEditInstruction(e.target.value)}
+                placeholder="e.g. fix the spelling in the headline, make the sky darker, remove the coffee cup"
+                rows={2}
+                className="w-full p-2.5 rounded-lg bg-black/20 border border-white/[0.08] text-[12.5px] leading-relaxed text-white/80 outline-none focus:border-[#F5A623]/40 resize-y placeholder:text-white/25"
+              />
+              <div className="flex items-center justify-between mt-2">
+                <span className="text-[10.5px] text-white/35">Keeps the rest of the image as-is.</span>
+                <button
+                  onClick={handleEditImage}
+                  disabled={isEditingImage || !editInstruction.trim()}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#F5A623] text-black text-[12px] font-semibold hover:bg-[#ffb833] disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {isEditingImage ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Pencil className="w-3.5 h-3.5" />}
+                  Apply edit
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Actions — bottom right */}
           <div className="mt-auto flex items-center justify-end gap-3">
             <button
@@ -739,6 +791,17 @@ const GravityApprove: React.FC = () => {
             >
               <RotateCcw className="w-3.5 h-3.5" />
               Regenerate
+            </button>
+            <button
+              onClick={() => setEditOpen((v) => !v)}
+              className={`flex items-center gap-2 h-11 px-5 rounded-lg border text-[13.5px] font-medium ${
+                editOpen
+                  ? 'border-[#F5A623]/50 bg-[#F5A623]/10 text-[#F5A623]'
+                  : 'border-white/[0.10] hover:border-white/25 hover:bg-white/[0.03] text-[#F5F4F1]'
+              }`}
+            >
+              <Pencil className="w-3.5 h-3.5" />
+              Edit
             </button>
             <button
               onClick={handleApprove}

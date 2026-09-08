@@ -644,4 +644,51 @@ router.post('/:id/retry-image', protect, async (req, res) => {
   }
 });
 
+// 11b. POST /:id/edit-image - Apply a targeted edit to the EXISTING image
+// (keep everything, change only what the instruction asks for), instead of
+// regenerating the whole thing from a prompt.
+router.post('/:id/edit-image', protect, checkTrial, async (req, res) => {
+  try {
+    const userId = req.user.userId || req.user.id;
+    const draft = await Draft.findOne({ _id: req.params.id, userId });
+
+    if (!draft) {
+      return res.status(404).json({ success: false, message: 'Draft not found' });
+    }
+    if (!draft.imageUrl) {
+      return res.status(400).json({ success: false, message: 'This draft has no image yet to edit' });
+    }
+
+    const instruction = typeof req.body?.instruction === 'string' ? req.body.instruction.trim() : '';
+    if (!instruction) {
+      return res.status(400).json({ success: false, message: 'Describe the change you want' });
+    }
+
+    const creditResult = await deductCredits(userId, 'image_edit', 1, 'Edit image');
+    if (!creditResult.success) {
+      return res.status(403).json({ success: false, message: creditResult.error || 'Insufficient credits', creditsRemaining: creditResult.creditsRemaining });
+    }
+
+    const { refineImageWithPrompt } = require('../services/geminiAI');
+    const bp = req.user.businessProfile || {};
+    const contextPrompt = draft.imagePromptResolved || draft.imagePrompt || draft.caption || 'marketing image';
+
+    const result = await refineImageWithPrompt(contextPrompt, instruction, bp.tone || 'professional', draft.imageUrl);
+
+    if (!result.success || !result.imageUrl) {
+      await refundCredits(userId, 'image_edit', 1, 'Refund: edit-image failed');
+      return res.status(500).json({ success: false, message: result.error || 'Could not apply that edit' });
+    }
+
+    draft.imageUrl = result.imageUrl;
+    draft.imagePromptResolved = `${contextPrompt}\n\nEdit applied: ${instruction}`;
+    await draft.save();
+
+    res.status(200).json({ success: true, draft, creditsRemaining: creditResult.creditsRemaining });
+  } catch (error) {
+    console.error('Edit image error:', error);
+    res.status(500).json({ success: false, message: 'Failed to edit image', error: error.message });
+  }
+});
+
 module.exports = router;

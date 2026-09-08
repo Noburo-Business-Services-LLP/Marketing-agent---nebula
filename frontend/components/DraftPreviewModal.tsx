@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, Calendar, Send, Trash2, Loader2, Instagram, Facebook, Linkedin, Twitter, Check, RotateCcw } from 'lucide-react';
+import { X, Save, Calendar, Send, Trash2, Loader2, Instagram, Facebook, Linkedin, Twitter, Check, RotateCcw, Pencil } from 'lucide-react';
 import { Draft } from '../types';
 import { draftsAPI } from '../services/api';
 
@@ -104,6 +104,32 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
       setErrorMsg(err.message || 'Failed to retry image generation.');
     } finally {
       setIsRetryingImage(false);
+    }
+  };
+
+  // Targeted fix — keep the image as-is, change only what the instruction
+  // asks for. Separate from Regenerate, which redraws the whole thing.
+  const [editOpen, setEditOpen] = useState(false);
+  const [editInstruction, setEditInstruction] = useState('');
+  const [isEditingImage, setIsEditingImage] = useState(false);
+
+  const handleEditImage = async () => {
+    if (!editInstruction.trim()) return;
+    setIsEditingImage(true);
+    setErrorMsg('');
+    setSuccessMsg('');
+    try {
+      await draftsAPI.editImage(draft._id, editInstruction.trim());
+      setSuccessMsg('Edit applied!');
+      setEditOpen(false);
+      setEditInstruction('');
+      setTimeout(() => {
+        onSuccess();
+      }, 1200);
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Could not apply that edit.');
+    } finally {
+      setIsEditingImage(false);
     }
   };
 
@@ -362,15 +388,57 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
             )}
 
             {imageUrl && draft.status !== 'processing' && (
-              <button
-                type="button"
-                onClick={handleRetryImage}
-                disabled={isRetryingImage}
-                className="mt-3 w-full inline-flex items-center justify-center gap-2 h-11 rounded-xl border border-white/[0.10] text-[13px] font-semibold text-white/70 hover:text-white hover:border-white/25 hover:bg-white/[0.03] transition-colors disabled:opacity-40"
-              >
-                {isRetryingImage ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
-                Regenerate
-              </button>
+              <div className="mt-3 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleRetryImage}
+                  disabled={isRetryingImage}
+                  className="flex-1 inline-flex items-center justify-center gap-2 h-11 rounded-xl border border-white/[0.10] text-[13px] font-semibold text-white/70 hover:text-white hover:border-white/25 hover:bg-white/[0.03] transition-colors disabled:opacity-40"
+                >
+                  {isRetryingImage ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+                  Regenerate
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditOpen((v) => !v)}
+                  className={`flex-1 inline-flex items-center justify-center gap-2 h-11 rounded-xl border text-[13px] font-semibold transition-colors ${
+                    editOpen
+                      ? 'border-[#F5A623]/50 bg-[#F5A623]/10 text-[#F5A623]'
+                      : 'border-white/[0.10] text-white/70 hover:text-white hover:border-white/25 hover:bg-white/[0.03]'
+                  }`}
+                >
+                  <Pencil className="w-4 h-4" />
+                  Edit
+                </button>
+              </div>
+            )}
+
+            {/* Small targeted fix — keeps the current image, changes only
+                what the instruction describes. Distinct from Regenerate,
+                which redraws the whole image from the prompt above. */}
+            {editOpen && (
+              <div className="mt-3 p-3 rounded-xl bg-[#F5A623]/[0.04] border border-[#F5A623]/20">
+                <label className="gravity-label block mb-1.5 text-[#F5A623]">Describe the change</label>
+                <textarea
+                  value={editInstruction}
+                  onChange={(e) => setEditInstruction(e.target.value)}
+                  placeholder="e.g. fix the spelling in the headline, make the sky darker, remove the coffee cup"
+                  rows={2}
+                  className="w-full p-2.5 rounded-lg bg-black/20 border border-white/[0.08] text-[12.5px] leading-relaxed text-white/80 outline-none focus:border-[#F5A623]/40 resize-y placeholder:text-white/25"
+                />
+                <div className="flex items-center justify-between mt-2">
+                  <span className="text-[10.5px] text-white/35">Keeps the rest of the image as-is.</span>
+                  <button
+                    type="button"
+                    onClick={handleEditImage}
+                    disabled={isEditingImage || !editInstruction.trim()}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#F5A623] text-black text-[12px] font-semibold hover:bg-[#ffb833] disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {isEditingImage ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Pencil className="w-3.5 h-3.5" />}
+                    Apply edit
+                  </button>
+                </div>
+              </div>
             )}
           </div>
 

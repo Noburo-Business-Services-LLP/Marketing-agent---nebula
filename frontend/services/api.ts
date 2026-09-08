@@ -4362,6 +4362,15 @@ export const draftsAPI = {
       method: 'POST',
       body: prompt ? JSON.stringify({ prompt }) : undefined
     }, true);
+  },
+
+  // Targeted edit — keeps the existing image, changes only what the
+  // instruction asks for, rather than regenerating from scratch.
+  editImage: async (id: string, instruction: string): Promise<{ success: boolean; draft: Draft; message?: string }> => {
+    return apiCall(`/drafts/${encodeURIComponent(id)}/edit-image`, {
+      method: 'POST',
+      body: JSON.stringify({ instruction })
+    }, true);
   }
 };
 
