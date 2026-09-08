@@ -110,6 +110,10 @@ const ContentCalendar: React.FC = () => {
   // the pending state and swaps in the art when it lands.
   const [coverBusy, setCoverBusy] = useState(false);
   const [planLanguage, setPlanLanguage] = useState('');
+  // What's specific to THIS plan — a launch, an event, an offer, a pillar to
+  // lean into. Optional: left blank, the AI plans from brand memory and
+  // recent Idea Inbox items alone.
+  const [planFocus, setPlanFocus] = useState('');
 
   useEffect(() => {
     // Watches the open plan (detail view) and every card's thumbnail (list
@@ -160,7 +164,7 @@ const ContentCalendar: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      const response = await contentCalendarAPI.generateNextMonth(planLanguage || undefined);
+      const response = await contentCalendarAPI.generateNextMonth(planLanguage || undefined, planFocus.trim() || undefined);
       await loadCalendar();
       setCalendar(response.calendar);
       setViewMode('detail');
@@ -294,7 +298,7 @@ const ContentCalendar: React.FC = () => {
   };
 
   const regenerate = () => {
-    updateCalendar(async () => contentCalendarAPI.regenerate(), 'regenerate');
+    updateCalendar(async () => contentCalendarAPI.regenerate(undefined, undefined, planFocus.trim() || undefined), 'regenerate');
   };
 
   const approveCalendar = () => {
@@ -333,29 +337,41 @@ const ContentCalendar: React.FC = () => {
             subcopy="Manage your monthly content strategies."
             className="!mb-0"
           />
-          <div className="flex items-center gap-2">
-          {/* Per-plan language. Empty means "use my account setting", so this
-              does not force a choice on people happy with their default. */}
-          <select
-            value={planLanguage}
-            onChange={(e) => setPlanLanguage(e.target.value)}
-            className="gravity-bare px-3 py-2 rounded-lg bg-white/[0.04] border border-white/[0.10] text-[13px] text-[#F5F4F1] outline-none"
-            title="Language for the next plan"
-          >
-            <option value="">My default language</option>
-            {CONTENT_LANGUAGES.map((l) => (
-              <option key={l.value} value={l.value}>{l.label}</option>
-            ))}
-          </select>
-          <button
-            type="button"
-            onClick={handleGenerateNextMonth}
-            disabled={loading}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-[#F5A623] text-black hover:bg-[#ffb833] transition-colors"
-          >
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-            Generate Next Month Plan
-          </button>
+          <div className="flex flex-col items-stretch sm:items-end gap-2">
+            <div className="flex items-center gap-2">
+              {/* Per-plan language. Empty means "use my account setting", so this
+                  does not force a choice on people happy with their default. */}
+              <select
+                value={planLanguage}
+                onChange={(e) => setPlanLanguage(e.target.value)}
+                className="gravity-bare px-3 py-2 rounded-lg bg-white/[0.04] border border-white/[0.10] text-[13px] text-[#F5F4F1] outline-none"
+                title="Language for the next plan"
+              >
+                <option value="">My default language</option>
+                {CONTENT_LANGUAGES.map((l) => (
+                  <option key={l.value} value={l.value}>{l.label}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={handleGenerateNextMonth}
+                disabled={loading}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-[#F5A623] text-black hover:bg-[#ffb833] transition-colors"
+              >
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                Generate Next Month Plan
+              </button>
+            </div>
+            {/* Optional — a launch, event, offer, or pillar to lean into this
+                month. Left blank, the AI still has brand memory and recent
+                Idea Inbox items to work from, just no specific steer. */}
+            <input
+              type="text"
+              value={planFocus}
+              onChange={(e) => setPlanFocus(e.target.value)}
+              placeholder="Anything specific to focus on this month? (optional)"
+              className="gravity-bare w-full sm:w-[360px] px-3 py-2 rounded-lg bg-white/[0.04] border border-white/[0.10] text-[13px] text-[#F5F4F1] outline-none placeholder:text-white/30"
+            />
           </div>
         </div>
         
@@ -684,7 +700,17 @@ const ContentCalendar: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-col items-stretch lg:items-end gap-2">
+          {/* Same optional focus used by "Generate Next Month Plan" — shown
+              here too since Regenerate is the other place a focus matters. */}
+          <input
+            type="text"
+            value={planFocus}
+            onChange={(e) => setPlanFocus(e.target.value)}
+            placeholder="Anything specific to focus on this month? (optional, used by Regenerate)"
+            className="gravity-bare w-full lg:w-[380px] px-3 py-2 rounded-lg bg-white/[0.04] border border-white/[0.10] text-[12.5px] text-[#F5F4F1] outline-none placeholder:text-white/30"
+          />
+          <div className="flex flex-wrap items-center gap-2">
 
           <button
             type="button"
@@ -724,7 +750,8 @@ const ContentCalendar: React.FC = () => {
               Generate Week {getActiveWeekNumber()} Content
             </button>
           )}
-          
+
+          </div>
         </div>
       </div>
 

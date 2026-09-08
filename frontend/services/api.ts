@@ -3804,18 +3804,21 @@ export const contentCalendarAPI = {
     }, true);
   },
 
-  regenerate: async (month?: string, language?: string): Promise<{ success: boolean; calendar: ContentCalendar }> => {
-    return apiCall('/content-calendar/regenerate', { 
+  /** `focus` is what's specific to this month — launches, offers, events,
+   * pillars to lean into. Optional; the AI plans generically without it. */
+  regenerate: async (month?: string, language?: string, focus?: string): Promise<{ success: boolean; calendar: ContentCalendar }> => {
+    return apiCall('/content-calendar/regenerate', {
       method: 'POST',
-      body: JSON.stringify({ ...(month ? { month } : {}), ...(language ? { language } : {}) })
+      body: JSON.stringify({ ...(month ? { month } : {}), ...(language ? { language } : {}), ...(focus ? { focus } : {}) })
     }, true);
   },
 
-  /** `language` overrides the account default for this plan only. */
-  generateNextMonth: async (language?: string): Promise<{ success: boolean; calendar: ContentCalendar }> => {
+  /** `language` overrides the account default for this plan only. `focus`
+   * is what's specific to this month — see regenerate() above. */
+  generateNextMonth: async (language?: string, focus?: string): Promise<{ success: boolean; calendar: ContentCalendar }> => {
     return apiCall('/content-calendar/generate-next', {
       method: 'POST',
-      body: JSON.stringify(language ? { language } : {})
+      body: JSON.stringify({ ...(language ? { language } : {}), ...(focus ? { focus } : {}) })
     }, true);
   },
 

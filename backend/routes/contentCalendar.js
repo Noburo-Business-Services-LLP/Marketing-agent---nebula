@@ -60,7 +60,7 @@ router.post('/generate-next', protect, async (req, res) => {
       nextMonthStr = `${year}-${String(month).padStart(2, '0')}`;
     }
     const user = await User.findById(req.user._id);
-    const calendar = await generateMonthlyCalendar(user, nextMonthStr, { language: req.body?.language });
+    const calendar = await generateMonthlyCalendar(user, nextMonthStr, { language: req.body?.language, focus: req.body?.focus });
     res.json({ success: true, calendar });
   } catch (error) {
     console.error('Content calendar generate next error:', error);
@@ -72,7 +72,7 @@ router.post('/regenerate', protect, async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
     const targetMonth = req.body.month || calendarMonth();
-    const calendar = await generateMonthlyCalendar(user, targetMonth, { language: req.body?.language });
+    const calendar = await generateMonthlyCalendar(user, targetMonth, { language: req.body?.language, focus: req.body?.focus });
     res.json({ success: true, calendar });
   } catch (error) {
     console.error('Content calendar regenerate error:', error);

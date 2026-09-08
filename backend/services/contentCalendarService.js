@@ -1,31 +1,48 @@
 const ContentCalendar = require('../models/ContentCalendar');
 const Campaign = require('../models/Campaign');
 const ContentDraft = require('../models/ContentDraft');
+const ContentIdea = require('../models/ContentIdea');
 const { parseGeminiJSON, generateCampaignImageNanoBanana } = require('./geminiAI');
 const { buildPrompt } = require('./promptRegistry');
 const { callTextLLM } = require('./openAI');
+const { buildBrandMemoryBlock } = require('./brandMemory');
 
 const CONTENT_CALENDAR_PROMPT = `
 You are a Senior Social Media Strategist, Brand Consultant, Content Marketing Expert, Consumer Psychologist, and Performance Marketing Specialist.
 
 Your task is to create a professional {{TOTAL_DAYS}}-day content calendar for any business.
 
+You are planning for {{PLAN_MONTH}}. Use this to reason about real, dated
+seasonal opportunities, festivals, and buying occasions — do not invent
+generic "seasonal content" without grounding it in what actually falls in
+this specific month.
+
+{{BRAND_MEMORY}}
+
+{{RECENT_IDEAS}}
+
+{{MONTHLY_FOCUS}}
+
 OUTPUT FORMAT:
-Generate the content calendar in an Excel-ready JSON array with the following fields:
-[
-  {
-    "day": "",
-    "format": "",
-    "contentPillar": "",
-    "headline": "",
-    "creativeConcept": "",
-    "productServiceNeeded": "",
-    "shootType": "",
-    "cta": "",
-    "objective": "",
-    "status": "Planned"
-  }
-]
+Return ONLY a single JSON object shaped EXACTLY like this — a top-level
+object with one key, "calendar", holding the array. Do not use any other
+key name for it, and put nothing else at the top level:
+{
+  "calendar": [
+    {
+      "day": "",
+      "format": "",
+      "contentPillar": "",
+      "headline": "",
+      "creativeConcept": "",
+      "productServiceNeeded": "",
+      "shootType": "",
+      "cta": "",
+      "objective": "",
+      "status": "Planned"
+    }
+  ]
+}
 
 INPUT VARIABLES:
 Business Name: {{BUSINESS_NAME}}
@@ -101,6 +118,13 @@ IMPORTANT:
 - Do not generate random ideas.
 - Each content must have business purpose.
 - Prioritize engagement, leads, sales, and growth.
+- Use the brand memory above (real products, tone, assets) instead of
+  generic industry filler — name the actual products/services where it
+  fits naturally, don't invent ones that aren't listed.
+- If the user gave specific ideas or a monthly focus above, weave the
+  relevant ones into this month's plan rather than ignoring them — but
+  still fill out the full calendar; there is no obligation to use every
+  idea listed, only the ones that genuinely fit.
 - If Language = Tamil → Headlines and CTA in Tamil.
 - If Language = English → Headlines and CTA in English.
 - If Business Vertical = Jewellery → generate jewellery-focused content.
@@ -108,7 +132,7 @@ IMPORTANT:
 - If Business Vertical = Clinic → generate healthcare-focused content.
 - Adapt content completely based on business type.
 
-Return ONLY valid JSON array.
+Return ONLY the JSON object described above — {"calendar": [...]} — nothing else.
 `;
 
 // A format counts as a reel if it implies motion.
@@ -298,7 +322,11 @@ function replacePromptVariable(prompt, key, value) {
   return prompt.replaceAll(`{{${key}}}`, String(value || ''));
 }
 
-function calendarPrompt(userProfile = {}, month = null, languageOverride = '') {
+function calendarPrompt(userProfile = {}, month = null, languageOverride = '', {
+  brandMemoryBlock = '',
+  recentIdeasBlock = '',
+  focus = ''
+} = {}) {
   const profile = getBusinessProfile(userProfile);
   const language = languageOverride || normalizeLanguage(profile.language || profile.contentLanguage);
   const location = profile.location || profile.businessLocation || userProfile.location || '';
@@ -312,6 +340,16 @@ function calendarPrompt(userProfile = {}, month = null, languageOverride = '') {
   const { maxReels } = computeReelPlan(month, reelsPerWeek);
   const totalPosts = totalDays * postsPerDay;
 
+  const brandMemorySection = brandMemoryBlock
+    ? `BRAND MEMORY (real facts about this specific brand — use them, do not invent alternatives):\n${brandMemoryBlock}`
+    : '';
+  const recentIdeasSection = recentIdeasBlock
+    ? `IDEAS THE USER HAS RECENTLY DROPPED IN (not yet used in any post — weave in what genuinely fits this month, ignore what doesn't):\n${recentIdeasBlock}`
+    : '';
+  const monthlyFocusSection = focus
+    ? `THIS MONTH'S SPECIFIC FOCUS (from the user — prioritize this over generic ideas):\n${focus}`
+    : '';
+
   return [
     ['BUSINESS_NAME', businessName],
     ['INDUSTRY', industry],
@@ -323,7 +361,11 @@ function calendarPrompt(userProfile = {}, month = null, languageOverride = '') {
     ['TOTAL_DAYS', totalDays],
     ['POSTS_PER_DAY', postsPerDay],
     ['TOTAL_POSTS', totalPosts],
-    ['MAX_REELS', maxReels]
+    ['MAX_REELS', maxReels],
+    ['PLAN_MONTH', monthLabel(month)],
+    ['BRAND_MEMORY', brandMemorySection],
+    ['RECENT_IDEAS', recentIdeasSection],
+    ['MONTHLY_FOCUS', monthlyFocusSection]
   ].reduce((prompt, [key, value]) => replacePromptVariable(prompt, key, value), CONTENT_CALENDAR_PROMPT);
 }
 
@@ -413,9 +455,21 @@ function normalizeCalendarItems(rawCalendar, userProfile = {}, month = null) {
   const fallbackNonReel = fallbackFlat.filter((it) => !isReelFormat(it.format));
   const fallbackReel = fallbackFlat.filter((it) => isReelFormat(it.format));
 
-  const rawWeeks = Array.isArray(rawCalendar?.weeks) ? rawCalendar.weeks : fallback.weeks;
-  const flat = Array.isArray(rawCalendar)
+  // OpenAI's JSON mode forces a top-level OBJECT, not the bare array the
+  // prompt used to ask for — the model has to invent a wrapper key on the
+  // fly to comply, and picks a different one call to call. This was the
+  // actual reason generation silently fell back to 100% generic template
+  // content: rawCalendar.weeks was never populated in that shape, so every
+  // field came from `fb` below with no error anywhere. The prompt now
+  // requires a fixed "calendar" key; the rest are kept only as a defensive
+  // net against a model that drifts from the contract anyway.
+  const unwrapped = Array.isArray(rawCalendar)
     ? rawCalendar
+    : (rawCalendar?.calendar || rawCalendar?.contentCalendar || rawCalendar?.days || rawCalendar?.items || rawCalendar?.posts || null);
+
+  const rawWeeks = Array.isArray(unwrapped) ? null : (Array.isArray(rawCalendar?.weeks) ? rawCalendar.weeks : fallback.weeks);
+  const flat = Array.isArray(unwrapped)
+    ? unwrapped
     : rawWeeks.flatMap((week) => Array.isArray(week?.items) ? week.items : []);
 
   const normalizeOne = (raw, fb, day) => ({
@@ -604,7 +658,7 @@ async function generateCalendarCover(calendar, userProfile = {}) {
   }
 }
 
-async function generateMonthlyCalendar(userProfile = {}, targetMonth = null, { language: languageOverride = '' } = {}) {
+async function generateMonthlyCalendar(userProfile = {}, targetMonth = null, { language: languageOverride = '', focus = '' } = {}) {
   const profile = getBusinessProfile(userProfile);
   const userId = userProfile._id || userProfile.userId || profile.userId;
   if (!userId) throw new Error('userId is required to generate a content calendar');
@@ -620,9 +674,23 @@ async function generateMonthlyCalendar(userProfile = {}, targetMonth = null, { l
   // and which cadence — they are planning for.
   const month = targetMonth || calendarMonth();
 
+  // What the model actually knows about THIS brand (real products, tone,
+  // assets) instead of the handful of static onboarding fields the prompt
+  // used to run on alone — and whatever the user has dropped into the Idea
+  // Inbox since the last plan, so the calendar keeps getting fed instead of
+  // working off one frozen snapshot forever.
+  const [brandMemoryBlock, recentIdeas] = await Promise.all([
+    buildBrandMemoryBlock(userId).catch(() => ''),
+    ContentIdea.find({ userId, status: 'new' }).sort({ createdAt: -1 }).limit(15).lean().catch(() => [])
+  ]);
+  const recentIdeasBlock = (recentIdeas || [])
+    .map((idea) => `- ${idea.text}`)
+    .join('\n');
+
   let aiCalendar = null;
   try {
-    const response = await llmRouter(calendarPrompt(userProfile, month, language));
+    const prompt = calendarPrompt(userProfile, month, language, { brandMemoryBlock, recentIdeasBlock, focus });
+    const response = await llmRouter(prompt);
     aiCalendar = parseGeminiJSON(response);
   } catch (error) {
     console.warn('[ContentCalendar] AI generation failed, using fallback:', error.message);
