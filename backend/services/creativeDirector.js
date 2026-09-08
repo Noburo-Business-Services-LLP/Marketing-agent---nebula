@@ -337,6 +337,10 @@ async function planCarousel(userId, {
   return {
     creativeConcept: toText(plan.creativeConcept),
     narrativeApproach: toText(plan.narrativeApproach),
+    // The one thing every slide is not allowed to renegotiate on its own —
+    // see summarizePlanForArtDirector, which surfaces it as its own labeled
+    // line rather than leaving it buried inside visualSystem's prose.
+    medium: toText(plan.medium),
     visualSystem: toText(plan.visualSystem),
     swipeMechanism: toText(plan.swipeMechanism),
     caption: toText(plan.caption),
@@ -352,6 +356,11 @@ function summarizePlanForArtDirector(plan) {
   return JSON.stringify({
     creativeConcept: plan.creativeConcept,
     narrativeApproach: plan.narrativeApproach,
+    // Surfaced as its own top-level field, not left inside visualSystem's
+    // prose — style drift between slides (a carousel opening as a photo and
+    // switching to illustration by slide 3) traced back to this being easy
+    // to miss when it was just one more sentence in a paragraph.
+    medium: plan.medium,
     visualSystem: plan.visualSystem,
     swipeMechanism: plan.swipeMechanism,
     slides: plan.slides.map((s) => ({ order: s.order, role: s.role, storyPurpose: s.storyPurpose, imageText: s.imageText }))
@@ -371,6 +380,7 @@ async function renderCarouselSlideImage(userId, plan, slideIndex) {
 
   const prompt = await buildPrompt(userId, 'carousel.artDirector', {
     carouselPlan: summarizePlanForArtDirector(plan),
+    medium: plan.medium || 'Not specified by the plan — infer one consistent medium from the creative concept and hold it for every slide.',
     slide: JSON.stringify({
       order: slide.order,
       role: slide.role,

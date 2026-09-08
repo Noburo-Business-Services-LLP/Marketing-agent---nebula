@@ -96,6 +96,8 @@ Avoid generic AI imagery unless it is genuinely appropriate to the idea.
 
 Do not automatically use AI brains, neural networks, glowing circuits, holograms, generic laptops, generic office scenes, floating dashboards, random 3D objects, rockets, lightbulbs, puzzle pieces, decorative squiggles or generic futuristic imagery.
 
+Also avoid the equally overused METAPHOR clichés — these show up just as often as the tech ones and read exactly as generic: a person standing at a cliff edge facing a landscape, a lone figure in a small boat on a stormy sea, a beam of light breaking through storm clouds onto someone below, a road or path dissolving into fog or the horizon, a person walking a tightrope, a maze representing confusion, someone climbing a mountain toward a summit. These are stock-photo shorthand for "challenge" or "uncertainty" and they are the first thing a generic AI marketing tool reaches for — find the idea's own specific, concrete visual instead of reaching for one of these.
+
 Brand colours and identity should be used intelligently, not mechanically.
 
 The visual concept should communicate the idea rather than simply decorate the text.
@@ -625,6 +627,12 @@ Do not copy this instruction set into the image prompt.
 
 Do not make the image generator decide the creative direction again — that decision is yours, made here.
 
+
+AVOID OVERUSED VISUAL CLICHÉS
+
+Do not automatically reach for: AI brains, neural networks, glowing circuits, holograms, generic laptops, generic office scenes, floating dashboards, random 3D objects, rockets, lightbulbs, puzzle pieces, decorative squiggles, generic futuristic imagery, a person at a cliff edge facing a landscape, a lone figure in a small boat on a stormy sea, a beam of light breaking through storm clouds onto someone below, a road dissolving into fog or the horizon, a person walking a tightrope, a maze representing confusion, or someone climbing toward a mountain summit.
+
+These are stock-photo shorthand for "technology" or "challenge/uncertainty" — they are the first thing a generic AI tool reaches for, and they are what makes content look like it could belong to any brand. Find the idea's own specific, concrete visual instead.
 
 FINAL CHECK
 
@@ -1255,11 +1263,21 @@ A carousel that spends every slide on hook + list items and reaches the end with
 
 Before planning individual slides, establish one visual concept for the entire carousel.
 
-Decide:
+Decide the MEDIUM FIRST, and state it explicitly and specifically — not "clean and modern," an actual rendering medium:
 
-- visual approach
+- photorealistic photography
+- flat vector illustration
+- painted / hand-illustrated
+- 3D render
+- collage / mixed media
+- or another specific medium that fits the idea
+
+This is a LOCKED decision. Every slide in this carousel must render in this exact medium — a carousel that opens as a photograph and switches to illustration by slide 3 reads as broken, not varied, even if each individual slide looks fine on its own. Write it as its own line so it cannot be missed or reinterpreted later: "MEDIUM: <your choice>".
+
+Then decide the rest:
+
 - visual world
-- imagery style
+- imagery style within that medium
 - main subject or character
 - environment
 - composition language
@@ -1268,7 +1286,7 @@ Decide:
 - typography approach
 - how visual progression will happen across slides
 
-The slides may vary in composition, but they must clearly belong to the same creative world.
+The slides may vary in composition, but they must clearly belong to the same creative world AND the same medium.
 
 Think:
 
@@ -1433,6 +1451,12 @@ Do not make the image generator decide the creative concept again.
 The creative decisions have already been made by you.
 
 
+AVOID OVERUSED VISUAL CLICHÉS
+
+Do not automatically reach for: AI brains, neural networks, glowing circuits, holograms, generic laptops, generic office scenes, floating dashboards, random 3D objects, rockets, lightbulbs, puzzle pieces, decorative squiggles, generic futuristic imagery, a person at a cliff edge facing a landscape, a lone figure in a small boat on a stormy sea, a beam of light breaking through storm clouds onto someone below, a road dissolving into fog or the horizon, a person walking a tightrope, a maze representing confusion, or someone climbing toward a mountain summit.
+
+These are stock-photo shorthand for "technology" or "challenge/uncertainty" — they are the first thing a generic AI tool reaches for, and they are what makes content look like it could belong to any brand. Find the idea's own specific, concrete visual instead.
+
 11. FINAL CREATIVE CHECK
 
 Before returning the result, internally verify:
@@ -1452,6 +1476,7 @@ Return ONLY valid JSON:
 {
   "creativeConcept": "",
   "narrativeApproach": "",
+  "medium": "One exact rendering medium — e.g. 'photorealistic photography', 'flat vector illustration', '3D render' — held for every slide.",
   "visualSystem": "",
   "swipeMechanism": "",
   "slides": [
@@ -1479,11 +1504,17 @@ Return ONLY valid JSON:
     stage: 'carousel-v2',
     variables: {
       carouselPlan: "The master plan's concept, narrative, visual system and every slide's role",
+      medium: "The one rendering medium locked for the whole carousel (photography, illustration, 3D render, etc) — every slide must match it exactly",
       slide: "This slide's own plan — role, purpose, concept, image text, draft prompt",
       slideAssets: 'The specific assets selected for this slide',
       brandAssets: 'A short brand note — palette, logo availability, tone'
     },
     template: `You are the Image Art Director executing a social media carousel that has already been creatively planned.
+
+MEDIUM (LOCKED — see the plan's own "medium" field below; this is not a suggestion):
+{{medium}}
+
+Every single slide renders in exactly this medium. Do not switch to photography if this says illustration. Do not switch to illustration, painting or 3D render if this says photography. This is the single most common way a carousel breaks — slide 1 looks like a photo, slide 3 looks like a painting — and it is checked for explicitly below.
 
 MASTER CAROUSEL PLAN:
 {{carouselPlan}}
@@ -1517,6 +1548,7 @@ Follow the master visual concept, visual world and continuity established by the
 
 Maintain consistency with the other slides in:
 
+- medium (the single most important one — see the locked instruction above)
 - visual style
 - character appearance
 - environment
@@ -1528,6 +1560,8 @@ Maintain consistency with the other slides in:
 - recurring visual elements
 
 If the slide is part of a transformation or story, preserve the visual continuity specified in the plan.
+
+Before finalizing this slide's prompt, check: does the medium named above still hold? If the slide concept seems to call for a different medium than the one locked above, follow the locked medium anyway and adapt the concept to fit it — do not silently switch mediums to fit the concept.
 
 
 ASSETS
