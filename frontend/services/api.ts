@@ -3938,6 +3938,21 @@ export const aiMemoryAPI = {
 
   reuseMemory: async (type: 'campaign' | 'video', id: string): Promise<any> => {
     return apiCall<any>(`/ai-memory/reuse/${type}/${encodeURIComponent(id)}`, { method: 'POST' }, true);
+  },
+
+  updateNote: async (noteId: string, updates: { text?: string; category?: string }): Promise<any> => {
+    return apiCall<any>(`/ai-memory/notes/${encodeURIComponent(noteId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates)
+    }, true);
+  },
+
+  deleteNote: async (noteId: string): Promise<any> => {
+    return apiCall<any>(`/ai-memory/notes/${encodeURIComponent(noteId)}`, { method: 'DELETE' }, true);
+  },
+
+  distillNow: async (): Promise<any> => {
+    return apiCall<any>('/ai-memory/distill', { method: 'POST' }, true);
   }
 };
 

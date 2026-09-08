@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Brain, Database, Hash, Megaphone, PlayCircle, TrendingUp, Copy, RefreshCw, Loader2, ArrowRight } from 'lucide-react';
+import { Brain, Pencil, Trash2, RefreshCw, Loader2, ArrowRight, Check, X } from 'lucide-react';
 import { aiMemoryAPI } from '../services/api';
 import {
   GravityHero,
@@ -9,34 +9,89 @@ import {
   GravityButton,
 } from '../components/gravity';
 
-const StatCard: React.FC<{ icon: React.ElementType; label: string; value: string | number }> = ({ icon: Icon, label, value }) => {
-  // Counts earn the display size; a status string like "metadata_ready" would
-  // just overflow the card at 26px, so it drops to body size instead.
-  const isCount = typeof value === 'number' || /^\d+$/.test(String(value));
-  return (
-    <div className="p-5 rounded-xl border border-white/[0.06] bg-white/[0.02] min-w-0">
-      <div className="flex items-center justify-between gap-3">
-        <GravityLabel>{label}</GravityLabel>
-        <Icon className="w-4 h-4 text-[#F5A623] flex-shrink-0" />
-      </div>
-      <div
-        className={`mt-3 text-[#F5F4F1] truncate ${isCount ? 'text-[26px] font-serif-display leading-none' : 'text-[14px] font-semibold'}`}
-        title={String(value)}
-      >
-        {value}
-      </div>
-    </div>
-  );
+type LearnedNote = {
+  _id: string;
+  text: string;
+  category: 'copy' | 'hashtags' | 'cta' | 'visual' | 'timing' | 'format';
+  confidence: number;
+  updatedAt?: string;
+  createdAt?: string;
+};
+
+const CATEGORY_LABELS: Record<string, string> = {
+  copy: 'Copy',
+  hashtags: 'Hashtags',
+  cta: 'Calls to action',
+  visual: 'Visual style',
+  timing: 'Timing',
+  format: 'Format'
 };
 
 const Panel: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = '' }) => (
   <section className={`rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 ${className}`}>{children}</section>
 );
 
+const NoteRow: React.FC<{
+  note: LearnedNote;
+  onSave: (id: string, text: string) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
+}> = ({ note, onSave, onDelete }) => {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(note.text);
+  const [busy, setBusy] = useState(false);
+
+  const save = async () => {
+    if (!draft.trim() || draft.trim() === note.text) { setEditing(false); return; }
+    setBusy(true);
+    try {
+      await onSave(note._id, draft.trim());
+      setEditing(false);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="flex items-start gap-3 py-2.5 border-b border-white/[0.05] last:border-b-0">
+      <span className="mt-0.5 inline-flex items-center rounded-full border border-[#F5A623]/25 bg-[#F5A623]/[0.08] px-2 py-0.5 text-[10.5px] font-semibold text-[#F5A623] flex-shrink-0">
+        {CATEGORY_LABELS[note.category] || note.category}
+      </span>
+      {editing ? (
+        <div className="flex-1 flex items-center gap-2">
+          <input
+            type="text"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            className="flex-1 px-2.5 py-1.5 rounded-md bg-black/30 border border-white/[0.10] text-[13px] text-[#F5F4F1] outline-none focus:border-[#F5A623]/40"
+            autoFocus
+          />
+          <button onClick={save} disabled={busy} className="p-1.5 rounded-md text-emerald-400 hover:bg-white/[0.06] disabled:opacity-40">
+            {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+          </button>
+          <button onClick={() => { setDraft(note.text); setEditing(false); }} className="p-1.5 rounded-md text-white/40 hover:bg-white/[0.06]">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      ) : (
+        <>
+          <p className="flex-1 text-[13px] text-[#F5F4F1] leading-relaxed">{note.text}</p>
+          <button onClick={() => setEditing(true)} className="p-1.5 rounded-md text-white/40 hover:text-white hover:bg-white/[0.06] flex-shrink-0">
+            <Pencil className="w-3.5 h-3.5" />
+          </button>
+          <button onClick={() => onDelete(note._id)} className="p-1.5 rounded-md text-white/40 hover:text-red-400 hover:bg-white/[0.06] flex-shrink-0">
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </>
+      )}
+    </div>
+  );
+};
+
 const AIMemory: React.FC = () => {
   const [loading, setLoading] = useState(true);
+  const [distilling, setDistilling] = useState(false);
   const [data, setData] = useState<any>(null);
-  const [copied, setCopied] = useState(false);
+  const [statusMsg, setStatusMsg] = useState('');
 
   const load = async () => {
     setLoading(true);
@@ -52,13 +107,33 @@ const AIMemory: React.FC = () => {
     load();
   }, []);
 
-  const summary = data?.summary || {};
-  const bestHashtags = useMemo(() => summary.bestHashtags || [], [summary.bestHashtags]);
+  const notes: LearnedNote[] = useMemo(() => data?.brandMemory?.learnedNotes || [], [data]);
+  const notesUpdatedAt: string | null = data?.brandMemory?.learnedNotesUpdatedAt || null;
+  const performanceCount: number = data?.summary?.performanceMemories || 0;
 
-  const copyContext = async () => {
-    await navigator.clipboard.writeText(data?.reusableContext || '');
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1200);
+  const saveNote = async (id: string, text: string) => {
+    await aiMemoryAPI.updateNote(id, { text });
+    await load();
+  };
+
+  const deleteNote = async (id: string) => {
+    await aiMemoryAPI.deleteNote(id);
+    await load();
+  };
+
+  const refreshNow = async () => {
+    setDistilling(true);
+    setStatusMsg('');
+    try {
+      const res = await aiMemoryAPI.distillNow();
+      setStatusMsg(res.skipped ? 'No new performance data since the last update.' : 'Updated with the latest performance data.');
+      await load();
+    } catch (err: any) {
+      setStatusMsg(err?.message || 'Could not refresh.');
+    } finally {
+      setDistilling(false);
+      window.setTimeout(() => setStatusMsg(''), 4000);
+    }
   };
 
   if (loading) {
@@ -76,79 +151,51 @@ const AIMemory: React.FC = () => {
           align="left"
           eyebrow="AI Memory"
           headline={<>What Gravity has <GravityEmphasis>learned</GravityEmphasis></>}
-          subcopy="Create, store, learn, and reuse content intelligence across Nebulaa."
+          subcopy="A small, curated set of patterns learned from your real published-post performance — not a raw log."
           className="!mb-0"
         />
-        <GravityButton variant="ghost" onClick={load} className="flex-shrink-0">
-          <RefreshCw className="w-4 h-4 text-[#F5A623]" />
-          Refresh
+        <GravityButton variant="ghost" onClick={refreshNow} disabled={distilling} className="flex-shrink-0">
+          {distilling ? <Loader2 className="w-4 h-4 animate-spin text-[#F5A623]" /> : <RefreshCw className="w-4 h-4 text-[#F5A623]" />}
+          Refresh now
         </GravityButton>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-4">
-        <StatCard icon={Megaphone} label="Campaign memories" value={summary.campaignMemories || 0} />
-        <StatCard icon={PlayCircle} label="Video memories" value={summary.videoMemories || 0} />
-        <StatCard icon={TrendingUp} label="Performance records" value={summary.performanceMemories || 0} />
-        <StatCard icon={Database} label="Vector status" value={summary.embeddingReady?.status || 'ready'} />
-      </div>
-
-      <div className="grid gap-3 lg:grid-cols-3">
-        <Panel className="lg:col-span-2">
-          <div className="flex items-center justify-between gap-3 mb-4">
-            <GravityLabel gold>Brand Intelligence</GravityLabel>
-            <Brain className="w-4 h-4 text-[#F5A623]" />
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {[
-              ['Tone', summary.brandTone],
-              ['Writing', summary.writingStyle || 'learning'],
-              ['CTA style', summary.ctaStyle || 'learning'],
-              ['Visual style', summary.visualStyle || 'learning']
-            ].map(([label, value]) => (
-              <div key={label as string} className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3.5">
-                <GravityLabel>{label}</GravityLabel>
-                <div className="mt-1 text-[14px] font-semibold text-[#F5F4F1]">{value || 'learning'}</div>
-              </div>
-            ))}
-          </div>
-        </Panel>
-
-        <Panel>
-          <div className="flex items-center justify-between gap-3 mb-4">
-            <GravityLabel gold>Best Hashtags</GravityLabel>
-            <Hash className="w-4 h-4 text-[#F5A623]" />
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {bestHashtags.length ? bestHashtags.slice(0, 18).map((tag: string) => (
-              <span key={tag} className="inline-flex items-center gap-1 rounded-full border border-[#F5A623]/25 bg-[#F5A623]/[0.08] px-2.5 py-1 text-[12px] text-[#F5A623]">
-                <Hash className="w-3 h-3" />
-                {tag.replace(/^#/, '')}
-              </span>
-            )) : (
-              <p className="text-[12.5px] text-white/45">Hashtag memory will appear after generation and analytics.</p>
-            )}
-          </div>
-        </Panel>
-      </div>
+      {statusMsg && (
+        <div className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-4 py-2.5 text-[12.5px] text-white/70">
+          {statusMsg}
+        </div>
+      )}
 
       <Panel>
-        <div className="flex items-center justify-between gap-3 mb-4">
-          <GravityLabel gold>Reusable AI Context</GravityLabel>
-          <GravityButton variant="ghost" onClick={copyContext} className="!px-3 !py-1.5 !text-[12px]">
-            <Copy className="w-3.5 h-3.5" />
-            {copied ? 'Copied' : 'Copy'}
-          </GravityButton>
+        <div className="flex items-center justify-between gap-3 mb-1">
+          <div className="flex items-center gap-2">
+            <Brain className="w-4 h-4 text-[#F5A623]" />
+            <GravityLabel gold>Learned patterns</GravityLabel>
+          </div>
+          <span className="text-[11px] text-white/40">
+            Based on {performanceCount} tracked post{performanceCount === 1 ? '' : 's'}
+            {notesUpdatedAt ? ` · last updated ${new Date(notesUpdatedAt).toLocaleDateString()}` : ''}
+          </span>
         </div>
-        <pre className="max-h-56 overflow-auto rounded-lg border border-white/[0.06] bg-black/30 p-4 text-[12.5px] leading-relaxed text-white/70 whitespace-pre-wrap">
-          {data?.reusableContext || 'No memory context generated yet.'}
-        </pre>
+        {notes.length ? (
+          <div className="mt-3">
+            {notes.map((note) => (
+              <NoteRow key={note._id} note={note} onSave={saveNote} onDelete={deleteNote} />
+            ))}
+          </div>
+        ) : (
+          <p className="mt-3 text-[13px] text-white/45">
+            Nothing learned yet — this fills in once enough published posts have been tracked
+            for at least a few days. Try "Refresh now" after some posts have been live for a while.
+          </p>
+        )}
       </Panel>
 
       <div className="grid gap-3 md:grid-cols-3">
         {[
           { to: '/ai-history', label: 'Campaign history' },
           { to: '/ai-history?type=video', label: 'Video history' },
-          { to: '/ai-performance', label: 'Performance learning' },
+          { to: '/ai-performance', label: 'Performance log' },
         ].map((link) => (
           <Link
             key={link.to}
