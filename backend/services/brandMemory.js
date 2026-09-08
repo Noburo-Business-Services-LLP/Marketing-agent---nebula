@@ -1,3 +1,4 @@
+const AIBrandMemory = require('../models/AIBrandMemory');
 const User = require('../models/User');
 const Product = require('../models/Product');
 const BrandAsset = require('../models/BrandAsset');
@@ -78,6 +79,21 @@ async function buildBrandMemoryBlock(userId) {
   lines.push('');
   lines.push('PEOPLE (founders, team, customers)');
   lines.push('- Not yet supported in Gravity. Do not depict a specific real founder, team member or customer — if a person is needed, keep them generic and unbranded.');
+
+  // Layer 2 of the AI memory system: a small, curated set of patterns
+  // distilled from real published-post performance (see
+  // services/memoryDistillation.js). Deliberately the ONLY memory-derived
+  // content read into generation — never the raw performance log directly.
+  const learnedMemory = await AIBrandMemory.findOne({ userId }).select('learnedNotes').lean();
+  const notes = (learnedMemory?.learnedNotes || [])
+    .slice()
+    .sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt))
+    .slice(0, 10);
+  if (notes.length) {
+    lines.push('');
+    lines.push("WHAT'S WORKED BEFORE (learned from published post performance)");
+    notes.forEach((n) => lines.push(`- ${n.text}`));
+  }
 
   return lines.join('\n');
 }
