@@ -117,6 +117,7 @@ const snapshotScheduler = require('./services/snapshotScheduler');
 const { startCampaignScheduler } = require('./services/campaignScheduler');
 const { startContentCalendarScheduler } = require('./services/contentCalendarService');
 const { startPerformanceTrackerScheduler } = require('./services/performanceTracker');
+const { startMemoryDistillationScheduler } = require('./services/memoryDistillation');
 const { initializeSocketHub } = require('./services/socketHub');
 const { startInboxPolling } = require('./services/socialInboxService');
 
@@ -737,6 +738,13 @@ const startServer = async () => {
       startPerformanceTrackerScheduler();
     } catch (schedulerError) {
       console.warn('Performance tracker scheduler failed to start:', schedulerError.message);
+    }
+
+    // Start weekly AI memory distillation scheduler
+    try {
+      startMemoryDistillationScheduler();
+    } catch (schedulerError) {
+      console.warn('Memory distillation scheduler failed to start:', schedulerError.message);
     }
 
     // Initialize OTP email service
