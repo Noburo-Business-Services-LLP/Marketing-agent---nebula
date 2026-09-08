@@ -460,7 +460,7 @@ async function processDraftImageGenerationJob(job) {
         rememberCampaignGeneration({
           userId: draft.userId,
           campaignId: draft.campaignId || null,
-          action: draft.contentType === 'campaign' ? 'campaign_generation' : 'post_generation',
+          action: draft.contentType === 'campaign' ? 'campaign_generation' : 'image_generation',
           campaignName: draft.title || '',
           objective: draft.objective || '',
           platform: (draft.platforms || [])[0] || 'instagram',
