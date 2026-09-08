@@ -8,6 +8,7 @@ const AIVideoMemory = require('../models/AIVideoMemory');
 const AIContentPerformance = require('../models/AIContentPerformance');
 const { buildAIContext } = require('../services/aiContextBuilder');
 const { resolveOrganizationId } = require('../services/aiMemoryService');
+const { distillMemoryForUser } = require('../services/memoryDistillation');
 
 function userIdFromReq(req) {
   return req.user.userId || req.user.id || req.user._id;
@@ -147,6 +148,77 @@ router.post('/reuse/:type/:id', protect, async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Failed to reuse memory item', error: error.message });
+  }
+});
+
+router.patch('/notes/:noteId', protect, async (req, res) => {
+  try {
+    const userId = userIdFromReq(req);
+    const organizationId = resolveOrganizationId({ user: req.user, userId });
+    const { text, category } = req.body || {};
+
+    const setFields = {};
+    if (typeof text === 'string' && text.trim()) setFields['learnedNotes.$.text'] = text.trim();
+    if (['copy', 'hashtags', 'cta', 'visual', 'timing', 'format'].includes(category)) {
+      setFields['learnedNotes.$.category'] = category;
+    }
+    if (!Object.keys(setFields).length) {
+      return res.status(400).json({ success: false, message: 'Nothing to update' });
+    }
+    setFields['learnedNotes.$.updatedAt'] = new Date();
+
+    const updated = await AIBrandMemory.findOneAndUpdate(
+      { organizationId, userId, 'learnedNotes._id': req.params.noteId },
+      { $set: setFields },
+      { new: true }
+    ).lean();
+
+    if (!updated) {
+      return res.status(404).json({ success: false, message: 'Note not found' });
+    }
+    const note = updated.learnedNotes.find((n) => String(n._id) === req.params.noteId);
+    res.json({ success: true, note });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Failed to update note', error: error.message });
+  }
+});
+
+router.delete('/notes/:noteId', protect, async (req, res) => {
+  try {
+    const userId = userIdFromReq(req);
+    const organizationId = resolveOrganizationId({ user: req.user, userId });
+    const updated = await AIBrandMemory.findOneAndUpdate(
+      { organizationId, userId },
+      { $pull: { learnedNotes: { _id: req.params.noteId } } },
+      { new: true }
+    ).lean();
+    if (!updated) {
+      return res.status(404).json({ success: false, message: 'Memory not found' });
+    }
+    res.json({ success: true, learnedNotes: updated.learnedNotes || [] });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Failed to delete note', error: error.message });
+  }
+});
+
+router.post('/distill', protect, async (req, res) => {
+  try {
+    const userId = userIdFromReq(req);
+    const organizationId = resolveOrganizationId({ user: req.user, userId });
+    const notes = await distillMemoryForUser(userId, organizationId);
+    if (notes === null) {
+      const existing = await AIBrandMemory.findOne({ organizationId, userId }).select('learnedNotes learnedNotesUpdatedAt').lean();
+      return res.json({
+        success: true,
+        skipped: true,
+        message: 'No new performance data since the last update.',
+        learnedNotes: existing?.learnedNotes || [],
+        learnedNotesUpdatedAt: existing?.learnedNotesUpdatedAt || null
+      });
+    }
+    res.json({ success: true, skipped: false, learnedNotes: notes });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Failed to refresh memory', error: error.message });
   }
 });
 
