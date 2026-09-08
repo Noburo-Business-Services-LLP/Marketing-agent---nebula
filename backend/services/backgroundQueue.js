@@ -243,9 +243,42 @@ async function processDraftImageGenerationJob(job) {
     // image-to-image path so the generated poster mirrors the reference's
     // style, composition, and layout. Otherwise, plain text-to-image.
     const hasReference = typeof job.referenceImage === 'string' && job.referenceImage.trim().length > 0;
+    // "Regenerate with this exact prompt" — the user edited the resolved
+    // prompt shown on the draft and wants THIS text run, not a fresh
+    // Creative Director decision. Takes priority over both other paths:
+    // whatever concept the model would invent, the user has already
+    // supplied a specific replacement for it.
+    const hasPromptOverride = typeof job.promptOverride === 'string' && job.promptOverride.trim().length > 0;
     let imageResult;
 
-    if (hasReference) {
+    if (hasPromptOverride) {
+      const primaryLogo = await getPrimaryLogoAsset(draft.userId);
+      imageResult = await Promise.race([
+        generateCampaignImageNanoBanana(job.promptOverride.trim(), {
+          userId: draft.userId,
+          useRawPrompt: true,
+          aspectRatio: job.aspectRatio || '1:1',
+          brandName: user?.companyName || 'Brand',
+          industry: bp.industry || '',
+          tone: bp.tone || 'professional',
+          targetLanguage: normalizeLanguage(bp.contentLanguage),
+          imageText: draft.imageText || '',
+          logoReservedPosition: primaryLogo?.url ? primaryLogo.position : null
+        }),
+        timeoutPromise
+      ]);
+      if (imageResult?.imageUrl && primaryLogo?.url) {
+        imageResult.imageUrl = await overlayBrandLogoIfPresent(imageResult.imageUrl, {
+          logoUrl: primaryLogo.url,
+          position: primaryLogo.position,
+          size: primaryLogo.size
+        });
+      }
+      // The prompt that produced THIS image is now the edited one — record
+      // it as such, so the next time someone opens this draft they see what
+      // actually made the picture in front of them, not the original.
+      if (imageResult?.imageUrl) draft.imagePromptResolved = job.promptOverride.trim();
+    } else if (hasReference) {
       // generatePosterFromReference expects: (referenceBase64, contentString, options)
       // and returns { success, imageBase64, error } — raw base64, NOT a URL.
       // So we upload the returned base64 to Cloudinary and hand back a { imageUrl }

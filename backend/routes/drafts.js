@@ -619,6 +619,12 @@ router.post('/:id/retry-image', protect, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Draft not found' });
     }
 
+    // Optional: regenerate with THIS exact prompt instead of a fresh
+    // Creative Director decision. The draft's own imagePromptResolved is
+    // what the UI shows and lets someone edit — round-tripped back here
+    // when they want to try their edit rather than roll the dice again.
+    const promptOverride = typeof req.body?.prompt === 'string' ? req.body.prompt.trim() : '';
+
     draft.status = 'processing';
     draft.errorMessage = '';
     await draft.save();
@@ -627,7 +633,8 @@ router.post('/:id/retry-image', protect, async (req, res) => {
     backgroundQueue.enqueue({
       type: draft.contentType === 'campaign' ? 'generate_campaign_image' : 'generate_post_image',
       draftId: draft._id,
-      aspectRatio: '1:1'
+      aspectRatio: '1:1',
+      promptOverride: promptOverride || undefined
     });
 
     res.status(200).json({ success: true, message: 'Requeued draft for image generation', draft });

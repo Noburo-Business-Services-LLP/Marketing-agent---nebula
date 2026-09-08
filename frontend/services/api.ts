@@ -4354,9 +4354,13 @@ export const draftsAPI = {
     }, true);
   },
 
-  retryImageGeneration: async (id: string): Promise<{ success: boolean; draft: Draft }> => {
+  // `prompt`, when given, regenerates with that exact text instead of a
+  // fresh Creative Director decision — the "edit the prompt, try again"
+  // loop rather than "reroll and hope."
+  retryImageGeneration: async (id: string, prompt?: string): Promise<{ success: boolean; draft: Draft }> => {
     return apiCall(`/drafts/${encodeURIComponent(id)}/retry-image`, {
-      method: 'POST'
+      method: 'POST',
+      body: prompt ? JSON.stringify({ prompt }) : undefined
     }, true);
   }
 };

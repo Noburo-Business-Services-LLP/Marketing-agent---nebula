@@ -275,10 +275,10 @@ const GravityApprove: React.FC = () => {
     }
   };
 
-  const redoDraft = async (draft: any) => {
+  const redoDraft = async (draft: any, promptOverride?: string) => {
     if (!draft?._id) return;
     try {
-      await draftsAPI.retryImageGeneration(String(draft._id));
+      await draftsAPI.retryImageGeneration(String(draft._id), promptOverride);
       await loadDrafts();
     } catch (e: any) {
       setError(e?.message || 'Failed to regenerate.');
@@ -292,10 +292,21 @@ const GravityApprove: React.FC = () => {
     try { await approveDraft(current); } catch { /* error already set */ } finally { setBusy(false); }
   };
 
+  // What was actually sent to the image model for the CURRENT post — kept
+  // in sync as index changes (unlike a modal, this page stays mounted while
+  // you page through the whole queue). Editable: Regenerate sends whatever
+  // is here, so leaving it means "try this again," editing it means "try
+  // this specific change," and clearing it hands the idea back to the
+  // Creative Director for a fresh concept.
+  const [promptDraft, setPromptDraft] = useState('');
+  useEffect(() => {
+    setPromptDraft(current?.imagePromptResolved || '');
+  }, [current?._id]);
+
   const handleRedo = async () => {
     if (!current) return;
     setBusy(true);
-    try { await redoDraft(current); } catch { /* error already set */ } finally { setBusy(false); }
+    try { await redoDraft(current, promptDraft.trim() || undefined); } catch { /* error already set */ } finally { setBusy(false); }
   };
 
   // Grid-card versions — track busy state per-card instead of the single
@@ -590,7 +601,7 @@ const GravityApprove: React.FC = () => {
                     <button
                       onClick={(e) => handleGridRedo(d, e)}
                       disabled={isBusy || processing}
-                      title="Redo"
+                      title="Regenerate"
                       className="w-8 h-8 flex items-center justify-center rounded-md border border-white/[0.10] text-white/60 hover:text-white/90 hover:bg-white/[0.05] disabled:opacity-30"
                     >
                       <RotateCcw className="w-3 h-3" />
@@ -614,13 +625,13 @@ const GravityApprove: React.FC = () => {
                 <AlertCircle className="w-8 h-8 text-red-400/70" />
                 <div className="text-[13px] font-semibold text-[#F5F4F1]">Image generation failed</div>
                 <div className="text-[11.5px] text-white/50 max-w-[260px] leading-relaxed">
-                  {current?.errorMessage || 'Something went wrong. Click Redo to try again.'}
+                  {current?.errorMessage || 'Something went wrong. Click Regenerate to try again.'}
                 </div>
                 <button
                   onClick={handleRedo}
                   className="mt-2 h-8 px-3 rounded-md bg-white/[0.06] hover:bg-white/[0.12] text-[12px] font-semibold text-[#F5F4F1]"
                 >
-                  Retry now
+                  Regenerate
                 </button>
               </div>
             ) : (
@@ -683,7 +694,7 @@ const GravityApprove: React.FC = () => {
             </dd>
           </dl>
 
-          <div className="border-t border-white/[0.06] pt-5 mb-8">
+          <div className="border-t border-white/[0.06] pt-5 mb-6">
             <div className="gravity-label mb-3">Caption</div>
             <p className="text-[14px] text-[#F5F4F1] leading-relaxed whitespace-pre-line mb-3">
               {captionBody || <span className="text-white/40">No caption yet.</span>}
@@ -697,6 +708,28 @@ const GravityApprove: React.FC = () => {
             )}
           </div>
 
+          {/* What was actually sent to the image model — editable, so
+              Regenerate means "try this specific change" instead of "reroll
+              and hope." Clearing it hands the idea back to the Creative
+              Director for a fresh concept. */}
+          <div className="border-t border-white/[0.06] pt-5 mb-8">
+            <div className="gravity-label mb-3">Prompt</div>
+            <textarea
+              value={promptDraft}
+              onChange={(e) => setPromptDraft(e.target.value)}
+              placeholder={current?.imagePromptResolved ? '' : 'No resolved prompt was recorded for this image. Leave blank to let the Creative Director choose a fresh concept, or write one to use exactly.'}
+              rows={5}
+              className="w-full p-3 rounded-lg bg-white/[0.03] border border-white/[0.08] text-[12px] leading-relaxed text-white/75 font-mono outline-none focus:border-[#F5A623]/40 resize-y placeholder:text-white/25 placeholder:font-sans"
+            />
+            <p className="text-[10.5px] text-white/30 mt-1.5">
+              {promptDraft.trim() && promptDraft.trim() !== (current?.imagePromptResolved || '').trim()
+                ? 'Edited — Regenerate will use this exact text.'
+                : promptDraft.trim()
+                  ? 'Regenerate will use this exact text again.'
+                  : 'Empty — Regenerate will ask the Creative Director for a new concept.'}
+            </p>
+          </div>
+
           {/* Actions — bottom right */}
           <div className="mt-auto flex items-center justify-end gap-3">
             <button
@@ -705,7 +738,7 @@ const GravityApprove: React.FC = () => {
               className="flex items-center gap-2 h-11 px-5 rounded-lg border border-white/[0.10] hover:border-white/25 hover:bg-white/[0.03] text-[#F5F4F1] text-[13.5px] font-medium disabled:opacity-40"
             >
               <RotateCcw className="w-3.5 h-3.5" />
-              Redo
+              Regenerate
             </button>
             <button
               onClick={handleApprove}

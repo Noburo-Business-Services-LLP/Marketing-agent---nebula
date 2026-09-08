@@ -85,13 +85,17 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [isRejecting, setIsRejecting] = useState(false);
   const [isRetryingImage, setIsRetryingImage] = useState(false);
+  // What the model was actually told to draw this. Editable — leave it as
+  // Gravity wrote it, tweak one detail, or clear it entirely to hand the
+  // idea back to the Creative Director for a fresh concept.
+  const [promptDraft, setPromptDraft] = useState(draft.imagePromptResolved || '');
 
   const handleRetryImage = async () => {
     setIsRetryingImage(true);
     setErrorMsg('');
     setSuccessMsg('');
     try {
-      await draftsAPI.retryImageGeneration(draft._id);
+      await draftsAPI.retryImageGeneration(draft._id, promptDraft.trim() || undefined);
       setSuccessMsg('Re-queued image generation in background!');
       setTimeout(() => {
         onSuccess();
@@ -323,7 +327,7 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
                     className="mt-1 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-[#F5A623] text-black text-[12px] font-semibold hover:bg-[#ffb833] disabled:opacity-50"
                   >
                     {isRetryingImage ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
-                    Try again
+                    Regenerate
                   </button>
                 </div>
               ) : imageUrl ? (
@@ -333,6 +337,30 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
               )}
             </div>
 
+            {/* What was actually sent to the image model — editable, so
+                "regenerate" means "try this specific change" instead of
+                "reroll and hope." Empty box on Regenerate hands the idea
+                back to the Creative Director for a fresh concept. */}
+            {draft.status !== 'processing' && (
+              <div className="mt-3">
+                <label className="gravity-label block mb-1.5">Prompt</label>
+                <textarea
+                  value={promptDraft}
+                  onChange={(e) => setPromptDraft(e.target.value)}
+                  placeholder={draft.imagePromptResolved ? '' : 'No resolved prompt was recorded for this image. Leave blank to let the Creative Director choose a fresh concept, or write one to use exactly.'}
+                  rows={5}
+                  className="w-full p-3 rounded-lg bg-white/[0.03] border border-white/[0.08] text-[12px] leading-relaxed text-white/75 font-mono outline-none focus:border-[#F5A623]/40 resize-y placeholder:text-white/25 placeholder:font-sans"
+                />
+                <p className="text-[10.5px] text-white/30 mt-1">
+                  {promptDraft.trim() && promptDraft.trim() !== (draft.imagePromptResolved || '').trim()
+                    ? 'Edited — Regenerate will use this exact text.'
+                    : promptDraft.trim()
+                      ? 'Regenerate will use this exact text again.'
+                      : 'Empty — Regenerate will ask the Creative Director for a new concept.'}
+                </p>
+              </div>
+            )}
+
             {imageUrl && draft.status !== 'processing' && (
               <button
                 type="button"
@@ -341,7 +369,7 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
                 className="mt-3 w-full inline-flex items-center justify-center gap-2 h-11 rounded-xl border border-white/[0.10] text-[13px] font-semibold text-white/70 hover:text-white hover:border-white/25 hover:bg-white/[0.03] transition-colors disabled:opacity-40"
               >
                 {isRetryingImage ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
-                Regenerate artwork
+                Regenerate
               </button>
             )}
           </div>
