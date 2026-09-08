@@ -375,10 +375,12 @@ const GravityCreate: React.FC = () => {
     setActionBusy(d._id);
     setError(null);
     try {
-      await draftsAPI.updateDraft(d._id, { imagePrompt: promptDraft });
-      await draftsAPI.retryImageGeneration(d._id);
+      // Send the edited text as a raw override — the image model uses it
+      // verbatim, skipping the content-writing and Creative Director passes
+      // that would otherwise reinterpret it into something else.
+      await draftsAPI.retryImageGeneration(d._id, promptDraft);
       setResults((prev) => prev.map((x: any) =>
-        x._id === d._id ? { ...x, status: 'processing', imageUrl: '', imagePrompt: promptDraft } : x));
+        x._id === d._id ? { ...x, status: 'processing', imageUrl: '', imagePromptResolved: promptDraft } : x));
       setPromptOpenFor('');
     } catch (e: any) {
       setError(e?.message || 'Could not regenerate');
@@ -1350,7 +1352,7 @@ const GravityCreate: React.FC = () => {
                                 <IconAction label="See the prompt" onClick={() => openPrompt(d)}>
                                   <Code2 className="w-3.5 h-3.5" />
                                 </IconAction>
-                                <IconAction label="Regenerate image" onClick={() => regenerateImage(d)} disabled={busy || processing}>
+                                <IconAction label="Regenerate" onClick={() => regenerateImage(d)} disabled={busy || processing}>
                                   <RotateCcw className="w-3.5 h-3.5" />
                                 </IconAction>
                                 <IconAction label="Delete this post" onClick={() => discard(d)} disabled={busy} danger>

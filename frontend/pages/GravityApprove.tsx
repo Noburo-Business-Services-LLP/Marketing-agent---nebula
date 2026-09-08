@@ -563,9 +563,9 @@ const GravityApprove: React.FC = () => {
                 onClick={() => openInSingleView(d._id)}
                 className="group relative rounded-xl border border-white/[0.08] bg-white/[0.02] overflow-hidden cursor-pointer transition-all duration-200 hover:border-[#F5A623]/50 hover:bg-white/[0.04]"
               >
-                <div className="relative bg-black aspect-square overflow-hidden">
+                <div className="relative bg-black aspect-[4/5] overflow-hidden">
                   {img ? (
-                    <img src={img} alt={d.title || 'Post'} className="w-full h-full object-cover" />
+                    <img src={img} alt={d.title || 'Post'} className="w-full h-full object-contain" />
                   ) : failed ? (
                     <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 px-3 text-center">
                       <AlertCircle className="w-5 h-5 text-red-400/70" />
@@ -619,7 +619,7 @@ const GravityApprove: React.FC = () => {
           <div className="absolute inset-[-20px] rounded-3xl blur-3xl opacity-70" style={{ background: 'radial-gradient(60% 55% at 50% 50%, rgba(245,166,35,0.16), transparent 70%)' }} />
           <div className="relative w-[380px] aspect-[4/5] rounded-2xl bg-[#151515] border border-white/[0.06] overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.6)]">
             {imageUrl ? (
-              <img src={imageUrl} alt={current?.title || 'draft preview'} className="w-full h-full object-cover" />
+              <img src={imageUrl} alt={current?.title || 'draft preview'} className="w-full h-full object-contain" />
             ) : String(current?.status || '').toLowerCase() === 'failed' ? (
               <div className="w-full h-full bg-gradient-to-br from-red-950/20 to-white/[0.01] flex flex-col items-center justify-center gap-3 px-6 text-center">
                 <AlertCircle className="w-8 h-8 text-red-400/70" />
