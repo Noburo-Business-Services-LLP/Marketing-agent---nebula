@@ -181,6 +181,61 @@ function calendarMonth(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 }
 
+/** "2026-09" -> 30. The actual day count for that specific month, not a
+ * guess — used everywhere this file used to hardcode 30 regardless of which
+ * month was actually being planned, which silently dropped day 31 in every
+ * 31-day month and left February referencing two days that don't exist. */
+function daysInMonth(monthStr) {
+  const [y, m] = String(monthStr || '').split('-').map(Number);
+  if (!y || !m) return 30;
+  return new Date(y, m, 0).getDate();
+}
+
+/** Monday of the real calendar week containing this date, normalized to
+ * midnight. Mirrors the exact logic the Schedule grid (GravityCalendar.tsx)
+ * uses on the frontend, so a "week" means the same thing in both places. */
+function startOfMondayWeek(d) {
+  const c = new Date(d);
+  c.setHours(0, 0, 0, 0);
+  const dow = c.getDay(); // 0=Sun..6=Sat
+  const diff = dow === 0 ? -6 : 1 - dow;
+  c.setDate(c.getDate() + diff);
+  return c;
+}
+
+/**
+ * Groups items into REAL calendar weeks (Monday-Sunday) instead of the
+ * fixed 8/8/8/6 buckets this used to use — a scheme with no relationship to
+ * actual dates, which is why some "weeks" showed 8 items and others 6. Each
+ * item's `day` (1-based within the month) is resolved to a real Date, and
+ * items are grouped by which Monday-anchored week that date falls in. A
+ * week that straddles a month boundary will legitimately have fewer than 7
+ * items in this month's list (the rest belong to the adjacent month's own
+ * plan) — that's correct, not a bug, the way a real calendar works.
+ */
+function groupIntoRealWeeks(items, monthStr) {
+  const [y, m] = String(monthStr || '').split('-').map(Number);
+  if (!y || !m) {
+    // No usable month context — fall back to plain chunks of 7 rather than
+    // the old 8/8/8/6 scheme, so this degrades gracefully instead of
+    // reintroducing the bug being fixed.
+    const rows = [];
+    for (let i = 0; i < items.length; i += 7) rows.push(items.slice(i, i + 7));
+    return rows.map((weekItems, i) => ({ weekNumber: i + 1, items: weekItems }));
+  }
+
+  const buckets = new Map(); // weekStart ISO date -> items
+  for (const item of items) {
+    const date = new Date(y, m - 1, item.day);
+    const weekStart = startOfMondayWeek(date).toISOString();
+    if (!buckets.has(weekStart)) buckets.set(weekStart, []);
+    buckets.get(weekStart).push(item);
+  }
+
+  const orderedStarts = Array.from(buckets.keys()).sort();
+  return orderedStarts.map((start, i) => ({ weekNumber: i + 1, items: buckets.get(start) }));
+}
+
 async function llmRouter(prompt) {
   // The monthly plan and the cover's theme-naming pass both go through
   // here — copy/planning text, so OpenAI first, Gemini as the fallback.
@@ -236,7 +291,7 @@ function tamilFallbackHeadline(day, businessName, heroProduct) {
   return templates[(day - 1) % templates.length];
 }
 
-function fallbackCalendar(userProfile = {}) {
+function fallbackCalendar(userProfile = {}, month = null) {
   const profile = getBusinessProfile(userProfile);
   const businessName = profile.businessName || profile.name || userProfile.companyName || 'Your Business';
   const heroProduct = profile.heroProduct || profile.niche || 'your offer';
@@ -248,7 +303,8 @@ function fallbackCalendar(userProfile = {}) {
   const pillars = ['education', 'product', 'social proof', 'behind the scenes', 'offer'];
   const objectives = ['awareness', 'engagement', 'leads', 'sales', 'community'];
   let otherIndex = 0;
-  const items = Array.from({ length: 30 }, (_, index) => {
+  const totalDays = daysInMonth(month);
+  const items = Array.from({ length: totalDays }, (_, index) => {
     const day = index + 1;
     const isReel = REEL_DAYS.includes(day);
     const format = isReel ? 'reel' : otherFormats[otherIndex++ % otherFormats.length];
@@ -273,21 +329,19 @@ function fallbackCalendar(userProfile = {}) {
   });
 
   return {
-    weeks: [1, 2, 3, 4].map((weekNumber) => ({
-      weekNumber,
-      items: items.slice((weekNumber - 1) * 8, weekNumber === 4 ? 30 : weekNumber * 8)
-    }))
+    weeks: groupIntoRealWeeks(items, month)
   };
 }
 
-function normalizeCalendarItems(rawCalendar, userProfile = {}) {
-  const fallback = fallbackCalendar(userProfile);
+function normalizeCalendarItems(rawCalendar, userProfile = {}, month = null) {
+  const fallback = fallbackCalendar(userProfile, month);
   const rawWeeks = Array.isArray(rawCalendar?.weeks) ? rawCalendar.weeks : fallback.weeks;
   const flat = Array.isArray(rawCalendar)
     ? rawCalendar
     : rawWeeks.flatMap((week) => Array.isArray(week?.items) ? week.items : []);
   const fallbackFlat = fallback.weeks.flatMap((week) => week.items);
-  const items = Array.from({ length: 30 }, (_, index) => {
+  const totalDays = daysInMonth(month);
+  const items = Array.from({ length: totalDays }, (_, index) => {
     const raw = flat[index] || fallbackFlat[index];
     return {
       day: index + 1,
@@ -348,10 +402,7 @@ function normalizeCalendarItems(rawCalendar, userProfile = {}) {
     keep.add(index);
   }
 
-  return [1, 2, 3, 4].map((weekNumber) => ({
-    weekNumber,
-    items: items.slice((weekNumber - 1) * 8, weekNumber === 4 ? 30 : weekNumber * 8)
-  }));
+  return groupIntoRealWeeks(items, month);
 }
 
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
@@ -482,7 +533,7 @@ async function generateMonthlyCalendar(userProfile = {}, targetMonth = null, { l
     aiCalendar = parseGeminiJSON(response);
   } catch (error) {
     console.warn('[ContentCalendar] AI generation failed, using fallback:', error.message);
-    aiCalendar = fallbackCalendar(userProfile);
+    aiCalendar = fallbackCalendar(userProfile, targetMonth || calendarMonth());
   }
 
   const month = targetMonth || calendarMonth();
@@ -494,7 +545,7 @@ async function generateMonthlyCalendar(userProfile = {}, targetMonth = null, { l
     businessType: profile.businessVertical || profile.industry || '',
     language,
     month,
-    weeks: normalizeCalendarItems(aiCalendar, userProfile),
+    weeks: normalizeCalendarItems(aiCalendar, userProfile, month),
     generatedAt: new Date()
   };
 
