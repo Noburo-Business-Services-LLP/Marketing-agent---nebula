@@ -36,6 +36,9 @@ export interface BusinessProfile {
   contentLanguage?: ContentLanguage;
   contentRestrictions?: string;
   firstMonthContentAngles?: string;
+  // How much content the AI monthly planner generates. Forward-only —
+  // changing this reshapes next month's plan, never the current one.
+  contentCadence?: { postsPerDay?: number; reelsPerWeek?: number };
 }
 
 export interface User {

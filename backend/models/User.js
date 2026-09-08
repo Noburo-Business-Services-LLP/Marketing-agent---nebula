@@ -101,6 +101,15 @@ const userSchema = new mongoose.Schema({
     contentRestrictions: { type: String, default: '' },
     firstMonthContentAngles: { type: String, default: '' },
 
+    // How much content the AI monthly planner should generate. Forward-only:
+    // changing this reshapes next month's plan, never the current one — a
+    // CSM may already be mid-review on this month's posts, and rewriting a
+    // plan out from under them is worse than waiting a cycle.
+    contentCadence: {
+      postsPerDay: { type: Number, min: 1, max: 5, default: 1 },
+      reelsPerWeek: { type: Number, min: 0, max: 7, default: 1 }
+    },
+
     // Brand assets extracted from website
     brandAssets: {
       logoUrl: { type: String, default: '' },

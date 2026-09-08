@@ -8,7 +8,7 @@ const { callTextLLM } = require('./openAI');
 const CONTENT_CALENDAR_PROMPT = `
 You are a Senior Social Media Strategist, Brand Consultant, Content Marketing Expert, Consumer Psychologist, and Performance Marketing Specialist.
 
-Your task is to create a professional 30-day content calendar for any business.
+Your task is to create a professional {{TOTAL_DAYS}}-day content calendar for any business.
 
 OUTPUT FORMAT:
 Generate the content calendar in an Excel-ready JSON array with the following fields:
@@ -35,6 +35,8 @@ Target Audience: {{TARGET_AUDIENCE}}
 Business Goal: {{BUSINESS_GOAL}}
 Language: {{LANGUAGE}}
 Posting Frequency: {{POSTING_FREQUENCY}}
+Posts Per Day: {{POSTS_PER_DAY}}
+Reels This Month: {{MAX_REELS}}
 
 CONTENT OBJECTIVES:
 The content calendar should help achieve:
@@ -50,11 +52,14 @@ The content calendar should help achieve:
 - Community Building
 
 CONTENT RULES:
-1. Create exactly 30 days of content.
+1. Create exactly {{TOTAL_POSTS}} non-reel posts — {{POSTS_PER_DAY}} for each of the
+   {{TOTAL_DAYS}} days — PLUS {{MAX_REELS}} reels on top of that count, not instead
+   of it. Reels are additional content for their day, not a replacement for
+   that day's regular post(s).
 2. Mix Posters, Carousels, Reels, Campaigns properly.
-2a. Use EXACTLY 4 reels across the whole month — no more, no fewer.
-    Spread them out, roughly one per week, and reserve them for the
-    ideas that genuinely need motion. Every other day must be a
+2a. Use EXACTLY {{MAX_REELS}} reels across the whole month — no more, no fewer.
+    Spread them out roughly evenly across the weeks, and reserve them for
+    the ideas that genuinely need motion. Every non-reel entry must be a
     poster, carousel, story, or campaign.
 3. Avoid repetitive content.
 4. Every content must have a clear marketing objective.
@@ -106,15 +111,49 @@ IMPORTANT:
 Return ONLY valid JSON array.
 `;
 
-// Reels cost real money per item (Fal render + ElevenLabs voice + ffmpeg
-// merge), so a month is capped at this many regardless of what the model
-// returns. Enforced in normalizeCalendarItems, which every calendar passes
-// through — AI-generated and fallback alike.
-const MAX_REELS_PER_MONTH = 4;
-// Preferred reel days when we get to choose: one per week.
-const REEL_DAYS = [4, 11, 18, 25];
 // A format counts as a reel if it implies motion.
 const isReelFormat = (value = '') => /reel|video/i.test(String(value || ''));
+
+/**
+ * The account's own cadence, with safe defaults matching what everyone got
+ * before this was configurable (1 post/day, ~1 reel/week). Read from
+ * businessProfile.contentCadence — see models/User.js. Forward-only by
+ * construction: this is read fresh each time a NEW month is generated, so
+ * changing it in Settings reshapes next month's plan, never rewrites a
+ * month a CSM may already be mid-review on.
+ */
+function getContentCadence(userProfile = {}) {
+  const profile = getBusinessProfile(userProfile);
+  const cadence = profile.contentCadence || {};
+  const postsPerDay = Math.max(1, Math.min(5, Number(cadence.postsPerDay) || 1));
+  const reelsPerWeekRaw = cadence.reelsPerWeek;
+  const reelsPerWeek = Math.max(0, Math.min(7, reelsPerWeekRaw === undefined || reelsPerWeekRaw === null ? 1 : Number(reelsPerWeekRaw) || 0));
+  return { postsPerDay, reelsPerWeek };
+}
+
+/**
+ * Reels cost real money per item (Fal render + ElevenLabs voice + ffmpeg
+ * merge), so a month is capped at a specific count regardless of what the
+ * model returns — enforced in normalizeCalendarItems, which every calendar
+ * passes through. Previously a flat 4/month on 4 fixed days; now driven by
+ * the account's reelsPerWeek, spread evenly across the month's real weeks.
+ */
+function computeReelPlan(month, reelsPerWeek) {
+  const totalDays = daysInMonth(month);
+  const weeksInMonth = Math.ceil(totalDays / 7);
+  const maxReels = Math.max(0, Math.round((Number(reelsPerWeek) || 0) * weeksInMonth));
+  if (maxReels === 0) return { maxReels: 0, reelDays: [] };
+  const reelDays = new Set();
+  for (let i = 0; i < maxReels; i += 1) {
+    const day = Math.min(totalDays, Math.max(1, Math.round((i + 0.5) * totalDays / maxReels)));
+    reelDays.add(day);
+  }
+  // Rounding can collapse two anchors onto the same day when reelsPerWeek is
+  // large relative to the month — the top-up loop in normalizeCalendarItems
+  // already knows how to fill a shortfall against the real maxReels target,
+  // so under-producing anchors here is recovered there, not a silent loss.
+  return { maxReels, reelDays: Array.from(reelDays).sort((a, b) => a - b) };
+}
 
 // The regional languages the product supports, keyed by the value stored on
 // the user. Each may be requested on its own or blended with English via the
@@ -259,7 +298,7 @@ function replacePromptVariable(prompt, key, value) {
   return prompt.replaceAll(`{{${key}}}`, String(value || ''));
 }
 
-function calendarPrompt(userProfile = {}, languageOverride = '') {
+function calendarPrompt(userProfile = {}, month = null, languageOverride = '') {
   const profile = getBusinessProfile(userProfile);
   const language = languageOverride || normalizeLanguage(profile.language || profile.contentLanguage);
   const location = profile.location || profile.businessLocation || userProfile.location || '';
@@ -268,6 +307,11 @@ function calendarPrompt(userProfile = {}, languageOverride = '') {
   const industry = profile.businessVertical || profile.industry || '';
   const businessGoal = deriveBusinessGoal(profile);
 
+  const totalDays = daysInMonth(month);
+  const { postsPerDay, reelsPerWeek } = getContentCadence(userProfile);
+  const { maxReels } = computeReelPlan(month, reelsPerWeek);
+  const totalPosts = totalDays * postsPerDay;
+
   return [
     ['BUSINESS_NAME', businessName],
     ['INDUSTRY', industry],
@@ -275,7 +319,11 @@ function calendarPrompt(userProfile = {}, languageOverride = '') {
     ['TARGET_AUDIENCE', targetAudience],
     ['BUSINESS_GOAL', businessGoal],
     ['LANGUAGE', language],
-    ['POSTING_FREQUENCY', '30 Days']
+    ['POSTING_FREQUENCY', `${totalDays} Days`],
+    ['TOTAL_DAYS', totalDays],
+    ['POSTS_PER_DAY', postsPerDay],
+    ['TOTAL_POSTS', totalPosts],
+    ['MAX_REELS', maxReels]
   ].reduce((prompt, [key, value]) => replacePromptVariable(prompt, key, value), CONTENT_CALENDAR_PROMPT);
 }
 
@@ -296,18 +344,21 @@ function fallbackCalendar(userProfile = {}, month = null) {
   const businessName = profile.businessName || profile.name || userProfile.companyName || 'Your Business';
   const heroProduct = profile.heroProduct || profile.niche || 'your offer';
   const language = normalizeLanguage(profile.language || profile.contentLanguage);
-  // Reels are the expensive format (Fal + ElevenLabs + ffmpeg per item), so
-  // the month gets exactly MAX_REELS_PER_MONTH of them — one per week.
-  // Every other day cycles through the cheap formats.
   const otherFormats = ['post', 'carousel', 'story', 'campaign'];
   const pillars = ['education', 'product', 'social proof', 'behind the scenes', 'offer'];
   const objectives = ['awareness', 'engagement', 'leads', 'sales', 'community'];
-  let otherIndex = 0;
   const totalDays = daysInMonth(month);
-  const items = Array.from({ length: totalDays }, (_, index) => {
-    const day = index + 1;
-    const isReel = REEL_DAYS.includes(day);
-    const format = isReel ? 'reel' : otherFormats[otherIndex++ % otherFormats.length];
+  const { postsPerDay, reelsPerWeek } = getContentCadence(userProfile);
+  const { reelDays } = computeReelPlan(month, reelsPerWeek);
+
+  // Reels are additional to the day's regular post(s), not a replacement —
+  // see CONTENT_CALENDAR_PROMPT's rule 1. postsPerDay non-reel items per
+  // day, plus one reel item per entry in reelDays.
+  const totalPosts = totalDays * postsPerDay;
+  let otherIndex = 0;
+  const nonReelItems = Array.from({ length: totalPosts }, (_, index) => {
+    const day = Math.floor(index / postsPerDay) + 1;
+    const format = otherFormats[otherIndex++ % otherFormats.length];
     // Only Tamil fallback copy exists, so it covers Tamil (pure or mixed) and
     // English stands in for the rest — better than emitting Tamil headlines
     // to a Telugu or Hindi account.
@@ -321,88 +372,125 @@ function fallbackCalendar(userProfile = {}, month = null) {
       headline,
       creativeConcept: `Show ${heroProduct} through a ${pillars[index % pillars.length]} angle for the target customer.`,
       productNeeded: heroProduct,
-      shootType: isReel ? 'video' : 'photo',
+      shootType: 'photo',
       cta: index % 3 === 0 ? 'Book now' : index % 3 === 1 ? 'Message us' : 'Learn more',
       objective: objectives[index % objectives.length],
       status: 'draft'
     };
   });
 
+  const reelItems = reelDays.map((day, index) => {
+    const headline = /^Tamil/.test(language)
+      ? tamilFallbackHeadline(day, businessName, heroProduct)
+      : `${businessName}: ${heroProduct} reel for day ${day}`;
+    return {
+      day,
+      format: 'reel',
+      contentPillar: pillars[index % pillars.length],
+      headline,
+      creativeConcept: `Show ${heroProduct} through a short, motion-led reel for the target customer.`,
+      productNeeded: heroProduct,
+      shootType: 'video',
+      cta: 'Learn more',
+      objective: objectives[index % objectives.length],
+      status: 'draft'
+    };
+  });
+
   return {
-    weeks: groupIntoRealWeeks(items, month)
+    weeks: groupIntoRealWeeks([...nonReelItems, ...reelItems], month)
   };
 }
 
 function normalizeCalendarItems(rawCalendar, userProfile = {}, month = null) {
+  const totalDays = daysInMonth(month);
+  const { postsPerDay, reelsPerWeek } = getContentCadence(userProfile);
+  const { maxReels, reelDays } = computeReelPlan(month, reelsPerWeek);
+  const totalPosts = totalDays * postsPerDay;
+
   const fallback = fallbackCalendar(userProfile, month);
+  const fallbackFlat = fallback.weeks.flatMap((week) => week.items);
+  const fallbackNonReel = fallbackFlat.filter((it) => !isReelFormat(it.format));
+  const fallbackReel = fallbackFlat.filter((it) => isReelFormat(it.format));
+
   const rawWeeks = Array.isArray(rawCalendar?.weeks) ? rawCalendar.weeks : fallback.weeks;
   const flat = Array.isArray(rawCalendar)
     ? rawCalendar
     : rawWeeks.flatMap((week) => Array.isArray(week?.items) ? week.items : []);
-  const fallbackFlat = fallback.weeks.flatMap((week) => week.items);
-  const totalDays = daysInMonth(month);
-  const items = Array.from({ length: totalDays }, (_, index) => {
-    const raw = flat[index] || fallbackFlat[index];
-    return {
-      day: index + 1,
-      format: String(raw?.format || fallbackFlat[index].format || 'post').trim().toLowerCase(),
-      contentPillar: String(raw?.contentPillar || raw?.pillar || fallbackFlat[index].contentPillar || '').trim(),
-      headline: String(raw?.headline || fallbackFlat[index].headline || '').trim(),
-      creativeConcept: String(raw?.creativeConcept || raw?.concept || fallbackFlat[index].creativeConcept || '').trim(),
-      productNeeded: String(raw?.productNeeded || raw?.productServiceNeeded || fallbackFlat[index].productNeeded || '').trim(),
-      shootType: String(raw?.shootType || fallbackFlat[index].shootType || 'photo').trim(),
-      cta: String(raw?.cta || fallbackFlat[index].cta || 'Learn more').trim(),
-      objective: String(raw?.objective || fallbackFlat[index].objective || 'awareness').trim().toLowerCase(),
-      status: ['approved', 'rejected'].includes(String(raw?.status || '').toLowerCase()) ? String(raw.status).toLowerCase() : 'draft'
-    };
+
+  const normalizeOne = (raw, fb, day) => ({
+    day,
+    format: String(raw?.format || fb?.format || 'post').trim().toLowerCase(),
+    contentPillar: String(raw?.contentPillar || raw?.pillar || fb?.contentPillar || '').trim(),
+    headline: String(raw?.headline || fb?.headline || '').trim(),
+    creativeConcept: String(raw?.creativeConcept || raw?.concept || fb?.creativeConcept || '').trim(),
+    productNeeded: String(raw?.productNeeded || raw?.productServiceNeeded || fb?.productNeeded || '').trim(),
+    shootType: String(raw?.shootType || fb?.shootType || 'photo').trim(),
+    cta: String(raw?.cta || fb?.cta || 'Learn more').trim(),
+    objective: String(raw?.objective || fb?.objective || 'awareness').trim().toLowerCase(),
+    status: ['approved', 'rejected'].includes(String(raw?.status || '').toLowerCase()) ? String(raw.status).toLowerCase() : 'draft'
   });
 
-  // Hard cap on reels. The prompt asks for 4, but models drift and the reel
-  // path is the expensive one — so enforce it here rather than trust output.
-  const reelIndexes = items.reduce((acc, item, i) => (isReelFormat(item.format) ? [...acc, i] : acc), []);
-  const keep = new Set();
+  // The model was told reels are ADDITIONAL to the day's post(s), not
+  // slotted at a fixed position — so they can land anywhere in its array.
+  // Split by what each entry actually is rather than assuming position,
+  // the way the old code could when reels and posts shared one index space.
+  const rawReel = flat.filter((it) => isReelFormat(it?.format));
+  const rawNonReel = flat.filter((it) => !isReelFormat(it?.format));
 
-  if (reelIndexes.length > MAX_REELS_PER_MONTH) {
-    // Over-delivered. Rather than keeping the first N (which bunches them
-    // at the top of the month), keep whichever the model chose that sit
-    // closest to the preferred weekly slots, so spacing stays sane.
-    const pool = [...reelIndexes];
-    for (const day of REEL_DAYS) {
-      if (!pool.length || keep.size >= MAX_REELS_PER_MONTH) break;
+  // Non-reel posts: exactly totalPosts of them, postsPerDay per day. Day is
+  // assigned by position, not whatever the model wrote in `day` — the same
+  // defensive stance the old code took by indexing instead of trusting raw
+  // day numbers, now doing double duty to guarantee the right posts-per-day
+  // distribution regardless of model drift.
+  const nonReelItems = Array.from({ length: totalPosts }, (_, index) => {
+    const day = Math.floor(index / postsPerDay) + 1;
+    const fb = fallbackNonReel.length ? fallbackNonReel[index % fallbackNonReel.length] : null;
+    return normalizeOne(rawNonReel[index], fb, day);
+  });
+
+  // Reels: hard cap at maxReels, same reasoning as before (real money per
+  // item) — just driven by the account's cadence instead of a flat 4.
+  let reelItems = rawReel.map((raw, i) => {
+    const day = reelDays.length ? reelDays[i % reelDays.length] : 1;
+    const fb = fallbackReel.length ? fallbackReel[i % fallbackReel.length] : null;
+    return normalizeOne(raw, fb, day);
+  });
+
+  if (reelItems.length > maxReels) {
+    // Over-delivered (or maxReels is 0 and the model made some anyway).
+    // Keep whichever sit closest to the preferred days rather than the
+    // first N, so spacing stays sane; discard the rest entirely — a reel
+    // that doesn't make the cut does not get demoted to a post, since the
+    // model already used its "this is worth motion" judgment on it and a
+    // demoted concept described for video rarely works as a still image.
+    const pool = reelItems.map((_, i) => i);
+    const keep = new Set();
+    for (const day of reelDays) {
+      if (!pool.length || keep.size >= maxReels) break;
       let best = 0;
       for (let k = 1; k < pool.length; k += 1) {
-        if (Math.abs(pool[k] + 1 - day) < Math.abs(pool[best] + 1 - day)) best = k;
+        if (Math.abs(reelItems[pool[k]].day - day) < Math.abs(reelItems[pool[best]].day - day)) best = k;
       }
       keep.add(pool[best]);
       pool.splice(best, 1);
     }
-  } else {
-    reelIndexes.forEach((i) => keep.add(i));
-  }
-
-  for (const i of reelIndexes) {
-    if (keep.has(i)) {
-      items[i].format = 'reel';
-      items[i].shootType = 'video';
-    } else {
-      items[i].format = 'carousel';
-      items[i].shootType = 'photo';
+    reelItems = reelItems.filter((_, i) => keep.has(i));
+  } else if (reelItems.length < maxReels) {
+    // Under-delivered (including a model that returned zero). Top up on
+    // whichever preferred days aren't already spoken for.
+    const usedDays = new Set(reelItems.map((r) => r.day));
+    for (const day of reelDays) {
+      if (reelItems.length >= maxReels) break;
+      if (usedDays.has(day)) continue;
+      const fb = fallbackReel.length ? fallbackReel[reelItems.length % fallbackReel.length] : null;
+      reelItems.push(normalizeOne(null, fb, day));
+      usedDays.add(day);
     }
   }
+  reelItems.forEach((item) => { item.format = 'reel'; item.shootType = 'video'; });
 
-  // Under-delivery is possible too (a model that returns zero reels). Top up
-  // on the preferred days, skipping any that are already reels.
-  for (const day of REEL_DAYS) {
-    if (keep.size >= MAX_REELS_PER_MONTH) break;
-    const index = day - 1;
-    const item = items[index];
-    if (!item || keep.has(index)) continue;
-    item.format = 'reel';
-    item.shootType = 'video';
-    keep.add(index);
-  }
-
-  return groupIntoRealWeeks(items, month);
+  return groupIntoRealWeeks([...nonReelItems, ...reelItems], month);
 }
 
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
@@ -527,16 +615,20 @@ async function generateMonthlyCalendar(userProfile = {}, targetMonth = null, { l
     languageOverride || profile.language || profile.contentLanguage
   );
 
+  // Resolved before the AI call, not after, so both the prompt (day count,
+  // posts/reels targets) and the fallback path agree on which month —
+  // and which cadence — they are planning for.
+  const month = targetMonth || calendarMonth();
+
   let aiCalendar = null;
   try {
-    const response = await llmRouter(calendarPrompt(userProfile, language));
+    const response = await llmRouter(calendarPrompt(userProfile, month, language));
     aiCalendar = parseGeminiJSON(response);
   } catch (error) {
     console.warn('[ContentCalendar] AI generation failed, using fallback:', error.message);
-    aiCalendar = fallbackCalendar(userProfile, targetMonth || calendarMonth());
+    aiCalendar = fallbackCalendar(userProfile, month);
   }
 
-  const month = targetMonth || calendarMonth();
   const calendarData = {
     userId,
     businessName: profile.businessName || profile.name || userProfile.companyName || '',
@@ -712,6 +804,7 @@ module.exports = {
   findItem,
   calendarMonth,
   normalizeCalendarItems,
-  MAX_REELS_PER_MONTH,
+  getContentCadence,
+  computeReelPlan,
   CONTENT_CALENDAR_PROMPT
 };

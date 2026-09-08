@@ -68,7 +68,8 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
     targetCustomerProfile: '', targetGender: '', geographicReach: '',
     customerType: '', pricePositioning: '', keyDifferentiator: '',
     brandStory: '', heroProduct: '', contentLanguage: '',
-    contentRestrictions: '', firstMonthContentAngles: ''
+    contentRestrictions: '', firstMonthContentAngles: '',
+    contentCadence: { postsPerDay: 1, reelsPerWeek: 1 }
   };
   const [bizData, setBizData] = useState<BusinessProfile>(emptyBiz);
   const [bizStatus, setBizStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -566,7 +567,30 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                             <Field label="Brand Voice">
                               <input className={inputCls} value={Array.isArray(bizData.brandVoice) ? bizData.brandVoice.join(', ') : (bizData.brandVoice || '')} onChange={e => handleBizChange('brandVoice', e.target.value)} placeholder="e.g. Professional, Witty" />
                             </Field>
+                            {/* How much the AI monthly planner generates. Forward-only —
+                                changing this reshapes next month's plan, not the current
+                                one, so a CSM mid-review never has their queue rewritten
+                                underneath them. */}
+                            <Field label="Posts Per Day">
+                              <input
+                                type="number" min={1} max={5} step={1}
+                                className={inputCls}
+                                value={bizData.contentCadence?.postsPerDay ?? 1}
+                                onChange={e => handleBizChange('contentCadence', { ...bizData.contentCadence, postsPerDay: Math.max(1, Math.min(5, Number(e.target.value) || 1)) })}
+                              />
+                            </Field>
+                            <Field label="Reels Per Week">
+                              <input
+                                type="number" min={0} max={7} step={1}
+                                className={inputCls}
+                                value={bizData.contentCadence?.reelsPerWeek ?? 1}
+                                onChange={e => handleBizChange('contentCadence', { ...bizData.contentCadence, reelsPerWeek: Math.max(0, Math.min(7, Number(e.target.value) || 0)) })}
+                              />
+                            </Field>
                           </div>
+                          <p className={`text-[11.5px] -mt-3 ${theme.textMuted}`}>
+                            Applies to next month's plan onward — the current month stays as already generated.
+                          </p>
 
                           <Field label="Marketing Goals (comma separated)">
                             <input className={inputCls} value={(bizData.marketingGoals || []).join(', ')} onChange={e => handleBizChange('marketingGoals', e.target.value.split(',').map(s => s.trim()).filter(Boolean))} placeholder="Brand Awareness, Sales, Leads" />
