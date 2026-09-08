@@ -144,6 +144,31 @@ Return ONLY a JSON object (no markdown, no backticks, no code blocks):
     });
     await campaign.save();
 
+    // Remember this generation in the AI Memory system (Layer 1 evidence).
+    // Fire-and-forget, same as the single-post path above.
+    try {
+      const { rememberCampaignGeneration } = require('./aiMemoryService');
+      rememberCampaignGeneration({
+        userId: calendar.userId,
+        campaignId: campaign._id,
+        action: 'campaign_generation',
+        campaignName: item.headline || '',
+        objective: item.objective || '',
+        platform: 'instagram',
+        platforms: ['instagram'],
+        tone: 'professional',
+        language: calendar.language || 'English',
+        prompt: calendarPromptUsed || parsed.imagePrompt || item.creativeConcept || '',
+        generatedCaptions: parsed.caption ? [parsed.caption] : [],
+        hashtags: parsed.hashtags || [],
+        cta: item.cta || '',
+        imagePrompts: (calendarPromptUsed || parsed.imagePrompt) ? [calendarPromptUsed || parsed.imagePrompt] : [],
+        generatedImages: imageUrl ? [imageUrl] : []
+      }).catch((err) => console.warn('[BackgroundQueue] AI memory write failed (non-fatal):', err.message));
+    } catch (memErr) {
+      console.warn('[BackgroundQueue] AI memory write failed (non-fatal):', memErr.message);
+    }
+
     // 5. Update calendar item
     item.generatedDraftId = draft._id;
     item.generatedCampaignId = campaign._id;
