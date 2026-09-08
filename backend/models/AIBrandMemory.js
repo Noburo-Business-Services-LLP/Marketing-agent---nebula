@@ -54,6 +54,26 @@ const aiBrandMemorySchema = new mongoose.Schema(
         examples: { type: [String], default: [] }
       }
     ],
+    // Layer 2 of the memory system: a small, curated, human-readable set of
+    // notes distilled from real published-post performance (AIContentPerformance)
+    // by the weekly distillation job. This — never the raw performance log —
+    // is what gets read into generation prompts and shown on the AI Memory
+    // page. See docs/superpowers/specs/2026-09-08-ai-memory-unification-design.md.
+    learnedNotes: [
+      {
+        text: { type: String, required: true, trim: true },
+        category: {
+          type: String,
+          enum: ['copy', 'hashtags', 'cta', 'visual', 'timing', 'format'],
+          default: 'copy'
+        },
+        sourceIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'AIContentPerformance' }],
+        confidence: { type: Number, default: 0.5, min: 0, max: 1 },
+        createdAt: { type: Date, default: Date.now },
+        updatedAt: { type: Date, default: Date.now }
+      }
+    ],
+    learnedNotesUpdatedAt: { type: Date, default: null },
     rawProfile: { type: mongoose.Schema.Types.Mixed, default: {} },
     reusableMetadata: { type: reusableMetadataSchema, default: () => ({ source: 'brand_memory' }) }
   },
