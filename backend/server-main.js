@@ -116,6 +116,7 @@ const notificationScheduler = require('./services/notificationScheduler');
 const snapshotScheduler = require('./services/snapshotScheduler');
 const { startCampaignScheduler } = require('./services/campaignScheduler');
 const { startContentCalendarScheduler } = require('./services/contentCalendarService');
+const { startPerformanceTrackerScheduler } = require('./services/performanceTracker');
 const { initializeSocketHub } = require('./services/socketHub');
 const { startInboxPolling } = require('./services/socialInboxService');
 
@@ -729,6 +730,13 @@ const startServer = async () => {
       startContentCalendarScheduler();
     } catch (schedulerError) {
       console.warn('Content calendar scheduler failed to start:', schedulerError.message);
+    }
+
+    // Start automatic performance-tracking scheduler (24h/3d/7d/2w/1m checks)
+    try {
+      startPerformanceTrackerScheduler();
+    } catch (schedulerError) {
+      console.warn('Performance tracker scheduler failed to start:', schedulerError.message);
     }
 
     // Initialize OTP email service
