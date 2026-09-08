@@ -491,6 +491,31 @@ class PersistentVideoGenerationQueue {
               } 
             }
           );
+
+          // Remember this generation in the AI Memory system (Layer 1
+          // evidence). Fire-and-forget — must never fail the video job.
+          if (jobDoc.userId && finalUrl) {
+            try {
+              const { rememberVideoGeneration } = require('./aiMemoryService');
+              const rawPayload = jobDoc.payload?.payload || {};
+              rememberVideoGeneration({
+                userId: jobDoc.userId,
+                jobId,
+                action: 'reel_generation',
+                prompt: rawPayload.script || rawPayload.prompt || '',
+                script: rawPayload.script || '',
+                captions: rawPayload.captions || [],
+                hashtags: rawPayload.hashtags || [],
+                cta: rawPayload.cta || '',
+                scenePrompts: rawPayload.scenePrompts || [],
+                language: rawPayload.language || 'English',
+                duration: rawPayload.durationSeconds || null,
+                generatedVideos: [finalUrl]
+              }).catch((err) => console.warn('[VideoQueue] AI memory write failed (non-fatal):', err.message));
+            } catch (memErr) {
+              console.warn('[VideoQueue] AI memory write failed (non-fatal):', memErr.message);
+            }
+          }
         } catch (err) {
           console.error(`⚠️ Failed to update Draft status to completed for job ${jobId}:`, err.message);
         }
