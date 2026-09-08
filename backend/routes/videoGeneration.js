@@ -1449,6 +1449,15 @@ router.post('/createVideo', protect, checkTrial, videoAiWriteLimiter, async (req
           businessProfile: req.user?.businessProfile
         },
         baseUrl
+      },
+      // What was actually deducted above, so a failure refunds the real
+      // amount instead of a hardcoded guess. See the queue's failure
+      // handler in videoGenerationQueue.js.
+      metadata: {
+        quarkCharge: [
+          { action: 'video_base', count: 1 },
+          { action: 'video_generated', count: sceneCount }
+        ]
       }
     });
 
