@@ -515,7 +515,7 @@ const {
 } = require('../utils/socialPostValidation');
 
 // Import logo overlay service for compositing logos onto posters
-const { overlayLogoAndUpload, replaceLogoAtBboxAndUpload } = require('../services/logoOverlay');
+const { overlayLogoAndUpload, replaceLogoAtBboxAndUpload, overlayBrandLogoIfPresent } = require('../services/logoOverlay');
 
 // Import BrandAsset model for fetching user's logos
 const BrandAsset = require('../models/BrandAsset');
@@ -606,6 +606,10 @@ async function resolveBrandIntelligenceContext(userId, businessProfile = {}) {
     guidelineBundle,
     effectiveTone,
     primaryLogoUrl,
+    // Carried alongside the URL so a caller can composite the logo
+    // pixel-exact after generation instead of handing it to the model.
+    primaryLogoPosition: primaryLogoAsset?.defaultPosition || 'bottom-right',
+    primaryLogoSize: primaryLogoAsset?.defaultSize || 'medium',
     visualHints
   };
   setCachedBrandContext(userId, resolved);
@@ -2192,12 +2196,14 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
         ].filter(Boolean);
         const chosenProductImages = explicitProductImages.length ? explicitProductImages : slotAssets.productImages;
 
+        // No brandLogo reference — the model redraws anything it's shown,
+        // logos included (softened, recolored, wordmark sometimes dropped).
+        // Composited pixel-exact after rendering instead, below.
         imageResult = await generateCampaignImageNanoBanana(finalPrompt || post.imageDescription, {
           userId: req.user.id,
           useRawPrompt: Boolean(finalPrompt),
           aspectRatio: aspectRatio || '1:1',
           brandName: brandDisplayName,
-          brandLogo: slotAssets.logoUrl || effectiveLogo || null,
           industry: bp.industry || '',
           tone: enforcedTone || 'professional',
           postIndex: slotIndex,
@@ -2215,6 +2221,15 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
           console.error(
             `[CAMPAIGN_IMAGE] slot ${slotIndex + 1}/${numSlots} failed: ${imageResult?.error || 'unknown error'}`
           );
+        }
+
+        const slotLogoUrl = slotAssets.logoUrl || effectiveLogo || null;
+        if (imageResult?.success && imageResult?.imageUrl && slotLogoUrl) {
+          imageResult.imageUrl = await overlayBrandLogoIfPresent(imageResult.imageUrl, {
+            logoUrl: slotLogoUrl,
+            position: slotAssets.logoPosition || brandCtx.primaryLogoPosition,
+            size: slotAssets.logoSize || brandCtx.primaryLogoSize
+          });
         }
 
         slotImageCache.set(slotIndex, imageResult);

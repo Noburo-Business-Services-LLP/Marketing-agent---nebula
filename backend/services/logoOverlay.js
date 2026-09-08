@@ -315,10 +315,39 @@ async function replaceLogoAtBboxAndUpload(baseImageSource, logoSource, bbox) {
   };
 }
 
+/**
+ * The default path every standard generation flow (single post, carousel,
+ * campaign) should use instead of handing a logo to the image model as a
+ * reference. Handing it to the model gets it redrawn — softened, recolored,
+ * sometimes with the wordmark dropped entirely, because a generative model
+ * reinterprets everything it sees rather than compositing it. This pastes
+ * the actual asset with Sharp, so it comes out pixel-exact.
+ *
+ * No-ops and returns the original URL unchanged when there is no logo to
+ * apply. Fails soft on an overlay error — a bad composite (a fetch timeout,
+ * a corrupt asset) should not lose an otherwise-good generation, so this
+ * logs a warning and returns the clean image rather than throwing.
+ */
+async function overlayBrandLogoIfPresent(imageUrl, { logoUrl, position, size } = {}) {
+  if (!imageUrl || !logoUrl) return imageUrl;
+  try {
+    const result = await overlayLogoAndUpload(imageUrl, logoUrl, {
+      position: position || 'bottom-right',
+      size: size || 'medium'
+    });
+    if (result?.success && result?.url) return result.url;
+    console.warn('⚠️ Logo overlay failed, keeping the clean image:', result?.error);
+  } catch (err) {
+    console.warn('⚠️ Logo overlay threw, keeping the clean image:', err.message);
+  }
+  return imageUrl;
+}
+
 module.exports = {
   overlayLogo,
   overlayLogoBase64,
   overlayLogoAndUpload,
+  overlayBrandLogoIfPresent,
   replaceLogoAtBbox,
   replaceLogoAtBboxAndUpload,
   getImageBuffer,

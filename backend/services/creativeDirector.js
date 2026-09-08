@@ -232,15 +232,23 @@ function extractFinalPrompt(raw) {
 function assetsToImageOptions(assets) {
   const productImages = assets.filter((a) => a.kind === 'product' || a.kind === 'service').map((a) => a.url);
   const environmentImage = assets.find((a) => a.kind === 'environment')?.url || null;
-  const logoUrl = assets.find((a) => a.kind === 'logo')?.url || null;
-  return { productImages, environmentImage, logoUrl };
+  const logoAsset = assets.find((a) => a.kind === 'logo') || null;
+  // Position/size travel with the URL so a caller can composite the logo
+  // pixel-exact after generation, rather than handing it to the image model.
+  return {
+    productImages,
+    environmentImage,
+    logoUrl: logoAsset?.url || null,
+    logoPosition: logoAsset?.position || 'bottom-right',
+    logoSize: logoAsset?.size || 'medium'
+  };
 }
 
 async function decideCreative(userId, ideaInput, imageInput) {
   const decision = await runCreativeDirector(userId, ideaInput);
   const finalPrompt = await runImageArtDirector(userId, decision, imageInput) || decision.draftImagePrompt;
 
-  const { productImages, environmentImage, logoUrl } = assetsToImageOptions([
+  const { productImages, environmentImage, logoUrl, logoPosition, logoSize } = assetsToImageOptions([
     ...decision.requiredAssets,
     ...decision.optionalAssets
   ]);
@@ -253,7 +261,9 @@ async function decideCreative(userId, ideaInput, imageInput) {
     cta: decision.cta,
     productImages,
     environmentImage,
-    logoUrl
+    logoUrl,
+    logoPosition,
+    logoSize
   };
 }
 

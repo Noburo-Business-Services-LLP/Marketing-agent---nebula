@@ -5,6 +5,7 @@ const { checkTrial, deductCredits, refundCredits, CREDIT_COSTS } = require('../m
 const Draft = require('../models/Draft');
 const { generateCampaignImageNanoBanana } = require('../services/geminiAI');
 const { planCarousel, renderCarouselSlideImage, assetsToImageOptions } = require('../services/creativeDirector');
+const { overlayBrandLogoIfPresent } = require('../services/logoOverlay');
 
 /**
  * Carousel generation, in two steps.
@@ -189,12 +190,14 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
 
       try {
         const finalPrompt = await renderCarouselSlideImage(req.user.id, plan, i);
-        const { productImages, environmentImage, logoUrl } = assetsToImageOptions([
+        const { productImages, environmentImage, logoUrl, logoPosition, logoSize } = assetsToImageOptions([
           ...slide.requiredAssets,
           ...slide.optionalAssets
         ]);
         const chosenProductImages = explicitProductImages.length ? explicitProductImages : productImages;
 
+        // No brandLogo reference — the model redraws anything it's shown,
+        // logos included. Composited pixel-exact after rendering instead.
         const result = await generateCampaignImageNanoBanana(finalPrompt, {
           userId: req.user.id,
           useRawPrompt: true,
@@ -202,7 +205,6 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
           tone,
           targetLanguage: language,
           imageText: slide.imageText,
-          brandLogo: logoUrl,
           environmentReferenceImage: environmentImage,
           previousSlideImage: previousSlideImageUrl,
           productReferenceImage: chosenProductImages[0] || null,
@@ -216,7 +218,10 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
         // document would approach Mongo's 16MB ceiling and bloat every later
         // read of this draft. Treat it as a failed slide instead.
         const rawUrl = String(result?.imageUrl || '');
-        const imageUrl = rawUrl.startsWith('http') ? rawUrl : '';
+        let imageUrl = rawUrl.startsWith('http') ? rawUrl : '';
+        if (imageUrl && logoUrl) {
+          imageUrl = await overlayBrandLogoIfPresent(imageUrl, { logoUrl, position: logoPosition, size: logoSize });
+        }
         if (rawUrl && !imageUrl) {
           console.warn(`[Carousel] slide ${slide.order} returned inline image data, not a URL — dropping it.`);
         }

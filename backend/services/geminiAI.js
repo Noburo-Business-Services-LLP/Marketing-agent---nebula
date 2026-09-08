@@ -5031,6 +5031,15 @@ Only the visual language should carry over, not the specific scene.`);
         }
       });
       referenceNotes.push(`Image ${parts.length} is the exact uploaded brand logo. Use it exactly as-is. Do not recreate or recolor it.`);
+    } else {
+      // No logo reference on this call is deliberate, not an omission — the
+      // real logo is composited pixel-exact afterward (see
+      // overlayBrandLogoIfPresent), because handing one to this model gets it
+      // redrawn and smeared. Without this line the model still reaches for
+      // its own invented badge/emblem in a bottom corner — a learned habit
+      // from corporate stock photography — which then collides with the
+      // real logo once it's pasted on top.
+      referenceNotes.push('Do not draw, invent, or imply any logo, brand mark, wordmark, or watermark anywhere in this image — including placeholder badges, emblems, or text-in-a-circle marks in a corner. Any brand mark is applied in a separate step after this image is generated.');
     }
 
     if (environmentInline?.data) {

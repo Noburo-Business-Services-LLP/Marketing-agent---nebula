@@ -125,7 +125,14 @@ async function buildAvailableAssetsCatalogue(userId) {
 
   if (logoAsset?.url) {
     const name = 'logo: brand logo';
-    catalogue.set(name.toLowerCase(), { url: logoAsset.url, kind: 'logo' });
+    // position/size carried through so callers can composite it pixel-exact
+    // afterward, instead of handing it to the image model to redraw.
+    catalogue.set(name.toLowerCase(), {
+      url: logoAsset.url,
+      kind: 'logo',
+      position: logoAsset.defaultPosition || 'bottom-right',
+      size: logoAsset.defaultSize || 'medium'
+    });
     lines.push(`- ${name}`);
   }
 

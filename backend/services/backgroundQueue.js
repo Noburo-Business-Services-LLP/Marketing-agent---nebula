@@ -11,6 +11,7 @@ const { buildBrandMemoryBlock } = require('./brandMemory');
 // this module too, when auto-generation runs.
 const { normalizeLanguage } = require('./contentCalendarService');
 const { decideCreative, getRecentCreativeHistory } = require('./creativeDirector');
+const { overlayBrandLogoIfPresent } = require('./logoOverlay');
 
 const queue = [];
 let processing = false;
@@ -352,6 +353,10 @@ async function processDraftImageGenerationJob(job) {
       ].filter(Boolean);
       const chosenProductImages = explicitProductImages.length ? explicitProductImages : (creative?.productImages || []);
 
+      // No brandLogo reference here on purpose — a generative model
+      // redraws anything it's shown, including logos (softened, recolored,
+      // sometimes with the wordmark dropped). The logo is composited
+      // pixel-exact afterward instead; see overlayBrandLogoIfPresent below.
       imageResult = await Promise.race([
         generateCampaignImageNanoBanana(creative?.finalPrompt || imageDescription, {
           userId: draft.userId,
@@ -362,13 +367,20 @@ async function processDraftImageGenerationJob(job) {
           tone: bp.tone || 'professional',
           targetLanguage: normalizeLanguage(bp.contentLanguage),
           imageText: draft.imageText || '',
-          brandLogo: creative?.logoUrl || null,
           environmentReferenceImage: creative?.environmentImage || null,
           productReferenceImage: chosenProductImages[0] || null,
           productReferenceImages: chosenProductImages.slice(1)
         }),
         timeoutPromise
       ]);
+
+      if (imageResult?.imageUrl && creative?.logoUrl) {
+        imageResult.imageUrl = await overlayBrandLogoIfPresent(imageResult.imageUrl, {
+          logoUrl: creative.logoUrl,
+          position: creative.logoPosition,
+          size: creative.logoSize
+        });
+      }
     }
 
     const finalImageUrl = typeof imageResult === 'string' ? imageResult : imageResult?.imageUrl;
