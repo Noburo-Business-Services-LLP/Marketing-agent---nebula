@@ -4,18 +4,21 @@ import { ChevronLeft, ChevronRight, Plus, Loader2 } from 'lucide-react';
 import { apiService } from '../services/api';
 import { Campaign } from '../types';
 
-// Gravity Calendar — two-week grid matching the prototype exactly.
-// Header shows the range in serif with italic gold week-numbers.
+// Gravity Calendar — a real month grid: jump to any month, see every day at
+// once, posts sit on the day they're actually scheduled for with a
+// thumbnail. Previously a 2-week rolling window (±14 days); rebuilt to full
+// months because a monthly client report needs "show me August," not a
+// window that happens to include some of August.
 
 const DAY_LABELS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 const MONTH_LABELS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-const NUMBER_WORDS = ['zero','one','two','three','four','five','six','seven','eight','nine','ten','eleven','twelve','thirteen','fourteen','fifteen','sixteen','seventeen','eighteen','nineteen','twenty'];
 
-function numberToWord(n: number): string {
-  if (n < 21) return NUMBER_WORDS[n];
-  if (n < 30) return `twenty-${NUMBER_WORDS[n - 20]}`;
-  if (n < 40) return `thirty-${NUMBER_WORDS[n - 30]}`;
-  return String(n);
+function startOfMonth(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth(), 1);
+}
+
+function addMonths(d: Date, n: number) {
+  return new Date(d.getFullYear(), d.getMonth() + n, 1);
 }
 
 function startOfMondayWeek(d: Date) {
@@ -48,7 +51,7 @@ const PLATFORM_DOT: Record<string, string> = {
 
 const GravityCalendar: React.FC = () => {
   const navigate = useNavigate();
-  const [anchorMonday, setAnchorMonday] = useState<Date>(() => startOfMondayWeek(new Date()));
+  const [anchorMonth, setAnchorMonth] = useState<Date>(() => startOfMonth(new Date()));
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -64,20 +67,31 @@ const GravityCalendar: React.FC = () => {
     return () => { cancelled = true; };
   }, []);
 
+  // A calendar grid always shows whole weeks — the last few days of the
+  // previous month and the first few of the next fill out the first/last
+  // row rather than leaving a ragged edge. Those days still render (a post
+  // scheduled on Aug 31 should be visible from September's view too) but
+  // dimmed, so it's obvious at a glance which days belong to this month.
   const weeks = useMemo(() => {
-    const w1 = Array.from({ length: 7 }, (_, i) => addDays(anchorMonday, i));
-    const w2 = Array.from({ length: 7 }, (_, i) => addDays(anchorMonday, 7 + i));
-    return [w1, w2];
-  }, [anchorMonday]);
+    const monthStart = anchorMonth;
+    const monthEnd = new Date(anchorMonth.getFullYear(), anchorMonth.getMonth() + 1, 0);
+    const gridStart = startOfMondayWeek(monthStart);
+    const gridEnd = addDays(startOfMondayWeek(monthEnd), 6);
 
-  const rangeStart = weeks[0][0];
-  const rangeEnd = weeks[1][6];
+    const days: Date[] = [];
+    let cursor = gridStart;
+    while (cursor.getTime() <= gridEnd.getTime()) {
+      days.push(cursor);
+      cursor = addDays(cursor, 1);
+    }
 
-  const monthLabel = MONTH_LABELS[rangeStart.getMonth()];
-  const startWord = numberToWord(rangeStart.getDate());
-  const endWord = numberToWord(rangeEnd.getDate());
-  const startEndSameMonth = rangeStart.getMonth() === rangeEnd.getMonth();
-  const endMonthLabel = MONTH_LABELS[rangeEnd.getMonth()];
+    const rows: Date[][] = [];
+    for (let i = 0; i < days.length; i += 7) rows.push(days.slice(i, i + 7));
+    return rows;
+  }, [anchorMonth]);
+
+  const monthLabel = MONTH_LABELS[anchorMonth.getMonth()];
+  const yearLabel = anchorMonth.getFullYear();
 
   // Group campaigns by day
   const postsByDay = useMemo(() => {
@@ -108,7 +122,7 @@ const GravityCalendar: React.FC = () => {
   const postsFor = (d: Date) => postsByDay.get(`${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`) || [];
 
   const totalPosts = useMemo(() => {
-    const all = [...weeks[0], ...weeks[1]];
+    const all = weeks.flat();
     return all.reduce((sum, d) => sum + postsFor(d).length, 0);
   }, [weeks, postsByDay]);
 
@@ -121,26 +135,25 @@ const GravityCalendar: React.FC = () => {
       {/* Header */}
       <div className="flex items-start justify-between mb-8 gap-6">
         <h1 className="font-serif-display text-[42px] leading-[1.05] tracking-[-0.02em] text-[#F5F4F1]">
-          {monthLabel} <span className="italic text-[#F5A623]">{startWord}</span>
-          {' '}through{' '}
-          {startEndSameMonth ? '' : `${endMonthLabel} `}
-          <span className="italic text-[#F5A623]">{endWord}</span>
+          {monthLabel} <span className="italic text-[#F5A623]">{yearLabel}</span>
         </h1>
         <div className="flex items-center gap-2 flex-shrink-0 mt-3">
           <button
-            onClick={() => setAnchorMonday(addDays(anchorMonday, -14))}
+            onClick={() => setAnchorMonth((m) => addMonths(m, -1))}
+            title="Previous month"
             className="w-9 h-9 rounded-lg border border-white/[0.08] flex items-center justify-center text-white/60 hover:text-[#F5F4F1] hover:bg-white/[0.04]"
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
           <button
-            onClick={() => setAnchorMonday(startOfMondayWeek(new Date()))}
+            onClick={() => setAnchorMonth(startOfMonth(new Date()))}
             className="h-9 px-4 rounded-lg border border-white/[0.10] text-[13px] font-semibold text-[#F5F4F1] hover:bg-white/[0.04]"
           >
             Today
           </button>
           <button
-            onClick={() => setAnchorMonday(addDays(anchorMonday, 14))}
+            onClick={() => setAnchorMonth((m) => addMonths(m, 1))}
+            title="Next month"
             className="w-9 h-9 rounded-lg border border-white/[0.08] flex items-center justify-center text-white/60 hover:text-[#F5F4F1] hover:bg-white/[0.04]"
           >
             <ChevronRight className="w-4 h-4" />
@@ -159,7 +172,7 @@ const GravityCalendar: React.FC = () => {
           ))}
         </div>
         <div className="text-[11.5px] text-white/50">
-          <span className="text-[#F5F4F1] font-semibold tabular-nums">{totalPosts}</span> posts
+          <span className="text-[#F5F4F1] font-semibold tabular-nums">{totalPosts}</span> posts this month
           {awaitingApproval > 0 && (
             <>
               <span className="mx-2 text-white/25">·</span>
@@ -168,6 +181,16 @@ const GravityCalendar: React.FC = () => {
             </>
           )}
         </div>
+      </div>
+
+      {/* Weekday header row — the grid below has no per-day label once it
+          spans 4-6 rows, so this anchors which column is which day. */}
+      <div className="grid grid-cols-7 gap-3 mb-2">
+        {DAY_LABELS.map((label) => (
+          <div key={label} className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/35 px-1">
+            {label}
+          </div>
+        ))}
       </div>
 
       {loading ? (
@@ -182,49 +205,47 @@ const GravityCalendar: React.FC = () => {
               {week.map((d) => {
                 const posts = postsFor(d);
                 const isToday = sameDay(d, today);
+                const inMonth = d.getMonth() === anchorMonth.getMonth();
                 return (
                   <div
                     key={d.toISOString()}
-                    className={`rounded-xl border p-3 min-h-[220px] flex flex-col ${
+                    className={`rounded-xl border p-3 min-h-[150px] flex flex-col transition-colors ${
                       isToday
                         ? 'border-[#F5A623]/40 bg-[#F5A623]/[0.03]'
-                        : 'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.03]'
-                    } transition-colors`}
+                        : inMonth
+                          ? 'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.03]'
+                          : 'border-white/[0.03] bg-white/[0.005] opacity-40'
+                    }`}
                   >
-                    <div className="flex items-baseline justify-between mb-3">
-                      <span className={`text-[10px] font-semibold uppercase tracking-[0.16em] ${
-                        isToday ? 'text-[#F5A623]' : 'text-white/45'
-                      }`}>
-                        {DAY_LABELS[(d.getDay() + 6) % 7]}
-                      </span>
-                      <span className={`text-[16px] font-serif-display tabular-nums ${isToday ? 'text-[#F5A623]' : 'text-[#F5F4F1]'}`}>
+                    <div className="flex items-baseline justify-end mb-2">
+                      <span className={`text-[14px] font-serif-display tabular-nums ${isToday ? 'text-[#F5A623]' : inMonth ? 'text-[#F5F4F1]' : 'text-white/40'}`}>
                         {d.getDate()}
                       </span>
                     </div>
                     <div className="flex-1 space-y-1.5">
-                      {posts.slice(0, 4).map((p) => (
+                      {posts.slice(0, 3).map((p) => (
                         <button
                           key={p.id}
                           onClick={() => navigate('/drafts')}
                           className="w-full flex items-center gap-2 p-1.5 rounded-md bg-white/[0.03] hover:bg-white/[0.08] transition-colors text-left group"
                         >
-                          <div className="w-8 h-8 rounded flex-shrink-0 bg-white/[0.05] overflow-hidden">
+                          <div className="w-7 h-7 rounded flex-shrink-0 bg-white/[0.05] overflow-hidden">
                             {p.image && <img src={p.image} alt="" className="w-full h-full object-cover" />}
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="text-[9px] font-semibold text-white/50 uppercase tracking-wider tabular-nums">
                               {p.time}
                             </div>
-                            <div className="text-[10.5px] text-[#F5F4F1] truncate leading-tight">
+                            <div className="text-[10px] text-[#F5F4F1] truncate leading-tight">
                               {p.title}
                             </div>
                           </div>
                           <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: PLATFORM_DOT[String(p.platform).toLowerCase()] || '#F5F4F1' }} />
                         </button>
                       ))}
-                      {posts.length > 4 && (
+                      {posts.length > 3 && (
                         <div className="text-[9.5px] text-white/40 text-center pt-0.5">
-                          +{posts.length - 4} more
+                          +{posts.length - 3} more
                         </div>
                       )}
                     </div>

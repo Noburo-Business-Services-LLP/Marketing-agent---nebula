@@ -17,6 +17,7 @@ import GravityCalendar from './pages/GravityCalendar';
 import GravityInsights from './pages/GravityInsights';
 import Campaigns from './pages/Campaigns';
 import ContentCalendar from './pages/ContentCalendar';
+import CalendarHome from './pages/CalendarHome';
 import ReelGenerator from './pages/ReelGenerator';
 import AdCampaigns from './pages/AdCampaigns';
 import Competitors from './pages/Competitors';
@@ -184,10 +185,11 @@ const App: React.FC = () => {
                     <Routes>
                     <Route path="/dashboard" element={<GravityHome />} />
                     <Route path="/dashboard-classic" element={<Dashboard />} />
-                    {/* Smart Calendar is the primary — full auto-fill, generation, scheduler.
-                        The pretty two-week grid from the Gravity prototype lives at -grid for now
-                        until its features are ported (auto-fill, scheduler, per-day generation). */}
-                    <Route path="/content-calendar" element={<ContentCalendar />} />
+                    {/* Two tabs on one page: Plan (AI month strategy, the PDF-able
+                        view) and Schedule (real month grid, thumbnails on the day
+                        they're actually scheduled). content-calendar-grid/-classic
+                        kept as direct links to the individual views. */}
+                    <Route path="/content-calendar" element={<CalendarHome />} />
                     <Route path="/content-calendar-grid" element={<GravityCalendar />} />
                     <Route path="/content-calendar-classic" element={<ContentCalendar />} />
                     <Route path="/campaigns" element={<GravityCreate />} />

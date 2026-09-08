@@ -2196,6 +2196,12 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
         ].filter(Boolean);
         const chosenProductImages = explicitProductImages.length ? explicitProductImages : slotAssets.productImages;
 
+        // Known before generation, not after, so the model can be told
+        // where the real logo will land and keep that corner clear.
+        const slotLogoUrl = slotAssets.logoUrl || effectiveLogo || null;
+        const slotLogoPosition = slotAssets.logoPosition || brandCtx.primaryLogoPosition;
+        const slotLogoSize = slotAssets.logoSize || brandCtx.primaryLogoSize;
+
         // No brandLogo reference — the model redraws anything it's shown,
         // logos included (softened, recolored, wordmark sometimes dropped).
         // Composited pixel-exact after rendering instead, below.
@@ -2212,7 +2218,8 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
           productReferenceImage: chosenProductImages[0] || null,
           productReferenceImages: chosenProductImages.slice(1),
           targetLanguage: selectedLanguage,
-          imageText: resolvedImageText
+          imageText: resolvedImageText,
+          logoReservedPosition: slotLogoUrl ? slotLogoPosition : null
         });
         
         // The failure reason used to be dropped entirely — a dead card in the
@@ -2223,12 +2230,11 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
           );
         }
 
-        const slotLogoUrl = slotAssets.logoUrl || effectiveLogo || null;
         if (imageResult?.success && imageResult?.imageUrl && slotLogoUrl) {
           imageResult.imageUrl = await overlayBrandLogoIfPresent(imageResult.imageUrl, {
             logoUrl: slotLogoUrl,
-            position: slotAssets.logoPosition || brandCtx.primaryLogoPosition,
-            size: slotAssets.logoSize || brandCtx.primaryLogoSize
+            position: slotLogoPosition,
+            size: slotLogoSize
           });
         }
 

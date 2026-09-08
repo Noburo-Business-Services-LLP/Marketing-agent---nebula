@@ -210,6 +210,9 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
 
         // No brandLogo reference — the model redraws anything it's shown,
         // logos included. Composited pixel-exact after rendering instead.
+        // logoReservedPosition tells it where that composite will land, so
+        // it can keep the corner clear instead of putting its own headline
+        // there and colliding with the real logo once pasted on top.
         const result = await generateCampaignImageNanoBanana(finalPrompt, {
           userId: req.user.id,
           useRawPrompt: true,
@@ -222,7 +225,8 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
           productReferenceImage: chosenProductImages[0] || null,
           productReferenceImages: chosenProductImages.slice(1),
           postIndex: i,
-          totalPosts: plan.slides.length
+          totalPosts: plan.slides.length,
+          logoReservedPosition: logoUrl ? logoPosition : null
         });
 
         // Image generation falls back to an inline base64 data URI when the
