@@ -99,7 +99,8 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
       contentPillar,
       objective,
       platform: (platforms || [])[0] || '',
-      campaignContext: [campaignContext, `Plan this as a ${requestedSlides}-slide carousel.`].filter(Boolean).join(' ')
+      campaignContext: campaignContext || '',
+      slideCount: requestedSlides
     });
 
     if (plan.slides.length === 0) {
@@ -114,7 +115,18 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
       return res.end();
     }
     if (plan.slides.length > requestedSlides) {
-      plan.slides = plan.slides.slice(0, requestedSlides);
+      // Keep the LAST slide, not just the first N. The master plan reserves
+      // its final slide for the payoff/resolution/CTA (see carousel.masterPlan's
+      // slide-count budgeting section) — blindly slicing from the front kept
+      // exactly the slides that truncation should have dropped, and cut off
+      // the one slide the whole plan was building toward.
+      const lastSlide = plan.slides[plan.slides.length - 1];
+      const keptFront = plan.slides.slice(0, requestedSlides - 1);
+      plan.slides = requestedSlides > 1 ? [...keptFront, lastSlide] : [lastSlide];
+      // Renumber so `order` stays contiguous after dropping whatever sat in
+      // the middle — downstream code (continuity between adjacent slides,
+      // the rendered order shown to the user) assumes order matches position.
+      plan.slides.forEach((slide, i) => { slide.order = i + 1; });
     }
 
     // The four master-plan fields combined into one readable summary — the

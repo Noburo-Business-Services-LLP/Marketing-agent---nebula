@@ -1162,6 +1162,7 @@ Return JSON only:
       objective: 'What this carousel is meant to achieve',
       platform: 'The platform this is for',
       campaignContext: 'The wider campaign this sits inside, if any',
+      slideCount: 'The exact number of slides this carousel must have — fixed by the slide picker before generation, not a suggestion',
       brandContext: 'The full brand memory — identity, tone, ICP, products, locations',
       availableAssets: 'The real assets on file that could be used',
       previousCreatives: 'Concepts already used recently, so this one does not repeat them'
@@ -1182,6 +1183,9 @@ OBJECTIVE:
 
 PLATFORM:
 {{platform}}
+
+SLIDE COUNT (FIXED — see section 2a below):
+{{slideCount}}
 
 BRAND MEMORY:
 {{brandContext}}
@@ -1232,6 +1236,19 @@ Examples:
 Do not force every carousel into Before → After.
 
 The content determines the narrative.
+
+
+2a. BUDGET THE FIXED SLIDE COUNT
+
+This carousel MUST have EXACTLY {{slideCount}} slides. Not fewer. Not more.
+
+The LAST slide (slide {{slideCount}}) is reserved for the payoff, resolution, takeaway, or next action — never a bare list item. Never end the carousel on the final problem, warning, or pain point with nothing after it.
+
+Plan the narrative to fit inside {{slideCount}} slides:
+- If the idea naturally has more beats than fit, COMPRESS or COMBINE points onto a single slide rather than dropping the ending.
+- If the idea has fewer beats than {{slideCount}}, develop the middle further (a supporting detail, an example, a proof point) rather than padding with filler.
+
+A carousel that spends every slide on hook + list items and reaches the end with no resolution is a failed plan, even if every individual slide is well designed.
 
 
 3. DESIGN ONE MASTER CREATIVE CONCEPT

@@ -296,7 +296,7 @@ async function getRecentCreativeHistory(userId, limit = 4) {
  * catalogue itself.
  */
 async function planCarousel(userId, {
-  idea, contentType, contentPillar, objective, platform, campaignContext
+  idea, contentType, contentPillar, objective, platform, campaignContext, slideCount
 }) {
   const [brandContext, assets, previousCreatives] = await Promise.all([
     buildBrandMemoryBlock(userId),
@@ -311,6 +311,11 @@ async function planCarousel(userId, {
     objective: objective || '',
     platform: platform || '',
     campaignContext: campaignContext || '',
+    // A real instruction, not text appended to campaignContext — the model
+    // was previously told the slide count only as a trailing sentence inside
+    // free-form context, which it was free to deprioritize against its own
+    // sense of how many slides the story needed.
+    slideCount: String(Number(slideCount) || 5),
     brandContext,
     availableAssets: assets.text,
     previousCreatives: formatPreviousCreatives(previousCreatives)
