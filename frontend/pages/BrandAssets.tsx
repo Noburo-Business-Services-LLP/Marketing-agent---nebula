@@ -9,6 +9,7 @@ import {
   Plus,
   RefreshCw,
   Sparkles,
+  LayoutGrid,
   Star,
   StarOff,
   Trash2,
@@ -44,6 +45,19 @@ interface BrandAsset {
   isPrimary: boolean;
   createdAt: string;
 }
+
+// The 6 spots a logo can default to — two rows (top/bottom) so it reads as
+// the same grid the logo will actually sit in on a generated post.
+type LogoGridPosition = 'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right';
+const LOGO_GRID: LogoGridPosition[] = ['top-left', 'top-center', 'top-right', 'bottom-left', 'bottom-center', 'bottom-right'];
+const LOGO_GRID_LABELS: Record<LogoGridPosition, string> = {
+  'top-left': 'Top left',
+  'top-center': 'Top center',
+  'top-right': 'Top right',
+  'bottom-left': 'Bottom left',
+  'bottom-center': 'Bottom center',
+  'bottom-right': 'Bottom right'
+};
 
 interface ConfidenceScores {
   tone?: number;
@@ -343,6 +357,31 @@ const BrandAssets: React.FC = () => {
     }
   };
 
+  // Which logo's position grid is currently expanded — one at a time, since
+  // showing all of them open at once on a page with several logos gets noisy.
+  const [openPositionPickerId, setOpenPositionPickerId] = useState<string | null>(null);
+  const [savingPositionId, setSavingPositionId] = useState<string | null>(null);
+
+  const setLogoPosition = async (logo: BrandAsset, position: LogoGridPosition) => {
+    if (logo.defaultPosition === position) return;
+    setSavingPositionId(logo._id);
+    // Optimistic — this is where the logo will land on the NEXT generation,
+    // not a slow server-side rendering step, so there's nothing to wait on.
+    setLogos((prev) => prev.map((l) => (l._id === logo._id ? { ...l, defaultPosition: position } : l)));
+    try {
+      const response = await brandAssetsAPI.update(logo._id, { defaultPosition: position });
+      if (!response?.success) {
+        setError(response?.message || 'Failed to update logo position');
+        await loadData(true);
+      }
+    } catch (err: any) {
+      setError(err?.message || 'Failed to update logo position');
+      await loadData(true);
+    } finally {
+      setSavingPositionId(null);
+    }
+  };
+
   const saveProfile = async () => {
     try {
       setSavingProfile(true);
@@ -630,6 +669,13 @@ const BrandAssets: React.FC = () => {
                         <span className={`truncate ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{logo.name}</span>
                         <div className="flex items-center gap-1">
                           <button
+                            onClick={() => setOpenPositionPickerId((cur) => (cur === logo._id ? null : logo._id))}
+                            className={`p-1 rounded ${openPositionPickerId === logo._id ? 'bg-[#F5A623] text-[#070A12]' : isDarkMode ? 'text-gray-300 hover:bg-slate-700' : 'text-gray-700 hover:bg-gray-200'}`}
+                            title={`Default position: ${LOGO_GRID_LABELS[(logo.defaultPosition as LogoGridPosition)] || 'Bottom right'}`}
+                          >
+                            <LayoutGrid className="w-3.5 h-3.5" />
+                          </button>
+                          <button
                             onClick={() => setPrimaryLogo(logo._id)}
                             className={`p-1 rounded ${logo.isPrimary ? 'bg-[#F5A623] text-[#070A12]' : isDarkMode ? 'text-gray-300 hover:bg-slate-700' : 'text-gray-700 hover:bg-gray-200'}`}
                             title={logo.isPrimary ? 'Primary' : 'Set primary'}
@@ -645,6 +691,42 @@ const BrandAssets: React.FC = () => {
                           </button>
                         </div>
                       </div>
+
+                      {/* Two rows (top/bottom) x three columns (left/center/right) —
+                          laid out to visually match the frame the logo will actually
+                          sit inside, so picking a spot here reads as picking a spot
+                          on the post, not choosing from an abstract list. */}
+                      {openPositionPickerId === logo._id && (
+                        <div className={`p-2 border-t ${isDarkMode ? 'border-slate-700 bg-slate-900/40' : 'border-gray-200 bg-white'}`}>
+                          <p className={`text-[10px] uppercase tracking-wide mb-1.5 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                            Default position
+                          </p>
+                          <div className="grid grid-cols-3 gap-1">
+                            {LOGO_GRID.map((pos) => {
+                              const active = (logo.defaultPosition || 'bottom-right') === pos;
+                              return (
+                                <button
+                                  key={pos}
+                                  disabled={savingPositionId === logo._id}
+                                  onClick={() => setLogoPosition(logo, pos)}
+                                  title={LOGO_GRID_LABELS[pos]}
+                                  className={`aspect-[4/3] rounded border flex items-center justify-center transition-colors disabled:opacity-50 ${
+                                    active
+                                      ? 'bg-[#F5A623] border-[#F5A623]'
+                                      : isDarkMode
+                                        ? 'border-slate-700 bg-slate-800/60 hover:bg-slate-700'
+                                        : 'border-gray-200 bg-gray-50 hover:bg-gray-100'
+                                  }`}
+                                >
+                                  <span
+                                    className={`w-2 h-2 rounded-sm ${active ? 'bg-[#070A12]' : isDarkMode ? 'bg-gray-500' : 'bg-gray-400'}`}
+                                  />
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

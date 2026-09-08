@@ -9,10 +9,15 @@ const fetch = require('node-fetch');
 /**
  * Position mapping for logo placement
  */
+// The 6-way grid a user picks a logo's home spot from: top/bottom rows,
+// left/center/right columns. 'center' (dead center of the frame) kept as a
+// 7th option for anything already relying on it, but not offered in the grid.
 const POSITION_MAP = {
   'top-left': { gravity: 'northwest', x: 20, y: 20 },
+  'top-center': { gravity: 'north', x: 0, y: 20 },
   'top-right': { gravity: 'northeast', x: 20, y: 20 },
   'bottom-left': { gravity: 'southwest', x: 20, y: 20 },
+  'bottom-center': { gravity: 'south', x: 0, y: 20 },
   'bottom-right': { gravity: 'southeast', x: 20, y: 20 },
   'center': { gravity: 'center', x: 0, y: 0 }
 };
@@ -123,12 +128,20 @@ async function overlayLogo(baseImageSource, logoSource, options = {}) {
         left = padding;
         top = padding;
         break;
+      case 'top-center':
+        left = Math.round((baseWidth - logoWidth) / 2);
+        top = padding;
+        break;
       case 'top-right':
         left = baseWidth - logoWidth - padding;
         top = padding;
         break;
       case 'bottom-left':
         left = padding;
+        top = baseHeight - logoHeight - padding;
+        break;
+      case 'bottom-center':
+        left = Math.round((baseWidth - logoWidth) / 2);
         top = baseHeight - logoHeight - padding;
         break;
       case 'bottom-right':

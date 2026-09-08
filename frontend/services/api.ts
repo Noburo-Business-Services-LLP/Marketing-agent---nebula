@@ -3015,7 +3015,7 @@ export const brandAssetsAPI = {
     type: 'logo' | 'template' | 'environment';
     name: string;
     isPrimary?: boolean;
-    defaultPosition?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'center';
+    defaultPosition?: 'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right' | 'center';
     defaultSize?: 'small' | 'medium' | 'large';
   }): Promise<any> => {
     return await apiCall<any>(

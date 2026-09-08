@@ -4637,6 +4637,11 @@ async function generateCampaignImageNanoBanana(imageDescription, options = {}) {
     aspectRatio = '1:1',
     brandName = '',
     brandLogo = null,
+    // Where the REAL logo will land once composited after generation (see
+    // overlayBrandLogoIfPresent). Passed even when brandLogo itself is null —
+    // that's the normal case now — so the model can keep that corner clear
+    // of its own headline text instead of the two colliding by accident.
+    logoReservedPosition = null,
     originalCharacterImage = null,
     characterReferenceImage = null,
     previousSceneImage = null,
@@ -5039,7 +5044,10 @@ Only the visual language should carry over, not the specific scene.`);
       // its own invented badge/emblem in a bottom corner — a learned habit
       // from corporate stock photography — which then collides with the
       // real logo once it's pasted on top.
-      referenceNotes.push('Do not draw, invent, or imply any logo, brand mark, wordmark, or watermark anywhere in this image — including placeholder badges, emblems, or text-in-a-circle marks in a corner. Any brand mark is applied in a separate step after this image is generated.');
+            const reservedZoneText = logoReservedPosition
+        ? ` A real logo will be composited afterward into a fixed rectangle at the ${String(logoReservedPosition).replace('-', ' ')} of this image — roughly the outer 20% of the width and 15% of the height on that side. Compose the headline, any other text, and the main subject so none of them extend into that specific rectangle; shift or reflow the headline rather than centering it across the full width if the reserved zone is top-center or bottom-center. Leave that rectangle visually calm — plain background or soft color, no text, no other emblem — the way a magazine leaves its masthead corner clear regardless of what the cover photo is doing.`
+        : '';
+      referenceNotes.push(`Do not draw, invent, or imply any logo, brand mark, wordmark, or watermark anywhere in this image — including placeholder badges, emblems, text-in-a-circle marks in a corner, a bordered or boxed brand-name lockup, or the brand name rendered as signage, a stamp, a compass rose label, or any other in-scene lettering standing in for a logo. This applies even when the requested caption or headline text itself contains the brand name — that text renders as ordinary copy, in the same style as the rest of the headline, never inside its own card, badge or border that reads as a second logo. Any real brand mark is applied in a separate step after this image is generated.${reservedZoneText}`);
     }
 
     if (environmentInline?.data) {

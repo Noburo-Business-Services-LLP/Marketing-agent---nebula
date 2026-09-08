@@ -6,7 +6,7 @@ const { parseGeminiJSON, generateCampaignImageNanoBanana, generatePosterFromRefe
 const { callTextLLM } = require('./openAI');
 const { uploadBase64Image } = require('./imageUploader');
 const { buildPrompt } = require('./promptRegistry');
-const { buildBrandMemoryBlock } = require('./brandMemory');
+const { buildBrandMemoryBlock, getPrimaryLogoAsset } = require('./brandMemory');
 // Lazy to avoid a load-order cycle: contentCalendarService lazily requires
 // this module too, when auto-generation runs.
 const { normalizeLanguage } = require('./contentCalendarService');
@@ -353,6 +353,20 @@ async function processDraftImageGenerationJob(job) {
       ].filter(Boolean);
       const chosenProductImages = explicitProductImages.length ? explicitProductImages : (creative?.productImages || []);
 
+      // Always composited for a standalone post, independent of whatever
+      // the Creative Director chose to select as a "required asset" for
+      // this specific idea — a single post is the brand's own content and
+      // should always carry its logo, not carry it only when an LLM's
+      // per-post judgment happened to ask for it. (Carousels and campaigns
+      // keep that judgment — a logo on every one of ten slides is clutter —
+      // this "always" is scoped to single posts only.)
+      //
+      // Fetched BEFORE generation, not after, so the model can be told where
+      // the real logo will land and keep that corner clear — without this,
+      // the model's own headline placement and the overlay's position
+      // collided whenever both defaulted to the same corner.
+      const primaryLogo = await getPrimaryLogoAsset(draft.userId);
+
       // No brandLogo reference here on purpose — a generative model
       // redraws anything it's shown, including logos (softened, recolored,
       // sometimes with the wordmark dropped). The logo is composited
@@ -369,16 +383,17 @@ async function processDraftImageGenerationJob(job) {
           imageText: draft.imageText || '',
           environmentReferenceImage: creative?.environmentImage || null,
           productReferenceImage: chosenProductImages[0] || null,
-          productReferenceImages: chosenProductImages.slice(1)
+          productReferenceImages: chosenProductImages.slice(1),
+          logoReservedPosition: primaryLogo?.url ? primaryLogo.position : null
         }),
         timeoutPromise
       ]);
 
-      if (imageResult?.imageUrl && creative?.logoUrl) {
+      if (imageResult?.imageUrl && primaryLogo?.url) {
         imageResult.imageUrl = await overlayBrandLogoIfPresent(imageResult.imageUrl, {
-          logoUrl: creative.logoUrl,
-          position: creative.logoPosition,
-          size: creative.logoSize
+          logoUrl: primaryLogo.url,
+          position: primaryLogo.position,
+          size: primaryLogo.size
         });
       }
     }

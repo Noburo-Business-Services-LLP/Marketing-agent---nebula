@@ -193,9 +193,33 @@ async function buildBrandGuidance(userId) {
   return parts.join(' ');
 }
 
+/**
+ * The account's primary logo, independent of whatever the Creative Director
+ * decides to select as a "required asset" for a given piece of content.
+ *
+ * Single image posts always get their logo composited (see
+ * overlayBrandLogoIfPresent in the callers) rather than leaving it to the
+ * Creative Director's per-post judgment — carousels and campaigns still use
+ * that judgment (a logo on every one of ten slides is clutter), but a
+ * standalone post is the brand's own content and should always carry it.
+ */
+async function getPrimaryLogoAsset(userId) {
+  if (!userId) return null;
+  const logo = await BrandAsset.findOne({ user: userId, type: 'logo' })
+    .sort({ isPrimary: -1, createdAt: -1 })
+    .lean();
+  if (!logo?.url) return null;
+  return {
+    url: logo.url,
+    position: logo.defaultPosition || 'bottom-right',
+    size: logo.defaultSize || 'medium'
+  };
+}
+
 module.exports = {
   buildBrandMemoryBlock,
   buildAvailableAssetsCatalogue,
   resolveAssetNames,
-  buildBrandGuidance
+  buildBrandGuidance,
+  getPrimaryLogoAsset
 };
