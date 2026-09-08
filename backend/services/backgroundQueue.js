@@ -451,6 +451,33 @@ async function processDraftImageGenerationJob(job) {
       draft.markModified('creative');
       
       await draft.save();
+
+      // Remember this generation in the AI Memory system (Layer 1 evidence).
+      // Fire-and-forget — a memory-write failure must never fail the
+      // generation the user is waiting on.
+      try {
+        const { rememberCampaignGeneration } = require('./aiMemoryService');
+        rememberCampaignGeneration({
+          userId: draft.userId,
+          campaignId: draft.campaignId || null,
+          action: draft.contentType === 'campaign' ? 'campaign_generation' : 'post_generation',
+          campaignName: draft.title || '',
+          objective: draft.objective || '',
+          platform: (draft.platforms || [])[0] || 'instagram',
+          platforms: draft.platforms || [],
+          tone: draft.tone || '',
+          language: draft.language || 'English',
+          prompt: draft.imagePromptResolved || draft.imagePrompt || '',
+          generatedCaptions: draft.caption ? [draft.caption] : [],
+          hashtags: draft.hashtags || [],
+          cta: draft.cta || '',
+          imagePrompts: draft.imagePromptResolved ? [draft.imagePromptResolved] : [],
+          generatedImages: [finalImageUrl]
+        }).catch((err) => console.warn('[BackgroundQueue] AI memory write failed (non-fatal):', err.message));
+      } catch (memErr) {
+        console.warn('[BackgroundQueue] AI memory write failed (non-fatal):', memErr.message);
+      }
+
       console.log(`[BackgroundQueue] Image generated successfully for Draft ${draftId}: ${finalImageUrl}`);
     } else {
       throw new Error(imageResult?.error || 'Failed to generate image URL');
