@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, RotateCcw, ChevronLeft, ChevronRight, Loader2, Sparkles, Instagram, Facebook, Linkedin, Youtube, AlertCircle, X, Pencil } from 'lucide-react';
+import { Check, RotateCcw, ChevronLeft, ChevronRight, Loader2, Sparkles, Instagram, Facebook, Linkedin, Youtube, AlertCircle, X, Pencil, LayoutGrid, Rows } from 'lucide-react';
 import { draftsAPI, apiService } from '../services/api';
 import { Draft } from '../types';
 import GeneratingFill from '../components/GeneratingFill';
@@ -38,6 +38,13 @@ const GravityApprove: React.FC = () => {
   const [index, setIndex] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Grid is for bulk triage across everything awaiting review at once;
+  // single is the full detail view. A customer with fifty drafts going
+  // through them one swipe at a time is the exact problem this solves.
+  const [reviewView, setReviewView] = useState<'single' | 'grid'>('single');
+  // Which draft a grid-card action is currently running for, so clicking
+  // Approve on one card doesn't grey out every other card on the page.
+  const [gridBusyId, setGridBusyId] = useState<string | null>(null);
   // Track drafts we've auto-retried image gen for, so we don't spam.
   const autoRetriedRef = useRef<Set<string>>(new Set());
   const pollTimerRef = useRef<any>(null);
@@ -247,38 +254,69 @@ const GravityApprove: React.FC = () => {
     return () => window.removeEventListener('keydown', onKey);
   }, [total]);
 
-  const handleApprove = async () => {
-    if (!current?._id) return;
-    setBusy(true);
+  // Shared by both views — the single-card Approve button and every grid
+  // card's quick-approve both funnel through this.
+  const approveDraft = async (draft: any) => {
+    if (!draft?._id) return;
     try {
       // Publish through the draft endpoint. It creates the underlying
       // Campaign itself (upsertCampaignFromDraft), so this also works for
       // single posts, which have no campaignId — the old path silently
       // skipped those and removed them from the list without publishing.
-      await draftsAPI.publishDraft(current._id, platforms);
-      // Remove from the queue locally.
-      const next = drafts.filter((_, i) => i !== index);
-      setDrafts(next);
-      setIndex((i) => Math.min(i, Math.max(0, next.length - 1)));
+      await draftsAPI.publishDraft(draft._id, draft.platforms || []);
+      setDrafts((prev) => {
+        const next = prev.filter((d: any) => d._id !== draft._id);
+        setIndex((i) => Math.min(i, Math.max(0, next.length - 1)));
+        return next;
+      });
     } catch (e: any) {
       setError(e?.message || 'Failed to approve');
-    } finally {
-      setBusy(false);
+      throw e;
     }
   };
 
-  const handleRedo = async () => {
-    if (!current?._id) return;
-    setBusy(true);
+  const redoDraft = async (draft: any) => {
+    if (!draft?._id) return;
     try {
-      await draftsAPI.retryImageGeneration(String(current._id));
-      // Refresh so status flips to 'processing' and poll kicks in.
+      await draftsAPI.retryImageGeneration(String(draft._id));
       await loadDrafts();
     } catch (e: any) {
       setError(e?.message || 'Failed to regenerate.');
-    } finally {
-      setBusy(false);
+      throw e;
     }
+  };
+
+  const handleApprove = async () => {
+    if (!current) return;
+    setBusy(true);
+    try { await approveDraft(current); } catch { /* error already set */ } finally { setBusy(false); }
+  };
+
+  const handleRedo = async () => {
+    if (!current) return;
+    setBusy(true);
+    try { await redoDraft(current); } catch { /* error already set */ } finally { setBusy(false); }
+  };
+
+  // Grid-card versions — track busy state per-card instead of the single
+  // page-wide `busy` flag, and open the full detail view on approve failure
+  // so the reason (e.g. no platforms selected) isn't invisible in a small card.
+  const handleGridApprove = async (draft: any, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setGridBusyId(draft._id);
+    try { await approveDraft(draft); } catch { /* error already set */ } finally { setGridBusyId(null); }
+  };
+
+  const handleGridRedo = async (draft: any, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setGridBusyId(draft._id);
+    try { await redoDraft(draft); } catch { /* error already set */ } finally { setGridBusyId(null); }
+  };
+
+  const openInSingleView = (draftId: string) => {
+    const i = drafts.findIndex((d: any) => d._id === draftId);
+    if (i >= 0) setIndex(i);
+    setReviewView('single');
   };
 
   // -------- render --------
@@ -449,26 +487,121 @@ const GravityApprove: React.FC = () => {
       {/* Header row */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-baseline gap-3">
-          <span className="gravity-label">Post {index + 1} / {total}</span>
+          <span className="gravity-label">
+            {reviewView === 'grid' ? `${total} awaiting review` : `Post ${index + 1} / ${total}`}
+          </span>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={goPrev}
-            disabled={index === 0}
-            className="w-9 h-9 rounded-lg border border-white/[0.08] flex items-center justify-center text-white/60 hover:text-[#F5F4F1] hover:bg-white/[0.04] disabled:opacity-30 disabled:cursor-not-allowed"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-          <button
-            onClick={goNext}
-            disabled={index >= total - 1}
-            className="w-9 h-9 rounded-lg border border-white/[0.08] flex items-center justify-center text-white/60 hover:text-[#F5F4F1] hover:bg-white/[0.04] disabled:opacity-30 disabled:cursor-not-allowed"
-          >
-            <ChevronRight className="w-4 h-4" />
-          </button>
+          {/* List/Grid toggle — grid is for triaging many at once, single is
+              for the one that needs a closer look. Switching to single from
+              a grid card opens that exact card, not wherever index happened
+              to be pointing. */}
+          <div className="flex items-center gap-0.5 p-0.5 rounded-lg border border-white/[0.08] mr-1">
+            <button
+              onClick={() => setReviewView('single')}
+              title="Single view"
+              className={`w-8 h-8 rounded-md flex items-center justify-center transition-colors ${
+                reviewView === 'single' ? 'bg-[#F5A623] text-black' : 'text-white/50 hover:text-white/80'
+              }`}
+            >
+              <Rows className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => setReviewView('grid')}
+              title="Grid view"
+              className={`w-8 h-8 rounded-md flex items-center justify-center transition-colors ${
+                reviewView === 'grid' ? 'bg-[#F5A623] text-black' : 'text-white/50 hover:text-white/80'
+              }`}
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          {reviewView === 'single' && (
+            <>
+              <button
+                onClick={goPrev}
+                disabled={index === 0}
+                className="w-9 h-9 rounded-lg border border-white/[0.08] flex items-center justify-center text-white/60 hover:text-[#F5F4F1] hover:bg-white/[0.04] disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <button
+                onClick={goNext}
+                disabled={index >= total - 1}
+                className="w-9 h-9 rounded-lg border border-white/[0.08] flex items-center justify-center text-white/60 hover:text-[#F5F4F1] hover:bg-white/[0.04] disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </>
+          )}
         </div>
       </div>
 
+      {reviewView === 'grid' ? (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {drafts.map((d: any) => {
+            const img = d.imageUrl || d.creative?.imageUrls?.[0] || '';
+            const status = String(d?.status || '').toLowerCase();
+            const processing = status === 'processing' || (!img && status !== 'failed');
+            const failed = status === 'failed' && !img;
+            const isBusy = gridBusyId === d._id;
+            const cap = String(d.caption || d.creative?.textContent || '').replace(/#\w+/g, '').trim();
+            return (
+              <div
+                key={d._id}
+                onClick={() => openInSingleView(d._id)}
+                className="group relative rounded-xl border border-white/[0.08] bg-white/[0.02] overflow-hidden cursor-pointer transition-all duration-200 hover:border-[#F5A623]/50 hover:bg-white/[0.04]"
+              >
+                <div className="relative bg-black aspect-square overflow-hidden">
+                  {img ? (
+                    <img src={img} alt={d.title || 'Post'} className="w-full h-full object-cover" />
+                  ) : failed ? (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 px-3 text-center">
+                      <AlertCircle className="w-5 h-5 text-red-400/70" />
+                      <span className="text-[10.5px] text-white/40">Generation failed</span>
+                    </div>
+                  ) : (
+                    <GeneratingFill resolution="" />
+                  )}
+                </div>
+                <div className="p-3">
+                  <p className="text-[12px] font-semibold text-[#F5F4F1] truncate">{d.title || 'Untitled'}</p>
+                  {cap && <p className="text-[10.5px] text-white/40 line-clamp-2 mt-1 leading-snug">{cap}</p>}
+                  <div className="flex items-center gap-1 mt-2">
+                    {(d.platforms || []).length === 0 ? (
+                      <span className="text-[9.5px] text-white/25">No platform</span>
+                    ) : (d.platforms || []).slice(0, 4).map((p: string) => {
+                      const meta = PLATFORM_META[String(p).toLowerCase()];
+                      return meta
+                        ? <meta.Icon key={p} className="w-3 h-3 text-white/45" />
+                        : <span key={p} className="text-[9.5px] text-white/40">{p}</span>;
+                    })}
+                  </div>
+                  <div className="flex items-center gap-1.5 mt-3 pt-2.5 border-t border-white/[0.06]">
+                    <button
+                      onClick={(e) => handleGridApprove(d, e)}
+                      disabled={isBusy || processing || failed}
+                      title="Approve & schedule"
+                      className="flex-1 inline-flex items-center justify-center gap-1 h-8 rounded-md bg-[#F5A623] hover:bg-[#ffb833] text-black text-[11px] font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {isBusy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" strokeWidth={3} />}
+                      Approve
+                    </button>
+                    <button
+                      onClick={(e) => handleGridRedo(d, e)}
+                      disabled={isBusy || processing}
+                      title="Redo"
+                      className="w-8 h-8 flex items-center justify-center rounded-md border border-white/[0.10] text-white/60 hover:text-white/90 hover:bg-white/[0.05] disabled:opacity-30"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
       <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-10">
         {/* PREVIEW */}
         <div className="relative flex items-center justify-center min-h-[560px]">
@@ -585,6 +718,7 @@ const GravityApprove: React.FC = () => {
           </div>
         </div>
       </div>
+      )}
 
       {error && (
         <div className="mt-6 text-center text-[12px] text-red-400">{error}</div>
