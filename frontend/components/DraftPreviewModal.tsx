@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Save, Calendar, Send, Trash2, Loader2, Instagram, Facebook, Linkedin, Twitter, Check, RotateCcw, Pencil } from 'lucide-react';
 import { Draft } from '../types';
 import { draftsAPI } from '../services/api';
+import { useQuarkCosts } from '../hooks/useQuarkCosts';
 
 interface DraftPreviewModalProps {
   draft: Draft;
@@ -10,6 +11,12 @@ interface DraftPreviewModalProps {
 }
 
 export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onClose, onSuccess }) => {
+  // Regenerate re-runs the full generation pipeline, so it costs the same
+  // Quarks as the original — campaign-type drafts are billed through the
+  // legacy Campaigns flow already (matches backend/routes/drafts.js).
+  const quarkCosts = useQuarkCosts();
+  const regenerateCost = draft.contentType === 'campaign' ? 0 : (quarkCosts.image_generated || 0);
+
   const [title, setTitle] = useState(draft.title || '');
   const [caption, setCaption] = useState(draft.caption || '');
   const [hashtags, setHashtags] = useState<string[]>(draft.hashtags || []);
@@ -91,6 +98,10 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
   const [promptDraft, setPromptDraft] = useState(draft.imagePromptResolved || '');
 
   const handleRetryImage = async () => {
+    const confirmMsg = regenerateCost > 0
+      ? `Regenerate this image for ${regenerateCost} Quark${regenerateCost === 1 ? '' : 's'}? This replaces the current image.`
+      : 'Regenerate this image? This replaces the current image.';
+    if (!window.confirm(confirmMsg)) return;
     setIsRetryingImage(true);
     setErrorMsg('');
     setSuccessMsg('');

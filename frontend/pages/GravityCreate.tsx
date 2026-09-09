@@ -372,7 +372,20 @@ const GravityCreate: React.FC = () => {
     setPromptDraft(d.imagePromptResolved || d.imagePrompt || '');
   };
 
+  // Regenerate re-runs the full generation pipeline, so it costs the same
+  // Quarks as the original — campaign-type drafts are billed through the
+  // legacy Campaigns flow already (matches backend/routes/drafts.js).
+  const regenerateCostFor = (d: Draft) => (d.contentType === 'campaign' ? 0 : (quarkCosts.image_generated || 0));
+  const confirmRegenerate = (d: Draft) => {
+    const cost = regenerateCostFor(d);
+    const msg = cost > 0
+      ? `Regenerate this image for ${cost} Quark${cost === 1 ? '' : 's'}? This replaces the current image.`
+      : 'Regenerate this image? This replaces the current image.';
+    return window.confirm(msg);
+  };
+
   const regenerateWithPrompt = async (d: Draft) => {
+    if (!confirmRegenerate(d)) return;
     setActionBusy(d._id);
     setError(null);
     try {
@@ -391,6 +404,7 @@ const GravityCreate: React.FC = () => {
   };
 
   const regenerateImage = async (d: Draft) => {
+    if (!confirmRegenerate(d)) return;
     setActionBusy(d._id);
     setError(null);
     try {

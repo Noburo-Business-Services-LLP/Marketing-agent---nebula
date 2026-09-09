@@ -298,6 +298,7 @@ const ContentCalendar: React.FC = () => {
   };
 
   const regenerate = () => {
+    if (!window.confirm("Regenerate this month's plan? This replaces every day's current idea.")) return;
     updateCalendar(async () => contentCalendarAPI.regenerate(undefined, undefined, planFocus.trim() || undefined), 'regenerate');
   };
 

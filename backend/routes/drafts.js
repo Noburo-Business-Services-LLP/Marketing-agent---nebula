@@ -611,12 +611,36 @@ router.post('/generate-image-bg', protect, checkTrial, async (req, res) => {
 
 // 11. POST /:id/retry-image - Reset status to 'processing' and re-enqueue failed draft for image generation
 router.post('/:id/retry-image', protect, async (req, res) => {
+  // Declared out here, not inside the try: the catch block needs to read it
+  // to decide whether to refund — same pattern as /generate-image-bg above.
+  let creditsDeducted = false;
+  let creditsRemaining;
   try {
     const userId = req.user.userId || req.user.id;
     const draft = await Draft.findOne({ _id: req.params.id, userId });
 
     if (!draft) {
       return res.status(404).json({ success: false, message: 'Draft not found' });
+    }
+
+    // Regenerate re-runs the exact same Creative Director + Art Director +
+    // image-model pipeline as the original generation, so it costs us the
+    // same real API spend — it must be metered the same way. This used to
+    // be free (a real gap: every Regenerate click cost Nebulaa money with
+    // nothing charged to the account). Mirrors /generate-image-bg's own
+    // rule: campaign-type drafts are charged through the legacy Campaigns
+    // flow already, so only the non-campaign case is metered here.
+    if (draft.contentType !== 'campaign') {
+      const creditResult = await deductCredits(userId, 'image_generated', 1, 'Regenerate post image');
+      if (!creditResult.success) {
+        return res.status(403).json({
+          success: false,
+          creditsExhausted: true,
+          message: creditResult.error || `Insufficient Quarks. Need ${CREDIT_COSTS.image_generated} Quarks to regenerate.`
+        });
+      }
+      creditsDeducted = true;
+      creditsRemaining = creditResult.creditsRemaining;
     }
 
     // Optional: regenerate with THIS exact prompt instead of a fresh
@@ -637,9 +661,16 @@ router.post('/:id/retry-image', protect, async (req, res) => {
       promptOverride: promptOverride || undefined
     });
 
-    res.status(200).json({ success: true, message: 'Requeued draft for image generation', draft });
+    res.status(200).json({ success: true, message: 'Requeued draft for image generation', draft, creditsRemaining });
   } catch (error) {
     console.error('Retry image generation error:', error);
+    if (creditsDeducted) {
+      try {
+        await refundCredits(req.user.userId || req.user.id, 'image_generated', 1, 'Refund: regenerate failed to enqueue');
+      } catch (refundErr) {
+        console.error('⚠️ Failed to refund Quarks after retry-image error:', refundErr.message);
+      }
+    }
     res.status(500).json({ success: false, message: 'Failed to retry image generation', error: error.message });
   }
 });
