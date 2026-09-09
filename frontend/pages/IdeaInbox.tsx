@@ -236,7 +236,6 @@ const IdeaInbox: React.FC = () => {
         headline={<>Ideas that didn't come from <GravityEmphasis>Gravity</GravityEmphasis></>}
         subcopy="Drop a thought, a link, an ad you liked — or paste a whole list. Turn any of them into a real post whenever you're ready."
         align="left"
-        size="md"
       />
 
       {error && (

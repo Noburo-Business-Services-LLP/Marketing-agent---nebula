@@ -5,6 +5,7 @@ import { draftsAPI, apiService } from '../services/api';
 import { Draft } from '../types';
 import GeneratingFill from '../components/GeneratingFill';
 import { DraftPreviewModal } from '../components/DraftPreviewModal';
+import { GravityHero, GravityEmphasis } from '../components/gravity';
 
 // Gravity Approve — matches the prototype's Approve screen: single big
 // preview on the left, structured metadata + caption on the right,
@@ -357,6 +358,17 @@ const GravityApprove: React.FC = () => {
 
   // -------- render --------
 
+  // The page-level header, same shape as every other top-level page —
+  // TabBar sits below it, not instead of it.
+  const Header = () => (
+    <GravityHero
+      align="left"
+      eyebrow="Approve"
+      headline={<>Give everything the <GravityEmphasis>once-over</GravityEmphasis></>}
+      subcopy="Review what Gravity drafted, approve what's ready, and send back what needs work."
+    />
+  );
+
   const TabBar = () => (
     <div className="flex items-center gap-1 overflow-x-auto border-b border-white/[0.07] mb-8">
       {TABS.map((t) => (
@@ -391,6 +403,7 @@ const GravityApprove: React.FC = () => {
 
     return (
       <div className="max-w-[1100px] mx-auto pb-24">
+        <Header />
         <TabBar />
 
         {libraryLoading ? (
@@ -519,6 +532,7 @@ const GravityApprove: React.FC = () => {
 
   return (
     <div className="max-w-[1180px] mx-auto pb-16">
+      <Header />
       <TabBar />
       {/* Header row */}
       <div className="flex items-center justify-between mb-6">

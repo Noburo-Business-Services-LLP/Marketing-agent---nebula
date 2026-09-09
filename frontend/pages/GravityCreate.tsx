@@ -9,6 +9,7 @@ import CalendarIdeaPicker from '../components/CalendarIdeaPicker';
 import PromptStudio from '../components/PromptStudio';
 import AssetPicker, { PickedAsset } from '../components/AssetPicker';
 import { BorderBeam } from '../components/ui/border-beam';
+import { GravityHero, GravityEmphasis } from '../components/gravity';
 
 const ASPECTS = [
   { key: '4:5',  label: '4:5',  hint: 'Portrait' },
@@ -913,31 +914,31 @@ const GravityCreate: React.FC = () => {
       </div>
 
       {/* Hero */}
-      <div className="text-center mb-10">
-        <div className="gravity-label text-[#F5A623] mb-4">
-          {mode === 'campaign'
+      <GravityHero
+        eyebrow={
+          mode === 'campaign'
             ? 'Plan a campaign · ' + duration
             : mode === 'carousel'
               ? `Build a carousel · ${slideCount} slides`
-              : 'Draft a post · one shot'}
-        </div>
-        <h1 className="font-serif-display text-[56px] leading-[1.05] tracking-[-0.02em] text-[#F5F4F1] mb-5">
-          {mode === 'campaign' ? (
-            <>What are we <span className="italic text-[#F5A623]">working on</span>?</>
+              : 'Draft a post · one shot'
+        }
+        headline={
+          mode === 'campaign' ? (
+            <>What are we <GravityEmphasis>working on</GravityEmphasis>?</>
           ) : mode === 'carousel' ? (
-            <>What's the <span className="italic text-[#F5A623]">story</span>?</>
+            <>What's the <GravityEmphasis>story</GravityEmphasis>?</>
           ) : (
-            <>What's on your <span className="italic text-[#F5A623]">mind</span>?</>
-          )}
-        </h1>
-        <p className="text-[15px] text-white/55 max-w-[560px] mx-auto leading-relaxed">
-          {mode === 'campaign'
+            <>What's on your <GravityEmphasis>mind</GravityEmphasis>?</>
+          )
+        }
+        subcopy={
+          mode === 'campaign'
             ? 'Describe the campaign once. Gravity drafts the full run — across platforms, spaced out, in your voice.'
             : mode === 'carousel'
               ? 'One idea, told across slides. Gravity plans the arc, then renders every slide in the same look.'
-              : 'One sentence is enough. Gravity turns it into a scroll-stopping post.'}
-        </p>
-      </div>
+              : 'One sentence is enough. Gravity turns it into a scroll-stopping post.'
+        }
+      />
 
       {/* Ideas already planned in the calendar. A button rather than a wall
           of tiles: the brief is the point of this screen, the ideas are an

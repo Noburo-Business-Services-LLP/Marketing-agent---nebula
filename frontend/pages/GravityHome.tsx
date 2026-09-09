@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Check, ArrowRight, Sparkles } from 'lucide-react';
 import { apiService, draftsAPI } from '../services/api';
 import { Draft, Campaign } from '../types';
+import { GravityHero, GravityEmphasis } from '../components/gravity';
 
 // Gravity Home — matches the prototype's Home screen exactly, wired to
 // real backend data (drafts, campaigns, credits) so it drops in as
@@ -210,21 +211,20 @@ const GravityHome: React.FC = () => {
       {/* HERO */}
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-8 items-center mb-14">
         <div>
-          <div className="flex items-center gap-2 mb-6">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#F5A623]" />
-            <span className="gravity-label">{dateLabel} · Bengaluru</span>
-          </div>
-
-          <h1 className="font-serif-display text-[64px] leading-[1.02] tracking-[-0.02em] text-[#F5F4F1] mb-6">
-            <span className="tabular-nums">{heroReadyCount}</span> {heroReadyCount === 1 ? 'post' : 'posts'}<br />
-            <span>{heroReadyCount === 1 ? 'is' : 'are'} ready for </span>
-            <span className="italic text-[#F5A623]">your eye</span>
-            <span>.</span>
-          </h1>
-
-          <p className="text-[15px] text-white/60 leading-relaxed max-w-[520px] mb-8">
-            Gravity drafted the week ahead while you slept. Take a minute, tap through, and we'll handle the rest — scheduled, posted, measured.
-          </p>
+          <GravityHero
+            align="left"
+            eyebrow={`${dateLabel} · Bengaluru`}
+            headline={
+              <>
+                <span className="tabular-nums">{heroReadyCount}</span> {heroReadyCount === 1 ? 'post' : 'posts'}<br />
+                <span>{heroReadyCount === 1 ? 'is' : 'are'} ready for </span>
+                <GravityEmphasis>your eye</GravityEmphasis>
+                <span>.</span>
+              </>
+            }
+            subcopy="Gravity drafted the week ahead while you slept. Take a minute, tap through, and we'll handle the rest — scheduled, posted, measured."
+            className="!mb-8"
+          />
 
           <div className="flex items-center gap-3">
             <Link
