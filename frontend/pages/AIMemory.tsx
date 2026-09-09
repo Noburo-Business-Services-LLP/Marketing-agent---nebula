@@ -46,6 +46,8 @@ const NoteRow: React.FC<{
     try {
       await onSave(note._id, draft.trim());
       setEditing(false);
+    } catch {
+      // error already surfaced via the parent's statusMsg; keep editing open so the draft isn't lost
     } finally {
       setBusy(false);
     }
@@ -65,20 +67,20 @@ const NoteRow: React.FC<{
             className="flex-1 px-2.5 py-1.5 rounded-md bg-black/30 border border-white/[0.10] text-[13px] text-[#F5F4F1] outline-none focus:border-[#F5A623]/40"
             autoFocus
           />
-          <button onClick={save} disabled={busy} className="p-1.5 rounded-md text-emerald-400 hover:bg-white/[0.06] disabled:opacity-40">
+          <button onClick={save} disabled={busy} title="Save" className="p-1.5 rounded-md text-emerald-400 hover:bg-white/[0.06] disabled:opacity-40">
             {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
           </button>
-          <button onClick={() => { setDraft(note.text); setEditing(false); }} className="p-1.5 rounded-md text-white/40 hover:bg-white/[0.06]">
+          <button onClick={() => { setDraft(note.text); setEditing(false); }} title="Cancel" className="p-1.5 rounded-md text-white/40 hover:bg-white/[0.06]">
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
       ) : (
         <>
           <p className="flex-1 text-[13px] text-[#F5F4F1] leading-relaxed">{note.text}</p>
-          <button onClick={() => setEditing(true)} className="p-1.5 rounded-md text-white/40 hover:text-white hover:bg-white/[0.06] flex-shrink-0">
+          <button onClick={() => setEditing(true)} title="Edit" className="p-1.5 rounded-md text-white/40 hover:text-white hover:bg-white/[0.06] flex-shrink-0">
             <Pencil className="w-3.5 h-3.5" />
           </button>
-          <button onClick={() => onDelete(note._id)} className="p-1.5 rounded-md text-white/40 hover:text-red-400 hover:bg-white/[0.06] flex-shrink-0">
+          <button onClick={() => onDelete(note._id)} title="Delete" className="p-1.5 rounded-md text-white/40 hover:text-red-400 hover:bg-white/[0.06] flex-shrink-0">
             <Trash2 className="w-3.5 h-3.5" />
           </button>
         </>
@@ -112,13 +114,24 @@ const AIMemory: React.FC = () => {
   const performanceCount: number = data?.summary?.performanceMemories || 0;
 
   const saveNote = async (id: string, text: string) => {
-    await aiMemoryAPI.updateNote(id, { text });
-    await load();
+    try {
+      await aiMemoryAPI.updateNote(id, { text });
+      await load();
+    } catch (err: any) {
+      setStatusMsg(err?.message || 'Could not save the note. Please try again.');
+      window.setTimeout(() => setStatusMsg(''), 4000);
+      throw err;
+    }
   };
 
   const deleteNote = async (id: string) => {
-    await aiMemoryAPI.deleteNote(id);
-    await load();
+    try {
+      await aiMemoryAPI.deleteNote(id);
+      await load();
+    } catch (err: any) {
+      setStatusMsg(err?.message || 'Could not delete the note. Please try again.');
+      window.setTimeout(() => setStatusMsg(''), 4000);
+    }
   };
 
   const refreshNow = async () => {
