@@ -166,9 +166,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
 
   const businessName = user?.businessProfile?.name || (user?.email ? user.email.split('@')[0] : 'Your Brand');
   const businessInitial = businessName.trim().charAt(0).toUpperCase() || 'B';
-  const businessHandle = user?.email
-    ? `@${user.email.split('@')[0]}`
-    : (user?.businessProfile?.name ? `@${user.businessProfile.name.toLowerCase().replace(/\s+/g, '')}` : '@brand');
+  const businessHandle = user?.email || 'Add your email in Settings';
 
   const NavLink: React.FC<{
     path: string;
@@ -245,9 +243,15 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
               </div>
             </div>
 
-            {/* Account chip */}
+            {/* Account chip — opens Settings straight into Business Profile,
+                since that's what someone clicking their own account name is
+                almost always after. */}
             <div className="px-4 mb-4">
-              <button className="w-full flex items-center gap-3 px-2.5 py-2 rounded-xl bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.06] transition-colors">
+              <button
+                onClick={() => { setSidebarOpen(false); navigate('/settings?tab=business'); }}
+                title="Business profile settings"
+                className="w-full flex items-center gap-3 px-2.5 py-2 rounded-xl bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.06] transition-colors"
+              >
                 <span className="w-7 h-7 rounded-md bg-gradient-to-br from-[#3a2410] to-[#1a0f04] border border-white/[0.08] text-[11px] font-semibold text-[#F5A623] flex items-center justify-center">
                   {businessInitial}
                 </span>

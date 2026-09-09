@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Save, AlertCircle, Check, Loader2, Eye, EyeOff, Zap, RefreshCw, CreditCard, Download, ExternalLink } from 'lucide-react';
 import { User, BillingData, BusinessProfile } from '../types';
 import { ACTION_LABELS, QUARK_GROUPS } from '../constants/quarks';
@@ -20,7 +21,12 @@ interface SettingsProps {
 const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
   const { isDarkMode } = useTheme();
   const theme = getThemeClasses(isDarkMode);
-  const [activeTab, setActiveTab] = useState('Profile');
+  // `?tab=business` deep-links straight into the Business Profile tab — used
+  // by the sidebar's account chip so clicking it lands somewhere useful
+  // instead of always opening on the generic Profile tab.
+  const [searchParams] = useSearchParams();
+  const initialTab = searchParams.get('tab') === 'business' ? 'Business Profile' : 'Profile';
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [emailNotifications, setEmailNotifications] = useState(true);
   
   // API Status State
