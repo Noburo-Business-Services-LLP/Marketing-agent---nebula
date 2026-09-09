@@ -288,26 +288,25 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
         subcopy="Profile, business details, notifications, security and billing."
       />
 
-      <div className="flex flex-col md:flex-row gap-8">
-          {/* Sidebar Tabs */}
-          <div className="w-full md:w-64 flex-shrink-0">
-             <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-1.5 space-y-1">
-                {['Profile', 'Business Profile', 'Notifications', 'Security', 'Billing'].map(tab => (
-                    <button
-                        key={tab}
-                        onClick={() => setActiveTab(tab)}
-                        className={`w-full text-left px-4 py-2.5 rounded-lg text-[13px] font-semibold transition-all ${
-                            activeTab === tab
-                            ? 'bg-[#F5A623] text-[#1A1208] shadow-[0_4px_18px_rgba(245,166,35,0.20)]'
-                            : 'text-white/55 hover:text-[#F5F4F1] hover:bg-white/[0.05]'
-                        }`}
-                    >
-                        {tab}
-                    </button>
-                ))}
-             </div>
-          </div>
+      {/* Same horizontal underline tab bar as Approve/Calendar/Videos —
+          this used to be a vertical sidebar list, the only page in the app
+          navigating its sub-sections that way. */}
+      <div className="flex items-center gap-1 overflow-x-auto border-b border-white/[0.07] mb-8">
+        {['Profile', 'Business Profile', 'Notifications', 'Security', 'Billing'].map(tab => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`relative whitespace-nowrap px-3.5 py-2.5 text-[13px] font-semibold transition-colors ${
+              activeTab === tab ? 'text-[#F5A623]' : 'text-white/50 hover:text-white/80'
+            }`}
+          >
+            {tab}
+            {activeTab === tab && <span className="absolute left-2 right-2 -bottom-px h-0.5 rounded-full bg-[#F5A623]" />}
+          </button>
+        ))}
+      </div>
 
+      <div className="flex flex-col md:flex-row gap-8">
           {/* Content */}
           <div className="flex-1">
               <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-8">
