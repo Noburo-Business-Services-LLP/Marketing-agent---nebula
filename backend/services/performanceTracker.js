@@ -57,16 +57,48 @@ function postTargets(campaign) {
   return targets;
 }
 
+// Optional ISO date string. When set, campaigns published before this date
+// are excluded from the candidate query entirely — otherwise the first time
+// this scheduler runs against a real environment, every pre-existing
+// published campaign has all its checkpoints already elapsed and triggers
+// an immediate burst of Ayrshare calls (5 checkpoints x every historical
+// campaign). Whoever enables this scheduler in a real environment should
+// set this to roughly "now" so only newly-published campaigns get tracked.
+// Left unset, behavior is unchanged (no cutoff, full backfill).
+const LAUNCH_AT = process.env.PERFORMANCE_TRACKER_LAUNCH_AT
+  ? new Date(process.env.PERFORMANCE_TRACKER_LAUNCH_AT)
+  : null;
+
 async function runPerformanceTrackerOnce({ now = new Date(), limit = MAX_CHECKS_PER_RUN } = {}) {
   // Only campaigns that are actually published and haven't exhausted every
   // checkpoint yet are candidates — cheap enough to filter the rest in
   // JS after a narrow Mongo query rather than encoding the checkpoint math
   // itself into the query.
+  //
+  // Sorted newest-published-first so that (a) there's a deterministic order
+  // instead of natural/insertion order, and (b) un-checkable campaigns that
+  // never accumulate a checkpoint (see below) can't permanently occupy the
+  // head of the window and starve newer, genuinely checkable campaigns.
+  //
+  // Also requires at least one of socialPostId/socialPostIds to be
+  // populated — a campaign with neither can never produce a postTargets()
+  // result, so keeping it out of the query in the first place is the main
+  // fix for that starvation; legacy campaigns with only
+  // facebookPostId/instagramPostId still get filtered out by postTargets()
+  // below (not worth teaching postTargets() those fields for this fix).
+  const publishedAtFilter = { $ne: null, $lte: new Date(now.getTime() - CHECKPOINTS[0].ms) };
+  if (LAUNCH_AT && !Number.isNaN(LAUNCH_AT.getTime())) {
+    publishedAtFilter.$gte = LAUNCH_AT;
+  }
   const candidates = await Campaign.find({
     status: 'posted',
-    publishedAt: { $ne: null, $lte: new Date(now.getTime() - CHECKPOINTS[0].ms) },
-    $expr: { $lt: [{ $size: { $ifNull: ['$performanceChecks', []] } }, CHECKPOINTS.length] }
-  }).limit(limit * 3).lean(); // headroom: not every candidate has a checkpoint due right now
+    publishedAt: publishedAtFilter,
+    $expr: { $lt: [{ $size: { $ifNull: ['$performanceChecks', []] } }, CHECKPOINTS.length] },
+    $or: [
+      { socialPostId: { $exists: true, $nin: [null, ''] } },
+      { socialPostIds: { $type: 'object', $ne: {} } }
+    ]
+  }).sort({ publishedAt: -1 }).limit(limit * 3).lean(); // headroom: not every candidate has a checkpoint due right now
 
   let checked = 0;
   for (const campaign of candidates) {
@@ -75,11 +107,30 @@ async function runPerformanceTrackerOnce({ now = new Date(), limit = MAX_CHECKS_
     if (!checkpoint) continue;
 
     const targets = postTargets(campaign);
-    if (!targets.length) continue;
+    if (!targets.length) {
+      // Matched the query but postTargets() still couldn't find a checkable
+      // postId (e.g. only facebookPostId/instagramPostId populated) — record
+      // the checkpoint anyway so this campaign eventually retires from the
+      // candidate set after 5 attempts instead of being checked forever.
+      await Campaign.updateOne(
+        { _id: campaign._id },
+        { $push: { performanceChecks: { checkpoint, checkedAt: now } } }
+      );
+      continue;
+    }
 
     const user = await User.findById(campaign.userId).select('ayrshare businessProfile').lean();
     const profileKey = user?.ayrshare?.profileKey;
-    if (!profileKey) continue; // no connected socials — nothing to check
+    if (!profileKey) {
+      // Same reasoning as above: no connected socials means this campaign
+      // will never be checkable, so retire this checkpoint rather than
+      // re-querying it on every run forever.
+      await Campaign.updateOne(
+        { _id: campaign._id },
+        { $push: { performanceChecks: { checkpoint, checkedAt: now } } }
+      );
+      continue;
+    }
 
     for (const { platform, postId } of targets) {
       if (checked >= limit) break;

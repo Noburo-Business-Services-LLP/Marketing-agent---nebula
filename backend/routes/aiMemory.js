@@ -158,7 +158,13 @@ router.patch('/notes/:noteId', protect, async (req, res) => {
     const { text, category } = req.body || {};
 
     const setFields = {};
-    if (typeof text === 'string' && text.trim()) setFields['learnedNotes.$.text'] = text.trim();
+    if (typeof text === 'string' && text.trim()) {
+      setFields['learnedNotes.$.text'] = text.trim();
+      // A human deliberately edited this note's text — mark it so the
+      // distillation job preserves it verbatim on the next run instead of
+      // silently rewording or dropping it.
+      setFields['learnedNotes.$.userEdited'] = true;
+    }
     if (['copy', 'hashtags', 'cta', 'visual', 'timing', 'format'].includes(category)) {
       setFields['learnedNotes.$.category'] = category;
     }

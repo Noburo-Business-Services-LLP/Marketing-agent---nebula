@@ -494,21 +494,30 @@ class PersistentVideoGenerationQueue {
 
           // Remember this generation in the AI Memory system (Layer 1
           // evidence). Fire-and-forget — must never fail the video job.
-          if (jobDoc.userId && finalUrl) {
+          //
+          // merge_video's payload is flat ({ jobId, userId, effectiveClipUrls,
+          // finalAudioUrl, subtitles, baseUrl } — see its enqueue call in
+          // routes/videoGeneration.js) with no recoverable textual content:
+          // it just combines already-generated clips, so there's nothing new
+          // to learn from. Only create_video_pipeline (whose real payload
+          // field is `description`, not `script`/`prompt`, and whose result
+          // carries per-scene imagePrompt text in `sceneData`) has content
+          // worth remembering.
+          if (jobDoc.userId && finalUrl && jobType === 'create_video_pipeline') {
             try {
               const { rememberVideoGeneration } = require('./aiMemoryService');
               const rawPayload = jobDoc.payload?.payload || {};
+              const sceneData = Array.isArray(result?.sceneData) ? result.sceneData : [];
               rememberVideoGeneration({
                 userId: jobDoc.userId,
                 jobId,
                 action: 'reel_generation',
-                prompt: rawPayload.script || rawPayload.prompt || '',
-                script: rawPayload.script || '',
-                captions: rawPayload.captions || [],
+                prompt: rawPayload.description || '',
+                script: rawPayload.description || '',
                 hashtags: rawPayload.hashtags || [],
                 cta: rawPayload.cta || '',
-                scenePrompts: rawPayload.scenePrompts || [],
-                language: rawPayload.language || 'English',
+                sceneData,
+                language: rawPayload.languageCode || 'English',
                 duration: rawPayload.durationSeconds || null,
                 generatedVideos: [finalUrl]
               }).catch((err) => console.warn('[VideoQueue] AI memory write failed (non-fatal):', err.message));

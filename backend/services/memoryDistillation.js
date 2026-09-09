@@ -13,8 +13,6 @@
 
 const AIBrandMemory = require('../models/AIBrandMemory');
 const AIContentPerformance = require('../models/AIContentPerformance');
-const AICampaignHistory = require('../models/AICampaignHistory');
-const AIVideoMemory = require('../models/AIVideoMemory');
 const { callTextLLM } = require('./openAI');
 const { parseGeminiJSON } = require('./geminiAI');
 
@@ -40,14 +38,13 @@ just append to them):
 Write up to ${MAX_NOTES} short notes, each a single plain-English sentence
 stating a concrete pattern (e.g. "Carousel posts about pricing outperform
 single posters", "Posts without a person in frame get more engagement this
-quarter", "Illustration-style images outperform photo-realistic ones").
-Only include a category "visual" note if the WINNING/LOSING posts' prompt
-text actually supports it — do not guess at visual patterns with no textual
-evidence. Drop any existing note that is contradicted by the new evidence.
-Each note needs a category: one of copy, hashtags, cta, visual, timing,
-format. Each note needs a confidence between 0 and 1 based on how much
-evidence supports it (one post = low confidence, five+ consistent posts =
-high confidence).
+quarter"). The evidence above is caption/hashtag/CTA/format text only — no
+visual or design data is included, so do NOT write a "visual" category note;
+you have no grounding for one. Drop any existing note that is contradicted
+by the new evidence. Each note needs a category: one of copy, hashtags, cta,
+timing, format. Each note needs a confidence between 0 and 1 based on how
+much evidence supports it (one post = low confidence, five+ consistent
+posts = high confidence).
 
 Return ONLY a JSON object shaped EXACTLY like this — a top-level object with
 one key, "notes", holding the array. Do not use any other key name, and put
@@ -107,17 +104,41 @@ async function distillMemoryForUser(userId, organizationId) {
   const rawNotes = Array.isArray(parsed?.notes) ? parsed.notes : [];
 
   const sourceIds = [...winners, ...losers].map((p) => p._id);
-  const notes = rawNotes
+  const llmNotes = rawNotes
     .filter((n) => n && typeof n.text === 'string' && n.text.trim())
-    .slice(0, MAX_NOTES)
     .map((n) => ({
       text: n.text.trim(),
       category: ['copy', 'hashtags', 'cta', 'visual', 'timing', 'format'].includes(n.category) ? n.category : 'copy',
       sourceIds,
       confidence: Number.isFinite(Number(n.confidence)) ? Math.max(0, Math.min(1, Number(n.confidence))) : 0.5,
+      userEdited: false,
       createdAt: new Date(),
       updatedAt: new Date()
     }));
+
+  // User-edited notes are deliberate human corrections and must survive a
+  // distillation run verbatim — the LLM only ever sees them as unlabeled
+  // prose in EXISTING_NOTES, so nothing stops it from rewording or quietly
+  // dropping one. Carry them forward untouched, then fill whatever room is
+  // left (up to MAX_NOTES) with the LLM's fresh output — user-edited notes
+  // win the cap over freshly generated ones. Skip any fresh note whose text
+  // duplicates a preserved user-edited note.
+  const existingUserEditedNotes = (brandMemory?.learnedNotes || []).filter((n) => n.userEdited);
+  const preservedTexts = new Set(existingUserEditedNotes.map((n) => n.text.trim().toLowerCase()));
+  const freshNotes = llmNotes.filter((n) => !preservedTexts.has(n.text.toLowerCase()));
+
+  const notes = [
+    ...existingUserEditedNotes.slice(0, MAX_NOTES),
+    ...freshNotes
+  ].slice(0, MAX_NOTES);
+
+  // A bad/unparseable LLM response yields rawNotes === [], which combined
+  // with no user-edited notes to preserve would otherwise wipe out every
+  // existing note and stamp learnedNotesUpdatedAt to now — permanently
+  // blocking retries until fresh evidence arrives (see the skip-check
+  // above). Bail out without writing so existing notes are untouched and
+  // the next scheduled run can retry freely.
+  if (!notes.length) return null;
 
   await AIBrandMemory.findOneAndUpdate(
     { organizationId, userId },
@@ -132,7 +153,13 @@ async function runDistillationOnce({ limit = 50 } = {}) {
   // Any account with an AIBrandMemory doc is a candidate — distillMemoryForUser
   // itself no-ops when there's no new evidence, so this doesn't need its own
   // "has this account been active" filter.
-  const accounts = await AIBrandMemory.find({}).select('userId organizationId').limit(limit).lean();
+  // Sorted so never-yet-distilled accounts (learnedNotesUpdatedAt: null) and
+  // the longest-stale ones come first — without this, the same first `limit`
+  // accounts (in whatever order Mongo happens to return) get processed every
+  // run once the account base exceeds `limit`, and every account past that
+  // is never distilled. Ascending order means the whole account base cycles
+  // through over successive runs as learnedNotesUpdatedAt advances.
+  const accounts = await AIBrandMemory.find({}).select('userId organizationId').sort({ learnedNotesUpdatedAt: 1 }).limit(limit).lean();
   let distilled = 0;
   for (const acct of accounts) {
     try {

@@ -3,6 +3,7 @@ const User = require('../models/User');
 const Product = require('../models/Product');
 const BrandAsset = require('../models/BrandAsset');
 const BrandIntelligenceProfile = require('../models/BrandIntelligenceProfile');
+const { resolveOrganizationId } = require('./aiMemoryService');
 
 /**
  * The "Brand Memory" context block fed to the content-writing prompts.
@@ -84,7 +85,12 @@ async function buildBrandMemoryBlock(userId) {
   // distilled from real published-post performance (see
   // services/memoryDistillation.js). Deliberately the ONLY memory-derived
   // content read into generation — never the raw performance log directly.
-  const learnedMemory = await AIBrandMemory.findOne({ userId }).select('learnedNotes').lean();
+  // This function only receives userId (no user object/organizationId from
+  // any call site), so organizationId is resolved the same simple way
+  // resolveOrganizationId falls back when given just a userId — kept
+  // consistent with every other read/write of this model elsewhere.
+  const organizationId = resolveOrganizationId({ userId });
+  const learnedMemory = await AIBrandMemory.findOne({ organizationId, userId }).select('learnedNotes').lean();
   const notes = (learnedMemory?.learnedNotes || [])
     .slice()
     .sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt))

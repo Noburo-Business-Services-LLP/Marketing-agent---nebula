@@ -80,7 +80,7 @@ const NoteRow: React.FC<{
           <button onClick={() => setEditing(true)} title="Edit" className="p-1.5 rounded-md text-white/40 hover:text-white hover:bg-white/[0.06] flex-shrink-0">
             <Pencil className="w-3.5 h-3.5" />
           </button>
-          <button onClick={() => onDelete(note._id)} title="Delete" className="p-1.5 rounded-md text-white/40 hover:text-red-400 hover:bg-white/[0.06] flex-shrink-0">
+          <button onClick={() => { if (window.confirm('Delete this note?')) onDelete(note._id); }} title="Delete" className="p-1.5 rounded-md text-white/40 hover:text-red-400 hover:bg-white/[0.06] flex-shrink-0">
             <Trash2 className="w-3.5 h-3.5" />
           </button>
         </>

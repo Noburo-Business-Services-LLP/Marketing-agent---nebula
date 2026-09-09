@@ -69,6 +69,10 @@ const aiBrandMemorySchema = new mongoose.Schema(
         },
         sourceIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'AIContentPerformance' }],
         confidence: { type: Number, default: 0.5, min: 0, max: 1 },
+        // Set when a human edited this note's text via PATCH /notes/:noteId.
+        // The distillation job must preserve these verbatim rather than
+        // letting the next LLM pass silently reword or drop them.
+        userEdited: { type: Boolean, default: false },
         createdAt: { type: Date, default: Date.now },
         updatedAt: { type: Date, default: Date.now }
       }
