@@ -1787,6 +1787,9 @@ router.post('/generateCharacters', protect, checkTrial, videoAiWriteLimiter, asy
 // can regenerate a specific character with a custom tweak.
 // ============================================================
 router.post('/generateCharacterPortrait', protect, checkTrial, videoAiWriteLimiter, async (req, res) => {
+  // Declared out here so the catch block can refund — same pattern as
+  // /generate-image-bg in routes/drafts.js.
+  let creditsDeducted = false;
   try {
     const { referencePrompt, overridePrompt, characterName, aspectRatio, characters, castMode, extraDirection } = req.body || {};
 
@@ -1855,6 +1858,19 @@ router.post('/generateCharacterPortrait', protect, checkTrial, videoAiWriteLimit
       }
     }
 
+    // A cast/character portrait re-render is one real Nano Banana call —
+    // this used to be free (the same gap fixed for post/campaign Regenerate
+    // in routes/drafts.js).
+    const creditResult = await deductCredits(userId, 'video_character_portrait', 1, 'Regenerate character portrait');
+    if (!creditResult.success) {
+      return res.status(403).json({
+        success: false,
+        creditsExhausted: true,
+        message: creditResult.error || `Insufficient Quarks. Need ${CREDIT_COSTS.video_character_portrait} Quarks to regenerate this portrait.`
+      });
+    }
+    creditsDeducted = true;
+
     const result = await generateCampaignImageNanoBanana(prompt, {
       aspectRatio: aspectRatio || '1:1',
       // For cast reference: suppress brandName so Nano Banana does NOT
@@ -1865,6 +1881,7 @@ router.post('/generateCharacterPortrait', protect, checkTrial, videoAiWriteLimit
     });
 
     if (!result?.success || !result?.imageUrl) {
+      await refundCredits(userId, 'video_character_portrait', 1, 'Refund: portrait generation returned no URL').catch(() => {});
       return res.status(502).json({
         success: false,
         message: result?.error || 'Image generation returned no URL'
@@ -1876,6 +1893,10 @@ router.post('/generateCharacterPortrait', protect, checkTrial, videoAiWriteLimit
       characterName: characterName || null
     });
   } catch (error) {
+    if (creditsDeducted) {
+      const userId = toUserId(req.user);
+      await refundCredits(userId, 'video_character_portrait', 1, 'Refund: portrait generation errored').catch(() => {});
+    }
     return responseError(res, error, 'Failed to generate character portrait');
   }
 });
@@ -2341,6 +2362,10 @@ router.post('/generateSingleScene', protect, checkTrial, videoAiWriteLimiter, as
 // ============================================================
 router.post('/generateSingleSceneImage', protect, checkTrial, videoAiWriteLimiter, async (req, res) => {
   const _t0 = Date.now();
+  // Declared out here so both the explicit failure return below and the
+  // catch block can refund — same pattern as /generate-image-bg in
+  // routes/drafts.js.
+  let creditsDeducted = false;
   try {
     const { jobId, sceneIndex, castImageUrl: castUrlFromReq } = req.body || {};
     console.log(`[singleSceneImage] IN jobId=${jobId} sceneIndex=${sceneIndex} castUrl=${castUrlFromReq ? 'present' : 'missing'}`);
@@ -2357,6 +2382,19 @@ router.post('/generateSingleSceneImage', protect, checkTrial, videoAiWriteLimite
       return res.status(404).json({ success: false, message: `Scene at index ${sceneIndex} not found` });
     }
     console.log(`[singleSceneImage] scene ok · draft has ${scenesArr.length} scenes · scene.imageUrl already? ${!!scene.imageUrl}`);
+
+    // Regenerating one scene's still re-runs one real Nano Banana call —
+    // this used to be free (the same class of gap fixed for post/campaign
+    // Regenerate in routes/drafts.js).
+    const creditResult = await deductCredits(userId, 'video_scene_image', 1, 'Regenerate scene image');
+    if (!creditResult.success) {
+      return res.status(403).json({
+        success: false,
+        creditsExhausted: true,
+        message: creditResult.error || `Insufficient Quarks. Need ${CREDIT_COSTS.video_scene_image} Quarks to regenerate this scene's image.`
+      });
+    }
+    creditsDeducted = true;
 
     const castUrl = String(castUrlFromReq || draft?.castImageUrl || draft?.characterImage || '').trim();
     const characterBible = Array.isArray(draft?.characterBible) ? draft.characterBible : [];
@@ -2498,6 +2536,7 @@ Match the reference's wall colors, floor materials, ceiling, lighting fixtures, 
       }
     }
     if (!imageUrl) {
+      await refundCredits(userId, 'video_scene_image', 1, 'Refund: scene image regeneration failed').catch(() => {});
       return res.status(502).json({ success: false, message: lastResult?.error || 'Nano Banana returned no imageUrl after retries' });
     }
 
@@ -2524,6 +2563,10 @@ Match the reference's wall colors, floor materials, ceiling, lighting fixtures, 
     }));
     return res.json({ success: true, jobId, sceneIndex, imageUrl, scene: nextScenes[sceneIndex], draft: saved });
   } catch (error) {
+    if (creditsDeducted) {
+      const userId = toUserId(req.user);
+      await refundCredits(userId, 'video_scene_image', 1, 'Refund: scene image regeneration errored').catch(() => {});
+    }
     return responseError(res, error, 'Failed to generate scene image');
   }
 });
@@ -2693,6 +2736,10 @@ router.post('/applySceneLogo', protect, videoJobReadLimiter, async (req, res) =>
 // rather than just posing.
 // ============================================================
 router.post('/generateSingleVideoClip', protect, checkTrial, videoAiWriteLimiter, async (req, res) => {
+  // Declared out here so the catch block can refund — same pattern as
+  // /generate-image-bg in routes/drafts.js.
+  let creditsDeducted = false;
+  let creditUserId = null;
   try {
     const { jobId, sceneIndex, regenTweak = '', aspectRatio: aspectFromReq } = req.body || {};
     if (!jobId) return res.status(400).json({ success: false, message: 'jobId is required' });
@@ -2700,6 +2747,7 @@ router.post('/generateSingleVideoClip', protect, checkTrial, videoAiWriteLimiter
       return res.status(400).json({ success: false, message: 'sceneIndex (0-based integer) is required' });
     }
     const userId = toUserId(req.user);
+    creditUserId = userId;
     const draft = await loadDraftForUser(jobId, userId);
     // Scenes can live in any of: draft.scenes | draft.images.sceneData
     // | draft.clips.sceneData. Prefer the collection that has an
@@ -2718,6 +2766,19 @@ router.post('/generateSingleVideoClip', protect, checkTrial, videoAiWriteLimiter
       message: `Scene at index ${sceneIndex} not found (draft has ${scenesArr.length} scene${scenesArr.length === 1 ? '' : 's'})`
     });
     if (!scene.imageUrl) return res.status(400).json({ success: false, message: 'Scene image must be generated first' });
+
+    // Regenerating one scene's clip re-runs one real Kling call — this used
+    // to be free (the same class of gap fixed for post/campaign Regenerate
+    // in routes/drafts.js).
+    const creditResult = await deductCredits(userId, 'video_scene_clip', 1, 'Regenerate scene clip');
+    if (!creditResult.success) {
+      return res.status(403).json({
+        success: false,
+        creditsExhausted: true,
+        message: creditResult.error || `Insufficient Quarks. Need ${CREDIT_COSTS.video_scene_clip} Quarks to regenerate this scene's clip.`
+      });
+    }
+    creditsDeducted = true;
 
     const validAspect = new Set(['9:16', '16:9', '1:1', '4:5']);
     const rawAspect = String(aspectFromReq || draft?.input?.aspectRatio || '9:16').trim();
@@ -2870,11 +2931,19 @@ router.post('/generateSingleVideoClip', protect, checkTrial, videoAiWriteLimiter
       draft: saved
     });
   } catch (error) {
+    if (creditsDeducted && creditUserId) {
+      await refundCredits(creditUserId, 'video_scene_clip', 1, 'Refund: scene clip regeneration errored').catch(() => {});
+    }
     return responseError(res, error, 'Failed to generate scene clip');
   }
 });
 
 router.post('/generateImages', protect, checkTrial, videoAiWriteLimiter, async (req, res) => {
+  // Declared out here so the catch block can refund whatever this request
+  // actually deducted — same pattern as /generate-image-bg in
+  // routes/drafts.js. 'replace' (a manually-uploaded image) never deducts.
+  let creditsDeductedCount = 0;
+  let creditUserId = null;
   try {
     const { jobId, action = 'generateAll', sceneId, sceneData, imagePrompt, imageData, imageUrl } = req.body || {};
     if (!jobId) {
@@ -2882,6 +2951,7 @@ router.post('/generateImages', protect, checkTrial, videoAiWriteLimiter, async (
     }
 
     const userId = toUserId(req.user);
+    creditUserId = userId;
     const draft = await loadDraftForUser(jobId, userId);
     const baseUrl = reqBaseUrl(req);
     const durationSeconds = normalizedDurationSeconds(draft?.input?.durationSeconds || 60, 60);
@@ -2895,6 +2965,34 @@ router.post('/generateImages', protect, checkTrial, videoAiWriteLimiter, async (
 
     if (!sourceScenes.length) {
       return res.status(400).json({ success: false, message: 'No scene data available. Generate scenes first.' });
+    }
+
+    // Only the branches that actually call the image model cost anything —
+    // 'replace' just saves a manually-uploaded image, no vendor call.
+    // Regenerating one scene re-runs one Nano Banana call; the bulk
+    // "generate/regenerate all" path (the else branch below) re-runs one
+    // per scene. This used to be entirely free — the same gap fixed for
+    // post/campaign Regenerate in routes/drafts.js.
+    if (action === 'regenerate' && sceneId) {
+      const creditResult = await deductCredits(userId, 'video_scene_image', 1, 'Regenerate scene image');
+      if (!creditResult.success) {
+        return res.status(403).json({
+          success: false,
+          creditsExhausted: true,
+          message: creditResult.error || `Insufficient Quarks. Need ${CREDIT_COSTS.video_scene_image} Quarks to regenerate this scene's image.`
+        });
+      }
+      creditsDeductedCount = 1;
+    } else if (action !== 'replace') {
+      const creditResult = await deductCredits(userId, 'video_scene_image', sourceScenes.length, 'Regenerate all scene images');
+      if (!creditResult.success) {
+        return res.status(403).json({
+          success: false,
+          creditsExhausted: true,
+          message: creditResult.error || `Insufficient Quarks. Need ${CREDIT_COSTS.video_scene_image * sourceScenes.length} Quarks to regenerate all ${sourceScenes.length} scene images.`
+        });
+      }
+      creditsDeductedCount = sourceScenes.length;
     }
 
     let nextScenes = sourceScenes;
@@ -2926,6 +3024,7 @@ router.post('/generateImages', protect, checkTrial, videoAiWriteLimiter, async (
     } else if (action === 'regenerate' && sceneId) {
       const idx = sourceScenes.findIndex((item) => String(item.sceneId) === String(sceneId));
       if (idx === -1) {
+        await refundCredits(userId, 'video_scene_image', 1, 'Refund: scene not found').catch(() => {});
         return res.status(404).json({ success: false, message: 'Scene not found' });
       }
       const targetScene = sourceScenes[idx];
@@ -2977,6 +3076,7 @@ router.post('/generateImages', protect, checkTrial, videoAiWriteLimiter, async (
             }
           } catch (error) {
             console.error('Nano Banana API Error:', error);
+            await refundCredits(userId, 'video_scene_image', 1, 'Refund: scene image regeneration errored').catch(() => {});
             return res.status(500).json({ success: false, message: 'Nano Banana API Error: ' + error.message });
           }
       } else {
@@ -3075,11 +3175,22 @@ router.post('/generateImages', protect, checkTrial, videoAiWriteLimiter, async (
       draft: updated
     });
   } catch (error) {
+    if (creditsDeductedCount > 0 && creditUserId) {
+      await refundCredits(creditUserId, 'video_scene_image', creditsDeductedCount, 'Refund: scene image generation errored').catch(() => {});
+    }
     return responseError(res, error, 'Failed to generate images');
   }
 });
 
 router.post('/generateClips', protect, checkTrial, videoAiWriteLimiter, async (req, res) => {
+  // Declared out here so the catch block can refund — same pattern as
+  // /generate-image-bg in routes/drafts.js. Only covers the synchronous
+  // path's failures; the async/queued path (off unless VIDEO_STEP_ASYNC is
+  // explicitly set) doesn't refund on a later job failure yet — a known,
+  // smaller gap left for a follow-up rather than reworking the queue's
+  // failure handling here.
+  let creditsDeductedCount = 0;
+  let creditUserId = null;
   try {
     const { jobId, sceneData } = req.body || {};
     if (!jobId) {
@@ -3087,6 +3198,7 @@ router.post('/generateClips', protect, checkTrial, videoAiWriteLimiter, async (r
     }
 
     const userId = toUserId(req.user);
+    creditUserId = userId;
     const draft = await loadDraftForUser(jobId, userId);
     const sourceScenes = sanitizeSceneData(
       sceneData ||
@@ -3099,6 +3211,19 @@ router.post('/generateClips', protect, checkTrial, videoAiWriteLimiter, async (r
     if (!sourceScenes.length || !sourceScenes.some((scene) => scene.imageUrl)) {
       return res.status(400).json({ success: false, message: 'Scene images are required before clip generation' });
     }
+
+    // Regenerating all clips re-runs one real Kling call per scene — this
+    // used to be free (the same gap fixed for post/campaign Regenerate in
+    // routes/drafts.js).
+    const creditResult = await deductCredits(userId, 'video_scene_clip', sourceScenes.length, 'Regenerate all scene clips');
+    if (!creditResult.success) {
+      return res.status(403).json({
+        success: false,
+        creditsExhausted: true,
+        message: creditResult.error || `Insufficient Quarks. Need ${CREDIT_COSTS.video_scene_clip * sourceScenes.length} Quarks to regenerate all ${sourceScenes.length} clips.`
+      });
+    }
+    creditsDeductedCount = sourceScenes.length;
 
     const shouldQueue =
       req.body?.async === true ||
@@ -3217,6 +3342,9 @@ router.post('/generateClips', protect, checkTrial, videoAiWriteLimiter, async (r
       draft: updated
     });
   } catch (error) {
+    if (creditsDeductedCount > 0 && creditUserId) {
+      await refundCredits(creditUserId, 'video_scene_clip', creditsDeductedCount, 'Refund: clip generation errored').catch(() => {});
+    }
     return responseError(res, error, 'Failed to generate clips');
   }
 });

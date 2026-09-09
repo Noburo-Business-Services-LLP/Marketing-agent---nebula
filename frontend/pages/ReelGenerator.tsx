@@ -240,6 +240,11 @@ const ReelGenerator: React.FC = () => {
   // per-card regenerate. overridePrompt takes precedence over the
   // originally-generated referencePrompt so users can steer the result.
   const renderCharacterPortrait = async (charId: string, useOverride = false) => {
+    const existing = generatedCharactersRef.current.find((c) => c.id === charId);
+    // Only confirm when this replaces an existing portrait — the very
+    // first render for a character has nothing to lose, so asking "are
+    // you sure" there would just be friction.
+    if (existing?.portraitUrl && !confirmRegenerateCost(1, quarkCosts.video_character_portrait || 0, 'this character portrait')) return;
     setGeneratedCharacters((prev) => prev.map((c) => c.id === charId ? { ...c, portraitLoading: true, portraitError: '' } : c));
     const ch = generatedCharactersRef.current.find((c) => c.id === charId);
     if (!ch) return;
@@ -273,6 +278,9 @@ const ReelGenerator: React.FC = () => {
       setCastImageError('No characters available yet.');
       return;
     }
+    // Only confirm when this replaces an existing cast image — the first
+    // render has nothing to lose.
+    if (castImageUrl && !confirmRegenerateCost(1, quarkCosts.video_character_portrait || 0, 'the cast reference image')) return;
     const tweak = castTweakPrompt.trim();
     setCastImageLoading(true);
     setCastImageError('');
@@ -348,6 +356,16 @@ const ReelGenerator: React.FC = () => {
   };
   const [promptStudioOpen, setPromptStudioOpen] = useState(false);
   const quarkCosts = useQuarkCosts();
+  // Every regenerate action re-runs a real vendor call, so it must confirm
+  // before spending Quarks — same policy as image Regenerate elsewhere in
+  // the app (GravityCreate/GravityApprove/DraftPreviewModal).
+  const confirmRegenerateCost = (count: number, costPerUnit: number, label: string) => {
+    const total = count * costPerUnit;
+    const msg = total > 0
+      ? `Regenerate ${label} for ${total} Quark${total === 1 ? '' : 's'}?`
+      : `Regenerate ${label}?`;
+    return window.confirm(msg);
+  };
   // Products/services featured in the video, and the environment it is set
   // in. Both now come from Brand Assets rather than upload-only.
   const [productPickerOpen, setProductPickerOpen] = useState(false);
@@ -1661,7 +1679,11 @@ setCharacterAge(nextDraft?.characterAge || '');
   //            scene enrichment is its own ~2000-token request so nothing
   //            gets truncated. Scene N appears in the UI the moment it's
   //            ready while scene N+1 is generating in the background.
-  const generatePromptAndScenes = async () => withBusy(async () => {
+  const generatePromptAndScenes = async () => {
+    // Only confirm when this replaces an existing script/scene breakdown —
+    // the first generation has nothing to lose.
+    if (scenes.length > 0 && !window.confirm('Regenerate the script and scene breakdown? This replaces the current one.')) return;
+    return withBusy(async () => {
     if (!jobId) throw new Error('Draft missing. Complete step 1 first.');
 
     // 1) Generate the structured strategy prompt (writes draft.prompt).
@@ -1726,7 +1748,8 @@ setCharacterAge(nextDraft?.characterAge || '');
     }
     setPendingSceneIndex(null);
     setTotalScenesForRun(0);
-  });
+    });
+  };
 
   const saveStep2EditsAndNext = async () => withBusy(async () => {
     if (!jobId) throw new Error('Draft missing');
@@ -1750,7 +1773,10 @@ setCharacterAge(nextDraft?.characterAge || '');
   // in the UI the moment Nano Banana returns it — no big-batch wait, and
   // the user can see progress live. The cast image from Step 2 is passed
   // as an identity anchor so every face matches the approved characters.
-  const generateSceneImages = async () => withBusy(async () => {
+  const generateSceneImages = async () => {
+    if (!Array.isArray(scenes) || scenes.length === 0) return;
+    if (!confirmRegenerateCost(scenes.length, quarkCosts.video_scene_image || 0, `${scenes.length} scene image${scenes.length === 1 ? '' : 's'}`)) return;
+    return withBusy(async () => {
     if (!jobId) throw new Error('Draft missing');
     if (!Array.isArray(scenes) || scenes.length === 0) {
       throw new Error('No scenes yet — generate Script + Scenes first.');
@@ -1777,7 +1803,8 @@ setCharacterAge(nextDraft?.characterAge || '');
     }
     setPendingSceneIndex(null);
     setTotalScenesForRun(0);
-  });
+    });
+  };
 
   // Toggle the brand-logo overlay on a single scene image.
   // mode: 'watermark' (subtle corner) | 'prominent' (larger, wall-sign
@@ -1826,6 +1853,7 @@ setCharacterAge(nextDraft?.characterAge || '');
 
   const regenerateSceneImage = async (scene: any) => {
     if (!jobId) { setError('Draft missing'); return; }
+    if (!confirmRegenerateCost(1, quarkCosts.video_scene_image || 0, 'this scene image')) return;
     const sid = String(scene.sceneId || '');
     // Find the scene's index in the current scenes array (source of
     // truth for the single-scene endpoint).
@@ -1862,6 +1890,7 @@ setCharacterAge(nextDraft?.characterAge || '');
 
   const regenerateScene = async (scene: any) => {
     if (!jobId) { setError('Draft missing'); return; }
+    if (!window.confirm('Regenerate this scene\'s breakdown? This replaces its current script details.')) return;
     const sid = String(scene.sceneId || '');
     markSceneRegenerating(sid, true);
     setError('');
@@ -1886,7 +1915,10 @@ setCharacterAge(nextDraft?.characterAge || '');
   // firing /generateSingleVideoClip one at a time so each clip lands
   // in the UI the moment Kling returns it. Skips scenes that already
   // have a clipUrl (allowing partial-retry after mid-run API exhaust).
-  const generateClips = async () => withBusy(async () => {
+  const generateClips = async () => {
+    const pending = (scenes || []).filter((s: any) => !s.clipUrl && s.imageUrl).length;
+    if (pending > 0 && !confirmRegenerateCost(pending, quarkCosts.video_scene_clip || 0, `${pending} scene clip${pending === 1 ? '' : 's'}`)) return;
+    return withBusy(async () => {
     if (!jobId) throw new Error('Draft missing');
     if (!Array.isArray(scenes) || scenes.length === 0) {
       throw new Error('No scenes to render — generate scenes + images first.');
@@ -1917,7 +1949,8 @@ setCharacterAge(nextDraft?.characterAge || '');
     }
     setPendingSceneIndex(null);
     setTotalScenesForRun(0);
-  });
+    });
+  };
 
   // Regenerate a single scene's clip. If `tweak` is provided, it's
   // appended to the Kling prompt as a hard override (user gets to
@@ -1926,6 +1959,7 @@ setCharacterAge(nextDraft?.characterAge || '');
     if (!jobId) { setError('Draft missing'); return; }
     const scene = scenes[sceneIdx];
     if (!scene) return;
+    if (!confirmRegenerateCost(1, quarkCosts.video_scene_clip || 0, 'this scene clip')) return;
     const sid = String(scene.sceneId || sceneIdx);
     markSceneRegenerating(sid, true);
     setError('');

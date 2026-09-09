@@ -174,6 +174,32 @@ const ACTION_USD = {
     assetCost(INFRA.mb_per_image) +
     INFRA.ffmpeg_compute_per_scene,
 
+  // --- video: regenerating ONE piece after the fact ------------------------
+  // video_generated bundles a whole scene (image + identity pass + clip +
+  // narration + script) because that is what /createVideo pays for in one
+  // shot. Regenerating afterward is finer-grained — re-rolling just the
+  // still or just the clip for one scene — and re-runs only that one real
+  // vendor call, so it needs its own, smaller price rather than either
+  // being charged the full per-scene bundle or (as it was before this)
+  // nothing at all.
+
+  // generateSingleSceneImage / generateImages' bulk path: one Nano Banana
+  // still per scene, no identity pass, no clip.
+  video_scene_image: image + assetCost(INFRA.mb_per_image),
+
+  // generateSingleVideoClip / generateClips' bulk path: the scene's image
+  // already exists, so this is Kling alone, not the full scene bundle.
+  video_scene_clip:
+    PROVIDER_RATES.kling_turbo_pro_per_5s_clip +
+    assetCost(INFRA.mb_per_scene_clip + INFRA.mb_per_final_video_per_scene) +
+    INFRA.ffmpeg_compute_per_scene,
+
+  // generateCharacterPortrait: also a single Nano Banana call (confirmed by
+  // reading the route — it does not call the fal_pulid identity model that
+  // video_base's initial 4-angle character sheet uses), same shape as
+  // video_scene_image.
+  video_character_portrait: image + assetCost(INFRA.mb_per_image),
+
   // --- the "smart post" flows ---------------------------------------------
   // A normal post plus an extra context/research pass over rivals, strategy
   // or event data.
@@ -259,6 +285,9 @@ const ACTION_UNITS = {
   carousel_generated: 'per slide',
   video_base: 'per video',
   video_generated: 'per scene',
+  video_scene_image: 'per scene',
+  video_scene_clip: 'per scene',
+  video_character_portrait: 'per portrait',
   chat_message: 'per message',
   rival_post: 'per post',
   strategic_post: 'per post',
