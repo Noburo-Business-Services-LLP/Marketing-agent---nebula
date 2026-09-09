@@ -2307,8 +2307,10 @@ setCharacterAge(nextDraft?.characterAge || '');
           </div>
         )}
 
-        <div className={`border-b overflow-x-auto ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'}`}>
-          <div className="flex space-x-6 min-w-max">
+        {/* Same pill-shaped switcher as Create's Campaign/Single post/Carousel
+            toggle — the one tab control style the whole app should share. */}
+        <div className="overflow-x-auto">
+          <div className="inline-flex items-center gap-1 p-1 rounded-full bg-white/[0.03] border border-white/[0.06]">
             {[
               { id: 'create', label: 'Create', icon: Plus },
               { id: 'all', label: 'All AI Videos', icon: null },
@@ -2332,12 +2334,11 @@ setCharacterAge(nextDraft?.characterAge || '');
                       setSuccessMessage('');
                     }
                   }}
-                  className={`pb-4 text-[13px] font-medium border-b-2 transition-colors flex items-center gap-2 ${active
-                    ? 'border-[#F5A623] text-[#F5A623]'
-                    : `border-transparent text-white/55 hover:text-[#F5F4F1] hover:border-white/20`
-                    }`}
+                  className={`whitespace-nowrap h-9 px-5 rounded-full text-[13px] font-semibold transition-colors flex items-center gap-2 ${
+                    active ? 'bg-white/[0.10] text-[#F5F4F1]' : 'text-white/55 hover:text-white/80'
+                  }`}
                 >
-                  {Icon && <Icon className="w-4 h-4" />}
+                  {Icon && <Icon className="w-3.5 h-3.5" />}
                   {tab.label}
                 </button>
               );

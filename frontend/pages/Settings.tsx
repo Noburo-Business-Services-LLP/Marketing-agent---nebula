@@ -288,22 +288,22 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
         subcopy="Profile, business details, notifications, security and billing."
       />
 
-      {/* Same horizontal underline tab bar as Approve/Calendar/Videos —
-          this used to be a vertical sidebar list, the only page in the app
-          navigating its sub-sections that way. */}
-      <div className="flex items-center gap-1 overflow-x-auto border-b border-white/[0.07] mb-8">
-        {['Profile', 'Business Profile', 'Notifications', 'Security', 'Billing'].map(tab => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`relative whitespace-nowrap px-3.5 py-2.5 text-[13px] font-semibold transition-colors ${
-              activeTab === tab ? 'text-[#F5A623]' : 'text-white/50 hover:text-white/80'
-            }`}
-          >
-            {tab}
-            {activeTab === tab && <span className="absolute left-2 right-2 -bottom-px h-0.5 rounded-full bg-[#F5A623]" />}
-          </button>
-        ))}
+      {/* Same pill-shaped switcher as Create's Campaign/Single post/Carousel
+          toggle — the one tab control style the whole app should share. */}
+      <div className="mb-8 overflow-x-auto">
+        <div className="inline-flex items-center gap-1 p-1 rounded-full bg-white/[0.03] border border-white/[0.06]">
+          {['Profile', 'Business Profile', 'Notifications', 'Security', 'Billing'].map(tab => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`whitespace-nowrap h-9 px-5 rounded-full text-[13px] font-semibold transition-colors ${
+                activeTab === tab ? 'bg-white/[0.10] text-[#F5F4F1]' : 'text-white/55 hover:text-white/80'
+              }`}
+            >
+              {tab}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="flex flex-col md:flex-row gap-8">
