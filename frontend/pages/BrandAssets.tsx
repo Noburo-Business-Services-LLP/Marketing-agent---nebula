@@ -562,26 +562,28 @@ const BrandAssets: React.FC = () => {
           </div>
         )}
 
-        <div className="flex flex-wrap gap-1.5 rounded-xl border border-white/[0.06] bg-white/[0.02] p-1.5">
-          {([
-            { id: 'brand', label: 'Brand' },
-            { id: 'products', label: 'Products & Services' },
-            { id: 'environment', label: 'Environment' },
-            { id: 'voice', label: 'Voice' },
-          ] as const).map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setActiveTab(t.id)}
-              className={`px-4 py-2 rounded-lg text-[13px] font-semibold transition-all ${
-                activeTab === t.id
-                  ? 'bg-[#F5A623] text-[#1A1208] shadow-[0_4px_18px_rgba(245,166,35,0.20)]'
-                  : 'text-white/55 hover:text-[#F5F4F1] hover:bg-white/[0.05]'
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
+        {/* Same pill-shaped switcher as Create's Campaign/Single post/Carousel
+            toggle — the one tab control style the whole app should share. */}
+        <div className="overflow-x-auto">
+          <div className="inline-flex items-center gap-1 p-1 rounded-full bg-white/[0.03] border border-white/[0.06]">
+            {([
+              { id: 'brand', label: 'Brand' },
+              { id: 'products', label: 'Products & Services' },
+              { id: 'environment', label: 'Environment' },
+              { id: 'voice', label: 'Voice' },
+            ] as const).map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setActiveTab(t.id)}
+                className={`whitespace-nowrap h-9 px-5 rounded-full text-[13px] font-semibold transition-colors ${
+                  activeTab === t.id ? 'bg-white/[0.10] text-[#F5F4F1]' : 'text-white/55 hover:text-white/80'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {activeTab === 'brand' && (

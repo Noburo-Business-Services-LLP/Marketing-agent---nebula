@@ -596,26 +596,28 @@ const ConnectSocials: React.FC = () => {
         </div>
       </div>
 
-      <div className="mb-6 flex flex-wrap gap-1.5 rounded-xl border border-white/[0.06] bg-white/[0.02] p-1.5">
-        {tabs.map((tab) => {
-          const Icon = tab.icon;
-          const active = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => handleTabClick(tab)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-semibold transition-all ${
-                active
-                  ? 'bg-[#F5A623] text-[#1A1208] shadow-[0_4px_18px_rgba(245,166,35,0.20)]'
-                  : 'text-white/55 hover:text-[#F5F4F1] hover:bg-white/[0.05]'
-              }`}
-            >
-              <Icon className="w-4 h-4" />
-              {tab.label}
-            </button>
-          );
-        })}
+      {/* Same pill-shaped switcher as Create's Campaign/Single post/Carousel
+          toggle — the one tab control style the whole app should share. */}
+      <div className="mb-6 overflow-x-auto">
+        <div className="inline-flex items-center gap-1 p-1 rounded-full bg-white/[0.03] border border-white/[0.06]">
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            const active = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => handleTabClick(tab)}
+                className={`whitespace-nowrap h-9 px-5 rounded-full text-[13px] font-semibold transition-colors flex items-center gap-2 ${
+                  active ? 'bg-white/[0.10] text-[#F5F4F1]' : 'text-white/55 hover:text-white/80'
+                }`}
+              >
+                <Icon className="w-3.5 h-3.5" />
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {activeTab === 'accounts' && (
