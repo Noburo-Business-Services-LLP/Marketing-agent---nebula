@@ -3,6 +3,7 @@ import { X, Save, Calendar, Send, Trash2, Loader2, Instagram, Facebook, Linkedin
 import { Draft } from '../types';
 import { draftsAPI } from '../services/api';
 import { useQuarkCosts } from '../hooks/useQuarkCosts';
+import { useConfirm } from '../context/ConfirmContext';
 
 interface DraftPreviewModalProps {
   draft: Draft;
@@ -15,6 +16,7 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
   // Quarks as the original — campaign-type drafts are billed through the
   // legacy Campaigns flow already (matches backend/routes/drafts.js).
   const quarkCosts = useQuarkCosts();
+  const confirm = useConfirm();
   const regenerateCost = draft.contentType === 'campaign' ? 0 : (quarkCosts.image_generated || 0);
 
   const [title, setTitle] = useState(draft.title || '');
@@ -99,9 +101,9 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
 
   const handleRetryImage = async () => {
     const confirmMsg = regenerateCost > 0
-      ? `Regenerate this image for ${regenerateCost} Quark${regenerateCost === 1 ? '' : 's'}? This replaces the current image.`
-      : 'Regenerate this image? This replaces the current image.';
-    if (!window.confirm(confirmMsg)) return;
+      ? `This costs ${regenerateCost} Quark${regenerateCost === 1 ? '' : 's'} and replaces the current image.`
+      : 'This replaces the current image.';
+    if (!(await confirm(confirmMsg, { title: 'Regenerate this image?', confirmLabel: 'Regenerate' }))) return;
     setIsRetryingImage(true);
     setErrorMsg('');
     setSuccessMsg('');
@@ -145,7 +147,7 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
   };
 
   const handleReject = async () => {
-    if (window.confirm('Are you sure you want to reject this draft? It will be archived.')) {
+    if (await confirm('It will be archived.', { title: 'Reject this draft?', confirmLabel: 'Reject', danger: true })) {
       setIsRejecting(true);
       setErrorMsg('');
       try {
@@ -163,7 +165,7 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
   };
 
   const handleRegenerate = async () => {
-    if (window.confirm('Are you sure you want to reject and regenerate a new draft for this slot?')) {
+    if (await confirm('This rejects the current draft and generates a brand new one for this slot.', { title: 'Regenerate a new draft?', confirmLabel: 'Regenerate' })) {
       setIsRegenerating(true);
       setErrorMsg('');
       try {
@@ -232,7 +234,7 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
       return;
     }
 
-    if (window.confirm('Are you sure you want to publish this post immediately to social media?')) {
+    if (await confirm('This posts immediately to the selected social platforms.', { title: 'Publish now?', confirmLabel: 'Publish' })) {
       setIsPublishing(true);
       setErrorMsg('');
       setSuccessMsg('');
@@ -260,7 +262,7 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
   };
 
   const handleDelete = async () => {
-    if (window.confirm('Are you sure you want to archive/delete this draft?')) {
+    if (await confirm('This archives the draft — it can\'t be undone from here.', { title: 'Delete this draft?', confirmLabel: 'Delete', danger: true })) {
       setIsDeleting(true);
       setErrorMsg('');
       try {

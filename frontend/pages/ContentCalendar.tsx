@@ -33,6 +33,7 @@ import { getThemeClasses, useTheme } from '../context/ThemeContext';
 import { GravityHero, GravityEmphasis } from '../components/gravity';
 import StrategyDocumentView from '../components/StrategyDocumentView';
 import { startBackgroundReel } from '../utils/backgroundReel';
+import { useConfirm } from '../context/ConfirmContext';
 
 // Reel days are the ones Approve auto-builds; everything else just gets a status.
 const isReelItem = (item: ContentCalendarItem) => /reel|video/i.test(String(item?.format || ''));
@@ -52,6 +53,7 @@ const ContentCalendar: React.FC = () => {
   const { isDarkMode } = useTheme();
   const theme = getThemeClasses(isDarkMode);
   const navigate = useNavigate();
+  const confirm = useConfirm();
   const [calendar, setCalendar] = useState<ContentCalendarType | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState('');
@@ -297,8 +299,8 @@ const ContentCalendar: React.FC = () => {
     updateCalendar(async () => contentCalendarAPI.reorder(nextItems.map((entry) => entry._id)), `reorder-${itemId}`);
   };
 
-  const regenerate = () => {
-    if (!window.confirm("Regenerate this month's plan? This replaces every day's current idea.")) return;
+  const regenerate = async () => {
+    if (!(await confirm("This replaces every day's current idea.", { title: "Regenerate this month's plan?", confirmLabel: 'Regenerate' }))) return;
     updateCalendar(async () => contentCalendarAPI.regenerate(undefined, undefined, planFocus.trim() || undefined), 'regenerate');
   };
 

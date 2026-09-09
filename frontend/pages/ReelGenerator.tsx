@@ -43,6 +43,7 @@ import {
 import CalendarIdeaPicker from '../components/CalendarIdeaPicker';
 import PromptStudio from '../components/PromptStudio';
 import { useQuarkCosts } from '../hooks/useQuarkCosts';
+import { useConfirm } from '../context/ConfirmContext';
 import AssetPicker, { PickedAsset } from '../components/AssetPicker';
 import { getThemeClasses, useTheme } from '../context/ThemeContext';
 import { contentCalendarAPI, inventoryAPI, videoGenerationAPI, draftsAPI } from '../services/api';
@@ -244,7 +245,7 @@ const ReelGenerator: React.FC = () => {
     // Only confirm when this replaces an existing portrait — the very
     // first render for a character has nothing to lose, so asking "are
     // you sure" there would just be friction.
-    if (existing?.portraitUrl && !confirmRegenerateCost(1, quarkCosts.video_character_portrait || 0, 'this character portrait')) return;
+    if (existing?.portraitUrl && !(await confirmRegenerateCost(1, quarkCosts.video_character_portrait || 0, 'this character portrait'))) return;
     setGeneratedCharacters((prev) => prev.map((c) => c.id === charId ? { ...c, portraitLoading: true, portraitError: '' } : c));
     const ch = generatedCharactersRef.current.find((c) => c.id === charId);
     if (!ch) return;
@@ -280,7 +281,7 @@ const ReelGenerator: React.FC = () => {
     }
     // Only confirm when this replaces an existing cast image — the first
     // render has nothing to lose.
-    if (castImageUrl && !confirmRegenerateCost(1, quarkCosts.video_character_portrait || 0, 'the cast reference image')) return;
+    if (castImageUrl && !(await confirmRegenerateCost(1, quarkCosts.video_character_portrait || 0, 'the cast reference image'))) return;
     const tweak = castTweakPrompt.trim();
     setCastImageLoading(true);
     setCastImageError('');
@@ -356,15 +357,14 @@ const ReelGenerator: React.FC = () => {
   };
   const [promptStudioOpen, setPromptStudioOpen] = useState(false);
   const quarkCosts = useQuarkCosts();
+  const confirmDialog = useConfirm();
   // Every regenerate action re-runs a real vendor call, so it must confirm
   // before spending Quarks — same policy as image Regenerate elsewhere in
   // the app (GravityCreate/GravityApprove/DraftPreviewModal).
   const confirmRegenerateCost = (count: number, costPerUnit: number, label: string) => {
     const total = count * costPerUnit;
-    const msg = total > 0
-      ? `Regenerate ${label} for ${total} Quark${total === 1 ? '' : 's'}?`
-      : `Regenerate ${label}?`;
-    return window.confirm(msg);
+    const msg = total > 0 ? `This costs ${total} Quark${total === 1 ? '' : 's'}.` : 'This replaces what you have now.';
+    return confirmDialog(msg, { title: `Regenerate ${label}?`, confirmLabel: 'Regenerate' });
   };
   // Products/services featured in the video, and the environment it is set
   // in. Both now come from Brand Assets rather than upload-only.
@@ -1682,7 +1682,7 @@ setCharacterAge(nextDraft?.characterAge || '');
   const generatePromptAndScenes = async () => {
     // Only confirm when this replaces an existing script/scene breakdown —
     // the first generation has nothing to lose.
-    if (scenes.length > 0 && !window.confirm('Regenerate the script and scene breakdown? This replaces the current one.')) return;
+    if (scenes.length > 0 && !(await confirmDialog('This replaces the current one.', { title: 'Regenerate the script and scene breakdown?', confirmLabel: 'Regenerate' }))) return;
     return withBusy(async () => {
     if (!jobId) throw new Error('Draft missing. Complete step 1 first.');
 
@@ -1775,7 +1775,7 @@ setCharacterAge(nextDraft?.characterAge || '');
   // as an identity anchor so every face matches the approved characters.
   const generateSceneImages = async () => {
     if (!Array.isArray(scenes) || scenes.length === 0) return;
-    if (!confirmRegenerateCost(scenes.length, quarkCosts.video_scene_image || 0, `${scenes.length} scene image${scenes.length === 1 ? '' : 's'}`)) return;
+    if (!(await confirmRegenerateCost(scenes.length, quarkCosts.video_scene_image || 0, `${scenes.length} scene image${scenes.length === 1 ? '' : 's'}`))) return;
     return withBusy(async () => {
     if (!jobId) throw new Error('Draft missing');
     if (!Array.isArray(scenes) || scenes.length === 0) {
@@ -1853,7 +1853,7 @@ setCharacterAge(nextDraft?.characterAge || '');
 
   const regenerateSceneImage = async (scene: any) => {
     if (!jobId) { setError('Draft missing'); return; }
-    if (!confirmRegenerateCost(1, quarkCosts.video_scene_image || 0, 'this scene image')) return;
+    if (!(await confirmRegenerateCost(1, quarkCosts.video_scene_image || 0, 'this scene image'))) return;
     const sid = String(scene.sceneId || '');
     // Find the scene's index in the current scenes array (source of
     // truth for the single-scene endpoint).
@@ -1890,7 +1890,7 @@ setCharacterAge(nextDraft?.characterAge || '');
 
   const regenerateScene = async (scene: any) => {
     if (!jobId) { setError('Draft missing'); return; }
-    if (!window.confirm('Regenerate this scene\'s breakdown? This replaces its current script details.')) return;
+    if (!(await confirmDialog('This replaces its current script details.', { title: "Regenerate this scene's breakdown?", confirmLabel: 'Regenerate' }))) return;
     const sid = String(scene.sceneId || '');
     markSceneRegenerating(sid, true);
     setError('');
@@ -1917,7 +1917,7 @@ setCharacterAge(nextDraft?.characterAge || '');
   // have a clipUrl (allowing partial-retry after mid-run API exhaust).
   const generateClips = async () => {
     const pending = (scenes || []).filter((s: any) => !s.clipUrl && s.imageUrl).length;
-    if (pending > 0 && !confirmRegenerateCost(pending, quarkCosts.video_scene_clip || 0, `${pending} scene clip${pending === 1 ? '' : 's'}`)) return;
+    if (pending > 0 && !(await confirmRegenerateCost(pending, quarkCosts.video_scene_clip || 0, `${pending} scene clip${pending === 1 ? '' : 's'}`))) return;
     return withBusy(async () => {
     if (!jobId) throw new Error('Draft missing');
     if (!Array.isArray(scenes) || scenes.length === 0) {
@@ -1959,7 +1959,7 @@ setCharacterAge(nextDraft?.characterAge || '');
     if (!jobId) { setError('Draft missing'); return; }
     const scene = scenes[sceneIdx];
     if (!scene) return;
-    if (!confirmRegenerateCost(1, quarkCosts.video_scene_clip || 0, 'this scene clip')) return;
+    if (!(await confirmRegenerateCost(1, quarkCosts.video_scene_clip || 0, 'this scene clip'))) return;
     const sid = String(scene.sceneId || sceneIdx);
     markSceneRegenerating(sid, true);
     setError('');
@@ -2162,7 +2162,7 @@ setCharacterAge(nextDraft?.characterAge || '');
 
   const deleteVideoDraft = async (id: string, title = 'this AI video') => {
     if (!id || deletingDraftId) return;
-    const ok = window.confirm(`Delete "${title}"? This will remove the draft and generated video files.`);
+    const ok = await confirmDialog('This removes the draft and generated video files.', { title: `Delete "${title}"?`, confirmLabel: 'Delete', danger: true });
     if (!ok) return;
 
     setDeletingDraftId(id);
@@ -2187,7 +2187,7 @@ setCharacterAge(nextDraft?.characterAge || '');
   const deleteGlobalDraft = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!id || deletingDraftId) return;
-    const ok = window.confirm(`Delete this draft? This will permanently remove the draft.`);
+    const ok = await confirmDialog('This permanently removes the draft.', { title: 'Delete this draft?', confirmLabel: 'Delete', danger: true });
     if (!ok) return;
 
     setDeletingDraftId(id);

@@ -7,6 +7,7 @@ import GeneratingFill from '../components/GeneratingFill';
 import { DraftPreviewModal } from '../components/DraftPreviewModal';
 import { GravityHero, GravityEmphasis } from '../components/gravity';
 import { useQuarkCosts } from '../hooks/useQuarkCosts';
+import { useConfirm } from '../context/ConfirmContext';
 
 // Gravity Approve — matches the prototype's Approve screen: single big
 // preview on the left, structured metadata + caption on the right,
@@ -39,6 +40,7 @@ const GravityApprove: React.FC = () => {
   // Quarks as the original — campaign-type drafts are billed through the
   // legacy Campaigns flow already (matches backend/routes/drafts.js).
   const quarkCosts = useQuarkCosts();
+  const confirm = useConfirm();
   const regenerateCostFor = (draft: any) => (draft?.contentType === 'campaign' ? 0 : (quarkCosts.image_generated || 0));
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [loading, setLoading] = useState(true);
@@ -286,9 +288,9 @@ const GravityApprove: React.FC = () => {
     if (!draft?._id) return;
     const cost = regenerateCostFor(draft);
     const confirmMsg = cost > 0
-      ? `Regenerate this image for ${cost} Quark${cost === 1 ? '' : 's'}? This replaces the current image.`
-      : 'Regenerate this image? This replaces the current image.';
-    if (!window.confirm(confirmMsg)) return;
+      ? `This costs ${cost} Quark${cost === 1 ? '' : 's'} and replaces the current image.`
+      : 'This replaces the current image.';
+    if (!(await confirm(confirmMsg, { title: 'Regenerate this image?', confirmLabel: 'Regenerate' }))) return;
     try {
       await draftsAPI.retryImageGeneration(String(draft._id), promptOverride);
       await loadDrafts();

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Brain, Pencil, Trash2, RefreshCw, Loader2, ArrowRight, Check, X } from 'lucide-react';
 import { aiMemoryAPI } from '../services/api';
+import { useConfirm } from '../context/ConfirmContext';
 import {
   GravityHero,
   GravityEmphasis,
@@ -36,6 +37,7 @@ const NoteRow: React.FC<{
   onSave: (id: string, text: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
 }> = ({ note, onSave, onDelete }) => {
+  const confirm = useConfirm();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(note.text);
   const [busy, setBusy] = useState(false);
@@ -80,7 +82,7 @@ const NoteRow: React.FC<{
           <button onClick={() => setEditing(true)} title="Edit" className="p-1.5 rounded-md text-white/40 hover:text-white hover:bg-white/[0.06] flex-shrink-0">
             <Pencil className="w-3.5 h-3.5" />
           </button>
-          <button onClick={() => { if (window.confirm('Delete this note?')) onDelete(note._id); }} title="Delete" className="p-1.5 rounded-md text-white/40 hover:text-red-400 hover:bg-white/[0.06] flex-shrink-0">
+          <button onClick={async () => { if (await confirm('This removes it from what Gravity uses to plan future posts.', { title: 'Delete this note?', confirmLabel: 'Delete', danger: true })) onDelete(note._id); }} title="Delete" className="p-1.5 rounded-md text-white/40 hover:text-red-400 hover:bg-white/[0.06] flex-shrink-0">
             <Trash2 className="w-3.5 h-3.5" />
           </button>
         </>

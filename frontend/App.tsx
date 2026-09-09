@@ -42,6 +42,7 @@ import PrivacyPolicy from './pages/PrivacyPolicy';
 import AdminLogin from './pages/AdminLogin';
 import AdminDashboard from './pages/AdminDashboard';
 import { ThemeProvider } from './context/ThemeContext';
+import { ConfirmProvider } from './context/ConfirmContext';
 import { apiService } from './services/api';
 import { User } from './types';
 import { Loader2 } from 'lucide-react';
@@ -115,6 +116,7 @@ const App: React.FC = () => {
 
   return (
     <ThemeProvider>
+    <ConfirmProvider>
     <Router>
       <Routes>
         {/* Landing Page - shown when not logged in */}
@@ -245,6 +247,7 @@ const App: React.FC = () => {
       {/* Campaign Reminder Pop-ups - only for logged in users */}
       {user && user.onboardingCompleted && <CampaignReminderPopup />}
     </Router>
+    </ConfirmProvider>
     </ThemeProvider>
   );
 };

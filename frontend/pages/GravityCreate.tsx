@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Sparkles, Layers, Calendar as CalendarIcon, Zap, Image as ImageIcon, Instagram, Facebook, Linkedin, ChevronRight, Loader2, Check, Clock, Save, AlertCircle, RotateCcw, Pencil, Trash2, Code2, Copy, X, SlidersHorizontal, GalleryHorizontalEnd, Package } from 'lucide-react';
 import { draftsAPI, brandAssetsAPI, apiService } from '../services/api';
 import { useQuarkCosts } from '../hooks/useQuarkCosts';
+import { useConfirm } from '../context/ConfirmContext';
 import { Draft } from '../types';
 import GeneratingFill from '../components/GeneratingFill';
 import CalendarIdeaPicker from '../components/CalendarIdeaPicker';
@@ -379,13 +380,13 @@ const GravityCreate: React.FC = () => {
   const confirmRegenerate = (d: Draft) => {
     const cost = regenerateCostFor(d);
     const msg = cost > 0
-      ? `Regenerate this image for ${cost} Quark${cost === 1 ? '' : 's'}? This replaces the current image.`
-      : 'Regenerate this image? This replaces the current image.';
-    return window.confirm(msg);
+      ? `This costs ${cost} Quark${cost === 1 ? '' : 's'} and replaces the current image.`
+      : 'This replaces the current image.';
+    return confirmDialog(msg, { title: 'Regenerate this image?', confirmLabel: 'Regenerate' });
   };
 
   const regenerateWithPrompt = async (d: Draft) => {
-    if (!confirmRegenerate(d)) return;
+    if (!(await confirmRegenerate(d))) return;
     setActionBusy(d._id);
     setError(null);
     try {
@@ -404,7 +405,7 @@ const GravityCreate: React.FC = () => {
   };
 
   const regenerateImage = async (d: Draft) => {
-    if (!confirmRegenerate(d)) return;
+    if (!(await confirmRegenerate(d))) return;
     setActionBusy(d._id);
     setError(null);
     try {
@@ -495,6 +496,7 @@ const GravityCreate: React.FC = () => {
 
   // Post count estimate (matches prototype text "~6 posts · 2 per week")
   const quarkCosts = useQuarkCosts();
+  const confirmDialog = useConfirm();
   // Campaign charges per post, carousel charges per slide — both scale with
   // how much is actually generated, matching how the backend deducts each.
   // Single post is the one true flat rate: it always makes exactly one image.
