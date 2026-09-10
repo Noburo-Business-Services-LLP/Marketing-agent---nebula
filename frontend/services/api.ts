@@ -4334,6 +4334,10 @@ export const draftsAPI = {
     objective?: string;
     // Overrides the brand's stored Settings default for this generation only.
     language?: string;
+    // '' means "No logo" was explicitly picked; omit the field entirely to
+    // fall back to the brand's primary logo (legacy behavior).
+    logoUrl?: string;
+    logoPosition?: string;
   }): Promise<{ success: boolean; draftId?: string; draft?: Draft; message?: string }> => {
     return apiCall('/drafts/generate-image-bg', {
       method: 'POST',

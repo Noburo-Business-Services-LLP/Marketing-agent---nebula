@@ -534,7 +534,12 @@ router.post('/generate-image-bg', protect, checkTrial, async (req, res) => {
       linkedProduct, productReferenceImages,
       // Context for the content-writing prompt — all optional, since a quick
       // one-line brief with none of this is the common case.
-      contentPillar, contentType, campaignContext, objective, language
+      contentPillar, contentType, campaignContext, objective, language,
+      // What Create's logo picker/position grid actually chose — '' means
+      // "No logo" was explicitly picked, distinct from omitting the field
+      // entirely (which falls back to the brand's primary logo). See
+      // backgroundQueue.js's `effectiveLogo` for how that distinction is used.
+      logoUrl, logoPosition
     } = req.body;
 
     // Single-post generation had no deduction at all — free, unlike every
@@ -596,7 +601,13 @@ router.post('/generate-image-bg', protect, checkTrial, async (req, res) => {
       productReferenceImages: Array.isArray(productReferenceImages) ? productReferenceImages : [],
       // The language picked in Create for this specific generation, if any —
       // overrides the brand's stored default (see backgroundQueue.js).
-      language: language || ''
+      language: language || '',
+      // Passed through EXACTLY as received — '' (explicit "No logo") must
+      // stay distinct from undefined (field omitted entirely, meaning fall
+      // back to the brand's primary logo). Coercing '' to undefined here
+      // would silently ignore an explicit "No logo" choice.
+      logoUrl,
+      logoPosition: logoPosition || undefined
     });
 
     res.status(201).json({ success: true, draftId: draft._id, draft });

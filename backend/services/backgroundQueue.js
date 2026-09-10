@@ -279,9 +279,25 @@ async function processDraftImageGenerationJob(job) {
     // supplied a specific replacement for it.
     const hasPromptOverride = typeof job.promptOverride === 'string' && job.promptOverride.trim().length > 0;
     let imageResult;
+    // Tracks whether THIS job already composited the real logo, so the save
+    // block below can mark the draft accordingly — see the note at the
+    // save block for why that matters.
+    let logoWasComposited = false;
+    let preLogoImageUrl = null;
+
+    // What Create actually asked for wins over the brand's own primary
+    // logo. `job.logoUrl` is only ever `undefined` for callers that never
+    // offered a choice (legacy behaviour: fall back to primary); Create
+    // always sends it explicitly, including '' for "No logo", so that
+    // choice — not just "the primary logo" — is what gets composited once,
+    // below, rather than the primary logo now and the real choice again
+    // later in a second, redundant pass.
+    const primaryLogoAsset = await getPrimaryLogoAsset(draft.userId);
+    const effectiveLogo = job.logoUrl !== undefined
+      ? (job.logoUrl ? { url: job.logoUrl, position: job.logoPosition || primaryLogoAsset?.position || 'bottom-right', size: primaryLogoAsset?.size || 'medium' } : null)
+      : primaryLogoAsset;
 
     if (hasPromptOverride) {
-      const primaryLogo = await getPrimaryLogoAsset(draft.userId);
       imageResult = await Promise.race([
         generateCampaignImageNanoBanana(job.promptOverride.trim(), {
           userId: draft.userId,
@@ -292,16 +308,18 @@ async function processDraftImageGenerationJob(job) {
           tone: bp.tone || 'professional',
           targetLanguage: effectiveLanguage,
           imageText: draft.imageText || '',
-          logoReservedPosition: primaryLogo?.url ? primaryLogo.position : null
+          logoReservedPosition: effectiveLogo?.url ? effectiveLogo.position : null
         }),
         timeoutPromise
       ]);
-      if (imageResult?.imageUrl && primaryLogo?.url) {
+      if (imageResult?.imageUrl && effectiveLogo?.url) {
+        preLogoImageUrl = imageResult.imageUrl;
         imageResult.imageUrl = await overlayBrandLogoIfPresent(imageResult.imageUrl, {
-          logoUrl: primaryLogo.url,
-          position: primaryLogo.position,
-          size: primaryLogo.size
+          logoUrl: effectiveLogo.url,
+          position: effectiveLogo.position,
+          size: effectiveLogo.size
         });
+        logoWasComposited = true;
       }
       // The prompt that produced THIS image is now the edited one — record
       // it as such, so the next time someone opens this draft they see what
@@ -415,20 +433,21 @@ async function processDraftImageGenerationJob(job) {
       ].filter(Boolean);
       const chosenProductImages = explicitProductImages.length ? explicitProductImages : (creative?.productImages || []);
 
-      // Always composited for a standalone post, independent of whatever
-      // the Creative Director chose to select as a "required asset" for
-      // this specific idea — a single post is the brand's own content and
-      // should always carry its logo, not carry it only when an LLM's
-      // per-post judgment happened to ask for it. (Carousels and campaigns
-      // keep that judgment — a logo on every one of ten slides is clutter —
-      // this "always" is scoped to single posts only.)
+      // Always composited for a standalone post (unless Create explicitly
+      // asked for none — see `effectiveLogo` above), independent of
+      // whatever the Creative Director chose to select as a "required
+      // asset" for this specific idea — a single post is the brand's own
+      // content and should always carry its logo, not carry it only when
+      // an LLM's per-post judgment happened to ask for it. (Carousels and
+      // campaigns keep that judgment — a logo on every one of ten slides
+      // is clutter — this "always" is scoped to single posts only.)
       //
-      // Fetched BEFORE generation, not after, so the model can be told where
-      // the real logo will land and keep that corner clear — without this,
-      // the model's own headline placement and the overlay's position
-      // collided whenever both defaulted to the same corner.
-      const primaryLogo = await getPrimaryLogoAsset(draft.userId);
-
+      // `effectiveLogo` is resolved BEFORE generation, not after, so the
+      // model can be told where the real logo will land and keep that
+      // corner clear — without this, the model's own headline placement
+      // and the overlay's position collided whenever both defaulted to the
+      // same corner.
+      //
       // No brandLogo reference here on purpose — a generative model
       // redraws anything it's shown, including logos (softened, recolored,
       // sometimes with the wordmark dropped). The logo is composited
@@ -446,17 +465,19 @@ async function processDraftImageGenerationJob(job) {
           environmentReferenceImage: creative?.environmentImage || null,
           productReferenceImage: chosenProductImages[0] || null,
           productReferenceImages: chosenProductImages.slice(1),
-          logoReservedPosition: primaryLogo?.url ? primaryLogo.position : null
+          logoReservedPosition: effectiveLogo?.url ? effectiveLogo.position : null
         }),
         timeoutPromise
       ]);
 
-      if (imageResult?.imageUrl && primaryLogo?.url) {
+      if (imageResult?.imageUrl && effectiveLogo?.url) {
+        preLogoImageUrl = imageResult.imageUrl;
         imageResult.imageUrl = await overlayBrandLogoIfPresent(imageResult.imageUrl, {
-          logoUrl: primaryLogo.url,
-          position: primaryLogo.position,
-          size: primaryLogo.size
+          logoUrl: effectiveLogo.url,
+          position: effectiveLogo.position,
+          size: effectiveLogo.size
         });
+        logoWasComposited = true;
       }
     }
 
@@ -470,7 +491,19 @@ async function processDraftImageGenerationJob(job) {
       draft.imageUrl = finalImageUrl;
       draft.status = 'completed';
       draft.errorMessage = '';
-      
+
+      // Without this, the frontend's own post-generation logo step (Create's
+      // poll loop, gated on `!draft.logoApplied`) never saw this job's logo
+      // as already applied and composited a SECOND one on top — invisible
+      // when the two composites happened to land in different corners, but
+      // once Create's logo-position picker made both target the same corner
+      // (this session), it became a visibly doubled/ghosted logo. Recording
+      // both flags here lets that later step correctly skip.
+      if (logoWasComposited) {
+        draft.logoApplied = true;
+        if (preLogoImageUrl) draft.imageUrlNoLogo = preLogoImageUrl;
+      }
+
       // Update creative field if it exists
       if (!draft.creative) draft.creative = {};
       draft.creative = {
@@ -478,7 +511,7 @@ async function processDraftImageGenerationJob(job) {
         imageUrls: [finalImageUrl]
       };
       draft.markModified('creative');
-      
+
       await draft.save();
 
       // Remember this generation in the AI Memory system (Layer 1 evidence).

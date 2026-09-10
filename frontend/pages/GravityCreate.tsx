@@ -576,6 +576,14 @@ const GravityCreate: React.FC = () => {
       contentType: ideaContext.format || 'post',
       objective: ideaContext.objective,
       language: languageValueFromLabel(language),
+      // Generation composites the logo itself now — this used to be
+      // handled entirely by the poll loop below, which meant the backend's
+      // own automatic primary-logo composite AND this one both ran,
+      // producing a visibly doubled logo once both started targeting the
+      // same corner. Sending the actual choice here (including '' for "No
+      // logo") lets generation do it once, correctly, in one pass.
+      logoUrl: selectedLogo,
+      logoPosition: selectedLogo ? logoPosition : undefined,
     });
     if (res?.draft) {
       setResults([res.draft]);
