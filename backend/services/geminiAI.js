@@ -5044,8 +5044,13 @@ Only the visual language should carry over, not the specific scene.`);
       // its own invented badge/emblem in a bottom corner — a learned habit
       // from corporate stock photography — which then collides with the
       // real logo once it's pasted on top.
-            const reservedZoneText = logoReservedPosition
-        ? ` A real logo will be composited afterward into a fixed rectangle at the ${String(logoReservedPosition).replace('-', ' ')} of this image — roughly the outer 20% of the width and 15% of the height on that side. Compose the headline, any other text, and the main subject so none of them extend into that specific rectangle; shift or reflow the headline rather than centering it across the full width if the reserved zone is top-center or bottom-center. Leave that rectangle visually calm — plain background or soft color, no text, no other emblem — the way a magazine leaves its masthead corner clear regardless of what the cover photo is doing.`
+            // Worded to avoid "rectangle" / "plain background or soft color" —
+      // an image model reads geometric, flat-fill language literally and
+      // paints an actual box there, which is exactly the visible artifact
+      // this was meant to prevent. What's wanted is the EXISTING scene kept
+      // quiet in that corner, not a distinct shape added on top of it.
+      const reservedZoneText = logoReservedPosition
+        ? ` A real logo will be composited afterward near the ${String(logoReservedPosition).replace('-', ' ')} of this image, over roughly the outer 20% of the width and 15% of the height on that side. Keep whatever is naturally in that corner — sky, wall, fabric, floor, whatever the scene already has there — low-contrast and free of fine detail, so the logo stays legible once placed. Do not add a distinct panel, card, plate, or shape of any kind to mark that area; it should look like an unremarkable, uncluttered part of the same continuous scene, not a separate zone. Compose the headline, any other text, and the main subject so none of them extend into that corner; shift or reflow the headline rather than centering it across the full width if the reserved corner is top-center or bottom-center.`
         : '';
       referenceNotes.push(`Do not draw, invent, or imply any logo, brand mark, wordmark, or watermark anywhere in this image — including placeholder badges, emblems, text-in-a-circle marks in a corner, a bordered or boxed brand-name lockup, or the brand name rendered as signage, a stamp, a compass rose label, or any other in-scene lettering standing in for a logo. This applies even when the requested caption or headline text itself contains the brand name — that text renders as ordinary copy, in the same style as the rest of the headline, never inside its own card, badge or border that reads as a second logo. Any real brand mark is applied in a separate step after this image is generated.${reservedZoneText}`);
     }

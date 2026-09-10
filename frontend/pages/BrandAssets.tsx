@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { brandAssetsAPI } from '../services/api';
 import { useConfirm } from '../context/ConfirmContext';
+import { LOGO_GRID, LOGO_GRID_LABELS, LogoGridPosition } from '../constants/logoPositions';
 // Rendered as a tab panel rather than merged in: Inventory is ~1,150 lines and
 // this file ~980, and one 2,100-line component would be a poor edit surface.
 import InventoryPanel from './Inventory';
@@ -47,18 +48,6 @@ interface BrandAsset {
   createdAt: string;
 }
 
-// The 6 spots a logo can default to — two rows (top/bottom) so it reads as
-// the same grid the logo will actually sit in on a generated post.
-type LogoGridPosition = 'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right';
-const LOGO_GRID: LogoGridPosition[] = ['top-left', 'top-center', 'top-right', 'bottom-left', 'bottom-center', 'bottom-right'];
-const LOGO_GRID_LABELS: Record<LogoGridPosition, string> = {
-  'top-left': 'Top left',
-  'top-center': 'Top center',
-  'top-right': 'Top right',
-  'bottom-left': 'Bottom left',
-  'bottom-center': 'Bottom center',
-  'bottom-right': 'Bottom right'
-};
 
 interface ConfidenceScores {
   tone?: number;
@@ -673,13 +662,6 @@ const BrandAssets: React.FC = () => {
                         <span className={`truncate ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{logo.name}</span>
                         <div className="flex items-center gap-1">
                           <button
-                            onClick={() => setOpenPositionPickerId((cur) => (cur === logo._id ? null : logo._id))}
-                            className={`p-1 rounded ${openPositionPickerId === logo._id ? 'bg-[#F5A623] text-[#070A12]' : isDarkMode ? 'text-gray-300 hover:bg-slate-700' : 'text-gray-700 hover:bg-gray-200'}`}
-                            title={`Default position: ${LOGO_GRID_LABELS[(logo.defaultPosition as LogoGridPosition)] || 'Bottom right'}`}
-                          >
-                            <LayoutGrid className="w-3.5 h-3.5" />
-                          </button>
-                          <button
                             onClick={() => setPrimaryLogo(logo._id)}
                             className={`p-1 rounded ${logo.isPrimary ? 'bg-[#F5A623] text-[#070A12]' : isDarkMode ? 'text-gray-300 hover:bg-slate-700' : 'text-gray-700 hover:bg-gray-200'}`}
                             title={logo.isPrimary ? 'Primary' : 'Set primary'}
@@ -695,6 +677,26 @@ const BrandAssets: React.FC = () => {
                           </button>
                         </div>
                       </div>
+
+                      {/* A bare icon here was easy to miss entirely — a user
+                          asked where logo-position selection was despite this
+                          already existing. A labeled row reads as a control,
+                          not decoration. */}
+                      <button
+                        onClick={() => setOpenPositionPickerId((cur) => (cur === logo._id ? null : logo._id))}
+                        className={`w-full flex items-center justify-between gap-1.5 px-2 py-1.5 border-t text-[11px] transition-colors ${
+                          openPositionPickerId === logo._id
+                            ? 'bg-[#F5A623]/10 text-[#F5A623]'
+                            : isDarkMode
+                              ? 'border-slate-700 text-gray-400 hover:bg-slate-700/60 hover:text-gray-200'
+                              : 'border-gray-200 text-gray-500 hover:bg-gray-100 hover:text-gray-700'
+                        }`}
+                      >
+                        <span className="flex items-center gap-1.5">
+                          <LayoutGrid className="w-3 h-3" />
+                          Position: {LOGO_GRID_LABELS[(logo.defaultPosition as LogoGridPosition)] || 'Bottom right'}
+                        </span>
+                      </button>
 
                       {/* Two rows (top/bottom) x three columns (left/center/right) —
                           laid out to visually match the frame the logo will actually

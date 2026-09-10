@@ -5,6 +5,7 @@ import { draftsAPI, brandAssetsAPI, apiService } from '../services/api';
 import { useQuarkCosts } from '../hooks/useQuarkCosts';
 import { useConfirm } from '../context/ConfirmContext';
 import { CONTENT_LANGUAGES } from '../constants/languages';
+import { LOGO_GRID, LOGO_GRID_LABELS, LogoGridPosition } from '../constants/logoPositions';
 import { Draft } from '../types';
 import GeneratingFill from '../components/GeneratingFill';
 import CalendarIdeaPicker from '../components/CalendarIdeaPicker';
@@ -208,7 +209,8 @@ const GravityCreate: React.FC = () => {
 
   // Brand logo choice, pulled from Brand Assets. Applied AFTER the image is
   // generated — handing a logo to an image model gets it redrawn and smeared.
-  const [logos, setLogos] = useState<Array<{ id: string; url: string; name: string }>>([]);
+  const [logos, setLogos] = useState<Array<{ id: string; url: string; name: string; defaultPosition: LogoGridPosition }>>([]);
+  const [logoPosition, setLogoPosition] = useState<LogoGridPosition>('bottom-right');
   const [selectedLogo, setSelectedLogo] = useState<string>('');
   const [captionBusy, setCaptionBusy] = useState<string>('');
   const [editingCaption, setEditingCaption] = useState<string>('');
@@ -250,11 +252,19 @@ const GravityCreate: React.FC = () => {
       try {
         const res: any = await brandAssetsAPI.getLogos();
         const list = (res?.assets || res?.logos || res?.data || [])
-          .map((a: any) => ({ id: String(a._id || a.id || a.url), url: a.url || a.imageUrl || '', name: a.name || 'Logo' }))
+          .map((a: any) => ({
+            id: String(a._id || a.id || a.url),
+            url: a.url || a.imageUrl || '',
+            name: a.name || 'Logo',
+            defaultPosition: (a.defaultPosition || 'bottom-right') as LogoGridPosition
+          }))
           .filter((a: any) => a.url);
         setLogos(list);
         const primary = (res?.assets || res?.logos || []).find((a: any) => a.isPrimary);
-        if (primary?.url) setSelectedLogo(primary.url);
+        if (primary?.url) {
+          setSelectedLogo(primary.url);
+          setLogoPosition((primary.defaultPosition || 'bottom-right') as LogoGridPosition);
+        }
       } catch { /* no logos configured — picker just stays empty */ }
     })();
   }, []);
@@ -287,7 +297,7 @@ const GravityCreate: React.FC = () => {
               const img = next?.imageUrl || next?.creative?.imageUrls?.[0];
               if (selectedLogo && img && !next.logoApplied) {
                 try {
-                  const applied = await draftsAPI.applyLogo(next._id, selectedLogo);
+                  const applied = await draftsAPI.applyLogo(next._id, selectedLogo, { position: logoPosition });
                   if (applied?.draft) next = applied.draft;
                 } catch { /* keep the unbranded image rather than losing it */ }
               }
@@ -601,6 +611,7 @@ const GravityCreate: React.FC = () => {
         aspectRatio: backendAspect,
         linkedProduct: primaryProduct,
         productReferenceImages: productImageUrls,
+        logoPosition: selectedLogo ? logoPosition : undefined,
         contentPillar: ideaContext.contentPillar,
         contentType: 'carousel',
         objective: ideaContext.objective,
@@ -692,6 +703,7 @@ const GravityCreate: React.FC = () => {
       tone: (tone.split(',')[0] || 'professional').toLowerCase(),
       language: languageValueFromLabel(language),
       aspectRatio: backendAspect,
+      logoPosition: selectedLogo ? logoPosition : undefined,
       // No keyMessages. The brief already travels as campaignDescription
       // above; sending it here as well presented it to the model as a
       // MANDATORY CONTENT STRUCTURE — a template to reproduce exactly, under
@@ -1211,7 +1223,7 @@ const GravityCreate: React.FC = () => {
             {logos.map((l) => (
               <button
                 key={l.id}
-                onClick={() => setSelectedLogo(l.url)}
+                onClick={() => { setSelectedLogo(l.url); setLogoPosition(l.defaultPosition); }}
                 title={l.name}
                 className={`w-11 h-11 rounded-lg border overflow-hidden bg-white/[0.04] transition-colors ${
                   selectedLogo === l.url ? 'border-[#F5A623]' : 'border-white/[0.10] hover:border-white/30'
@@ -1229,6 +1241,31 @@ const GravityCreate: React.FC = () => {
               </button>
             )}
           </div>
+
+          {/* Only relevant once a logo is actually going on the image.
+              Defaults to that logo's own Brand Assets position, overridable
+              here for just this run. */}
+          {selectedLogo && (
+            <div className="mt-3">
+              <div className="gravity-label mb-1.5 text-white/35">Logo position</div>
+              <div className="grid grid-cols-3 gap-1.5 max-w-[220px]">
+                {LOGO_GRID.map((pos) => (
+                  <button
+                    key={pos}
+                    onClick={() => setLogoPosition(pos)}
+                    title={LOGO_GRID_LABELS[pos]}
+                    className={`aspect-[4/3] rounded-md border flex items-center justify-center transition-colors ${
+                      logoPosition === pos
+                        ? 'border-[#F5A623] bg-[#F5A623]/12'
+                        : 'border-white/[0.10] bg-white/[0.02] hover:border-white/30'
+                    }`}
+                  >
+                    <span className={`w-1.5 h-1.5 rounded-sm ${logoPosition === pos ? 'bg-[#F5A623]' : 'bg-white/30'}`} />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

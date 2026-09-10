@@ -65,7 +65,10 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
       contentPillar = '',
       contentType = 'carousel',
       campaignContext = '',
-      objective = ''
+      objective = '',
+      // Overrides the logo's own saved default (Brand Assets) for this
+      // generation only — set from Create's position picker.
+      logoPosition: logoPositionOverride
     } = req.body || {};
 
     // Accepts both the stored value ("tamil_english_mix") and a display
@@ -210,10 +213,11 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
 
       try {
         const finalPrompt = await renderCarouselSlideImage(req.user.id, plan, i);
-        const { productImages, environmentImage, logoUrl, logoPosition, logoSize } = assetsToImageOptions([
+        const { productImages, environmentImage, logoUrl, logoPosition: resolvedLogoPosition, logoSize } = assetsToImageOptions([
           ...slide.requiredAssets,
           ...slide.optionalAssets
         ]);
+        const logoPosition = logoPositionOverride || resolvedLogoPosition;
         const chosenProductImages = explicitProductImages.length ? explicitProductImages : productImages;
 
         // No brandLogo reference — the model redraws anything it's shown,

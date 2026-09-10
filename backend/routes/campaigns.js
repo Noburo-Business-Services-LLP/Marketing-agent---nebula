@@ -1527,6 +1527,9 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
       linkedProduct,
       productReferenceImages,
       language: languageInput,
+      // Overrides the logo's own saved default (Brand Assets) for this
+      // generation only — set from Create's position picker.
+      logoPosition: logoPositionOverride,
       // Cadence from the Create page ("2 posts / week"). Optional — callers
       // that omit it keep the old preferredDays-driven behaviour.
       postsPerWeek: postsPerWeekInput
@@ -2172,7 +2175,7 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
         // Known before generation, not after, so the model can be told
         // where the real logo will land and keep that corner clear.
         const slotLogoUrl = slotAssets.logoUrl || effectiveLogo || null;
-        const slotLogoPosition = slotAssets.logoPosition || brandCtx.primaryLogoPosition;
+        const slotLogoPosition = slotAssets.logoPosition || logoPositionOverride || brandCtx.primaryLogoPosition;
         const slotLogoSize = slotAssets.logoSize || brandCtx.primaryLogoSize;
 
         // No brandLogo reference — the model redraws anything it's shown,
