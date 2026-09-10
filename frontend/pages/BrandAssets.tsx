@@ -18,6 +18,7 @@ import {
   X
 } from 'lucide-react';
 import { brandAssetsAPI } from '../services/api';
+import { useConfirm } from '../context/ConfirmContext';
 // Rendered as a tab panel rather than merged in: Inventory is ~1,150 lines and
 // this file ~980, and one 2,100-line component would be a poor edit surface.
 import InventoryPanel from './Inventory';
@@ -156,6 +157,7 @@ const getFontFamilyForPreview = (value?: string) => {
 };
 
 const BrandAssets: React.FC = () => {
+  const confirm = useConfirm();
   const [logos, setLogos] = useState<BrandAsset[]>([]);
   const [profile, setProfile] = useState<BrandIntelligenceProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -343,7 +345,7 @@ const BrandAssets: React.FC = () => {
   };
 
   const deleteLogo = async (asset: BrandAsset) => {
-    if (!window.confirm(`Delete logo "${asset.name}"?`)) return;
+    if (!(await confirm(`Delete logo "${asset.name}"?`, { title: 'Delete logo?', confirmLabel: 'Delete', danger: true }))) return;
     try {
       const response = await brandAssetsAPI.delete(asset._id);
       if (!response?.success) {
@@ -494,7 +496,7 @@ const BrandAssets: React.FC = () => {
 
   const deletePastPost = async (postId?: string) => {
     if (!postId) return;
-    if (!window.confirm('Delete this past post sample?')) return;
+    if (!(await confirm('Delete this past post sample?', { title: 'Delete past post sample?', confirmLabel: 'Delete', danger: true }))) return;
     try {
       const response = await brandAssetsAPI.deletePastPostSample(postId);
       if (!response?.success) {

@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { GravityHero, GravityEmphasis } from '../components/gravity';
 import { ideasAPI, draftsAPI } from '../services/api';
+import { useConfirm } from '../context/ConfirmContext';
 
 interface Idea {
   _id: string;
@@ -40,6 +41,7 @@ const fileToBase64 = (file: File): Promise<string> =>
   });
 
 const IdeaInbox: React.FC = () => {
+  const confirm = useConfirm();
   const [ideas, setIdeas] = useState<Idea[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -191,7 +193,7 @@ const IdeaInbox: React.FC = () => {
   };
 
   const deleteIdea = async (idea: Idea) => {
-    if (!window.confirm('Delete this idea? This can\'t be undone.')) return;
+    if (!(await confirm("This can't be undone.", { title: 'Delete this idea?', confirmLabel: 'Delete', danger: true }))) return;
     try {
       await ideasAPI.remove(idea._id);
       setIdeas((prev) => prev.filter((i) => i._id !== idea._id));

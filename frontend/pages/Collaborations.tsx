@@ -3,8 +3,10 @@ import { apiService } from '../services/api';
 import { useTheme } from '../context/ThemeContext';
 import { Plus, X, Sparkles, Trash2, Calendar } from 'lucide-react';
 import InfluencerPortalTabs from '../components/InfluencerPortalTabs';
+import { useConfirm } from '../context/ConfirmContext';
 
 const Collaborations: React.FC = () => {
+  const confirm = useConfirm();
   const { isDarkMode } = useTheme();
   const [items, setItems] = useState<any[]>([]);
   const [influencers, setInfluencers] = useState<any[]>([]);
@@ -33,7 +35,7 @@ const Collaborations: React.FC = () => {
   };
 
   const remove = async (id: string) => {
-    const confirmed = window.confirm('Delete this collaboration?');
+    const confirmed = await confirm('Delete this collaboration?', { title: 'Delete collaboration?', confirmLabel: 'Delete', danger: true });
     if (!confirmed) return;
     await apiService.deleteCollaboration(id);
     load();

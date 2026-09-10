@@ -11,8 +11,10 @@ import { inventoryAPI } from '../services/api';
 import { Product } from '../types';
 import { useTheme, getThemeClasses } from '../context/ThemeContext';
 import { GravityHero, GravityEmphasis } from '../components/gravity';
+import { useConfirm } from '../context/ConfirmContext';
 
 const Inventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
+  const confirm = useConfirm();
   const { isDarkMode } = useTheme();
   const theme = getThemeClasses(isDarkMode);
   
@@ -186,7 +188,7 @@ const Inventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   };
 
   const handleDelete = async (productId: string) => {
-    if (!window.confirm('Are you sure you want to delete this product?')) return;
+    if (!(await confirm('Are you sure you want to delete this product?', { title: 'Delete product?', confirmLabel: 'Delete', danger: true }))) return;
     
     try {
       const response = await inventoryAPI.deleteProduct(productId);

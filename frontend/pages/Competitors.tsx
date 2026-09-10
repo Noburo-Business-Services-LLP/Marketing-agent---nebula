@@ -3,6 +3,7 @@ import { apiService } from '../services/api';
 import { CompetitorPost } from '../types';
 import { Loader2, Search, RotateCw, ExternalLink, Heart, MessageCircle, Plus, Instagram, Twitter, Linkedin, Facebook, Youtube, Swords, Sparkles, X, Eye, Download, Copy, Save, MessageSquare, FileText, EyeOff, Users, MapPin, Edit3, Zap } from 'lucide-react';
 import { useTheme, getThemeClasses } from '../context/ThemeContext';
+import { useConfirm } from '../context/ConfirmContext';
 import { GravityHero, GravityEmphasis } from '../components/gravity';
 import LogoSelector from '../components/LogoSelector';
 
@@ -26,6 +27,7 @@ interface Competitor {
 }
 
 const Competitors: React.FC = () => {
+  const confirm = useConfirm();
   const { isDarkMode } = useTheme();
   const theme = getThemeClasses(isDarkMode);
   const [posts, setPosts] = useState<CompetitorPost[]>([]);
@@ -186,9 +188,9 @@ const Competitors: React.FC = () => {
   };
 
   // Close rival post modal with credit warning
-  const handleCloseRivalModal = () => {
+  const handleCloseRivalModal = async () => {
     if (rivalPostLoading || rivalPost) {
-      const shouldClose = window.confirm('⚡ 7 Quarks have already been consumed. Do you want to close?');
+      const shouldClose = await confirm('7 Quarks have already been consumed. Do you want to close?', { title: '⚡ Close rival post?', confirmLabel: 'Close' });
       if (!shouldClose) return;
     }
     setShowRivalPostModal(false);

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ImagePlus, Loader2, Trash2, AlertCircle, Store } from 'lucide-react';
 import { brandAssetsAPI } from '../services/api';
+import { useConfirm } from '../context/ConfirmContext';
 
 interface EnvironmentAsset {
   _id: string;
@@ -26,6 +27,7 @@ const fileToBase64 = (file: File): Promise<string> =>
  * in its "pick from brand assets" picker without further plumbing.
  */
 const EnvironmentAssets: React.FC = () => {
+  const confirm = useConfirm();
   const [assets, setAssets] = useState<EnvironmentAsset[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -79,7 +81,7 @@ const EnvironmentAssets: React.FC = () => {
   };
 
   const remove = async (id: string, name: string) => {
-    if (!window.confirm(`Remove "${name}"?`)) return;
+    if (!(await confirm(`Remove "${name}"?`, { title: 'Remove image?', confirmLabel: 'Remove', danger: true }))) return;
     try {
       const res = await brandAssetsAPI.delete(id);
       if (res?.success) setAssets(prev => prev.filter(a => a._id !== id));
