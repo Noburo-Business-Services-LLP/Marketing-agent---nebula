@@ -252,6 +252,10 @@ async function processDraftImageGenerationJob(job) {
 
     const user = await User.findById(draft.userId);
     const bp = user?.businessProfile || {};
+    // A language picked for this specific generation (Create's Language
+    // pill) wins over the brand's stored default — someone testing regional
+    // copy per-post should not be stuck with whatever Settings has saved.
+    const effectiveLanguage = normalizeLanguage(job.language || bp.contentLanguage);
 
     // generateCampaignImageNanoBanana retries once on a fallback model when the
     // primary is busy, and each of the two calls carries its own 120s internal
@@ -286,7 +290,7 @@ async function processDraftImageGenerationJob(job) {
           brandName: user?.companyName || 'Brand',
           industry: bp.industry || '',
           tone: bp.tone || 'professional',
-          targetLanguage: normalizeLanguage(bp.contentLanguage),
+          targetLanguage: effectiveLanguage,
           imageText: draft.imageText || '',
           logoReservedPosition: primaryLogo?.url ? primaryLogo.position : null
         }),
@@ -346,7 +350,7 @@ async function processDraftImageGenerationJob(job) {
           campaignContext: job.campaignContext || '',
           objective: job.objective || '',
           platform: (job.platforms || draft.platforms || [])[0] || '',
-          language: normalizeLanguage(bp.contentLanguage),
+          language: effectiveLanguage,
           brandContextBlock
         });
         const raw = await callTextLLM(planPrompt, { jsonMode: true, maxTokens: 2000 });
@@ -388,7 +392,7 @@ async function processDraftImageGenerationJob(job) {
           previousCreatives: await getRecentCreativeHistory(draft.userId)
         }, {
           aspectRatio: job.aspectRatio || '1:1',
-          language: normalizeLanguage(bp.contentLanguage)
+          language: effectiveLanguage
         });
       } catch (err) {
         console.error('[BackgroundQueue] Creative Director pass failed, falling back to the plain image description:', err.message);
@@ -437,7 +441,7 @@ async function processDraftImageGenerationJob(job) {
           brandName: user?.companyName || 'Brand',
           industry: bp.industry || '',
           tone: bp.tone || 'professional',
-          targetLanguage: normalizeLanguage(bp.contentLanguage),
+          targetLanguage: effectiveLanguage,
           imageText: draft.imageText || '',
           environmentReferenceImage: creative?.environmentImage || null,
           productReferenceImage: chosenProductImages[0] || null,

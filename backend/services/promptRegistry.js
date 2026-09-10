@@ -280,6 +280,7 @@ Platform:
 
 Language:
 {{language}}
+LANGUAGE ENFORCEMENT: Write the caption, hashtags, and any body copy strictly in {{language}}. Do not default to English unless {{language}} is English.
 
 ==================================================
 FIRST: UNDERSTAND THE IDEA
@@ -861,6 +862,7 @@ Tone:
 
 Language:
 {{language}}
+LANGUAGE ENFORCEMENT: Write every post caption, hashtag, and CTA strictly in {{language}}. Do not default to English unless {{language}} is English.
 
 Number of Posts:
 {{totalPosts}}
@@ -1736,6 +1738,7 @@ Platform:
 
 Language:
 {{language}}
+LANGUAGE ENFORCEMENT: Write every slide headline, story copy, caption, and hashtag strictly in {{language}}. Do not default to English unless {{language}} is English.
 
 ==================================================
 FIRST: DETERMINE THE CAROUSEL'S JOB

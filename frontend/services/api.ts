@@ -4332,6 +4332,8 @@ export const draftsAPI = {
     contentType?: string;
     campaignContext?: string;
     objective?: string;
+    // Overrides the brand's stored Settings default for this generation only.
+    language?: string;
   }): Promise<{ success: boolean; draftId?: string; draft?: Draft; message?: string }> => {
     return apiCall('/drafts/generate-image-bg', {
       method: 'POST',

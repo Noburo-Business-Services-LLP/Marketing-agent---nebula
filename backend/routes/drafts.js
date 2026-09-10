@@ -534,7 +534,7 @@ router.post('/generate-image-bg', protect, checkTrial, async (req, res) => {
       linkedProduct, productReferenceImages,
       // Context for the content-writing prompt — all optional, since a quick
       // one-line brief with none of this is the common case.
-      contentPillar, contentType, campaignContext, objective
+      contentPillar, contentType, campaignContext, objective, language
     } = req.body;
 
     // Single-post generation had no deduction at all — free, unlike every
@@ -564,6 +564,7 @@ router.post('/generate-image-bg', protect, checkTrial, async (req, res) => {
       status: 'processing',
       sourceType: type === 'campaign' ? 'campaign' : 'post',
       contentType: type === 'campaign' ? 'campaign' : 'post',
+      language: language || 'English',
       creative: {
         type: 'image',
         textContent: caption || '',
@@ -592,7 +593,10 @@ router.post('/generate-image-bg', protect, checkTrial, async (req, res) => {
       // price and description; the image list is attached so each chosen item
       // actually appears rather than being described from memory.
       linkedProduct: linkedProduct || null,
-      productReferenceImages: Array.isArray(productReferenceImages) ? productReferenceImages : []
+      productReferenceImages: Array.isArray(productReferenceImages) ? productReferenceImages : [],
+      // The language picked in Create for this specific generation, if any —
+      // overrides the brand's stored default (see backgroundQueue.js).
+      language: language || ''
     });
 
     res.status(201).json({ success: true, draftId: draft._id, draft });

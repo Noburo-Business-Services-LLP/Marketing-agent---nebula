@@ -5,6 +5,7 @@ const { checkTrial, deductCredits, refundCredits, CREDIT_COSTS } = require('../m
 const Draft = require('../models/Draft');
 const { generateCampaignImageNanoBanana } = require('../services/geminiAI');
 const { planCarousel, renderCarouselSlideImage, assetsToImageOptions } = require('../services/creativeDirector');
+const { normalizeLanguage } = require('../services/contentCalendarService');
 const { overlayBrandLogoIfPresent } = require('../services/logoOverlay');
 
 /**
@@ -67,6 +68,12 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
       objective = ''
     } = req.body || {};
 
+    // Accepts both the stored value ("tamil_english_mix") and a display
+    // label, same normalizer used for single-post and calendar generation —
+    // keeps carousel language handling consistent with the rest of the app
+    // instead of adding a fourth, narrower parsing implementation.
+    const normalizedLanguage = normalizeLanguage(language);
+
     const cleanBrief = String(brief || title || '').trim();
     if (!cleanBrief) {
       send('error', { message: 'Tell me what the carousel is about first.' });
@@ -100,7 +107,8 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
       objective,
       platform: (platforms || [])[0] || '',
       campaignContext: campaignContext || '',
-      slideCount: requestedSlides
+      slideCount: requestedSlides,
+      language: normalizedLanguage
     });
 
     if (plan.slides.length === 0) {
@@ -148,7 +156,7 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
       hashtags: plan.hashtags,
       platforms,
       tone,
-      language,
+      language: normalizedLanguage,
       aspectRatio,
       sourceType: 'carousel',
       contentType: 'carousel',
@@ -218,7 +226,7 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
           useRawPrompt: true,
           aspectRatio,
           tone,
-          targetLanguage: language,
+          targetLanguage: normalizedLanguage,
           imageText: slide.imageText,
           environmentReferenceImage: environmentImage,
           previousSlideImage: previousSlideImageUrl,

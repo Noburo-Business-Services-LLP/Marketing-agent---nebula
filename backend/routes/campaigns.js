@@ -18,6 +18,7 @@ const { parseGeminiJSON, generateICPAndStrategy, generateCampaignImageNanoBanana
 const { callTextLLM } = require('../services/openAI');
 const { buildPrompt } = require('../services/promptRegistry');
 const { buildBrandMemoryBlock } = require('../services/brandMemory');
+const { normalizeLanguage } = require('../services/contentCalendarService');
 const { planCampaignVisuals, renderCampaignSlotImage, assetsToImageOptions } = require('../services/creativeDirector');
 // Import Ayrshare for social media posting
 const { getPostStatus, retryPost: retryAyrsharePost, deletePost: deleteAyrsharePost } = require('../services/socialMediaAPI');
@@ -1241,25 +1242,11 @@ router.post('/smart-populate-template', protect, async (req, res) => {
     const strictBrandText = strictBrandMode ? buildStrictBrandLockText(brandCtx) : '';
     const platform = String(platformInput || 'instagram').trim().toLowerCase();
     const strategy = String(strategyLabel || '').trim();
-    const normalizeCampaignLanguage = (value = '') => {
-      const normalized = String(value || '').trim().toLowerCase();
-      const languageMap = {
-        english: 'English',
-        en: 'English',
-        hindi: 'Hindi',
-        hi: 'Hindi',
-        tamil: 'Tamil',
-        ta: 'Tamil',
-        telugu: 'Telugu',
-        te: 'Telugu',
-        malayalam: 'Malayalam',
-        ml: 'Malayalam',
-        kannada: 'Kannada',
-        kn: 'Kannada'
-      };
-      return languageMap[normalized] || 'English';
-    };
-    const selectedLanguage = normalizeCampaignLanguage(languageInput);
+    // Shared with single-post/carousel/calendar generation (see
+    // contentCalendarService.js) — was previously a local 6-language map
+    // (no Marathi/Bengali/Gujarati/Punjabi/Odia/Urdu, no "+ English mix"),
+    // so most of Create's language list silently became English here.
+    const selectedLanguage = normalizeLanguage(languageInput);
     const normalizeTemplateText = (raw = '') =>
       String(raw || '')
         .replace(/\r\n/g, '\n')
@@ -1545,25 +1532,11 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
       postsPerWeek: postsPerWeekInput
     } = req.body;
 
-    const normalizeCampaignLanguage = (value = '') => {
-      const normalized = String(value || '').trim().toLowerCase();
-      const languageMap = {
-        english: 'English',
-        en: 'English',
-        hindi: 'Hindi',
-        hi: 'Hindi',
-        tamil: 'Tamil',
-        ta: 'Tamil',
-        telugu: 'Telugu',
-        te: 'Telugu',
-        malayalam: 'Malayalam',
-        ml: 'Malayalam',
-        kannada: 'Kannada',
-        kn: 'Kannada'
-      };
-      return languageMap[normalized] || 'English';
-    };
-    const selectedLanguage = normalizeCampaignLanguage(languageInput);
+    // Shared with single-post/carousel/calendar generation (see
+    // contentCalendarService.js) — was previously a local 6-language map
+    // (no Marathi/Bengali/Gujarati/Punjabi/Odia/Urdu, no "+ English mix"),
+    // so most of Create's language list silently became English here.
+    const selectedLanguage = normalizeLanguage(languageInput);
 
     generationLockSignature = buildGenerationSignature({
       route: 'generate-campaign-stream',
@@ -4679,25 +4652,8 @@ router.post('/generate-caption', protect, checkTrial, requireCredits('campaign_t
   try {
     const { image, platform, language: languageInput, selectedProducts = [], prompt: userPrompt = '', generateOption = 'both', existingCaption = '', existingHashtags = '' } = req.body;
 
-    const normalizeCaptionLanguage = (value = '') => {
-      const normalized = String(value || '').trim().toLowerCase();
-      const languageMap = {
-        english: 'English',
-        en: 'English',
-        hindi: 'Hindi',
-        hi: 'Hindi',
-        tamil: 'Tamil',
-        ta: 'Tamil',
-        telugu: 'Telugu',
-        te: 'Telugu',
-        malayalam: 'Malayalam',
-        ml: 'Malayalam',
-        kannada: 'Kannada',
-        kn: 'Kannada'
-      };
-      return languageMap[normalized] || 'English';
-    };
-    const selectedLanguage = normalizeCaptionLanguage(languageInput);
+    // Shared normalizer — see note above.
+    const selectedLanguage = normalizeLanguage(languageInput);
     
     // If no image is provided, generate text-only caption/hashtags
     if (!image) {

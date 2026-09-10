@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, Layers, Calendar as CalendarIcon, Zap, Image as ImageIcon, Instagram, Facebook, Linkedin, ChevronRight, Loader2, Check, Clock, Save, AlertCircle, RotateCcw, Pencil, Trash2, Code2, Copy, X, SlidersHorizontal, GalleryHorizontalEnd, Package } from 'lucide-react';
+import { Sparkles, Layers, Calendar as CalendarIcon, Zap, Image as ImageIcon, Instagram, Facebook, Linkedin, ChevronRight, Loader2, Check, Clock, Save, AlertCircle, RotateCcw, Pencil, Trash2, Code2, Copy, X, SlidersHorizontal, GalleryHorizontalEnd, Package, Globe } from 'lucide-react';
 import { draftsAPI, brandAssetsAPI, apiService } from '../services/api';
 import { useQuarkCosts } from '../hooks/useQuarkCosts';
 import { useConfirm } from '../context/ConfirmContext';
+import { CONTENT_LANGUAGES } from '../constants/languages';
 import { Draft } from '../types';
 import GeneratingFill from '../components/GeneratingFill';
 import CalendarIdeaPicker from '../components/CalendarIdeaPicker';
@@ -37,6 +38,13 @@ const DURATIONS = ['1 week', '2 weeks', '3 weeks', '4 weeks'];
 const CADENCES = ['2 posts / week', '3 posts / week', '5 posts / week', 'Daily'];
 const TONES = ['Warm, unhurried', 'Confident, bold', 'Playful, kinetic', 'Luxurious, poetic', 'Professional, calm'];
 const VISUAL_STYLES = ['4:5 portrait', '1:1 square', '9:16 vertical', '16:9 landscape'];
+// Same list Settings/Onboarding offer, so a language picked here means the
+// same thing everywhere else in the product. Popover works off the labels;
+// the matching stored value ('hindi', 'tamil_english_mix', ...) is looked
+// up at submit time.
+const LANGUAGES = CONTENT_LANGUAGES.map((l) => l.label);
+const languageValueFromLabel = (label: string) =>
+  CONTENT_LANGUAGES.find((l) => l.label === label)?.value || 'english';
 const PLATFORMS = [
   { key: 'instagram', label: 'Instagram', Icon: Instagram },
   { key: 'facebook',  label: 'Facebook',  Icon: Facebook },
@@ -167,8 +175,9 @@ const GravityCreate: React.FC = () => {
   const [cadence, setCadence] = useState('3 posts / week');
   const [tone, setTone] = useState('Warm, unhurried');
   const [visualStyle, setVisualStyle] = useState('4:5 portrait');
+  const [language, setLanguage] = useState('English');
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(['instagram']);
-  const [openPopover, setOpenPopover] = useState<null | 'duration' | 'cadence' | 'tone' | 'style'>(null);
+  const [openPopover, setOpenPopover] = useState<null | 'duration' | 'cadence' | 'tone' | 'style' | 'language'>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [progressMsg, setProgressMsg] = useState<string>('');
@@ -556,6 +565,7 @@ const GravityCreate: React.FC = () => {
       contentPillar: ideaContext.contentPillar,
       contentType: ideaContext.format || 'post',
       objective: ideaContext.objective,
+      language: languageValueFromLabel(language),
     });
     if (res?.draft) {
       setResults([res.draft]);
@@ -587,7 +597,7 @@ const GravityCreate: React.FC = () => {
         slideCount,
         platforms: selectedPlatforms,
         tone: (tone.split(',')[0] || 'professional').toLowerCase(),
-        language: 'English',
+        language: languageValueFromLabel(language),
         aspectRatio: backendAspect,
         linkedProduct: primaryProduct,
         productReferenceImages: productImageUrls,
@@ -680,7 +690,7 @@ const GravityCreate: React.FC = () => {
       objective: ideaContext.objective || 'awareness',
       platforms: selectedPlatforms,
       tone: (tone.split(',')[0] || 'professional').toLowerCase(),
-      language: 'English',
+      language: languageValueFromLabel(language),
       aspectRatio: backendAspect,
       // No keyMessages. The brief already travels as campaignDescription
       // above; sending it here as well presented it to the model as a
@@ -1114,6 +1124,16 @@ const GravityCreate: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Language — every mode, not just Campaign, since a single post or a
+          carousel is just as often the thing being tested in a regional
+          language. */}
+      <div className="max-w-xs mx-auto mb-6">
+        <div className="relative">
+          <MetaBox label="Language" value={language} Icon={Globe} onClick={() => setOpenPopover(openPopover === 'language' ? null : 'language')} />
+          <OptionPopover open={openPopover === 'language'} options={LANGUAGES} onPick={setLanguage} onClose={() => setOpenPopover(null)} />
+        </div>
+      </div>
 
       {/* Platforms */}
       <div className="flex items-center justify-center gap-4 py-4 mb-2">
