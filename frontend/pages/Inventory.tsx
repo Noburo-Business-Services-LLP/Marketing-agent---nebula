@@ -10,8 +10,11 @@ import {
 import { inventoryAPI } from '../services/api';
 import { Product } from '../types';
 import { useTheme, getThemeClasses } from '../context/ThemeContext';
+import { GravityHero, GravityEmphasis } from '../components/gravity';
+import { useConfirm } from '../context/ConfirmContext';
 
-const Inventory: React.FC = () => {
+const Inventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
+  const confirm = useConfirm();
   const { isDarkMode } = useTheme();
   const theme = getThemeClasses(isDarkMode);
   
@@ -46,17 +49,85 @@ const Inventory: React.FC = () => {
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Form State
+  // Form State. `keyFeatures` is newline-separated text in the form and split
+  // into an array on save; `images` holds additional images beyond imageUrl.
   const [formData, setFormData] = useState({
     name: '',
+    type: 'product' as 'product' | 'service',
     description: '',
     price: '',
+    priceNote: '',
     currency: 'USD',
     imageUrl: '',
-    stockQuantity: '',
+    images: [] as string[],
+    keyFeatures: '',
     category: '',
     tags: ''
   });
+
+  // ── Product images ──────────────────────────────────────────────────────
+  // imageUrl is the primary image and `images` holds the rest. They are kept
+  // separate in the model so existing consumers (Reels picker, campaign
+  // generation) keep reading imageUrl, but the form treats them as one list.
+  const productImagesInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingImages, setUploadingImages] = useState(false);
+  const [imageUploadError, setImageUploadError] = useState('');
+
+  const allFormImages = [formData.imageUrl, ...formData.images].filter(Boolean);
+
+  const setImageList = (list: string[]) => {
+    setFormData(prev => ({ ...prev, imageUrl: list[0] || '', images: list.slice(1) }));
+  };
+
+  const removeImageAt = (index: number) => {
+    setImageList(allFormImages.filter((_, i) => i !== index));
+  };
+
+  const makePrimaryImage = (index: number) => {
+    const next = [...allFormImages];
+    const [picked] = next.splice(index, 1);
+    setImageList([picked, ...next]);
+  };
+
+  const fileToDataUrl = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(new Error('Could not read file'));
+      reader.readAsDataURL(file);
+    });
+
+  const handleImageFiles = async (fileList: FileList | null) => {
+    const files = Array.from(fileList || []);
+    if (!files.length) return;
+    setImageUploadError('');
+    setUploadingImages(true);
+    const uploaded: string[] = [];
+    try {
+      for (const file of files) {
+        if (!file.type.startsWith('image/')) {
+          setImageUploadError(`${file.name} is not an image`);
+          continue;
+        }
+        if (file.size > 10 * 1024 * 1024) {
+          setImageUploadError(`${file.name} is larger than 10MB`);
+          continue;
+        }
+        const dataUrl = await fileToDataUrl(file);
+        const res = await inventoryAPI.uploadProductImage(dataUrl);
+        if (res?.success && res.url) {
+          uploaded.push(res.url);
+        } else {
+          setImageUploadError(res?.message || `Could not upload ${file.name}`);
+        }
+      }
+      if (uploaded.length) setImageList([...allFormImages, ...uploaded]);
+    } catch (err: any) {
+      setImageUploadError(err?.message || 'Image upload failed');
+    } finally {
+      setUploadingImages(false);
+    }
+  };
 
   const categories = ['all', ...Array.from(new Set(products.map(p => p.category)))].filter(Boolean);
 
@@ -82,11 +153,14 @@ const Inventory: React.FC = () => {
     setEditingProduct(null);
     setFormData({
       name: '',
+      type: 'product',
       description: '',
       price: '',
+      priceNote: '',
       currency: 'USD',
       imageUrl: '',
-      stockQuantity: '',
+      images: [],
+      keyFeatures: '',
       category: '',
       tags: ''
     });
@@ -97,11 +171,16 @@ const Inventory: React.FC = () => {
     setEditingProduct(product);
     setFormData({
       name: product.name,
+      type: product.type === 'service' ? 'service' : 'product',
       description: product.description || '',
-      price: product.price.toString(),
+      // price is optional now. `.toString()` on it threw for any entry without
+      // one, and tsc cannot catch it here because strictNullChecks is off.
+      price: product.price === undefined || product.price === null ? '' : String(product.price),
+      priceNote: product.priceNote || '',
       currency: product.currency || 'USD',
       imageUrl: product.imageUrl || '',
-      stockQuantity: product.stockQuantity?.toString() || '',
+      images: Array.isArray(product.images) ? product.images : [],
+      keyFeatures: (product.keyFeatures || []).join('\n'),
       category: product.category || '',
       tags: product.tags?.join(', ') || ''
     });
@@ -109,7 +188,7 @@ const Inventory: React.FC = () => {
   };
 
   const handleDelete = async (productId: string) => {
-    if (!window.confirm('Are you sure you want to delete this product?')) return;
+    if (!(await confirm('Are you sure you want to delete this product?', { title: 'Delete product?', confirmLabel: 'Delete', danger: true }))) return;
     
     try {
       const response = await inventoryAPI.deleteProduct(productId);
@@ -128,8 +207,9 @@ const Inventory: React.FC = () => {
     
     const payload = {
       ...formData,
-      price: parseFloat(formData.price),
-      stockQuantity: parseInt(formData.stockQuantity) || 0,
+      // Blank stays blank rather than becoming NaN — services may have no price.
+      price: formData.price.trim() === '' ? undefined : parseFloat(formData.price),
+      keyFeatures: formData.keyFeatures.split('\n').map(f => f.trim()).filter(Boolean),
       tags: formData.tags.split(',').map(tag => tag.trim()).filter(Boolean)
     };
 
@@ -267,25 +347,33 @@ const Inventory: React.FC = () => {
     }
   };
 
-  const inputClasses = `w-full px-4 py-2.5 rounded-xl border outline-none focus:ring-2 focus:ring-[#ffcc29] transition-all ${
+  const inputClasses = `w-full px-4 py-2.5 rounded-xl border outline-none focus:ring-2 focus:ring-[#F5A623] transition-all ${
     isDarkMode ? 'bg-slate-900 border-slate-700 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-900'
   }`;
 
   const labelClasses = `block text-xs font-bold uppercase tracking-wide mb-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`;
 
   return (
-    <div className={`p-6 min-h-screen ${isDarkMode ? 'bg-[#070A12]' : 'bg-slate-50'}`}>
-      {/* Header */}
+    <div className={embedded ? '' : 'p-6 min-h-screen'}>
+      {/* Header. When embedded as a Brand Assets tab the page already has a
+          hero, so this one is suppressed rather than stacking two. */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
-        <div>
-          <h1 className={`text-3xl font-black tracking-tight flex items-center gap-3 ${theme.text}`}>
-            <Package className="w-8 h-8 text-[#ffcc29]" />
-            Inventory <span className="text-slate-500 font-light">Management</span>
-          </h1>
-          <p className={`text-sm mt-1 font-medium ${theme.textSecondary}`}>
-            Manage your products and their stock levels for marketing campaigns.
-          </p>
-        </div>
+        {embedded ? (
+          <div>
+            <h2 className="font-serif-display text-[22px] text-[#F5F4F1]">Products &amp; Services</h2>
+            <p className="text-[12.5px] text-white/45 mt-1 max-w-[560px]">
+              What the business offers, with images and details Gravity draws on when it creates campaigns.
+            </p>
+          </div>
+        ) : (
+          <GravityHero
+            align="left"
+            eyebrow="Products & Services"
+            headline={<>Everything you <GravityEmphasis>offer</GravityEmphasis></>}
+            subcopy="Your products and services, with images and details Gravity draws on when it creates campaigns, images and videos."
+            className="!mb-0"
+          />
+        )}
         
         <div className="flex items-center gap-3 flex-wrap">
           <button 
@@ -303,8 +391,8 @@ const Inventory: React.FC = () => {
             onClick={() => { setShowImportModal(true); setImportResult(null); setImportFile(null); }}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border font-bold text-sm transition-all hover:scale-[1.02] active:scale-[0.98] ${
               isDarkMode
-                ? 'bg-slate-800 border-slate-700 text-slate-200 hover:border-[#ffcc29]/50 hover:text-[#ffcc29]'
-                : 'bg-white border-slate-200 text-slate-700 hover:border-[#ffcc29] hover:text-[#ffcc29]'
+                ? 'bg-slate-800 border-slate-700 text-slate-200 hover:border-[#F5A623]/50 hover:text-[#F5A623]'
+                : 'bg-white border-slate-200 text-slate-700 hover:border-[#F5A623] hover:text-[#F5A623]'
             }`}
           >
             <FileSpreadsheet className="w-4 h-4" />
@@ -313,43 +401,46 @@ const Inventory: React.FC = () => {
 
           <button 
             onClick={handleOpenAdd}
-            className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-[#ffcc29] to-[#ffa500] text-black font-bold rounded-xl shadow-lg shadow-[#ffcc29]/20 hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all"
+            className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-[#F5A623] to-[#ffb833] text-black font-bold rounded-xl shadow-lg shadow-[#F5A623]/20 hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all"
           >
             <Plus className="w-5 h-5" />
-            Add Product
+            Add Entry
           </button>
         </div>
       </div>
 
       {/* Stats Quick View */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
         {[
-          { label: 'Total Products', value: products.length, icon: Box, color: 'text-blue-500' },
-          { label: 'In Stock', value: products.filter(p => p.stockStatus === 'in-stock').length, icon: Check, color: 'text-green-500' },
-          { label: 'Low Stock', value: products.filter(p => p.stockStatus === 'low-stock').length, icon: AlertCircle, color: 'text-yellow-500' },
-          { label: 'Out of Stock', value: products.filter(p => p.stockStatus === 'out-of-stock').length, icon: X, color: 'text-red-500' },
+          // Counts that describe a catalogue, not a stock ledger. "With images"
+          // earns its place: an entry without images gives generation nothing
+          // to work from, so it is the number worth acting on.
+          { label: 'Total Entries', value: products.length, icon: Box, color: 'text-[#F5A623]', tint: 'bg-[#F5A623]/10 border-[#F5A623]/20' },
+          { label: 'Products', value: products.filter(p => p.type !== 'service').length, icon: Package, color: 'text-[#F5A623]', tint: 'bg-[#F5A623]/10 border-[#F5A623]/20' },
+          { label: 'Services', value: products.filter(p => p.type === 'service').length, icon: Sparkles, color: 'text-sky-300', tint: 'bg-sky-400/10 border-sky-400/20' },
+          { label: 'With Images', value: products.filter(p => (p.imageUrl && p.imageUrl.trim()) || (p.images && p.images.length)).length, icon: ImageIcon, color: 'text-emerald-400', tint: 'bg-emerald-500/10 border-emerald-500/20' },
         ].map((stat, i) => (
-          <div key={i} className={`p-4 rounded-2xl border shadow-sm flex items-center justify-between ${theme.bgCard} ${isDarkMode ? 'border-slate-800/50' : 'border-slate-200/50'}`}>
-            <div>
-              <p className={`text-[10px] font-bold uppercase tracking-wider ${theme.textMuted}`}>{stat.label}</p>
-              <p className={`text-xl font-black ${theme.text}`}>{stat.value}</p>
+          <div key={i} className="p-5 rounded-xl border border-white/[0.06] bg-white/[0.02] flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <div className="gravity-label">{stat.label}</div>
+              <p className="mt-1.5 text-[26px] font-serif-display leading-none text-[#F5F4F1]">{stat.value}</p>
             </div>
-            <div className={`p-3 rounded-xl bg-opacity-10 ${stat.color} bg-current`}>
-              <stat.icon className="w-5 h-5" />
+            <div className={`p-2.5 rounded-lg border flex-shrink-0 ${stat.tint}`}>
+              <stat.icon className={`w-4 h-4 ${stat.color}`} />
             </div>
           </div>
         ))}
       </div>
 
       {/* Filters & Search */}
-      <div className={`mb-6 p-4 rounded-2xl border shadow-sm flex flex-col md:flex-row items-center gap-4 ${theme.bgCard} ${isDarkMode ? 'border-slate-800/50' : 'border-slate-200/50'}`}>
+      <div className={`mb-6 p-4 rounded-2xl border shadow-sm flex flex-col md:flex-row items-center gap-4 border-white/[0.06] bg-white/[0.02]`}>
         <div className="relative flex-1 w-full">
           <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`} />
           <input 
             type="text" 
-            placeholder="Search within your inventory..."
+            placeholder="Search products and services..."
             className={`w-full pl-10 pr-4 py-2 text-sm rounded-xl outline-none border transition-all ${
-              isDarkMode ? 'bg-slate-900 border-slate-700 text-white focus:border-[#ffcc29]' : 'bg-slate-50 border-slate-200 text-slate-900 focus:border-[#ffcc29]'
+              isDarkMode ? 'bg-slate-900 border-slate-700 text-white focus:border-[#F5A623]' : 'bg-slate-50 border-slate-200 text-slate-900 focus:border-[#F5A623]'
             }`}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -376,8 +467,8 @@ const Inventory: React.FC = () => {
       {loading ? (
         <div className="flex flex-col items-center justify-center py-20 gap-4">
           <div className="relative">
-            <div className="w-16 h-16 rounded-full border-4 border-slate-700 border-t-[#ffcc29] animate-spin" />
-            <Package className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-6 text-[#ffcc29]" />
+            <div className="w-16 h-16 rounded-full border-4 border-slate-700 border-t-[#F5A623] animate-spin" />
+            <Package className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-6 text-[#F5A623]" />
           </div>
           <p className={`text-sm font-medium animate-pulse ${theme.textSecondary}`}>Syncing your inventory...</p>
         </div>
@@ -386,15 +477,15 @@ const Inventory: React.FC = () => {
           <div className="inline-flex p-6 rounded-full bg-slate-100 dark:bg-slate-800 mb-6">
             <Package className="w-12 h-12 text-slate-400" />
           </div>
-          <h2 className={`text-xl font-bold ${theme.text}`}>Your inventory is empty</h2>
+          <h2 className={`text-xl font-bold ${theme.text}`}>Nothing here yet</h2>
           <p className={`text-sm mt-2 max-w-sm mx-auto ${theme.textSecondary}`}>
-            Start by adding your first product to link it with AI-powered marketing campaigns.
+            Add a product or service so Gravity has real images and details to build campaigns from.
           </p>
           <button 
             onClick={handleOpenAdd}
-            className="mt-6 px-6 py-3 bg-[#ffcc29] text-black font-bold rounded-xl hover:bg-[#ffcc29]/90 transition-all active:scale-95"
+            className="mt-6 px-6 py-3 bg-[#F5A623] text-black font-bold rounded-xl hover:bg-[#F5A623]/90 transition-all active:scale-95"
           >
-            Add New Product
+            Add your first entry
           </button>
         </div>
       ) : (
@@ -402,7 +493,7 @@ const Inventory: React.FC = () => {
           {filteredProducts.map(product => (
             <div 
               key={product._id} 
-              className={`group rounded-2xl border shadow-sm overflow-hidden transition-all duration-300 hover:shadow-xl hover:translate-y-[-4px] ${theme.bgCard} ${isDarkMode ? 'border-slate-800/50 hover:border-[#ffcc29]/30' : 'border-slate-200/50 hover:border-[#ffcc29]/30'}`}
+              className={`group rounded-2xl border shadow-sm overflow-hidden transition-all duration-300 hover:shadow-xl hover:translate-y-[-4px] ${theme.bgCard} ${isDarkMode ? 'border-slate-800/50 hover:border-[#F5A623]/30' : 'border-slate-200/50 hover:border-[#F5A623]/30'}`}
             >
               {/* Product Image Container */}
               <div className="relative h-56 overflow-hidden bg-slate-100">
@@ -414,24 +505,29 @@ const Inventory: React.FC = () => {
                   </div>
                 )}
                 
-                {/* Stock Status Badge */}
-                <div className={`absolute top-4 left-4 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border backdrop-blur-md shadow-lg ${getStockColor(product.stockStatus)}`}>
-                  {product.stockStatus.replace('-', ' ')}
-                </div>
+                {/* No stock badge: this is a catalogue of what a business
+                    offers, and Nebulaa has no way to know real stock levels.
+                    Missing images matter here instead — an entry without one
+                    gives generation nothing to work from. */}
+                {!(product.imageUrl && product.imageUrl.trim()) && !(product.images && product.images.length) && (
+                  <div className="absolute top-4 left-4 px-3 py-1 rounded-full text-[10px] font-semibold uppercase tracking-[0.12em] border border-amber-400/25 bg-amber-400/10 text-amber-300 backdrop-blur-md">
+                    No image
+                  </div>
+                )}
 
                 {/* Quick Actions Overlay */}
                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
                   <button 
                     onClick={() => handleOpenAdGenerator(product)}
-                    className="p-3 bg-[#ffcc29] rounded-xl text-slate-900 hover:bg-white transition-colors shadow-lg group/btn"
+                    className="p-3 bg-[#F5A623] rounded-xl text-slate-900 hover:bg-white transition-colors shadow-lg group/btn"
                     title="Generate AI Ad Image"
                   >
                     <Sparkles className="w-5 h-5 group-hover/btn:animate-pulse" />
                   </button>
                   <button 
                     onClick={() => handleOpenEdit(product)}
-                    className="p-3 bg-white rounded-xl text-slate-800 hover:bg-[#ffcc29] transition-colors shadow-lg"
-                    title="Edit Product"
+                    className="p-3 bg-white rounded-xl text-slate-800 hover:bg-[#F5A623] transition-colors shadow-lg"
+                    title="Edit"
                   >
                     <Edit className="w-5 h-5" />
                   </button>
@@ -465,24 +561,36 @@ const Inventory: React.FC = () => {
                     </span>
                   )}
                   {product.tags?.slice(0, 2).map((tag, i) => (
-                    <span key={i} className={`px-2 py-1 rounded-lg text-[10px] font-bold ${isDarkMode ? 'bg-slate-800 text-[#ffcc29]/70' : 'bg-slate-100 text-[#ffcc29]'}`}>
+                    <span key={i} className={`px-2 py-1 rounded-lg text-[10px] font-bold ${isDarkMode ? 'bg-slate-800 text-[#F5A623]/70' : 'bg-slate-100 text-[#F5A623]'}`}>
                       #{tag}
                     </span>
                   ))}
                 </div>
 
-                <div className={`flex items-center justify-between pt-4 border-t ${isDarkMode ? 'border-slate-800' : 'border-slate-100'}`}>
-                  <div>
-                    <p className={`text-[10px] font-bold uppercase tracking-wider ${theme.textMuted}`}>PRICE</p>
-                    <p className="text-xl font-black text-[#ffcc29]">
-                      <span className="text-xs font-bold mr-0.5">{product.currency || 'USD'}</span>
-                      {product.price}
-                    </p>
+                <div className="flex items-end justify-between gap-3 pt-4 border-t border-white/[0.06]">
+                  <div className="min-w-0">
+                    <div className="gravity-label">Pricing</div>
+                    {product.price !== undefined && product.price !== null ? (
+                      <p className="text-[18px] font-semibold text-[#F5A623] mt-0.5">
+                        <span className="text-[11px] font-medium mr-0.5">{product.currency || 'USD'}</span>
+                        {product.price}
+                      </p>
+                    ) : product.priceNote ? (
+                      <p className="text-[13px] font-medium text-[#F5A623] mt-0.5 truncate">{product.priceNote}</p>
+                    ) : (
+                      <p className="text-[13px] text-white/35 mt-0.5">Not set</p>
+                    )}
+                    {product.price !== undefined && product.price !== null && product.priceNote && (
+                      <p className="text-[11px] text-white/40 truncate">{product.priceNote}</p>
+                    )}
                   </div>
-                  <div className="text-right">
-                    <p className={`text-[10px] font-bold uppercase tracking-wider ${theme.textMuted}`}>STOCK</p>
-                    <p className={`text-sm font-black ${theme.text}`}>{product.stockQuantity || 0} pcs</p>
-                  </div>
+                  <span className={`flex-shrink-0 px-2.5 py-1 rounded-md text-[10px] font-semibold uppercase tracking-[0.12em] border ${
+                    product.type === 'service'
+                      ? 'border-sky-400/25 bg-sky-400/10 text-sky-300'
+                      : 'border-[#F5A623]/25 bg-[#F5A623]/10 text-[#F5A623]'
+                  }`}>
+                    {product.type === 'service' ? 'Service' : 'Product'}
+                  </span>
                 </div>
               </div>
             </div>
@@ -493,16 +601,20 @@ const Inventory: React.FC = () => {
       {/* Add/Edit Product Modal */}
       {showAddModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-300">
-          <div className={`relative w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] ${theme.bgCard} animate-in slide-in-from-bottom-4 duration-500`}>
+          {/* gravity-glow sits on a wrapper, not the panel: the panel needs
+              overflow-hidden for its rounded header, which would clip the
+              glow's ::before at inset -14px. */}
+          <div className="gravity-glow w-full max-w-2xl rounded-3xl animate-in slide-in-from-bottom-4 duration-500">
+          <div className="relative w-full rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] bg-[#111111] border border-white/[0.08]">
             {/* Modal Header */}
             <div className={`px-8 py-6 border-b flex items-center justify-between ${isDarkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
               <div className="flex items-center gap-4">
-                <div className="p-3 rounded-2xl bg-[#ffcc29]/10 border border-[#ffcc29]/20">
-                  {editingProduct ? <Edit className="w-6 h-6 text-[#ffcc29]" /> : <Plus className="w-6 h-6 text-[#ffcc29]" />}
+                <div className="p-3 rounded-2xl bg-[#F5A623]/10 border border-[#F5A623]/20">
+                  {editingProduct ? <Edit className="w-6 h-6 text-[#F5A623]" /> : <Plus className="w-6 h-6 text-[#F5A623]" />}
                 </div>
                 <div>
-                  <h3 className={`text-xl font-black ${theme.text}`}>{editingProduct ? 'Edit Product' : 'Add New Product'}</h3>
-                  <p className={`text-xs font-medium ${theme.textSecondary}`}>Fill in the details to update your inventory catalogue.</p>
+                  <h3 className={`text-xl font-black ${theme.text}`}>{editingProduct ? 'Edit Entry' : (formData.type === 'service' ? 'Add New Service' : 'Add New Product')}</h3>
+                  <p className={`text-xs font-medium ${theme.textSecondary}`}>Details Gravity will draw on when generating campaigns.</p>
                 </div>
               </div>
               <button 
@@ -516,12 +628,33 @@ const Inventory: React.FC = () => {
             {/* Modal Form Content */}
             <form onSubmit={handleSave} className="flex-1 overflow-y-auto p-8 custom-scrollbar">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Type first: it changes what the rest of the form means. */}
                 <div className="md:col-span-2">
-                  <label className={labelClasses}>Product Name *</label>
-                  <input 
-                    required 
-                    className={inputClasses} 
-                    placeholder="e.g. Ultra Wireless Headphones"
+                  <label className={labelClasses}>Type</label>
+                  <div className="flex gap-2">
+                    {(['product', 'service'] as const).map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setFormData({ ...formData, type: t })}
+                        className={`flex-1 px-4 py-2.5 rounded-xl text-[13px] font-semibold capitalize transition-all border ${
+                          formData.type === t
+                            ? 'bg-[#F5A623] text-[#1A1208] border-[#F5A623] shadow-[0_4px_18px_rgba(245,166,35,0.20)]'
+                            : 'border-white/[0.12] text-[#F5F4F1] hover:bg-white/[0.05] hover:border-white/20'
+                        }`}
+                      >
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className={labelClasses}>{formData.type === 'service' ? 'Service Name *' : 'Product Name *'}</label>
+                  <input
+                    required
+                    className={inputClasses}
+                    placeholder={formData.type === 'service' ? 'e.g. Bridal Makeup Session' : 'e.g. Ultra Wireless Headphones'}
                     value={formData.name}
                     onChange={(e) => setFormData({...formData, name: e.target.value})}
                   />
@@ -532,37 +665,49 @@ const Inventory: React.FC = () => {
                   <textarea 
                     className={`${inputClasses} resize-none`} 
                     rows={3}
-                    placeholder="Provide a detailed description of the product..."
+                    placeholder={formData.type === 'service' ? 'What the service involves, who it is for, what the outcome is...' : 'Provide a detailed description of the product...'}
                     value={formData.description}
                     onChange={(e) => setFormData({...formData, description: e.target.value})}
                   />
                 </div>
+
+                {/* Concrete selling points. Generation uses these as copy source
+                    material, so one per line keeps them individually usable. */}
+                <div className="md:col-span-2">
+                  <label className={labelClasses}>Key Features / Benefits</label>
+                  <textarea
+                    className={`${inputClasses} resize-none`}
+                    rows={3}
+                    placeholder={'One per line, e.g.\nHandmade in small batches\nDelivered within 48 hours'}
+                    value={formData.keyFeatures}
+                    onChange={(e) => setFormData({...formData, keyFeatures: e.target.value})}
+                  />
+                </div>
                 
                 <div>
-                  <label className={labelClasses}>Price *</label>
+                  <label className={labelClasses}>Price</label>
                   <div className="relative">
                     <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-500">$</span>
-                    <input 
-                      required 
-                      type="number" 
+                    <input
+                      type="number"
                       step="0.01"
-                      className={`${inputClasses} pl-8`} 
-                      placeholder="0.00"
+                      className={`${inputClasses} pl-8`}
+                      placeholder="Optional"
                       value={formData.price}
                       onChange={(e) => setFormData({...formData, price: e.target.value})}
                     />
                   </div>
                 </div>
-                
+
+                {/* Replaces "Initial Stock". Stock is not something Nebulaa can
+                    know; a flexible pricing line is something a service needs. */}
                 <div>
-                  <label className={labelClasses}>Initial Stock *</label>
-                  <input 
-                    required
-                    type="number" 
-                    className={inputClasses} 
-                    placeholder="0"
-                    value={formData.stockQuantity}
-                    onChange={(e) => setFormData({...formData, stockQuantity: e.target.value})}
+                  <label className={labelClasses}>Pricing Note</label>
+                  <input
+                    className={inputClasses}
+                    placeholder="e.g. From ₹5,000/session, Quote on request"
+                    value={formData.priceNote}
+                    onChange={(e) => setFormData({...formData, priceNote: e.target.value})}
                   />
                 </div>
                 
@@ -586,23 +731,76 @@ const Inventory: React.FC = () => {
                   />
                 </div>
                 
+                {/* Images. The first one is the primary and is stored as
+                    `imageUrl`, so every existing consumer keeps working; the
+                    rest go to `images`. */}
                 <div className="md:col-span-2">
-                  <label className={labelClasses}>Product Image URL</label>
-                  <div className="flex gap-4">
-                    <div className="flex-1">
-                      <input 
-                        className={inputClasses} 
-                        placeholder="Paste image URL here..."
-                        value={formData.imageUrl}
-                        onChange={(e) => setFormData({...formData, imageUrl: e.target.value})}
-                      />
-                    </div>
-                    {formData.imageUrl && (
-                      <div className="w-12 h-12 rounded-xl overflow-hidden border border-slate-700">
-                        <img src={formData.imageUrl} className="w-full h-full object-cover" alt="Preview" />
+                  <label className={labelClasses}>Images</label>
+                  <p className="text-[11.5px] text-white/40 -mt-1 mb-3">
+                    The first image is the primary one. More angles and contexts give generation more to work with.
+                  </p>
+
+                  <div className="flex flex-wrap gap-3 mb-3">
+                    {allFormImages.map((src, i) => (
+                      <div key={`${src}-${i}`} className="relative group w-24 h-24 rounded-xl overflow-hidden border border-white/[0.10]">
+                        <img src={src} className="w-full h-full object-cover" alt={`Image ${i + 1}`} />
+                        {i === 0 && (
+                          <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-[0.1em] bg-[#F5A623] text-[#1A1208]">
+                            Primary
+                          </span>
+                        )}
+                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5">
+                          {i !== 0 && (
+                            <button type="button" title="Make primary" onClick={() => makePrimaryImage(i)}
+                              className="p-1.5 rounded-md bg-white/15 hover:bg-[#F5A623] hover:text-[#1A1208] text-white transition-colors">
+                              <Check className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          <button type="button" title="Remove" onClick={() => removeImageAt(i)}
+                            className="p-1.5 rounded-md bg-white/15 hover:bg-red-500 text-white transition-colors">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
-                    )}
+                    ))}
+
+                    <button
+                      type="button"
+                      onClick={() => productImagesInputRef.current?.click()}
+                      disabled={uploadingImages}
+                      className="w-24 h-24 rounded-xl border border-dashed border-white/[0.15] hover:border-[#F5A623]/50 hover:bg-white/[0.03] flex flex-col items-center justify-center gap-1 text-white/40 hover:text-[#F5A623] transition-all disabled:opacity-50"
+                    >
+                      {uploadingImages ? <Loader2 className="w-5 h-5 animate-spin" /> : <ImagePlus className="w-5 h-5" />}
+                      <span className="text-[10px] font-semibold">{uploadingImages ? 'Uploading' : 'Upload'}</span>
+                    </button>
+                    <input
+                      ref={productImagesInputRef}
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => { handleImageFiles(e.target.files); e.target.value = ''; }}
+                    />
                   </div>
+
+                  {imageUploadError && (
+                    <p className="text-[12px] text-red-300 mb-3">{imageUploadError}</p>
+                  )}
+
+                  <details className="group">
+                    <summary className="cursor-pointer text-[11.5px] text-white/40 hover:text-white/70 select-none">
+                      Or paste an image URL
+                    </summary>
+                    <input
+                      className={`${inputClasses} mt-2`}
+                      placeholder="https://..."
+                      value={formData.imageUrl.startsWith('data:') ? '' : formData.imageUrl}
+                      onChange={(e) => setFormData({...formData, imageUrl: e.target.value})}
+                    />
+                    <p className="text-[11px] text-white/35 mt-1.5">
+                      Fetched fresh each time something is generated. If the link is slow, private or dead, the image is skipped silently — uploading is more reliable.
+                    </p>
+                  </details>
                 </div>
               </div>
 
@@ -620,12 +818,13 @@ const Inventory: React.FC = () => {
                 <button 
                   type="submit"
                   disabled={isSaving}
-                  className="px-8 py-3 bg-gradient-to-r from-[#ffcc29] to-[#ffa500] text-black font-black rounded-xl shadow-lg shadow-[#ffcc29]/20 hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 flex items-center gap-2"
+                  className="px-8 py-3 bg-gradient-to-r from-[#F5A623] to-[#ffb833] text-black font-black rounded-xl shadow-lg shadow-[#F5A623]/20 hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 flex items-center gap-2"
                 >
-                  {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : editingProduct ? 'Update Product' : 'Create Product'}
+                  {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : editingProduct ? 'Save Changes' : (formData.type === 'service' ? 'Create Service' : 'Create Product')}
                 </button>
               </div>
             </form>
+          </div>
           </div>
         </div>
       )}
@@ -642,8 +841,8 @@ const Inventory: React.FC = () => {
               isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200'
             }`}>
               <div className="flex items-center gap-4">
-                <div className="p-3 rounded-2xl bg-[#ffcc29]/10 border border-[#ffcc29]/20">
-                  <Upload className="w-5 h-5 text-[#ffcc29]" />
+                <div className="p-3 rounded-2xl bg-[#F5A623]/10 border border-[#F5A623]/20">
+                  <Upload className="w-5 h-5 text-[#F5A623]" />
                 </div>
                 <div>
                   <h3 className={`text-lg font-black ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
@@ -698,10 +897,10 @@ const Inventory: React.FC = () => {
                   onClick={() => fileInputRef.current?.click()}
                   className={`relative flex flex-col items-center justify-center gap-3 p-10 rounded-2xl border-2 border-dashed cursor-pointer transition-all duration-200 ${
                     isDragging
-                      ? 'border-[#ffcc29] bg-[#ffcc29]/5 scale-[1.01]'
+                      ? 'border-[#F5A623] bg-[#F5A623]/5 scale-[1.01]'
                       : importFile
                       ? isDarkMode ? 'border-green-500/40 bg-green-500/5' : 'border-green-400 bg-green-50'
-                      : isDarkMode ? 'border-slate-700 hover:border-[#ffcc29]/50 hover:bg-[#ffcc29]/5' : 'border-slate-200 hover:border-[#ffcc29] hover:bg-[#ffcc29]/5'
+                      : isDarkMode ? 'border-slate-700 hover:border-[#F5A623]/50 hover:bg-[#F5A623]/5' : 'border-slate-200 hover:border-[#F5A623] hover:bg-[#F5A623]/5'
                   }`}
                 >
                   <input
@@ -729,9 +928,9 @@ const Inventory: React.FC = () => {
                   ) : (
                     <>
                       <div className={`p-4 rounded-2xl border ${
-                        isDragging ? 'bg-[#ffcc29]/10 border-[#ffcc29]/30' : isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-200'
+                        isDragging ? 'bg-[#F5A623]/10 border-[#F5A623]/30' : isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-200'
                       }`}>
-                        <Upload className={`w-8 h-8 ${isDragging ? 'text-[#ffcc29]' : isDarkMode ? 'text-slate-500' : 'text-slate-400'}`} />
+                        <Upload className={`w-8 h-8 ${isDragging ? 'text-[#F5A623]' : isDarkMode ? 'text-slate-500' : 'text-slate-400'}`} />
                       </div>
                       <div className="text-center">
                         <p className={`font-bold text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>
@@ -852,7 +1051,7 @@ const Inventory: React.FC = () => {
                   <button
                     onClick={() => { setImportFile(null); setImportResult(null); }}
                     className={`w-full py-2.5 rounded-xl border text-sm font-bold transition-all ${
-                      isDarkMode ? 'border-slate-700 text-slate-400 hover:border-[#ffcc29]/40 hover:text-[#ffcc29]' : 'border-slate-200 text-slate-500 hover:border-[#ffcc29] hover:text-[#ffcc29]'
+                      isDarkMode ? 'border-slate-700 text-slate-400 hover:border-[#F5A623]/40 hover:text-[#F5A623]' : 'border-slate-200 text-slate-500 hover:border-[#F5A623] hover:text-[#F5A623]'
                     }`}
                   >
                     Import another file
@@ -879,7 +1078,7 @@ const Inventory: React.FC = () => {
                   type="button"
                   onClick={handleImport}
                   disabled={!importFile || isImporting}
-                  className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-[#ffcc29] to-[#ffa500] text-black font-black text-sm rounded-xl shadow-lg shadow-[#ffcc29]/20 hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100"
+                  className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-[#F5A623] to-[#ffb833] text-black font-black text-sm rounded-xl shadow-lg shadow-[#F5A623]/20 hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100"
                 >
                   {isImporting ? (
                     <><Loader2 className="w-4 h-4 animate-spin" /> Importing…</>
@@ -897,7 +1096,7 @@ const Inventory: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleCloseImport}
-                  className="px-6 py-2.5 bg-gradient-to-r from-[#ffcc29] to-[#ffa500] text-black font-black text-sm rounded-xl shadow-lg shadow-[#ffcc29]/20 hover:shadow-xl transition-all"
+                  className="px-6 py-2.5 bg-gradient-to-r from-[#F5A623] to-[#ffb833] text-black font-black text-sm rounded-xl shadow-lg shadow-[#F5A623]/20 hover:shadow-xl transition-all"
                 >
                   Done
                 </button>
@@ -916,8 +1115,8 @@ const Inventory: React.FC = () => {
             <div className={`w-full md:w-[380px] p-8 flex flex-col gap-8 border-r ${isDarkMode ? 'bg-slate-900/50 border-white/5' : 'bg-slate-50 border-slate-200'}`}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="p-2.5 rounded-2xl bg-[#ffcc29]/20 border border-[#ffcc29]/30">
-                    <Sparkles className="w-6 h-6 text-[#ffcc29]" />
+                  <div className="p-2.5 rounded-2xl bg-[#F5A623]/20 border border-[#F5A623]/30">
+                    <Sparkles className="w-6 h-6 text-[#F5A623]" />
                   </div>
                   <h3 className={`text-xl font-black ${theme.text}`}>AI Ad Studio</h3>
                 </div>
@@ -943,7 +1142,7 @@ const Inventory: React.FC = () => {
                       onClick={() => setAdOptions(prev => ({ ...prev, platform: p.id }))}
                       className={`flex items-center gap-3 p-3 rounded-2xl border transition-all ${
                         adOptions.platform === p.id 
-                          ? 'bg-[#ffcc29]/10 border-[#ffcc29] text-[#ffcc29]' 
+                          ? 'bg-[#F5A623]/10 border-[#F5A623] text-[#F5A623]' 
                           : `${isDarkMode ? 'bg-slate-800/50 border-white/5 text-slate-400' : 'bg-white border-slate-200 text-slate-600'} hover:border-slate-400`
                       }`}
                     >
@@ -963,7 +1162,7 @@ const Inventory: React.FC = () => {
                       onClick={() => setAdOptions(prev => ({ ...prev, tone: t.toLowerCase() }))}
                       className={`p-3 rounded-2xl border text-xs font-bold transition-all ${
                         adOptions.tone === t.toLowerCase() 
-                          ? 'bg-[#ffcc29]/10 border-[#ffcc29] text-[#ffcc29]' 
+                          ? 'bg-[#F5A623]/10 border-[#F5A623] text-[#F5A623]' 
                           : `${isDarkMode ? 'bg-slate-800/50 border-white/5 text-slate-400' : 'bg-white border-slate-200 text-slate-600'} hover:border-slate-400`
                       }`}
                     >
@@ -986,7 +1185,7 @@ const Inventory: React.FC = () => {
                       onClick={() => setAdOptions(prev => ({ ...prev, aspectRatio: r.id }))}
                       className={`flex-1 flex flex-col items-center gap-2 p-4 rounded-2xl border transition-all ${
                         adOptions.aspectRatio === r.id 
-                          ? 'bg-[#ffcc29]/10 border-[#ffcc29] text-[#ffcc29]' 
+                          ? 'bg-[#F5A623]/10 border-[#F5A623] text-[#F5A623]' 
                           : `${isDarkMode ? 'bg-slate-800/50 border-white/5 text-slate-400' : 'bg-white border-slate-200 text-slate-600'} hover:border-slate-400`
                       }`}
                     >
@@ -1001,7 +1200,7 @@ const Inventory: React.FC = () => {
                 <button
                   onClick={handleGenerateAd}
                   disabled={isGeneratingAd}
-                  className="w-full h-14 bg-[#ffcc29] text-slate-900 rounded-2xl font-black text-sm shadow-xl shadow-[#ffcc29]/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 disabled:scale-100 flex items-center justify-center gap-2"
+                  className="w-full h-14 bg-[#F5A623] text-slate-900 rounded-2xl font-black text-sm shadow-xl shadow-[#F5A623]/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 disabled:scale-100 flex items-center justify-center gap-2"
                 >
                   {isGeneratingAd ? (
                     <>
@@ -1032,8 +1231,8 @@ const Inventory: React.FC = () => {
                   {isGeneratingAd ? (
                     <div className="absolute inset-0 flex flex-col items-center justify-center gap-6">
                       <div className="relative">
-                        <div className="w-20 h-20 border-4 border-[#ffcc29]/20 border-t-[#ffcc29] rounded-full animate-spin" />
-                        <Sparkles className="absolute inset-0 m-auto w-8 h-8 text-[#ffcc29] animate-pulse" />
+                        <div className="w-20 h-20 border-4 border-[#F5A623]/20 border-t-[#F5A623] rounded-full animate-spin" />
+                        <Sparkles className="absolute inset-0 m-auto w-8 h-8 text-[#F5A623] animate-pulse" />
                       </div>
                       <div className="text-center">
                         <p className={`text-sm font-black mb-1 ${theme.text}`}>Nano Banana 2 is working</p>
@@ -1053,7 +1252,7 @@ const Inventory: React.FC = () => {
                       </div>
                       <h4 className={`text-xl font-black mb-3 ${theme.text}`}>Ready to Launch?</h4>
                       <p className={`text-xs leading-relaxed max-w-xs ${theme.textSecondary}`}>
-                        Click generate to create an agency-grade marketing image for <span className="font-bold text-[#ffcc29]">{selectedAdProduct.name}</span>.
+                        Click generate to create an agency-grade marketing image for <span className="font-bold text-[#F5A623]">{selectedAdProduct.name}</span>.
                       </p>
                     </div>
                   )}

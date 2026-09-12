@@ -9,10 +9,15 @@ const fetch = require('node-fetch');
 /**
  * Position mapping for logo placement
  */
+// The 6-way grid a user picks a logo's home spot from: top/bottom rows,
+// left/center/right columns. 'center' (dead center of the frame) kept as a
+// 7th option for anything already relying on it, but not offered in the grid.
 const POSITION_MAP = {
   'top-left': { gravity: 'northwest', x: 20, y: 20 },
+  'top-center': { gravity: 'north', x: 0, y: 20 },
   'top-right': { gravity: 'northeast', x: 20, y: 20 },
   'bottom-left': { gravity: 'southwest', x: 20, y: 20 },
+  'bottom-center': { gravity: 'south', x: 0, y: 20 },
   'bottom-right': { gravity: 'southeast', x: 20, y: 20 },
   'center': { gravity: 'center', x: 0, y: 0 }
 };
@@ -123,12 +128,20 @@ async function overlayLogo(baseImageSource, logoSource, options = {}) {
         left = padding;
         top = padding;
         break;
+      case 'top-center':
+        left = Math.round((baseWidth - logoWidth) / 2);
+        top = padding;
+        break;
       case 'top-right':
         left = baseWidth - logoWidth - padding;
         top = padding;
         break;
       case 'bottom-left':
         left = padding;
+        top = baseHeight - logoHeight - padding;
+        break;
+      case 'bottom-center':
+        left = Math.round((baseWidth - logoWidth) / 2);
         top = baseHeight - logoHeight - padding;
         break;
       case 'bottom-right':
@@ -315,10 +328,39 @@ async function replaceLogoAtBboxAndUpload(baseImageSource, logoSource, bbox) {
   };
 }
 
+/**
+ * The default path every standard generation flow (single post, carousel,
+ * campaign) should use instead of handing a logo to the image model as a
+ * reference. Handing it to the model gets it redrawn — softened, recolored,
+ * sometimes with the wordmark dropped entirely, because a generative model
+ * reinterprets everything it sees rather than compositing it. This pastes
+ * the actual asset with Sharp, so it comes out pixel-exact.
+ *
+ * No-ops and returns the original URL unchanged when there is no logo to
+ * apply. Fails soft on an overlay error — a bad composite (a fetch timeout,
+ * a corrupt asset) should not lose an otherwise-good generation, so this
+ * logs a warning and returns the clean image rather than throwing.
+ */
+async function overlayBrandLogoIfPresent(imageUrl, { logoUrl, position, size } = {}) {
+  if (!imageUrl || !logoUrl) return imageUrl;
+  try {
+    const result = await overlayLogoAndUpload(imageUrl, logoUrl, {
+      position: position || 'bottom-right',
+      size: size || 'medium'
+    });
+    if (result?.success && result?.url) return result.url;
+    console.warn('⚠️ Logo overlay failed, keeping the clean image:', result?.error);
+  } catch (err) {
+    console.warn('⚠️ Logo overlay threw, keeping the clean image:', err.message);
+  }
+  return imageUrl;
+}
+
 module.exports = {
   overlayLogo,
   overlayLogoBase64,
   overlayLogoAndUpload,
+  overlayBrandLogoIfPresent,
   replaceLogoAtBbox,
   replaceLogoAtBboxAndUpload,
   getImageBuffer,

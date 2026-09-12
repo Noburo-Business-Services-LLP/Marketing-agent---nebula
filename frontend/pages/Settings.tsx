@@ -1,9 +1,17 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Save, AlertCircle, Check, Loader2, Eye, EyeOff, Zap, RefreshCw, CreditCard, Download, ExternalLink } from 'lucide-react';
 import { User, BillingData, BusinessProfile } from '../types';
+import { ACTION_LABELS, QUARK_GROUPS } from '../constants/quarks';
+import { useQuarkPricing } from '../hooks/useQuarkCosts';
 import { jsPDF } from 'jspdf';
 import { apiService } from '../services/api';
+import { CONTENT_LANGUAGES } from '../constants/languages';
 import { useTheme, getThemeClasses } from '../context/ThemeContext';
+import {
+  GravityHero,
+  GravityEmphasis,
+} from '../components/gravity';
 
 interface SettingsProps {
   user: User | null;
@@ -13,7 +21,12 @@ interface SettingsProps {
 const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
   const { isDarkMode } = useTheme();
   const theme = getThemeClasses(isDarkMode);
-  const [activeTab, setActiveTab] = useState('Profile');
+  // `?tab=business` deep-links straight into the Business Profile tab — used
+  // by the sidebar's account chip so clicking it lands somewhere useful
+  // instead of always opening on the generic Profile tab.
+  const [searchParams] = useSearchParams();
+  const initialTab = searchParams.get('tab') === 'business' ? 'Business Profile' : 'Profile';
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [emailNotifications, setEmailNotifications] = useState(true);
   
   // API Status State
@@ -49,6 +62,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
 
   // Billing State
   const [billingData, setBillingData] = useState<BillingData | null>(null);
+  const { costs: quarkCosts, units: quarkUnits } = useQuarkPricing();
   const [loadingBilling, setLoadingBilling] = useState(false);
 
   // Business Profile Form State (full onboarding questionnaire)
@@ -60,7 +74,8 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
     targetCustomerProfile: '', targetGender: '', geographicReach: '',
     customerType: '', pricePositioning: '', keyDifferentiator: '',
     brandStory: '', heroProduct: '', contentLanguage: '',
-    contentRestrictions: '', firstMonthContentAngles: ''
+    contentRestrictions: '', firstMonthContentAngles: '',
+    contentCadence: { postsPerDay: 1, reelsPerWeek: 1 }
   };
   const [bizData, setBizData] = useState<BusinessProfile>(emptyBiz);
   const [bizStatus, setBizStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -266,40 +281,38 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
 
   return (
     <div className="max-w-4xl mx-auto">
-      <div className="mb-8">
-        <h1 className={`text-2xl font-bold ${theme.text}`}>Settings</h1>
+      <GravityHero
+        align="left"
+        eyebrow="Settings"
+        headline={<>Your account, your <GravityEmphasis>rules</GravityEmphasis></>}
+        subcopy="Profile, business details, notifications, security and billing."
+      />
+
+      {/* Same pill-shaped switcher as Create's Campaign/Single post/Carousel
+          toggle — the one tab control style the whole app should share. */}
+      <div className="mb-8 overflow-x-auto">
+        <div className="inline-flex items-center gap-1 p-1 rounded-full bg-white/[0.03] border border-white/[0.06]">
+          {['Profile', 'Business Profile', 'Notifications', 'Security', 'Billing'].map(tab => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`whitespace-nowrap h-9 px-5 rounded-full text-[13px] font-semibold transition-colors ${
+                activeTab === tab ? 'bg-white/[0.10] text-[#F5F4F1]' : 'text-white/55 hover:text-white/80'
+              }`}
+            >
+              {tab}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="flex flex-col md:flex-row gap-8">
-          {/* Sidebar Tabs */}
-          <div className="w-full md:w-64 flex-shrink-0">
-             <div className={`rounded-xl shadow-sm border p-2 space-y-1 ${theme.bgCard} ${
-               isDarkMode ? 'border-slate-700/50' : 'border-slate-200'
-             }`}>
-                {['Profile', 'Business Profile', 'Notifications', 'Security', 'Billing'].map(tab => (
-                    <button
-                        key={tab}
-                        onClick={() => setActiveTab(tab)}
-                        className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                            activeTab === tab 
-                            ? 'bg-[#ffcc29]/20 text-[#ffcc29]' 
-                            : `${theme.textSecondary} ${isDarkMode ? 'hover:bg-slate-700' : 'hover:bg-slate-50'}`
-                        }`}
-                    >
-                        {tab}
-                    </button>
-                ))}
-             </div>
-          </div>
-
           {/* Content */}
           <div className="flex-1">
-              <div className={`rounded-xl shadow-sm border p-8 ${theme.bgCard} ${
-                isDarkMode ? 'border-slate-700/50' : 'border-slate-200'
-              }`}>
+              <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-8">
                   {activeTab === 'Profile' && (
                       <div className="animate-in fade-in duration-300">
-                          <h2 className={`text-lg font-bold mb-6 ${theme.text}`}>Profile Settings</h2>
+                          <h2 className="font-serif-display text-[22px] text-[#F5F4F1] mb-6">Profile Settings</h2>
                           
                           <div className="space-y-6 mb-8">
                               <div className="grid grid-cols-2 gap-6">
@@ -313,8 +326,8 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                           errors.firstName 
                                             ? 'border-red-300 focus:ring-red-200' 
                                             : isDarkMode 
-                                              ? 'bg-[#0d1117] border-slate-700/50 text-white focus:ring-[#ffcc29]/30' 
-                                              : 'bg-white border-slate-300 text-slate-900 focus:ring-[#ffcc29]'
+                                              ? 'bg-[#0d1117] border-slate-700/50 text-white focus:ring-[#F5A623]/30' 
+                                              : 'bg-white border-slate-300 text-slate-900 focus:ring-[#F5A623]'
                                         }`}
                                       />
                                       {errors.firstName && <p className="text-red-500 text-xs mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {errors.firstName}</p>}
@@ -329,8 +342,8 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                           errors.lastName 
                                             ? 'border-red-300 focus:ring-red-200' 
                                             : isDarkMode 
-                                              ? 'bg-[#0d1117] border-slate-700/50 text-white focus:ring-[#ffcc29]/30' 
-                                              : 'bg-white border-slate-300 text-slate-900 focus:ring-[#ffcc29]'
+                                              ? 'bg-[#0d1117] border-slate-700/50 text-white focus:ring-[#F5A623]/30' 
+                                              : 'bg-white border-slate-300 text-slate-900 focus:ring-[#F5A623]'
                                         }`}
                                       />
                                       {errors.lastName && <p className="text-red-500 text-xs mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {errors.lastName}</p>}
@@ -346,8 +359,8 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                         onChange={e => handleChange('companyName', e.target.value)}
                                         className={`w-full p-3 border rounded-lg outline-none focus:ring-2 transition-all ${
                                           isDarkMode 
-                                            ? 'bg-[#0d1117] border-slate-700/50 text-white focus:ring-[#ffcc29]/30' 
-                                            : 'bg-white border-slate-300 text-slate-900 focus:ring-[#ffcc29]'
+                                            ? 'bg-[#0d1117] border-slate-700/50 text-white focus:ring-[#F5A623]/30' 
+                                            : 'bg-white border-slate-300 text-slate-900 focus:ring-[#F5A623]'
                                         }`}
                                       />
                                   </div>
@@ -359,8 +372,8 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                         onChange={e => handleChange('industry', e.target.value)}
                                         className={`w-full p-3 border rounded-lg outline-none focus:ring-2 transition-all ${
                                           isDarkMode 
-                                            ? 'bg-[#0d1117] border-slate-700/50 text-white focus:ring-[#ffcc29]/30' 
-                                            : 'bg-white border-slate-300 text-slate-900 focus:ring-[#ffcc29]'
+                                            ? 'bg-[#0d1117] border-slate-700/50 text-white focus:ring-[#F5A623]/30' 
+                                            : 'bg-white border-slate-300 text-slate-900 focus:ring-[#F5A623]'
                                         }`}
                                       />
                                   </div>
@@ -376,8 +389,8 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                       errors.email 
                                         ? 'border-red-300 focus:ring-red-200' 
                                         : isDarkMode 
-                                          ? 'bg-[#0d1117] border-slate-700/50 text-white focus:ring-[#ffcc29]/30' 
-                                          : 'bg-white border-slate-300 text-slate-900 focus:ring-[#ffcc29]'
+                                          ? 'bg-[#0d1117] border-slate-700/50 text-white focus:ring-[#F5A623]/30' 
+                                          : 'bg-white border-slate-300 text-slate-900 focus:ring-[#F5A623]'
                                     }`}
                                   />
                                   {errors.email && <p className="text-red-500 text-xs mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {errors.email}</p>}
@@ -385,7 +398,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                           </div>
 
                           <div className={`border-t pt-8 mb-8 ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'}`}>
-                              <h3 className={`text-lg font-bold mb-6 ${theme.text}`}>Preferences</h3>
+                              <h3 className="font-serif-display text-[20px] text-[#F5F4F1] mb-6">Preferences</h3>
                               <div className={`flex items-center justify-between p-4 rounded-lg border ${
                                 isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-slate-50 border-slate-200'
                               }`}>
@@ -395,7 +408,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                   </div>
                                   <button 
                                     onClick={() => setEmailNotifications(!emailNotifications)}
-                                    className={`w-12 h-6 rounded-full transition-colors relative ${emailNotifications ? 'bg-[#ffcc29]' : isDarkMode ? 'bg-slate-600' : 'bg-slate-300'}`}
+                                    className={`w-12 h-6 rounded-full transition-colors relative ${emailNotifications ? 'bg-[#F5A623]' : isDarkMode ? 'bg-slate-600' : 'bg-slate-300'}`}
                                   >
                                       <div className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-all ${emailNotifications ? 'left-7' : 'left-1'}`}></div>
                                   </button>
@@ -417,7 +430,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                 ? 'bg-green-600 text-white' 
                                 : saveStatus === 'error'
                                 ? 'bg-red-600 text-white'
-                                : 'bg-[#ffcc29] text-black hover:bg-[#ffcc29]/80'
+                                : 'bg-[#F5A623] text-black hover:bg-[#F5A623]/80'
                             }`}
                           >
                               {saveStatus === 'saving' ? (
@@ -436,8 +449,8 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                   {activeTab === 'Business Profile' && (() => {
                     const inputCls = `w-full p-3 border rounded-lg outline-none focus:ring-2 transition-all ${
                       isDarkMode
-                        ? 'bg-[#0d1117] border-slate-700/50 text-white focus:ring-[#ffcc29]/30'
-                        : 'bg-white border-slate-300 text-slate-900 focus:ring-[#ffcc29]'
+                        ? 'bg-[#0d1117] border-slate-700/50 text-white focus:ring-[#F5A623]/30'
+                        : 'bg-white border-slate-300 text-slate-900 focus:ring-[#F5A623]'
                     }`;
                     const labelCls = `block text-xs font-bold ${theme.textSecondary} uppercase tracking-wide mb-2`;
                     const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
@@ -449,7 +462,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                     const industryOptions = ['Technology/SaaS', 'E-commerce/Retail', 'Food & Beverage', 'Fashion & Apparel', 'Beauty & Wellness', 'Healthcare', 'Education', 'Finance/Fintech', 'Real Estate', 'Travel & Hospitality', 'Media & Entertainment', 'Professional Services', 'Manufacturing', 'Automotive', 'Jewellery', 'Home & Furniture', 'Non-profit', 'Other'];
                     return (
                       <div className="animate-in fade-in duration-300">
-                        <h2 className={`text-lg font-bold mb-2 ${theme.text}`}>Business Profile</h2>
+                        <h2 className="font-serif-display text-[22px] text-[#F5F4F1] mb-2">Business Profile</h2>
                         <p className={`text-sm mb-6 ${theme.textSecondary}`}>All answers from your onboarding questionnaire. Edit any field and click Save.</p>
 
                         <div className="space-y-5 mb-6">
@@ -551,15 +564,38 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                             <Field label="Content Language">
                               <select className={inputCls} value={bizData.contentLanguage || ''} onChange={e => handleBizChange('contentLanguage', e.target.value)}>
                                 <option value="">Select...</option>
-                                <option value="english">English</option>
-                                <option value="tamil">Tamil</option>
-                                <option value="tamil_english_mix">Tamil + English Mix</option>
+                                {CONTENT_LANGUAGES.map((l) => (
+                                  <option key={l.value} value={l.value}>{l.label}</option>
+                                ))}
                               </select>
                             </Field>
                             <Field label="Brand Voice">
                               <input className={inputCls} value={Array.isArray(bizData.brandVoice) ? bizData.brandVoice.join(', ') : (bizData.brandVoice || '')} onChange={e => handleBizChange('brandVoice', e.target.value)} placeholder="e.g. Professional, Witty" />
                             </Field>
+                            {/* How much the AI monthly planner generates. Forward-only —
+                                changing this reshapes next month's plan, not the current
+                                one, so a CSM mid-review never has their queue rewritten
+                                underneath them. */}
+                            <Field label="Posts Per Day">
+                              <input
+                                type="number" min={1} max={5} step={1}
+                                className={inputCls}
+                                value={bizData.contentCadence?.postsPerDay ?? 1}
+                                onChange={e => handleBizChange('contentCadence', { ...bizData.contentCadence, postsPerDay: Math.max(1, Math.min(5, Number(e.target.value) || 1)) })}
+                              />
+                            </Field>
+                            <Field label="Reels Per Week">
+                              <input
+                                type="number" min={0} max={7} step={1}
+                                className={inputCls}
+                                value={bizData.contentCadence?.reelsPerWeek ?? 1}
+                                onChange={e => handleBizChange('contentCadence', { ...bizData.contentCadence, reelsPerWeek: Math.max(0, Math.min(7, Number(e.target.value) || 0)) })}
+                              />
+                            </Field>
                           </div>
+                          <p className={`text-[11.5px] -mt-3 ${theme.textMuted}`}>
+                            Applies to next month's plan onward — the current month stays as already generated.
+                          </p>
 
                           <Field label="Marketing Goals (comma separated)">
                             <input className={inputCls} value={(bizData.marketingGoals || []).join(', ')} onChange={e => handleBizChange('marketingGoals', e.target.value.split(',').map(s => s.trim()).filter(Boolean))} placeholder="Brand Awareness, Sales, Leads" />
@@ -599,7 +635,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                             className={`px-8 py-2.5 rounded-lg font-bold flex items-center justify-center gap-2 transition-all shadow-sm ${
                               bizStatus === 'saved' ? 'bg-green-600 text-white'
                               : bizStatus === 'error' ? 'bg-red-600 text-white'
-                              : 'bg-[#ffcc29] text-black hover:bg-[#ffcc29]/80'
+                              : 'bg-[#F5A623] text-black hover:bg-[#F5A623]/80'
                             }`}
                           >
                             {bizStatus === 'saving' ? (<><Loader2 className="w-4 h-4 animate-spin" /> Saving...</>)
@@ -624,7 +660,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
 
                   {activeTab === 'Security' && (
                       <div className="animate-in fade-in duration-300">
-                          <h2 className={`text-lg font-bold mb-6 ${theme.text}`}>Change Password</h2>
+                          <h2 className="font-serif-display text-[22px] text-[#F5F4F1] mb-6">Change Password</h2>
                           
                           <div className="space-y-6 mb-8 max-w-md">
                               <div>
@@ -638,8 +674,8 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                           passwordErrors.currentPassword 
                                             ? 'border-red-300 focus:ring-red-200' 
                                             : isDarkMode 
-                                              ? 'bg-[#0d1117] border-slate-700/50 text-white focus:ring-[#ffcc29]/30' 
-                                              : 'bg-white border-slate-300 text-slate-900 focus:ring-[#ffcc29]'
+                                              ? 'bg-[#0d1117] border-slate-700/50 text-white focus:ring-[#F5A623]/30' 
+                                              : 'bg-white border-slate-300 text-slate-900 focus:ring-[#F5A623]'
                                         }`}
                                       />
                                       <button
@@ -664,8 +700,8 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                           passwordErrors.newPassword 
                                             ? 'border-red-300 focus:ring-red-200' 
                                             : isDarkMode 
-                                              ? 'bg-[#0d1117] border-slate-700/50 text-white focus:ring-[#ffcc29]/30' 
-                                              : 'bg-white border-slate-300 text-slate-900 focus:ring-[#ffcc29]'
+                                              ? 'bg-[#0d1117] border-slate-700/50 text-white focus:ring-[#F5A623]/30' 
+                                              : 'bg-white border-slate-300 text-slate-900 focus:ring-[#F5A623]'
                                         }`}
                                       />
                                       <button
@@ -691,8 +727,8 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                           passwordErrors.confirmPassword 
                                             ? 'border-red-300 focus:ring-red-200' 
                                             : isDarkMode 
-                                              ? 'bg-[#0d1117] border-slate-700/50 text-white focus:ring-[#ffcc29]/30' 
-                                              : 'bg-white border-slate-300 text-slate-900 focus:ring-[#ffcc29]'
+                                              ? 'bg-[#0d1117] border-slate-700/50 text-white focus:ring-[#F5A623]/30' 
+                                              : 'bg-white border-slate-300 text-slate-900 focus:ring-[#F5A623]'
                                         }`}
                                       />
                                       <button
@@ -721,7 +757,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                           <button 
                             onClick={handlePasswordSave}
                             disabled={passwordStatus === 'saving'}
-                            className="px-8 py-2.5 rounded-lg font-bold flex items-center gap-2 transition-all shadow-sm bg-[#ffcc29] text-black hover:bg-[#ffcc29]/80 disabled:opacity-50"
+                            className="px-8 py-2.5 rounded-lg font-bold flex items-center gap-2 transition-all shadow-sm bg-[#F5A623] text-black hover:bg-[#F5A623]/80 disabled:opacity-50"
                           >
                               {passwordStatus === 'saving' ? (
                                   <><Loader2 className="w-4 h-4 animate-spin" /> Changing Password...</>
@@ -742,11 +778,11 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
 
                   {activeTab === 'Billing' && (
                       <div className="animate-in fade-in duration-300">
-                          <h2 className={`text-lg font-bold mb-6 ${theme.text}`}>Billing & Invoices</h2>
+                          <h2 className="font-serif-display text-[22px] text-[#F5F4F1] mb-6">Billing & Invoices</h2>
 
                           {loadingBilling ? (
                             <div className="flex items-center justify-center py-16">
-                              <Loader2 className="w-6 h-6 animate-spin text-[#ffcc29]" />
+                              <Loader2 className="w-6 h-6 animate-spin text-[#F5A623]" />
                               <span className={`ml-3 ${theme.textSecondary}`}>Loading billing info...</span>
                             </div>
                           ) : billingData ? (
@@ -782,11 +818,11 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                 </div>
                               </div>
 
-                              {/* Credits */}
+                              {/* Quarks */}
                               <div className={`p-5 rounded-lg border ${
                                 isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-slate-50 border-slate-200'
                               }`}>
-                                <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3">Credits</p>
+                                <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3">Quarks</p>
                                 <div className="grid grid-cols-2 gap-4">
                                   <div>
                                     <p className={`text-2xl font-bold ${theme.text}`}>{billingData.credits.balance}</p>
@@ -797,6 +833,73 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                     <p className={`text-xs ${theme.textSecondary}`}>Used</p>
                                   </div>
                                 </div>
+                              </div>
+
+                              {/* What each action costs. Grouped the way the work is
+                                  actually thought about — posts, carousels, video, edits —
+                                  because a flat list of twelve keys is what made the old
+                                  header popover unreadable. */}
+                              <div className={`p-5 rounded-lg border ${
+                                isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-slate-50 border-slate-200'
+                              }`}>
+                                <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-1">Quark Costs</p>
+                                <p className={`text-xs mb-4 ${theme.textSecondary}`}>
+                                  Every price is per unit of work, so bigger jobs cost proportionally more.
+                                </p>
+
+                                <div className="space-y-4">
+                                  {QUARK_GROUPS.map((group) => {
+                                    const rows = group.actions.filter((a) => (quarkCosts[a] || 0) > 0);
+                                    if (!rows.length) return null;
+                                    return (
+                                      <div key={group.title}>
+                                        <div className="flex items-baseline justify-between gap-3 mb-1.5">
+                                          <p className={`text-[13px] font-semibold ${theme.text}`}>{group.title}</p>
+                                          {group.example && (
+                                            <p className="text-[11px] text-slate-500 tabular-nums shrink-0">
+                                              {group.example(quarkCosts)}
+                                            </p>
+                                          )}
+                                        </div>
+                                        <p className="text-[11.5px] text-slate-500 mb-2 leading-snug">{group.blurb}</p>
+                                        <div className={`rounded-lg overflow-hidden border ${
+                                          isDarkMode ? 'border-white/[0.06]' : 'border-slate-200'
+                                        }`}>
+                                          {rows.map((action, i) => (
+                                            <div
+                                              key={action}
+                                              className={`flex items-center justify-between gap-3 px-3 py-2 ${
+                                                isDarkMode ? 'bg-white/[0.03]' : 'bg-white'
+                                              } ${i > 0 ? (isDarkMode ? 'border-t border-white/[0.06]' : 'border-t border-slate-100') : ''}`}
+                                            >
+                                              <span className={`text-[13px] truncate ${theme.textSecondary}`}>
+                                                {ACTION_LABELS[action]?.icon} {ACTION_LABELS[action]?.label || action}
+                                              </span>
+                                              <span className="flex items-baseline gap-1.5 shrink-0">
+                                                <span className={`text-[13px] font-semibold tabular-nums ${theme.text}`}>
+                                                  {quarkCosts[action]}
+                                                </span>
+                                                {/* The unit is the whole point: "19" next to "Carousel"
+                                                    reads as the price of a carousel, which it isn't. */}
+                                                {quarkUnits[action] && (
+                                                  <span className="text-[11px] text-slate-500 w-[62px] text-left">
+                                                    {quarkUnits[action]}
+                                                  </span>
+                                                )}
+                                              </span>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+
+                                {(quarkCosts.competitor_scrape === 0) && (
+                                  <p className="text-[11.5px] text-slate-500 mt-4 pt-3 border-t border-slate-200/40">
+                                    🔍 Competitor Intel is free.
+                                  </p>
+                                )}
                               </div>
 
                               {/* Payment History */}
@@ -811,7 +914,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                         <tr className={isDarkMode ? 'bg-slate-800/50' : 'bg-slate-50'}>
                                           <th className={`text-left px-4 py-3 font-medium ${theme.textSecondary}`}>Date</th>
                                           <th className={`text-left px-4 py-3 font-medium ${theme.textSecondary}`}>Amount</th>
-                                          <th className={`text-left px-4 py-3 font-medium ${theme.textSecondary}`}>Credits</th>
+                                          <th className={`text-left px-4 py-3 font-medium ${theme.textSecondary}`}>Quarks</th>
                                           <th className={`text-left px-4 py-3 font-medium ${theme.textSecondary}`}>Status</th>
                                           <th className={`text-left px-4 py-3 font-medium ${theme.textSecondary}`}>Invoice</th>
                                         </tr>
@@ -847,7 +950,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                                   href={payment.invoiceUrl}
                                                   target="_blank"
                                                   rel="noopener noreferrer"
-                                                  className="text-[#ffcc29] hover:text-[#ffcc29]/80 flex items-center gap-1 text-xs font-medium"
+                                                  className="text-[#F5A623] hover:text-[#F5A623]/80 flex items-center gap-1 text-xs font-medium"
                                                 >
                                                   <ExternalLink className="w-3 h-3" /> View
                                                 </a>

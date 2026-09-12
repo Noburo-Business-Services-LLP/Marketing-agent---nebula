@@ -11,14 +11,29 @@ import {
   Sparkles,
   ToggleLeft,
   ToggleRight,
+  ImageIcon,
   X
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'];
+
+/** "2026-06" -> "June 2026". The stored value is not meant to be read raw. */
+const monthLabel = (month = '') => {
+  const m = /^(\d{4})-(\d{2})$/.exec(String(month || '').trim());
+  if (!m) return String(month || '');
+  const name = MONTH_NAMES[parseInt(m[2], 10) - 1];
+  return name ? `${name} ${m[1]}` : String(month);
+};
 import { contentCalendarAPI, draftsAPI } from '../services/api';
+import { CONTENT_LANGUAGES } from '../constants/languages';
 import { ContentCalendar as ContentCalendarType, ContentCalendarItem, Draft } from '../types';
 import { getThemeClasses, useTheme } from '../context/ThemeContext';
+import { GravityHero, GravityEmphasis } from '../components/gravity';
 import StrategyDocumentView from '../components/StrategyDocumentView';
 import { startBackgroundReel } from '../utils/backgroundReel';
+import { useConfirm } from '../context/ConfirmContext';
 
 // Reel days are the ones Approve auto-builds; everything else just gets a status.
 const isReelItem = (item: ContentCalendarItem) => /reel|video/i.test(String(item?.format || ''));
@@ -38,6 +53,7 @@ const ContentCalendar: React.FC = () => {
   const { isDarkMode } = useTheme();
   const theme = getThemeClasses(isDarkMode);
   const navigate = useNavigate();
+  const confirm = useConfirm();
   const [calendar, setCalendar] = useState<ContentCalendarType | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState('');
@@ -92,6 +108,38 @@ const ContentCalendar: React.FC = () => {
   };
 
 
+  // Covers render after the plan is saved, so a freshly generated month shows
+  // the pending state and swaps in the art when it lands.
+  const [coverBusy, setCoverBusy] = useState(false);
+  const [planLanguage, setPlanLanguage] = useState('');
+  // What's specific to THIS plan — a launch, an event, an offer, a pillar to
+  // lean into. Optional: left blank, the AI plans from brand memory and
+  // recent Idea Inbox items alone.
+  const [planFocus, setPlanFocus] = useState('');
+
+  useEffect(() => {
+    // Watches the open plan (detail view) and every card's thumbnail (list
+    // view) — either can be mid-render when this page loads.
+    const anyPending = calendar?.coverStatus === 'pending' || history.some((c) => c.coverStatus === 'pending');
+    if (!anyPending) return;
+    const id = setInterval(() => { loadCalendar(); }, 6000);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [calendar?.coverStatus, calendar?._id, history]);
+
+  const requestCover = async () => {
+    if (!calendar) return;
+    setCoverBusy(true);
+    try {
+      await contentCalendarAPI.generateCover(calendar.month);
+      setCalendar({ ...calendar, coverStatus: 'pending' });
+    } catch (err: any) {
+      setError(err?.message || 'Could not start the cover image.');
+    } finally {
+      setCoverBusy(false);
+    }
+  };
+
   const allItems = useMemo(
     () => (calendar?.weeks || []).flatMap((week) => week.items || []),
     [calendar]
@@ -118,7 +166,7 @@ const ContentCalendar: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      const response = await contentCalendarAPI.generateNextMonth();
+      const response = await contentCalendarAPI.generateNextMonth(planLanguage || undefined, planFocus.trim() || undefined);
       await loadCalendar();
       setCalendar(response.calendar);
       setViewMode('detail');
@@ -140,6 +188,52 @@ const ContentCalendar: React.FC = () => {
       if (response?.calendar) setCalendar(response.calendar);
     } catch (err: any) {
       setError(err?.message || 'Calendar update failed');
+    } finally {
+      setSaving('');
+    }
+  };
+
+  // The list view renders from `history`, which updateCalendar does not touch
+  // — it only sets the detail `calendar`. Toggling from a card would hit the
+  // API and leave the switch visually stuck, so this updates the list entry.
+  const toggleAutoGenerateForPlan = async (plan: ContentCalendarType) => {
+    const key = `auto-${plan._id}`;
+    setSaving(key);
+    setError('');
+    try {
+      const response = await contentCalendarAPI.updateSettings({
+        calendarId: plan._id,
+        autoGenerate: !plan.autoGenerate,
+      });
+      const updated = response?.calendar;
+      setHistory((prev) => prev.map((c) => (c._id === plan._id ? { ...c, ...(updated || { autoGenerate: !plan.autoGenerate }) } : c)));
+      if (calendar?._id === plan._id && updated) setCalendar(updated);
+    } catch (err: any) {
+      setError(err?.message || 'Calendar update failed');
+    } finally {
+      setSaving('');
+    }
+  };
+
+  // A week's worth is the default. Anything above it is the user deliberately
+  // spending credits faster, so the warning fires there rather than nagging on
+  // every change.
+  const AUTO_GENERATE_DEFAULT = 7;
+
+  const setAutoGenerateLimit = async (plan: ContentCalendarType, limit: number) => {
+    const key = `limit-${plan._id}`;
+    setSaving(key);
+    setError('');
+    try {
+      const response = await contentCalendarAPI.updateSettings({
+        calendarId: plan._id,
+        autoGenerateLimit: limit,
+      });
+      const updated = response?.calendar;
+      setHistory((prev) => prev.map((c) => (c._id === plan._id ? { ...c, ...(updated || { autoGenerateLimit: limit }) } : c)));
+      if (calendar?._id === plan._id && updated) setCalendar(updated);
+    } catch (err: any) {
+      setError(err?.message || 'Could not update the limit');
     } finally {
       setSaving('');
     }
@@ -205,8 +299,9 @@ const ContentCalendar: React.FC = () => {
     updateCalendar(async () => contentCalendarAPI.reorder(nextItems.map((entry) => entry._id)), `reorder-${itemId}`);
   };
 
-  const regenerate = () => {
-    updateCalendar(async () => contentCalendarAPI.regenerate(), 'regenerate');
+  const regenerate = async () => {
+    if (!(await confirm("This replaces every day's current idea.", { title: "Regenerate this month's plan?", confirmLabel: 'Regenerate' }))) return;
+    updateCalendar(async () => contentCalendarAPI.regenerate(undefined, undefined, planFocus.trim() || undefined), 'regenerate');
   };
 
   const approveCalendar = () => {
@@ -229,7 +324,7 @@ const ContentCalendar: React.FC = () => {
   if (loading) {
     return (
       <div className="min-h-[50vh] flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-[#ffcc29]" />
+        <Loader2 className="w-8 h-8 animate-spin text-[#F5A623]" />
       </div>
     );
   }
@@ -237,20 +332,50 @@ const ContentCalendar: React.FC = () => {
   if (viewMode === 'list') {
     return (
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className={`text-xl font-bold ${theme.text}`}>Smart Calendar Plans</h2>
-            <p className={`text-sm ${theme.textSecondary}`}>Manage your monthly content strategies.</p>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <GravityHero
+            align="left"
+            eyebrow="Smart Calendar"
+            headline={<>The month, <GravityEmphasis>planned</GravityEmphasis></>}
+            subcopy="Manage your monthly content strategies."
+            className="!mb-0"
+          />
+          <div className="flex flex-col items-stretch sm:items-end gap-2">
+            <div className="flex items-center gap-2">
+              {/* Per-plan language. Empty means "use my account setting", so this
+                  does not force a choice on people happy with their default. */}
+              <select
+                value={planLanguage}
+                onChange={(e) => setPlanLanguage(e.target.value)}
+                className="gravity-bare px-3 py-2 rounded-lg bg-white/[0.04] border border-white/[0.10] text-[13px] text-[#F5F4F1] outline-none"
+                title="Language for the next plan"
+              >
+                <option value="">My default language</option>
+                {CONTENT_LANGUAGES.map((l) => (
+                  <option key={l.value} value={l.value}>{l.label}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={handleGenerateNextMonth}
+                disabled={loading}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-[#F5A623] text-black hover:bg-[#ffb833] transition-colors"
+              >
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                Generate Next Month Plan
+              </button>
+            </div>
+            {/* Optional — a launch, event, offer, or pillar to lean into this
+                month. Left blank, the AI still has brand memory and recent
+                Idea Inbox items to work from, just no specific steer. */}
+            <input
+              type="text"
+              value={planFocus}
+              onChange={(e) => setPlanFocus(e.target.value)}
+              placeholder="Anything specific to focus on this month? (optional)"
+              className="gravity-bare w-full sm:w-[360px] px-3 py-2 rounded-lg bg-white/[0.04] border border-white/[0.10] text-[13px] text-[#F5F4F1] outline-none placeholder:text-white/30"
+            />
           </div>
-          <button
-            type="button"
-            onClick={handleGenerateNextMonth}
-            disabled={loading}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-[#ffcc29] text-black hover:bg-[#e6b825] transition-colors"
-          >
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-            Generate Next Month Plan
-          </button>
         </div>
         
         {history.length === 0 && !loading && (
@@ -261,20 +386,105 @@ const ContentCalendar: React.FC = () => {
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {history.map((cal) => (
-            <div 
+            <div
               key={cal._id}
               onClick={() => { setCalendar(cal); setViewMode('detail'); }}
-              className={`cursor-pointer group relative p-5 rounded-xl border transition-all ${isDarkMode ? 'border-slate-800 bg-slate-900 hover:border-slate-700 hover:bg-slate-800/80' : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'}`}
+              className="cursor-pointer group relative rounded-xl border border-white/[0.06] bg-white/[0.02] hover:border-white/[0.12] hover:bg-white/[0.04] transition-all overflow-hidden"
             >
-              <div className="flex justify-between items-start mb-4">
-                <h3 className={`text-lg font-bold group-hover:text-[#ffcc29] transition-colors ${theme.text}`}>{cal.month}</h3>
-                {cal.approved && <span title="Approved"><Check className="w-5 h-5 text-emerald-500 bg-emerald-500/10 p-1 rounded-full" /></span>}
+              {/* Cover thumbnail. Same source as the detail banner, so a
+                  month reads the same whether you're browsing the grid or
+                  already inside it. */}
+              <div className="relative h-28 bg-[#151515]">
+                {cal.coverImageUrl ? (
+                  <img src={cal.coverImageUrl} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full bg-gradient-to-br from-[#F5A623]/[0.08] via-transparent to-transparent flex items-center justify-center">
+                    {cal.coverStatus === 'pending' ? (
+                      <Loader2 className="w-4 h-4 animate-spin text-[#F5A623]/60" />
+                    ) : (
+                      <ImageIcon className="w-5 h-5 text-white/15" />
+                    )}
+                  </div>
+                )}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
+                {cal.approved && (
+                  <span title="Approved" className="absolute top-2.5 right-2.5">
+                    <Check className="w-5 h-5 text-emerald-400 bg-emerald-500/20 backdrop-blur p-1 rounded-full" />
+                  </span>
+                )}
               </div>
-              <p className={`text-sm mb-3 ${theme.textSecondary}`}>{cal.businessName || 'Business Plan'}</p>
-              <div className={`flex items-center gap-3 text-xs ${theme.textMuted}`}>
-                <span className={`px-2 py-1 rounded-md ${isDarkMode ? 'bg-slate-800' : 'bg-slate-100'}`}>{cal.language}</span>
-                <span className={`px-2 py-1 rounded-md ${isDarkMode ? 'bg-slate-800' : 'bg-slate-100'}`}>{cal.weeks?.length || 0} Weeks</span>
-                {cal.autoGenerate && <span className="px-2 py-1 rounded-md bg-emerald-500/10 text-emerald-500">Auto-Fill ON</span>}
+
+              <div className="p-5 pt-4">
+              <h3 className="font-serif-display text-[20px] text-[#F5F4F1] group-hover:text-[#F5A623] transition-colors">
+                {monthLabel(cal.month)}
+              </h3>
+              {cal.themeTitle ? (
+                <p className="text-[13px] text-[#F5A623]/90 mb-3 mt-0.5 line-clamp-1">{cal.themeTitle}</p>
+              ) : (
+                <p className="text-[13px] text-white/50 mb-3 mt-0.5">{cal.businessName || 'Business Plan'}</p>
+              )}
+              <div className="flex items-center gap-2 text-[11px] text-white/45 mb-4">
+                <span className="px-2 py-1 rounded-md bg-white/[0.04]">{cal.language}</span>
+                <span className="px-2 py-1 rounded-md bg-white/[0.04]">{cal.weeks?.length || 0} Weeks</span>
+              </div>
+
+              {/* Auto Generation used to live only inside a plan, so anyone
+                  told to "turn on Smart Calendar" landed here and found no
+                  control at all. stopPropagation keeps the card's own click
+                  (open the plan) from firing when you hit the switch. */}
+              <div
+                className="flex items-center justify-between gap-3 pt-3 border-t border-white/[0.06]"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="min-w-0">
+                  <div className="gravity-label">Auto Generation</div>
+                  <div className={`text-[12px] mt-0.5 ${cal.autoGenerate ? 'text-emerald-400' : 'text-white/40'}`}>
+                    {cal.autoGenerate ? 'A draft a day, for review' : 'Off'}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={!!cal.autoGenerate}
+                  aria-label={`Toggle auto generation for ${monthLabel(cal.month)}`}
+                  disabled={saving === `auto-${cal._id}`}
+                  onClick={() => toggleAutoGenerateForPlan(cal)}
+                  className={`relative flex-shrink-0 w-12 h-6 rounded-full transition-colors disabled:opacity-50 ${cal.autoGenerate ? 'bg-[#F5A623]' : 'bg-white/[0.15]'}`}
+                >
+                  <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${cal.autoGenerate ? 'translate-x-6' : 'translate-x-0'}`} />
+                </button>
+              </div>
+
+              {/* How much it is allowed to make. Only worth showing once the
+                  switch is on — off, the number means nothing. */}
+              {cal.autoGenerate && (
+                <div className="mt-3 pt-3 border-t border-white/[0.06]" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="gravity-label">Limit</div>
+                      <div className="text-[12px] mt-0.5 text-white/45">
+                        {cal.autoGeneratedCount || 0} of {cal.autoGenerateLimit ?? AUTO_GENERATE_DEFAULT} made
+                      </div>
+                    </div>
+                    <select
+                      value={cal.autoGenerateLimit ?? AUTO_GENERATE_DEFAULT}
+                      disabled={saving === `limit-${cal._id}`}
+                      onChange={(e) => setAutoGenerateLimit(cal, Number(e.target.value))}
+                      className="gravity-bare flex-shrink-0 px-2.5 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.10] text-[12.5px] text-[#F5F4F1] outline-none disabled:opacity-50"
+                    >
+                      {[3, 5, 7, 10, 14, 20, 30].map((n) => (
+                        <option key={n} value={n}>{n} posts</option>
+                      ))}
+                    </select>
+                  </div>
+                  {(cal.autoGenerateLimit ?? AUTO_GENERATE_DEFAULT) > AUTO_GENERATE_DEFAULT && (
+                    <p className="mt-2 text-[11.5px] text-[#F5A623]/90 leading-relaxed">
+                      Above a week's worth. Each post generates an image, so this
+                      will use credits faster.
+                    </p>
+                  )}
+                </div>
+              )}
               </div>
             </div>
           ))}
@@ -298,7 +508,7 @@ const ContentCalendar: React.FC = () => {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
-      <button onClick={() => setViewMode('list')} className="mb-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#ffcc29] text-black hover:bg-[#e6b825] transition-colors shadow-sm">
+      <button onClick={() => setViewMode('list')} className="mb-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#F5A623] text-black hover:bg-[#ffb833] transition-colors shadow-sm">
         ← Back to Plans
       </button>
 
@@ -306,13 +516,13 @@ const ContentCalendar: React.FC = () => {
       <div className={`flex items-center gap-6 border-b px-2 mb-6 ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
         <button
           onClick={() => setActiveDetailTab('calendar')}
-          className={`pb-3 text-sm font-bold border-b-2 transition-colors ${activeDetailTab === 'calendar' ? 'border-[#ffcc29] text-[#ffcc29]' : 'border-transparent ' + theme.textSecondary + ' hover:' + theme.text}`}
+          className={`pb-3 text-sm font-bold border-b-2 transition-colors ${activeDetailTab === 'calendar' ? 'border-[#F5A623] text-[#F5A623]' : 'border-transparent ' + theme.textSecondary + ' hover:' + theme.text}`}
         >
           Calendar View
         </button>
         <button
           onClick={() => setActiveDetailTab('planning')}
-          className={`pb-3 text-sm font-bold border-b-2 transition-colors ${activeDetailTab === 'planning' ? 'border-[#ffcc29] text-[#ffcc29]' : 'border-transparent ' + theme.textSecondary + ' hover:' + theme.text}`}
+          className={`pb-3 text-sm font-bold border-b-2 transition-colors ${activeDetailTab === 'planning' ? 'border-[#F5A623] text-[#F5A623]' : 'border-transparent ' + theme.textSecondary + ' hover:' + theme.text}`}
         >
           Content Planning
         </button>
@@ -321,7 +531,7 @@ const ContentCalendar: React.FC = () => {
             setActiveDetailTab('drafts');
             loadWeeklyDrafts();
           }}
-          className={`pb-3 text-sm font-bold border-b-2 transition-colors ${activeDetailTab === 'drafts' ? 'border-[#ffcc29] text-[#ffcc29]' : 'border-transparent ' + theme.textSecondary + ' hover:' + theme.text}`}
+          className={`pb-3 text-sm font-bold border-b-2 transition-colors ${activeDetailTab === 'drafts' ? 'border-[#F5A623] text-[#F5A623]' : 'border-transparent ' + theme.textSecondary + ' hover:' + theme.text}`}
         >
           Weekly Drafts
         </button>
@@ -337,13 +547,13 @@ const ContentCalendar: React.FC = () => {
         <div className="space-y-6 mt-4">
           <div className="flex items-center justify-between border-b pb-4 border-slate-800">
             <div>
-              <h2 className={`text-xl font-bold ${theme.text}`}>Week {getActiveWeekNumber()} Drafts</h2>
+              <h2 className="font-serif-display text-[22px] text-[#F5F4F1]">Week {getActiveWeekNumber()} Drafts</h2>
               <p className={`text-xs ${theme.textMuted} mt-1`}>Review the drafts generated from your weekly content calendar.</p>
             </div>
           </div>
         {loadingWeeklyDrafts ? (
           <div className="py-20 flex flex-col items-center justify-center gap-3">
-            <Loader2 className="w-8 h-8 animate-spin text-[#ffcc29]" />
+            <Loader2 className="w-8 h-8 animate-spin text-[#F5A623]" />
             <p className={`text-sm ${theme.textMuted}`}>Loading weekly drafts...</p>
           </div>
         ) : weeklyDrafts.length === 0 ? (
@@ -363,7 +573,7 @@ const ContentCalendar: React.FC = () => {
                 <div className="relative aspect-video w-full bg-slate-950 overflow-hidden flex items-center justify-center">
                   {item.status === 'processing' ? (
                     <div className="flex flex-col items-center gap-1.5 text-slate-400 text-xs">
-                      <Loader2 className="w-6 h-6 text-[#ffcc29] animate-spin" />
+                      <Loader2 className="w-6 h-6 text-[#F5A623] animate-spin" />
                       <span>Generating Image...</span>
                     </div>
                   ) : item.status === 'failed' ? (
@@ -398,7 +608,7 @@ const ContentCalendar: React.FC = () => {
                       {item.caption || <span className="italic text-slate-650">No caption defined</span>}
                     </p>
                   </div>
-                  <div className="pt-3 border-t border-slate-800/60 flex items-center justify-between text-xs text-[#ffcc29]">
+                  <div className="pt-3 border-t border-slate-800/60 flex items-center justify-between text-xs text-[#F5A623]">
                     {item.status === 'failed' ? (
                       <button
                         onClick={async (e) => {
@@ -432,24 +642,84 @@ const ContentCalendar: React.FC = () => {
 
       {activeDetailTab === 'calendar' && (
         <>
+      {/* Month banner. The cover is art for the month's own theme, so it sits
+          behind the month name rather than beside it — and the scrim keeps the
+          type readable whatever the image turns out to be. */}
+      <div className="relative rounded-2xl overflow-hidden border border-white/[0.08] bg-[#141414] mb-5">
+        <div className="absolute inset-0">
+          {calendar.coverImageUrl ? (
+            <img src={calendar.coverImageUrl} alt="" className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full bg-gradient-to-br from-[#F5A623]/[0.10] via-transparent to-transparent" />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/70 to-black/40" />
+        </div>
+
+        <div className="relative px-6 py-7 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+          <div className="min-w-0">
+            <div className="gravity-label text-[#F5A623] mb-1.5">Smart Calendar</div>
+            <h2 className="font-serif-display text-[34px] leading-[1.05] text-[#F5F4F1]">
+              {monthLabel(calendar.month)}
+            </h2>
+            {calendar.themeTitle && (
+              <div className="mt-2 text-[14px] font-semibold text-[#F5A623]">{calendar.themeTitle}</div>
+            )}
+            {calendar.themeSummary && (
+              <p className="mt-1 text-[12.5px] text-white/60 max-w-[440px] leading-relaxed">
+                {calendar.themeSummary}
+              </p>
+            )}
+            <p className="mt-2.5 text-[11.5px] text-white/40">
+              {calendar.businessName || 'Your business'} · {calendar.businessVertical || 'Content'} · {calendar.language}
+            </p>
+          </div>
+
+          <div className="shrink-0">
+            {calendar.coverStatus === 'pending' ? (
+              <span className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-[12px] text-white/55 border border-white/[0.12]">
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-[#F5A623]" />
+                Making the cover…
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={requestCover}
+                disabled={coverBusy}
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-[12px] font-semibold border border-white/[0.12] text-[#F5F4F1] hover:bg-white/[0.06] hover:border-[#F5A623]/40 transition-all disabled:opacity-40"
+              >
+                <ImageIcon className="w-3.5 h-3.5 text-[#F5A623]" />
+                {calendar.coverImageUrl ? 'New cover' : 'Make a cover'}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-[#ffcc29]" />
-            <h2 className={`text-xl font-bold ${theme.text}`}>Gravity Smart Calendar</h2>
+            <Sparkles className="w-5 h-5 text-[#F5A623]" />
+            <h2 className="font-serif-display text-[18px] text-[#F5F4F1]">This month's plan</h2>
           </div>
-          <p className={`mt-1 text-sm ${theme.textSecondary}`}>
-            {calendar.businessName || 'Your business'} · {calendar.businessVertical || 'Content'} · {calendar.month} · {calendar.language}
-          </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-col items-stretch lg:items-end gap-2">
+          {/* Same optional focus used by "Generate Next Month Plan" — shown
+              here too since Regenerate is the other place a focus matters. */}
+          <input
+            type="text"
+            value={planFocus}
+            onChange={(e) => setPlanFocus(e.target.value)}
+            placeholder="Anything specific to focus on this month? (optional, used by Regenerate)"
+            className="gravity-bare w-full lg:w-[380px] px-3 py-2 rounded-lg bg-white/[0.04] border border-white/[0.10] text-[12.5px] text-[#F5F4F1] outline-none placeholder:text-white/30"
+          />
+          <div className="flex flex-wrap items-center gap-2">
 
           <button
             type="button"
             onClick={approveCalendar}
             disabled={!!saving || calendar.approved}
-            className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold ${calendar.approved ? 'bg-emerald-500/15 text-emerald-400' : 'bg-[#ffcc29] text-black'}`}
+            className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold ${calendar.approved ? 'bg-emerald-500/15 text-emerald-400' : 'bg-[#F5A623] text-black'}`}
           >
             <Check className="w-4 h-4" />
             {calendar.approved ? 'Approved' : 'Approve'}
@@ -483,7 +753,8 @@ const ContentCalendar: React.FC = () => {
               Generate Week {getActiveWeekNumber()} Content
             </button>
           )}
-          
+
+          </div>
         </div>
       </div>
 
@@ -509,7 +780,7 @@ const ContentCalendar: React.FC = () => {
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2 mb-2">
-                          <span className="text-xs font-bold px-2 py-1 rounded bg-[#ffcc29] text-black">Day {item.day}</span>
+                          <span className="text-xs font-bold px-2 py-1 rounded bg-[#F5A623] text-black">Day {item.day}</span>
                           <span className={`text-xs px-2 py-1 rounded ${isDarkMode ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-700'}`}>{item.format}</span>
                           <span className={`text-xs px-2 py-1 rounded capitalize ${item.status === 'approved' ? 'bg-emerald-500/15 text-emerald-400' : item.status === 'rejected' ? 'bg-red-500/15 text-red-400' : isDarkMode ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-700'}`}>{item.status}</span>
                         </div>
@@ -555,7 +826,7 @@ const ContentCalendar: React.FC = () => {
                           Edit
                         </button>
                       ) : (
-                        <button type="button" onClick={() => saveItem(item._id)} disabled={busy} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-[#ffcc29] text-black">
+                        <button type="button" onClick={() => saveItem(item._id)} disabled={busy} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-[#F5A623] text-black">
                           {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
                           Save
                         </button>
@@ -566,7 +837,7 @@ const ContentCalendar: React.FC = () => {
                         disabled={busy || Boolean(item.reelQueueJobId)}
                         title={isReelItem(item) ? 'Approve and build this reel in the background' : 'Mark this day approved'}
                         className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold ${
-                          isReelItem(item) ? 'bg-[#ffcc29] text-black' : 'bg-emerald-500/15 text-emerald-400'
+                          isReelItem(item) ? 'bg-[#F5A623] text-black' : 'bg-emerald-500/15 text-emerald-400'
                         } disabled:opacity-50`}
                       >
                         {saving === `approved-${item._id}`
@@ -586,7 +857,7 @@ const ContentCalendar: React.FC = () => {
                           View Draft
                         </a>
                       ) : (
-                        <button type="button" onClick={() => createDraft(item)} disabled={busy || Boolean(item.generatedCampaignId)} className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold ${item.generatedCampaignId ? 'bg-slate-500/15 text-slate-400' : 'bg-[#ffcc29] text-black'}`}>
+                        <button type="button" onClick={() => createDraft(item)} disabled={busy || Boolean(item.generatedCampaignId)} className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold ${item.generatedCampaignId ? 'bg-slate-500/15 text-slate-400' : 'bg-[#F5A623] text-black'}`}>
                           {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
                           {item.generatedCampaignId ? 'Draft Saved' : 'Save Draft'}
                         </button>

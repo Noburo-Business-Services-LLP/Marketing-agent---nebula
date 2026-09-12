@@ -9,7 +9,10 @@ const brandAssetSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['logo', 'template'],
+    // 'environment' = photos of the actual premises (shop, showroom,
+    // storefront). The Reels Environment step reads these from this same
+    // collection, so no extra plumbing is needed for it to pick them up.
+    enum: ['logo', 'template', 'environment'],
     required: true
   },
   name: {
@@ -45,7 +48,10 @@ const brandAssetSchema = new mongoose.Schema({
   // For logos: default position when overlaying on posters
   defaultPosition: {
     type: String,
-    enum: ['top-left', 'top-right', 'bottom-left', 'bottom-right', 'center'],
+    // The 6-way grid a user picks a logo's home corner from — top/bottom
+    // rows, left/center/right columns. 'center' kept as a 7th option for
+    // anyone relying on it already; it isn't offered in the grid UI.
+    enum: ['top-left', 'top-center', 'top-right', 'bottom-left', 'bottom-center', 'bottom-right', 'center'],
     default: 'bottom-right'
   },
   // For logos: default size percentage (relative to poster)

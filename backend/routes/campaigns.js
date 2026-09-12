@@ -14,7 +14,12 @@ const MentionLog = require('../models/MentionLog');
 const Draft = require('../models/Draft');
 const User = require('../models/User');
 const crypto = require('crypto');
-const { callGemini, parseGeminiJSON, generateICPAndStrategy, generateCampaignImageNanoBanana } = require('../services/geminiAI');
+const { parseGeminiJSON, generateICPAndStrategy, generateCampaignImageNanoBanana } = require('../services/geminiAI');
+const { callTextLLM } = require('../services/openAI');
+const { buildPrompt } = require('../services/promptRegistry');
+const { buildBrandMemoryBlock } = require('../services/brandMemory');
+const { normalizeLanguage } = require('../services/contentCalendarService');
+const { planCampaignVisuals, renderCampaignSlotImage, assetsToImageOptions } = require('../services/creativeDirector');
 // Import Ayrshare for social media posting
 const { getPostStatus, retryPost: retryAyrsharePost, deletePost: deleteAyrsharePost } = require('../services/socialMediaAPI');
 const {
@@ -511,7 +516,7 @@ const {
 } = require('../utils/socialPostValidation');
 
 // Import logo overlay service for compositing logos onto posters
-const { overlayLogoAndUpload, replaceLogoAtBboxAndUpload } = require('../services/logoOverlay');
+const { overlayLogoAndUpload, replaceLogoAtBboxAndUpload, overlayBrandLogoIfPresent } = require('../services/logoOverlay');
 
 // Import BrandAsset model for fetching user's logos
 const BrandAsset = require('../models/BrandAsset');
@@ -602,6 +607,10 @@ async function resolveBrandIntelligenceContext(userId, businessProfile = {}) {
     guidelineBundle,
     effectiveTone,
     primaryLogoUrl,
+    // Carried alongside the URL so a caller can composite the logo
+    // pixel-exact after generation instead of handing it to the model.
+    primaryLogoPosition: primaryLogoAsset?.defaultPosition || 'bottom-right',
+    primaryLogoSize: primaryLogoAsset?.defaultSize || 'medium',
     visualHints
   };
   setCachedBrandContext(userId, resolved);
@@ -861,7 +870,7 @@ POSTS TO ALIGN:
 ${JSON.stringify(posts)}`;
 
   try {
-    const refinedRaw = await callGemini(prompt, { temperature: 0.3, maxTokens: 8000, skipCache: true });
+    const refinedRaw = await callTextLLM(prompt, { jsonMode: true, temperature: 0.3, maxTokens: 8000, skipCache: true });
     const refined = parseGeminiJSON(refinedRaw);
     if (!Array.isArray(refined?.posts) || refined.posts.length !== posts.length) {
       return posts;
@@ -1233,25 +1242,11 @@ router.post('/smart-populate-template', protect, async (req, res) => {
     const strictBrandText = strictBrandMode ? buildStrictBrandLockText(brandCtx) : '';
     const platform = String(platformInput || 'instagram').trim().toLowerCase();
     const strategy = String(strategyLabel || '').trim();
-    const normalizeCampaignLanguage = (value = '') => {
-      const normalized = String(value || '').trim().toLowerCase();
-      const languageMap = {
-        english: 'English',
-        en: 'English',
-        hindi: 'Hindi',
-        hi: 'Hindi',
-        tamil: 'Tamil',
-        ta: 'Tamil',
-        telugu: 'Telugu',
-        te: 'Telugu',
-        malayalam: 'Malayalam',
-        ml: 'Malayalam',
-        kannada: 'Kannada',
-        kn: 'Kannada'
-      };
-      return languageMap[normalized] || 'English';
-    };
-    const selectedLanguage = normalizeCampaignLanguage(languageInput);
+    // Shared with single-post/carousel/calendar generation (see
+    // contentCalendarService.js) — was previously a local 6-language map
+    // (no Marathi/Bengali/Gujarati/Punjabi/Odia/Urdu, no "+ English mix"),
+    // so most of Create's language list silently became English here.
+    const selectedLanguage = normalizeLanguage(languageInput);
     const normalizeTemplateText = (raw = '') =>
       String(raw || '')
         .replace(/\r\n/g, '\n')
@@ -1332,7 +1327,7 @@ Return JSON only with this schema:
   "ctaText": "single CTA sentence"
 }`;
 
-    const aiRaw = await callGemini(prompt, { temperature: 0.65, maxTokens: 1600, skipCache: true });
+    const aiRaw = await callTextLLM(prompt, { jsonMode: true, temperature: 0.65, maxTokens: 1600, skipCache: true });
     const aiData = parseGeminiJSON(aiRaw) || {};
     const sectionParagraphs = aiData?.sectionParagraphs && typeof aiData.sectionParagraphs === 'object' ? aiData.sectionParagraphs : {};
     const sectionBullets = aiData?.sectionBullets && typeof aiData.sectionBullets === 'object' ? aiData.sectionBullets : {};
@@ -1530,31 +1525,21 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
       preferredDays: daysInput, targetAge, targetGender,
       targetLocation, targetInterests, productLogo,
       linkedProduct,
+      productReferenceImages,
       language: languageInput,
+      // Overrides the logo's own saved default (Brand Assets) for this
+      // generation only — set from Create's position picker.
+      logoPosition: logoPositionOverride,
       // Cadence from the Create page ("2 posts / week"). Optional — callers
       // that omit it keep the old preferredDays-driven behaviour.
       postsPerWeek: postsPerWeekInput
     } = req.body;
 
-    const normalizeCampaignLanguage = (value = '') => {
-      const normalized = String(value || '').trim().toLowerCase();
-      const languageMap = {
-        english: 'English',
-        en: 'English',
-        hindi: 'Hindi',
-        hi: 'Hindi',
-        tamil: 'Tamil',
-        ta: 'Tamil',
-        telugu: 'Telugu',
-        te: 'Telugu',
-        malayalam: 'Malayalam',
-        ml: 'Malayalam',
-        kannada: 'Kannada',
-        kn: 'Kannada'
-      };
-      return languageMap[normalized] || 'English';
-    };
-    const selectedLanguage = normalizeCampaignLanguage(languageInput);
+    // Shared with single-post/carousel/calendar generation (see
+    // contentCalendarService.js) — was previously a local 6-language map
+    // (no Marathi/Bengali/Gujarati/Punjabi/Odia/Urdu, no "+ English mix"),
+    // so most of Create's language list silently became English here.
+    const selectedLanguage = normalizeLanguage(languageInput);
 
     generationLockSignature = buildGenerationSignature({
       route: 'generate-campaign-stream',
@@ -1607,8 +1592,6 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
     const strictBrandText = strictBrandMode ? buildStrictBrandLockText(brandCtx) : '';
     const lockedPaletteArray = getBrandPalette(brandCtx);
     const lockedPalette = lockedPaletteArray.join(', ');
-    const primaryLockedColor = String(lockedPaletteArray[0] || '').trim();
-    const secondaryLockedColor = String(lockedPaletteArray[1] || '').trim();
     const aiMemoryContext = await buildAIContext({
       userId,
       user,
@@ -1638,8 +1621,9 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
     const postsPerSlot = 1;
     const totalPosts = numSlots * postsPerSlot;
 
-    // Deduct credits: 7 per individual post generated
-    const creditCost = totalPosts * 7; 
+    // Charged per post, at whatever campaign_full currently costs — the rate
+    // lives in config/apiCosts.js, not here. (A local `creditCost = totalPosts * 7`
+    // used to sit here: unused, and already wrong once the rate moved.)
     const creditResult = await deductCredits(userId, 'campaign_full', totalPosts, `AI campaign generation (${totalPosts} posts across ${platforms.length} platforms)`);
     if (!creditResult.success) {
       sendEvent('error', { message: creditResult.error, creditsExhausted: true });
@@ -1711,72 +1695,33 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
       platform: String(platforms[i % platforms.length] || 'instagram').trim().toLowerCase()
     }));
 
-    // Step 1: Generate all captions via Gemini (ROCI format prompt)
-    const captionPrompt = `ROLE: You are a senior social media strategist and copywriter at a leading digital marketing agency. You craft high-converting, scroll-stopping social media campaigns for premium brands.
+    // Step 1: Generate all captions via Gemini. Everything conditional is
+    // resolved here, so the template the user edits contains prose and
+    // {{placeholders}} only -- no JS for an edit to break.
+    const brandContextBlock = await buildBrandMemoryBlock(req.user.id);
+    const captionVars = {
+      campaignName,
+      campaignDescription: campaignDescription || '',
+      // The model reads this as the core idea to develop -- same text as the
+      // brief above, offered under the name the prompt actually asks for.
+      idea: campaignDescription || campaignName,
+      objective: objective || 'awareness',
+      audience: `${targetAge || '18-35'} age, ${targetGender || 'all'} gender${targetLocation ? ', located in ' + targetLocation : ''}${targetInterests ? ', interested in ' + targetInterests : ''}`,
+      platforms: platforms.join(', '),
+      tone: enforcedTone || 'professional',
+      language: selectedLanguage,
+      totalPosts,
+      campaignDuration: duration || '1 week',
+      brandContextBlock,
+      productBlock: linkedProduct
+        ? `Featured ${linkedProduct.type === 'service' ? 'service' : 'product'}: ${linkedProduct.name}${linkedProduct.price ? ` — ${linkedProduct.currency || '$'}${linkedProduct.price}` : ''}\n${linkedProduct.description || ''}`
+        : '',
+      keyMessagesBlock: keyMessages
+        ? `MANDATORY CONTENT STRUCTURES (STRICTLY FOLLOW THESE):\n${keyMessages}`
+        : ''
+    };
 
-OBJECTIVE: You are a strict content generator. Your job is to STRICTLY follow and fill the provided template structures.
-
-STRICTOR RULES:
-- Do NOT change the format, do NOT remove sections, and do NOT convert content into paragraphs.
-- Automatically fill ALL bullet points, numbered points, highlights, tips, outcomes, and sections with meaningful content based on the campaign details.
-- Do NOT leave any placeholders like [Key Point 1], [Tip 1], [Point], or [Outcome].
-- ONLY keep the CTA link field as "[Link]" or "[Your CTA Link]".
-- Do NOT add any introduction, conversational filler, or extra commentary.
-- Keep all headings, symbols, and markers (like colons :) exactly as they appear in the template.
-
-CONTEXT:
-- Brand: ${brandDisplayName} (${bp.industry || 'General'} industry)
-- Campaign: "${campaignName}"${campaignDescription ? ` - ${campaignDescription}` : ''}
-- Objective: ${objective || 'awareness'}
-- Target audience: ${targetAge || '18-35'} age, ${targetGender || 'all'} gender${targetLocation ? ', located in ' + targetLocation : ''}${targetInterests ? ', interested in ' + targetInterests : ''}
-- Platforms: ${platforms.join(', ')}
-- Tone: ${enforcedTone || 'professional'}
-- Language: ${selectedLanguage}
-${linkedProduct ? `- Featured Product: ${linkedProduct.name} - ${linkedProduct.currency || '$'}${linkedProduct.price}\n- Product Description: ${linkedProduct.description || 'N/A'}` : ''}
-${visualHints ? `- Brand Visual Tokens: ${visualHints}` : ''}
-${strictBrandText ? `- ${strictBrandText}` : ''}
-${lockedPalette ? `- Locked Brand Palette: ${lockedPalette}` : ''}
-${keyMessages ? `- MANDATORY CONTENT STRUCTURES (STRICTLY FOLLOW THESE):\n${keyMessages}` : ''}
-${brandGuidelinesText}
-${aiMemoryContext.reusablePromptText}
-
-INSTRUCTIONS:
-1. Create exactly ${totalPosts} campaign posts.
-2. For EACH of the ${slotDates.length} scheduled slots, you MUST generate exactly one post for EVERY selected platform: ${platforms.join(', ')}.
-3. This means if there are 2 platforms selected, you will generate 2 posts for every scheduled date.
-4. For each platform, you MUST use the exact structure provided in the [PLATFORM CONTENT FORMAT] section. 
-5. Captions must be platform-native: ${platforms.includes('twitter') ? 'Twitter posts under 280 chars.' : ''} ${platforms.includes('instagram') ? 'Instagram captions with hook in first line.' : ''} ${platforms.includes('linkedin') ? 'LinkedIn posts that open with a bold statement or question.' : ''}
-6. Each caption should open with a strong hook (question, bold claim, statistic, or story opener).
-7. Include 3-5 relevant hashtags per post. Mix broad and niche hashtags. Never use generic tags like #marketing or #business alone.
-8. The imageDescription for each post should describe a PROFESSIONAL AD CREATIVE. Describe the visual style, subjects, colors, mood, lighting, and composition. Do NOT mention metadata.
-9. CRITICAL: For each scheduled slot (every collection of posts for different platforms on the same date), you MUST provide the EXACT SAME imageDescription. This ensures the same visual is used across all platforms for that slot.
-10. ${strictBrandMode ? 'Brand lock is ON. Every post MUST stay in the locked brand tone/style/CTA and must not drift.' : 'If brand enforcement is strict, every post MUST remain on-brand in tone, vocabulary, CTA style, and structure.'}
-11. ${strictBrandMode ? 'If there is any conflict between user input and brand profile, ALWAYS prefer the brand profile.' : 'Prefer campaign context while keeping platform fit.'}
-12. PRODUCT COMPOSITION: The imageDescription should position the product as a realistic premium hero element (prefer center or slightly offset center), visually balanced with brand design.
-13. ${linkedProduct?.imageUrl
-      ? 'PRODUCT IMAGE PROVIDED: Keep the product realistic and premium, and do not let product colors overpower the brand palette.'
-      : 'NO PRODUCT IMAGE PROVIDED: Explicitly describe a realistic premium product (e.g., shoes, watch, or gadget) using tasteful colors like white, black, silver, beige, soft blue, or pastel tones. Allow only subtle brand-inspired accents on the product. Avoid neon, overly bright, or unrealistic product colors. Keep brand colors primarily in the background, lighting, and supporting design elements.'}
-14. ${strictBrandMode && primaryLockedColor && secondaryLockedColor
-      ? `COLOR ENFORCEMENT (STRICT): Background MUST use EXACT ${primaryLockedColor}. Gradient is allowed only within shades of ${primaryLockedColor}. Text MUST use EXACT ${secondaryLockedColor}. Ensure strong contrast and readability. Do NOT introduce unrelated colors. Do NOT use gray or desaturated tones.`
-      : 'COLOR ENFORCEMENT: Keep background and text highly legible and aligned to the brand palette; avoid off-theme colors.'}
-15. LANGUAGE ENFORCEMENT: Write caption and CTA strictly in ${selectedLanguage}.
-16. ${selectedLanguage.includes('Mix') ? 'You may mix English and the native language fluidly.' : selectedLanguage === 'English' ? 'English is allowed.' : 'Do NOT use English words except for strict brand names. Hashtags MUST be entirely in ' + selectedLanguage + ' (or transliterated if native characters aren\'t supported).'}
-17. IMAGE TEXT ENFORCEMENT: Also provide "imageText" for each post (2-5 words max). imageText MUST be strictly in ${selectedLanguage}. Do NOT use English for imageText unless selectedLanguage is English or Mix.
-18. imageText must be short, punchy, and suitable for text overlay on the image.
-
-Return ONLY valid JSON (no markdown, no backticks):
-{
-  "posts": [
-    {
-      "platform": "instagram|linkedin|twitter|facebook",
-      "caption": "The full caption text with emojis and line breaks",
-      "hashtags": ["#tag1", "#tag2", "#tag3"],
-      "contentTheme": "educational|promotional|engagement|storytelling|social_proof|problem_solution",
-      "imageDescription": "Detailed visual description for AI image generation",
-      "imageText": "Short overlay text (2-5 words) strictly in selected language"
-    }
-  ]
-}`;
+    const captionPrompt = await buildPrompt(req.user.id, 'campaign.content', captionVars);
 
     const normalizeTemplateText = (raw = '') => {
       return String(raw || '')
@@ -1916,14 +1861,12 @@ Return ONLY valid JSON (no markdown, no backticks):
       // if (aborted) return res.end(); // Removed to allow background generation
       attempts++;
       
-      console.log(` [CAMPAIGN_CONTENT] ${campaignContentGenerationId} Gemini call #${attempts}`, { userId, totalPosts });
-      const textRes = await callGemini(currentPrompt, {
+      console.log(` [CAMPAIGN_CONTENT] ${campaignContentGenerationId} call #${attempts}`, { userId, totalPosts });
+      const textRes = await callTextLLM(currentPrompt, {
+        jsonMode: true,
         maxTokens: 8000,
         temperature: 0.85,
-        skipCache: true,
-        // Enforce a single provider request for this workflow.
-        maxRetries: 1,
-        models: ['gemini-2.5-pro']
+        skipCache: true
       });
       parsed = parseGeminiJSON(textRes);
 
@@ -2159,6 +2102,34 @@ Return ONLY valid JSON (no markdown, no backticks):
       fallbackImageTextByLanguage[selectedLanguageKey] ||
       fallbackImageTextByLanguage.english;
 
+    // One call plans the whole campaign's visual system — a through-line,
+    // one creative world, and a focused image plan for every post — after
+    // the copy above already exists. Replaces deciding each slot's visual
+    // in isolation, which could not reliably produce posts that relate to
+    // each other; the same fix the carousel got for the same reason.
+    sendEvent('status', { message: 'Planning the campaign\'s visual system...' });
+    let visualPlan = null;
+    try {
+      visualPlan = await planCampaignVisuals(req.user.id, {
+        idea: `${campaignName}${campaignDescription ? ' — ' + campaignDescription : ''}`,
+        objective: objective || '',
+        audience: `${targetAge || '18-35'} age, ${targetGender || 'all'} gender${targetLocation ? ', located in ' + targetLocation : ''}${targetInterests ? ', interested in ' + targetInterests : ''}`,
+        platforms: platforms.join(', '),
+        tone: enforcedTone || 'professional',
+        language: selectedLanguage,
+        posts: postsToProcess.map((p) => ({
+          caption: p.caption || '',
+          contentTheme: p.contentTheme || '',
+          campaignRole: p.campaignRole || '',
+          platform: p.platform || '',
+          imageDescription: p.imageDescription || '',
+          imageText: p.imageText || ''
+        }))
+      });
+    } catch (err) {
+      console.error('[CAMPAIGN_IMAGE] Visual plan failed, each slot will fall back to its own plain image description:', err.message);
+    }
+
     for (let i = 0; i < postsToProcess.length; i++) {
       // if (aborted) break; // Removed to allow background generation
 
@@ -2175,23 +2146,56 @@ Return ONLY valid JSON (no markdown, no backticks):
       } else {
         sendEvent('generating', { index: i, total: postsToProcess.length, message: `Generating image for slot ${slotIndex + 1}...` });
         const resolvedImageText = String(post?.imageText || '').trim() || defaultImageText;
-        
-        imageResult = await generateCampaignImageNanoBanana(post.imageDescription, {
+
+        // Executes what the visual plan above already decided for this
+        // slot, rather than deciding it fresh here.
+        let finalPrompt = null;
+        let slotAssets = { productImages: [], environmentImage: null, logoUrl: null };
+        if (visualPlan?.slots?.[slotIndex]) {
+          try {
+            finalPrompt = await renderCampaignSlotImage(req.user.id, visualPlan, slotIndex, {
+              aspectRatio: aspectRatio || '1:1',
+              language: selectedLanguage
+            });
+            slotAssets = assetsToImageOptions([
+              ...visualPlan.slots[slotIndex].requiredAssets,
+              ...visualPlan.slots[slotIndex].optionalAssets
+            ]);
+          } catch (err) {
+            console.error(`[CAMPAIGN_IMAGE] Art Director failed for slot ${slotIndex + 1}, falling back to the plain image description:`, err.message);
+          }
+        }
+
+        const explicitProductImages = [
+          linkedProduct?.imageUrl,
+          ...(Array.isArray(productReferenceImages) ? productReferenceImages.slice(1) : [])
+        ].filter(Boolean);
+        const chosenProductImages = explicitProductImages.length ? explicitProductImages : slotAssets.productImages;
+
+        // Known before generation, not after, so the model can be told
+        // where the real logo will land and keep that corner clear.
+        const slotLogoUrl = slotAssets.logoUrl || effectiveLogo || null;
+        const slotLogoPosition = slotAssets.logoPosition || logoPositionOverride || brandCtx.primaryLogoPosition;
+        const slotLogoSize = slotAssets.logoSize || brandCtx.primaryLogoSize;
+
+        // No brandLogo reference — the model redraws anything it's shown,
+        // logos included (softened, recolored, wordmark sometimes dropped).
+        // Composited pixel-exact after rendering instead, below.
+        imageResult = await generateCampaignImageNanoBanana(finalPrompt || post.imageDescription, {
+          userId: req.user.id,
+          useRawPrompt: Boolean(finalPrompt),
           aspectRatio: aspectRatio || '1:1',
           brandName: brandDisplayName,
-          brandLogo: effectiveLogo || null,
           industry: bp.industry || '',
           tone: enforcedTone || 'professional',
-          strictBrandLock: strictBrandMode,
-          brandPalette: getBrandPalette(brandCtx),
-          fontType: brandCtx?.profile?.assets?.fontType || '',
-          postIndex: slotIndex, // Use slot index for image context
+          postIndex: slotIndex,
           totalPosts: numSlots,
-          campaignTheme: campaignName,
-          keyMessages: [keyMessages || '', visualHints || '', strictBrandText || '', brandGuidelinesText || ''].filter(Boolean).join('\n'),
-          linkedProduct,
+          environmentReferenceImage: slotAssets.environmentImage || null,
+          productReferenceImage: chosenProductImages[0] || null,
+          productReferenceImages: chosenProductImages.slice(1),
           targetLanguage: selectedLanguage,
-          imageText: resolvedImageText
+          imageText: resolvedImageText,
+          logoReservedPosition: slotLogoUrl ? slotLogoPosition : null
         });
         
         // The failure reason used to be dropped entirely — a dead card in the
@@ -2200,6 +2204,14 @@ Return ONLY valid JSON (no markdown, no backticks):
           console.error(
             `[CAMPAIGN_IMAGE] slot ${slotIndex + 1}/${numSlots} failed: ${imageResult?.error || 'unknown error'}`
           );
+        }
+
+        if (imageResult?.success && imageResult?.imageUrl && slotLogoUrl) {
+          imageResult.imageUrl = await overlayBrandLogoIfPresent(imageResult.imageUrl, {
+            logoUrl: slotLogoUrl,
+            position: slotLogoPosition,
+            size: slotLogoSize
+          });
         }
 
         slotImageCache.set(slotIndex, imageResult);
@@ -2235,6 +2247,10 @@ Return ONLY valid JSON (no markdown, no backticks):
           cta: '',
           imageUrl: postData.imageUrl || '',
           imagePrompt: postData.imageDescription || '',
+          // The prompt actually sent to the image model — was never
+          // persisted for campaign posts, so "see the prompt" in Create had
+          // nothing to show for anything generated through this route.
+          imagePromptResolved: imageResult?.promptUsed || '',
           platforms: [postData.platform],
           language: selectedLanguage,
           tone: enforcedTone || '',
@@ -4394,14 +4410,12 @@ Return ONLY valid JSON (no markdown, no code blocks):
 }`;
 
     const campaignPostsGenerationId = `campaign_posts_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    console.log(`[CAMPAIGN_POSTS] ${campaignPostsGenerationId} Gemini call #1`, { userId, totalPosts });
-    const response = await callGemini(prompt, {
+    console.log(`[CAMPAIGN_POSTS] ${campaignPostsGenerationId} call #1`, { userId, totalPosts });
+    const response = await callTextLLM(prompt, {
+      jsonMode: true,
       maxTokens: 4000,
       temperature: 0.8,
-      skipCache: true,
-      // Enforce a single provider request for this workflow.
-      maxRetries: 1,
-      models: ['gemini-2.5-pro']
+      skipCache: true
     });
     const parsed = parseGeminiJSON(response);
     const fallbackPost = {
@@ -4641,25 +4655,8 @@ router.post('/generate-caption', protect, checkTrial, requireCredits('campaign_t
   try {
     const { image, platform, language: languageInput, selectedProducts = [], prompt: userPrompt = '', generateOption = 'both', existingCaption = '', existingHashtags = '' } = req.body;
 
-    const normalizeCaptionLanguage = (value = '') => {
-      const normalized = String(value || '').trim().toLowerCase();
-      const languageMap = {
-        english: 'English',
-        en: 'English',
-        hindi: 'Hindi',
-        hi: 'Hindi',
-        tamil: 'Tamil',
-        ta: 'Tamil',
-        telugu: 'Telugu',
-        te: 'Telugu',
-        malayalam: 'Malayalam',
-        ml: 'Malayalam',
-        kannada: 'Kannada',
-        kn: 'Kannada'
-      };
-      return languageMap[normalized] || 'English';
-    };
-    const selectedLanguage = normalizeCaptionLanguage(languageInput);
+    // Shared normalizer — see note above.
+    const selectedLanguage = normalizeLanguage(languageInput);
     
     // If no image is provided, generate text-only caption/hashtags
     if (!image) {

@@ -82,9 +82,33 @@ const userSchema = new mongoose.Schema({
     keyDifferentiator: { type: String, default: '' },
     brandStory: { type: String, default: '' },
     heroProduct: { type: String, default: '' },
-    contentLanguage: { type: String, enum: ['tamil', 'english', 'tamil_english_mix', ''], default: '' },
+    // Regional languages, each usable on its own or blended with English.
+    // Previously Tamil was the only option, so anyone else had no way to say
+    // what language their content should be in.
+    contentLanguage: {
+      type: String,
+      enum: [
+        '', 'english',
+        'tamil', 'telugu', 'hindi', 'kannada', 'malayalam', 'marathi',
+        'bengali', 'gujarati', 'punjabi', 'odia', 'urdu',
+        'tamil_english_mix', 'telugu_english_mix', 'hindi_english_mix',
+        'kannada_english_mix', 'malayalam_english_mix', 'marathi_english_mix',
+        'bengali_english_mix', 'gujarati_english_mix', 'punjabi_english_mix',
+        'odia_english_mix', 'urdu_english_mix'
+      ],
+      default: ''
+    },
     contentRestrictions: { type: String, default: '' },
     firstMonthContentAngles: { type: String, default: '' },
+
+    // How much content the AI monthly planner should generate. Forward-only:
+    // changing this reshapes next month's plan, never the current one — a
+    // CSM may already be mid-review on this month's posts, and rewriting a
+    // plan out from under them is worse than waiting a cycle.
+    contentCadence: {
+      postsPerDay: { type: Number, min: 1, max: 5, default: 1 },
+      reelsPerWeek: { type: Number, min: 0, max: 7, default: 1 }
+    },
 
     // Brand assets extracted from website
     brandAssets: {

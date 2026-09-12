@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, Calendar, Send, Trash2, Loader2, Instagram, Facebook, Linkedin, Twitter, Check, RotateCcw } from 'lucide-react';
+import { X, Save, Calendar, Send, Trash2, Loader2, Instagram, Facebook, Linkedin, Twitter, Check, RotateCcw, Pencil } from 'lucide-react';
 import { Draft } from '../types';
 import { draftsAPI } from '../services/api';
+import { useQuarkCosts } from '../hooks/useQuarkCosts';
+import { useConfirm } from '../context/ConfirmContext';
 
 interface DraftPreviewModalProps {
   draft: Draft;
@@ -10,6 +12,13 @@ interface DraftPreviewModalProps {
 }
 
 export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onClose, onSuccess }) => {
+  // Regenerate re-runs the full generation pipeline, so it costs the same
+  // Quarks as the original — campaign-type drafts are billed through the
+  // legacy Campaigns flow already (matches backend/routes/drafts.js).
+  const quarkCosts = useQuarkCosts();
+  const confirm = useConfirm();
+  const regenerateCost = draft.contentType === 'campaign' ? 0 : (quarkCosts.image_generated || 0);
+
   const [title, setTitle] = useState(draft.title || '');
   const [caption, setCaption] = useState(draft.caption || '');
   const [hashtags, setHashtags] = useState<string[]>(draft.hashtags || []);
@@ -85,13 +94,21 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [isRejecting, setIsRejecting] = useState(false);
   const [isRetryingImage, setIsRetryingImage] = useState(false);
+  // What the model was actually told to draw this. Editable — leave it as
+  // Gravity wrote it, tweak one detail, or clear it entirely to hand the
+  // idea back to the Creative Director for a fresh concept.
+  const [promptDraft, setPromptDraft] = useState(draft.imagePromptResolved || '');
 
   const handleRetryImage = async () => {
+    const confirmMsg = regenerateCost > 0
+      ? `This costs ${regenerateCost} Quark${regenerateCost === 1 ? '' : 's'} and replaces the current image.`
+      : 'This replaces the current image.';
+    if (!(await confirm(confirmMsg, { title: 'Regenerate this image?', confirmLabel: 'Regenerate' }))) return;
     setIsRetryingImage(true);
     setErrorMsg('');
     setSuccessMsg('');
     try {
-      await draftsAPI.retryImageGeneration(draft._id);
+      await draftsAPI.retryImageGeneration(draft._id, promptDraft.trim() || undefined);
       setSuccessMsg('Re-queued image generation in background!');
       setTimeout(() => {
         onSuccess();
@@ -103,8 +120,34 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
     }
   };
 
+  // Targeted fix — keep the image as-is, change only what the instruction
+  // asks for. Separate from Regenerate, which redraws the whole thing.
+  const [editOpen, setEditOpen] = useState(false);
+  const [editInstruction, setEditInstruction] = useState('');
+  const [isEditingImage, setIsEditingImage] = useState(false);
+
+  const handleEditImage = async () => {
+    if (!editInstruction.trim()) return;
+    setIsEditingImage(true);
+    setErrorMsg('');
+    setSuccessMsg('');
+    try {
+      await draftsAPI.editImage(draft._id, editInstruction.trim());
+      setSuccessMsg('Edit applied!');
+      setEditOpen(false);
+      setEditInstruction('');
+      setTimeout(() => {
+        onSuccess();
+      }, 1200);
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Could not apply that edit.');
+    } finally {
+      setIsEditingImage(false);
+    }
+  };
+
   const handleReject = async () => {
-    if (window.confirm('Are you sure you want to reject this draft? It will be archived.')) {
+    if (await confirm('It will be archived.', { title: 'Reject this draft?', confirmLabel: 'Reject', danger: true })) {
       setIsRejecting(true);
       setErrorMsg('');
       try {
@@ -122,7 +165,7 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
   };
 
   const handleRegenerate = async () => {
-    if (window.confirm('Are you sure you want to reject and regenerate a new draft for this slot?')) {
+    if (await confirm('This rejects the current draft and generates a brand new one for this slot.', { title: 'Regenerate a new draft?', confirmLabel: 'Regenerate' })) {
       setIsRegenerating(true);
       setErrorMsg('');
       try {
@@ -191,7 +234,7 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
       return;
     }
 
-    if (window.confirm('Are you sure you want to publish this post immediately to social media?')) {
+    if (await confirm('This posts immediately to the selected social platforms.', { title: 'Publish now?', confirmLabel: 'Publish' })) {
       setIsPublishing(true);
       setErrorMsg('');
       setSuccessMsg('');
@@ -219,7 +262,7 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
   };
 
   const handleDelete = async () => {
-    if (window.confirm('Are you sure you want to archive/delete this draft?')) {
+    if (await confirm('This archives the draft — it can\'t be undone from here.', { title: 'Delete this draft?', confirmLabel: 'Delete', danger: true })) {
       setIsDeleting(true);
       setErrorMsg('');
       try {
@@ -323,7 +366,7 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
                     className="mt-1 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-[#F5A623] text-black text-[12px] font-semibold hover:bg-[#ffb833] disabled:opacity-50"
                   >
                     {isRetryingImage ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
-                    Try again
+                    Regenerate
                   </button>
                 </div>
               ) : imageUrl ? (
@@ -333,16 +376,82 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
               )}
             </div>
 
+            {/* What was actually sent to the image model — editable, so
+                "regenerate" means "try this specific change" instead of
+                "reroll and hope." Empty box on Regenerate hands the idea
+                back to the Creative Director for a fresh concept. */}
+            {draft.status !== 'processing' && (
+              <div className="mt-3">
+                <label className="gravity-label block mb-1.5">Prompt</label>
+                <textarea
+                  value={promptDraft}
+                  onChange={(e) => setPromptDraft(e.target.value)}
+                  placeholder={draft.imagePromptResolved ? '' : 'No resolved prompt was recorded for this image. Leave blank to let the Creative Director choose a fresh concept, or write one to use exactly.'}
+                  rows={5}
+                  className="w-full p-3 rounded-lg bg-white/[0.03] border border-white/[0.08] text-[12px] leading-relaxed text-white/75 font-mono outline-none focus:border-[#F5A623]/40 resize-y placeholder:text-white/25 placeholder:font-sans"
+                />
+                <p className="text-[10.5px] text-white/30 mt-1">
+                  {promptDraft.trim() && promptDraft.trim() !== (draft.imagePromptResolved || '').trim()
+                    ? 'Edited — Regenerate will use this exact text.'
+                    : promptDraft.trim()
+                      ? 'Regenerate will use this exact text again.'
+                      : 'Empty — Regenerate will ask the Creative Director for a new concept.'}
+                </p>
+              </div>
+            )}
+
             {imageUrl && draft.status !== 'processing' && (
-              <button
-                type="button"
-                onClick={handleRetryImage}
-                disabled={isRetryingImage}
-                className="mt-3 w-full inline-flex items-center justify-center gap-2 h-11 rounded-xl border border-white/[0.10] text-[13px] font-semibold text-white/70 hover:text-white hover:border-white/25 hover:bg-white/[0.03] transition-colors disabled:opacity-40"
-              >
-                {isRetryingImage ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
-                Regenerate artwork
-              </button>
+              <div className="mt-3 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleRetryImage}
+                  disabled={isRetryingImage}
+                  className="flex-1 inline-flex items-center justify-center gap-2 h-11 rounded-xl border border-white/[0.10] text-[13px] font-semibold text-white/70 hover:text-white hover:border-white/25 hover:bg-white/[0.03] transition-colors disabled:opacity-40"
+                >
+                  {isRetryingImage ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+                  Regenerate
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditOpen((v) => !v)}
+                  className={`flex-1 inline-flex items-center justify-center gap-2 h-11 rounded-xl border text-[13px] font-semibold transition-colors ${
+                    editOpen
+                      ? 'border-[#F5A623]/50 bg-[#F5A623]/10 text-[#F5A623]'
+                      : 'border-white/[0.10] text-white/70 hover:text-white hover:border-white/25 hover:bg-white/[0.03]'
+                  }`}
+                >
+                  <Pencil className="w-4 h-4" />
+                  Edit
+                </button>
+              </div>
+            )}
+
+            {/* Small targeted fix — keeps the current image, changes only
+                what the instruction describes. Distinct from Regenerate,
+                which redraws the whole image from the prompt above. */}
+            {editOpen && (
+              <div className="mt-3 p-3 rounded-xl bg-[#F5A623]/[0.04] border border-[#F5A623]/20">
+                <label className="gravity-label block mb-1.5 text-[#F5A623]">Describe the change</label>
+                <textarea
+                  value={editInstruction}
+                  onChange={(e) => setEditInstruction(e.target.value)}
+                  placeholder="e.g. fix the spelling in the headline, make the sky darker, remove the coffee cup"
+                  rows={2}
+                  className="w-full p-2.5 rounded-lg bg-black/20 border border-white/[0.08] text-[12.5px] leading-relaxed text-white/80 outline-none focus:border-[#F5A623]/40 resize-y placeholder:text-white/25"
+                />
+                <div className="flex items-center justify-between mt-2">
+                  <span className="text-[10.5px] text-white/35">Keeps the rest of the image as-is.</span>
+                  <button
+                    type="button"
+                    onClick={handleEditImage}
+                    disabled={isEditingImage || !editInstruction.trim()}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#F5A623] text-black text-[12px] font-semibold hover:bg-[#ffb833] disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {isEditingImage ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Pencil className="w-3.5 h-3.5" />}
+                    Apply edit
+                  </button>
+                </div>
+              </div>
             )}
           </div>
 

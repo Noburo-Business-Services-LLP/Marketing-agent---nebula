@@ -1,10 +1,18 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, Layers, Calendar as CalendarIcon, Zap, Image as ImageIcon, Instagram, Facebook, Linkedin, ChevronRight, Loader2, Check, Clock, Save, AlertCircle, RotateCcw, Pencil, Trash2 } from 'lucide-react';
+import { Sparkles, Layers, Calendar as CalendarIcon, Zap, Image as ImageIcon, Instagram, Facebook, Linkedin, ChevronRight, Loader2, Check, Clock, Save, AlertCircle, RotateCcw, Pencil, Trash2, Code2, Copy, X, SlidersHorizontal, GalleryHorizontalEnd, Package, Globe } from 'lucide-react';
 import { draftsAPI, brandAssetsAPI, apiService } from '../services/api';
+import { useQuarkCosts } from '../hooks/useQuarkCosts';
+import { useConfirm } from '../context/ConfirmContext';
+import { CONTENT_LANGUAGES } from '../constants/languages';
+import { LOGO_GRID, LOGO_GRID_LABELS, LogoGridPosition } from '../constants/logoPositions';
 import { Draft } from '../types';
 import GeneratingFill from '../components/GeneratingFill';
+import CalendarIdeaPicker from '../components/CalendarIdeaPicker';
+import PromptStudio from '../components/PromptStudio';
+import AssetPicker, { PickedAsset } from '../components/AssetPicker';
 import { BorderBeam } from '../components/ui/border-beam';
+import { GravityHero, GravityEmphasis } from '../components/gravity';
 
 const ASPECTS = [
   { key: '4:5',  label: '4:5',  hint: 'Portrait' },
@@ -25,12 +33,19 @@ const getToken = () =>
 // Wires the primary CTA to apiService.createCampaign, then routes to
 // /drafts (Approve) so the user sees what got produced.
 
-type CreateMode = 'campaign' | 'single';
+type CreateMode = 'campaign' | 'single' | 'carousel';
 
 const DURATIONS = ['1 week', '2 weeks', '3 weeks', '4 weeks'];
 const CADENCES = ['2 posts / week', '3 posts / week', '5 posts / week', 'Daily'];
 const TONES = ['Warm, unhurried', 'Confident, bold', 'Playful, kinetic', 'Luxurious, poetic', 'Professional, calm'];
 const VISUAL_STYLES = ['4:5 portrait', '1:1 square', '9:16 vertical', '16:9 landscape'];
+// Same list Settings/Onboarding offer, so a language picked here means the
+// same thing everywhere else in the product. Popover works off the labels;
+// the matching stored value ('hindi', 'tamil_english_mix', ...) is looked
+// up at submit time.
+const LANGUAGES = CONTENT_LANGUAGES.map((l) => l.label);
+const languageValueFromLabel = (label: string) =>
+  CONTENT_LANGUAGES.find((l) => l.label === label)?.value || 'english';
 const PLATFORMS = [
   { key: 'instagram', label: 'Instagram', Icon: Instagram },
   { key: 'facebook',  label: 'Facebook',  Icon: Facebook },
@@ -86,6 +101,72 @@ const OptionPopover: React.FC<{
   );
 };
 
+
+// Native title= tooltips take 1-2s to appear and use OS styling, so these
+// labels were effectively invisible. This shows on hover immediately.
+const IconAction: React.FC<{
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  danger?: boolean;
+  children: React.ReactNode;
+}> = ({ label, onClick, disabled = false, danger = false, children }) => (
+  <div className="relative group/tip">
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      className={`p-1.5 rounded-md text-white/40 hover:bg-white/[0.06] disabled:opacity-30 transition-colors ${
+        danger ? 'hover:text-red-400' : 'hover:text-[#F5A623]'
+      }`}
+    >
+      {children}
+    </button>
+    <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-1 rounded-md bg-[#151515] border border-white/[0.10] text-[11px] text-[#F5F4F1] whitespace-nowrap opacity-0 group-hover/tip:opacity-100 transition-opacity z-30 shadow-xl">
+      {label}
+    </span>
+  </div>
+);
+
+
+/**
+ * A placeholder for an image that has not arrived yet.
+ *
+ * The backend streams posts one at a time, so exactly one is being made and
+ * the rest are waiting. Previously every pending card looked identical, which
+ * is why a run felt stalled: you could not tell which was actually moving.
+ */
+const PendingSlot: React.FC<{ position: number; active: boolean; etaSeconds: number | null; elapsed: number }>
+  = ({ position, active, etaSeconds, elapsed }) => {
+  const remaining = etaSeconds != null ? Math.max(0, etaSeconds - elapsed) : null;
+  const fmt = (s: number) => (s >= 60 ? `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s` : `${s}s`);
+  return (
+    <div className={`rounded-2xl border overflow-hidden flex flex-col ${
+      active ? 'border-[#F5A623]/30 bg-[#F5A623]/[0.03]' : 'border-white/[0.06] bg-white/[0.02]'
+    }`}>
+      <div className="aspect-[4/5] flex flex-col items-center justify-center gap-3 px-6 text-center">
+        {active ? (
+          <>
+            <Loader2 className="w-6 h-6 animate-spin text-[#F5A623]" />
+            <div className="gravity-label text-[#F5A623]">Generating</div>
+            <div className="text-[12px] text-white/45 tabular-nums">
+              {remaining != null
+                ? `about ${fmt(remaining)} left`
+                : `${fmt(elapsed)} elapsed`}
+            </div>
+          </>
+        ) : (
+          <>
+            <Clock className="w-5 h-5 text-white/25" />
+            <div className="gravity-label text-white/35">Queued</div>
+            <div className="text-[12px] text-white/30">Post {position}</div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const GravityCreate: React.FC = () => {
   const navigate = useNavigate();
   const [mode, setMode] = useState<CreateMode>('campaign');
@@ -95,12 +176,25 @@ const GravityCreate: React.FC = () => {
   const [cadence, setCadence] = useState('3 posts / week');
   const [tone, setTone] = useState('Warm, unhurried');
   const [visualStyle, setVisualStyle] = useState('4:5 portrait');
+  const [language, setLanguage] = useState('English');
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(['instagram']);
-  const [openPopover, setOpenPopover] = useState<null | 'duration' | 'cadence' | 'tone' | 'style'>(null);
+  const [openPopover, setOpenPopover] = useState<null | 'duration' | 'cadence' | 'tone' | 'style' | 'language'>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [progressMsg, setProgressMsg] = useState<string>('');
   const [postsGenerated, setPostsGenerated] = useState<number>(0);
+  // Timing for the queue display: when the run began, and how long each post
+  // took, so the one in flight can show a real estimate rather than a guess.
+  const [runStartedAt, setRunStartedAt] = useState<number | null>(null);
+  const [postDurations, setPostDurations] = useState<number[]>([]);
+  const [tick, setTick] = useState(0);
+
+  // Drives the elapsed counter while a run is in progress.
+  useEffect(() => {
+    if (!submitting) return;
+    const t = setInterval(() => setTick((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, [submitting]);
 
   // Results stay on this page instead of bouncing to /drafts. The image is
   // produced by a background worker, so we poll the draft(s) until the
@@ -111,25 +205,66 @@ const GravityCreate: React.FC = () => {
   const [scheduleFor, setScheduleFor] = useState<string>('');
   const [schedulingId, setSchedulingId] = useState<string>('');
   const pollRef = useRef<any>(null);
+  const runStartRef = useRef<number | null>(null);
 
   // Brand logo choice, pulled from Brand Assets. Applied AFTER the image is
   // generated — handing a logo to an image model gets it redrawn and smeared.
-  const [logos, setLogos] = useState<Array<{ id: string; url: string; name: string }>>([]);
+  const [logos, setLogos] = useState<Array<{ id: string; url: string; name: string; defaultPosition: LogoGridPosition }>>([]);
+  const [logoPosition, setLogoPosition] = useState<LogoGridPosition>('bottom-right');
   const [selectedLogo, setSelectedLogo] = useState<string>('');
   const [captionBusy, setCaptionBusy] = useState<string>('');
   const [editingCaption, setEditingCaption] = useState<string>('');
   const [captionDraft, setCaptionDraft] = useState<string>('');
+
+  // Browsing planned ideas is deliberately unrelated to autoGenerate: that
+  // flag controls unattended background generation, not whether a person may
+  // look at ideas they already planned.
+  const [ideaPickerOpen, setIdeaPickerOpen] = useState(false);
+  const [promptStudioOpen, setPromptStudioOpen] = useState(false);
+  // Products or services this creative should feature. Multiple, because a
+  // bundle or a range is one post, not several.
+  const [assetPickerOpen, setAssetPickerOpen] = useState(false);
+  const [pickedProducts, setPickedProducts] = useState<PickedAsset[]>([]);
+  // Carousel length. Below three there is no story to tell; above ten the
+  // platforms stop showing every slide anyway.
+  const [slideCount, setSlideCount] = useState(5);
+  const [pickedIdea, setPickedIdea] = useState<string>('');
+
+  const [ideaContext, setIdeaContext] = useState<{ contentPillar: string; objective: string; format: string }>({
+    contentPillar: '', objective: '', format: ''
+  });
+
+  const applyCalendarItem = (item: any) => {
+    setName(item.headline || '');
+    setDescription(item.creativeConcept || item.headline || '');
+    setPickedIdea(item.headline || '');
+    // Carried into the content-writing prompt so it knows which pillar and
+    // objective this idea came from, rather than guessing from the brief alone.
+    setIdeaContext({
+      contentPillar: item.contentPillar || '',
+      objective: item.objective || '',
+      format: item.format || ''
+    });
+  };
 
   useEffect(() => {
     (async () => {
       try {
         const res: any = await brandAssetsAPI.getLogos();
         const list = (res?.assets || res?.logos || res?.data || [])
-          .map((a: any) => ({ id: String(a._id || a.id || a.url), url: a.url || a.imageUrl || '', name: a.name || 'Logo' }))
+          .map((a: any) => ({
+            id: String(a._id || a.id || a.url),
+            url: a.url || a.imageUrl || '',
+            name: a.name || 'Logo',
+            defaultPosition: (a.defaultPosition || 'bottom-right') as LogoGridPosition
+          }))
           .filter((a: any) => a.url);
         setLogos(list);
         const primary = (res?.assets || res?.logos || []).find((a: any) => a.isPrimary);
-        if (primary?.url) setSelectedLogo(primary.url);
+        if (primary?.url) {
+          setSelectedLogo(primary.url);
+          setLogoPosition((primary.defaultPosition || 'bottom-right') as LogoGridPosition);
+        }
       } catch { /* no logos configured — picker just stays empty */ }
     })();
   }, []);
@@ -162,7 +297,7 @@ const GravityCreate: React.FC = () => {
               const img = next?.imageUrl || next?.creative?.imageUrls?.[0];
               if (selectedLogo && img && !next.logoApplied) {
                 try {
-                  const applied = await draftsAPI.applyLogo(next._id, selectedLogo);
+                  const applied = await draftsAPI.applyLogo(next._id, selectedLogo, { position: logoPosition });
                   if (applied?.draft) next = applied.draft;
                 } catch { /* keep the unbranded image rather than losing it */ }
               }
@@ -233,7 +368,63 @@ const GravityCreate: React.FC = () => {
     }
   };
 
+  // Prompt inspector: shows the exact text that produced this image, so a weak
+  // result can be diagnosed and re-run without leaving the card.
+  const [promptOpenFor, setPromptOpenFor] = useState<string>('');
+  const [promptDraft, setPromptDraft] = useState<string>('');
+  const [promptCopied, setPromptCopied] = useState(false);
+
+  const openPrompt = (d: Draft) => {
+    setPromptOpenFor(d._id);
+    setPromptDraft(d.imagePromptResolved || d.imagePrompt || '');
+    setPromptCopied(false);
+  };
+
+  const copyPrompt = async () => {
+    try {
+      await navigator.clipboard.writeText(promptDraft);
+      setPromptCopied(true);
+      window.setTimeout(() => setPromptCopied(false), 1400);
+    } catch { /* clipboard unavailable */ }
+  };
+
+  const resetPrompt = (d: Draft) => {
+    setPromptDraft(d.imagePromptResolved || d.imagePrompt || '');
+  };
+
+  // Regenerate re-runs the full generation pipeline, so it costs the same
+  // Quarks as the original — campaign-type drafts are billed through the
+  // legacy Campaigns flow already (matches backend/routes/drafts.js).
+  const regenerateCostFor = (d: Draft) => (d.contentType === 'campaign' ? 0 : (quarkCosts.image_generated || 0));
+  const confirmRegenerate = (d: Draft) => {
+    const cost = regenerateCostFor(d);
+    const msg = cost > 0
+      ? `This costs ${cost} Quark${cost === 1 ? '' : 's'} and replaces the current image.`
+      : 'This replaces the current image.';
+    return confirmDialog(msg, { title: 'Regenerate this image?', confirmLabel: 'Regenerate' });
+  };
+
+  const regenerateWithPrompt = async (d: Draft) => {
+    if (!(await confirmRegenerate(d))) return;
+    setActionBusy(d._id);
+    setError(null);
+    try {
+      // Send the edited text as a raw override — the image model uses it
+      // verbatim, skipping the content-writing and Creative Director passes
+      // that would otherwise reinterpret it into something else.
+      await draftsAPI.retryImageGeneration(d._id, promptDraft);
+      setResults((prev) => prev.map((x: any) =>
+        x._id === d._id ? { ...x, status: 'processing', imageUrl: '', imagePromptResolved: promptDraft } : x));
+      setPromptOpenFor('');
+    } catch (e: any) {
+      setError(e?.message || 'Could not regenerate');
+    } finally {
+      setActionBusy('');
+    }
+  };
+
   const regenerateImage = async (d: Draft) => {
+    if (!(await confirmRegenerate(d))) return;
     setActionBusy(d._id);
     setError(null);
     try {
@@ -243,6 +434,33 @@ const GravityCreate: React.FC = () => {
       setError(e?.message || 'Could not regenerate');
     } finally {
       setActionBusy('');
+    }
+  };
+
+  // Targeted fix — keep the existing image, change only what the instruction
+  // describes. Separate from Regenerate, which redraws the whole thing.
+  const [editImageFor, setEditImageFor] = useState<string>('');
+  const [editImageInstruction, setEditImageInstruction] = useState<string>('');
+  const [editImageBusy, setEditImageBusy] = useState<string>('');
+
+  const openEditImage = (d: Draft) => {
+    setEditImageFor(d._id);
+    setEditImageInstruction('');
+  };
+
+  const applyImageEdit = async (d: Draft) => {
+    if (!editImageInstruction.trim()) return;
+    setEditImageBusy(d._id);
+    setError(null);
+    try {
+      const res = await draftsAPI.editImage(d._id, editImageInstruction.trim());
+      setResults((prev) => prev.map((x: any) => x._id === d._id ? { ...x, imageUrl: res.draft.imageUrl, imagePromptResolved: res.draft.imagePromptResolved } : x));
+      setEditImageFor('');
+      setEditImageInstruction('');
+    } catch (e: any) {
+      setError(e?.message || 'Could not apply that edit');
+    } finally {
+      setEditImageBusy('');
     }
   };
 
@@ -296,11 +514,26 @@ const GravityCreate: React.FC = () => {
     setSelectedPlatforms((prev) => prev.includes(key) ? prev.filter((p) => p !== key) : [...prev, key]);
 
   // Post count estimate (matches prototype text "~6 posts · 2 per week")
+  const quarkCosts = useQuarkCosts();
+  const confirmDialog = useConfirm();
+  // Campaign charges per post, carousel charges per slide — both scale with
+  // how much is actually generated, matching how the backend deducts each.
+  // Single post is the one true flat rate: it always makes exactly one image.
+  const currentActionCost =
+    mode === 'campaign' ? (quarkCosts.campaign_full || 0)
+    : mode === 'carousel' ? (quarkCosts.carousel_generated || 0)
+    : (quarkCosts.image_generated || 0);
+
   const estimate = useMemo(() => {
     const weeks = parseInt(duration, 10) || 1;
     const perWeek = parseInt(cadence, 10) || 1;
     return { total: weeks * perWeek, perWeek };
   }, [duration, cadence]);
+
+  const currentActionTotal =
+    mode === 'campaign' ? currentActionCost * estimate.total
+    : mode === 'carousel' ? currentActionCost * slideCount
+    : currentActionCost;
 
   // Map friendly duration/aspect labels to backend enum values used by
   // /generate-campaign-stream.
@@ -337,11 +570,129 @@ const GravityCreate: React.FC = () => {
       platforms: selectedPlatforms,
       prompt: description.trim() || name.trim() || 'A cinematic marketing poster',
       aspectRatio: backendAspect,
+      linkedProduct: primaryProduct,
+      productReferenceImages: productImageUrls,
+      contentPillar: ideaContext.contentPillar,
+      contentType: ideaContext.format || 'post',
+      objective: ideaContext.objective,
+      language: languageValueFromLabel(language),
+      // Generation composites the logo itself now — this used to be
+      // handled entirely by the poll loop below, which meant the backend's
+      // own automatic primary-logo composite AND this one both ran,
+      // producing a visibly doubled logo once both started targeting the
+      // same corner. Sending the actual choice here (including '' for "No
+      // logo") lets generation do it once, correctly, in one pass.
+      logoUrl: selectedLogo,
+      logoPosition: selectedLogo ? logoPosition : undefined,
     });
     if (res?.draft) {
       setResults([res.draft]);
       setActioned({});
     }
+    setProgressMsg('');
+  };
+
+  // Carousel mode — one post told across several slides.
+  //
+  // The backend plans the whole arc first, then renders slides one at a time
+  // over SSE, so the shared look is decided once and every slide inherits it.
+  // Slides appear as they land rather than all at the end.
+  const handleDraftCarousel = async () => {
+    const token = getToken();
+    if (!token) throw new Error('Please log in again.');
+
+    runStartRef.current = Date.now();
+    setRunStartedAt(Date.now());
+    setPostDurations([]);
+    setProgressMsg('Planning the story…');
+
+    const response = await fetch(`${API_BASE}/carousels/generate-stream`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: name.trim(),
+        brief: description.trim() || name.trim(),
+        slideCount,
+        platforms: selectedPlatforms,
+        tone: (tone.split(',')[0] || 'professional').toLowerCase(),
+        language: languageValueFromLabel(language),
+        aspectRatio: backendAspect,
+        linkedProduct: primaryProduct,
+        productReferenceImages: productImageUrls,
+        logoPosition: selectedLogo ? logoPosition : undefined,
+        contentPillar: ideaContext.contentPillar,
+        contentType: 'carousel',
+        objective: ideaContext.objective,
+      }),
+    });
+    if (!response.ok) throw new Error(`Server responded ${response.status}`);
+    if (!response.body) throw new Error('No response body from server.');
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let currentEvent = '';
+    let complete = false;
+    let landed = 0;
+    // Set from an 'error' SSE event and thrown after the loop. Throwing it
+    // immediately, inline, landed inside the same try that parses each SSE
+    // line — whose catch exists only to skip a malformed line — so the
+    // backend's actual reason ("Could not plan the carousel...") was
+    // silently discarded and replaced by the generic fallback below.
+    let serverError = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+      for (const line of lines) {
+        if (line.startsWith('event: ')) {
+          currentEvent = line.slice(7).trim();
+        } else if (line.startsWith('data: ') && currentEvent) {
+          try {
+            const data = JSON.parse(line.slice(6));
+            if (currentEvent === 'status' || currentEvent === 'generating') {
+              setProgressMsg(data.message || 'Rendering…');
+            } else if (currentEvent === 'slide') {
+              landed += 1;
+              setPostDurations((prev) => {
+                const startedAt = runStartRef.current ?? Date.now();
+                const priorTotal = prev.reduce((a, b) => a + b, 0);
+                const thisOne = Math.max(1, Math.round((Date.now() - startedAt) / 1000) - priorTotal);
+                return [...prev, thisOne];
+              });
+              setPostsGenerated(landed);
+              // Each slide is shown as its own card so progress is visible,
+              // but they are all one draft — hence the synthetic id, and the
+              // per-card actions being hidden for them.
+              setResults((prev: any[]) => [...prev, {
+                _id: `${data.draftId}::${data.order}`,
+                carouselDraftId: data.draftId,
+                isCarouselSlide: true,
+                slideLabel: `Slide ${data.order}${data.role ? ' · ' + data.role : ''}`,
+                title: data.headline || `Slide ${data.order}`,
+                caption: data.headline || '',
+                imageUrl: data.imageUrl || '',
+                status: data.imageUrl ? 'draft' : 'failed',
+                aspectRatio: backendAspect,
+                platforms: selectedPlatforms,
+              }]);
+            } else if (currentEvent === 'complete') {
+              complete = true;
+            } else if (currentEvent === 'error') {
+              serverError = data?.message || 'Generation failed';
+            }
+          } catch (parseErr) {
+            // Ignore malformed lines
+          }
+        }
+      }
+    }
+
+    if (serverError) throw new Error(serverError);
+    if (!complete && landed === 0) throw new Error('Generation ended without any slides.');
     setProgressMsg('');
   };
 
@@ -355,14 +706,18 @@ const GravityCreate: React.FC = () => {
     const body = {
       campaignName: name.trim(),
       campaignDescription: description.trim() || name.trim(),
-      objective: 'awareness',
+      objective: ideaContext.objective || 'awareness',
       platforms: selectedPlatforms,
       tone: (tone.split(',')[0] || 'professional').toLowerCase(),
-      language: 'English',
+      language: languageValueFromLabel(language),
       aspectRatio: backendAspect,
-      keyMessages: selectedPlatforms
-        .map((p) => `[${p.toUpperCase()} CONTENT FORMAT]\n${description.trim()}`)
-        .join('\n\n---\n\n'),
+      logoPosition: selectedLogo ? logoPosition : undefined,
+      // No keyMessages. The brief already travels as campaignDescription
+      // above; sending it here as well presented it to the model as a
+      // MANDATORY CONTENT STRUCTURE — a template to reproduce exactly, under
+      // rules forbidding any change or added commentary. The model obeyed,
+      // and captions came back as the brief typed verbatim. This field is for
+      // real content templates, which Create does not collect.
       duration: backendDuration,
       // Without this the backend fell back to three hardcoded days and then
       // multiplied by the platform count, so the cadence picker did nothing
@@ -375,9 +730,16 @@ const GravityCreate: React.FC = () => {
       targetLocation: '',
       targetInterests: '',
       productLogo: null,
-      linkedProduct: null,
+      // The first selection anchors the copy (name, price, description); the
+      // rest ride along as extra reference images so every chosen item
+      // actually appears in the creative.
+      linkedProduct: primaryProduct,
+      productReferenceImages: productImageUrls,
     };
 
+    runStartRef.current = Date.now();
+    setRunStartedAt(Date.now());
+    setPostDurations([]);
     setProgressMsg('Warming up the studio…');
     const response = await fetch(`${API_BASE}/campaigns/generate-campaign-stream`, {
       method: 'POST',
@@ -396,6 +758,10 @@ const GravityCreate: React.FC = () => {
     let currentEvent = '';
     let complete = false;
     let postCount = 0;
+    // Same reasoning as the carousel loop: captured here and thrown after
+    // the loop, not inline, so it survives the surrounding catch instead of
+    // being treated as a malformed line and discarded.
+    let serverError = '';
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -412,6 +778,13 @@ const GravityCreate: React.FC = () => {
               setProgressMsg(data.message || 'Drafting…');
             } else if (currentEvent === 'post') {
               postCount += 1;
+              // How long this one took, for estimating the next.
+              setPostDurations((prev) => {
+                const startedAt = runStartRef.current ?? Date.now();
+                const priorTotal = prev.reduce((a, b) => a + b, 0);
+                const thisOne = Math.max(1, Math.round((Date.now() - startedAt) / 1000) - priorTotal);
+                return [...prev, thisOne];
+              });
               setPostsGenerated(postCount);
               setProgressMsg(`Drafted ${postCount} post${postCount > 1 ? 's' : ''}…`);
               // Render each post the moment it lands. The payload already
@@ -439,7 +812,7 @@ const GravityCreate: React.FC = () => {
             } else if (currentEvent === 'complete') {
               complete = true;
             } else if (currentEvent === 'error') {
-              throw new Error(data?.message || 'Generation failed');
+              serverError = data?.message || 'Generation failed';
             }
           } catch (parseErr) {
             // Ignore malformed lines
@@ -447,6 +820,7 @@ const GravityCreate: React.FC = () => {
         }
       }
     }
+    if (serverError) throw new Error(serverError);
     if (!complete && postCount === 0) {
       throw new Error('Generation ended without any posts.');
     }
@@ -482,7 +856,9 @@ const GravityCreate: React.FC = () => {
     setResults([]);
     setActioned({});
     try {
-      if (mode === 'single') {
+      if (mode === 'carousel') {
+        await handleDraftCarousel();
+      } else if (mode === 'single') {
         await handleDraftSinglePost();
       } else {
         await handleDraftCampaign();
@@ -506,8 +882,23 @@ const GravityCreate: React.FC = () => {
   // While a request is in flight there is no draft record yet, so show
   // placeholder cards in the grid straight away. They animate in place and
   // are swapped for the real drafts the moment those come back.
+  // Shapes the selection into what each backend expects: one linked product
+  // for the copy, and every image for the visual references.
+  const primaryProduct = pickedProducts.length
+    ? {
+      _id: pickedProducts[0].id || undefined,
+      name: pickedProducts[0].name,
+      description: pickedProducts[0].description || '',
+      imageUrl: pickedProducts[0].imageUrl
+    }
+    : null;
+  const productImageUrls = pickedProducts.map((p) => p.imageUrl).filter(Boolean);
+
+  // How many cards this run will produce, whichever mode is active.
+  const expectedCount = mode === 'campaign' ? estimate.total : mode === 'carousel' ? slideCount : 1;
+
   const pendingCards = submitting && results.length === 0
-    ? Array.from({ length: mode === 'campaign' ? Math.min(estimate.total, 4) : 1 })
+    ? Array.from({ length: Math.min(expectedCount, 4) })
     : [];
 
   // Posts now stream in one at a time, so once the first card lands the grid
@@ -516,9 +907,22 @@ const GravityCreate: React.FC = () => {
   // moment the first image arrived, with more still on the way.
   const remainingCards = submitting && results.length > 0
     ? Array.from({
-      length: Math.max(0, (mode === 'campaign' ? estimate.total : 1) - results.length)
+      length: Math.max(0, expectedCount - results.length)
     })
     : [];
+
+  // Estimate from this run's own completed posts rather than a fixed guess,
+  // so it reflects how the model is actually performing right now.
+  const avgPostSeconds = postDurations.length
+    ? Math.round(postDurations.reduce((a, b) => a + b, 0) / postDurations.length)
+    : null;
+  // `tick` is read so the counter re-renders every second.
+  const elapsedOnCurrent = (() => {
+    void tick;
+    if (!runStartedAt) return 0;
+    const spentOnFinished = postDurations.reduce((a, b) => a + b, 0);
+    return Math.max(0, Math.round((Date.now() - runStartedAt) / 1000) - spentOnFinished);
+  })();
 
   return (
     <div className="max-w-[900px] mx-auto pb-24">
@@ -543,27 +947,99 @@ const GravityCreate: React.FC = () => {
             <Sparkles className="w-3.5 h-3.5" />
             Single post
           </button>
+          <button
+            onClick={() => setMode('carousel')}
+            className={`flex items-center gap-2 h-9 px-5 rounded-full text-[13px] font-semibold transition-colors ${
+              mode === 'carousel' ? 'bg-white/[0.10] text-[#F5F4F1]' : 'text-white/55 hover:text-white/80'
+            }`}
+          >
+            <GalleryHorizontalEnd className="w-3.5 h-3.5" />
+            Carousel
+          </button>
         </div>
       </div>
 
       {/* Hero */}
-      <div className="text-center mb-10">
-        <div className="gravity-label text-[#F5A623] mb-4">
-          {mode === 'campaign' ? 'Plan a campaign · ' + duration : 'Draft a post · one shot'}
-        </div>
-        <h1 className="font-serif-display text-[56px] leading-[1.05] tracking-[-0.02em] text-[#F5F4F1] mb-5">
-          {mode === 'campaign' ? (
-            <>What are we <span className="italic text-[#F5A623]">working on</span>?</>
+      <GravityHero
+        eyebrow={
+          mode === 'campaign'
+            ? 'Plan a campaign · ' + duration
+            : mode === 'carousel'
+              ? `Build a carousel · ${slideCount} slides`
+              : 'Draft a post · one shot'
+        }
+        headline={
+          mode === 'campaign' ? (
+            <>What are we <GravityEmphasis>working on</GravityEmphasis>?</>
+          ) : mode === 'carousel' ? (
+            <>What's the <GravityEmphasis>story</GravityEmphasis>?</>
           ) : (
-            <>What's on your <span className="italic text-[#F5A623]">mind</span>?</>
-          )}
-        </h1>
-        <p className="text-[15px] text-white/55 max-w-[560px] mx-auto leading-relaxed">
-          {mode === 'campaign'
+            <>What's on your <GravityEmphasis>mind</GravityEmphasis>?</>
+          )
+        }
+        subcopy={
+          mode === 'campaign'
             ? 'Describe the campaign once. Gravity drafts the full run — across platforms, spaced out, in your voice.'
-            : 'One sentence is enough. Gravity turns it into a scroll-stopping post.'}
-        </p>
+            : mode === 'carousel'
+              ? 'One idea, told across slides. Gravity plans the arc, then renders every slide in the same look.'
+              : 'One sentence is enough. Gravity turns it into a scroll-stopping post.'
+        }
+      />
+
+      {/* Ideas already planned in the calendar. A button rather than a wall
+          of tiles: the brief is the point of this screen, the ideas are an
+          optional shortcut into it. */}
+      <div className="flex flex-wrap items-center justify-center gap-3 mb-6">
+        <button
+          onClick={() => setIdeaPickerOpen(true)}
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-[13px] font-semibold border border-white/[0.12] text-[#F5F4F1] hover:bg-white/[0.05] hover:border-[#F5A623]/40 transition-all"
+        >
+          <CalendarIcon className="w-4 h-4 text-[#F5A623]" />
+          Pull an idea from your calendar
+        </button>
+        <button
+          onClick={() => setPromptStudioOpen(true)}
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-[13px] font-semibold border border-white/[0.12] text-[#F5F4F1] hover:bg-white/[0.05] hover:border-[#F5A623]/40 transition-all"
+        >
+          <SlidersHorizontal className="w-4 h-4 text-[#F5A623]" />
+          Edit the prompts
+        </button>
+        <button
+          onClick={() => setAssetPickerOpen(true)}
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-[13px] font-semibold border border-white/[0.12] text-[#F5F4F1] hover:bg-white/[0.05] hover:border-[#F5A623]/40 transition-all"
+        >
+          <Package className="w-4 h-4 text-[#F5A623]" />
+          {pickedProducts.length === 0
+            ? 'Feature a product or service'
+            : `${pickedProducts.length} product${pickedProducts.length > 1 ? 's' : ''} selected`}
+        </button>
+        {pickedIdea && (
+          <span className="text-[12px] text-white/45">
+            Loaded: <span className="text-[#F5A623]">{pickedIdea}</span>
+          </span>
+        )}
       </div>
+
+      <CalendarIdeaPicker
+        open={ideaPickerOpen}
+        onClose={() => setIdeaPickerOpen(false)}
+        onPick={applyCalendarItem}
+        type={mode === 'single' ? 'post' : undefined}
+      />
+
+      <AssetPicker
+        open={assetPickerOpen}
+        onClose={() => setAssetPickerOpen(false)}
+        source="products"
+        selected={pickedProducts}
+        onChange={setPickedProducts}
+      />
+
+      <PromptStudio
+        open={promptStudioOpen}
+        onClose={() => setPromptStudioOpen(false)}
+        focus={mode === 'campaign' ? 'campaign.content' : mode === 'carousel' ? 'carousel.content' : 'single.content'}
+      />
 
       {/* Name + Description card, wrapped in a travelling border beam.
           `mono` is the greyscale variant — desaturated and brightened it
@@ -609,7 +1085,7 @@ const GravityCreate: React.FC = () => {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder={mode === 'campaign' ? 'Monsoon menu launch' : 'Sunday pour-over ritual'}
-              className="flex-1 bg-transparent border-none outline-none text-[16px] font-semibold text-[#F5F4F1] placeholder:text-white/25"
+              className="gravity-bare flex-1 bg-transparent border-none outline-none text-[16px] font-semibold text-[#F5F4F1] placeholder:text-white/25"
             />
           </div>
           <textarea
@@ -619,12 +1095,33 @@ const GravityCreate: React.FC = () => {
               ? 'e.g. Launch our monsoon menu over two weeks — tease, reveal, drive footfall to the Saturday launch event.'
               : 'e.g. Slow Sunday. Filter coffee, one hand pouring, room quiet — invite people to spend the morning with us.'}
             rows={4}
-            className="w-full bg-transparent border-none outline-none text-[14.5px] text-white/60 leading-relaxed resize-none placeholder:text-white/25"
+            className="gravity-bare w-full bg-transparent border-none outline-none text-[14.5px] text-white/60 leading-relaxed resize-none placeholder:text-white/25"
           />
         </div>
       </div>
       </BorderBeam>
       </div>
+
+      {/* How many slides. A carousel's length changes the shape of the story,
+          so it is picked before the brief is sent, not afterwards. */}
+      {mode === 'carousel' && (
+        <div className="flex flex-wrap items-center justify-center gap-2 mb-6">
+          <span className="gravity-label text-white/35 mr-1">Slides</span>
+          {[3, 4, 5, 6, 7, 8, 10].map((n) => (
+            <button
+              key={n}
+              onClick={() => setSlideCount(n)}
+              className={`h-9 w-9 rounded-full text-[13px] font-semibold transition-colors ${
+                slideCount === n
+                  ? 'bg-[#F5A623] text-[#1A1208]'
+                  : 'text-white/55 border border-white/[0.12] hover:text-[#F5F4F1] hover:bg-white/[0.05]'
+              }`}
+            >
+              {n}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Metadata grid — Campaign mode only */}
       {mode === 'campaign' && (
@@ -647,6 +1144,16 @@ const GravityCreate: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Language — every mode, not just Campaign, since a single post or a
+          carousel is just as often the thing being tested in a regional
+          language. */}
+      <div className="max-w-xs mx-auto mb-6">
+        <div className="relative">
+          <MetaBox label="Language" value={language} Icon={Globe} onClick={() => setOpenPopover(openPopover === 'language' ? null : 'language')} />
+          <OptionPopover open={openPopover === 'language'} options={LANGUAGES} onPick={setLanguage} onClose={() => setOpenPopover(null)} />
+        </div>
+      </div>
 
       {/* Platforms */}
       <div className="flex items-center justify-center gap-4 py-4 mb-2">
@@ -724,7 +1231,7 @@ const GravityCreate: React.FC = () => {
             {logos.map((l) => (
               <button
                 key={l.id}
-                onClick={() => setSelectedLogo(l.url)}
+                onClick={() => { setSelectedLogo(l.url); setLogoPosition(l.defaultPosition); }}
                 title={l.name}
                 className={`w-11 h-11 rounded-lg border overflow-hidden bg-white/[0.04] transition-colors ${
                   selectedLogo === l.url ? 'border-[#F5A623]' : 'border-white/[0.10] hover:border-white/30'
@@ -742,6 +1249,31 @@ const GravityCreate: React.FC = () => {
               </button>
             )}
           </div>
+
+          {/* Only relevant once a logo is actually going on the image.
+              Defaults to that logo's own Brand Assets position, overridable
+              here for just this run. */}
+          {selectedLogo && (
+            <div className="mt-3">
+              <div className="gravity-label mb-1.5 text-white/35">Logo position</div>
+              <div className="grid grid-cols-3 gap-1.5 max-w-[220px]">
+                {LOGO_GRID.map((pos) => (
+                  <button
+                    key={pos}
+                    onClick={() => setLogoPosition(pos)}
+                    title={LOGO_GRID_LABELS[pos]}
+                    className={`aspect-[4/3] rounded-md border flex items-center justify-center transition-colors ${
+                      logoPosition === pos
+                        ? 'border-[#F5A623] bg-[#F5A623]/12'
+                        : 'border-white/[0.10] bg-white/[0.02] hover:border-white/30'
+                    }`}
+                  >
+                    <span className={`w-1.5 h-1.5 rounded-sm ${logoPosition === pos ? 'bg-[#F5A623]' : 'bg-white/30'}`} />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -766,7 +1298,12 @@ const GravityCreate: React.FC = () => {
             ) : (
               <>
                 <Zap className="w-4 h-4" strokeWidth={2.5} />
-                {mode === 'campaign' ? 'Draft my campaign' : 'Draft this post'}
+                {mode === 'campaign' ? 'Draft my campaign' : mode === 'carousel' ? 'Build my carousel' : 'Draft this post'}
+                {currentActionCost > 0 && (
+                  <span className="ml-0.5 px-1.5 py-0.5 rounded-md bg-black/15 text-[11.5px] font-semibold tabular-nums">
+                    {currentActionTotal}
+                  </span>
+                )}
               </>
             )}
           </button>
@@ -788,7 +1325,7 @@ const GravityCreate: React.FC = () => {
         <div className="max-w-5xl mx-auto mt-14">
           <div className="text-center mb-10">
             <div className="gravity-label text-[#F5A623] mb-3">
-              {mode === 'campaign' ? 'Building your campaign' : 'Drafting your post'}
+              {mode === 'campaign' ? 'Building your campaign' : mode === 'carousel' ? 'Building your carousel' : 'Drafting your post'}
             </div>
             <h2 className="text-[42px] leading-[1.1] font-semibold text-[#F5F4F1] tracking-[-0.02em]">
               Making something <em className="italic font-normal text-[#F5A623]">good</em>.
@@ -823,23 +1360,33 @@ const GravityCreate: React.FC = () => {
               Start over
             </button>
 
+            {/* These are a series of posts in one campaign, not variations of
+                the same idea — there is nothing to pick between. */}
             <div className="gravity-label text-[#F5A623] mb-3">
               {submitting
-                ? `${results.length} of ${mode === 'campaign' ? estimate.total : 1} ready…`
-                : `${results.length} variation${results.length !== 1 ? 's' : ''} · pick what you love`}
+                ? `${results.length} of ${expectedCount} ready…`
+                : mode === 'campaign'
+                  ? `${results.length} post${results.length !== 1 ? 's' : ''} · your campaign`
+                  : mode === 'carousel'
+                    ? `${results.length} slide${results.length !== 1 ? 's' : ''} · swipe in order`
+                    : 'Your post'}
             </div>
             <h2 className="text-[42px] leading-[1.1] font-semibold text-[#F5F4F1] tracking-[-0.02em]">
               {submitting ? (
                 <>Making something <em className="italic font-normal text-[#F5A623]">good</em>.</>
+              ) : mode === 'campaign' ? (
+                <>Your campaign is <em className="italic font-normal text-[#F5A623]">ready</em>.</>
+              ) : mode === 'carousel' ? (
+                <>Your carousel is <em className="italic font-normal text-[#F5A623]">ready</em>.</>
               ) : (
-                <>Here's what <em className="italic font-normal text-[#F5A623]">came back</em>.</>
+                <>Your post is <em className="italic font-normal text-[#F5A623]">ready</em>.</>
               )}
             </h2>
-            <p className="text-[13.5px] text-white/45 mt-3">
-              {stillRendering
-                ? 'Still rendering — this updates on its own.'
-                : 'Edit or regenerate any of them. Approve to send to your queue. Discard to throw away.'}
-            </p>
+            {stillRendering && (
+              <p className="text-[13.5px] text-white/45 mt-3">
+                Still rendering — this updates on its own.
+              </p>
+            )}
           </div>
 
           <div className={`grid gap-4 ${results.length === 1 ? 'grid-cols-1 max-w-md' : 'sm:grid-cols-2 lg:grid-cols-3'}`}>
@@ -897,42 +1444,130 @@ const GravityCreate: React.FC = () => {
                         </p>
                         <div className="flex items-center justify-between mt-2.5">
                           <div className="gravity-label text-white/35">
-                            {backendAspect} · {mode === 'campaign' ? 'Campaign' : 'Editorial'}
+                            {backendAspect} · {d.slideLabel || (mode === 'campaign' ? 'Campaign' : 'Editorial')}
                           </div>
                           <div className="flex items-center gap-1">
-                            <button
-                              onClick={() => generateCaption(d)}
-                              disabled={captionBusy === d._id || !img}
-                              title="Write a caption from this image"
-                              className="p-1.5 rounded-md text-white/40 hover:text-[#F5A623] hover:bg-white/[0.06] disabled:opacity-30"
-                            >
-                              {captionBusy === d._id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                            </button>
-                            <button
-                              onClick={() => { setEditingCaption(d._id); setCaptionDraft(d.caption || ''); }}
-                              title="Edit caption"
-                              className="p-1.5 rounded-md text-white/40 hover:text-white hover:bg-white/[0.06]"
-                            >
-                              <Pencil className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => regenerateImage(d)}
-                              disabled={busy || processing}
-                              title="Regenerate image"
-                              className="p-1.5 rounded-md text-white/40 hover:text-white hover:bg-white/[0.06] disabled:opacity-30"
-                            >
-                              <RotateCcw className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => discard(d)}
-                              disabled={busy}
-                              title="Discard"
-                              className="p-1.5 rounded-md text-white/40 hover:text-red-400 hover:bg-white/[0.06] disabled:opacity-30"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                            {/* Every one of these addresses a single draft. A
+                                carousel slide is one image inside a shared
+                                draft, so none of them apply to it. */}
+                            {!d.isCarouselSlide && (
+                              <>
+                                <IconAction label="Write a caption" onClick={() => generateCaption(d)} disabled={captionBusy === d._id || !img}>
+                                  {captionBusy === d._id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                                </IconAction>
+                                <IconAction label="Edit caption" onClick={() => { setEditingCaption(d._id); setCaptionDraft(d.caption || ''); }}>
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </IconAction>
+                                <IconAction label="See the prompt" onClick={() => openPrompt(d)}>
+                                  <Code2 className="w-3.5 h-3.5" />
+                                </IconAction>
+                                <IconAction label="Regenerate" onClick={() => regenerateImage(d)} disabled={busy || processing}>
+                                  <RotateCcw className="w-3.5 h-3.5" />
+                                </IconAction>
+                                <IconAction label="Edit image" onClick={() => openEditImage(d)} disabled={busy || processing || !img}>
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </IconAction>
+                                <IconAction label="Delete this post" onClick={() => discard(d)} disabled={busy} danger>
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </IconAction>
+                              </>
+                            )}
                           </div>
                         </div>
+
+                        {/* The exact prompt that produced this image. Editing it
+                            and regenerating is the fastest way to find out why a
+                            result was weak. */}
+                        {promptOpenFor === d._id && (
+                          <div className="mt-3 rounded-xl border border-[#F5A623]/20 bg-[#F5A623]/[0.03] p-4">
+                            <div className="flex items-center justify-between gap-3 mb-2">
+                              <div className="gravity-label text-[#F5A623]">Prompt sent to the image model</div>
+                              <button
+                                onClick={() => setPromptOpenFor('')}
+                                className="p-1 rounded-md text-white/40 hover:text-white hover:bg-white/[0.06]"
+                                title="Close"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+
+                            {!(d.imagePromptResolved || d.imagePrompt) ? (
+                              <p className="text-[12px] text-white/45">
+                                No prompt was recorded for this image. Images generated from now on will show theirs here.
+                              </p>
+                            ) : (
+                              <>
+                                <textarea
+                                  value={promptDraft}
+                                  onChange={(e) => setPromptDraft(e.target.value)}
+                                  rows={10}
+                                  className="gravity-bare w-full bg-black/30 border border-white/[0.08] rounded-lg p-3 text-[12px] leading-relaxed text-white/75 font-mono resize-y"
+                                />
+                                <div className="flex flex-wrap items-center gap-2 mt-3">
+                                  <button
+                                    onClick={copyPrompt}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold border border-white/[0.12] text-[#F5F4F1] hover:bg-white/[0.05]"
+                                  >
+                                    <Copy className="w-3.5 h-3.5" />
+                                    {promptCopied ? 'Copied' : 'Copy'}
+                                  </button>
+                                  <button
+                                    onClick={() => regenerateWithPrompt(d)}
+                                    disabled={busy || processing || !promptDraft.trim()}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-[#F5A623] text-[#1A1208] hover:bg-[#ffb833] disabled:opacity-40 disabled:cursor-not-allowed"
+                                  >
+                                    <RotateCcw className="w-3.5 h-3.5" />
+                                    Regenerate with this
+                                  </button>
+                                  <button
+                                    onClick={() => resetPrompt(d)}
+                                    className="px-3 py-1.5 rounded-lg text-[12px] font-semibold text-white/50 hover:text-[#F5F4F1] hover:bg-white/[0.05]"
+                                  >
+                                    Reset
+                                  </button>
+                                  <span className="text-[11px] text-white/35 ml-auto">Regenerating costs credits.</span>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Small targeted fix — keeps the current image,
+                            changes only what the instruction describes.
+                            Separate from "See the prompt" above, which
+                            redraws the whole image from a full prompt. */}
+                        {editImageFor === d._id && (
+                          <div className="mt-3 rounded-xl border border-[#F5A623]/20 bg-[#F5A623]/[0.03] p-4">
+                            <div className="flex items-center justify-between gap-3 mb-2">
+                              <div className="gravity-label text-[#F5A623]">Describe the change</div>
+                              <button
+                                onClick={() => setEditImageFor('')}
+                                className="p-1 rounded-md text-white/40 hover:text-white hover:bg-white/[0.06]"
+                                title="Close"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                            <textarea
+                              value={editImageInstruction}
+                              onChange={(e) => setEditImageInstruction(e.target.value)}
+                              placeholder="e.g. fix the spelling in the headline, make the sky darker, remove the coffee cup"
+                              rows={2}
+                              className="gravity-bare w-full bg-black/30 border border-white/[0.08] rounded-lg p-3 text-[12px] leading-relaxed text-white/75 resize-y"
+                            />
+                            <div className="flex items-center justify-between mt-3">
+                              <span className="text-[11px] text-white/35">Keeps the rest of the image as-is.</span>
+                              <button
+                                onClick={() => applyImageEdit(d)}
+                                disabled={editImageBusy === d._id || !editImageInstruction.trim()}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-[#F5A623] text-[#1A1208] hover:bg-[#ffb833] disabled:opacity-40 disabled:cursor-not-allowed"
+                              >
+                                {editImageBusy === d._id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Pencil className="w-3.5 h-3.5" />}
+                                Apply edit
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </>
                     )}
 
@@ -996,19 +1631,18 @@ const GravityCreate: React.FC = () => {
               );
             })}
 
-            {/* Slots still rendering — same animation as the opening screen,
-                so the grid fills in one card at a time instead of the
-                animation disappearing after the first image lands. */}
+            {/* Slots still to come. Posts stream back one at a time, so only
+                the first of these is actually being made — the rest are
+                waiting. Showing them all as identical spinners was why a run
+                looked stalled. */}
             {remainingCards.map((_, i) => (
-              <div key={`pending-${i}`} className="rounded-xl border border-white/[0.08] bg-white/[0.02] overflow-hidden">
-                <div className="relative bg-black" style={{ aspectRatio: backendAspect.replace(':', ' / ') }}>
-                  <GeneratingFill prompt={description.trim() || name.trim()} resolution={backendAspect} />
-                </div>
-                <div className="p-3.5">
-                  <div className="h-3 w-2/3 rounded bg-white/[0.07] animate-pulse" />
-                  <div className="h-2.5 w-1/3 rounded bg-white/[0.05] animate-pulse mt-2.5" />
-                </div>
-              </div>
+              <PendingSlot
+                key={`pending-${i}`}
+                position={results.length + i + 1}
+                active={i === 0}
+                etaSeconds={avgPostSeconds}
+                elapsed={elapsedOnCurrent}
+              />
             ))}
           </div>
 

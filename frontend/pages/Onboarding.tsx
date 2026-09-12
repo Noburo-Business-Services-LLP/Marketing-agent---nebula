@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { apiService } from '../services/api';
+import { CONTENT_LANGUAGES } from '../constants/languages';
 import { User, BusinessProfile, SocialConnection } from '../types';
 import { ChevronRight, Check, Users, Megaphone, Sparkles, Loader2, Building, AlertCircle, Share2, Instagram, Facebook, Linkedin, Youtube, Pin, MessageCircle, SkipForward, Sun, Moon, Globe, CheckCircle, XCircle, ExternalLink, ArrowLeft } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
@@ -526,7 +527,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
             {duplicateCheck.show && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
                     <div className={`max-w-md w-full mx-4 rounded-2xl p-8 shadow-2xl ${
-                        theme === 'dark' ? 'bg-[#0d1117] border border-[#ffcc29]/20' : 'bg-white border border-gray-200'
+                        theme === 'dark' ? 'bg-[#0d1117] border border-[#F5A623]/20' : 'bg-white border border-gray-200'
                     }`}>
                         <div className="text-center mb-6">
                             <div className="w-16 h-16 rounded-full bg-amber-500/10 flex items-center justify-center mx-auto mb-4">
@@ -556,7 +557,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                             </button>
                             <button
                                 onClick={handleSwitchAccount}
-                                className="flex-1 py-3 rounded-xl font-semibold text-sm bg-[#ffcc29] hover:bg-[#e6b825] text-[#070A12] transition-colors"
+                                className="flex-1 py-3 rounded-xl font-semibold text-sm bg-[#F5A623] hover:bg-[#ffb833] text-[#070A12] transition-colors"
                             >
                                 Switch Account
                             </button>
@@ -578,40 +579,52 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                 {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </button>
 
-            <div className={`rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col md:flex-row min-h-[500px] ${
-                theme === 'dark' ? 'bg-[#0d1117]' : 'bg-white'
-            }`}>
+            <div className={"rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col md:flex-row min-h-[500px] bg-[#111111] border border-white/[0.08]"}>
                 
-                {/* Sidebar */}
-                <div className="bg-[#ffcc29] p-8 text-white md:w-1/3 flex flex-col justify-between">
-                    <div>
-                        <div className="flex items-center gap-3 font-bold text-xl mb-8 text-[#070A12]">
+                {/* Sidebar. Was a solid #F5A623 slab with dark text — the
+                    loudest surface in the product, and the first thing a new
+                    user saw. Dark with gold accents matches what it leads to. */}
+                <div className="relative p-8 md:w-1/3 flex flex-col justify-between bg-[#0E0D0B] border-r border-white/[0.06] overflow-hidden">
+                    <div
+                        className="pointer-events-none absolute inset-0"
+                        style={{ background: 'radial-gradient(70% 50% at 50% 0%, rgba(245,166,35,0.10) 0%, rgba(245,166,35,0) 65%)' }}
+                    />
+                    <div className="relative">
+                        <div className="flex items-center gap-3 mb-8">
                             <img src="/assets/logo.png" alt="Nebulaa Gravity" className="w-10 h-10" />
                             <div className="text-left">
-                                <div className="text-xl font-bold leading-tight">Nebulaa</div>
-                                <div className="text-lg font-bold leading-tight">Gravity</div>
+                                <div className="font-serif-display text-[19px] leading-tight text-[#F5F4F1]">Nebulaa</div>
+                                <div className="font-serif-display text-[17px] leading-tight text-[#F5A623]">Gravity</div>
                             </div>
                         </div>
-                        <h2 className="text-2xl font-bold mb-2 text-[#070A12]">Let's build your agent.</h2>
-                        <p className="text-[#070A12]/70 text-sm">We need to understand your business to generate high-quality content.</p>
+                        <h2 className="font-serif-display text-[26px] leading-tight mb-2 text-[#F5F4F1]">Let's build your agent.</h2>
+                        <p className="text-[13px] text-white/50 leading-relaxed">We need to understand your business to generate high-quality content.</p>
                     </div>
 
-                    <div className="space-y-6 mt-8">
-                        {steps.map((s) => (
-                            <div key={s.num} className="flex items-center gap-3 opacity-90">
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold border-2 transition-colors ${
-                                    step >= s.num ? 'bg-[#070A12] text-[#ffcc29] border-[#070A12]' : 'border-[#070A12]/50 text-[#070A12]/70'
-                                }`}>
-                                    {step > s.num ? <Check className="w-4 h-4" /> : s.num}
+                    <div className="relative space-y-5 mt-8">
+                        {steps.map((s) => {
+                            const done = step > s.num;
+                            const current = step === s.num;
+                            return (
+                                <div key={s.num} className="flex items-center gap-3">
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[12px] font-semibold border transition-all ${
+                                        current
+                                            ? 'bg-[#F5A623] text-[#1A1208] border-[#F5A623] shadow-[0_0_14px_rgba(245,166,35,0.40)]'
+                                            : done
+                                                ? 'bg-[#F5A623]/85 text-[#1A1208] border-transparent'
+                                                : 'border-white/[0.12] text-white/30'
+                                    }`}>
+                                        {done ? <Check className="w-4 h-4" /> : s.num}
+                                    </div>
+                                    <span className={`text-[13px] font-medium ${current ? 'text-[#F5F4F1]' : done ? 'text-white/60' : 'text-white/30'}`}>{s.title}</span>
                                 </div>
-                                <span className={`font-medium ${step === s.num ? 'text-[#070A12]' : 'text-[#070A12]/70'}`}>{s.title}</span>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </div>
 
                 {/* Form Area */}
-                <div className={`p-8 md:w-2/3 flex flex-col ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>
+                <div className={"p-8 md:w-2/3 flex flex-col text-[#F5F4F1]"}>
                     <div className="flex-1">
                         {error && (
                             <div className="bg-red-500/20 text-red-400 p-3 rounded-lg text-sm mb-4 flex items-center gap-2 animate-in fade-in border border-red-500/30">
@@ -626,9 +639,9 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                     <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Company Name <span className="text-red-500">*</span></label>
                                     <input 
                                         type="text" 
-                                        className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#ffcc29] ${
+                                        className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#F5A623] ${
                                             theme === 'dark' 
-                                                ? 'bg-[#070A12] border-[#ffcc29]/30 text-[#ededed] placeholder-[#ededed]/40' 
+                                                ? 'bg-[#070A12] border-[#F5A623]/30 text-[#ededed] placeholder-[#ededed]/40' 
                                                 : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
                                         }`}
                                         placeholder="e.g. Gravity Corp"
@@ -640,9 +653,9 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                     <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Mobile Number <span className="text-red-500">*</span></label>
                                     <input
                                         type="tel"
-                                        className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#ffcc29] ${
+                                        className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#F5A623] ${
                                             theme === 'dark'
-                                                ? 'bg-[#070A12] border-[#ffcc29]/30 text-[#ededed] placeholder-[#ededed]/40'
+                                                ? 'bg-[#070A12] border-[#F5A623]/30 text-[#ededed] placeholder-[#ededed]/40'
                                                 : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
                                         }`}
                                         placeholder="e.g. +91 98765 43210"
@@ -656,9 +669,9 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                         <div className="flex-1 relative">
                                             <input 
                                                 type="text" 
-                                                className={`w-full p-3 pr-10 border rounded-lg outline-none focus:ring-2 focus:ring-[#ffcc29] ${
+                                                className={`w-full p-3 pr-10 border rounded-lg outline-none focus:ring-2 focus:ring-[#F5A623] ${
                                                     theme === 'dark' 
-                                                        ? 'bg-[#070A12] border-[#ffcc29]/30 text-[#ededed] placeholder-[#ededed]/40' 
+                                                        ? 'bg-[#070A12] border-[#F5A623]/30 text-[#ededed] placeholder-[#ededed]/40' 
                                                         : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
                                                 } ${websiteStatus === 'invalid' ? 'border-red-500' : websiteStatus === 'analyzed' ? 'border-emerald-500' : ''}`}
                                                 placeholder="e.g. nike.com or https://nike.com"
@@ -672,7 +685,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                             />
                                             {/* Status indicator */}
                                             <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                                                {analyzingWebsite && <Loader2 className="w-5 h-5 animate-spin text-[#ffcc29]" />}
+                                                {analyzingWebsite && <Loader2 className="w-5 h-5 animate-spin text-[#F5A623]" />}
                                                 {!analyzingWebsite && websiteStatus === 'analyzed' && <CheckCircle className="w-5 h-5 text-emerald-500" />}
                                                 {!analyzingWebsite && websiteStatus === 'invalid' && <XCircle className="w-5 h-5 text-red-500" />}
                                             </div>
@@ -684,7 +697,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                             className={`px-4 py-3 rounded-lg font-semibold text-sm flex items-center gap-2 transition-colors ${
                                                 !formData.website || analyzingWebsite
                                                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                                    : 'bg-[#ffcc29] text-[#070A12] hover:bg-[#e6b825]'
+                                                    : 'bg-[#F5A623] text-[#070A12] hover:bg-[#ffb833]'
                                             }`}
                                         >
                                             {analyzingWebsite ? (
@@ -715,9 +728,9 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                     <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Niche <span className="text-red-500">*</span></label>
                                     <input
                                         type="text"
-                                        className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#ffcc29] ${
+                                        className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#F5A623] ${
                                             theme === 'dark'
-                                                ? 'bg-[#070A12] border-[#ffcc29]/30 text-[#ededed] placeholder-[#ededed]/40'
+                                                ? 'bg-[#070A12] border-[#F5A623]/30 text-[#ededed] placeholder-[#ededed]/40'
                                                 : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
                                         }`}
                                         placeholder="e.g. Sustainable Fashion, AI SaaS, Organic Skincare"
@@ -728,9 +741,9 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                 <div>
                                     <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Business Vertical <span className="text-red-500">*</span></label>
                                     <select
-                                        className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#ffcc29] ${
+                                        className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#F5A623] ${
                                             theme === 'dark'
-                                                ? 'bg-[#070A12] border-[#ffcc29]/30 text-[#ededed]'
+                                                ? 'bg-[#070A12] border-[#F5A623]/30 text-[#ededed]'
                                                 : 'bg-white border-gray-300 text-gray-900'
                                         }`}
                                         value={formData.industry || ''}
@@ -764,9 +777,9 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                     <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Problem You Solve <span className="text-red-500">*</span></label>
                                     <textarea
                                         rows={3}
-                                        className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#ffcc29] resize-none ${
+                                        className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#F5A623] resize-none ${
                                             theme === 'dark'
-                                                ? 'bg-[#070A12] border-[#ffcc29]/30 text-[#ededed] placeholder-[#ededed]/40'
+                                                ? 'bg-[#070A12] border-[#F5A623]/30 text-[#ededed] placeholder-[#ededed]/40'
                                                 : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
                                         }`}
                                         placeholder="What pain point does your business solve for customers? e.g. Busy parents struggle to find healthy school lunches — we deliver fresh, dietitian-approved tiffins every morning."
@@ -788,10 +801,10 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                                 onClick={() => handleChange('businessType', option.value)}
                                                 className={`p-3 rounded-lg border text-center transition-all ${
                                                     formData.businessType === option.value
-                                                    ? 'border-[#ffcc29] bg-[#ffcc29]/10 text-[#ffcc29]'
+                                                    ? 'border-[#F5A623] bg-[#F5A623]/10 text-[#F5A623]'
                                                     : theme === 'dark' 
-                                                        ? 'border-[#ededed]/20 hover:border-[#ffcc29]/50 text-[#ededed]/70'
-                                                        : 'border-gray-200 hover:border-[#ffcc29]/50 text-gray-600'
+                                                        ? 'border-[#ededed]/20 hover:border-[#F5A623]/50 text-[#ededed]/70'
+                                                        : 'border-gray-200 hover:border-[#F5A623]/50 text-gray-600'
                                                 }`}
                                             >
                                                 <div className="font-bold text-sm">{option.label}</div>
@@ -804,9 +817,9 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                     <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Business Location <span className="text-red-500">*</span></label>
                                     <input 
                                         type="text" 
-                                        className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#ffcc29] ${
+                                        className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#F5A623] ${
                                             theme === 'dark' 
-                                                ? 'bg-[#070A12] border-[#ffcc29]/30 text-[#ededed] placeholder-[#ededed]/40' 
+                                                ? 'bg-[#070A12] border-[#F5A623]/30 text-[#ededed] placeholder-[#ededed]/40' 
                                                 : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
                                         }`}
                                         placeholder="e.g. Chennai, Tamil Nadu or New York, USA"
@@ -823,9 +836,9 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                         type="number"
                                         min={0}
                                         step={1}
-                                        className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#ffcc29] ${
+                                        className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#F5A623] ${
                                             theme === 'dark'
-                                                ? 'bg-[#070A12] border-[#ffcc29]/30 text-[#ededed] placeholder-[#ededed]/40'
+                                                ? 'bg-[#070A12] border-[#F5A623]/30 text-[#ededed] placeholder-[#ededed]/40'
                                                 : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
                                         }`}
                                         placeholder="e.g. 12"
@@ -854,10 +867,10 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                                 onClick={() => handleChange('brandMaturity', option.value as any)}
                                                 className={`p-3 rounded-lg border text-left transition-all ${
                                                     formData.brandMaturity === option.value
-                                                        ? 'border-[#ffcc29] bg-[#ffcc29]/10 text-[#ffcc29]'
+                                                        ? 'border-[#F5A623] bg-[#F5A623]/10 text-[#F5A623]'
                                                         : theme === 'dark'
-                                                            ? 'border-[#ededed]/20 hover:border-[#ffcc29]/50 text-[#ededed]/70'
-                                                            : 'border-gray-200 hover:border-[#ffcc29]/50 text-gray-600'
+                                                            ? 'border-[#ededed]/20 hover:border-[#F5A623]/50 text-[#ededed]/70'
+                                                            : 'border-gray-200 hover:border-[#F5A623]/50 text-gray-600'
                                                 }`}
                                             >
                                                 <div className="font-bold text-sm">{option.label}</div>
@@ -873,9 +886,9 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                             <input 
                                                 type="text" 
                                                 maxLength={15}
-                                                className={`w-full p-3 pr-10 border rounded-lg outline-none focus:ring-2 focus:ring-[#ffcc29] uppercase ${
+                                                className={`w-full p-3 pr-10 border rounded-lg outline-none focus:ring-2 focus:ring-[#F5A623] uppercase ${
                                                     theme === 'dark' 
-                                                        ? 'bg-[#070A12] border-[#ffcc29]/30 text-[#ededed] placeholder-[#ededed]/40' 
+                                                        ? 'bg-[#070A12] border-[#F5A623]/30 text-[#ededed] placeholder-[#ededed]/40' 
                                                         : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
                                                 } ${gstStatus === 'invalid' ? 'border-red-500' : gstStatus === 'valid' ? 'border-emerald-500' : ''}`}
                                                 placeholder="e.g. 22AAAAA0000A1Z5"
@@ -883,7 +896,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                                 onChange={e => handleChange('gstNumber', e.target.value.toUpperCase())}
                                             />
                                             <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                                                {verifyingGST && <Loader2 className="w-5 h-5 animate-spin text-[#ffcc29]" />}
+                                                {verifyingGST && <Loader2 className="w-5 h-5 animate-spin text-[#F5A623]" />}
                                                 {!verifyingGST && gstStatus === 'valid' && <CheckCircle className="w-5 h-5 text-emerald-500" />}
                                                 {!verifyingGST && gstStatus === 'invalid' && <XCircle className="w-5 h-5 text-red-500" />}
                                             </div>
@@ -895,7 +908,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                             className={`px-4 py-3 rounded-lg font-semibold text-sm flex items-center gap-2 transition-colors ${
                                                 !formData.gstNumber || formData.gstNumber.length !== 15 || verifyingGST
                                                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                                    : 'bg-[#ffcc29] text-[#070A12] hover:bg-[#e6b825]'
+                                                    : 'bg-[#F5A623] text-[#070A12] hover:bg-[#ffb833]'
                                             }`}
                                         >
                                             {verifyingGST ? <Loader2 className="w-4 h-4 animate-spin" /> : <>Verify</>}
@@ -920,9 +933,9 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                 <div>
                                     <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Short Description</label>
                                     <textarea 
-                                        className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#ffcc29] h-24 resize-none ${
+                                        className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#F5A623] h-24 resize-none ${
                                             theme === 'dark' 
-                                                ? 'bg-[#070A12] border-[#ffcc29]/30 text-[#ededed] placeholder-[#ededed]/40' 
+                                                ? 'bg-[#070A12] border-[#F5A623]/30 text-[#ededed] placeholder-[#ededed]/40' 
                                                 : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
                                         }`}
                                         placeholder="What do you do?"
@@ -958,10 +971,10 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                                     }}
                                                     className={`p-3 rounded-lg border text-sm font-medium transition-all ${
                                                         isSelected
-                                                        ? 'border-[#ffcc29] bg-[#ffcc29]/10 text-[#ffcc29]'
+                                                        ? 'border-[#F5A623] bg-[#F5A623]/10 text-[#F5A623]'
                                                         : theme === 'dark'
-                                                            ? 'border-[#ededed]/20 hover:border-[#ffcc29]/50 text-[#ededed]/70'
-                                                            : 'border-gray-200 hover:border-[#ffcc29]/50 text-gray-600'
+                                                            ? 'border-[#ededed]/20 hover:border-[#F5A623]/50 text-[#ededed]/70'
+                                                            : 'border-gray-200 hover:border-[#F5A623]/50 text-gray-600'
                                                     }`}
                                                 >
                                                     {isSelected && <span className="mr-1">✓</span>}{voice}
@@ -979,9 +992,9 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                     <input
                                         type="text"
                                         maxLength={100}
-                                        className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#ffcc29] ${
+                                        className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#F5A623] ${
                                             theme === 'dark'
-                                                ? 'bg-[#070A12] border-[#ffcc29]/30 text-[#ededed] placeholder-[#ededed]/40'
+                                                ? 'bg-[#070A12] border-[#F5A623]/30 text-[#ededed] placeholder-[#ededed]/40'
                                                 : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
                                         }`}
                                         placeholder="e.g. Bridal gold sets, Custom sofas, Sunday biryani special"
@@ -997,9 +1010,9 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                     <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Target Customer Profile <span className="text-red-500">*</span></label>
                                     <textarea
                                         rows={3}
-                                        className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#ffcc29] resize-none ${
+                                        className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#F5A623] resize-none ${
                                             theme === 'dark'
-                                                ? 'bg-[#070A12] border-[#ffcc29]/30 text-[#ededed] placeholder-[#ededed]/40'
+                                                ? 'bg-[#070A12] border-[#F5A623]/30 text-[#ededed] placeholder-[#ededed]/40'
                                                 : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
                                         }`}
                                         placeholder="Describe the typical customer — age, gender, occasion. e.g. Women aged 25-40, local area, buying for weddings and festivals."
@@ -1023,10 +1036,10 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                                 onClick={() => handleChange('targetGender', option.value as any)}
                                                 className={`p-3 rounded-lg border text-center text-sm transition-all ${
                                                     formData.targetGender === option.value
-                                                        ? 'border-[#ffcc29] bg-[#ffcc29]/10 text-[#ffcc29]'
+                                                        ? 'border-[#F5A623] bg-[#F5A623]/10 text-[#F5A623]'
                                                         : theme === 'dark'
-                                                            ? 'border-[#ededed]/20 hover:border-[#ffcc29]/50 text-[#ededed]/70'
-                                                            : 'border-gray-200 hover:border-[#ffcc29]/50 text-gray-600'
+                                                            ? 'border-[#ededed]/20 hover:border-[#F5A623]/50 text-[#ededed]/70'
+                                                            : 'border-gray-200 hover:border-[#F5A623]/50 text-gray-600'
                                                 }`}
                                             >
                                                 {option.label}
@@ -1049,10 +1062,10 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                                 onClick={() => handleChange('geographicReach', option.value as any)}
                                                 className={`p-3 rounded-lg border text-left transition-all ${
                                                     formData.geographicReach === option.value
-                                                        ? 'border-[#ffcc29] bg-[#ffcc29]/10 text-[#ffcc29]'
+                                                        ? 'border-[#F5A623] bg-[#F5A623]/10 text-[#F5A623]'
                                                         : theme === 'dark'
-                                                            ? 'border-[#ededed]/20 hover:border-[#ffcc29]/50 text-[#ededed]/70'
-                                                            : 'border-gray-200 hover:border-[#ffcc29]/50 text-gray-600'
+                                                            ? 'border-[#ededed]/20 hover:border-[#F5A623]/50 text-[#ededed]/70'
+                                                            : 'border-gray-200 hover:border-[#F5A623]/50 text-gray-600'
                                                 }`}
                                             >
                                                 <div className="font-bold text-sm">{option.label}</div>
@@ -1076,10 +1089,10 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                                 onClick={() => handleChange('customerType', option.value as any)}
                                                 className={`p-3 rounded-lg border text-left transition-all ${
                                                     formData.customerType === option.value
-                                                        ? 'border-[#ffcc29] bg-[#ffcc29]/10 text-[#ffcc29]'
+                                                        ? 'border-[#F5A623] bg-[#F5A623]/10 text-[#F5A623]'
                                                         : theme === 'dark'
-                                                            ? 'border-[#ededed]/20 hover:border-[#ffcc29]/50 text-[#ededed]/70'
-                                                            : 'border-gray-200 hover:border-[#ffcc29]/50 text-gray-600'
+                                                            ? 'border-[#ededed]/20 hover:border-[#F5A623]/50 text-[#ededed]/70'
+                                                            : 'border-gray-200 hover:border-[#F5A623]/50 text-gray-600'
                                                 }`}
                                             >
                                                 <div className="font-bold text-sm">{option.label}</div>
@@ -1109,19 +1122,19 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                             onClick={() => toggleGoal(goal)}
                                             className={`p-4 rounded-xl border cursor-pointer flex items-center justify-between transition-all ${
                                                 formData.marketingGoals.includes(goal)
-                                                ? 'border-[#ffcc29] bg-[#ffcc29]/10 shadow-sm'
+                                                ? 'border-[#F5A623] bg-[#F5A623]/10 shadow-sm'
                                                 : theme === 'dark' 
-                                                    ? 'border-[#ededed]/20 hover:border-[#ffcc29]/50'
+                                                    ? 'border-[#ededed]/20 hover:border-[#F5A623]/50'
                                                     : 'border-gray-200 hover:border-gray-300'
                                             }`}
                                         >
                                             <div className="flex items-center gap-3">
                                                 <div className={`w-5 h-5 rounded border flex items-center justify-center ${
-                                                     formData.marketingGoals.includes(goal) ? 'bg-[#ffcc29] border-[#ffcc29]' : theme === 'dark' ? 'border-[#ededed]/30' : 'border-gray-300'
+                                                     formData.marketingGoals.includes(goal) ? 'bg-[#F5A623] border-[#F5A623]' : theme === 'dark' ? 'border-[#ededed]/30' : 'border-gray-300'
                                                 }`}>
                                                     {formData.marketingGoals.includes(goal) && <Check className="w-3 h-3 text-[#070A12]" />}
                                                 </div>
-                                                <span className={`font-medium ${formData.marketingGoals.includes(goal) ? 'text-[#ffcc29]' : theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>{goal}</span>
+                                                <span className={`font-medium ${formData.marketingGoals.includes(goal) ? 'text-[#F5A623]' : theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>{goal}</span>
                                             </div>
                                         </div>
                                     ))}
@@ -1135,8 +1148,8 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                     <p className={`text-xs mb-3 ${theme === 'dark' ? 'text-[#ededed]/50' : 'text-gray-500'}`}>
                                         Add specific competitors you'd like to track, or skip this — Gravity will automatically discover competitors based on your business and location.
                                     </p>
-                                    <div className={`mb-3 p-3 rounded-lg flex items-start gap-2 ${theme === 'dark' ? 'bg-[#ffcc29]/10 border border-slate-700/50' : 'bg-yellow-50 border border-yellow-200'}`}>
-                                        <span className="text-[#ffcc29] text-lg">✨</span>
+                                    <div className={`mb-3 p-3 rounded-lg flex items-start gap-2 ${theme === 'dark' ? 'bg-[#F5A623]/10 border border-slate-700/50' : 'bg-yellow-50 border border-yellow-200'}`}>
+                                        <span className="text-[#F5A623] text-lg">✨</span>
                                         <p className={`text-xs ${theme === 'dark' ? 'text-[#ededed]/70' : 'text-gray-600'}`}>
                                             <strong>AI-Powered Discovery:</strong> We'll automatically find and track your top competitors in {formData.businessLocation || 'your location'} based on your industry and target audience.
                                         </p>
@@ -1144,9 +1157,9 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                     <div className="flex gap-2">
                                         <input 
                                             type="text" 
-                                            className={`flex-1 p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#ffcc29] ${
+                                            className={`flex-1 p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#F5A623] ${
                                                 theme === 'dark' 
-                                                    ? 'bg-[#070A12] border-[#ffcc29]/30 text-[#ededed] placeholder-[#ededed]/40' 
+                                                    ? 'bg-[#070A12] border-[#F5A623]/30 text-[#ededed] placeholder-[#ededed]/40' 
                                                     : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
                                             }`}
                                             placeholder="e.g. Nike, Adidas, Puma"
@@ -1174,7 +1187,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                                     setCompetitorInput('');
                                                 }
                                             }}
-                                            className="px-4 py-2 bg-[#ffcc29] text-[#070A12] rounded-lg font-bold hover:bg-[#e6b825] transition-colors"
+                                            className="px-4 py-2 bg-[#F5A623] text-[#070A12] rounded-lg font-bold hover:bg-[#ffb833] transition-colors"
                                         >
                                             Add
                                         </button>
@@ -1186,13 +1199,13 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                             {formData.competitors.map((comp, idx) => (
                                                 <span 
                                                     key={idx}
-                                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#ffcc29]/20 text-[#ffcc29] rounded-full text-sm font-medium"
+                                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#F5A623]/20 text-[#F5A623] rounded-full text-sm font-medium"
                                                 >
                                                     {comp}
                                                     <button
                                                         type="button"
                                                         onClick={() => handleChange('competitors', formData.competitors?.filter((_, i) => i !== idx))}
-                                                        className="w-4 h-4 rounded-full bg-[#ffcc29]/30 hover:bg-[#ffcc29]/50 flex items-center justify-center text-[#070A12]"
+                                                        className="w-4 h-4 rounded-full bg-[#F5A623]/30 hover:bg-[#F5A623]/50 flex items-center justify-center text-[#070A12]"
                                                     >
                                                         ×
                                                     </button>
@@ -1218,10 +1231,10 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                                 onClick={() => handleChange('pricePositioning', option.value as any)}
                                                 className={`p-2.5 rounded-lg border text-center text-sm font-medium transition-all ${
                                                     formData.pricePositioning === option.value
-                                                        ? 'border-[#ffcc29] bg-[#ffcc29]/10 text-[#ffcc29]'
+                                                        ? 'border-[#F5A623] bg-[#F5A623]/10 text-[#F5A623]'
                                                         : theme === 'dark'
-                                                            ? 'border-[#ededed]/20 hover:border-[#ffcc29]/50 text-[#ededed]/70'
-                                                            : 'border-gray-200 hover:border-[#ffcc29]/50 text-gray-600'
+                                                            ? 'border-[#ededed]/20 hover:border-[#F5A623]/50 text-[#ededed]/70'
+                                                            : 'border-gray-200 hover:border-[#F5A623]/50 text-gray-600'
                                                 }`}
                                             >
                                                 {option.label}
@@ -1238,9 +1251,9 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                     <input
                                         type="text"
                                         maxLength={150}
-                                        className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#ffcc29] ${
+                                        className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#F5A623] ${
                                             theme === 'dark'
-                                                ? 'bg-[#070A12] border-[#ffcc29]/30 text-[#ededed] placeholder-[#ededed]/40'
+                                                ? 'bg-[#070A12] border-[#F5A623]/30 text-[#ededed] placeholder-[#ededed]/40'
                                                 : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
                                         }`}
                                         placeholder="e.g. 25 years of family craftsmanship in gold jewellery."
@@ -1258,9 +1271,9 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                     </label>
                                     <textarea
                                         rows={4}
-                                        className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#ffcc29] resize-none ${
+                                        className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#F5A623] resize-none ${
                                             theme === 'dark'
-                                                ? 'bg-[#070A12] border-[#ffcc29]/30 text-[#ededed] placeholder-[#ededed]/40'
+                                                ? 'bg-[#070A12] border-[#F5A623]/30 text-[#ededed] placeholder-[#ededed]/40'
                                                 : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
                                         }`}
                                         placeholder="Founding story, family legacy, awards, unique specialty."
@@ -1272,21 +1285,17 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                 <div>
                                     <label className={`block text-sm font-bold mb-2 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Content Language <span className="text-red-500">*</span></label>
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                        {[
-                                            { value: 'tamil', label: 'Tamil only' },
-                                            { value: 'english', label: 'English only' },
-                                            { value: 'tamil_english_mix', label: 'Tamil + English mix' },
-                                        ].map(option => (
+                                        {CONTENT_LANGUAGES.map(option => (
                                             <button
                                                 key={option.value}
                                                 type="button"
                                                 onClick={() => handleChange('contentLanguage', option.value as any)}
                                                 className={`p-3 rounded-lg border text-center text-sm font-medium transition-all ${
                                                     formData.contentLanguage === option.value
-                                                        ? 'border-[#ffcc29] bg-[#ffcc29]/10 text-[#ffcc29]'
+                                                        ? 'border-[#F5A623] bg-[#F5A623]/10 text-[#F5A623]'
                                                         : theme === 'dark'
-                                                            ? 'border-[#ededed]/20 hover:border-[#ffcc29]/50 text-[#ededed]/70'
-                                                            : 'border-gray-200 hover:border-[#ffcc29]/50 text-gray-600'
+                                                            ? 'border-[#ededed]/20 hover:border-[#F5A623]/50 text-[#ededed]/70'
+                                                            : 'border-gray-200 hover:border-[#F5A623]/50 text-gray-600'
                                                 }`}
                                             >
                                                 {option.label}
@@ -1301,9 +1310,9 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                     </label>
                                     <textarea
                                         rows={3}
-                                        className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#ffcc29] resize-none ${
+                                        className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#F5A623] resize-none ${
                                             theme === 'dark'
-                                                ? 'bg-[#070A12] border-[#ffcc29]/30 text-[#ededed] placeholder-[#ededed]/40'
+                                                ? 'bg-[#070A12] border-[#F5A623]/30 text-[#ededed] placeholder-[#ededed]/40'
                                                 : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
                                         }`}
                                         placeholder="Anything you do NOT want posted. e.g. No political content. No competitor mentions. No personal photos."
@@ -1316,9 +1325,9 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                     <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>First Month Content Angles <span className="text-red-500">*</span></label>
                                     <textarea
                                         rows={3}
-                                        className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#ffcc29] resize-none ${
+                                        className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#F5A623] resize-none ${
                                             theme === 'dark'
-                                                ? 'bg-[#070A12] border-[#ffcc29]/30 text-[#ededed] placeholder-[#ededed]/40'
+                                                ? 'bg-[#070A12] border-[#F5A623]/30 text-[#ededed] placeholder-[#ededed]/40'
                                                 : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
                                         }`}
                                         placeholder="Festivals, offers, new products, or events in the next 30 days. e.g. Diwali sale, new collection launch, jewellery exhibition."
@@ -1337,7 +1346,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                 <h3 className={`text-xl font-bold ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>Connect Your Accounts</h3>
                                 <p className={`text-sm ${theme === 'dark' ? 'text-[#ededed]/60' : 'text-gray-500'}`}>
                                     Link your social media accounts to enable seamless publishing and analytics. 
-                                    <span className="text-[#ffcc29] font-medium"> This step is optional.</span>
+                                    <span className="text-[#F5A623] font-medium"> This step is optional.</span>
                                 </p>
 
                                 {/* Notification */}
@@ -1360,7 +1369,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                                 social.connected
                                                 ? 'border-green-500/50 bg-green-500/10'
                                                 : theme === 'dark' 
-                                                    ? 'border-[#ededed]/20 hover:border-[#ffcc29]/50'
+                                                    ? 'border-[#ededed]/20 hover:border-[#F5A623]/50'
                                                     : 'border-gray-200 hover:border-gray-300'
                                             }`}
                                         >
@@ -1386,7 +1395,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                                 <button
                                                     onClick={() => initiateConnection(social.platform)}
                                                     disabled={loadingPlatform === social.platform}
-                                                    className="px-4 py-1.5 text-sm font-medium bg-[#ffcc29] text-[#070A12] rounded-lg hover:bg-[#e6b825] transition-colors flex items-center gap-2 disabled:opacity-70"
+                                                    className="px-4 py-1.5 text-sm font-medium bg-[#F5A623] text-[#070A12] rounded-lg hover:bg-[#ffb833] transition-colors flex items-center gap-2 disabled:opacity-70"
                                                 >
                                                     {loadingPlatform === social.platform ? (
                                                         <>
@@ -1427,7 +1436,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                 <button 
                                     onClick={handleSubmit}
                                     disabled={submitting}
-                                    className="bg-[#ffcc29] hover:bg-[#e6b825] text-[#070A12] px-8 py-3 rounded-xl font-bold flex items-center gap-2 transition-all shadow-lg shadow-[#ffcc29]/20 disabled:opacity-70"
+                                    className="bg-[#F5A623] hover:bg-[#ffb833] text-[#070A12] px-8 py-3 rounded-xl font-bold flex items-center gap-2 transition-all shadow-lg shadow-[#F5A623]/20 disabled:opacity-70"
                                 >
                                     {submitting ? (
                                         <>
@@ -1446,7 +1455,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                 <button 
                                     onClick={handleNext}
                                     disabled={submitting}
-                                    className="bg-[#ffcc29] hover:bg-[#e6b825] text-[#070A12] px-8 py-3 rounded-xl font-bold flex items-center gap-2 transition-all shadow-lg shadow-[#ffcc29]/20 disabled:opacity-70"
+                                    className="bg-[#F5A623] hover:bg-[#ffb833] text-[#070A12] px-8 py-3 rounded-xl font-bold flex items-center gap-2 transition-all shadow-lg shadow-[#F5A623]/20 disabled:opacity-70"
                                 >
                                     Continue <ChevronRight className="w-5 h-5" />
                                 </button>

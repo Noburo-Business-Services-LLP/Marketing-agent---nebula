@@ -2,6 +2,7 @@ const express = require('express');
 const path = require('path');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
+const { checkTrial, deductCredits, refundCredits, CREDIT_COSTS } = require('../middleware/trialGuard');
 const Draft = require('../models/Draft');
 const Campaign = require('../models/Campaign');
 const User = require('../models/User');
@@ -521,10 +522,42 @@ router.post('/:id/apply-logo', protect, async (req, res) => {
 });
 
 // 10. POST /generate-image-bg - Create a draft immediately with status 'processing' and enqueue background image generation
-router.post('/generate-image-bg', protect, async (req, res) => {
+router.post('/generate-image-bg', protect, checkTrial, async (req, res) => {
+  // Declared out here, not inside the try: the catch block below needs to
+  // read it to decide whether to refund, and a variable declared inside a
+  // try is not visible in its own catch.
+  let creditsDeducted = false;
   try {
     const userId = req.user.userId || req.user.id;
-    const { type, title, caption, hashtags, prompt, aspectRatio, platforms, referenceImage } = req.body;
+    const {
+      type, title, caption, hashtags, prompt, aspectRatio, platforms, referenceImage,
+      linkedProduct, productReferenceImages,
+      // Context for the content-writing prompt — all optional, since a quick
+      // one-line brief with none of this is the common case.
+      contentPillar, contentType, campaignContext, objective, language,
+      // What Create's logo picker/position grid actually chose — '' means
+      // "No logo" was explicitly picked, distinct from omitting the field
+      // entirely (which falls back to the brand's primary logo). See
+      // backgroundQueue.js's `effectiveLogo` for how that distinction is used.
+      logoUrl, logoPosition
+    } = req.body;
+
+    // Single-post generation had no deduction at all — free, unlike every
+    // other generation path in the app. The type:'campaign' branch here is
+    // the older Campaigns.tsx page, which charges campaign_full through its
+    // own flow already; only the post case is uncharged, so only it is
+    // metered here.
+    if (type !== 'campaign') {
+      const creditResult = await deductCredits(userId, 'image_generated', 1, 'AI post generation');
+      if (!creditResult.success) {
+        return res.status(403).json({
+          success: false,
+          creditsExhausted: true,
+          message: creditResult.error || `Insufficient Quarks. Need ${CREDIT_COSTS.image_generated} Quarks to generate a post.`
+        });
+      }
+      creditsDeducted = true;
+    }
 
     const draft = new Draft({
       userId,
@@ -536,6 +569,7 @@ router.post('/generate-image-bg', protect, async (req, res) => {
       status: 'processing',
       sourceType: type === 'campaign' ? 'campaign' : 'post',
       contentType: type === 'campaign' ? 'campaign' : 'post',
+      language: language || 'English',
       creative: {
         type: 'image',
         textContent: caption || '',
@@ -555,18 +589,47 @@ router.post('/generate-image-bg', protect, async (req, res) => {
       type: type === 'campaign' ? 'generate_campaign_image' : 'generate_post_image',
       draftId: draft._id,
       aspectRatio: aspectRatio || '1:1',
-      referenceImage: referenceImage || null
+      referenceImage: referenceImage || null,
+      contentPillar: contentPillar || '',
+      contentType: contentType || (type === 'campaign' ? 'campaign' : 'post'),
+      campaignContext: campaignContext || '',
+      objective: objective || '',
+      // Products chosen in Create. The linked one gives the model the name,
+      // price and description; the image list is attached so each chosen item
+      // actually appears rather than being described from memory.
+      linkedProduct: linkedProduct || null,
+      productReferenceImages: Array.isArray(productReferenceImages) ? productReferenceImages : [],
+      // The language picked in Create for this specific generation, if any —
+      // overrides the brand's stored default (see backgroundQueue.js).
+      language: language || '',
+      // Passed through EXACTLY as received — '' (explicit "No logo") must
+      // stay distinct from undefined (field omitted entirely, meaning fall
+      // back to the brand's primary logo). Coercing '' to undefined here
+      // would silently ignore an explicit "No logo" choice.
+      logoUrl,
+      logoPosition: logoPosition || undefined
     });
 
     res.status(201).json({ success: true, draftId: draft._id, draft });
   } catch (error) {
     console.error('Generate image bg error:', error);
+    if (creditsDeducted) {
+      try {
+        await refundCredits(req.user.userId || req.user.id, 'image_generated', 1, 'Refund: post enqueuing failed');
+      } catch (refundErr) {
+        console.error('⚠️ Failed to refund Quarks after enqueuing error:', refundErr.message);
+      }
+    }
     res.status(500).json({ success: false, message: 'Failed to queue image generation', error: error.message });
   }
 });
 
 // 11. POST /:id/retry-image - Reset status to 'processing' and re-enqueue failed draft for image generation
 router.post('/:id/retry-image', protect, async (req, res) => {
+  // Declared out here, not inside the try: the catch block needs to read it
+  // to decide whether to refund — same pattern as /generate-image-bg above.
+  let creditsDeducted = false;
+  let creditsRemaining;
   try {
     const userId = req.user.userId || req.user.id;
     const draft = await Draft.findOne({ _id: req.params.id, userId });
@@ -574,6 +637,32 @@ router.post('/:id/retry-image', protect, async (req, res) => {
     if (!draft) {
       return res.status(404).json({ success: false, message: 'Draft not found' });
     }
+
+    // Regenerate re-runs the exact same Creative Director + Art Director +
+    // image-model pipeline as the original generation, so it costs us the
+    // same real API spend — it must be metered the same way. This used to
+    // be free (a real gap: every Regenerate click cost Nebulaa money with
+    // nothing charged to the account). Mirrors /generate-image-bg's own
+    // rule: campaign-type drafts are charged through the legacy Campaigns
+    // flow already, so only the non-campaign case is metered here.
+    if (draft.contentType !== 'campaign') {
+      const creditResult = await deductCredits(userId, 'image_generated', 1, 'Regenerate post image');
+      if (!creditResult.success) {
+        return res.status(403).json({
+          success: false,
+          creditsExhausted: true,
+          message: creditResult.error || `Insufficient Quarks. Need ${CREDIT_COSTS.image_generated} Quarks to regenerate.`
+        });
+      }
+      creditsDeducted = true;
+      creditsRemaining = creditResult.creditsRemaining;
+    }
+
+    // Optional: regenerate with THIS exact prompt instead of a fresh
+    // Creative Director decision. The draft's own imagePromptResolved is
+    // what the UI shows and lets someone edit — round-tripped back here
+    // when they want to try their edit rather than roll the dice again.
+    const promptOverride = typeof req.body?.prompt === 'string' ? req.body.prompt.trim() : '';
 
     draft.status = 'processing';
     draft.errorMessage = '';
@@ -583,13 +672,68 @@ router.post('/:id/retry-image', protect, async (req, res) => {
     backgroundQueue.enqueue({
       type: draft.contentType === 'campaign' ? 'generate_campaign_image' : 'generate_post_image',
       draftId: draft._id,
-      aspectRatio: '1:1'
+      aspectRatio: '1:1',
+      promptOverride: promptOverride || undefined
     });
 
-    res.status(200).json({ success: true, message: 'Requeued draft for image generation', draft });
+    res.status(200).json({ success: true, message: 'Requeued draft for image generation', draft, creditsRemaining });
   } catch (error) {
     console.error('Retry image generation error:', error);
+    if (creditsDeducted) {
+      try {
+        await refundCredits(req.user.userId || req.user.id, 'image_generated', 1, 'Refund: regenerate failed to enqueue');
+      } catch (refundErr) {
+        console.error('⚠️ Failed to refund Quarks after retry-image error:', refundErr.message);
+      }
+    }
     res.status(500).json({ success: false, message: 'Failed to retry image generation', error: error.message });
+  }
+});
+
+// 11b. POST /:id/edit-image - Apply a targeted edit to the EXISTING image
+// (keep everything, change only what the instruction asks for), instead of
+// regenerating the whole thing from a prompt.
+router.post('/:id/edit-image', protect, checkTrial, async (req, res) => {
+  try {
+    const userId = req.user.userId || req.user.id;
+    const draft = await Draft.findOne({ _id: req.params.id, userId });
+
+    if (!draft) {
+      return res.status(404).json({ success: false, message: 'Draft not found' });
+    }
+    if (!draft.imageUrl) {
+      return res.status(400).json({ success: false, message: 'This draft has no image yet to edit' });
+    }
+
+    const instruction = typeof req.body?.instruction === 'string' ? req.body.instruction.trim() : '';
+    if (!instruction) {
+      return res.status(400).json({ success: false, message: 'Describe the change you want' });
+    }
+
+    const creditResult = await deductCredits(userId, 'image_edit', 1, 'Edit image');
+    if (!creditResult.success) {
+      return res.status(403).json({ success: false, message: creditResult.error || 'Insufficient credits', creditsRemaining: creditResult.creditsRemaining });
+    }
+
+    const { refineImageWithPrompt } = require('../services/geminiAI');
+    const bp = req.user.businessProfile || {};
+    const contextPrompt = draft.imagePromptResolved || draft.imagePrompt || draft.caption || 'marketing image';
+
+    const result = await refineImageWithPrompt(contextPrompt, instruction, bp.tone || 'professional', draft.imageUrl);
+
+    if (!result.success || !result.imageUrl) {
+      await refundCredits(userId, 'image_edit', 1, 'Refund: edit-image failed');
+      return res.status(500).json({ success: false, message: result.error || 'Could not apply that edit' });
+    }
+
+    draft.imageUrl = result.imageUrl;
+    draft.imagePromptResolved = `${contextPrompt}\n\nEdit applied: ${instruction}`;
+    await draft.save();
+
+    res.status(200).json({ success: true, draft, creditsRemaining: creditResult.creditsRemaining });
+  } catch (error) {
+    console.error('Edit image error:', error);
+    res.status(500).json({ success: false, message: 'Failed to edit image', error: error.message });
   }
 });
 

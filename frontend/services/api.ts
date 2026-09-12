@@ -407,7 +407,7 @@ export const apiService = {
   },
 
   // Credits & Trial
-  getCredits: async (): Promise<{ success: boolean; credits?: { balance: number; totalUsed: number; history?: any[] }; trial?: { startDate: string; expiresAt: string; daysLeft: number; isExpired: boolean }; costs?: Record<string, number> }> => {
+  getCredits: async (): Promise<{ success: boolean; credits?: { balance: number; totalUsed: number; history?: any[] }; trial?: { startDate: string; expiresAt: string; daysLeft: number; isExpired: boolean }; costs?: Record<string, number>; units?: Record<string, string> }> => {
     try {
       return await apiCall('/credits', { method: 'GET' }, true);
     } catch (error) {
@@ -2989,7 +2989,7 @@ export const apiService = {
 // ================================
 export const brandAssetsAPI = {
   // Get all brand assets
-  getAll: async (type?: 'logo' | 'template'): Promise<any> => {
+  getAll: async (type?: 'logo' | 'template' | 'environment'): Promise<any> => {
     const query = type ? `?type=${type}` : '';
     return await apiCall<any>(`/brand-assets${query}`, {}, true);
   },
@@ -3012,10 +3012,10 @@ export const brandAssetsAPI = {
   // Upload a new asset (logo or template)
   upload: async (data: {
     imageData: string;
-    type: 'logo' | 'template';
+    type: 'logo' | 'template' | 'environment';
     name: string;
     isPrimary?: boolean;
-    defaultPosition?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'center';
+    defaultPosition?: 'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right' | 'center';
     defaultSize?: 'small' | 'medium' | 'large';
   }): Promise<any> => {
     return await apiCall<any>(
@@ -3149,6 +3149,39 @@ export const brandAssetsAPI = {
   },
 };
 
+export const ideasAPI = {
+  // Everything not dismissed, unless a specific status is asked for.
+  getAll: async (status?: 'new' | 'expanded' | 'dismissed'): Promise<any> => {
+    const query = status ? `?status=${status}` : '';
+    return await apiCall<any>(`/ideas${query}`, {}, true);
+  },
+
+  create: async (data: {
+    text: string;
+    imageData?: string;
+    sourceUrl?: string;
+    targetDate?: string;
+  }): Promise<any> => {
+    return await apiCall<any>('/ideas', { method: 'POST', body: JSON.stringify(data) }, true);
+  },
+
+  bulkCreate: async (items: string[], source: 'bulk_paste' | 'bulk_file'): Promise<any> => {
+    return await apiCall<any>(
+      '/ideas/bulk',
+      { method: 'POST', body: JSON.stringify({ items, source }) },
+      true
+    );
+  },
+
+  update: async (id: string, data: { status?: 'new' | 'expanded' | 'dismissed'; draftId?: string }): Promise<any> => {
+    return await apiCall<any>(`/ideas/${id}`, { method: 'PATCH', body: JSON.stringify(data) }, true);
+  },
+
+  remove: async (id: string): Promise<any> => {
+    return await apiCall<any>(`/ideas/${id}`, { method: 'DELETE' }, true);
+  },
+};
+
 export const adCampaignsAPI = {
   getAll: async (): Promise<any> => {
     return await apiCall<any>('/ad-campaigns', { method: 'GET' }, true);
@@ -3239,6 +3272,16 @@ export const inventoryAPI = {
     return apiCall('/products', {
       method: 'POST',
       body: JSON.stringify(data)
+    }, true);
+  },
+
+  // Upload one image and get back a hosted URL. Uploaded images are stored
+  // once; a pasted remote URL is refetched on every generation and silently
+  // dropped if it fails.
+  uploadProductImage: async (imageData: string): Promise<any> => {
+    return apiCall('/products/upload-image', {
+      method: 'POST',
+      body: JSON.stringify({ imageData })
     }, true);
   },
 
@@ -3750,22 +3793,40 @@ export const contentCalendarAPI = {
     return apiCall('/content-calendar/history', { method: 'GET' }, true);
   },
 
-  regenerate: async (month?: string): Promise<{ success: boolean; calendar: ContentCalendar }> => {
-    return apiCall('/content-calendar/regenerate', { 
+  /**
+   * Ask for the month's cover art. Returns immediately with status 'pending' —
+   * rendering outlives the request, so the caller polls get() for the result.
+   */
+  generateCover: async (month?: string): Promise<{ success: boolean; status: string }> => {
+    return apiCall('/content-calendar/cover', {
       method: 'POST',
-      body: JSON.stringify(month ? { month } : {})
+      body: JSON.stringify({ month })
     }, true);
   },
 
-  generateNextMonth: async (): Promise<{ success: boolean; calendar: ContentCalendar }> => {
-    return apiCall('/content-calendar/generate-next', { method: 'POST' }, true);
+  /** `focus` is what's specific to this month — launches, offers, events,
+   * pillars to lean into. Optional; the AI plans generically without it. */
+  regenerate: async (month?: string, language?: string, focus?: string): Promise<{ success: boolean; calendar: ContentCalendar }> => {
+    return apiCall('/content-calendar/regenerate', {
+      method: 'POST',
+      body: JSON.stringify({ ...(month ? { month } : {}), ...(language ? { language } : {}), ...(focus ? { focus } : {}) })
+    }, true);
+  },
+
+  /** `language` overrides the account default for this plan only. `focus`
+   * is what's specific to this month — see regenerate() above. */
+  generateNextMonth: async (language?: string, focus?: string): Promise<{ success: boolean; calendar: ContentCalendar }> => {
+    return apiCall('/content-calendar/generate-next', {
+      method: 'POST',
+      body: JSON.stringify({ ...(language ? { language } : {}), ...(focus ? { focus } : {}) })
+    }, true);
   },
 
   today: async (): Promise<{ success: boolean; suggestion: ContentCalendarItem | null; calendarId?: string | null }> => {
     return apiCall('/content-calendar/today', { method: 'GET' }, true);
   },
 
-  updateSettings: async (data: { calendarId?: string; autoGenerate?: boolean; approved?: boolean }): Promise<{ success: boolean; calendar: ContentCalendar }> => {
+  updateSettings: async (data: { calendarId?: string; autoGenerate?: boolean; approved?: boolean; autoGenerateLimit?: number }): Promise<{ success: boolean; calendar: ContentCalendar }> => {
     return apiCall('/content-calendar/settings', { method: 'PATCH', body: JSON.stringify(data) }, true);
   },
 
@@ -3877,6 +3938,21 @@ export const aiMemoryAPI = {
 
   reuseMemory: async (type: 'campaign' | 'video', id: string): Promise<any> => {
     return apiCall<any>(`/ai-memory/reuse/${type}/${encodeURIComponent(id)}`, { method: 'POST' }, true);
+  },
+
+  updateNote: async (noteId: string, updates: { text?: string; category?: string }): Promise<any> => {
+    return apiCall<any>(`/ai-memory/notes/${encodeURIComponent(noteId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates)
+    }, true);
+  },
+
+  deleteNote: async (noteId: string): Promise<any> => {
+    return apiCall<any>(`/ai-memory/notes/${encodeURIComponent(noteId)}`, { method: 'DELETE' }, true);
+  },
+
+  distillNow: async (): Promise<any> => {
+    return apiCall<any>('/ai-memory/distill', { method: 'POST' }, true);
   }
 };
 
@@ -4246,6 +4322,22 @@ export const draftsAPI = {
     prompt: string;
     aspectRatio?: string;
     referenceImage?: string;  // base64 data URL — optional visual reference
+    // Products or services to feature. The linked one anchors the copy; the
+    // image list is attached to the generation as visual references.
+    linkedProduct?: { _id?: string; name: string; description?: string; imageUrl?: string } | null;
+    productReferenceImages?: string[];
+    // Context for the content-writing prompt, carried from a picked calendar
+    // idea. All optional — a freehand brief has none of this.
+    contentPillar?: string;
+    contentType?: string;
+    campaignContext?: string;
+    objective?: string;
+    // Overrides the brand's stored Settings default for this generation only.
+    language?: string;
+    // '' means "No logo" was explicitly picked; omit the field entirely to
+    // fall back to the brand's primary logo (legacy behavior).
+    logoUrl?: string;
+    logoPosition?: string;
   }): Promise<{ success: boolean; draftId?: string; draft?: Draft; message?: string }> => {
     return apiCall('/drafts/generate-image-bg', {
       method: 'POST',
@@ -4286,10 +4378,61 @@ export const draftsAPI = {
     }, true);
   },
 
-  retryImageGeneration: async (id: string): Promise<{ success: boolean; draft: Draft }> => {
+  // `prompt`, when given, regenerates with that exact text instead of a
+  // fresh Creative Director decision — the "edit the prompt, try again"
+  // loop rather than "reroll and hope."
+  retryImageGeneration: async (id: string, prompt?: string): Promise<{ success: boolean; draft: Draft }> => {
     return apiCall(`/drafts/${encodeURIComponent(id)}/retry-image`, {
-      method: 'POST'
+      method: 'POST',
+      body: prompt ? JSON.stringify({ prompt }) : undefined
+    }, true);
+  },
+
+  // Targeted edit — keeps the existing image, changes only what the
+  // instruction asks for, rather than regenerating from scratch.
+  editImage: async (id: string, instruction: string): Promise<{ success: boolean; draft: Draft; message?: string }> => {
+    return apiCall(`/drafts/${encodeURIComponent(id)}/edit-image`, {
+      method: 'POST',
+      body: JSON.stringify({ instruction })
     }, true);
   }
 };
 
+
+// ---------------------------------------------------------------------------
+// Prompts
+// ---------------------------------------------------------------------------
+
+export interface EditablePrompt {
+  id: string;
+  label: string;
+  summary: string;
+  stage: string;
+  /** Placeholder name -> what it means, for the reference list in the editor. */
+  variables: Record<string, string>;
+  /** What ships with the product. Kept so a reset needs no extra request. */
+  defaultTemplate: string;
+  /** What will actually be used: the edit if there is one, else the default. */
+  template: string;
+  isEdited: boolean;
+  updatedAt: string | null;
+}
+
+export const promptsAPI = {
+  list: async (): Promise<{ success: boolean; prompts: EditablePrompt[] }> => {
+    return apiCall('/prompts', { method: 'GET' }, true);
+  },
+
+  save: async (
+    id: string,
+    template: string
+  ): Promise<{ success: boolean; template: string; isEdited: boolean }> => {
+    return apiCall(`/prompts/${id}`, { method: 'PUT', body: JSON.stringify({ template }) }, true);
+  },
+
+  reset: async (
+    id: string
+  ): Promise<{ success: boolean; template: string; isEdited: boolean }> => {
+    return apiCall(`/prompts/${id}`, { method: 'DELETE' }, true);
+  }
+};

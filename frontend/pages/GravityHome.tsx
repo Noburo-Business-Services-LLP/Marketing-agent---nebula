@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Check, ArrowRight, Sparkles } from 'lucide-react';
 import { apiService, draftsAPI } from '../services/api';
 import { Draft, Campaign } from '../types';
+import { GravityHero, GravityEmphasis } from '../components/gravity';
 
 // Gravity Home — matches the prototype's Home screen exactly, wired to
 // real backend data (drafts, campaigns, credits) so it drops in as
@@ -116,18 +117,61 @@ const GravityHome: React.FC = () => {
   const now = new Date();
   const dateLabel = `${DAY_LABELS[now.getDay()]}, ${MONTH_LABELS[now.getMonth()]} ${now.getDate()}`;
 
+  // Shown only when the account has made nothing yet. Deliberately marked as
+  // examples on the card: an unlabelled stack of stock imagery on a personal
+  // dashboard reads as "these are your posts", which would be a lie.
+  const SAMPLE_STACK = [
+    'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400&q=80&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400&q=80&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1600185365483-26d7a4cc7519?w=400&q=80&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=400&q=80&auto=format&fit=crop',
+  ];
+
   // Card stack — real artwork, real platform, real date. Previously the
   // labels were hardcoded to "IG · TOMORROW/THU/FRI/SAT" regardless of what
   // was actually scheduled, which made the whole panel decorative.
+  //
+  // Drafts come first and campaigns second: the artwork this account actually
+  // generated lives on drafts, so sourcing campaigns alone left the stack as
+  // four empty gradient blocks for anyone who had made posts but not yet run
+  // a scheduled campaign.
   const stackCards = useMemo(() => {
-    const upcoming = campaigns
+    // While the fetch is still in flight, drafts/campaigns are both still
+    // their initial empty arrays — indistinguishable from a genuinely empty
+    // account. Rendering SAMPLE_STACK here was a real bug, not the
+    // documented empty-state fallback: on every mount (including navigating
+    // back to this tab, which remounts the component and resets this state
+    // to []) it flashed real stock photography for however long the fetch
+    // took, before snapping to the actual state. Four blank placeholder
+    // cards keep the layout stable without claiming to be anyone's content.
+    if (loading) {
+      return [{ img: '', tag: '', sample: false }, { img: '', tag: '', sample: false }, { img: '', tag: '', sample: false }, { img: '', tag: '', sample: false }];
+    }
+
+    const fromDrafts = drafts
+      .map((d: any) => ({
+        img: d?.imageUrl || d?.creative?.imageUrls?.[0] || '',
+        platform: (d?.platforms?.[0] || '').toString(),
+        when: d?.scheduledDate || d?.createdAt || null,
+      }))
+      .filter((d: any) => d.img);
+
+    const fromCampaigns = campaigns
       .map((c: any) => ({
         img: c?.creative?.imageUrls?.[0] || '',
         platform: (c?.platforms?.[0] || '').toString(),
         when: c?.scheduling?.startDate || c?.scheduledDate || null,
       }))
-      .filter((c: any) => c.img || c.when)
-      .sort((a: any, b: any) => new Date(a.when || 0).getTime() - new Date(b.when || 0).getTime())
+      .filter((c: any) => c.img);
+
+    const real = [...fromDrafts, ...fromCampaigns];
+
+    if (real.length === 0) {
+      return SAMPLE_STACK.map((img) => ({ img, tag: 'EXAMPLE', sample: true }));
+    }
+
+    const upcoming = real
+      .sort((a: any, b: any) => new Date(b.when || 0).getTime() - new Date(a.when || 0).getTime())
       .slice(0, 4);
 
     return upcoming.map((c: any) => {
@@ -142,9 +186,9 @@ const GravityHome: React.FC = () => {
         }
       }
       const platform = c.platform ? c.platform.slice(0, 2).toUpperCase() : '';
-      return { img: c.img, tag: [platform, label].filter(Boolean).join(' · ') };
+      return { img: c.img, tag: [platform, label].filter(Boolean).join(' · '), sample: false };
     });
-  }, [campaigns]);
+  }, [drafts, campaigns, loading]);
 
   return (
     <div className="max-w-[1240px] mx-auto pb-16">
@@ -167,21 +211,20 @@ const GravityHome: React.FC = () => {
       {/* HERO */}
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-8 items-center mb-14">
         <div>
-          <div className="flex items-center gap-2 mb-6">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#F5A623]" />
-            <span className="gravity-label">{dateLabel} · Bengaluru</span>
-          </div>
-
-          <h1 className="font-serif-display text-[64px] leading-[1.02] tracking-[-0.02em] text-[#F5F4F1] mb-6">
-            <span className="tabular-nums">{heroReadyCount}</span> {heroReadyCount === 1 ? 'post' : 'posts'}<br />
-            <span>{heroReadyCount === 1 ? 'is' : 'are'} ready for </span>
-            <span className="italic text-[#F5A623]">your eye</span>
-            <span>.</span>
-          </h1>
-
-          <p className="text-[15px] text-white/60 leading-relaxed max-w-[520px] mb-8">
-            Gravity drafted the week ahead while you slept. Take a minute, tap through, and we'll handle the rest — scheduled, posted, measured.
-          </p>
+          <GravityHero
+            align="left"
+            eyebrow={`${dateLabel} · Bengaluru`}
+            headline={
+              <>
+                <span className="tabular-nums">{heroReadyCount}</span> {heroReadyCount === 1 ? 'post' : 'posts'}<br />
+                <span>{heroReadyCount === 1 ? 'is' : 'are'} ready for </span>
+                <GravityEmphasis>your eye</GravityEmphasis>
+                <span>.</span>
+              </>
+            }
+            subcopy="Gravity drafted the week ahead while you slept. Take a minute, tap through, and we'll handle the rest — scheduled, posted, measured."
+            className="!mb-8"
+          />
 
           <div className="flex items-center gap-3">
             <Link
@@ -205,7 +248,7 @@ const GravityHome: React.FC = () => {
         <div className="relative w-[440px] h-[300px] hidden lg:block">
           {/* Ambient glow */}
           <div className="absolute inset-[-40px] rounded-full blur-3xl opacity-70" style={{ background: 'radial-gradient(60% 50% at 50% 50%, rgba(245,166,35,0.20), transparent 70%)' }} />
-          {stackCards.map(({ img, tag }, i) => {
+          {stackCards.map(({ img, tag, sample }: any, i) => {
             const angle = (i - 1.5) * 6;
             const offsetX = (i - 1.5) * 60;
             const z = i === 2 ? 4 : i === 1 ? 3 : i === 3 ? 2 : 1;
@@ -226,8 +269,10 @@ const GravityHome: React.FC = () => {
                 )}
                 {tag && (
                   <div className="absolute inset-x-0 bottom-0 flex items-center justify-between px-2 py-1.5 bg-gradient-to-t from-black/70 to-transparent">
-                    <span className="text-[9px] font-semibold tracking-widest text-white/80">{tag}</span>
-                    <span className="text-[9px] text-white/60 tabular-nums">{i + 1}/{stackCards.length}</span>
+                    <span className={`text-[9px] font-semibold tracking-widest ${sample ? 'text-white/55' : 'text-white/80'}`}>{tag}</span>
+                    {!sample && (
+                      <span className="text-[9px] text-white/60 tabular-nums">{i + 1}/{stackCards.length}</span>
+                    )}
                   </div>
                 )}
               </div>

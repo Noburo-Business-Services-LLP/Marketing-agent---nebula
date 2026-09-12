@@ -24,8 +24,8 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
   const [firstName, setFirstName] = useState('');
   const [companyName, setCompanyName] = useState('');
   const [website, setWebsite] = useState('');
-  const [brandPrimaryColor, setBrandPrimaryColor] = useState('#ffcc29');
-  const [brandSecondaryColor, setBrandSecondaryColor] = useState('#e6b825');
+  const [brandPrimaryColor, setBrandPrimaryColor] = useState('#F5A623');
+  const [brandSecondaryColor, setBrandSecondaryColor] = useState('#ffb833');
   const [detectingBrandColors, setDetectingBrandColors] = useState(false);
 
   // OTP Verification State
@@ -381,10 +381,10 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
   // ========================
   if (forgotPasswordStep !== 'idle') {
     return (
-      <div className={`min-h-screen flex items-center justify-center p-4 ${theme === 'dark' ? 'bg-[#070A12]' : 'bg-gray-100'}`}>
-        <div className={`rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col animate-in zoom-in-95 duration-300 ${theme === 'dark' ? 'bg-[#0d1117] border border-slate-700/50' : 'bg-white border border-gray-200'}`}>
+      <div className={"min-h-screen flex items-center justify-center p-4"}>
+        <div className={"rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col animate-in zoom-in-95 duration-300 bg-[#111111] border border-white/[0.08]"}>
           {/* Header */}
-          <div className="bg-gradient-to-r from-[#ffcc29] to-[#e6b825] p-8 text-center relative">
+          <div className="bg-gradient-to-r from-[#F5A623] to-[#ffb833] p-8 text-center relative">
             <button
               onClick={() => { setForgotPasswordStep('idle'); setError(null); setFpEmail(''); setFpOtpDigits(['', '', '', '', '', '']); setFpNewPassword(''); }}
               className="absolute top-4 left-4 p-2 rounded-lg bg-[#070A12]/10 hover:bg-[#070A12]/20 transition-colors"
@@ -425,14 +425,14 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
                     value={fpEmail}
                     onChange={(e) => setFpEmail(e.target.value)}
                     placeholder="you@company.com"
-                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 outline-none transition-all ${theme === 'dark' ? 'bg-[#070A12] border-[#ffcc29]/30 focus:ring-[#ffcc29]/50 focus:border-[#ffcc29] text-[#ededed] placeholder-[#ededed]/40' : 'bg-gray-50 border-gray-300 focus:ring-[#ffcc29]/50 focus:border-[#ffcc29] text-gray-900 placeholder-gray-400'}`}
+                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 outline-none transition-all bg-white/[0.03] border-white/[0.08] focus:ring-[#F5A623]/30 focus:border-[#F5A623]/50 text-[#F5F4F1] placeholder-white/25`}
                     onKeyDown={(e) => e.key === 'Enter' && handleForgotSendOtp()}
                   />
                 </div>
                 <button
                   onClick={handleForgotSendOtp}
                   disabled={fpLoading || !fpEmail}
-                  className="w-full bg-[#ffcc29] hover:bg-[#e6b825] text-[#070A12] font-bold py-3 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full bg-[#F5A623] hover:bg-[#ffb833] text-[#070A12] font-bold py-3 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {fpLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Sending...</> : <><Mail className="w-4 h-4" /> Send Reset Code</>}
                 </button>
@@ -456,8 +456,8 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
                       onKeyDown={(e) => handleFpOtpKeyDown(index, e)}
                       disabled={fpLoading}
                       className={`w-12 h-14 text-center text-xl font-bold rounded-xl border-2 outline-none transition-all duration-200 ${digit
-                          ? theme === 'dark' ? 'border-[#ffcc29] bg-[#ffcc29]/5 text-[#ffcc29]' : 'border-[#ffcc29] bg-[#ffcc29]/5 text-[#070A12]'
-                          : theme === 'dark' ? 'border-slate-700 bg-[#070A12] text-[#ededed] focus:border-[#ffcc29] focus:ring-2 focus:ring-[#ffcc29]/20' : 'border-gray-300 bg-gray-50 text-gray-900 focus:border-[#ffcc29] focus:ring-2 focus:ring-[#ffcc29]/20'
+                          ? theme === 'dark' ? 'border-[#F5A623] bg-[#F5A623]/5 text-[#F5A623]' : 'border-[#F5A623] bg-[#F5A623]/5 text-[#070A12]'
+                          : theme === 'dark' ? 'border-slate-700 bg-[#070A12] text-[#ededed] focus:border-[#F5A623] focus:ring-2 focus:ring-[#F5A623]/20' : 'border-gray-300 bg-gray-50 text-gray-900 focus:border-[#F5A623] focus:ring-2 focus:ring-[#F5A623]/20'
                         } disabled:opacity-50`}
                     />
                   ))}
@@ -465,7 +465,7 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
                 <button
                   onClick={handleFpVerifyOtp}
                   disabled={fpOtpDigits.join('').length !== 6 || fpLoading}
-                  className="w-full bg-[#ffcc29] hover:bg-[#e6b825] text-[#070A12] font-bold py-3 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full bg-[#F5A623] hover:bg-[#ffb833] text-[#070A12] font-bold py-3 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {fpLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Verifying...</> : <><ShieldCheck className="w-4 h-4" /> Verify Code</>}
                 </button>
@@ -475,7 +475,7 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
                     {fpResendCooldown > 0 ? (
                       <span className={`font-medium ${theme === 'dark' ? 'text-[#ededed]/70' : 'text-gray-600'}`}>Resend in {fpResendCooldown}s</span>
                     ) : (
-                      <button onClick={handleFpResend} disabled={fpLoading} className="text-[#ffcc29] font-semibold hover:underline focus:outline-none disabled:opacity-50 inline-flex items-center gap-1">
+                      <button onClick={handleFpResend} disabled={fpLoading} className="text-[#F5A623] font-semibold hover:underline focus:outline-none disabled:opacity-50 inline-flex items-center gap-1">
                         <RefreshCw className="w-3 h-3" /> Resend Code
                       </button>
                     )}
@@ -497,7 +497,7 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
                       placeholder="••••••••"
                       className={`w-full px-4 py-2 pr-10 border rounded-lg focus:ring-2 outline-none transition-all ${!isFpPwdValid && fpNewPassword.length > 0
                           ? 'border-red-400/50 focus:ring-red-400/30'
-                          : theme === 'dark' ? 'border-[#ffcc29]/30 focus:ring-[#ffcc29]/50 focus:border-[#ffcc29]' : 'border-gray-300 focus:ring-[#ffcc29]/50 focus:border-[#ffcc29]'
+                          : theme === 'dark' ? 'border-[#F5A623]/30 focus:ring-[#F5A623]/50 focus:border-[#F5A623]' : 'border-gray-300 focus:ring-[#F5A623]/50 focus:border-[#F5A623]'
                         } ${theme === 'dark' ? 'bg-[#070A12] text-[#ededed] placeholder-[#ededed]/40' : 'bg-gray-50 text-gray-900 placeholder-gray-400'}`}
                     />
                     <button
@@ -510,7 +510,7 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
                   </div>
                 </div>
                 <div className={`p-3 rounded-lg text-xs ${theme === 'dark' ? 'bg-[#070A12] border border-slate-700/50' : 'bg-gray-50 border border-gray-200'}`}>
-                  <p className="font-semibold text-[#ffcc29] mb-2 flex items-center gap-1"><ShieldCheck className="w-3 h-3" /> Password Requirements:</p>
+                  <p className="font-semibold text-[#F5A623] mb-2 flex items-center gap-1"><ShieldCheck className="w-3 h-3" /> Password Requirements:</p>
                   <ul className="space-y-1">
                     <CriteriaItem met={fpPwdCriteria.length} label="At least 8 characters" theme={theme} />
                     <CriteriaItem met={fpPwdCriteria.letter} label="Contains a letter" theme={theme} />
@@ -521,7 +521,7 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
                 <button
                   onClick={handleFpResetPassword}
                   disabled={fpLoading || !isFpPwdValid}
-                  className="w-full bg-[#ffcc29] hover:bg-[#e6b825] text-[#070A12] font-bold py-3 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full bg-[#F5A623] hover:bg-[#ffb833] text-[#070A12] font-bold py-3 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {fpLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Updating...</> : <><Lock className="w-4 h-4" /> Update Password</>}
                 </button>
@@ -547,7 +547,7 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
   // ========================
   if (showOtpScreen) {
     return (
-      <div className={`min-h-screen flex items-center justify-center p-4 ${theme === 'dark' ? 'bg-[#070A12]' : 'bg-gray-100'}`}>
+      <div className={"min-h-screen flex items-center justify-center p-4"}>
 
         <div className={`rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col animate-in zoom-in-95 duration-300 ${theme === 'dark'
             ? 'bg-[#0d1117] border border-slate-700/50'
@@ -555,7 +555,7 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
           }`}>
 
           {/* Header */}
-          <div className="bg-gradient-to-r from-[#ffcc29] to-[#e6b825] p-8 text-center relative">
+          <div className="bg-gradient-to-r from-[#F5A623] to-[#ffb833] p-8 text-center relative">
             <button
               onClick={() => { setShowOtpScreen(false); setError(null); setOtpDigits(['', '', '', '', '', '']); }}
               className="absolute top-4 left-4 p-2 rounded-lg bg-[#070A12]/10 hover:bg-[#070A12]/20 transition-colors"
@@ -607,11 +607,11 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
                       ? 'border-green-500 bg-green-500/10 text-green-400'
                       : digit
                         ? theme === 'dark'
-                          ? 'border-[#ffcc29] bg-[#ffcc29]/5 text-[#ffcc29]'
-                          : 'border-[#ffcc29] bg-[#ffcc29]/5 text-[#070A12]'
+                          ? 'border-[#F5A623] bg-[#F5A623]/5 text-[#F5A623]'
+                          : 'border-[#F5A623] bg-[#F5A623]/5 text-[#070A12]'
                         : theme === 'dark'
-                          ? 'border-slate-700 bg-[#070A12] text-[#ededed] focus:border-[#ffcc29] focus:ring-2 focus:ring-[#ffcc29]/20'
-                          : 'border-gray-300 bg-gray-50 text-gray-900 focus:border-[#ffcc29] focus:ring-2 focus:ring-[#ffcc29]/20'
+                          ? 'border-slate-700 bg-[#070A12] text-[#ededed] focus:border-[#F5A623] focus:ring-2 focus:ring-[#F5A623]/20'
+                          : 'border-gray-300 bg-gray-50 text-gray-900 focus:border-[#F5A623] focus:ring-2 focus:ring-[#F5A623]/20'
                     } disabled:opacity-50`}
                 />
               ))}
@@ -621,7 +621,7 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
             <button
               onClick={handleVerifyOtp}
               disabled={otpDigits.join('').length !== 6 || otpLoading || otpSuccess}
-              className="w-full bg-[#ffcc29] hover:bg-[#e6b825] text-[#070A12] font-bold py-3 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-[#F5A623] hover:bg-[#ffb833] text-[#070A12] font-bold py-3 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {otpLoading ? (
                 <><Loader2 className="w-4 h-4 animate-spin" /> Verifying...</>
@@ -644,7 +644,7 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
                   <button
                     onClick={handleResendOtp}
                     disabled={otpLoading}
-                    className="text-[#ffcc29] font-semibold hover:underline focus:outline-none disabled:opacity-50 inline-flex items-center gap-1"
+                    className="text-[#F5A623] font-semibold hover:underline focus:outline-none disabled:opacity-50 inline-flex items-center gap-1"
                   >
                     <RefreshCw className="w-3 h-3" /> Resend Code
                   </button>
@@ -661,12 +661,9 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
   // LOGIN / SIGNUP SCREEN
   // ========================
   return (
-    <div className={`min-h-screen flex items-center justify-center p-4 ${theme === 'dark' ? 'bg-[#070A12]' : 'bg-gray-100'}`}>
+    <div className={"min-h-screen flex items-center justify-center p-4"}>
 
-      <div className={`rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col animate-in zoom-in-95 duration-300 ${theme === 'dark'
-          ? 'bg-[#0d1117] border border-slate-700/50'
-          : 'bg-white border border-gray-200'
-        }`}>
+      <div className={"rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col animate-in zoom-in-95 duration-300 bg-[#111111] border border-white/[0.08]"}>
 
         {/* Header */}
         <div
@@ -685,7 +682,7 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
 
         {/* Form */}
         <div className="p-8">
-          <h2 className={`text-xl font-bold mb-6 text-center ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>
+          <h2 className={"font-serif-display text-[26px] mb-6 text-center text-[#F5F4F1]"}>
             {isLogin ? 'Welcome Back' : 'Create Secure Account'}
           </h2>
 
@@ -705,8 +702,8 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
                     type="text"
                     required
                     className={`w-full px-4 py-2 border rounded-lg focus:ring-2 outline-none transition-all ${theme === 'dark'
-                        ? 'bg-[#070A12] border-[#ffcc29]/30 focus:ring-[#ffcc29]/50 focus:border-[#ffcc29] text-[#ededed] placeholder-[#ededed]/40'
-                        : 'bg-gray-50 border-gray-300 focus:ring-[#ffcc29]/50 focus:border-[#ffcc29] text-gray-900 placeholder-gray-400'
+                        ? 'bg-[#070A12] border-[#F5A623]/30 focus:ring-[#F5A623]/50 focus:border-[#F5A623] text-[#ededed] placeholder-[#ededed]/40'
+                        : 'bg-gray-50 border-gray-300 focus:ring-[#F5A623]/50 focus:border-[#F5A623] text-gray-900 placeholder-gray-400'
                       }`}
                     value={firstName}
                     onChange={(e) => setFirstName(e.target.value)}
@@ -719,8 +716,8 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
                     type="text"
                     required
                     className={`w-full px-4 py-2 border rounded-lg focus:ring-2 outline-none transition-all ${theme === 'dark'
-                        ? 'bg-[#070A12] border-[#ffcc29]/30 focus:ring-[#ffcc29]/50 focus:border-[#ffcc29] text-[#ededed] placeholder-[#ededed]/40'
-                        : 'bg-gray-50 border-gray-300 focus:ring-[#ffcc29]/50 focus:border-[#ffcc29] text-gray-900 placeholder-gray-400'
+                        ? 'bg-[#070A12] border-[#F5A623]/30 focus:ring-[#F5A623]/50 focus:border-[#F5A623] text-[#ededed] placeholder-[#ededed]/40'
+                        : 'bg-gray-50 border-gray-300 focus:ring-[#F5A623]/50 focus:border-[#F5A623] text-gray-900 placeholder-gray-400'
                       }`}
                     value={companyName}
                     onChange={(e) => setCompanyName(e.target.value)}
@@ -733,8 +730,8 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
                     <input
                       type="text"
                       className={`flex-1 px-4 py-2 border rounded-lg focus:ring-2 outline-none transition-all ${theme === 'dark'
-                          ? 'bg-[#070A12] border-[#ffcc29]/30 focus:ring-[#ffcc29]/50 focus:border-[#ffcc29] text-[#ededed] placeholder-[#ededed]/40'
-                          : 'bg-gray-50 border-gray-300 focus:ring-[#ffcc29]/50 focus:border-[#ffcc29] text-gray-900 placeholder-gray-400'
+                          ? 'bg-[#070A12] border-[#F5A623]/30 focus:ring-[#F5A623]/50 focus:border-[#F5A623] text-[#ededed] placeholder-[#ededed]/40'
+                          : 'bg-gray-50 border-gray-300 focus:ring-[#F5A623]/50 focus:border-[#F5A623] text-gray-900 placeholder-gray-400'
                         }`}
                       value={website}
                       onChange={(e) => setWebsite(e.target.value)}
@@ -764,8 +761,8 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
                 type="email"
                 required
                 className={`w-full px-4 py-2 border rounded-lg focus:ring-2 outline-none transition-all ${theme === 'dark'
-                    ? 'bg-[#070A12] border-[#ffcc29]/30 focus:ring-[#ffcc29]/50 focus:border-[#ffcc29] text-[#ededed] placeholder-[#ededed]/40'
-                    : 'bg-gray-50 border-gray-300 focus:ring-[#ffcc29]/50 focus:border-[#ffcc29] text-gray-900 placeholder-gray-400'
+                    ? 'bg-[#070A12] border-[#F5A623]/30 focus:ring-[#F5A623]/50 focus:border-[#F5A623] text-[#ededed] placeholder-[#ededed]/40'
+                    : 'bg-gray-50 border-gray-300 focus:ring-[#F5A623]/50 focus:border-[#F5A623] text-gray-900 placeholder-gray-400'
                   }`}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -782,8 +779,8 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
                   className={`w-full px-4 py-2 pr-10 border rounded-lg focus:ring-2 outline-none transition-all ${!isLogin && !isPasswordValid && password.length > 0
                       ? 'border-red-400/50 focus:ring-red-400/30'
                       : theme === 'dark'
-                        ? 'border-[#ffcc29]/30 focus:ring-[#ffcc29]/50 focus:border-[#ffcc29]'
-                        : 'border-gray-300 focus:ring-[#ffcc29]/50 focus:border-[#ffcc29]'
+                        ? 'border-[#F5A623]/30 focus:ring-[#F5A623]/50 focus:border-[#F5A623]'
+                        : 'border-gray-300 focus:ring-[#F5A623]/50 focus:border-[#F5A623]'
                     } ${theme === 'dark' ? 'bg-[#070A12] text-[#ededed] placeholder-[#ededed]/40' : 'bg-gray-50 text-gray-900 placeholder-gray-400'}`}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -802,7 +799,7 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
                   <button
                     type="button"
                     onClick={() => { setForgotPasswordStep('email'); setError(null); }}
-                    className="text-[#ffcc29] text-xs font-medium hover:underline focus:outline-none"
+                    className="text-[#F5A623] text-xs font-medium hover:underline focus:outline-none"
                   >
                     Forgot Password?
                   </button>
@@ -816,7 +813,7 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
                   ? 'bg-[#070A12] border border-slate-700/50'
                   : 'bg-gray-50 border border-gray-200'
                 }`}>
-                <p className="font-semibold text-[#ffcc29] mb-2 flex items-center gap-1">
+                <p className="font-semibold text-[#F5A623] mb-2 flex items-center gap-1">
                   <ShieldCheck className="w-3 h-3" /> Password Requirements:
                 </p>
                 <ul className="space-y-1">
@@ -847,7 +844,7 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
               {isLogin ? "Don't have an account? " : "Already have an account? "}
               <button
                 onClick={() => { setIsLogin(!isLogin); setError(null); setPassword(''); }}
-                className="text-[#ffcc29] font-semibold hover:underline focus:outline-none"
+                className="text-[#F5A623] font-semibold hover:underline focus:outline-none"
               >
                 {isLogin ? 'Sign Up' : 'Log In'}
               </button>

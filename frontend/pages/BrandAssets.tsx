@@ -9,6 +9,7 @@ import {
   Plus,
   RefreshCw,
   Sparkles,
+  LayoutGrid,
   Star,
   StarOff,
   Trash2,
@@ -17,10 +18,23 @@ import {
   X
 } from 'lucide-react';
 import { brandAssetsAPI } from '../services/api';
+import { useConfirm } from '../context/ConfirmContext';
+import { LOGO_GRID, LOGO_GRID_LABELS, LogoGridPosition } from '../constants/logoPositions';
+// Rendered as a tab panel rather than merged in: Inventory is ~1,150 lines and
+// this file ~980, and one 2,100-line component would be a poor edit surface.
+import InventoryPanel from './Inventory';
+import EnvironmentPanel from './EnvironmentAssets';
+import {
+  GravityHero,
+  GravityEmphasis,
+  GravityLabel,
+  GravityButton,
+  GravityFileInput,
+} from '../components/gravity';
 
 interface BrandAsset {
   _id: string;
-  type: 'logo' | 'template';
+  type: 'logo' | 'template' | 'environment';
   name: string;
   url: string;
   cloudinaryPublicId: string;
@@ -33,6 +47,7 @@ interface BrandAsset {
   isPrimary: boolean;
   createdAt: string;
 }
+
 
 interface ConfidenceScores {
   tone?: number;
@@ -131,6 +146,7 @@ const getFontFamilyForPreview = (value?: string) => {
 };
 
 const BrandAssets: React.FC = () => {
+  const confirm = useConfirm();
   const [logos, setLogos] = useState<BrandAsset[]>([]);
   const [profile, setProfile] = useState<BrandIntelligenceProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -160,6 +176,14 @@ const BrandAssets: React.FC = () => {
   const [pastCaption, setPastCaption] = useState('');
   const [pastPlatform, setPastPlatform] = useState('instagram');
   const [pastImagePreview, setPastImagePreview] = useState<string | null>(null);
+
+  // Brand Assets is the single home for brand material: identity, what the
+  // business offers, the space it operates in, and how it writes.
+  type BrandTab = 'brand' | 'products' | 'environment' | 'voice';
+  const [activeTab, setActiveTab] = useState<BrandTab>(() => {
+    const t = new URLSearchParams(window.location.hash.split('?')[1] || '').get('tab');
+    return (['brand', 'products', 'environment', 'voice'] as const).includes(t as BrandTab) ? (t as BrandTab) : 'brand';
+  });
 
   const isDarkMode = document.documentElement.classList.contains('dark');
   const primaryLogo = useMemo(() => logos.find((l) => l.isPrimary) || logos[0] || null, [logos]);
@@ -310,7 +334,7 @@ const BrandAssets: React.FC = () => {
   };
 
   const deleteLogo = async (asset: BrandAsset) => {
-    if (!window.confirm(`Delete logo "${asset.name}"?`)) return;
+    if (!(await confirm(`Delete logo "${asset.name}"?`, { title: 'Delete logo?', confirmLabel: 'Delete', danger: true }))) return;
     try {
       const response = await brandAssetsAPI.delete(asset._id);
       if (!response?.success) {
@@ -321,6 +345,31 @@ const BrandAssets: React.FC = () => {
       await loadData(true);
     } catch (err: any) {
       setError(err?.message || 'Failed to delete logo');
+    }
+  };
+
+  // Which logo's position grid is currently expanded — one at a time, since
+  // showing all of them open at once on a page with several logos gets noisy.
+  const [openPositionPickerId, setOpenPositionPickerId] = useState<string | null>(null);
+  const [savingPositionId, setSavingPositionId] = useState<string | null>(null);
+
+  const setLogoPosition = async (logo: BrandAsset, position: LogoGridPosition) => {
+    if (logo.defaultPosition === position) return;
+    setSavingPositionId(logo._id);
+    // Optimistic — this is where the logo will land on the NEXT generation,
+    // not a slow server-side rendering step, so there's nothing to wait on.
+    setLogos((prev) => prev.map((l) => (l._id === logo._id ? { ...l, defaultPosition: position } : l)));
+    try {
+      const response = await brandAssetsAPI.update(logo._id, { defaultPosition: position });
+      if (!response?.success) {
+        setError(response?.message || 'Failed to update logo position');
+        await loadData(true);
+      }
+    } catch (err: any) {
+      setError(err?.message || 'Failed to update logo position');
+      await loadData(true);
+    } finally {
+      setSavingPositionId(null);
     }
   };
 
@@ -385,9 +434,10 @@ const BrandAssets: React.FC = () => {
     }
   };
 
-  const handlePastPostImageSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  // Takes the File directly rather than the change event, so it can be driven
+  // by GravityFileInput (which hides the real input to escape native chrome).
+  const handlePastPostImageSelect = async (file?: File) => {
     try {
-      const file = event.target.files?.[0];
       if (!file) return;
       if (!file.type.startsWith('image/')) {
         setError('Past post file must be an image');
@@ -435,7 +485,7 @@ const BrandAssets: React.FC = () => {
 
   const deletePastPost = async (postId?: string) => {
     if (!postId) return;
-    if (!window.confirm('Delete this past post sample?')) return;
+    if (!(await confirm('Delete this past post sample?', { title: 'Delete past post sample?', confirmLabel: 'Delete', danger: true }))) return;
     try {
       const response = await brandAssetsAPI.deletePastPostSample(postId);
       if (!response?.success) {
@@ -464,56 +514,75 @@ const BrandAssets: React.FC = () => {
   if (loading) {
     return (
       <div className={`min-h-screen flex items-center justify-center ${isDarkMode ? 'bg-[#070A12]' : 'bg-gray-100'}`}>
-        <Loader2 className="w-8 h-8 animate-spin text-[#FFCC29]" />
+        <Loader2 className="w-8 h-8 animate-spin text-[#F5A623]" />
       </div>
     );
   }
 
   return (
-    <div className={`min-h-screen p-6 ${isDarkMode ? 'bg-[#070A12]' : 'bg-gray-100'}`}>
+    <div className="min-h-screen p-6">
       <div className="max-w-7xl mx-auto space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className={`text-3xl font-bold flex items-center gap-3 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-              <Palette className="w-8 h-8 text-[#FFCC29]" />
-              Brand Intelligence & Assets
-            </h1>
-            <p className={`mt-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-              Save your brand identity once and auto-apply it in every campaign.
-            </p>
-          </div>
-          <button
-            onClick={() => loadData(true)}
-            disabled={refreshing}
-            className="px-4 py-2 rounded-lg bg-[#FFCC29] text-[#070A12] font-semibold hover:bg-[#FFCC29]/90 disabled:opacity-60 flex items-center gap-2"
-          >
-            {refreshing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+        <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
+          <GravityHero
+            align="left"
+            eyebrow="Brand Assets"
+            headline={<>Teach Gravity your <GravityEmphasis>look</GravityEmphasis></>}
+            subcopy="Save your brand identity once and auto-apply it in every campaign."
+            className="!mb-0"
+          />
+          <GravityButton variant="ghost" onClick={() => loadData(true)} disabled={refreshing} className="flex-shrink-0">
+            {refreshing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4 text-[#F5A623]" />}
             Refresh
-          </button>
+          </GravityButton>
         </div>
 
         {error && (
-          <div className="p-4 rounded-lg border border-red-500/40 bg-red-500/10 text-red-400 flex items-center gap-3">
-            <AlertCircle className="w-5 h-5 flex-shrink-0" />
+          <div className="px-5 py-3.5 rounded-xl border border-red-500/30 bg-red-500/[0.08] text-[13px] text-red-200/90 flex items-center gap-3">
+            <AlertCircle className="w-4 h-4 flex-shrink-0 text-red-400/80" />
             <span>{error}</span>
-            <button onClick={() => setError(null)} className="ml-auto">
+            <button onClick={() => setError(null)} className="ml-auto p-1 rounded-md text-red-300/60 hover:text-red-200 hover:bg-red-500/10 transition-colors">
               <X className="w-4 h-4" />
             </button>
           </div>
         )}
 
         {success && (
-          <div className="p-4 rounded-lg border border-emerald-500/40 bg-emerald-500/10 text-emerald-400 flex items-center gap-3">
-            <CheckCircle className="w-5 h-5 flex-shrink-0" />
+          <div className="px-5 py-3.5 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.07] text-[13px] text-emerald-200 flex items-center gap-3">
+            <CheckCircle className="w-4 h-4 flex-shrink-0" />
             <span>{success}</span>
           </div>
         )}
 
+        {/* Same pill-shaped switcher as Create's Campaign/Single post/Carousel
+            toggle — the one tab control style the whole app should share. */}
+        <div className="overflow-x-auto">
+          <div className="inline-flex items-center gap-1 p-1 rounded-full bg-white/[0.03] border border-white/[0.06]">
+            {([
+              { id: 'brand', label: 'Brand' },
+              { id: 'products', label: 'Products & Services' },
+              { id: 'environment', label: 'Environment' },
+              { id: 'voice', label: 'Voice' },
+            ] as const).map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setActiveTab(t.id)}
+                className={`whitespace-nowrap h-9 px-5 rounded-full text-[13px] font-semibold transition-colors ${
+                  activeTab === t.id ? 'bg-white/[0.10] text-[#F5F4F1]' : 'text-white/55 hover:text-white/80'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {activeTab === 'brand' && (
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-          <section className={`xl:col-span-1 rounded-2xl border p-5 ${isDarkMode ? 'bg-[#0D1117] border-slate-700/60' : 'bg-white border-gray-200'}`}>
+          <section className={`xl:col-span-1 rounded-2xl border p-5 border-white/[0.06] bg-white/[0.02]`}>
             <div className="flex items-center justify-between mb-4">
-              <h2 className={`text-lg font-semibold flex items-center gap-2 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                <ImageIcon className="w-5 h-5 text-[#FFCC29]" />
+              <h2 className={"font-serif-display text-[20px] text-[#F5F4F1] flex items-center gap-2"}>
+                <ImageIcon className="w-5 h-5 text-[#F5A623]" />
                 Brand Logos
               </h2>
               <span className={`text-xs px-2 py-1 rounded-full ${isDarkMode ? 'bg-slate-800 text-gray-300' : 'bg-gray-100 text-gray-700'}`}>
@@ -524,7 +593,7 @@ const BrandAssets: React.FC = () => {
             <div
               onDragOver={(e) => e.preventDefault()}
               onDrop={handleLogoDrop}
-              className={`border-2 border-dashed rounded-xl p-4 text-center transition-colors ${isDarkMode ? 'border-slate-600 bg-slate-800/40 hover:border-[#FFCC29]/60' : 'border-gray-300 bg-gray-50 hover:border-[#FFCC29]'
+              className={`border-2 border-dashed rounded-xl p-4 text-center transition-colors ${isDarkMode ? 'border-slate-600 bg-slate-800/40 hover:border-[#F5A623]/60' : 'border-gray-300 bg-gray-50 hover:border-[#F5A623]'
                 }`}
             >
               {logoPreview ? (
@@ -566,7 +635,7 @@ const BrandAssets: React.FC = () => {
                 <button
                   onClick={uploadLogo}
                   disabled={uploadingLogo}
-                  className="w-full px-4 py-2 rounded-lg bg-[#FFCC29] text-[#070A12] font-semibold hover:bg-[#FFCC29]/90 disabled:opacity-60 flex items-center justify-center gap-2"
+                  className="w-full px-4 py-2 rounded-lg bg-[#F5A623] text-[#070A12] font-semibold hover:bg-[#F5A623]/90 disabled:opacity-60 flex items-center justify-center gap-2"
                 >
                   {uploadingLogo ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
                   {uploadingLogo ? 'Uploading...' : 'Upload Logo'}
@@ -584,7 +653,7 @@ const BrandAssets: React.FC = () => {
                     <div
                       key={logo._id}
                       className={`group border rounded-lg overflow-hidden ${isDarkMode ? 'border-slate-700 bg-slate-800/50' : 'border-gray-200 bg-gray-50'
-                        } ${logo.isPrimary ? 'ring-2 ring-[#FFCC29]' : ''}`}
+                        } ${logo.isPrimary ? 'ring-2 ring-[#F5A623]' : ''}`}
                     >
                       <div className="aspect-square p-3 flex items-center justify-center">
                         <img src={logo.url} alt={logo.name} className="max-w-full max-h-full object-contain" />
@@ -594,7 +663,7 @@ const BrandAssets: React.FC = () => {
                         <div className="flex items-center gap-1">
                           <button
                             onClick={() => setPrimaryLogo(logo._id)}
-                            className={`p-1 rounded ${logo.isPrimary ? 'bg-[#FFCC29] text-[#070A12]' : isDarkMode ? 'text-gray-300 hover:bg-slate-700' : 'text-gray-700 hover:bg-gray-200'}`}
+                            className={`p-1 rounded ${logo.isPrimary ? 'bg-[#F5A623] text-[#070A12]' : isDarkMode ? 'text-gray-300 hover:bg-slate-700' : 'text-gray-700 hover:bg-gray-200'}`}
                             title={logo.isPrimary ? 'Primary' : 'Set primary'}
                           >
                             {logo.isPrimary ? <Star className="w-3.5 h-3.5 fill-current" /> : <StarOff className="w-3.5 h-3.5" />}
@@ -608,6 +677,62 @@ const BrandAssets: React.FC = () => {
                           </button>
                         </div>
                       </div>
+
+                      {/* A bare icon here was easy to miss entirely — a user
+                          asked where logo-position selection was despite this
+                          already existing. A labeled row reads as a control,
+                          not decoration. */}
+                      <button
+                        onClick={() => setOpenPositionPickerId((cur) => (cur === logo._id ? null : logo._id))}
+                        className={`w-full flex items-center justify-between gap-1.5 px-2 py-1.5 border-t text-[11px] transition-colors ${
+                          openPositionPickerId === logo._id
+                            ? 'bg-[#F5A623]/10 text-[#F5A623]'
+                            : isDarkMode
+                              ? 'border-slate-700 text-gray-400 hover:bg-slate-700/60 hover:text-gray-200'
+                              : 'border-gray-200 text-gray-500 hover:bg-gray-100 hover:text-gray-700'
+                        }`}
+                      >
+                        <span className="flex items-center gap-1.5">
+                          <LayoutGrid className="w-3 h-3" />
+                          Position: {LOGO_GRID_LABELS[(logo.defaultPosition as LogoGridPosition)] || 'Bottom right'}
+                        </span>
+                      </button>
+
+                      {/* Two rows (top/bottom) x three columns (left/center/right) —
+                          laid out to visually match the frame the logo will actually
+                          sit inside, so picking a spot here reads as picking a spot
+                          on the post, not choosing from an abstract list. */}
+                      {openPositionPickerId === logo._id && (
+                        <div className={`p-2 border-t ${isDarkMode ? 'border-slate-700 bg-slate-900/40' : 'border-gray-200 bg-white'}`}>
+                          <p className={`text-[10px] uppercase tracking-wide mb-1.5 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                            Default position
+                          </p>
+                          <div className="grid grid-cols-3 gap-1">
+                            {LOGO_GRID.map((pos) => {
+                              const active = (logo.defaultPosition || 'bottom-right') === pos;
+                              return (
+                                <button
+                                  key={pos}
+                                  disabled={savingPositionId === logo._id}
+                                  onClick={() => setLogoPosition(logo, pos)}
+                                  title={LOGO_GRID_LABELS[pos]}
+                                  className={`aspect-[4/3] rounded border flex items-center justify-center transition-colors disabled:opacity-50 ${
+                                    active
+                                      ? 'bg-[#F5A623] border-[#F5A623]'
+                                      : isDarkMode
+                                        ? 'border-slate-700 bg-slate-800/60 hover:bg-slate-700'
+                                        : 'border-gray-200 bg-gray-50 hover:bg-gray-100'
+                                  }`}
+                                >
+                                  <span
+                                    className={`w-2 h-2 rounded-sm ${active ? 'bg-[#070A12]' : isDarkMode ? 'bg-gray-500' : 'bg-gray-400'}`}
+                                  />
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -615,10 +740,10 @@ const BrandAssets: React.FC = () => {
             </div>
           </section>
 
-          <section className={`xl:col-span-2 rounded-2xl border p-5 ${isDarkMode ? 'bg-[#0D1117] border-slate-700/60' : 'bg-white border-gray-200'}`}>
+          <section className={`xl:col-span-2 rounded-2xl border p-5 border-white/[0.06] bg-white/[0.02]`}>
             <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-              <h2 className={`text-lg font-semibold flex items-center gap-2 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                <BrainCircuit className="w-5 h-5 text-[#FFCC29]" />
+              <h2 className={"font-serif-display text-[20px] text-[#F5F4F1] flex items-center gap-2"}>
+                <BrainCircuit className="w-5 h-5 text-[#F5A623]" />
                 Brand Profile
               </h2>
               <div className="flex items-center gap-2">
@@ -634,7 +759,7 @@ const BrandAssets: React.FC = () => {
                 <button
                   onClick={saveProfile}
                   disabled={savingProfile}
-                  className="px-4 py-2 rounded-lg bg-[#FFCC29] text-[#070A12] font-semibold hover:bg-[#FFCC29]/90 disabled:opacity-60 flex items-center gap-2"
+                  className="px-4 py-2 rounded-lg bg-[#F5A623] text-[#070A12] font-semibold hover:bg-[#F5A623]/90 disabled:opacity-60 flex items-center gap-2"
                 >
                   {savingProfile ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
                   Save Profile
@@ -692,7 +817,7 @@ const BrandAssets: React.FC = () => {
                   <input
                     value={secondaryColor}
                     onChange={(e) => setSecondaryColor(e.target.value)}
-                    placeholder="#FFCC29"
+                    placeholder="#F5A623"
                     className={`flex-1 px-3 py-2 rounded-lg border ${isDarkMode ? 'bg-slate-800 border-slate-600 text-white' : 'bg-white border-gray-300 text-gray-900'
                       }`}
                   />
@@ -737,7 +862,7 @@ const BrandAssets: React.FC = () => {
             </div>
 
             <div className="mt-5">
-              <h3 className={`text-sm font-semibold uppercase tracking-wide mb-3 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+              <h3 className={"gravity-label mb-3"}>
                 Profile Overrides
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -810,13 +935,25 @@ const BrandAssets: React.FC = () => {
 
           </section>
         </div>
+        )}
 
-        <section className={`rounded-2xl border p-5 ${isDarkMode ? 'bg-[#0D1117] border-slate-700/60' : 'bg-white border-gray-200'}`}>
+        {activeTab === 'products' && <InventoryPanel embedded />}
+
+        {activeTab === 'environment' && <EnvironmentPanel />}
+
+        {activeTab === 'voice' && (
+        <section className={`rounded-2xl border p-5 border-white/[0.06] bg-white/[0.02]`}>
           <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-            <h2 className={`text-lg font-semibold flex items-center gap-2 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-              <Sparkles className="w-5 h-5 text-[#FFCC29]" />
-              Past Campaign Learning
-            </h2>
+            <div>
+              <h2 className={"font-serif-display text-[20px] text-[#F5F4F1] flex items-center gap-2"}>
+                <Sparkles className="w-5 h-5 text-[#F5A623]" />
+                Teach Gravity your voice
+              </h2>
+              <p className="text-[12.5px] text-white/45 mt-1 max-w-[560px]">
+                Paste captions from posts you have already published. Gravity reads them for your
+                recurring hashtags, openers, CTA phrasing and rhythm, and writes in that voice.
+              </p>
+            </div>
             <span className={`text-xs px-2 py-1 rounded-full ${isDarkMode ? 'bg-slate-800 text-gray-300' : 'bg-gray-100 text-gray-700'}`}>
               {(profile?.pastPosts || []).length} samples
             </span>
@@ -848,10 +985,16 @@ const BrandAssets: React.FC = () => {
                   }`}
               />
 
-              <label className="block">
-                <span className={`text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Image Sample (Optional)</span>
-                <input type="file" accept="image/*" className="mt-2 block w-full text-sm" onChange={handlePastPostImageSelect} />
-              </label>
+              <div className="block">
+                <GravityLabel>Image Sample (Optional)</GravityLabel>
+                <GravityFileInput
+                  accept="image/*"
+                  className="mt-2"
+                  buttonText="Choose image"
+                  fileName={pastImagePreview ? 'Image selected' : undefined}
+                  onFile={handlePastPostImageSelect}
+                />
+              </div>
 
               {pastImagePreview && (
                 <div className="relative rounded-lg overflow-hidden border border-slate-600/50">
@@ -868,7 +1011,7 @@ const BrandAssets: React.FC = () => {
               <button
                 onClick={addPastPost}
                 disabled={addingPastPost}
-                className="w-full px-4 py-2 rounded-lg bg-[#FFCC29] text-[#070A12] font-semibold hover:bg-[#FFCC29]/90 disabled:opacity-60 flex items-center justify-center gap-2"
+                className="w-full px-4 py-2 rounded-lg bg-[#F5A623] text-[#070A12] font-semibold hover:bg-[#F5A623]/90 disabled:opacity-60 flex items-center justify-center gap-2"
               >
                 {addingPastPost ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                 {addingPastPost ? 'Adding...' : 'Add Sample'}
@@ -877,7 +1020,7 @@ const BrandAssets: React.FC = () => {
 
             <div className="lg:col-span-2 space-y-4">
               <div className={`rounded-xl border p-4 ${isDarkMode ? 'border-slate-700 bg-slate-800/30' : 'border-gray-200 bg-gray-50'}`}>
-                <h3 className={`text-sm font-semibold uppercase tracking-wide mb-3 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                <h3 className={"gravity-label mb-3"}>
                   Detected Pattern Summary
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
@@ -942,6 +1085,7 @@ const BrandAssets: React.FC = () => {
             </div>
           </div>
         </section>
+        )}
 
         {!profile?.hasBrandAssets && !profile?.hasPastPosts && (
           <section className={`rounded-2xl border p-4 ${isDarkMode ? 'border-slate-700 bg-slate-800/30 text-gray-300' : 'border-gray-200 bg-gray-50 text-gray-700'}`}>

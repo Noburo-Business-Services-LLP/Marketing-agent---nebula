@@ -41,6 +41,32 @@ const draftSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  // The exact text sent to the image model, as opposed to imagePrompt above,
+  // which is only the seed description the caller supplied. Surfaced in the UI
+  // so you can see why an image came out the way it did.
+  // The overlay text the content prompt asked for, kept alongside the caption
+  // so the image step and the UI agree on what was actually requested.
+  imageText: {
+    type: String,
+    default: ''
+  },
+  // What the Creative Director decided before any image was rendered — the
+  // concept it chose and the visual treatment it picked. Shown in the UI so
+  // a weak result can be traced to a decision, not just a picture, and read
+  // back on the next generation so the account does not keep landing on the
+  // same idea.
+  creativeConcept: {
+    type: String,
+    default: ''
+  },
+  visualTreatment: {
+    type: String,
+    default: ''
+  },
+  imagePromptResolved: {
+    type: String,
+    default: ''
+  },
   platforms: [{
     type: String
   }],
@@ -70,14 +96,40 @@ const draftSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  // A carousel is one post made of several ordered images that tell a single
+  // story. Kept as a sub-array rather than separate drafts so the slides stay
+  // together through approval and scheduling, and so their order survives.
+  carouselSlides: [{
+    order: { type: Number, required: true },
+    // What this slide does in the narrative: hook, build or payoff.
+    role: { type: String, default: '' },
+    headline: { type: String, default: '' },
+    // What this slide needs to make the audience understand or feel, from
+    // the master plan — distinct from headline, which is the on-image text.
+    storyPurpose: { type: String, default: '' },
+    imagePrompt: { type: String, default: '' },
+    // The text actually rendered on this slide's image. headline doubled as
+    // this before the master-plan flow existed; now the plan writes both
+    // separately, so they are stored separately.
+    imageText: { type: String, default: '' },
+    imageUrl: { type: String, default: '' },
+    creativeConcept: { type: String, default: '' },
+    visualTreatment: { type: String, default: '' }
+  }],
+  // The look every slide in a carousel shares. Held on the draft so a later
+  // regeneration of one slide can match the others instead of drifting.
+  carouselStyleGuide: {
+    type: String,
+    default: ''
+  },
   sourceType: {
     type: String,
-    enum: ['campaign', 'post', 'reel', 'calendar'],
+    enum: ['campaign', 'post', 'reel', 'calendar', 'carousel'],
     required: true
   },
   contentType: {
     type: String,
-    enum: ['campaign', 'post', 'reel'],
+    enum: ['campaign', 'post', 'reel', 'carousel'],
     default: 'campaign',
     index: true
   },

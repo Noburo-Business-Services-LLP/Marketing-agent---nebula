@@ -73,6 +73,7 @@ const notificationRoutes = require('./routes/notifications');
 
 // Brand Assets routes
 const brandAssetsRoutes = require('./routes/brandAssets');
+const ideasRoutes = require('./routes/ideas');
 
 // Ads / Boost routes
 const adsRoutes = require('./routes/ads');
@@ -93,6 +94,8 @@ const contentCalendarRoutes = require('./routes/contentCalendar');
 // Google Calendar routes
 const googleCalendarRoutes = require('./routes/googleCalendar');
 const productRoutes = require('./routes/products');
+const promptRoutes = require('./routes/prompts');
+const carouselRoutes = require('./routes/carousels');
 const videoGenerationRoutes = require('./routes/videoGeneration');
 const aiMemoryRoutes = require('./routes/aiMemory');
 const influencerRoutes = require('./routes/influencerRoutes');
@@ -113,6 +116,8 @@ const notificationScheduler = require('./services/notificationScheduler');
 const snapshotScheduler = require('./services/snapshotScheduler');
 const { startCampaignScheduler } = require('./services/campaignScheduler');
 const { startContentCalendarScheduler } = require('./services/contentCalendarService');
+const { startPerformanceTrackerScheduler } = require('./services/performanceTracker');
+const { startMemoryDistillationScheduler } = require('./services/memoryDistillation');
 const { initializeSocketHub } = require('./services/socketHub');
 const { startInboxPolling } = require('./services/socialInboxService');
 
@@ -420,6 +425,7 @@ app.use('/api/notifications', notificationRoutes);
 
 // Routes - Brand Assets
 app.use('/api/brand-assets', brandAssetsRoutes);
+app.use('/api/ideas', ideasRoutes);
 
 // Routes - Ads / Boost
 app.use('/api/ads', adsRoutes);
@@ -435,6 +441,8 @@ app.use('/api/content', contentRoutes);
 app.use('/api/content-calendar', contentCalendarRoutes);
 app.use('/api/google-calendar', googleCalendarRoutes);
 app.use('/api/products', productRoutes);
+app.use('/api/prompts', promptRoutes);
+app.use('/api/carousels', carouselRoutes);
 // Video generation has its own per-route limiters (job polling must not trip AI limiter).
 app.use('/api/video-generation', videoGenerationRoutes);
 app.use('/api/ai-memory', aiMemoryRoutes);
@@ -723,6 +731,20 @@ const startServer = async () => {
       startContentCalendarScheduler();
     } catch (schedulerError) {
       console.warn('Content calendar scheduler failed to start:', schedulerError.message);
+    }
+
+    // Start automatic performance-tracking scheduler (24h/3d/7d/2w/1m checks)
+    try {
+      startPerformanceTrackerScheduler();
+    } catch (schedulerError) {
+      console.warn('Performance tracker scheduler failed to start:', schedulerError.message);
+    }
+
+    // Start weekly AI memory distillation scheduler
+    try {
+      startMemoryDistillationScheduler();
+    } catch (schedulerError) {
+      console.warn('Memory distillation scheduler failed to start:', schedulerError.message);
     }
 
     // Initialize OTP email service
