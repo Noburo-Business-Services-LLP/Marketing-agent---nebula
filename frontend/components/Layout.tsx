@@ -223,7 +223,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
 
         {/* ================= SIDEBAR ================= */}
         <aside
-          className={`fixed inset-y-0 left-0 z-30 w-[240px] bg-[#111111] border-r border-[var(--gv-border-subtle)] transform transition-transform duration-300 ease-in-out md:translate-x-0 md:static md:inset-auto ${
+          className={`fixed inset-y-0 left-0 z-30 w-[240px] bg-[var(--gv-panel)] border-r border-[var(--gv-border-subtle)] transform transition-transform duration-300 ease-in-out md:translate-x-0 md:static md:inset-auto ${
             isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
           }`}
         >
@@ -317,7 +317,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
         {/* ================= MAIN COLUMN ================= */}
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           {/* Mobile top bar */}
-          <header className="md:hidden flex items-center justify-between px-4 h-14 border-b border-[var(--gv-border-subtle)] bg-[#0A0A0A]/80 backdrop-blur">
+          <header className="md:hidden flex items-center justify-between px-4 h-14 border-b border-[var(--gv-border-subtle)] bg-[var(--gv-panel)] backdrop-blur">
             <button
               onClick={() => setSidebarOpen(true)}
               className="text-[var(--gv-text-secondary)] hover:text-[var(--gv-accent-text)]"
