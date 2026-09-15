@@ -160,10 +160,20 @@ More importantly, `frontend/index.html` already has a global
    need to be re-derived for the light palette rather than blindly
    swapped, since a wash designed to lighten a dark background needs the
    opposite direction on a light one).
-4. **`components/Layout.tsx`** — add a sun/moon toggle icon button in the
-   sidebar, next to the account chip, calling the `toggleTheme()` that
-   already exists on `useTheme()`. This is the only new *behavior* in
-   this spec; everything else is visual.
+4. **`components/Layout.tsx`** — two things, found to both be necessary
+   while scoping the plan for this spec:
+   - The sidebar itself (nav items, account chip, "GRAVITY" wordmark,
+     help/logout links, mobile header — visible on every page, not just
+     the 7 files above) turns out to be hardcoded dark too, entirely
+     unconditional. The file's existing `useTheme` import is used
+     elsewhere, not for the sidebar. Without fixing this, the 7 themed
+     pages would sit inside a shell that stays permanently dark — a
+     visible seam, not a working light mode. Same token migration as
+     every other file in this list.
+   - Add a sun/moon toggle icon button in the sidebar, next to the
+     account chip, calling the `toggleTheme()` that already exists on
+     `useTheme()`. This is the only new *behavior* in this spec;
+     everything else is visual.
 
 ## Known edge cases
 
