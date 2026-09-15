@@ -21,9 +21,30 @@ import {
   ChevronDown,
   Star,
   Play,
-  Pause
-} from 'lucide-react';
-import { useSmartCalendarAutoFill } from '../hooks/useSmartCalendarAutoFill';
+  Pause,
+  Clock,
+  Crop,
+  Languages,
+  Layers,
+  Target,
+  Megaphone,
+  Calendar as CalendarIcon, SlidersHorizontal } from 'lucide-react';
+import {
+  GravityHero,
+  GravityEmphasis,
+  GravityLabel,
+  GravityPanel,
+  GravityMetaBox,
+  GravityOptionPopover,
+  GravityStepRail,
+  GravityFileInput,
+  GravityButton,
+} from '../components/gravity';
+import CalendarIdeaPicker from '../components/CalendarIdeaPicker';
+import PromptStudio from '../components/PromptStudio';
+import { useQuarkCosts } from '../hooks/useQuarkCosts';
+import { useConfirm } from '../context/ConfirmContext';
+import AssetPicker, { PickedAsset } from '../components/AssetPicker';
 import { getThemeClasses, useTheme } from '../context/ThemeContext';
 import { contentCalendarAPI, inventoryAPI, videoGenerationAPI, draftsAPI } from '../services/api';
 import { Product, Draft } from '../types';
@@ -83,46 +104,69 @@ function fileToDataUrl(file: Blob): Promise<string> {
   });
 }
 
+/* Step 1 settings — these were six side-by-side <select>s; they now feed
+   GravityMetaBox popovers, so each needs a display label as well as a value. */
+const DURATION_OPTIONS = [15, 30, 45, 60, 90, 120].map((n) => ({ value: String(n), label: `${n} sec` }));
+
+const ASPECT_RATIO_OPTIONS = [
+  { value: '9:16', label: '9:16 · Reels / Shorts (vertical)' },
+  { value: '16:9', label: '16:9 · YouTube (widescreen)' },
+  { value: '1:1', label: '1:1 · Instagram Square' },
+  { value: '4:5', label: '4:5 · Instagram Feed (portrait)' },
+];
+
+const LANGUAGE_OPTIONS = [
+  { value: 'en', label: 'English' },
+  { value: 'hi', label: 'Hindi (हिन्दी)' },
+  { value: 'ta', label: 'Tamil (தமிழ்)' },
+  { value: 'te', label: 'Telugu (తెలుగు)' },
+  { value: 'kn', label: 'Kannada (ಕನ್ನಡ)' },
+  { value: 'ml', label: 'Malayalam (മലയാളം)' },
+];
+
+const VOICE_GENDER_OPTIONS = [
+  { value: 'female', label: 'Female' },
+  { value: 'male', label: 'Male' },
+];
+
+const SCENE_COUNT_OPTIONS = [
+  { value: '', label: 'Auto — let Gravity decide' },
+  ...Array.from({ length: 10 }, (_, i) => ({ value: String(i + 1), label: `${i + 1} scene${i ? 's' : ''}` })),
+];
+
+const labelFor = (options: { value: string; label: string }[], value: string, fallback: string) =>
+  options.find((o) => o.value === String(value))?.label ?? fallback;
+
 const ReelGenerator: React.FC = () => {
   const [searchParams] = useSearchParams();
   const { isDarkMode } = useTheme();
   const theme = getThemeClasses(isDarkMode);
-  const panelClass = `${theme.bgCard} border ${isDarkMode ? 'border-slate-800' : 'border-slate-200'} rounded-2xl`;
-  const inputClass = `w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition ${isDarkMode
-    ? 'bg-slate-900 border-slate-700 text-white focus:border-[#ffcc29]'
-    : 'bg-white border-slate-300 text-slate-900 focus:border-[#ffcc29]'
-    }`;
+  // Both are used throughout the wizard, so defining them in Gravity terms
+  // here restyles every panel and field on the page from one place.
+  const panelClass = 'rounded-2xl border border-white/[0.06] bg-white/[0.02]';
+  const inputClass = 'w-full rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-2.5 text-sm text-[#F5F4F1] outline-none transition placeholder:text-white/25 focus:border-[#F5A623]/50';
+  // Which Step 1 MetaBox has its popover open (null = none). The settings that
+  // were six side-by-side <select>s are now MetaBoxes sharing this one slot.
+  const [openMetaBox, setOpenMetaBox] = useState<string | null>(null);
+  // Hidden file input driven by the Product MetaBox's "Upload image…" option.
+  const productImageInputRef = useRef<HTMLInputElement>(null);
 
   const [step, setStep] = useState(1);
-  const {
-    isAutoFillEnabled,
-    availableItems,
-    selectedItemId,
-    setSelectedItemId,
-    selectedItem,
-    isLoading: isCalendarLoading,
-    getMappedData
-  } = useSmartCalendarAutoFill('reel');
+  // Browsing planned ideas is unrelated to autoGenerate — that flag is about
+  // unattended background generation, not whether someone may look at the
+  // ideas they already planned. The old hook gated one on the other and
+  // returned nothing at all when auto-generation was off.
+  const [ideaPickerOpen, setIdeaPickerOpen] = useState(false);
+  const [pickedIdea, setPickedIdea] = useState<string>('');
 
-  // Clear the hook's auto-selected FIFO pick on mount so the user
-  // starts with NO tile approved. They browse the Smart Calendar
-  // tiles in Step 1 and explicitly click "Approve & Use This" on the
-  // one they want — that click sets selectedItemId, which fires the
-  // effect below and populates the input fields.
-  useEffect(() => {
-    setSelectedItemId('');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    if (isAutoFillEnabled && selectedItem) {
-      const data = getMappedData(selectedItem);
-      setDescription(data.story || data.caption);
-      setPromptText(data.videoPrompt);
-      setCaption(data.caption);
-      setHashtagsText(data.hashtags);
-    }
-  }, [isAutoFillEnabled, selectedItem]);
+  const applyCalendarIdea = (idea: any) => {
+    const combined = `${idea.creativeConcept || ''}${idea.shootType ? ` (Style: ${idea.shootType})` : ''}`.trim();
+    setDescription(idea.creativeConcept || idea.headline || '');
+    setPromptText(combined || idea.headline || '');
+    setCaption(idea.creativeConcept || '');
+    setHashtagsText(`#${(idea.contentPillar || 'Content').replace(/\s+/g, '')} #${(idea.objective || 'Goal').replace(/\s+/g, '')}`);
+    setPickedIdea(idea.headline || '');
+  };
 
   const [busy, setBusy] = useState(false);
   const [regeneratingSceneIds, setRegeneratingSceneIds] = useState<Set<string>>(new Set());
@@ -197,6 +241,11 @@ const ReelGenerator: React.FC = () => {
   // per-card regenerate. overridePrompt takes precedence over the
   // originally-generated referencePrompt so users can steer the result.
   const renderCharacterPortrait = async (charId: string, useOverride = false) => {
+    const existing = generatedCharactersRef.current.find((c) => c.id === charId);
+    // Only confirm when this replaces an existing portrait — the very
+    // first render for a character has nothing to lose, so asking "are
+    // you sure" there would just be friction.
+    if (existing?.portraitUrl && !(await confirmRegenerateCost(1, quarkCosts.video_character_portrait || 0, 'this character portrait'))) return;
     setGeneratedCharacters((prev) => prev.map((c) => c.id === charId ? { ...c, portraitLoading: true, portraitError: '' } : c));
     const ch = generatedCharactersRef.current.find((c) => c.id === charId);
     if (!ch) return;
@@ -230,6 +279,9 @@ const ReelGenerator: React.FC = () => {
       setCastImageError('No characters available yet.');
       return;
     }
+    // Only confirm when this replaces an existing cast image — the first
+    // render has nothing to lose.
+    if (castImageUrl && !(await confirmRegenerateCost(1, quarkCosts.video_character_portrait || 0, 'the cast reference image'))) return;
     const tweak = castTweakPrompt.trim();
     setCastImageLoading(true);
     setCastImageError('');
@@ -282,22 +334,11 @@ const ReelGenerator: React.FC = () => {
     }
   };
 
-  // Auto-fire character generation when the user enters Step 2 with an
-  // accepted concept (Path B — required flow). Skipping the concept step
-  // means no characters — the Character Designer needs approved story
-  // context to design specific, on-brief characters.
-  useEffect(() => {
-    if (
-      step === 2 &&
-      acceptedConcept &&
-      generatedCharacters.length === 0 &&
-      !generatingCharacters2 &&
-      !characterGenError
-    ) {
-      runCharacterGeneration();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, acceptedConcept]);
+  // Character generation is deliberately NOT auto-fired on entering Step 2.
+  // It costs credits and renders a cast reference image, so arriving at the
+  // step — including navigating back to re-read something — must not spend
+  // anything. The panel shows a Generate button instead; the Character
+  // Designer still requires an accepted concept for story context.
 
   // Pull the finished video URL from any of the fields the pipeline may
   // use — reel drafts write it into imageUrl/creative.videoUrl, video
@@ -314,6 +355,23 @@ const ReelGenerator: React.FC = () => {
       ''
     );
   };
+  const [promptStudioOpen, setPromptStudioOpen] = useState(false);
+  const quarkCosts = useQuarkCosts();
+  const confirmDialog = useConfirm();
+  // Every regenerate action re-runs a real vendor call, so it must confirm
+  // before spending Quarks — same policy as image Regenerate elsewhere in
+  // the app (GravityCreate/GravityApprove/DraftPreviewModal).
+  const confirmRegenerateCost = (count: number, costPerUnit: number, label: string) => {
+    const total = count * costPerUnit;
+    const msg = total > 0 ? `This costs ${total} Quark${total === 1 ? '' : 's'}.` : 'This replaces what you have now.';
+    return confirmDialog(msg, { title: `Regenerate ${label}?`, confirmLabel: 'Regenerate' });
+  };
+  // Products/services featured in the video, and the environment it is set
+  // in. Both now come from Brand Assets rather than upload-only.
+  const [productPickerOpen, setProductPickerOpen] = useState(false);
+  const [pickedProducts, setPickedProducts] = useState<PickedAsset[]>([]);
+  const [envPickerOpen, setEnvPickerOpen] = useState(false);
+  const [pickedEnvironment, setPickedEnvironment] = useState<PickedAsset[]>([]);
   const [successMessage, setSuccessMessage] = useState('');
 
   // Persistent Queue background worker progress states
@@ -410,12 +468,21 @@ const ReelGenerator: React.FC = () => {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return;
       const saved = JSON.parse(raw);
-      if (saved.description) setDescription(saved.description);
-      if (Array.isArray(saved.concepts) && saved.concepts.length) setConcepts(saved.concepts);
-      if (saved.conceptsRecommended) setConceptsRecommended(saved.conceptsRecommended);
-      if (saved.conceptsReason) setConceptsReason(saved.conceptsReason);
-      if (saved.acceptedConceptId) setAcceptedConceptId(saved.acceptedConceptId);
-      if (saved.acceptedConcept) setAcceptedConcept(saved.acceptedConcept);
+      const savedBrief = String(saved.description || '').trim();
+      if (savedBrief) setDescription(savedBrief);
+
+      // Concepts are derived from the brief, so they are only restored
+      // alongside it. Restoring them on their own left three concepts sitting
+      // above an empty brief with no way to replace them: the Generate button
+      // hides once concepts exist, and Regenerate is disabled while the brief
+      // is empty — a dead end you could only escape by clearing storage.
+      if (savedBrief && Array.isArray(saved.concepts) && saved.concepts.length) {
+        setConcepts(saved.concepts);
+        if (saved.conceptsRecommended) setConceptsRecommended(saved.conceptsRecommended);
+        if (saved.conceptsReason) setConceptsReason(saved.conceptsReason);
+        if (saved.acceptedConceptId) setAcceptedConceptId(saved.acceptedConceptId);
+        if (saved.acceptedConcept) setAcceptedConcept(saved.acceptedConcept);
+      }
       if (Array.isArray(saved.generatedCharacters) && saved.generatedCharacters.length) {
         setGeneratedCharacters(saved.generatedCharacters);
       }
@@ -519,6 +586,14 @@ const ReelGenerator: React.FC = () => {
   }, [languageCode]);
 
   const [sceneCount, setSceneCount] = useState<number | ''>('');
+
+  // Mirrors estimateSceneCount() in services/videoGenerationPipeline.js —
+  // that is the actual scene count the backend charges for, so the badge
+  // on the generate button reflects the same formula rather than a
+  // client-side guess that could drift from it.
+  const estimatedSceneCount = Math.max(1, Math.min(10,
+    Number(sceneCount) || Math.round(durationSeconds / 6)
+  ));
   const [selectedProductId, setSelectedProductId] = useState('');
   const [inputImageData, setInputImageData] = useState('');
   const [inputImageName, setInputImageName] = useState('');
@@ -639,7 +714,17 @@ const ReelGenerator: React.FC = () => {
     loadVideoDrafts();
   }, []);
 
+  // Skips the mount run. This effect is declared before the resume effect
+  // below, so on mount it fired with jobId still '' and deleted the stored
+  // id before the resume effect could read it — which is why resuming after
+  // a refresh never worked: you silently lost your place in the wizard.
+  // Clearing is still correct when jobId is emptied later (reset, delete).
+  const wizardJobIdPersisted = useRef(false);
   useEffect(() => {
+    if (!wizardJobIdPersisted.current) {
+      wizardJobIdPersisted.current = true;
+      if (!jobId) return;
+    }
     try {
       if (jobId) {
         localStorage.setItem('nebula_ai_video_wizard_jobId', jobId);
@@ -657,12 +742,27 @@ const ReelGenerator: React.FC = () => {
 
   useEffect(() => {
     // Resume last open draft after refresh.
+    //
+    // The stored id can outlive the draft it points at — deleting a draft
+    // never cleared it. Previously the failed load was swallowed and jobId
+    // was left set, so every later save 404'd and the wizard was stuck for
+    // good with no way to recover. A load failure must therefore clear the
+    // stored id and start clean.
     try {
       const savedJobId = localStorage.getItem('nebula_ai_video_wizard_jobId') || '';
       if (!savedJobId) return;
       setShowWizard(true);
       setJobId(savedJobId);
-      refreshDraft(savedJobId, { syncStep: true });
+      refreshDraft(savedJobId, { syncStep: true }).catch(() => {
+        try {
+          localStorage.removeItem('nebula_ai_video_wizard_jobId');
+          localStorage.removeItem('nebula_ai_video_wizard_step');
+        } catch (_) { }
+        setJobId('');
+        setDraft(null);
+        setStep(1);
+        setError('That draft is no longer available, so we started you on a new one.');
+      });
     } catch (_) {
       // ignore
     }
@@ -1319,8 +1419,17 @@ setCharacterAge(nextDraft?.characterAge || '');
       durationSeconds,
       sceneCount: sceneCount || undefined,
       imageData: inputImageData || undefined,
-      productId: selectedProduct?._id || undefined,
-      product: selectedProduct || undefined,
+      productId: pickedProducts[0]?.id || undefined,
+      product: pickedProducts[0]
+        ? {
+          _id: pickedProducts[0].id,
+          name: pickedProducts[0].name,
+          description: pickedProducts[0].description || '',
+          imageUrl: pickedProducts[0].imageUrl
+        }
+        : undefined,
+      // Everything chosen, so a bundle or range all appears.
+      productReferenceImages: pickedProducts.map((x) => x.imageUrl).filter(Boolean),
       aspectRatio,
       languageCode,
       environment: environmentEnabled ? {
@@ -1340,6 +1449,36 @@ setCharacterAge(nextDraft?.characterAge || '');
     setDraft(response.draft || null);
     await loadVideoDrafts();
     return response.jobId;
+  };
+
+  // Extracted from the button's inline handler: the concept action is now
+  // rendered in two places — above the concepts when there are none to
+  // generate, below them once they exist — so it needs a shared reference.
+  const runConceptGeneration = async () => {
+    if (!description.trim()) {
+      setConceptError('Describe the video first.');
+      return;
+    }
+    setConceptError('');
+    setGeneratingConcepts(true);
+    setAcceptedConceptId('');
+    setConcepts([]);
+    try {
+      const res = await videoGenerationAPI.generateConcepts({
+        description: description.trim(),
+        durationSeconds: Number(durationSeconds) || 30,
+      });
+      if (!res?.success || !Array.isArray(res.concepts) || res.concepts.length === 0) {
+        throw new Error(res?.message || 'No concepts returned. Try again.');
+      }
+      setConcepts(res.concepts as VideoConcept[]);
+      setConceptsRecommended(res.recommended || '');
+      setConceptsReason(res.recommendationReason || '');
+    } catch (e: any) {
+      setConceptError(e?.message || 'Failed to generate concepts.');
+    } finally {
+      setGeneratingConcepts(false);
+    }
   };
 
   const step1Next = async () => withBusy(async () => {
@@ -1439,8 +1578,17 @@ setCharacterAge(nextDraft?.characterAge || '');
       durationSeconds,
       sceneCount: sceneCount || undefined,
       imageData: inputImageData || undefined,
-      productId: selectedProduct?._id || undefined,
-      product: selectedProduct || undefined,
+      productId: pickedProducts[0]?.id || undefined,
+      product: pickedProducts[0]
+        ? {
+          _id: pickedProducts[0].id,
+          name: pickedProducts[0].name,
+          description: pickedProducts[0].description || '',
+          imageUrl: pickedProducts[0].imageUrl
+        }
+        : undefined,
+      // Everything chosen, so a bundle or range all appears.
+      productReferenceImages: pickedProducts.map((x) => x.imageUrl).filter(Boolean),
       videoType: 'reel',
       aspectRatio,
       languageCode,
@@ -1531,7 +1679,11 @@ setCharacterAge(nextDraft?.characterAge || '');
   //            scene enrichment is its own ~2000-token request so nothing
   //            gets truncated. Scene N appears in the UI the moment it's
   //            ready while scene N+1 is generating in the background.
-  const generatePromptAndScenes = async () => withBusy(async () => {
+  const generatePromptAndScenes = async () => {
+    // Only confirm when this replaces an existing script/scene breakdown —
+    // the first generation has nothing to lose.
+    if (scenes.length > 0 && !(await confirmDialog('This replaces the current one.', { title: 'Regenerate the script and scene breakdown?', confirmLabel: 'Regenerate' }))) return;
+    return withBusy(async () => {
     if (!jobId) throw new Error('Draft missing. Complete step 1 first.');
 
     // 1) Generate the structured strategy prompt (writes draft.prompt).
@@ -1596,7 +1748,8 @@ setCharacterAge(nextDraft?.characterAge || '');
     }
     setPendingSceneIndex(null);
     setTotalScenesForRun(0);
-  });
+    });
+  };
 
   const saveStep2EditsAndNext = async () => withBusy(async () => {
     if (!jobId) throw new Error('Draft missing');
@@ -1620,7 +1773,10 @@ setCharacterAge(nextDraft?.characterAge || '');
   // in the UI the moment Nano Banana returns it — no big-batch wait, and
   // the user can see progress live. The cast image from Step 2 is passed
   // as an identity anchor so every face matches the approved characters.
-  const generateSceneImages = async () => withBusy(async () => {
+  const generateSceneImages = async () => {
+    if (!Array.isArray(scenes) || scenes.length === 0) return;
+    if (!(await confirmRegenerateCost(scenes.length, quarkCosts.video_scene_image || 0, `${scenes.length} scene image${scenes.length === 1 ? '' : 's'}`))) return;
+    return withBusy(async () => {
     if (!jobId) throw new Error('Draft missing');
     if (!Array.isArray(scenes) || scenes.length === 0) {
       throw new Error('No scenes yet — generate Script + Scenes first.');
@@ -1647,7 +1803,8 @@ setCharacterAge(nextDraft?.characterAge || '');
     }
     setPendingSceneIndex(null);
     setTotalScenesForRun(0);
-  });
+    });
+  };
 
   // Toggle the brand-logo overlay on a single scene image.
   // mode: 'watermark' (subtle corner) | 'prominent' (larger, wall-sign
@@ -1696,6 +1853,7 @@ setCharacterAge(nextDraft?.characterAge || '');
 
   const regenerateSceneImage = async (scene: any) => {
     if (!jobId) { setError('Draft missing'); return; }
+    if (!(await confirmRegenerateCost(1, quarkCosts.video_scene_image || 0, 'this scene image'))) return;
     const sid = String(scene.sceneId || '');
     // Find the scene's index in the current scenes array (source of
     // truth for the single-scene endpoint).
@@ -1732,6 +1890,7 @@ setCharacterAge(nextDraft?.characterAge || '');
 
   const regenerateScene = async (scene: any) => {
     if (!jobId) { setError('Draft missing'); return; }
+    if (!(await confirmDialog('This replaces its current script details.', { title: "Regenerate this scene's breakdown?", confirmLabel: 'Regenerate' }))) return;
     const sid = String(scene.sceneId || '');
     markSceneRegenerating(sid, true);
     setError('');
@@ -1756,7 +1915,10 @@ setCharacterAge(nextDraft?.characterAge || '');
   // firing /generateSingleVideoClip one at a time so each clip lands
   // in the UI the moment Kling returns it. Skips scenes that already
   // have a clipUrl (allowing partial-retry after mid-run API exhaust).
-  const generateClips = async () => withBusy(async () => {
+  const generateClips = async () => {
+    const pending = (scenes || []).filter((s: any) => !s.clipUrl && s.imageUrl).length;
+    if (pending > 0 && !(await confirmRegenerateCost(pending, quarkCosts.video_scene_clip || 0, `${pending} scene clip${pending === 1 ? '' : 's'}`))) return;
+    return withBusy(async () => {
     if (!jobId) throw new Error('Draft missing');
     if (!Array.isArray(scenes) || scenes.length === 0) {
       throw new Error('No scenes to render — generate scenes + images first.');
@@ -1787,7 +1949,8 @@ setCharacterAge(nextDraft?.characterAge || '');
     }
     setPendingSceneIndex(null);
     setTotalScenesForRun(0);
-  });
+    });
+  };
 
   // Regenerate a single scene's clip. If `tweak` is provided, it's
   // appended to the Kling prompt as a hard override (user gets to
@@ -1796,6 +1959,7 @@ setCharacterAge(nextDraft?.characterAge || '');
     if (!jobId) { setError('Draft missing'); return; }
     const scene = scenes[sceneIdx];
     if (!scene) return;
+    if (!(await confirmRegenerateCost(1, quarkCosts.video_scene_clip || 0, 'this scene clip'))) return;
     const sid = String(scene.sceneId || sceneIdx);
     markSceneRegenerating(sid, true);
     setError('');
@@ -1998,7 +2162,7 @@ setCharacterAge(nextDraft?.characterAge || '');
 
   const deleteVideoDraft = async (id: string, title = 'this AI video') => {
     if (!id || deletingDraftId) return;
-    const ok = window.confirm(`Delete "${title}"? This will remove the draft and generated video files.`);
+    const ok = await confirmDialog('This removes the draft and generated video files.', { title: `Delete "${title}"?`, confirmLabel: 'Delete', danger: true });
     if (!ok) return;
 
     setDeletingDraftId(id);
@@ -2023,7 +2187,7 @@ setCharacterAge(nextDraft?.characterAge || '');
   const deleteGlobalDraft = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!id || deletingDraftId) return;
-    const ok = window.confirm(`Delete this draft? This will permanently remove the draft.`);
+    const ok = await confirmDialog('This permanently removes the draft.', { title: 'Delete this draft?', confirmLabel: 'Delete', danger: true });
     if (!ok) return;
 
     setDeletingDraftId(id);
@@ -2055,7 +2219,7 @@ setCharacterAge(nextDraft?.characterAge || '');
   const statusPillClass = (status: string) => {
     if (status === 'posted') return 'bg-green-500/15 text-green-300 border-green-500/30';
     if (status === 'scheduled') return 'bg-blue-500/15 text-blue-300 border-blue-500/30';
-    if (status === 'created') return 'bg-[#ffcc29]/15 text-[#ffcc29] border-[#ffcc29]/30';
+    if (status === 'created') return 'bg-[#F5A623]/15 text-[#F5A623] border-[#F5A623]/30';
     return isDarkMode ? 'bg-slate-800 text-slate-300 border-slate-700' : 'bg-slate-100 text-slate-700 border-slate-300';
   };
 
@@ -2063,7 +2227,7 @@ setCharacterAge(nextDraft?.characterAge || '');
     ? (isDarkMode
       ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
       : 'bg-slate-200 text-slate-400 cursor-not-allowed')
-    : 'bg-[#ffcc29] text-black hover:bg-[#f0bd18]'
+    : 'bg-[#F5A623] text-black hover:bg-[#ffb833]'
     }`;
 
   const canStep1Next = !busy && !!description.trim();
@@ -2093,22 +2257,94 @@ setCharacterAge(nextDraft?.characterAge || '');
   return (
     <div className={`p-6 min-h-screen ${isDarkMode ? 'bg-[#070A12]' : 'bg-slate-50'}`}>
       <div className="max-w-6xl mx-auto space-y-6">
-        <div>
-          <h1 className={`text-2xl font-bold ${theme.text}`}>AI Video Manager</h1>
-          <p className={theme.textSecondary}>Create, schedule, and track your AI videos in one place.</p>
-        </div>
+        {/* In the wizard, each step already carries its own GravityHero as
+            the display headline — a page-level one on top would stack two
+            competing titles, so this collapses to a compact meta line
+            instead. Browsing (not in the wizard) has no step hero to lean
+            on, so it gets the full page-level hero like every other page. */}
+        {showWizard ? (
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <GravityLabel>Videos</GravityLabel>
+              <p className="text-[13px] text-white/45 mt-1">Create, schedule, and track your AI videos in one place.</p>
+            </div>
+            {/* Every step of this wizard runs on a prompt. They are reachable
+                from here so a weak result can be traced to the prompt that
+                produced it without leaving the page. */}
+            <button
+              onClick={() => setPromptStudioOpen(true)}
+              className="shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-[13px] font-semibold border border-white/[0.12] text-[#F5F4F1] hover:bg-white/[0.05] hover:border-[#F5A623]/40 transition-all"
+            >
+              <SlidersHorizontal className="w-4 h-4 text-[#F5A623]" />
+              Edit the prompts
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <GravityHero
+              align="left"
+              eyebrow="Videos"
+              headline={<>Bring your brand to <GravityEmphasis>life</GravityEmphasis></>}
+              subcopy="Create, schedule, and track your AI videos in one place."
+              className="!mb-0"
+            />
+            <button
+              onClick={() => setPromptStudioOpen(true)}
+              className="shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-[13px] font-semibold border border-white/[0.12] text-[#F5F4F1] hover:bg-white/[0.05] hover:border-[#F5A623]/40 transition-all"
+            >
+              <SlidersHorizontal className="w-4 h-4 text-[#F5A623]" />
+              Edit the prompts
+            </button>
+          </div>
+        )}
+
+        <AssetPicker
+          open={productPickerOpen}
+          onClose={() => setProductPickerOpen(false)}
+          source="products"
+          selected={pickedProducts}
+          onChange={setPickedProducts}
+        />
+
+        <AssetPicker
+          open={envPickerOpen}
+          onClose={() => setEnvPickerOpen(false)}
+          source="environment"
+          selected={pickedEnvironment}
+          onChange={(assets) => {
+            setPickedEnvironment(assets);
+            // Merge into the existing references rather than replacing them,
+            // so a catalogued space and an uploaded one can sit side by side.
+            setEnvironmentRefs((prev) => {
+              const uploads = prev.filter((r) => r.source === 'upload');
+              const fromAssets = assets.map((a) => ({
+                url: a.dataUrl ? '' : a.imageUrl,
+                dataUrl: a.dataUrl || '',
+                source: 'brand-asset' as const,
+                alt: a.name
+              }));
+              return [...uploads, ...fromAssets].slice(0, 5);
+            });
+          }}
+          max={5}
+        />
+
+        <PromptStudio
+          open={promptStudioOpen}
+          onClose={() => setPromptStudioOpen(false)}
+          focus="video.story"
+        />
 
         {successMessage && (
-          <div className={`rounded-xl border px-4 py-3 text-sm font-medium ${isDarkMode
-            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200'
-            : 'bg-emerald-50 border-emerald-200 text-emerald-800'
-            }`}>
+          <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/[0.07] px-5 py-3.5 text-[13px] font-medium text-emerald-200">
             {successMessage}
           </div>
         )}
 
-        <div className={`border-b overflow-x-auto ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'}`}>
-          <div className="flex space-x-6 min-w-max">
+        {/* Same pill-shaped switcher as Create's Campaign/Single post/Carousel
+            toggle — the one tab control style the whole app should share. */}
+        <div className="overflow-x-auto">
+          <div className="inline-flex items-center gap-1 p-1 rounded-full bg-white/[0.03] border border-white/[0.06]">
             {[
               { id: 'create', label: 'Create', icon: Plus },
               { id: 'all', label: 'All AI Videos', icon: null },
@@ -2132,12 +2368,11 @@ setCharacterAge(nextDraft?.characterAge || '');
                       setSuccessMessage('');
                     }
                   }}
-                  className={`pb-4 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${active
-                    ? 'border-[#ffcc29] text-[#ffcc29]'
-                    : `border-transparent ${theme.text} hover:text-[#ffcc29] hover:border-[#ffcc29]/30`
-                    }`}
+                  className={`whitespace-nowrap h-9 px-5 rounded-full text-[13px] font-semibold transition-colors flex items-center gap-2 ${
+                    active ? 'bg-white/[0.10] text-[#F5F4F1]' : 'text-white/55 hover:text-white/80'
+                  }`}
                 >
-                  {Icon && <Icon className="w-4 h-4" />}
+                  {Icon && <Icon className="w-3.5 h-3.5" />}
                   {tab.label}
                 </button>
               );
@@ -2168,7 +2403,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                           else openVideoDraft(item.generationProgress?.jobId || item._id);
                         }
                       }}
-                      className={`text-left rounded-2xl border overflow-hidden shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg cursor-pointer ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 hover:border-[#ffcc29]/50' : 'bg-white border-slate-200 hover:border-[#ffcc29]/60'}`}
+                      className={`text-left rounded-2xl border overflow-hidden shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg cursor-pointer ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 hover:border-[#F5A623]/50' : 'bg-white border-slate-200 hover:border-[#F5A623]/60'}`}
                     >
                       <div className="relative">
                         {(() => {
@@ -2248,7 +2483,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                         else openVideoDraft(item.jobId);
                       }
                     }}
-                    className={`text-left rounded-2xl border overflow-hidden shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 hover:border-[#ffcc29]/50' : 'bg-white border-slate-200 hover:border-[#ffcc29]/60'
+                    className={`text-left rounded-2xl border overflow-hidden shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 hover:border-[#F5A623]/50' : 'bg-white border-slate-200 hover:border-[#F5A623]/60'
                       }`}
                   >
                     <div className="relative">
@@ -2319,7 +2554,7 @@ setCharacterAge(nextDraft?.characterAge || '');
               </div>
             ) : (
               <div className={`${panelClass} p-8 text-center`}>
-                <Film className="w-8 h-8 mx-auto text-[#ffcc29] mb-3" />
+                <Film className="w-8 h-8 mx-auto text-[#F5A623] mb-3" />
                 <p className={`font-semibold ${theme.text}`}>No AI videos in this tab yet.</p>
                 <p className={`text-sm mt-1 ${theme.textSecondary}`}>Create a new AI video to see it here.</p>
               </div>
@@ -2329,39 +2564,21 @@ setCharacterAge(nextDraft?.characterAge || '');
 
         {showWizard && (
           <>
-            <div className={`${panelClass} p-4`}>
-              <div className="grid grid-cols-2 md:grid-cols-6 lg:grid-cols-11 gap-2">
-                {WIZARD_STEPS.map(({ label, step: stepNo }, idx) => {
-                  // Position shown to the user stays 1..n so dropping the
-                  // publishing steps doesn't leave a gap before Final Output.
-                  const displayNo = idx + 1;
-                  const active = stepNo === step;
-                  const done = stepNo < step;
-                  // Final Output is also reachable any time the final video has been rendered
+            <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] px-6 py-5">
+              <GravityStepRail
+                steps={WIZARD_STEPS.map(({ label, step: stepNo }) => {
+                  // Final Output is also reachable any time the final video
+                  // has been rendered, not just once you've walked past it.
                   const finalReady = stepNo === FINAL_OUTPUT_STEP && !!(finalOutputUrl || finalVideoUrl);
-                  const clickable = done || finalReady;
-                  return (
-                    <button
-                      key={label}
-                      type="button"
-                      onClick={() => clickable && setStep(stepNo)}
-                      disabled={!clickable && !active}
-                      className={`text-xs px-2 py-2 rounded-lg border transition ${active
-                        ? 'bg-[#ffcc29] text-black border-[#ffcc29] font-bold'
-                        : done
-                          ? (isDarkMode
-                            ? 'bg-slate-800 border-slate-700 text-slate-100'
-                            : 'bg-slate-100 border-slate-300 text-slate-800')
-                          : (isDarkMode
-                            ? 'bg-slate-900 border-slate-800 text-slate-500'
-                            : 'bg-slate-50 border-slate-200 text-slate-400')
-                        }`}
-                    >
-                      {displayNo}. {label}
-                    </button>
-                  );
+                  const done = stepNo < step;
+                  return {
+                    label,
+                    state: stepNo === step ? 'active' : done ? 'done' : 'upcoming',
+                    clickable: done || finalReady,
+                  };
                 })}
-              </div>
+                onStepClick={(idx) => setStep(WIZARD_STEPS[idx].step)}
+              />
             </div>
 
             {step > 1 && step < 11 && (
@@ -2371,7 +2588,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                 disabled={busy}
                 className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-semibold transition-colors ${busy
                   ? (isDarkMode ? 'border-slate-800 text-slate-600 cursor-not-allowed' : 'border-slate-200 text-slate-400 cursor-not-allowed')
-                  : (isDarkMode ? 'border-slate-600 text-slate-200 hover:border-[#ffcc29] hover:text-[#ffcc29]' : 'border-slate-300 text-slate-700 hover:border-[#ffcc29] hover:text-[#b88f00]')
+                  : (isDarkMode ? 'border-slate-600 text-slate-200 hover:border-[#F5A623] hover:text-[#F5A623]' : 'border-slate-300 text-slate-700 hover:border-[#F5A623] hover:text-[#F5A623]')
                   }`}
               >
                 <ArrowLeft className="w-4 h-4" />
@@ -2380,8 +2597,24 @@ setCharacterAge(nextDraft?.characterAge || '');
             )}
 
             {error && (
-              <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-                {error}
+              <div className="rounded-xl border border-red-500/30 bg-red-500/[0.08] px-5 py-3.5 flex items-start justify-between gap-4">
+                <div className="flex-1">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-red-400/80 mb-1">
+                    Generation error
+                  </div>
+                  <div className="text-[13px] text-red-200/90">{error}</div>
+                </div>
+                {/* Dismissible rather than auto-clearing: this reports a real
+                    failure, so it should not vanish on its own — but it also
+                    must not follow you around the wizard forever. */}
+                <button
+                  type="button"
+                  onClick={() => setError('')}
+                  aria-label="Dismiss error"
+                  className="flex-shrink-0 p-1 rounded-md text-red-300/60 hover:text-red-200 hover:bg-red-500/10 transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               </div>
             )}
 
@@ -2390,21 +2623,21 @@ setCharacterAge(nextDraft?.characterAge || '');
                 }`}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <Loader2 className="w-5 h-5 text-[#ffcc29] animate-spin" />
+                    <Loader2 className="w-5 h-5 text-[#F5A623] animate-spin" />
                     <div>
                       <h3 className={`font-bold ${theme.text}`}>Background Worker Processing...</h3>
                       <p className={`text-xs ${theme.textSecondary}`}>
-                        Job: <span className="font-mono text-[#ffcc29]">{activeQueueJobId}</span> | Status: <span className="capitalize">{activeJobStatus}</span>
+                        Job: <span className="font-mono text-[#F5A623]">{activeQueueJobId}</span> | Status: <span className="capitalize">{activeJobStatus}</span>
                       </p>
                     </div>
                   </div>
-                  <span className="text-xl font-black text-[#ffcc29]">{activeJobProgress}%</span>
+                  <span className="text-xl font-black text-[#F5A623]">{activeJobProgress}%</span>
                 </div>
 
                 {/* Progress Bar */}
                 <div className={`w-full h-2 rounded-full overflow-hidden ${isDarkMode ? 'bg-slate-800' : 'bg-slate-100'}`}>
                   <div
-                    className="h-full bg-gradient-to-r from-[#ffcc29] to-[#f0bd18] transition-all duration-500 ease-out"
+                    className="h-full bg-gradient-to-r from-[#F5A623] to-[#ffb833] transition-all duration-500 ease-out"
                     style={{ width: `${activeJobProgress}%` }}
                   />
                 </div>
@@ -2471,270 +2704,204 @@ setCharacterAge(nextDraft?.characterAge || '');
             )}
 
             {step === 1 && (
-              <div className={`${panelClass} p-6 space-y-4`}>
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <h2 className={`font-bold text-lg ${theme.text}`}>Step 1: Input</h2>
-                  <div className="flex flex-col items-end gap-2">
-                    {isCalendarLoading && <span className="inline-flex items-center gap-1.5 text-[11px] text-white/60"><Loader2 className="w-3 h-3 animate-spin" /> Loading Smart Calendar…</span>}
-                  </div>
+              <div className="space-y-6">
+                <GravityHero
+                  eyebrow="Videos"
+                  headline={<>What are we <GravityEmphasis>filming</GravityEmphasis>?</>}
+                  subcopy="Describe the video once. Gravity writes the script, casts the voice, and renders every scene."
+                />
+                {/* Ideas already planned in the calendar. A button, not a
+                    permanent tile wall — the brief is what this step is for. */}
+                <div className="flex flex-wrap items-center justify-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setIdeaPickerOpen(true)}
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-[13px] font-semibold border border-white/[0.12] text-[#F5F4F1] hover:bg-white/[0.05] hover:border-[#F5A623]/40 transition-all"
+                  >
+                    <CalendarIcon className="w-4 h-4 text-[#F5A623]" />
+                    Pull an idea from your calendar
+                  </button>
+                  {pickedIdea && (
+                    <span className="text-[12px] text-white/45">
+                      Loaded: <span className="text-[#F5A623]">{pickedIdea}</span>
+                    </span>
+                  )}
                 </div>
 
-                {/* Smart Calendar suggestions — always visible on Step 1 so
-                    the user knows why tiles are/aren't showing. Four states:
-                    loading, disabled (autoGenerate off), enabled-but-empty,
-                    or tiles available. */}
-                {!isCalendarLoading && !isAutoFillEnabled && (
-                  <div className={`rounded-xl border border-white/10 bg-white/[0.02] p-4 flex items-start justify-between gap-3`}>
-                    <div className="flex-1">
-                      <p className={`text-[11px] font-semibold uppercase tracking-[0.16em] ${theme.textMuted}`}>Smart Calendar · off</p>
-                      <p className={`text-[13px] mt-1 ${theme.text}`}>
-                        Turn on Smart Calendar to see AI-generated reel briefs as tiles here.
-                      </p>
-                      <p className={`text-[11px] mt-1 ${theme.textSecondary}`}>
-                        Or just describe your video manually below.
-                      </p>
-                    </div>
-                    <a
-                      href="#/content-calendar"
-                      className="px-3 py-1.5 text-[11px] rounded-md border border-[#F5A623]/60 text-[#F5A623] hover:bg-[#F5A623]/10 font-semibold whitespace-nowrap"
-                    >
-                      Open Calendar →
-                    </a>
-                  </div>
-                )}
-                {isAutoFillEnabled && availableItems.length > 0 && (
-                  <div className="rounded-xl border border-[#F5A623]/30 bg-[#F5A623]/[0.04] p-4 space-y-3">
-                    <div className="flex items-baseline justify-between gap-3">
-                      <div>
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#F5A623]">
-                          Smart Calendar · {availableItems.length} pending reel{availableItems.length > 1 ? 's' : ''} this week
-                        </p>
-                        <p className={`text-[12px] mt-1 ${theme.textSecondary}`}>
-                          Approve one to load its brief as your input. Or scroll down and write manually.
-                        </p>
-                      </div>
-                      {selectedItemId && (
-                        <button
-                          onClick={() => { setSelectedItemId(''); setDescription(''); setPromptText(''); }}
-                          className="text-[11px] text-white/50 hover:text-white/85"
-                        >
-                          Clear selection
-                        </button>
-                      )}
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                      {availableItems.map((item) => {
-                        const isSelected = selectedItemId === item._id;
-                        return (
-                          <div
-                            key={item._id}
-                            className={`relative rounded-lg border p-3 transition-all ${
-                              isSelected
-                                ? 'border-[#F5A623] bg-[#F5A623]/10 ring-1 ring-[#F5A623]/40'
-                                : 'border-white/[0.08] bg-white/[0.02] hover:border-white/20'
-                            }`}
-                          >
-                            <div className="flex items-baseline justify-between gap-2">
-                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide bg-[#F5A623]/20 text-[#F5A623]">
-                                {item.format || 'Reel'}
-                              </span>
-                              {item.contentPillar && (
-                                <span className={`text-[10px] uppercase tracking-wide ${theme.textMuted}`}>
-                                  {item.contentPillar}
-                                </span>
-                              )}
-                            </div>
-                            <h4 className={`font-semibold text-sm mt-2 line-clamp-2 ${theme.text}`}>
-                              {item.headline || 'Untitled scene'}
-                            </h4>
-                            {item.creativeConcept && (
-                              <p className={`text-[12px] mt-1.5 line-clamp-3 ${theme.textSecondary}`}>
-                                {item.creativeConcept}
-                              </p>
-                            )}
-                            <div className={`flex flex-wrap gap-2 mt-2.5 text-[10px] ${theme.textMuted}`}>
-                              {item.objective && <span>🎯 {item.objective}</span>}
-                              {item.cta && <span>📢 {item.cta}</span>}
-                              {item.productNeeded && <span>📦 {item.productNeeded}</span>}
-                            </div>
-                            <button
-                              onClick={() => setSelectedItemId(item._id)}
-                              disabled={isSelected}
-                              className={`mt-3 w-full px-3 py-1.5 rounded-md text-[11px] font-semibold transition-colors ${
-                                isSelected
-                                  ? 'bg-[#F5A623] text-black cursor-default'
-                                  : 'border border-[#F5A623]/60 text-[#F5A623] hover:bg-[#F5A623]/10'
-                              }`}
-                            >
-                              {isSelected ? '✓ Approved — loaded as input' : 'Approve & Use This'}
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-                {isAutoFillEnabled && availableItems.length === 0 && !isCalendarLoading && (
-                  <div className={`rounded-lg border border-white/10 bg-white/[0.02] p-3 text-[12px] ${theme.textSecondary}`}>
-                    No pending reels in the Smart Calendar for this week. Write your video description below to create manually.
-                  </div>
-                )}
-
-                <textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  className={`${inputClass} min-h-[120px]`}
-                  placeholder={selectedItemId ? 'Loaded from Smart Calendar — you can edit before continuing…' : 'Or describe your own video here…'}
+                <CalendarIdeaPicker
+                  open={ideaPickerOpen}
+                  onClose={() => setIdeaPickerOpen(false)}
+                  onPick={applyCalendarIdea}
+                  type="reel"
                 />
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-                  <div>
-                    <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Duration</label>
-                    <select value={durationSeconds} onChange={(e) => setDurationSeconds(Number(e.target.value))} className={`${inputClass} mt-2`}>
-                      {[15, 30, 45, 60, 90, 120].map((item) => <option key={item} value={item}>{item} sec</option>)}
-                    </select>
+
+                {/* The one hero moment on this page — halo + travelling beam.
+                    Every other panel here stays plain so this stays special. */}
+                <GravityPanel halo beam>
+                  <GravityLabel gold className="mb-2">Video brief</GravityLabel>
+                  <textarea
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    rows={5}
+                    className="gravity-bare w-full bg-transparent border-none outline-none text-[14.5px] text-white/70 leading-relaxed resize-none placeholder:text-white/25"
+                    placeholder={pickedIdea
+                      ? 'Loaded from your calendar — edit before continuing…'
+                      : 'e.g. A 30-second walkthrough of our new filter coffee — close-ups of the pour, steam rising, ending on the storefront at golden hour.'}
+                  />
+                </GravityPanel>
+                {/* Settings. Previously six raw <select>s at xl:grid-cols-6;
+                    now MetaBoxes on the same two-column rhythm as Create. */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="relative">
+                    <GravityMetaBox
+                      label="Duration"
+                      value={`${durationSeconds} sec`}
+                      Icon={Clock}
+                      onClick={() => setOpenMetaBox(openMetaBox === 'duration' ? null : 'duration')}
+                    />
+                    <GravityOptionPopover
+                      open={openMetaBox === 'duration'}
+                      options={DURATION_OPTIONS}
+                      onPick={(v) => setDurationSeconds(Number(v))}
+                      onClose={() => setOpenMetaBox(null)}
+                    />
                   </div>
-                  <div>
-                    <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Aspect Ratio</label>
-                    <select
-                      value={aspectRatio}
-                      onChange={(e) => setAspectRatio(e.target.value as AspectRatio)}
-                      className={`${inputClass} mt-2`}
-                    >
-                      <option value="9:16">9:16 · Reels / Shorts (vertical)</option>
-                      <option value="16:9">16:9 · YouTube (widescreen)</option>
-                      <option value="1:1">1:1 · Instagram Square</option>
-                      <option value="4:5">4:5 · Instagram Feed (portrait)</option>
-                    </select>
-                    <p className={`text-[11px] mt-1 ${theme.textSecondary}`}>Images & clips render in this ratio.</p>
+
+                  <div className="relative">
+                    <GravityMetaBox
+                      label="Aspect Ratio"
+                      value={labelFor(ASPECT_RATIO_OPTIONS, aspectRatio, aspectRatio)}
+                      Icon={Crop}
+                      onClick={() => setOpenMetaBox(openMetaBox === 'aspect' ? null : 'aspect')}
+                    />
+                    <GravityOptionPopover
+                      open={openMetaBox === 'aspect'}
+                      options={ASPECT_RATIO_OPTIONS}
+                      onPick={(v) => setAspectRatio(v as AspectRatio)}
+                      onClose={() => setOpenMetaBox(null)}
+                    />
                   </div>
-                  <div>
-                    <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Video Language</label>
-                    <select
-                      value={languageCode}
-                      onChange={(e) => setLanguageCode(e.target.value as VideoLang)}
-                      className={`${inputClass} mt-2`}
-                    >
-                      <option value="en">English</option>
-                      <option value="hi">Hindi (हिन्दी)</option>
-                      <option value="ta">Tamil (தமிழ்)</option>
-                      <option value="te">Telugu (తెలుగు)</option>
-                      <option value="kn">Kannada (ಕನ್ನಡ)</option>
-                      <option value="ml">Malayalam (മലയാളം)</option>
-                    </select>
-                    <p className={`text-[11px] mt-1 ${theme.textSecondary}`}>Script + voiceover in this language.</p>
+
+                  <div className="relative">
+                    <GravityMetaBox
+                      label="Video Language"
+                      value={labelFor(LANGUAGE_OPTIONS, languageCode, 'English')}
+                      Icon={Languages}
+                      onClick={() => setOpenMetaBox(openMetaBox === 'language' ? null : 'language')}
+                    />
+                    <GravityOptionPopover
+                      open={openMetaBox === 'language'}
+                      options={LANGUAGE_OPTIONS}
+                      onPick={(v) => setLanguageCode(v as VideoLang)}
+                      onClose={() => setOpenMetaBox(null)}
+                    />
                   </div>
-                  <div>
-                    <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Voice Gender</label>
-                    <select
-                      value={voiceGender}
-                      onChange={(e) => {
-                        setVoiceGender(e.target.value as 'male' | 'female');
+
+                  <div className="relative">
+                    <GravityMetaBox
+                      label="Voice Gender"
+                      value={labelFor(VOICE_GENDER_OPTIONS, voiceGender, 'Female')}
+                      Icon={Mic}
+                      onClick={() => setOpenMetaBox(openMetaBox === 'voice' ? null : 'voice')}
+                    />
+                    <GravityOptionPopover
+                      open={openMetaBox === 'voice'}
+                      options={VOICE_GENDER_OPTIONS}
+                      onPick={(v) => {
+                        setVoiceGender(v as 'male' | 'female');
                         // Reset the selected voice so the user re-picks
                         // from the new gender's catalog on Step 6.
                         setSelectedVoiceId('');
                       }}
-                      className={`${inputClass} mt-2`}
-                    >
-                      <option value="female">Female</option>
-                      <option value="male">Male</option>
-                    </select>
-                    <p className={`text-[11px] mt-1 ${theme.textSecondary}`}>Filters the voice list on Audio Config.</p>
-                  </div>
-                  <div>
-                    <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Scene Count (Optional)</label>
-                    <input
-                      type="number"
-                      min={1}
-                      max={10}
-                      value={sceneCount}
-                      onChange={(e) => setSceneCount(e.target.value ? Number(e.target.value) : '')}
-                      className={`${inputClass} mt-2`}
+                      onClose={() => setOpenMetaBox(null)}
                     />
                   </div>
-                  <div>
-                    <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Upload Product Image (Optional)</label>
-                    <input type="file" accept="image/*" className="mt-2 text-sm" onChange={(e) => onInputImage(e.target.files?.[0])} />
-                    {inputImageName && <p className={`text-xs mt-1 ${theme.textSecondary}`}>{inputImageName}</p>}
+
+                  <div className="relative">
+                    <GravityMetaBox
+                      label="Scene Count"
+                      value={sceneCount ? `${sceneCount} scene${sceneCount === 1 ? '' : 's'}` : 'Auto'}
+                      Icon={Layers}
+                      onClick={() => setOpenMetaBox(openMetaBox === 'scenes' ? null : 'scenes')}
+                    />
+                    <GravityOptionPopover
+                      open={openMetaBox === 'scenes'}
+                      options={SCENE_COUNT_OPTIONS}
+                      onPick={(v) => setSceneCount(v ? Number(v) : '')}
+                      onClose={() => setOpenMetaBox(null)}
+                    />
+                  </div>
+
+                  {/* Upload and product-pick were two adjacent controls, but the
+                      existing code already treats them as mutually exclusive —
+                      picking a product clears the upload. One box says that. */}
+                  <div className="relative">
+                    <GravityMetaBox
+                      label="Product"
+                      value={
+                        pickedProducts.length === 0
+                          ? 'None'
+                          : pickedProducts.length === 1
+                            ? pickedProducts[0].name
+                            : `${pickedProducts.length} selected`
+                      }
+                      Icon={Package}
+                      onClick={() => setProductPickerOpen(true)}
+                    />
+                    <input
+                      ref={productImageInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => onInputImage(e.target.files?.[0])}
+                    />
                   </div>
                 </div>
-                <div>
-                  <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>OR Select Product</label>
-                  <select
-                    value={selectedProductId}
-                    onChange={(e) => {
-                      setSelectedProductId(e.target.value);
-                      if (e.target.value) {
-                        setInputImageData('');
-                        setInputImageName('');
-                      }
-                    }}
-                    className={`${inputClass} mt-2`}
-                  >
-                    <option value="">{loadingProducts ? 'Loading products...' : 'No product selected'}</option>
-                    {products.map((product) => <option key={product._id} value={product._id}>{product.name}</option>)}
-                  </select>
-                </div>
 
+                {/* Top row. Once concepts exist, Regenerate and Next move
+                    below them — otherwise you scroll through three long
+                    concept cards and the way forward is back up at the top.
+                    Auto-Generate stays here: it skips the concept step. */}
                 <div className="flex flex-wrap gap-3">
-                  {/* Generate Concept — creates 3 creative-director options
-                      the user must approve one before proceeding. */}
-                  <button
-                    onClick={async () => {
-                      if (!description.trim()) {
-                        setConceptError('Describe the video first.');
-                        return;
-                      }
-                      setConceptError('');
-                      setGeneratingConcepts(true);
-                      setAcceptedConceptId('');
-                      setConcepts([]);
-                      try {
-                        const res = await videoGenerationAPI.generateConcepts({
-                          description: description.trim(),
-                          durationSeconds: Number(durationSeconds) || 30,
-                        });
-                        if (!res?.success || !Array.isArray(res.concepts) || res.concepts.length === 0) {
-                          throw new Error(res?.message || 'No concepts returned. Try again.');
-                        }
-                        setConcepts(res.concepts as VideoConcept[]);
-                        setConceptsRecommended(res.recommended || '');
-                        setConceptsReason(res.recommendationReason || '');
-                      } catch (e: any) {
-                        setConceptError(e?.message || 'Failed to generate concepts.');
-                      } finally {
-                        setGeneratingConcepts(false);
-                      }
-                    }}
-                    disabled={generatingConcepts || !description.trim()}
-                    className={`px-6 py-3 rounded-xl font-bold transition-colors ${
-                      generatingConcepts || !description.trim()
-                        ? 'bg-[#F5A623]/40 text-[#1A1208]/50 cursor-not-allowed'
-                        : 'bg-[#F5A623] text-[#1A1208] hover:bg-[#ffb833]'
-                    }`}
-                  >
-                    {generatingConcepts ? (
-                      <><Loader2 className="w-4 h-4 animate-spin inline mr-2" />Generating concepts…</>
-                    ) : concepts.length > 0 ? '↻ Regenerate concepts' : '✨ Generate Concept'}
-                  </button>
-                  <button
-                    onClick={step1Next}
-                    disabled={!canStep1Next || (concepts.length > 0 && !acceptedConceptId)}
-                    className={primaryButtonClass(!canStep1Next || (concepts.length > 0 && !acceptedConceptId))}
-                    title={concepts.length > 0 && !acceptedConceptId ? 'Accept a concept first' : undefined}
-                  >
-                    {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Next'}
-                  </button>
+                  {concepts.length === 0 && (
+                    <>
+                      <button
+                        onClick={runConceptGeneration}
+                        disabled={generatingConcepts || !description.trim()}
+                        className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-[13px] font-semibold transition-all bg-[#F5A623] text-[#1A1208] hover:bg-[#ffb833] shadow-[0_4px_18px_rgba(245,166,35,0.20)] disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
+                      >
+                        {generatingConcepts ? (
+                          <><Loader2 className="w-4 h-4 animate-spin" />Generating concepts…</>
+                        ) : (
+                          <><Sparkles className="w-4 h-4" />Generate Concept</>
+                        )}
+                      </button>
+                      <button
+                        onClick={step1Next}
+                        disabled={!canStep1Next}
+                        className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-[13px] font-semibold transition-all border border-white/[0.12] text-[#F5F4F1] hover:bg-white/[0.05] hover:border-white/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Next'}
+                      </button>
+                    </>
+                  )}
                   <button
                     onClick={startAutoGenerate}
                     disabled={!canStep1Next || (concepts.length > 0 && !acceptedConceptId)}
-                    className={`px-6 py-3 rounded-xl font-bold transition-colors ${
-                      !canStep1Next || (concepts.length > 0 && !acceptedConceptId)
-                        ? 'bg-blue-900/50 text-blue-500/50 cursor-not-allowed'
-                        : 'bg-blue-500 text-white hover:bg-blue-600'
-                    }`}
+                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-[13px] font-semibold transition-all border border-white/[0.12] text-[#F5F4F1] hover:bg-white/[0.05] hover:border-white/20 disabled:opacity-40 disabled:cursor-not-allowed"
                     title={concepts.length > 0 && !acceptedConceptId ? 'Accept a concept first' : undefined}
                   >
-                    {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Auto-Generate Full Video'}
+                    {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : (
+                      <>
+                        <Film className="w-4 h-4 text-[#F5A623]" />
+                        Auto-Generate Full Video
+                        {quarkCosts.video_generated > 0 && (
+                          <span className="ml-0.5 px-1.5 py-0.5 rounded-md bg-white/[0.08] text-[11.5px] font-semibold tabular-nums">
+                            {(quarkCosts.video_base || 0) + quarkCosts.video_generated * estimatedSceneCount}
+                          </span>
+                        )}
+                      </>
+                    )}
                   </button>
                 </div>
 
@@ -2873,13 +3040,41 @@ setCharacterAge(nextDraft?.characterAge || '');
                     )}
                   </div>
                 )}
+
+                {/* The way forward, at the end of the concepts you just read. */}
+                {concepts.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-3 pt-2">
+                    <button
+                      onClick={step1Next}
+                      disabled={!canStep1Next || !acceptedConceptId}
+                      className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-[13px] font-semibold transition-all bg-[#F5A623] text-[#1A1208] hover:bg-[#ffb833] shadow-[0_4px_18px_rgba(245,166,35,0.20)] disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
+                      title={!acceptedConceptId ? 'Accept a concept first' : undefined}
+                    >
+                      {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Next'}
+                    </button>
+                    <button
+                      onClick={runConceptGeneration}
+                      disabled={generatingConcepts || !description.trim()}
+                      className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-[13px] font-semibold transition-all border border-white/[0.12] text-[#F5F4F1] hover:bg-white/[0.05] hover:border-white/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {generatingConcepts ? (
+                        <><Loader2 className="w-4 h-4 animate-spin" />Generating concepts…</>
+                      ) : (
+                        <><RefreshCcw className="w-4 h-4" />Regenerate concepts</>
+                      )}
+                    </button>
+                    {!acceptedConceptId && (
+                      <span className="text-[12px] text-white/40">Accept a concept above to continue.</span>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
             {step === 2 && (
-            <div className={`p-6 space-y-6 ${panelClass}`}>
+            <div className={`p-6 space-y-6 gravity-glow ${panelClass}`}>
               <div className="flex items-center justify-between mb-4">
-                <h2 className={`text-xl font-bold ${theme.text}`}>Character & Video Style Configuration</h2>
+                <GravityHero size="md" align="left" eyebrow="Videos" headline="Character & Video Style" className="!mb-0" />
                 {acceptedConcept && (
                   <div className="text-right">
                     <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#F5A623]">
@@ -2918,7 +3113,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                         Character Bible · from your accepted concept
                       </div>
                       <div className={`text-xs mt-1 ${theme.textSecondary}`}>
-                        Pick a character to build the video around. You can regenerate for a fresh cast.
+                        The full cast is generated together in one reference image. Click a name below to make that character the lead the video follows — the rest stay in the cast for scene consistency.
                       </div>
                     </div>
                     <button
@@ -2940,6 +3135,18 @@ setCharacterAge(nextDraft?.characterAge || '');
                     <div className="flex items-center gap-2 py-6 justify-center text-white/50 text-sm">
                       <Loader2 className="w-4 h-4 animate-spin" />
                       Designing characters that match your concept…
+                    </div>
+                  )}
+
+                  {!generatingCharacters2 && generatedCharacters.length === 0 && !characterGenError && (
+                    <div className="py-8 text-center">
+                      <Sparkles className="w-5 h-5 text-[#F5A623] mx-auto mb-2.5" />
+                      <div className="text-[13.5px] text-[#F5F4F1]">
+                        Ready to design your cast from “{acceptedConcept?.title || 'your concept'}”.
+                      </div>
+                      <div className="text-[12px] text-white/45 mt-1">
+                        Hit Generate above when you are — it costs Quarks, so nothing runs until you ask.
+                      </div>
                     </div>
                   )}
 
@@ -3083,7 +3290,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                   <span className={theme.text}>Preserve Character Identity</span>
                   <button
                     onClick={() => setPreserveIdentity(!preserveIdentity)}
-                    className={`flex-shrink-0 transition-colors ${preserveIdentity ? 'text-[#ffcc29]' : theme.textMuted}`}
+                    className={`flex-shrink-0 transition-colors ${preserveIdentity ? 'text-[#F5A623]' : theme.textMuted}`}
                     disabled={!characterEnabled}
                   >
                     {preserveIdentity ? <ToggleRight className="w-8 h-8" /> : <ToggleLeft className="w-8 h-8" />}
@@ -3093,7 +3300,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                   <span className={theme.text}>Include Brand Logo</span>
                   <button
                     onClick={() => setUseLogo(!useLogo)}
-                    className={`flex-shrink-0 transition-colors ${useLogo ? 'text-[#ffcc29]' : theme.textMuted}`}
+                    className={`flex-shrink-0 transition-colors ${useLogo ? 'text-[#F5A623]' : theme.textMuted}`}
                   >
                     {useLogo ? <ToggleRight className="w-8 h-8" /> : <ToggleLeft className="w-8 h-8" />}
                   </button>
@@ -3122,12 +3329,12 @@ setCharacterAge(nextDraft?.characterAge || '');
 
                     {characterSource === 'upload' ? (
                       <div>
-                        <label className={`block text-sm font-medium mb-1 ${theme.textMuted}`}>Upload Character Image</label>
-                        <input 
-                          type="file" 
+                        <div className="gravity-label mb-2">Upload Character Image</div>
+                        <GravityFileInput
                           accept="image/*"
-                          onChange={async (e) => {
-                            const file = e.target.files?.[0];
+                          buttonText="Choose image"
+                          fileName={characterImage ? 'Image selected' : undefined}
+                          onFile={async (file) => {
                             if (file) {
                               const base64 = await fileToDataUrl(file);
                               if (base64) {
@@ -3137,7 +3344,6 @@ setCharacterAge(nextDraft?.characterAge || '');
                               }
                             }
                           }}
-                          className={inputClass}
                         />
                         {characterImage && (
                           <div className="mt-2 relative inline-block">
@@ -3391,7 +3597,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                 <button
                   onClick={step2Next}
                   disabled={busy || (characterEnabled && !characterApproved && characterSource === 'generate')}
-                  className="px-6 py-2.5 bg-[#ffcc29] text-black font-semibold rounded-xl hover:bg-[#e6b825] transition disabled:opacity-50"
+                  className="px-6 py-2.5 bg-[#F5A623] text-black font-semibold rounded-xl hover:bg-[#ffb833] transition disabled:opacity-50"
                 >
                   {characterEnabled && !characterApproved && characterSource === 'generate' ? 'Approve Character to Continue' : 'Save & Next (Environment)'}
                 </button>
@@ -3400,28 +3606,32 @@ setCharacterAge(nextDraft?.characterAge || '');
           )}
 
           {step === 3 && (
-            <div className={`${panelClass} p-6 space-y-5`}>
+            <div className={`${panelClass} gravity-glow p-6 space-y-5`}>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
-                  <h2 className={`font-bold text-lg ${theme.text}`}>Step 3: Environment</h2>
+                  <GravityHero size="md" align="left" eyebrow="Videos" headline="Environment" />
                   <p className={`text-[12px] mt-1 ${theme.textSecondary}`}>
                     Lock every scene to your actual space (shop, showroom, workshop, storefront). Every image + clip will render inside this exact environment.
                   </p>
                 </div>
-                {/* ON/OFF toggle */}
-                <div className="flex items-center gap-2">
-                  <span className={`text-xs uppercase tracking-wide ${environmentEnabled ? theme.textMuted : theme.text}`}>OFF</span>
+                {/* ON/OFF toggle. flex-shrink-0 throughout: the knob is
+                    absolutely positioned with a fixed translate, so if the
+                    flex row squeezes the track the knob overflows it. */}
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <span className={`text-[10px] font-semibold uppercase tracking-[0.16em] ${environmentEnabled ? 'text-white/35' : 'text-[#F5F4F1]'}`}>OFF</span>
                   <button
                     onClick={() => {
                       setEnvironmentEnabled((v) => !v);
                       if (!environmentEnabled) loadBrandAssetImages();
                     }}
-                    className={`relative w-12 h-6 rounded-full transition-colors ${environmentEnabled ? 'bg-[#F5A623]' : 'bg-slate-600'}`}
+                    role="switch"
+                    aria-checked={environmentEnabled}
+                    className={`relative flex-shrink-0 w-12 h-6 rounded-full transition-colors ${environmentEnabled ? 'bg-[#F5A623]' : 'bg-white/[0.15]'}`}
                     aria-label="Toggle environment lock"
                   >
-                    <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${environmentEnabled ? 'translate-x-6' : 'translate-x-0.5'}`} />
+                    <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${environmentEnabled ? 'translate-x-6' : 'translate-x-0'}`} />
                   </button>
-                  <span className={`text-xs uppercase tracking-wide ${environmentEnabled ? theme.text : theme.textMuted}`}>ON</span>
+                  <span className={`text-[10px] font-semibold uppercase tracking-[0.16em] ${environmentEnabled ? 'text-[#F5F4F1]' : 'text-white/35'}`}>ON</span>
                 </div>
               </div>
 
@@ -3443,13 +3653,25 @@ setCharacterAge(nextDraft?.characterAge || '');
                     <p className={`text-[11px] mt-1 ${theme.textSecondary}`}>
                       Wide shot of the space + a detail or two. Same lighting / angle-of-day as you want the video to feel like.
                     </p>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="mt-3 text-sm"
-                      disabled={environmentRefs.length >= 5}
-                      onChange={(e) => onEnvironmentUpload(e.target.files?.[0])}
-                    />
+                    <div className="mt-3 flex flex-wrap items-center gap-2.5">
+                      <GravityFileInput
+                        accept="image/*"
+                        disabled={environmentRefs.length >= 5}
+                        buttonText="Upload reference"
+                        fileName={environmentRefs.length ? `${environmentRefs.length} of 5 added` : undefined}
+                        onFile={(f) => onEnvironmentUpload(f)}
+                      />
+                      {/* Spaces already photographed for the brand belong here
+                          too — uploading one again was the only option. */}
+                      <button
+                        onClick={() => setEnvPickerOpen(true)}
+                        disabled={environmentRefs.length >= 5}
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-[12.5px] font-semibold border border-white/[0.12] text-[#F5F4F1] hover:bg-white/[0.05] hover:border-[#F5A623]/40 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        <ImageIcon className="w-3.5 h-3.5 text-[#F5A623]" />
+                        Choose from Brand Assets
+                      </button>
+                    </div>
                     {environmentRefs.length >= 5 && (
                       <p className="text-[11px] mt-2 text-amber-400">Max 5 references. Remove one to add another.</p>
                     )}
@@ -3590,11 +3812,11 @@ setCharacterAge(nextDraft?.characterAge || '');
               const castLookup = new Map(generatedCharacters.map((c) => [c.id, c]));
 
               return (
-              <div className={`${panelClass} p-6 space-y-6`}>
+              <div className={`${panelClass} gravity-glow p-6 space-y-6`}>
                 {/* HEADER */}
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <h2 className={`font-bold text-lg ${theme.text}`}>Step 3: Script + Scenes</h2>
+                    <GravityHero size="md" align="left" eyebrow="Videos" headline="Script + Scenes" />
                     <p className={`text-xs mt-0.5 ${theme.textSecondary}`}>
                       Story arc · Voiceover · Scene-by-scene breakdown — production-ready and editable.
                     </p>
@@ -3685,7 +3907,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                         disabled={!voiceoverText}
                         className="text-[11px] font-semibold px-3 py-1.5 rounded-md border border-white/[0.10] hover:border-[#F5A623]/40 hover:text-[#F5A623] text-white/70 disabled:opacity-30"
                       >
-                        {voiceoverCopied ? '✓ Copied' : 'Copy for ElevenLabs'}
+                        {voiceoverCopied ? 'Copied' : 'Copy'}
                       </button>
                       <ChevronDown className={`w-4 h-4 text-white/50 transition-transform ${showVoiceover ? 'rotate-180' : ''}`} />
                     </div>
@@ -3974,9 +4196,9 @@ setCharacterAge(nextDraft?.characterAge || '');
             })()}
 
             {step === 5 && (
-              <div className={`${panelClass} p-6 space-y-4`}>
+              <div className={`${panelClass} gravity-glow p-6 space-y-4`}>
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <h2 className={`font-bold text-lg ${theme.text}`}>Step 5: Scene Images</h2>
+                  <GravityHero size="md" align="left" eyebrow="Videos" headline="Scene Images" />
                   <span className={`text-[11px] px-2 py-1 rounded-full border ${theme.textMuted} border-white/10`}>
                     Aspect: {aspectRatio} · Sequential render
                   </span>
@@ -3984,8 +4206,8 @@ setCharacterAge(nextDraft?.characterAge || '');
 
                 {/* Sequential progress banner while gen loop is running */}
                 {pendingSceneIndex !== null && totalScenesForRun > 0 && (
-                  <div className={`rounded-xl border border-[#ffcc29]/40 bg-[#ffcc29]/5 px-4 py-3 flex items-center gap-3`}>
-                    <Loader2 className="w-4 h-4 animate-spin text-[#ffcc29]" />
+                  <div className={`rounded-xl border border-[#F5A623]/40 bg-[#F5A623]/5 px-4 py-3 flex items-center gap-3`}>
+                    <Loader2 className="w-4 h-4 animate-spin text-[#F5A623]" />
                     <div className="flex-1">
                       <p className={`text-sm font-semibold ${theme.text}`}>
                         Rendering scene {pendingSceneIndex + 1} of {totalScenesForRun}…
@@ -3994,14 +4216,14 @@ setCharacterAge(nextDraft?.characterAge || '');
                         Nano Banana · consistent characters + locked environment
                       </p>
                     </div>
-                    <span className="text-xs text-[#ffcc29] font-semibold tabular-nums">
+                    <span className="text-xs text-[#F5A623] font-semibold tabular-nums">
                       {pendingSceneIndex + 1} / {totalScenesForRun}
                     </span>
                   </div>
                 )}
 
                 <div className="flex flex-wrap items-center gap-2">
-                  <button onClick={generateSceneImages} disabled={busy} className="px-4 py-2 rounded-xl border border-[#ffcc29] text-[#ffcc29] font-semibold">
+                  <button onClick={generateSceneImages} disabled={busy} className="px-4 py-2 rounded-xl border border-[#F5A623] text-[#F5A623] font-semibold">
                     {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : (scenes.some((s) => s.imageUrl) ? 'Regenerate All Scene Images' : 'Generate All Scene Images')}
                   </button>
                   {scenes.some((s) => s.imageUrl) && (
@@ -4040,7 +4262,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                         <div className="flex items-center justify-between gap-2">
                           <p className={`font-semibold ${theme.text}`}>{scene.title || `Scene ${idx + 1}`}</p>
                           {isRendering && (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-[#ffcc29]/15 border border-[#ffcc29]/40 text-[#ffcc29]">
+                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-[#F5A623]/15 border border-[#F5A623]/40 text-[#F5A623]">
                               <Loader2 className="w-3 h-3 animate-spin" /> Rendering
                             </span>
                           )}
@@ -4069,8 +4291,8 @@ setCharacterAge(nextDraft?.characterAge || '');
                             <div className="w-full h-full rounded-lg border border-dashed border-slate-600 flex items-center justify-center bg-black/10">
                               {isRendering ? (
                                 <div className="flex flex-col items-center gap-2">
-                                  <Loader2 className="w-8 h-8 text-[#ffcc29] animate-spin" />
-                                  <p className="text-xs font-semibold text-[#ffcc29] tracking-wide">Generating…</p>
+                                  <Loader2 className="w-8 h-8 text-[#F5A623] animate-spin" />
+                                  <p className="text-xs font-semibold text-[#F5A623] tracking-wide">Generating…</p>
                                 </div>
                               ) : isQueued ? (
                                 <div className="flex flex-col items-center gap-1 opacity-60">
@@ -4084,10 +4306,10 @@ setCharacterAge(nextDraft?.characterAge || '');
                           )}
                           {showSpinnerOverlay && scene.imageUrl && (
                             <div className="absolute inset-0 rounded-lg overflow-hidden pointer-events-none">
-                              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[#ffcc29]/15 to-transparent skeleton-shimmer" />
+                              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[#F5A623]/15 to-transparent skeleton-shimmer" />
                               <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/30 backdrop-blur-[2px]">
-                                <Sparkles className="w-6 h-6 text-[#ffcc29] animate-pulse" />
-                                <p className="text-xs font-semibold text-[#ffcc29] tracking-wide">
+                                <Sparkles className="w-6 h-6 text-[#F5A623] animate-pulse" />
+                                <p className="text-xs font-semibold text-[#F5A623] tracking-wide">
                                   {isRendering ? 'Generating…' : 'Regenerating…'}
                                 </p>
                               </div>
@@ -4098,7 +4320,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                           <button
                             onClick={() => regenerateSceneImage(scene)}
                             disabled={isRegen || isRendering}
-                            className="px-3 py-2 text-xs rounded-lg border border-[#ffcc29] text-[#ffcc29] hover:bg-[#ffcc29]/10 disabled:opacity-50 flex items-center gap-1.5"
+                            className="px-3 py-2 text-xs rounded-lg border border-[#F5A623] text-[#F5A623] hover:bg-[#F5A623]/10 disabled:opacity-50 flex items-center gap-1.5"
                           >
                             {isRegen ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCcw className="w-3 h-3" />}
                             {isRegen ? 'Regenerating' : 'Regenerate'}
@@ -4142,9 +4364,9 @@ setCharacterAge(nextDraft?.characterAge || '');
             )}
 
             {step === 6 && (
-              <div className={`${panelClass} p-6 space-y-4`}>
+              <div className={`${panelClass} gravity-glow p-6 space-y-4`}>
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <h2 className={`font-bold text-lg ${theme.text}`}>Step 4: Video Clip Generation</h2>
+                  <GravityHero size="md" align="left" eyebrow="Videos" headline="Video Clips" />
                   <span className={`text-[11px] px-2 py-1 rounded-full border ${theme.textMuted} border-white/10`}>
                     Aspect: {aspectRatio} · Sequential render
                   </span>
@@ -4152,8 +4374,8 @@ setCharacterAge(nextDraft?.characterAge || '');
 
                 {/* Sequential progress banner */}
                 {pendingSceneIndex !== null && totalScenesForRun > 0 && (
-                  <div className={`rounded-xl border border-[#ffcc29]/40 bg-[#ffcc29]/5 px-4 py-3 flex items-center gap-3`}>
-                    <Loader2 className="w-4 h-4 animate-spin text-[#ffcc29]" />
+                  <div className={`rounded-xl border border-[#F5A623]/40 bg-[#F5A623]/5 px-4 py-3 flex items-center gap-3`}>
+                    <Loader2 className="w-4 h-4 animate-spin text-[#F5A623]" />
                     <div>
                       <p className={`text-sm font-semibold ${theme.text}`}>
                         Rendering scene {pendingSceneIndex + 1} of {totalScenesForRun}
@@ -4166,7 +4388,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                 )}
 
                 <div className="flex flex-wrap gap-2">
-                  <button onClick={generateClips} disabled={busy} className="px-4 py-2 rounded-xl border border-[#ffcc29] text-[#ffcc29] font-semibold">
+                  <button onClick={generateClips} disabled={busy} className="px-4 py-2 rounded-xl border border-[#F5A623] text-[#F5A623] font-semibold">
                     {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : (scenes.some((s) => s.clipUrl) ? 'Resume / Continue' : 'Generate All Clips')}
                   </button>
                   {scenes.some((s) => s.clipUrl) && (
@@ -4211,9 +4433,9 @@ setCharacterAge(nextDraft?.characterAge || '');
                         </div>
 
                         {isPending || isRegen ? (
-                          <div className="w-full aspect-video rounded-lg border border-[#ffcc29]/40 bg-black/40 flex flex-col items-center justify-center gap-2">
-                            <Loader2 className="w-6 h-6 animate-spin text-[#ffcc29]" />
-                            <p className="text-xs text-[#ffcc29] font-semibold">
+                          <div className="w-full aspect-video rounded-lg border border-[#F5A623]/40 bg-black/40 flex flex-col items-center justify-center gap-2">
+                            <Loader2 className="w-6 h-6 animate-spin text-[#F5A623]" />
+                            <p className="text-xs text-[#F5A623] font-semibold">
                               {isRegen ? 'Regenerating this scene…' : 'Rendering…'}
                             </p>
                           </div>
@@ -4228,7 +4450,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                           <button
                             onClick={() => regenerateSceneClip(idx, '')}
                             disabled={busy || isRegen || isPending || !scene.imageUrl}
-                            className="px-3 py-2 text-xs rounded-lg border border-[#ffcc29] text-[#ffcc29] hover:bg-[#ffcc29]/10 disabled:opacity-50 flex items-center gap-1.5"
+                            className="px-3 py-2 text-xs rounded-lg border border-[#F5A623] text-[#F5A623] hover:bg-[#F5A623]/10 disabled:opacity-50 flex items-center gap-1.5"
                           >
                             {isRegen ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCcw className="w-3 h-3" />}
                             {isRegen ? 'Regenerating' : 'Regenerate'}
@@ -4259,8 +4481,8 @@ setCharacterAge(nextDraft?.characterAge || '');
             )}
 
             {step === 7 && (
-              <div className={`${panelClass} p-6 space-y-4`}>
-                <h2 className={`font-bold text-lg ${theme.text}`}>Step 5: Audio Configuration</h2>
+              <div className={`${panelClass} gravity-glow p-6 space-y-4`}>
+                <GravityHero size="md" align="left" eyebrow="Videos" headline="Audio Config" />
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
                     <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Audio</label>
@@ -4493,8 +4715,12 @@ setCharacterAge(nextDraft?.characterAge || '');
 
                 {audioEnabled && audioMode === 'upload' && (
                   <div className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3 space-y-3`}>
-                    <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Upload Voice / Record Voice</label>
-                    <input type="file" accept="audio/*" onChange={(e) => onManualVoiceUpload(e.target.files?.[0])} className="text-sm" />
+                    <div className="gravity-label">Upload Voice / Record Voice</div>
+                    <GravityFileInput
+                      accept="audio/*"
+                      buttonText="Choose audio"
+                      onFile={(f) => onManualVoiceUpload(f)}
+                    />
                     <div className="flex gap-2">
                       {!isRecording ? (
                         <button onClick={startVoiceRecording} className="px-3 py-2 rounded-lg border border-slate-500 text-slate-200 text-sm">
@@ -4511,7 +4737,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                 )}
 
                 <div className="flex flex-wrap gap-3">
-                  <button onClick={generateAudioPreview} disabled={!canAudioPreview} className="px-4 py-2 rounded-xl border border-[#ffcc29] text-[#ffcc29] font-semibold disabled:opacity-60">
+                  <button onClick={generateAudioPreview} disabled={!canAudioPreview} className="px-4 py-2 rounded-xl border border-[#F5A623] text-[#F5A623] font-semibold disabled:opacity-60">
                     {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Generate Audio Preview'}
                   </button>
                   <button onClick={mixAudio} disabled={busy || !generatedTracks} className="px-4 py-2 rounded-xl border border-slate-500 text-slate-300 font-semibold disabled:opacity-60">
@@ -4594,8 +4820,8 @@ setCharacterAge(nextDraft?.characterAge || '');
             )}
 
             {step === 8 && (
-              <div className={`${panelClass} p-6 space-y-4`}>
-                <h2 className={`font-bold text-lg ${theme.text}`}>Step 6: Audio Mixing Preview</h2>
+              <div className={`${panelClass} gravity-glow p-6 space-y-4`}>
+                <GravityHero size="md" align="left" eyebrow="Videos" headline="Audio Mix" />
                 {activeAudioScript && (
                   <div className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3`}>
                     <p className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Voice Script</p>
@@ -4624,7 +4850,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                 </div>
 
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                  <button onClick={mixAudio} disabled={busy} className="px-5 py-3 rounded-xl border border-[#ffcc29] text-[#ffcc29] font-semibold disabled:opacity-60">
+                  <button onClick={mixAudio} disabled={busy} className="px-5 py-3 rounded-xl border border-[#F5A623] text-[#F5A623] font-semibold disabled:opacity-60">
                     {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Mix Audio'}
                   </button>
                   <button onClick={() => setStep(9)} disabled={!canStep6Next} className={primaryButtonClass(!canStep6Next)}>Next</button>
@@ -4639,10 +4865,10 @@ setCharacterAge(nextDraft?.characterAge || '');
             )}
 
             {step === 9 && (
-              <div className={`${panelClass} p-6 space-y-4`}>
-                <h2 className={`font-bold text-lg ${theme.text}`}>Step 7: Video + Audio Merge</h2>
+              <div className={`${panelClass} gravity-glow p-6 space-y-4`}>
+                <GravityHero size="md" align="left" eyebrow="Videos" headline="Video Merge" />
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                  <button onClick={mergeVideo} disabled={busy} className="px-5 py-3 rounded-xl border border-[#ffcc29] text-[#ffcc29] font-semibold disabled:opacity-60">
+                  <button onClick={mergeVideo} disabled={busy} className="px-5 py-3 rounded-xl border border-[#F5A623] text-[#F5A623] font-semibold disabled:opacity-60">
                     {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Merge Video + Audio'}
                   </button>
                   <button onClick={() => setStep(10)} disabled={!canStep7Next} className={primaryButtonClass(!canStep7Next)}>Next</button>
@@ -4657,9 +4883,9 @@ setCharacterAge(nextDraft?.characterAge || '');
             )}
 
             {step === 10 && (
-              <div className={`${panelClass} p-6 space-y-4`}>
-                <h2 className={`font-bold text-lg ${theme.text}`}>Step 8: Thumbnail + Content Generation</h2>
-                <button onClick={generateContent} disabled={busy} className="px-4 py-2 rounded-xl border border-[#ffcc29] text-[#ffcc29] font-semibold">
+              <div className={`${panelClass} gravity-glow p-6 space-y-4`}>
+                <GravityHero size="md" align="left" eyebrow="Videos" headline="Thumbnail + Content" />
+                <button onClick={generateContent} disabled={busy} className="px-4 py-2 rounded-xl border border-[#F5A623] text-[#F5A623] font-semibold">
                   {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Generate Thumbnail + Caption + Hashtags'}
                 </button>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -4689,8 +4915,8 @@ setCharacterAge(nextDraft?.characterAge || '');
             )}
 
             {step === 11 && (
-              <div className={`${panelClass} p-6 space-y-4`}>
-                <h2 className={`font-bold text-lg ${theme.text}`}>Step 9: Platform Selection</h2>
+              <div className={`${panelClass} gravity-glow p-6 space-y-4`}>
+                <GravityHero size="md" align="left" eyebrow="Videos" headline="Platform Selection" />
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   {['instagram', 'facebook', 'linkedin', 'youtube'].map((platform) => {
                     const active = selectedPlatforms.includes(platform);
@@ -4699,7 +4925,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                         key={platform}
                         onClick={() => togglePlatform(platform)}
                         className={`px-4 py-3 rounded-xl border text-sm font-semibold ${active
-                          ? 'bg-[#ffcc29] text-black border-[#ffcc29]'
+                          ? 'bg-[#F5A623] text-black border-[#F5A623]'
                           : isDarkMode
                             ? 'bg-slate-900 border-slate-700 text-slate-200'
                             : 'bg-white border-slate-300 text-slate-700'
@@ -4715,8 +4941,8 @@ setCharacterAge(nextDraft?.characterAge || '');
             )}
 
             {step === 12 && (
-              <div className={`${panelClass} p-6 space-y-4`}>
-                <h2 className={`font-bold text-lg ${theme.text}`}>Step 10: Scheduling</h2>
+              <div className={`${panelClass} gravity-glow p-6 space-y-4`}>
+                <GravityHero size="md" align="left" eyebrow="Videos" headline="Scheduling" />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Date</label>
@@ -4739,8 +4965,8 @@ setCharacterAge(nextDraft?.characterAge || '');
             )}
 
             {step === 13 && (
-              <div className={`${panelClass} p-6 space-y-4`}>
-                <h2 className={`font-bold text-lg ${theme.text}`}>Final Step: Output</h2>
+              <div className={`${panelClass} gravity-glow p-6 space-y-4`}>
+                <GravityHero size="md" align="left" eyebrow="Videos" headline="Final Output" />
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   <div className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3`}>
                     <p className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Final Video</p>
@@ -4783,7 +5009,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                 </div>
 
                 <div className="flex gap-3">
-                  <button onClick={() => schedulePost(true)} disabled={busy} className="px-6 py-3 rounded-xl bg-[#ffcc29] text-black font-bold">
+                  <button onClick={() => schedulePost(true)} disabled={busy} className="px-6 py-3 rounded-xl bg-[#F5A623] text-black font-bold">
                     Publish
                   </button>
                   <button
@@ -4796,13 +5022,6 @@ setCharacterAge(nextDraft?.characterAge || '');
               </div>
             )}
 
-            <div className={`${panelClass} p-3`}>
-              <p className={`text-xs ${theme.textMuted} flex items-center gap-2`}>
-                <Music2 className="w-4 h-4" />
-                APIs: createDraft, generatePrompt, generateScenes, generateImages, generateClips, generateAudio, mixAudio, mergeVideo, generateContent, schedulePost.
-              </p>
-              {jobId && <p className={`text-xs mt-1 ${theme.textSecondary}`}>Current jobId: {jobId}</p>}
-            </div>
           </>
         )}
       </div>

@@ -180,9 +180,9 @@ const NotificationBell: React.FC = () => {
       case 'campaign_reminder_15':
         return <Clock className="w-4 h-4 text-[#ffcc29]" />;
       case 'campaign_live':
-        return <Calendar className="w-4 h-4 text-green-500" />;
+        return <Calendar className="w-4 h-4 text-emerald-400/90" />;
       default:
-        return <Bell className="w-4 h-4 text-blue-500" />;
+        return <Bell className="w-4 h-4 text-white/50" />;
     }
   };
 
@@ -220,7 +220,7 @@ const NotificationBell: React.FC = () => {
       >
         <Bell className="w-5 h-5" />
         {unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
+          <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 bg-[#F5A623] text-[#1A1208] text-[10px] font-bold rounded-full flex items-center justify-center leading-none">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
@@ -340,7 +340,7 @@ const NotificationBell: React.FC = () => {
                           )}
                           <button
                             onClick={() => handleDelete(notification._id)}
-                            className={`p-1 rounded hover:bg-red-500/20 text-red-400`}
+                            className={`p-1 rounded hover:bg-red-500/15 text-red-400/80 hover:text-red-300`}
                             title="Delete"
                           >
                             <Trash2 className="w-3 h-3" />

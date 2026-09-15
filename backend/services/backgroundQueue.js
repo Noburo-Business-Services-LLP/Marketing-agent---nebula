@@ -2,8 +2,16 @@ const Draft = require('../models/Draft');
 const ContentCalendar = require('../models/ContentCalendar');
 const Campaign = require('../models/Campaign');
 const User = require('../models/User');
-const { callGemini, parseGeminiJSON, generateCampaignImageNanoBanana, generatePosterFromReference } = require('./geminiAI');
+const { parseGeminiJSON, generateCampaignImageNanoBanana, generatePosterFromReference } = require('./geminiAI');
+const { callTextLLM } = require('./openAI');
 const { uploadBase64Image } = require('./imageUploader');
+const { buildPrompt } = require('./promptRegistry');
+const { buildBrandMemoryBlock, getPrimaryLogoAsset } = require('./brandMemory');
+// Lazy to avoid a load-order cycle: contentCalendarService lazily requires
+// this module too, when auto-generation runs.
+const { normalizeLanguage } = require('./contentCalendarService');
+const { decideCreative, getRecentCreativeHistory } = require('./creativeDirector');
+const { overlayBrandLogoIfPresent } = require('./logoOverlay');
 
 const queue = [];
 let processing = false;
@@ -59,7 +67,7 @@ Return ONLY a JSON object (no markdown, no backticks, no code blocks):
   "imagePrompt": "Detailed prompt for generating the image"
 }`;
 
-    const llmResponse = await callGemini(prompt);
+    const llmResponse = await callTextLLM(prompt, { jsonMode: true, maxTokens: 2000 });
     let parsed = { caption: item.headline, hashtags: [], imagePrompt: item.creativeConcept };
     try {
       parsed = parseGeminiJSON(llmResponse);
@@ -72,8 +80,10 @@ Return ONLY a JSON object (no markdown, no backticks, no code blocks):
 
     // 2. Generate Image using Nano Banana Pro
     let imageUrl = '';
+    let calendarPromptUsed = '';
     try {
       const imageResult = await generateCampaignImageNanoBanana(parsed.imagePrompt || item.creativeConcept, {
+        userId: calendar.userId,
         aspectRatio: '1:1',
         brandName: calendar.businessName,
         industry: calendar.businessVertical || '',
@@ -81,6 +91,7 @@ Return ONLY a JSON object (no markdown, no backticks, no code blocks):
       });
       if (imageResult && imageResult.success) {
         imageUrl = imageResult.imageUrl;
+        calendarPromptUsed = imageResult.promptUsed || '';
       }
     } catch (imgErr) {
       console.error('[BackgroundQueue] Image generation failed:', imgErr.message);
@@ -92,6 +103,9 @@ Return ONLY a JSON object (no markdown, no backticks, no code blocks):
     draft.cta = item.cta || '';
     draft.imageUrl = imageUrl;
     draft.imagePrompt = parsed.imagePrompt || item.creativeConcept || '';
+    // Same for the Smart Calendar path — these are the auto-generated posts,
+    // so being able to see their prompt matters most here.
+    if (calendarPromptUsed) draft.imagePromptResolved = calendarPromptUsed;
     draft.platforms = ['instagram'];
     draft.language = calendar.language || 'English';
     draft.objective = item.objective || 'awareness';
@@ -129,6 +143,31 @@ Return ONLY a JSON object (no markdown, no backticks, no code blocks):
       }
     });
     await campaign.save();
+
+    // Remember this generation in the AI Memory system (Layer 1 evidence).
+    // Fire-and-forget, same as the single-post path above.
+    try {
+      const { rememberCampaignGeneration } = require('./aiMemoryService');
+      rememberCampaignGeneration({
+        userId: calendar.userId,
+        campaignId: campaign._id,
+        action: 'campaign_generation',
+        campaignName: item.headline || '',
+        objective: item.objective || '',
+        platform: 'instagram',
+        platforms: ['instagram'],
+        tone: 'professional',
+        language: calendar.language || 'English',
+        prompt: calendarPromptUsed || parsed.imagePrompt || item.creativeConcept || '',
+        generatedCaptions: parsed.caption ? [parsed.caption] : [],
+        hashtags: parsed.hashtags || [],
+        cta: item.cta || '',
+        imagePrompts: (calendarPromptUsed || parsed.imagePrompt) ? [calendarPromptUsed || parsed.imagePrompt] : [],
+        generatedImages: imageUrl ? [imageUrl] : []
+      }).catch((err) => console.warn('[BackgroundQueue] AI memory write failed (non-fatal):', err.message));
+    } catch (memErr) {
+      console.warn('[BackgroundQueue] AI memory write failed (non-fatal):', memErr.message);
+    }
 
     // 5. Update calendar item
     item.generatedDraftId = draft._id;
@@ -213,18 +252,80 @@ async function processDraftImageGenerationJob(job) {
 
     const user = await User.findById(draft.userId);
     const bp = user?.businessProfile || {};
+    // A language picked for this specific generation (Create's Language
+    // pill) wins over the brand's stored default — someone testing regional
+    // copy per-post should not be stuck with whatever Settings has saved.
+    const effectiveLanguage = normalizeLanguage(job.language || bp.contentLanguage);
 
+    // generateCampaignImageNanoBanana retries once on a fallback model when the
+    // primary is busy, and each of the two calls carries its own 120s internal
+    // timeout — so their combined worst case comfortably exceeds the 60s this
+    // used to allow. That made single-post generation fail under exactly the
+    // "high demand" conditions the fallback exists to recover from — the race
+    // outside always lost before the retry inside had a chance to land.
+    const IMAGE_JOB_TIMEOUT_MS = 220_000;
     const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Image generation timed out after 60s')), 60000)
+      setTimeout(() => reject(new Error(`Image generation timed out after ${IMAGE_JOB_TIMEOUT_MS / 1000}s`)), IMAGE_JOB_TIMEOUT_MS)
     );
 
     // If the user uploaded a reference/inspiration image, use Nano Banana's
     // image-to-image path so the generated poster mirrors the reference's
     // style, composition, and layout. Otherwise, plain text-to-image.
     const hasReference = typeof job.referenceImage === 'string' && job.referenceImage.trim().length > 0;
+    // "Regenerate with this exact prompt" — the user edited the resolved
+    // prompt shown on the draft and wants THIS text run, not a fresh
+    // Creative Director decision. Takes priority over both other paths:
+    // whatever concept the model would invent, the user has already
+    // supplied a specific replacement for it.
+    const hasPromptOverride = typeof job.promptOverride === 'string' && job.promptOverride.trim().length > 0;
     let imageResult;
+    // Tracks whether THIS job already composited the real logo, so the save
+    // block below can mark the draft accordingly — see the note at the
+    // save block for why that matters.
+    let logoWasComposited = false;
+    let preLogoImageUrl = null;
 
-    if (hasReference) {
+    // What Create actually asked for wins over the brand's own primary
+    // logo. `job.logoUrl` is only ever `undefined` for callers that never
+    // offered a choice (legacy behaviour: fall back to primary); Create
+    // always sends it explicitly, including '' for "No logo", so that
+    // choice — not just "the primary logo" — is what gets composited once,
+    // below, rather than the primary logo now and the real choice again
+    // later in a second, redundant pass.
+    const primaryLogoAsset = await getPrimaryLogoAsset(draft.userId);
+    const effectiveLogo = job.logoUrl !== undefined
+      ? (job.logoUrl ? { url: job.logoUrl, position: job.logoPosition || primaryLogoAsset?.position || 'bottom-right', size: primaryLogoAsset?.size || 'medium' } : null)
+      : primaryLogoAsset;
+
+    if (hasPromptOverride) {
+      imageResult = await Promise.race([
+        generateCampaignImageNanoBanana(job.promptOverride.trim(), {
+          userId: draft.userId,
+          useRawPrompt: true,
+          aspectRatio: job.aspectRatio || '1:1',
+          brandName: user?.companyName || 'Brand',
+          industry: bp.industry || '',
+          tone: bp.tone || 'professional',
+          targetLanguage: effectiveLanguage,
+          imageText: draft.imageText || '',
+          logoReservedPosition: effectiveLogo?.url ? effectiveLogo.position : null
+        }),
+        timeoutPromise
+      ]);
+      if (imageResult?.imageUrl && effectiveLogo?.url) {
+        preLogoImageUrl = imageResult.imageUrl;
+        imageResult.imageUrl = await overlayBrandLogoIfPresent(imageResult.imageUrl, {
+          logoUrl: effectiveLogo.url,
+          position: effectiveLogo.position,
+          size: effectiveLogo.size
+        });
+        logoWasComposited = true;
+      }
+      // The prompt that produced THIS image is now the edited one — record
+      // it as such, so the next time someone opens this draft they see what
+      // actually made the picture in front of them, not the original.
+      if (imageResult?.imageUrl) draft.imagePromptResolved = job.promptOverride.trim();
+    } else if (hasReference) {
       // generatePosterFromReference expects: (referenceBase64, contentString, options)
       // and returns { success, imageBase64, error } — raw base64, NOT a URL.
       // So we upload the returned base64 to Cloudinary and hand back a { imageUrl }
@@ -253,24 +354,156 @@ async function processDraftImageGenerationJob(job) {
       }
       imageResult = { imageUrl: upload.url };
     } else {
+      // Write the actual copy and image brief before rendering anything. The
+      // idea typed in Create is a one-liner; it is not what should become the
+      // caption or drive the image, only the seed for a real content-writing
+      // pass — the same two-step shape campaigns already use.
+      let contentPrompt = null;
+      try {
+        const brandContextBlock = await buildBrandMemoryBlock(draft.userId);
+        const planPrompt = await buildPrompt(draft.userId, 'single.content', {
+          idea: draft.imagePrompt || draft.caption || '',
+          contentPillar: job.contentPillar || '',
+          contentType: job.contentType || 'post',
+          campaignContext: job.campaignContext || '',
+          objective: job.objective || '',
+          platform: (job.platforms || draft.platforms || [])[0] || '',
+          language: effectiveLanguage,
+          brandContextBlock
+        });
+        const raw = await callTextLLM(planPrompt, { jsonMode: true, maxTokens: 2000 });
+        contentPrompt = parseGeminiJSON(raw);
+      } catch (err) {
+        console.error('[BackgroundQueue] Content-writing pass failed, using the raw idea instead:', err.message);
+      }
+
+      const imageDescription = String(contentPrompt?.imageDescription || '').trim() || draft.imagePrompt || draft.caption || 'A creative poster';
+
+      // Only overwrite what the content pass actually produced — a failed or
+      // partial result should not blank out what the user already had.
+      if (contentPrompt?.caption) {
+        draft.caption = contentPrompt.caption;
+        if (!draft.creative) draft.creative = {};
+        draft.creative.textContent = contentPrompt.caption;
+        draft.creative.captions = contentPrompt.caption;
+        draft.markModified('creative');
+      }
+      if (Array.isArray(contentPrompt?.hashtags) && contentPrompt.hashtags.length) {
+        draft.hashtags = contentPrompt.hashtags;
+      }
+      // What the visual should actually be is a separate decision from what
+      // the post says. The Creative Director makes it — reading the brand's
+      // full asset library once, choosing only what this specific idea
+      // needs — then the Art Director turns that into the final instruction.
+      // The image model receives ONLY that instruction and the specific
+      // asset URLs chosen for it, never the brand context or this decision
+      // prompt itself.
+      let creative = null;
+      try {
+        creative = await decideCreative(draft.userId, {
+          idea: imageDescription,
+          contentType: job.contentType || 'post',
+          contentPillar: job.contentPillar || '',
+          objective: job.objective || '',
+          platform: (job.platforms || draft.platforms || [])[0] || '',
+          campaignContext: job.campaignContext || '',
+          previousCreatives: await getRecentCreativeHistory(draft.userId)
+        }, {
+          aspectRatio: job.aspectRatio || '1:1',
+          language: effectiveLanguage
+        });
+      } catch (err) {
+        console.error('[BackgroundQueue] Creative Director pass failed, falling back to the plain image description:', err.message);
+      }
+
+      if (creative?.creativeConcept) {
+        draft.creativeConcept = creative.creativeConcept;
+        draft.visualTreatment = creative.visualTreatment;
+      }
+      // The Creative Director's own imageText supersedes single.content's —
+      // it was chosen alongside the actual visual, not written blind.
+      if (creative?.imageText) draft.imageText = creative.imageText;
+
+      // Explicitly selected images take priority over the Creative Director's
+      // own picks — a user who picked a product in Create meant that product,
+      // whatever the model decides is relevant.
+      const explicitProductImages = [
+        job.linkedProduct?.imageUrl,
+        ...(Array.isArray(job.productReferenceImages) ? job.productReferenceImages.slice(1) : [])
+      ].filter(Boolean);
+      const chosenProductImages = explicitProductImages.length ? explicitProductImages : (creative?.productImages || []);
+
+      // Always composited for a standalone post (unless Create explicitly
+      // asked for none — see `effectiveLogo` above), independent of
+      // whatever the Creative Director chose to select as a "required
+      // asset" for this specific idea — a single post is the brand's own
+      // content and should always carry its logo, not carry it only when
+      // an LLM's per-post judgment happened to ask for it. (Carousels and
+      // campaigns keep that judgment — a logo on every one of ten slides
+      // is clutter — this "always" is scoped to single posts only.)
+      //
+      // `effectiveLogo` is resolved BEFORE generation, not after, so the
+      // model can be told where the real logo will land and keep that
+      // corner clear — without this, the model's own headline placement
+      // and the overlay's position collided whenever both defaulted to the
+      // same corner.
+      //
+      // No brandLogo reference here on purpose — a generative model
+      // redraws anything it's shown, including logos (softened, recolored,
+      // sometimes with the wordmark dropped). The logo is composited
+      // pixel-exact afterward instead; see overlayBrandLogoIfPresent below.
       imageResult = await Promise.race([
-        generateCampaignImageNanoBanana(draft.imagePrompt || draft.caption || 'A creative poster', {
+        generateCampaignImageNanoBanana(creative?.finalPrompt || imageDescription, {
+          userId: draft.userId,
+          useRawPrompt: Boolean(creative?.finalPrompt),
           aspectRatio: job.aspectRatio || '1:1',
           brandName: user?.companyName || 'Brand',
           industry: bp.industry || '',
-          tone: bp.tone || 'professional'
+          tone: bp.tone || 'professional',
+          targetLanguage: effectiveLanguage,
+          imageText: draft.imageText || '',
+          environmentReferenceImage: creative?.environmentImage || null,
+          productReferenceImage: chosenProductImages[0] || null,
+          productReferenceImages: chosenProductImages.slice(1),
+          logoReservedPosition: effectiveLogo?.url ? effectiveLogo.position : null
         }),
         timeoutPromise
       ]);
+
+      if (imageResult?.imageUrl && effectiveLogo?.url) {
+        preLogoImageUrl = imageResult.imageUrl;
+        imageResult.imageUrl = await overlayBrandLogoIfPresent(imageResult.imageUrl, {
+          logoUrl: effectiveLogo.url,
+          position: effectiveLogo.position,
+          size: effectiveLogo.size
+        });
+        logoWasComposited = true;
+      }
     }
 
     const finalImageUrl = typeof imageResult === 'string' ? imageResult : imageResult?.imageUrl;
+    // Keep the exact prompt that produced this image, for the UI to show.
+    if (typeof imageResult === 'object' && imageResult?.promptUsed) {
+      draft.imagePromptResolved = imageResult.promptUsed;
+    }
 
     if (finalImageUrl) {
       draft.imageUrl = finalImageUrl;
       draft.status = 'completed';
       draft.errorMessage = '';
-      
+
+      // Without this, the frontend's own post-generation logo step (Create's
+      // poll loop, gated on `!draft.logoApplied`) never saw this job's logo
+      // as already applied and composited a SECOND one on top — invisible
+      // when the two composites happened to land in different corners, but
+      // once Create's logo-position picker made both target the same corner
+      // (this session), it became a visibly doubled/ghosted logo. Recording
+      // both flags here lets that later step correctly skip.
+      if (logoWasComposited) {
+        draft.logoApplied = true;
+        if (preLogoImageUrl) draft.imageUrlNoLogo = preLogoImageUrl;
+      }
+
       // Update creative field if it exists
       if (!draft.creative) draft.creative = {};
       draft.creative = {
@@ -278,8 +511,35 @@ async function processDraftImageGenerationJob(job) {
         imageUrls: [finalImageUrl]
       };
       draft.markModified('creative');
-      
+
       await draft.save();
+
+      // Remember this generation in the AI Memory system (Layer 1 evidence).
+      // Fire-and-forget — a memory-write failure must never fail the
+      // generation the user is waiting on.
+      try {
+        const { rememberCampaignGeneration } = require('./aiMemoryService');
+        rememberCampaignGeneration({
+          userId: draft.userId,
+          campaignId: draft.campaignId || null,
+          action: draft.contentType === 'campaign' ? 'campaign_generation' : 'image_generation',
+          campaignName: draft.title || '',
+          objective: draft.objective || '',
+          platform: (draft.platforms || [])[0] || 'instagram',
+          platforms: draft.platforms || [],
+          tone: draft.tone || '',
+          language: draft.language || 'English',
+          prompt: draft.imagePromptResolved || draft.imagePrompt || '',
+          generatedCaptions: draft.caption ? [draft.caption] : [],
+          hashtags: draft.hashtags || [],
+          cta: draft.cta || '',
+          imagePrompts: draft.imagePromptResolved ? [draft.imagePromptResolved] : [],
+          generatedImages: [finalImageUrl]
+        }).catch((err) => console.warn('[BackgroundQueue] AI memory write failed (non-fatal):', err.message));
+      } catch (memErr) {
+        console.warn('[BackgroundQueue] AI memory write failed (non-fatal):', memErr.message);
+      }
+
       console.log(`[BackgroundQueue] Image generated successfully for Draft ${draftId}: ${finalImageUrl}`);
     } else {
       throw new Error(imageResult?.error || 'Failed to generate image URL');

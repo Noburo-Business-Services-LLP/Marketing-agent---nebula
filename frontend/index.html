@@ -64,11 +64,13 @@
       body {
         font-family: 'Inter', sans-serif;
       }
-      /* Gravity redesign — applied when body has .gravity-shell class */
-      body.gravity-shell,
-      html.dark body.gravity-shell {
-        background-color: #0A0A0A !important;
-        color: #F5F4F1 !important;
+      /* Gravity redesign — applied when body has .gravity-shell class.
+         Uses the token pair above so this now actually varies by theme —
+         previously hardcoded dark regardless of .dark, which is why light
+         mode had no visible effect on Gravity pages at all. */
+      body.gravity-shell {
+        background-color: var(--gv-bg) !important;
+        color: var(--gv-text-primary) !important;
       }
       /* Ambient gold radial glow for the Gravity shell — subtle, top-right */
       body.gravity-shell::before {
@@ -98,6 +100,66 @@
         --grav-border-strong: rgba(255,255,255,0.12);
         --grav-text: #F5F4F1;
         --grav-text-muted: rgba(255,255,255,0.55);
+      }
+      /* ============================================================
+         GRAVITY LIGHT-MODE TOKENS
+         Values adopted from nebulaa-ai-website/app/globals.css — the
+         sibling marketing site's already-validated Gravity palette
+         (dark values match this app's own existing colors; the
+         gold-on-light text contrast is real WCAG math, not a guess).
+         See docs/superpowers/specs/2026-09-15-gravity-light-mode-design.md
+         ============================================================ */
+      :root {
+        --gv-bg: #FAF9F6;
+        --gv-panel: #FFFFFF;
+        --gv-panel-2: #F2F0EA;
+        --gv-ink-rgb: 23 23 26;
+        --gv-text-primary: #17171A;
+        --gv-text-secondary: #44433F;
+        --gv-text-tertiary: #78756D;
+        --gv-text-muted: #9C998F;
+        --gv-surface-1: rgb(var(--gv-ink-rgb) / 0.03);
+        --gv-surface-2: rgb(var(--gv-ink-rgb) / 0.05);
+        --gv-surface-3: rgb(var(--gv-ink-rgb) / 0.08);
+        --gv-surface-4: rgb(var(--gv-ink-rgb) / 0.12);
+        --gv-border-subtle: rgb(var(--gv-ink-rgb) / 0.10);
+        --gv-border-default: rgb(var(--gv-ink-rgb) / 0.16);
+        --gv-border-strong: rgb(var(--gv-ink-rgb) / 0.24);
+        --gv-accent: #F5A623;
+        --gv-accent-text: #96650A;
+        --gv-accent-display: #B0770F;
+        --gv-accent-hover: #D68C0F;
+        --gv-accent-fill: rgba(245,166,35,0.10);
+        --gv-accent-ink: #1A1208;
+        /* Raw channels so Tailwind's own /NN opacity-modifier syntax can be
+           applied to the accent — a bare var(--gv-accent)/NN silently
+           resolves to transparent, since Tailwind cannot inject an alpha
+           channel into an opaque var() reference. Use
+           rgb(var(--gv-accent-rgb)/0.NN) everywhere a translucent accent is
+           needed. Verified live before this plan was dispatched. Identical
+           in both themes (the accent hue itself does not change), so this
+           is declared once here and not repeated under .dark. */
+        --gv-accent-rgb: 245 166 35;
+      }
+      .dark {
+        --gv-bg: #0A0A0A;
+        --gv-panel: #151515;
+        --gv-panel-2: #1A1A1A;
+        --gv-ink-rgb: 245 244 241;
+        --gv-text-primary: #F5F4F1;
+        --gv-text-secondary: #C9C6BE;
+        --gv-text-tertiary: #8A8780;
+        --gv-text-muted: #6E6B65;
+        --gv-surface-2: rgb(var(--gv-ink-rgb) / 0.06);
+        --gv-surface-3: rgb(var(--gv-ink-rgb) / 0.10);
+        --gv-surface-4: rgb(var(--gv-ink-rgb) / 0.14);
+        --gv-border-subtle: rgb(var(--gv-ink-rgb) / 0.06);
+        --gv-border-default: rgb(var(--gv-ink-rgb) / 0.10);
+        --gv-border-strong: rgb(var(--gv-ink-rgb) / 0.14);
+        --gv-accent-text: #F5A623;
+        --gv-accent-display: #F5A623;
+        --gv-accent-hover: #ffb833;
+        --gv-accent-fill: rgba(245,166,35,0.06);
       }
       /* Backgrounds — legacy dark tones become Gravity black */
       body.gravity-shell [class*="bg-[#070A12]"],
@@ -177,6 +239,20 @@
         border-color: rgba(245,166,35,0.5) !important;
         outline: none !important;
         box-shadow: 0 0 0 3px rgba(245,166,35,0.10) !important;
+      }
+      /* Opt-out for fields inside a GravityPanel. The panel already supplies
+         the surface, so the field styling above would draw a second, visibly
+         lighter box within the card. Tailwind's bg-transparent cannot win on
+         its own — the rule above carries !important AND higher specificity —
+         so this needs the element+class selector to override it. */
+      body.gravity-shell textarea.gravity-bare,
+      body.gravity-shell input.gravity-bare,
+      body.gravity-shell textarea.gravity-bare:focus,
+      body.gravity-shell input.gravity-bare:focus {
+        background-color: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        outline: none !important;
       }
       /* Primary action buttons (gold in old code) — Gravity gold with shadow */
       body.gravity-shell button[class*="bg-[#ffcc29]"],
@@ -332,6 +408,45 @@
       }
       @media (prefers-reduced-motion: reduce) {
         .metalHalo { animation: none; opacity: 0.8; }
+      }
+
+      /* ------------------------------------------------------------------
+         Marks the panel the current wizard step is about. Because steps are
+         conditionally rendered, only the active step's panel exists in the
+         DOM — so "one glow at a time, following the user" needs no state:
+         every step panel carries this class and exactly one is ever mounted.
+
+         Softer and wider than .metalHalo, which sits around a compact input;
+         these panels are full-width and tall, so the same intensity would
+         read as a glare rather than a glow.
+         ------------------------------------------------------------------ */
+      /* z-index:0 makes this its own stacking context, which matters inside a
+         modal: the overlay there has its own background (and a backdrop-filter,
+         which also creates a context), so a ::before at z-index:-1 painted
+         behind that black overlay and was invisible. Keeping the context local
+         means the glow stays behind the panel but above whatever is under it. */
+      .gravity-glow { position: relative; z-index: 0; }
+      .gravity-glow::before {
+        content: '';
+        position: absolute;
+        inset: -14px;
+        border-radius: 30px;
+        pointer-events: none;
+        z-index: -1;
+        background:
+          radial-gradient(55% 90% at 50% 0%,   rgba(245,166,35,0.16) 0%, rgba(245,166,35,0) 70%),
+          radial-gradient(65% 100% at 50% 100%, rgba(255,196,84,0.11) 0%, rgba(255,196,84,0) 72%);
+        filter: blur(22px);
+        animation: metal-breathe 5.5s ease-in-out infinite;
+      }
+      /* Warm the panel edge itself so the glow looks like it belongs to the
+         card rather than sitting behind it. */
+      .gravity-glow {
+        border-color: rgba(245,166,35,0.18) !important;
+        box-shadow: inset 0 1px 0 0 rgba(255,214,150,0.07);
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .gravity-glow::before { animation: none; opacity: 0.85; }
       }
 
       /* ------------------------------------------------------------------

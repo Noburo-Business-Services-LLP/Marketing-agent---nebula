@@ -269,7 +269,7 @@ class PersistentVideoGenerationQueue {
   /**
    * Enqueues a new background job into MongoDB
    */
-  async enqueue({ userId = null, jobType, payload = {} }) {
+  async enqueue({ userId = null, jobType, payload = {}, metadata = {} }) {
     if (!jobType) {
       throw new Error('jobType is required to enqueue');
     }
@@ -287,7 +287,10 @@ class PersistentVideoGenerationQueue {
       currentStep: 'queued',
       payload,
       attempts: 0,
-      metadata: { jobType }
+      // `metadata.quarkCharge` (when the caller supplies it) is how the
+      // failure handler below refunds what was ACTUALLY deducted, rather
+      // than a hardcoded guess that drifts from whatever the route charges.
+      metadata: { jobType, ...metadata }
     });
 
     // Proactively trigger the drain loop
@@ -342,16 +345,19 @@ class PersistentVideoGenerationQueue {
       await this._pushLog(jobId, `Job cancelled by user.`);
 
       if (job.userId) {
+        const charges = job.metadata?.quarkCharge;
         try {
           const { refundCredits } = require('../middleware/trialGuard');
-          const refundResult = await refundCredits(
-            job.userId,
-            'campaign_full',
-            1,
-            `Refund: AI video generation job ${jobId} was cancelled`
-          );
-          if (refundResult.success) {
+          if (Array.isArray(charges) && charges.length) {
+            for (const { action, count } of charges) {
+              await refundCredits(job.userId, action, count, `Refund: AI video generation job ${jobId} was cancelled`);
+            }
             await this._pushLog(jobId, `Credits automatically refunded due to cancellation.`);
+          } else {
+            const refundResult = await refundCredits(job.userId, 'campaign_full', 1, `Refund: AI video generation job ${jobId} was cancelled (legacy, no charge record)`);
+            if (refundResult.success) {
+              await this._pushLog(jobId, `Credits automatically refunded due to cancellation (legacy fallback).`);
+            }
           }
         } catch (refundError) {
           console.error(`⚠️ Failed to refund credits for cancelled job ${jobId}:`, refundError.message);
@@ -485,6 +491,40 @@ class PersistentVideoGenerationQueue {
               } 
             }
           );
+
+          // Remember this generation in the AI Memory system (Layer 1
+          // evidence). Fire-and-forget — must never fail the video job.
+          //
+          // merge_video's payload is flat ({ jobId, userId, effectiveClipUrls,
+          // finalAudioUrl, subtitles, baseUrl } — see its enqueue call in
+          // routes/videoGeneration.js) with no recoverable textual content:
+          // it just combines already-generated clips, so there's nothing new
+          // to learn from. Only create_video_pipeline (whose real payload
+          // field is `description`, not `script`/`prompt`, and whose result
+          // carries per-scene imagePrompt text in `sceneData`) has content
+          // worth remembering.
+          if (jobDoc.userId && finalUrl && jobType === 'create_video_pipeline') {
+            try {
+              const { rememberVideoGeneration } = require('./aiMemoryService');
+              const rawPayload = jobDoc.payload?.payload || {};
+              const sceneData = Array.isArray(result?.sceneData) ? result.sceneData : [];
+              rememberVideoGeneration({
+                userId: jobDoc.userId,
+                jobId,
+                action: 'reel_generation',
+                prompt: rawPayload.description || '',
+                script: rawPayload.description || '',
+                hashtags: rawPayload.hashtags || [],
+                cta: rawPayload.cta || '',
+                sceneData,
+                language: rawPayload.languageCode || 'English',
+                duration: rawPayload.durationSeconds || null,
+                generatedVideos: [finalUrl]
+              }).catch((err) => console.warn('[VideoQueue] AI memory write failed (non-fatal):', err.message));
+            } catch (memErr) {
+              console.warn('[VideoQueue] AI memory write failed (non-fatal):', memErr.message);
+            }
+          }
         } catch (err) {
           console.error(`⚠️ Failed to update Draft status to completed for job ${jobId}:`, err.message);
         }
@@ -515,18 +555,32 @@ class PersistentVideoGenerationQueue {
         console.error(`⚠️ Failed to update Draft status to failed for job ${jobId}:`, err.message);
       }
 
-      // Refund credits to user on job failure
+      // Refund exactly what was charged for this job. jobDoc.metadata.quarkCharge
+      // is set by the caller at enqueue time (see createVideo in
+      // routes/videoGeneration.js) as [{ action, count }, ...]. Without it this
+      // used to refund a hardcoded 'campaign_full' x1 (20 Q) regardless of what
+      // was actually deducted — for a video that charges video_base + N scenes
+      // (75 + N x 90), that silently kept the difference on every failure.
       if (jobDoc.userId) {
+        const charges = jobDoc.metadata?.quarkCharge;
         try {
           const { refundCredits } = require('../middleware/trialGuard');
-          const refundResult = await refundCredits(
-            jobDoc.userId,
-            'campaign_full',
-            1,
-            `Refund: AI video generation job ${jobId} failed`
-          );
-          if (refundResult.success) {
-            await this._pushLog(jobId, `Credits automatically refunded (Balance: ${refundResult.creditsRemaining})`);
+          if (Array.isArray(charges) && charges.length) {
+            let total = 0;
+            for (const { action, count } of charges) {
+              const r = await refundCredits(jobDoc.userId, action, count, `Refund: AI video generation job ${jobId} failed`);
+              if (r.success) total += 1;
+            }
+            if (total) await this._pushLog(jobId, `Credits automatically refunded for ${total} charge(s).`);
+          } else {
+            // Legacy jobs enqueued before quarkCharge existed: nothing to key
+            // the refund off, so fall back to the old flat guess rather than
+            // silently refunding nothing.
+            console.warn(`⚠️ Job ${jobId} has no metadata.quarkCharge — falling back to legacy flat refund.`);
+            const refundResult = await refundCredits(jobDoc.userId, 'campaign_full', 1, `Refund: AI video generation job ${jobId} failed (legacy, no charge record)`);
+            if (refundResult.success) {
+              await this._pushLog(jobId, `Credits automatically refunded (legacy fallback, Balance: ${refundResult.creditsRemaining})`);
+            }
           }
         } catch (refundError) {
           console.error(`⚠️ Failed to refund credits for job ${jobId}:`, refundError.message);

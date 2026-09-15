@@ -3,18 +3,13 @@ const User = require('../models/User');
 /**
  * Credit costs per action (demo version)
  */
-const CREDIT_COSTS = {
-  image_generated: 5,    // Per image generated via AI
-  image_edit: 3,         // Edit/regenerate an image
-  campaign_text: 2,      // Campaign text/caption generation
-  campaign_full: 7,      // Full campaign (image + text)
-  chat_message: 0.5,     // Chatbot message
-  competitor_scrape: 0,  // FREE
-  rival_post: 7,         // Create rival post (image + text)
-  strategic_post: 7,     // Strategic advisor post (image + text)
-  event_post: 7,         // Event post (image + text)
-  refine_image: 3,       // Refine/edit image with AI
-};
+// The Quark price of each action, DERIVED from what the action actually costs
+// us in API spend (see config/apiCosts.js) rather than picked by feel. Every
+// price here is per UNIT — per image, per carousel SLIDE, per video SCENE —
+// because that is what the vendor bills us per. Change a vendor rate in
+// apiCosts.js and these move with it; do not hardcode numbers back into here.
+const { QUARK_COSTS: CREDIT_COSTS, ACTION_UNITS } = require('../config/apiCosts');
+
 
 /**
  * Middleware: Check if trial is still active
@@ -219,4 +214,4 @@ const refundCredits = async (userId, action, count = 1, description = '') => {
   }
 };
 
-module.exports = { checkTrial, deductCredits, requireCredits, refundCredits, CREDIT_COSTS };
+module.exports = { checkTrial, deductCredits, requireCredits, refundCredits, CREDIT_COSTS, ACTION_UNITS };

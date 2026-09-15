@@ -4,6 +4,7 @@ import { adCampaignsAPI, apiService, brandAssetsAPI } from '../services/api';
 import { DashboardData, Campaign, CompetitorPost } from '../types';
 import { TrendingUp, ArrowUpRight, ChevronRight, ChevronLeft, Calendar as CalendarIcon, Calendar, CalendarSync, Info, Activity, Clock, MoreHorizontal, Plus, X, ExternalLink, Edit3, Share2, MessageSquare, FileText, Loader2, Bell, BellRing, Check, AlertCircle, Trash2, Eye, Users, BarChart3, Swords, Sparkles, Download, Copy, Send, Save, Lightbulb, Flame, Target, Zap, Music, Image as ImageIcon, RefreshCw, PenTool, Wand2, Upload, Filter, Unlink } from 'lucide-react';
 import { useTheme, getThemeClasses } from '../context/ThemeContext';
+import { useConfirm } from '../context/ConfirmContext';
 import PlatformPreview from '../components/PlatformPreview';
 import LogoSelector from '../components/LogoSelector';
 
@@ -253,6 +254,7 @@ const SectionButtons: React.FC<{
 };
 
 const Dashboard: React.FC = () => {
+  const confirm = useConfirm();
   const { isDarkMode } = useTheme();
   const theme = getThemeClasses(isDarkMode);
   const navigate = useNavigate();
@@ -480,7 +482,7 @@ const Dashboard: React.FC = () => {
       const creditData = await apiService.getCredits();
       const balance = creditData?.credits?.balance ?? 0;
       if (balance < 7) {
-        alert(`Insufficient credits. You need 7 credits to create a post but you only have ${balance}. Please wait for your next credit cycle or upgrade your plan.`);
+        alert(`Insufficient Quarks. You need 7 Quarks to create a post but you only have ${balance}. Please wait for your next Quark cycle or upgrade your plan.`);
         return;
       }
     } catch (e) {
@@ -521,7 +523,7 @@ const Dashboard: React.FC = () => {
       const creditData = await apiService.getCredits();
       const balance = creditData?.credits?.balance ?? 0;
       if (balance < 3) {
-        alert(`Insufficient credits. You need 3 credits to refine an image but you only have ${balance}. Please wait for your next credit cycle or upgrade your plan.`);
+        alert(`Insufficient Quarks. You need 3 Quarks to refine an image but you only have ${balance}. Please wait for your next Quark cycle or upgrade your plan.`);
         return;
       }
     } catch (e) {
@@ -672,7 +674,7 @@ const Dashboard: React.FC = () => {
       const creditData = await apiService.getCredits();
       const balance = creditData?.credits?.balance ?? 0;
       if (balance < 7) {
-        alert(`Insufficient credits. You need 7 credits to create a rival post but you only have ${balance}. Please wait for your next credit cycle or upgrade your plan.`);
+        alert(`Insufficient Quarks. You need 7 Quarks to create a rival post but you only have ${balance}. Please wait for your next Quark cycle or upgrade your plan.`);
         return;
       }
     } catch (e) {
@@ -1994,9 +1996,9 @@ const Dashboard: React.FC = () => {
                   </div>
                 </div>
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     if (generatingPost) {
-                      if (window.confirm('7 credits have been consumed for this generation. Are you sure you want to close?')) {
+                      if (await confirm('7 credits have been consumed for this generation. Are you sure you want to close?', { title: 'Close post creator?', confirmLabel: 'Close' })) {
                         setShowPostCreator(false);
                       }
                     } else {
@@ -2301,9 +2303,9 @@ const Dashboard: React.FC = () => {
 
       {/* Rival Post Modal */}
       {showRivalPostModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => {
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={async () => {
             if (rivalPostLoading || rivalPost) {
-              const shouldClose = window.confirm('⚡ 7 credits have already been consumed. Do you want to close?');
+              const shouldClose = await confirm('7 credits have already been consumed. Do you want to close?', { title: '⚡ Close rival post?', confirmLabel: 'Close' });
               if (!shouldClose) return;
             }
             setShowRivalPostModal(false);
@@ -2329,9 +2331,9 @@ const Dashboard: React.FC = () => {
                   </div>
                 </div>
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     if (rivalPostLoading || rivalPost) {
-                      const shouldClose = window.confirm('⚡ 7 credits have already been consumed. Do you want to close?');
+                      const shouldClose = await confirm('7 credits have already been consumed. Do you want to close?', { title: '⚡ Close rival post?', confirmLabel: 'Close' });
                       if (!shouldClose) return;
                     }
                     setShowRivalPostModal(false);

@@ -144,7 +144,7 @@ router.get('/', protect, async (req, res) => {
     const userId = getUserId(req);
     const query = { user: userId };
     
-    if (type && ['logo', 'template'].includes(type)) {
+    if (type && ['logo', 'template', 'environment'].includes(type)) {
       query.type = type;
     }
     
@@ -220,8 +220,8 @@ router.post('/upload', protect, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Image data is required' });
     }
     
-    if (!type || !['logo', 'template'].includes(type)) {
-      return res.status(400).json({ success: false, message: 'Type must be "logo" or "template"' });
+    if (!type || !['logo', 'template', 'environment'].includes(type)) {
+      return res.status(400).json({ success: false, message: 'Type must be "logo", "template" or "environment"' });
     }
     
     if (!name || name.trim().length === 0) {
@@ -229,7 +229,11 @@ router.post('/upload', protect, async (req, res) => {
     }
     
     // Upload to Cloudinary
-    const folder = type === 'logo' ? 'nebula-brand-logos' : 'nebula-brand-templates';
+    const folder = type === 'logo'
+      ? 'nebula-brand-logos'
+      : type === 'environment'
+        ? 'nebula-brand-environment'
+        : 'nebula-brand-templates';
     const uploadResult = await uploadBase64Image(imageData, folder);
     
     if (!uploadResult.success) {
@@ -763,7 +767,7 @@ router.delete('/:id', protect, async (req, res) => {
     
     res.json({
       success: true,
-      message: `${asset.type === 'logo' ? 'Logo' : 'Template'} deleted successfully`
+      message: `${asset.type === 'logo' ? 'Logo' : asset.type === 'environment' ? 'Environment image' : 'Template'} deleted successfully`
     });
   } catch (error) {
     console.error('Error deleting brand asset:', error);

@@ -3,10 +3,12 @@ import { FileText, Search, Trash2, Calendar, Loader2, Plus, ExternalLink, Refres
 import { Draft } from '../types';
 import { draftsAPI } from '../services/api';
 import { DraftPreviewModal } from '../components/DraftPreviewModal';
+import { useConfirm } from '../context/ConfirmContext';
 import { DraftProcessingAnimation } from '../components/DraftProcessingAnimation';
 import { Link, useNavigate } from 'react-router-dom';
 
 export const Drafts: React.FC = () => {
+  const confirm = useConfirm();
   const navigate = useNavigate();
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [filteredDrafts, setFilteredDrafts] = useState<Draft[]>([]);
@@ -102,7 +104,7 @@ export const Drafts: React.FC = () => {
 
   const handleBulkDelete = async () => {
     if (selectedIds.length === 0) return;
-    if (window.confirm(`Are you sure you want to archive the ${selectedIds.length} selected draft(s)?`)) {
+    if (await confirm(`Are you sure you want to archive the ${selectedIds.length} selected draft(s)?`, { title: 'Archive drafts?', confirmLabel: 'Archive' })) {
       setIsLoading(true);
       try {
         await Promise.all(selectedIds.map(id => draftsAPI.deleteDraft(id)));

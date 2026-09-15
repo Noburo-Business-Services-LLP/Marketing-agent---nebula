@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
 const User = require('../models/User');
-const { CREDIT_COSTS } = require('../middleware/trialGuard');
+const { CREDIT_COSTS, ACTION_UNITS } = require('../middleware/trialGuard');
 const { ensureCreditCycle } = require('../middleware/creditGuard');
 
 /**
@@ -39,7 +39,12 @@ router.get('/', protect, async (req, res) => {
         daysLeft,
         isExpired: isTrialExpired || (user.trial?.isExpired ?? false)
       },
-      costs: CREDIT_COSTS
+      costs: CREDIT_COSTS,
+      // Prices are per unit, and the unit differs per action (per slide,
+      // per scene, per post). Shipping the units alongside the numbers is
+      // what stops the UI rendering "Carousel 4.5" as if that were the
+      // price of a whole carousel.
+      units: ACTION_UNITS
     });
   } catch (error) {
     console.error('Get credits error:', error);

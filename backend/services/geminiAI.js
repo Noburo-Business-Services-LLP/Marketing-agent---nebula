@@ -4,7 +4,9 @@
  */
 
 const { GoogleAuth } = require('google-auth-library');
+const { buildPrompt } = require('./promptRegistry');
 const { uploadBase64Image } = require('./imageUploader');
+const { generateOpenAIImage } = require('./openaiImage');
 const fs = require('fs/promises');
 const path = require('path');
 
@@ -719,7 +721,9 @@ async function generateAIImage(campaignTitle, campaignDescription, objective, pl
   if (brandContext.companyName) brandDetails.push(`Brand: ${brandContext.companyName}`);
   if (brandContext.products) brandDetails.push(`Products/Services: ${brandContext.products}`);
   if (brandContext.niche) brandDetails.push(`Business type: ${brandContext.niche}`);
-  if (brandContext.description) brandDetails.push(`About: ${brandContext.description.substring(0, 100)}`);
+  // 100 chars cut most brand descriptions mid-sentence, so the model saw a
+  // fragment. Still bounded to keep the prompt within model limits.
+  if (brandContext.description) brandDetails.push(`About: ${brandContext.description.substring(0, 400)}`);
 
   // Add brand colors if available
   const brandColors = brandContext.brandColors || [];
@@ -774,7 +778,7 @@ ${brandInfo}
 ${colorGuidance}
 
 CAMPAIGN: "${campaignTitle}"
-${campaignContext.substring(0, 200)}
+${campaignContext.substring(0, 1200)}
 
 ${safetyNote}
 ${logoInstruction}
@@ -788,9 +792,7 @@ REQUIREMENTS:
 - Platform: ${platform} (optimized aspect ratio)
 - Objective: ${objective} campaign
 - Style: Modern, clean, vibrant colors, professional photography
-- NO text or words in image
-- NO babies, children, infants, or minors in the image
-- Focus on PRODUCTS and aesthetics only
+- TEXT: If the design calls for a headline, keep it SHORT (3-7 words max), as a punchy headline or tagline, never a paragraph. Use professional typography, at most 2 font styles, and never placeholder text like [Date] or [CTA]. If unsure of rendering the script correctly, render no text at all.
 - Commercial quality suitable for marketing
 
 Make the image specific to ${brandContext.companyName || 'the brand'}'s actual business and products.`;
@@ -4635,10 +4637,27 @@ async function generateCampaignImageNanoBanana(imageDescription, options = {}) {
     aspectRatio = '1:1',
     brandName = '',
     brandLogo = null,
+    // Where the REAL logo will land once composited after generation (see
+    // overlayBrandLogoIfPresent). Passed even when brandLogo itself is null —
+    // that's the normal case now — so the model can keep that corner clear
+    // of its own headline text instead of the two colliding by accident.
+    logoReservedPosition = null,
     originalCharacterImage = null,
     characterReferenceImage = null,
     previousSceneImage = null,
+    // Carousel-specific: the immediately preceding slide's own rendered
+    // image, so slide 2 can visually continue slide 1 rather than only
+    // sharing a text description of what slide 1 decided. Kept separate
+    // from previousSceneImage (video continuity) — that note talks about
+    // people/clothing/props carrying across a scene cut, which fits a video
+    // frame but not a designed still; a carousel wants shared palette,
+    // lighting and composition language, not "the same clothing".
+    previousSlideImage = null,
     productReferenceImage = null,
+    // Several products can feature in one creative (a bundle, a range, a
+    // comparison). The single productReferenceImage above stays for callers
+    // that only ever have one.
+    productReferenceImages = [],
     // NEW — environment reference image (locked physical space for
     // the whole video). Has a dedicated note that tells Nano Banana
     // this is a PLACE not a person; match walls/floor/lighting.
@@ -4657,10 +4676,23 @@ async function generateCampaignImageNanoBanana(imageDescription, options = {}) {
     characterSource = 'system',
     preserveCharacterIdentity = false,
     consistencyStrength = 'normal',
+    // Present when generation runs for a signed-in user, so their edited
+    // prompt is used; absent for internal calls, which get the default.
+    userId = null,
   } = options;
 
   const linkedProduct = options.linkedProduct && typeof options.linkedProduct === 'object' ? options.linkedProduct : null;
-  const hasProductReferenceImage = Boolean(String(productReferenceImage || linkedProduct?.imageUrl || '').trim());
+  // The linked product's own image counts as the primary reference. Campaign
+  // generation passed linkedProduct but never productReferenceImage, so
+  // hasProductReferenceImage went true — and the prompt announced "Product
+  // reference image: Provided" — while no image was ever attached.
+  const primaryProductImage =
+    String(productReferenceImage || '').trim() || String(linkedProduct?.imageUrl || '').trim() || null;
+
+  const extraProductImages = (Array.isArray(productReferenceImages) ? productReferenceImages : [])
+    .map((u) => String(u || '').trim())
+    .filter(Boolean);
+  const hasProductReferenceImage = Boolean(primaryProductImage || extraProductImages.length);
   const normalizedPalette = Array.isArray(brandPalette) ? brandPalette.filter(Boolean) : [];
   const primaryColor = String(normalizedPalette[0] || '').trim();
   const secondaryColor = String(normalizedPalette[1] || '').trim();
@@ -4677,8 +4709,20 @@ async function generateCampaignImageNanoBanana(imageDescription, options = {}) {
   const isCinematic = Boolean(options.isCinematic);
   
   let prompt = '';
-  
-  if (isCinematic && characterReferenceImage) {
+
+  // The Creative Director / Art Director pipeline (single post, carousel,
+  // campaign) has already decided the concept, the visual treatment and
+  // exactly which real assets to use, and has already written the final
+  // image instruction itself. Wrapping that in this function's own giant
+  // "elite creative director" prompt below would mean the image model sees
+  // two different creative directors' instructions layered on top of each
+  // other, plus the full brand context a second time — precisely what that
+  // pipeline exists to avoid sending. useRawPrompt sends its instruction
+  // through untouched; every other caller (calendar covers, reels, product
+  // shots) is unaffected and keeps building its prompt exactly as before.
+  if (options.useRawPrompt) {
+    prompt = String(imageDescription || '').trim();
+  } else if (isCinematic && characterReferenceImage) {
     prompt = `SYSTEM ROLE:
 You are an image editing model, not an image generation model.
 
@@ -4730,51 +4774,71 @@ ASPECT RATIO: ${aspectRatio}
 INSTRUCTIONS:
 1. DESIGN QUALITY: Purely cinematic, photorealistic, no text overlays, no UI elements, no borders, no graphic design elements.`;
   } else {
-    prompt = `ROLE: You are an elite creative director at a top-tier advertising agency. You create award-winning social media ad creatives that drive engagement and conversions for global brands.
-
-OBJECTIVE: Generate a single, publication-ready social media ad image that looks like it was produced by a professional design team. The image must be visually stunning, immediately attention-grabbing in a social feed, and communicate the brand message through design, not through literal text dumps.
-
-CONTEXT:
-- Brand: ${brandName || 'The brand'}${industry ? ` (${industry} industry)` : ''}
-- Campaign theme: ${campaignTheme || 'Marketing campaign'}
-${linkedProduct ? `- Featured Product: ${linkedProduct.name}
-- Product description: ${linkedProduct.description || 'N/A'}
-- Product reference image: ${hasProductReferenceImage ? 'Provided' : 'Not provided'}` : ''}
-- Visual direction: ${imageDescription}
-- Tone & mood: ${tone || 'professional'}
-${normalizedPalette.length ? `- Locked brand palette: ${normalizedPalette.join(', ')}` : ''}
-${fontType ? `- Preferred typography style: ${fontType}` : ''}
-${keyMessages ? `- Campaign messaging (for design inspiration, NOT to be written verbatim on the image): ${keyMessages}` : ''}
-
-INSTRUCTIONS:
-1. DESIGN QUALITY: ${strictBrandLock
-      ? 'Create a polished, agency-grade ad creative with a clean luxury layout. Keep rendering photorealistic and minimal. Do NOT use cinematic color grading, auto color enhancement, random overlays, or multi-color effects.'
-      : 'Create a polished, agency-grade ad creative. Think Canva Pro templates, not PowerPoint slides. Use professional color grading, balanced composition, and modern design trends (gradients, glassmorphism, bold typography, lifestyle photography style, etc.)'}
-2. ASPECT RATIO: The image MUST be in exactly ${aspectRatio} aspect ratio. This is critical.
-3. RESOLUTION: Output at 1024px on the longest edge maximum. Do not exceed 1K resolution.
-4. TEXT ON IMAGE: If the design calls for text overlays, keep them SHORT (3-7 words max). Use professional typography and no more than 2 font styles. The text should be a punchy headline or tagline, NOT a paragraph. Never put placeholder text like [Date], [Name], [CTA], etc.
-4A. LANGUAGE LOCK FOR IMAGE TEXT: Any visible text rendered on the image MUST be strictly in ${resolvedTargetLanguage}. ${resolvedTargetLanguage.toLowerCase().includes('mix') ? 'You may mix English and native script fluidly.' : resolvedTargetLanguage === 'English' ? 'English is allowed.' : 'Do NOT render English text on the image (except unavoidable brand names/logos).'}
-4B. TEXT SAFETY RULE: If you are not confident rendering ${resolvedTargetLanguage} script correctly, do NOT render any extra text overlay instead of falling back to English.
-${preferredImageText ? `4C. REQUIRED OVERLAY TEXT: Render this exact text on the image as the main headline: "${preferredImageText}". Do not translate it and do not replace it with English.` : ''}
-5. BRAND IDENTITY: ${brandName ? `Subtly incorporate "${brandName}" as real brand craft.` : 'Make the design look professionally branded.'}
-6. NO METADATA: Do NOT include post numbers, aspect ratio labels, generic "Brand" labels, campaign names, watermark text, frame borders, or UI-like editor elements.
-7. VISUAL STORYTELLING: Let imagery communicate the message with strong focal points and emotional resonance.
-8. COLOR PALETTE: ${normalizedPalette.length
-      ? `STRICT: Use only this brand palette and avoid off-brand colors: ${normalizedPalette.join(', ')}.`
-      : `Use a cohesive, premium color palette. ${tone === 'luxurious' || tone === 'luxury' ? 'Think dark tones with gold/silver accents.' : tone === 'playful' || tone === 'fun' ? 'Use vibrant, energetic colors.' : 'Use modern, clean colors that feel trustworthy and professional.'}`}
-9. STRICT BRAND PRIORITY: ${strictBrandLock ? 'ENFORCED. Brand identity overrides product color influence.' : 'Keep brand consistency high.'}
-${strictBrandLock && primaryColor && secondaryColor ? `10. COLOR ENFORCEMENT (STRICT): Background MUST use EXACT brand primary color ${primaryColor}. Gradient allowed only within shades/tints of ${primaryColor}. Text MUST use EXACT brand secondary color ${secondaryColor}. Do NOT introduce any extra color family. Remove blue/pink/violet/neon looks. No mixed-tone gradients and no texture noise.` : ''}
-${strictBrandLock && brandLogo ? '11. LOGO RULE: Use the exact uploaded logo only. Do not recreate or alter it. Keep proportions and original colors.' : ''}
-${strictBrandLock && linkedProduct ? '12. PRODUCT RULE: Keep product centered or slightly offset. Any visible product UI/screen elements must use brand-primary shades only.' : ''}
-${linkedProduct ? `13. PRODUCT REALISM & COLOR CONTROL: ${strictBrandLock
-      ? (hasProductReferenceImage
-        ? `Use the provided product reference to preserve shape/materials. Keep composition color-locked to ${primaryColor} and ${secondaryColor}.`
-        : `No product reference image is available. Generate a premium smartwatch/fitness hero product and keep the full composition color-locked to ${primaryColor} and ${secondaryColor} only.`)
-      : (hasProductReferenceImage
-        ? 'Use the provided product reference to preserve realistic product form/materials. Keep product tones premium and believable (avoid neon or over-saturated rendering).'
-        : 'No product reference image is available. Generate a realistic premium hero product with tasteful tones and subtle brand-inspired accents.')} Keep brand colors primarily in background, lighting, and supporting design elements.` : '13. PRODUCT REALISM & COLOR CONTROL: If a hero product appears, keep it realistic and premium with restrained tones; avoid unrealistic bright colors.'}
-${fontType ? `14. TYPOGRAPHY: Any rendered text should align with a "${fontType}" style and remain minimal.` : '14. TYPOGRAPHY: Keep text overlays minimal and premium.'}
-${totalPosts > 1 ? `15. SERIES CONSISTENCY: This is part of a ${totalPosts}-post campaign series. Maintain a consistent visual style and design language across posts.` : ''}`;
+    // The standard ad-creative path is user-editable through the prompt
+    // registry. Every conditional is resolved here, so the stored template
+    // holds prose and {{placeholders}} only. The character-identity and
+    // cinematic branches above stay in code: an accidental edit there would
+    // silently break identity preservation across a video's scenes.
+    prompt = await buildPrompt(userId, 'image.creative', {
+      brandLine: `${brandName || 'The brand'}${industry ? ` (${industry} industry)` : ''}`,
+      campaignTheme: campaignTheme || 'Marketing campaign',
+      productBlock: linkedProduct
+        ? `- Featured Product: ${linkedProduct.name}\n- Product description: ${linkedProduct.description || 'N/A'}\n- Product reference image: ${hasProductReferenceImage ? 'Provided' : 'Not provided'}`
+        : '',
+      imageDescription,
+      tone: tone || 'professional',
+      paletteLine: normalizedPalette.length ? `- Locked brand palette: ${normalizedPalette.join(', ')}\n` : '',
+      fontLine: fontType ? `- Preferred typography style: ${fontType}\n` : '',
+      keyMessagesLine: keyMessages
+        ? `- Campaign messaging (for design inspiration, NOT to be written verbatim on the image): ${keyMessages}\n`
+        : '',
+      designQuality: strictBrandLock
+        ? 'Create a polished, agency-grade ad creative with a clean luxury layout. Keep rendering photorealistic and minimal. Do NOT use cinematic color grading, auto color enhancement, random overlays, or multi-color effects.'
+        : 'Create a polished, agency-grade ad creative. Think Canva Pro templates, not PowerPoint slides. Use professional color grading, balanced composition, and modern design trends (gradients, glassmorphism, bold typography, lifestyle photography style, etc.)',
+      aspectRatio,
+      language: resolvedTargetLanguage,
+      languageRule: resolvedTargetLanguage.toLowerCase().includes('mix')
+        ? 'You may mix English and native script fluidly.'
+        : resolvedTargetLanguage === 'English'
+          ? 'English is allowed.'
+          : 'Do NOT render English text on the image (except unavoidable brand names/logos).',
+      overlayTextRule: preferredImageText
+        ? `4C. REQUIRED OVERLAY TEXT: Render this exact text on the image as the main headline: "${preferredImageText}". Do not translate it and do not replace it with English.`
+        : '',
+      brandIdentityRule: brandName
+        ? `Subtly incorporate "${brandName}" as real brand craft.`
+        : 'Make the design look professionally branded.',
+      colorPaletteRule: normalizedPalette.length
+        ? `STRICT: Use only this brand palette and avoid off-brand colors: ${normalizedPalette.join(', ')}.`
+        : `Use a cohesive, premium color palette. ${tone === 'luxurious' || tone === 'luxury' ? 'Think dark tones with gold/silver accents.' : tone === 'playful' || tone === 'fun' ? 'Use vibrant, energetic colors.' : 'Use modern, clean colors that feel trustworthy and professional.'}`,
+      strictBrandPriorityRule: strictBrandLock
+        ? 'ENFORCED. Brand identity overrides product color influence.'
+        : 'Keep brand consistency high.',
+      colorEnforcementRule: strictBrandLock && primaryColor && secondaryColor
+        ? `10. COLOR ENFORCEMENT (STRICT): Background MUST use EXACT brand primary color ${primaryColor}. Gradient allowed only within shades/tints of ${primaryColor}. Text MUST use EXACT brand secondary color ${secondaryColor}. Do NOT introduce any extra color family. Remove blue/pink/violet/neon looks. No mixed-tone gradients and no texture noise.`
+        : '',
+      logoRule: strictBrandLock && brandLogo
+        ? '11. LOGO RULE: Use the exact uploaded logo only. Do not recreate or alter it. Keep proportions and original colors.'
+        : '',
+      productRule: strictBrandLock && linkedProduct
+        ? '12. PRODUCT RULE: Keep product centered or slightly offset. Any visible product UI/screen elements must use brand-primary shades only.'
+        : '',
+      productRealismRule: linkedProduct
+        ? `13. PRODUCT REALISM & COLOR CONTROL: ${strictBrandLock
+            ? (hasProductReferenceImage
+              ? `Use the provided product reference to preserve shape/materials. Keep composition color-locked to ${primaryColor} and ${secondaryColor}.`
+              : `No product reference image is available. Generate a premium smartwatch/fitness hero product and keep the full composition color-locked to ${primaryColor} and ${secondaryColor} only.`)
+            : (hasProductReferenceImage
+              ? 'Use the provided product reference to preserve realistic product form/materials. Keep product tones premium and believable (avoid neon or over-saturated rendering).'
+              : 'No product reference image is available. Generate a realistic premium hero product with tasteful tones and subtle brand-inspired accents.')} Keep brand colors primarily in background, lighting, and supporting design elements.`
+        : '13. PRODUCT REALISM & COLOR CONTROL: If a hero product appears, keep it realistic and premium with restrained tones; avoid unrealistic bright colors.',
+      typographyRule: fontType
+        ? `14. TYPOGRAPHY: Any rendered text should align with a "${fontType}" style and remain minimal.`
+        : '14. TYPOGRAPHY: Keep text overlays minimal and premium.',
+      seriesConsistencyRule: totalPosts > 1
+        ? `15. SERIES CONSISTENCY: This is part of a ${totalPosts}-post campaign series. Maintain a consistent visual style and design language across posts.`
+        : ''
+    });
   }
 
   if (
@@ -4828,12 +4892,22 @@ FORBIDDEN:
 Treat this as an image editing task where the original person must remain identical.`;
   }
 
+  // Declared out here, not inside the try: the fallback model returns from the
+  // catch block below, and it needs to report the same prompt.
+  let promptUsed = prompt;
+
+  // Out here with promptUsed, and for the same reason: the catch block below
+  // retries on the fallback model and reuses this exact array (character,
+  // environment and logo references plus the text prompt). Declared inside
+  // the try, it was out of scope there — so every fallback attempt threw
+  // "parts is not defined" instead of retrying, and the primary model being
+  // busy meant no image at all.
+  let parts = [];
+
   try {
     console.log(`[NanoBananaPro] Generating post ${postIndex + 1}/${totalPosts} in ${aspectRatio}...`);
 
     const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/nano-banana-pro-preview:generateContent';
-
-    const parts = [];
 
     const prepareInlineImage = async (imageValue, label) => {
       if (!imageValue) return null;
@@ -4862,14 +4936,22 @@ Treat this as an image editing task where the original person must remain identi
       return null;
     };
 
-    const [logoInline, productInline, originalCharacterInline, characterInline, previousSceneInline, environmentInline] = await Promise.all([
+    const [logoInline, productInline, originalCharacterInline, characterInline, previousSceneInline, previousSlideInline, environmentInline] = await Promise.all([
       prepareInlineImage(brandLogo, 'brand logo'),
-      prepareInlineImage(productReferenceImage, 'product reference image'),
+      prepareInlineImage(primaryProductImage, 'product reference image'),
       prepareInlineImage(originalCharacterImage, 'original character image'),
       prepareInlineImage(characterReferenceImage, 'canonical character image'),
       prepareInlineImage(previousSceneImage, 'previous scene image'),
+      prepareInlineImage(previousSlideImage, 'previous carousel slide image'),
       prepareInlineImage(environmentReferenceImage, 'environment reference image')
     ]);
+
+    // Prepared separately so one unreadable product image cannot take the
+    // whole batch down with it — prepareInlineImage already returns null on
+    // failure, and those are dropped here.
+    const extraProductInline = (await Promise.all(
+      extraProductImages.map((url, i) => prepareInlineImage(url, `product reference image ${i + 2}`))
+    )).filter((img) => img?.data);
 
     const referenceNotes = [];
 
@@ -4913,6 +4995,19 @@ If it is a backdrop / interior only, match its lighting palette and material voc
 Do NOT invent new people not visible in earlier scenes.`);
     }
 
+    if (previousSlideInline?.data) {
+      parts.push({
+        inlineData: {
+          mimeType: previousSlideInline.mimeType || 'image/png',
+          data: previousSlideInline.data
+        }
+      });
+      referenceNotes.push(`Image ${parts.length} is the PREVIOUS SLIDE in this same carousel.
+Continue the same visual family: palette, lighting, composition style and material treatment.
+The subject and content of this slide should be different, as directed by this slide's own concept — do not repeat the previous slide's subject or composition.
+Only the visual language should carry over, not the specific scene.`);
+    }
+
     if (productInline?.data) {
       parts.push({
         inlineData: {
@@ -4923,6 +5018,16 @@ Do NOT invent new people not visible in earlier scenes.`);
       referenceNotes.push(`Image ${parts.length} is the exact product reference image. Preserve product form, materials, and key structure.`);
     }
 
+    for (const extra of extraProductInline) {
+      parts.push({
+        inlineData: {
+          mimeType: extra.mimeType || 'image/png',
+          data: extra.data
+        }
+      });
+      referenceNotes.push(`Image ${parts.length} is another exact product reference image. Preserve its form, materials, and key structure. Every product reference supplied must appear in the final image, and they must sit together as one deliberate arrangement rather than a collage.`);
+    }
+
     if (logoInline?.data) {
       parts.push({
         inlineData: {
@@ -4931,6 +5036,23 @@ Do NOT invent new people not visible in earlier scenes.`);
         }
       });
       referenceNotes.push(`Image ${parts.length} is the exact uploaded brand logo. Use it exactly as-is. Do not recreate or recolor it.`);
+    } else {
+      // No logo reference on this call is deliberate, not an omission — the
+      // real logo is composited pixel-exact afterward (see
+      // overlayBrandLogoIfPresent), because handing one to this model gets it
+      // redrawn and smeared. Without this line the model still reaches for
+      // its own invented badge/emblem in a bottom corner — a learned habit
+      // from corporate stock photography — which then collides with the
+      // real logo once it's pasted on top.
+            // Worded to avoid "rectangle" / "plain background or soft color" —
+      // an image model reads geometric, flat-fill language literally and
+      // paints an actual box there, which is exactly the visible artifact
+      // this was meant to prevent. What's wanted is the EXISTING scene kept
+      // quiet in that corner, not a distinct shape added on top of it.
+      const reservedZoneText = logoReservedPosition
+        ? ` A real logo will be composited afterward near the ${String(logoReservedPosition).replace('-', ' ')} of this image, over roughly the outer 20% of the width and 15% of the height on that side. Keep whatever is naturally in that corner — sky, wall, fabric, floor, whatever the scene already has there — low-contrast and free of fine detail, so the logo stays legible once placed. Do not add a distinct panel, card, plate, or shape of any kind to mark that area; it should look like an unremarkable, uncluttered part of the same continuous scene, not a separate zone. Compose the headline, any other text, and the main subject so none of them extend into that corner; shift or reflow the headline rather than centering it across the full width if the reserved corner is top-center or bottom-center.`
+        : '';
+      referenceNotes.push(`Do not draw, invent, or imply any logo, brand mark, wordmark, or watermark anywhere in this image — including placeholder badges, emblems, text-in-a-circle marks in a corner, a bordered or boxed brand-name lockup, or the brand name rendered as signage, a stamp, a compass rose label, or any other in-scene lettering standing in for a logo. This applies even when the requested caption or headline text itself contains the brand name — that text renders as ordinary copy, in the same style as the rest of the headline, never inside its own card, badge or border that reads as a second logo. This also applies when the scene calls for depicting this brand's own product, app, or dashboard on a screen, monitor, phone, or other display within the image: render that interface convincingly through layout, charts, colors and UI chrome, but leave its own on-screen wordmark/logo area blank, blurred, or replaced with a generic mark rather than spelling out the real brand name there — a screen that happens to be showing software still counts as "in this image" for this rule. Any real brand mark is applied in a separate step after this image is generated.${reservedZoneText}`);
     }
 
     if (environmentInline?.data) {
@@ -4943,11 +5065,14 @@ Do NOT invent new people not visible in earlier scenes.`);
       referenceNotes.push(`Image ${parts.length} is the environment reference — a photo of the user's actual physical space. The generated scene must take place inside this space. Match its walls, floor, ceiling, lighting, and material vocabulary.`);
     }
 
-    if (referenceNotes.length > 0) {
-      parts.push({ text: `${referenceNotes.join('\n\n')}\n\n${prompt}` });
-    } else {
-      parts.push({ text: prompt });
-    }
+    // The exact text sent to the model, kept so it can be surfaced in the UI
+    // alongside the image it produced. Previously this was discarded, which
+    // made it impossible to see why an image came out the way it did.
+    promptUsed = referenceNotes.length > 0
+      ? `${referenceNotes.join('\n\n')}\n\n${prompt}`
+      : prompt;
+
+    parts.push({ text: promptUsed });
 
     console.log("Gemini input parts:");
     console.log(JSON.stringify(parts.map((p, index) => ({
@@ -4990,13 +5115,13 @@ Do NOT invent new people not visible in earlier scenes.`);
           try {
             const uploadResult = await uploadBase64Image(base64Image, 'nebula-campaign-posts');
             if (uploadResult.success && uploadResult.url) {
-              return { success: true, imageUrl: uploadResult.url, model: 'nano-banana-2' };
+              return { success: true, imageUrl: uploadResult.url, model: 'nano-banana-2', promptUsed };
             }
           } catch (uploadErr) {
             console.warn('Cloudinary upload failed, returning base64:', uploadErr.message);
           }
 
-          return { success: true, imageUrl: base64Image, model: 'nano-banana-2' };
+          return { success: true, imageUrl: base64Image, model: 'nano-banana-2', promptUsed };
         }
       }
     }
@@ -5041,10 +5166,10 @@ Do NOT invent new people not visible in earlier scenes.`);
               try {
                 const uploadResult = await uploadBase64Image(base64Image, 'nebula-campaign-posts');
                 if (uploadResult.success && uploadResult.url) {
-                  return { success: true, imageUrl: uploadResult.url, model: 'gemini-2.5-flash-image' };
+                  return { success: true, imageUrl: uploadResult.url, model: 'gemini-2.5-flash-image', promptUsed };
                 }
               } catch (_) { }
-              return { success: true, imageUrl: base64Image, model: 'gemini-2.5-flash-image' };
+              return { success: true, imageUrl: base64Image, model: 'gemini-2.5-flash-image', promptUsed };
             }
           }
         }
@@ -5055,6 +5180,20 @@ Do NOT invent new people not visible in earlier scenes.`);
       }
     } catch (fbErr) {
       console.error('Fallback also failed:', fbErr.message);
+    }
+
+    // Third tier — a different provider entirely, only reached after both
+    // Nano Banana attempts above have failed. Text-only (see openaiImage.js
+    // for why); still worth trying over returning nothing.
+    try {
+      console.log('[NanoBanana2] Both Nano Banana attempts failed, trying OpenAI image generation...');
+      const openAiResult = await generateOpenAIImage(promptUsed, { aspectRatio });
+      if (openAiResult?.success && openAiResult?.imageUrl) {
+        return { success: true, imageUrl: openAiResult.imageUrl, model: openAiResult.model, promptUsed };
+      }
+      console.warn('[NanoBanana2] OpenAI fallback also failed:', openAiResult?.error);
+    } catch (openAiErr) {
+      console.error('[NanoBanana2] OpenAI fallback threw:', openAiErr.message);
     }
 
     return { success: false, error: error.message };

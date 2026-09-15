@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { UploadCloud, Loader2, Sparkles, Calendar, Send, X, Instagram, Facebook, Linkedin, Twitter, Check } from 'lucide-react';
 import { draftsAPI, apiService } from '../services/api';
+import { GravityHero, GravityEmphasis } from '../components/gravity';
 
 const PLATFORMS = [
   { key: 'instagram', label: 'Instagram', Icon: Instagram },
@@ -116,15 +117,11 @@ const UploadAndSchedule: React.FC = () => {
 
   return (
     <div className="max-w-[900px] mx-auto pb-24">
-      <div className="text-center mb-10 mt-4">
-        <div className="gravity-label text-[#F5A623] mb-4">Upload · your own media</div>
-        <h1 className="font-serif-display text-[52px] leading-[1.05] tracking-[-0.02em] text-[#F5F4F1] mb-5">
-          Already have <span className="italic text-[#F5A623]">something</span>?
-        </h1>
-        <p className="text-[15px] text-white/55 max-w-[520px] mx-auto leading-relaxed">
-          Drop in a photo or a video. Gravity writes the caption and puts it out.
-        </p>
-      </div>
+      <GravityHero
+        eyebrow="Upload · your own media"
+        headline={<>Already have <GravityEmphasis>something</GravityEmphasis>?</>}
+        subcopy="Drop in a photo or a video. Gravity writes the caption and puts it out."
+      />
 
       {!file ? (
         <div

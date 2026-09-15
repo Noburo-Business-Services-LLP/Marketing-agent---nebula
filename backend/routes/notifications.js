@@ -14,6 +14,22 @@ const notificationScheduler = require('../services/notificationScheduler');
  * GET /api/notifications
  * Get all notifications for the current user
  */
+/**
+ * Reminders are time-sensitive by construction: "goes live in 30 minutes"
+ * means nothing a day later, let alone a month. They were never expired, so
+ * every reminder ever sent stayed unread forever and the bell just counted
+ * upwards. Anything older than this window is treated as spent — the record
+ * stays, it simply stops being news.
+ */
+const REMINDER_SHELF_LIFE_MS = 24 * 60 * 60 * 1000;
+
+function freshOnly(query) {
+  return {
+    ...query,
+    createdAt: { $gte: new Date(Date.now() - REMINDER_SHELF_LIFE_MS) }
+  };
+}
+
 router.get('/', protect, async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
@@ -30,17 +46,17 @@ router.get('/', protect, async (req, res) => {
       query.status = { $in: ['sent', 'pending'] }; // Include pending notifications too
     }
 
-    const notifications = await Notification.find(query)
+    const notifications = await Notification.find(freshOnly(query))
       .sort({ createdAt: -1 })
       .limit(parseInt(limit))
       .select('-emailError');
 
     // Get unread count - include both sent and pending
-    const unreadCount = await Notification.countDocuments({
+    const unreadCount = await Notification.countDocuments(freshOnly({
       userId,
       readAt: null,
       status: { $in: ['sent', 'pending'] }
-    });
+    }));
 
     res.json({
       success: true,
@@ -61,11 +77,11 @@ router.get('/unread-count', protect, async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
 
-    const count = await Notification.countDocuments({
+    const count = await Notification.countDocuments(freshOnly({
       userId,
       readAt: null,
       status: { $in: ['sent', 'pending'] }
-    });
+    }));
 
     res.json({
       success: true,

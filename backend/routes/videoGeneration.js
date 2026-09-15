@@ -1,4 +1,5 @@
 const express = require('express');
+const { buildPrompt } = require('../services/promptRegistry');
 const router = express.Router();
 const rateLimit = require('express-rate-limit');
 const { ipKeyGenerator } = rateLimit;
@@ -7,7 +8,7 @@ const path = require('path');
 
 const Product = require('../models/Product');
 const { protect } = require('../middleware/auth');
-const { checkTrial, deductCredits, refundCredits } = require('../middleware/trialGuard');
+const { checkTrial, deductCredits, refundCredits, CREDIT_COSTS } = require('../middleware/trialGuard');
 const { getPublicBaseUrl } = require('../utils/toneAudio');
 const { videoGenerationQueue } = require('../services/videoGenerationQueue');
 const {
@@ -23,7 +24,8 @@ const {
   normalizeCreateInput,
   materializeSourceToFile,
   normalizeSceneVideoClip,
-  createJobContext
+  createJobContext,
+  estimateSceneCount
 } = require('../services/videoGenerationPipeline');
 const { generateVideoClip, getKlingDuration } = require('../services/videoService');
 const { uploadVideoFile } = require('../services/imageUploader');
@@ -75,7 +77,7 @@ const {
   saveDataUrlToJob
 } = require('../services/videoDraftStore');
 const { callGemini, parseGeminiJSON, generateCampaignImageNanoBanana } = require('../services/geminiAI');
-const { callOpenAI } = require('../services/openAI');
+const { callOpenAI, callTextLLM } = require('../services/openAI');
 const User = require('../models/User');
 const { buildAIContext } = require('../services/aiContextBuilder');
 const { learnVideoStep } = require('../services/aiVideoLearning');
@@ -351,11 +353,27 @@ const videoJobReadLimiter = rateLimit({
   keyGenerator: (req) => String(req.user?._id || req.user?.id || ipKeyGenerator(req.ip))
 });
 
-function friendlyVideoMessage(message = '', fallbackMessage = 'Retrying video generation...') {
+// Messages the user can actually act on. These are checked BEFORE the
+// technical filter below, which would otherwise swallow them: its patterns
+// include /error/i and /failed/i, so almost any real message matched and was
+// replaced with "Retrying video generation..." — telling the user a retry was
+// under way when the request had simply failed. That cost real debugging time.
+const ACTIONABLE_MESSAGE_PATTERNS = [
+  /not found/i,
+  /no longer available/i,
+  /not authori[sz]ed/i,
+  /permission/i,
+  /insufficient credits/i,
+  /credits/i,
+  /required/i,
+  /invalid/i
+];
+
+function friendlyVideoMessage(message = '', fallbackMessage = 'Something went wrong. Please try again.') {
   const raw = String(message || '').trim();
+  if (raw && ACTIONABLE_MESSAGE_PATTERNS.some((pattern) => pattern.test(raw))) return raw;
+
   const technicalPatterns = [
-    /job not found/i,
-    /draft not found/i,
     /ffmpeg/i,
     /fal\.?ai/i,
     /queue/i,
@@ -364,14 +382,13 @@ function friendlyVideoMessage(message = '', fallbackMessage = 'Retrying video ge
     /internal server error/i,
     /timeout/i,
     /timed out/i,
-    /failed/i,
-    /error/i
+    /stack/i
   ];
   if (!raw || technicalPatterns.some((pattern) => pattern.test(raw))) {
     const fallback = String(fallbackMessage || '').trim();
     return fallback && !technicalPatterns.some((pattern) => pattern.test(fallback))
       ? fallback
-      : 'Retrying video generation...';
+      : 'Something went wrong. Please try again.';
   }
   return raw;
 }
@@ -383,7 +400,7 @@ function responseError(res, error, fallbackMessage) {
   if (error?.stack) console.error(error.stack);
   return res.status(statusCode).json({
     success: false,
-    message: friendlyVideoMessage(error?.message, fallbackMessage || 'Retrying video generation...')
+    message: friendlyVideoMessage(error?.message, fallbackMessage || 'Something went wrong. Please try again.')
   });
 }
 
@@ -929,29 +946,21 @@ function audioScriptLabel(code = 'en') {
   return labels[normalizeAudioLanguageCode(code)] || labels.en;
 }
 
-async function localizeAudioScript({ text, languageCode }) {
+async function localizeAudioScript({ text, languageCode, userId = null }) {
   const source = String(text || '').replace(/\s+/g, ' ').trim();
   const normalizedLanguage = normalizeAudioLanguageCode(languageCode);
   if (!source || normalizedLanguage.startsWith('en')) return source;
 
   const language = audioLanguageLabel(normalizedLanguage);
   const script = audioScriptLabel(normalizedLanguage);
-  const prompt = `Translate and adapt this short reel voiceover for text-to-speech.
-
-Target language: ${language}
-Target script: ${script}
-
-Rules:
-- Return only the final voiceover text. No markdown, labels, or quotes.
-- Translate the narration into ${language}; do not return English for this target language.
-- Keep brand names, product names, prices, URLs, and technical model names unchanged when needed.
-- Keep it natural for a short social media reel.
-
-Voiceover:
-${source}`;
+  const prompt = await buildPrompt(userId, 'video.ttsTranslate', {
+    language: (language),
+    script: (script),
+    source: (source)
+  });
 
   try {
-    const localized = await callGemini(prompt, {
+    const localized = await callTextLLM(prompt, {
       skipCache: true,
       temperature: 0.25,
       maxTokens: 900,
@@ -1131,31 +1140,17 @@ async function generateStructuredPrompt(draft) {
     category: draft?.input?.product?.category || ''
   });
 
-  const prompt = `You are an AI video strategist.
-Return STRICT JSON:
-{
-  "structuredPrompt": "string",
-  "creativeDirection": {
-    "targetAudience": "string",
-    "tone": "string",
-    "visualStyle": "string",
-    "cta": "string"
-  }
-}
-
-Context:
-- Description: ${description}
-- Product Name: ${productName || 'N/A'}
-- Product Description: ${productDescription || 'N/A'}
-- Reference: ${sourceHint}
-${aiMemoryContext.reusablePromptText}
-
-Rules:
-- structuredPrompt must be concise but actionable for scene generation.
-- Keep ad-ready language with clear call-to-action.`;
+  const prompt = await buildPrompt(draft?.userId, 'video.brief', {
+    description: (description),
+    productName: (productName || 'N/A'),
+    productDescription: (productDescription || 'N/A'),
+    sourceHint: (sourceHint),
+    reusablePromptText: (aiMemoryContext.reusablePromptText)
+  });
 
   try {
-    const raw = await callGemini(prompt, {
+    const raw = await callTextLLM(prompt, {
+      jsonMode: true,
       skipCache: true,
       temperature: 0.55,
       maxTokens: 900,
@@ -1225,48 +1220,24 @@ async function generateCaptionAndHashtags({ draft, selectedPlatforms = [] }) {
     category: draft?.input?.product?.category || ''
   });
 
-  const prompt = `Write the social caption for THIS specific video — not a generic one.
-
-Return STRICT JSON:
-{
-  "caption": "string",
-  "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5", "#tag6"]
-}
-
-THE BUSINESS
-- Name: ${profile?.name || 'N/A'}
-- Industry: ${profile?.industry || 'N/A'}
-- Audience: ${profile?.targetAudience || 'N/A'}
-- Product featured: ${draft?.input?.product?.name || 'N/A'}
-
-THE VIDEO (this is what the caption must be about)
-- Brief: ${draft?.input?.description || 'N/A'}
-- Story: ${story || 'N/A'}
-- Style: ${draft?.videoStyle || 'N/A'}
-${draft?.characterName ? `- Character on screen: ${draft.characterName}` : ''}
-- Narration: ${voiceScript || 'N/A'}
-- Scene by scene:
-${beatByBeat || '  (no scenes available)'}
-
-- Platforms: ${selectedPlatforms.join(', ') || 'instagram'}
-${aiMemoryContext.reusablePromptText}
-
-RULES
-- The caption MUST reference what actually happens in this video — the specific
-  product, the moment, the transformation, the feeling this story creates.
-  Someone who watched it should recognise it from the caption alone.
-- BANNED: "Discover our latest", "Elevate your", "Take your X to the next level",
-  "Unlock", "Game-changer", "Look no further", and any line that would fit an
-  unrelated business unchanged. If the caption would work for a different
-  company's video, rewrite it.
-- Name the business or product at least once where it reads naturally.
-- 1-3 lines, conversational, no markdown, no emoji spam (2 max).
-- End with a clear next step suited to the business (visit, DM, call, order).
-- hashtags: 5-12 tags. Mix specific (product, city, category) with reach tags.
-  No single-word generics like #love or #instagood.`;
+  const prompt = await buildPrompt(draft?.userId, 'video.caption', {
+    name: (profile?.name || 'N/A'),
+    industry: (profile?.industry || 'N/A'),
+    targetAudience: (profile?.targetAudience || 'N/A'),
+    name2: (draft?.input?.product?.name || 'N/A'),
+    description: (draft?.input?.description || 'N/A'),
+    story: (story || 'N/A'),
+    videoStyle: (draft?.videoStyle || 'N/A'),
+    block8: (draft?.characterName ? `- Character on screen: ${draft.characterName}` : ''),
+    voiceScript: (voiceScript || 'N/A'),
+    beatByBeat: (beatByBeat || '  (no scenes available)'),
+    block11: (selectedPlatforms.join(', ') || 'instagram'),
+    reusablePromptText: (aiMemoryContext.reusablePromptText)
+  });
 
   try {
-    const raw = await callGemini(prompt, {
+    const raw = await callTextLLM(prompt, {
+      jsonMode: true,
       skipCache: true,
       temperature: 0.7,
       maxTokens: 900,
@@ -1427,18 +1398,44 @@ router.post('/createVideo', protect, checkTrial, videoAiWriteLimiter, async (req
     return res.status(401).json({ success: false, message: 'Authentication required' });
   }
 
-  // Deduct 7 credits synchronously before enqueuing
-  const creditResult = await deductCredits(userId, 'campaign_full', 1, 'AI video generation pipeline');
-  if (!creditResult.success) {
+  const payload = req.body || {};
+  // Per scene, not flat — a video renders an image plus a clip per scene,
+  // real work a shorter video doesn't do. estimateSceneCount is the exact
+  // function the pipeline itself uses to decide scene count, so what gets
+  // charged here matches what actually gets generated rather than a second,
+  // possibly different, guess.
+  const sceneCount = estimateSceneCount(payload.durationSeconds, payload.sceneCount);
+
+  // A video costs money in two shapes, so it is charged in two. The per-scene
+  // part scales (image + face swap + Kling clip + narration). The base part
+  // does not: the 4-portrait character sheet, one music track sized to the
+  // whole runtime, the thumbnail and the story pass all happen exactly once
+  // however long the video is. Folding the base into the per-scene rate would
+  // overcharge a 10-scene video and undercharge a 3-scene one.
+  const videoTotal = CREDIT_COSTS.video_base + sceneCount * CREDIT_COSTS.video_generated;
+
+  const baseCharge = await deductCredits(userId, 'video_base', 1, 'AI video — character sheet, music, thumbnail, story');
+  if (!baseCharge.success) {
     return res.status(403).json({
       success: false,
       creditsExhausted: true,
-      message: creditResult.error || 'Insufficient credits. Need 7 credits for full campaign.'
+      message: baseCharge.error || `Insufficient Quarks. Need ${videoTotal} Quarks for a ${sceneCount}-scene video.`
+    });
+  }
+
+  const creditResult = await deductCredits(userId, 'video_generated', sceneCount, 'AI video generation pipeline');
+  if (!creditResult.success) {
+    // The base already landed; give it back rather than keeping payment for
+    // a video that never got enqueued.
+    await refundCredits(userId, 'video_base', 1, 'Refund: video scenes could not be charged');
+    return res.status(403).json({
+      success: false,
+      creditsExhausted: true,
+      message: creditResult.error || `Insufficient Quarks. Need ${videoTotal} Quarks for a ${sceneCount}-scene video.`
     });
   }
 
   try {
-    const payload = req.body || {};
     const baseUrl = reqBaseUrl(req);
 
     const queued = await videoGenerationQueue.enqueue({
@@ -1452,6 +1449,15 @@ router.post('/createVideo', protect, checkTrial, videoAiWriteLimiter, async (req
           businessProfile: req.user?.businessProfile
         },
         baseUrl
+      },
+      // What was actually deducted above, so a failure refunds the real
+      // amount instead of a hardcoded guess. See the queue's failure
+      // handler in videoGenerationQueue.js.
+      metadata: {
+        quarkCharge: [
+          { action: 'video_base', count: 1 },
+          { action: 'video_generated', count: sceneCount }
+        ]
       }
     });
 
@@ -1486,7 +1492,8 @@ router.post('/createVideo', protect, checkTrial, videoAiWriteLimiter, async (req
   } catch (error) {
     // Refund credits immediately if enqueuing fails
     try {
-      await refundCredits(userId, 'campaign_full', 1, 'Refund: AI video enqueuing failed');
+      await refundCredits(userId, 'video_generated', sceneCount, 'Refund: AI video enqueuing failed');
+      await refundCredits(userId, 'video_base', 1, 'Refund: AI video enqueuing failed');
     } catch (refundErr) {
       console.error('⚠️ Failed to refund credits after enqueuing error:', refundErr.message);
     }
@@ -1499,9 +1506,11 @@ router.get('/jobs/:jobId', protect, videoJobReadLimiter, async (req, res) => {
     const userId = req.user?._id ? String(req.user._id) : (req.user?.id ? String(req.user.id) : null);
     const job = await videoGenerationQueue.getJob(req.params.jobId, userId);
     if (!job) {
+      // A job that does not exist is not being retried — say so, so the
+      // client can stop polling and the user knows where they stand.
       return res.status(404).json({
         success: false,
-        message: 'Retrying video generation...'
+        message: 'That job is no longer available.'
       });
     }
     return res.json({
@@ -1636,65 +1645,17 @@ router.post('/generateConcepts', protect, checkTrial, videoAiWriteLimiter, async
     // Prompt sourced from Video Concept Prompt.docx, with brand slots
     // filled dynamically and a STRICT JSON output wrapper added so the
     // frontend can render each concept in a card without parsing prose.
-    const systemPrompt = `You are an award-winning Creative Director from Ogilvy, Wieden+Kennedy and Apple.
-Your job is NOT to create an advertisement.
-Your job is to create a commercial that people remember.
-
-You are creating a premium social media reel (${durationSeconds} seconds) for the following brand.
-
-BRAND DETAILS
-Business Name: ${brandName}
-Industry: ${industry}
-Brand Summary: ${brandSummary}
-Target Audience: ${targetAudience}
-Target Location / Region: ${conceptRegionHint}
-Brand Tone: ${brandTone}
-Competitors: ${competitors || 'N/A'}
-
-REGIONAL AUTHENTICITY (mandatory)
-Every concept must be culturally authentic to "${conceptRegionHint}".
-- People described in the story must be of that region's ethnicity (e.g. South Indian for Tamil Nadu brands — NOT Western characters).
-- Names, settings, wardrobe, festivals, and cultural touchpoints must match.
-- Do NOT default to Western/generic scenarios. Draw from regional life, cuisine, family structure, celebrations.
-
-USER'S CREATIVE BRIEF
-${description}
-
-Your task is to come up with THREE completely different commercial concepts.
-Each concept should be emotionally powerful, memorable and capable of becoming a viral premium brand film.
-Avoid clichés.
-Avoid direct selling.
-Avoid explaining the product.
-Do not start with the product.
-Think like Apple, Nike, Tanishq or Google commercials.
-
-The three concepts MUST be completely different from one another:
-- Concept 1 → Emotional
-- Concept 2 → Inspirational
-- Concept 3 → Unexpected or highly creative
-
-OUTPUT FORMAT — STRICT JSON ONLY, no markdown, no code fences, no prose outside the JSON:
-{
-  "concepts": [
-    {
-      "id": "concept_1",
-      "type": "emotional",
-      "title": "Memorable campaign title",
-      "coreEmotion": "What the audience should feel — one short phrase",
-      "bigIdea": "One paragraph explaining the central idea",
-      "storySummary": "Beginning → Emotion → Brand → Ending, one paragraph",
-      "whyItWorks": "Why this works psychologically, one paragraph",
-      "visualStyle": "Cinematography, palette, mood direction",
-      "musicStyle": "Suggested background music style",
-      "endingMessage": "The final line or brand payoff"
-    },
-    { "id": "concept_2", "type": "inspirational", ... same schema ... },
-    { "id": "concept_3", "type": "unexpected", ... same schema ... }
-  ],
-  "recommended": "concept_1 | concept_2 | concept_3",
-  "recommendationReason": "One paragraph explaining why the recommended concept is strongest."
-}
-Return exactly 3 concepts in the array.`;
+    const systemPrompt = await buildPrompt(req.user.id, 'video.concepts', {
+      durationSeconds: (durationSeconds),
+      brandName: (brandName),
+      industry: (industry),
+      brandSummary: (brandSummary),
+      targetAudience: (targetAudience),
+      conceptRegionHint: (conceptRegionHint),
+      brandTone: (brandTone),
+      competitors: (competitors || 'N/A'),
+      description: (description)
+    });
 
     let raw;
     try {
@@ -1774,57 +1735,18 @@ router.post('/generateCharacters', protect, checkTrial, videoAiWriteLimiter, asy
     // Prompt sourced verbatim from Character Prompt.docx, generalized
     // with brand + approved-concept slots and wrapped in a strict JSON
     // schema so the frontend can render cards + numbered chips.
-    const systemPrompt = `Based on the approved story, determine whether recurring characters are required.
-If characters appear in multiple scenes, create a MASTER CHARACTER REFERENCE prompt.
-Generate one production-ready prompt that creates a single cast reference image containing all recurring characters with unique IDs.
-The reference should maintain family resemblance, identical facial identity and realistic age progression.
-Return only the character reference prompt.
-
---- CONTEXT ---
-APPROVED STORY / CONCEPT
-Title: ${conceptTitle || '(from user description)'}
-Core Emotion: ${conceptEmotion || 'n/a'}
-Story Summary: ${conceptStory || description}
-Visual Style: ${conceptVisualStyle || 'Premium cinematic'}
-
-BRAND
-Business: ${brandName}
-Industry: ${industry}
-Target Audience: ${targetAudience}
-Target Location / Region: ${regionHint}
-${businessLanguage ? 'Business Language(s): ' + businessLanguage : ''}
-Brand Tone: ${brandTone}
-
---- REGIONAL AUTHENTICITY (MANDATORY) ---
-Every character MUST look like a real member of the brand's actual target market.
-- Ethnicity, skin tone, facial features, body type, and age markers must match "${regionHint}".
-- Names MUST be authentic to that region (e.g. Tamil / Hindi / Kannada / regional Indian names for an Indian brand — NOT Western names like John, Emma, David, Sarah).
-- Clothing must match the region and business context (e.g. saree, kurta, veshti, sherwani, dupatta for South Indian brands — NOT generic Western casualwear unless the concept explicitly demands it).
-- Do NOT default to White/European appearance. Do NOT produce generic "Western-looking" characters unless the target region is explicitly Western.
-- Cultural touches (jewellery, bindi, mangalsutra, henna, footwear) should reflect the region where relevant.
-The single most important rule: viewers from the target region must recognize these as their people.
-
---- OUTPUT ---
-Return STRICT JSON ONLY (no markdown, no code fences, no prose outside the JSON) matching this schema:
-{
-  "characters": [
-    {
-      "id": "01",
-      "name": "Full realistic name",
-      "age": "e.g. 34",
-      "gender": "Male | Female | Non-binary",
-      "role": "Their role in the story",
-      "personality": "One short sentence",
-      "appearance": "Facial features, build, ethnicity",
-      "clothing": "Specific outfit matching the story",
-      "hairStyle": "Specific haircut/style",
-      "hairColor": "Natural hair color"
-    }
-  ],
-  "castReferencePrompt": "The single MASTER CHARACTER REFERENCE prompt — one clean horizontal photograph, plain off-white / neutral studio backdrop, all characters standing side-by-side in a single row, evenly spaced, full-body visible, facing camera, natural warm cinematic lighting, photorealistic commercial studio quality. EVERY character must authentically look like a real person from ${regionHint} — correct ethnicity, skin tone, facial features, and regional wardrobe (saree/kurta/veshti/salwar for Indian brands). Do NOT render Western/European-looking people unless the concept explicitly demands it. Directly UNDER each character render a small clean text label in this exact format on TWO lines: line 1 = '01', '02', '03' ... (the zero-padded 2-digit number in a small warm-gold color), line 2 = 'FULLNAME · AGE XX' (in black or dark grey, all uppercase). Match the characters array order left to right. STRICT PROHIBITIONS: do NOT render any headline text, tagline, brand name banner, marketing copy, decorative typography, or slogans anywhere in the image — only the numbered character labels described above are allowed. Do NOT add background props, furniture, or a floor plate. Do NOT put the brand name anywhere in the frame. Keep the background as clean empty studio wall. Maintain family resemblance if applicable, identical facial identity, realistic age progression."
-}
-Character IDs MUST be zero-padded 2-digit strings: "01", "02", "03" ... matching the order they appear in the master image.
-Return only what the story genuinely needs (up to 8 characters).`;
+    const systemPrompt = await buildPrompt(req.user.id, 'video.casting', {
+      conceptTitle: (conceptTitle || '(from user description)'),
+      conceptEmotion: (conceptEmotion || 'n/a'),
+      conceptStory: (conceptStory || description),
+      conceptVisualStyle: (conceptVisualStyle || 'Premium cinematic'),
+      brandName: (brandName),
+      industry: (industry),
+      targetAudience: (targetAudience),
+      regionHint: (regionHint),
+      block9: (businessLanguage ? 'Business Language(s): ' + businessLanguage : ''),
+      brandTone: (brandTone)
+    });
 
     let raw;
     try {
@@ -1865,6 +1787,9 @@ Return only what the story genuinely needs (up to 8 characters).`;
 // can regenerate a specific character with a custom tweak.
 // ============================================================
 router.post('/generateCharacterPortrait', protect, checkTrial, videoAiWriteLimiter, async (req, res) => {
+  // Declared out here so the catch block can refund — same pattern as
+  // /generate-image-bg in routes/drafts.js.
+  let creditsDeducted = false;
   try {
     const { referencePrompt, overridePrompt, characterName, aspectRatio, characters, castMode, extraDirection } = req.body || {};
 
@@ -1933,6 +1858,19 @@ router.post('/generateCharacterPortrait', protect, checkTrial, videoAiWriteLimit
       }
     }
 
+    // A cast/character portrait re-render is one real Nano Banana call —
+    // this used to be free (the same gap fixed for post/campaign Regenerate
+    // in routes/drafts.js).
+    const creditResult = await deductCredits(userId, 'video_character_portrait', 1, 'Regenerate character portrait');
+    if (!creditResult.success) {
+      return res.status(403).json({
+        success: false,
+        creditsExhausted: true,
+        message: creditResult.error || `Insufficient Quarks. Need ${CREDIT_COSTS.video_character_portrait} Quarks to regenerate this portrait.`
+      });
+    }
+    creditsDeducted = true;
+
     const result = await generateCampaignImageNanoBanana(prompt, {
       aspectRatio: aspectRatio || '1:1',
       // For cast reference: suppress brandName so Nano Banana does NOT
@@ -1943,6 +1881,7 @@ router.post('/generateCharacterPortrait', protect, checkTrial, videoAiWriteLimit
     });
 
     if (!result?.success || !result?.imageUrl) {
+      await refundCredits(userId, 'video_character_portrait', 1, 'Refund: portrait generation returned no URL').catch(() => {});
       return res.status(502).json({
         success: false,
         message: result?.error || 'Image generation returned no URL'
@@ -1954,6 +1893,10 @@ router.post('/generateCharacterPortrait', protect, checkTrial, videoAiWriteLimit
       characterName: characterName || null
     });
   } catch (error) {
+    if (creditsDeducted) {
+      const userId = toUserId(req.user);
+      await refundCredits(userId, 'video_character_portrait', 1, 'Refund: portrait generation errored').catch(() => {});
+    }
     return responseError(res, error, 'Failed to generate character portrait');
   }
 });
@@ -2014,28 +1957,10 @@ router.post('/generateCharacterPreview', protect, checkTrial, videoAiWriteLimite
     
     const resolvedArtStyle = artStyle || 'Realistic / Photography';
     
-    let prompt = `Create a professional Master Character Reference Sheet.
-The sheet must show the exact same person in all views and preserve the identical face, hairstyle, beard, skin tone, body proportions, and age.
-
-Include the following sections:
-1. Face Views: Front view, Left profile, Right profile, 45-degree angle.
-2. Body Views: Full body front, Full body side, Full body back.
-3. Expression Sheet: Neutral, Happy, Serious, Thinking.
-4. Pose Sheet: Standing, Walking, Sitting, Pointing.
-
-Requirements:
-- Use the exact same person in every image.
-- Maintain identical facial geometry.
-- Maintain identical beard style.
-- Maintain identical hairstyle and hairline.
-- Maintain identical skin tone and ethnicity.
-- Maintain identical body proportions.
-- Use a clean studio background.
-- Arrange everything in a professional character reference sheet layout.
-- Art Style / Format: ${resolvedArtStyle}.
-- Video Theme Style: ${videoStyle || 'Cinematic, extremely high quality.'}
-- CRITICAL: Do not add glasses, hats, or other face-obscuring accessories unless explicitly specified.
-`;
+    const prompt = await buildPrompt(req.user.id, 'video.characterSheet', {
+      resolvedArtStyle: (resolvedArtStyle),
+      videoStyle: (videoStyle || 'Cinematic, extremely high quality.')
+    });
 
     if (description) {
         prompt += `\nSubject details to enforce: ${description}`;
@@ -2437,6 +2362,10 @@ router.post('/generateSingleScene', protect, checkTrial, videoAiWriteLimiter, as
 // ============================================================
 router.post('/generateSingleSceneImage', protect, checkTrial, videoAiWriteLimiter, async (req, res) => {
   const _t0 = Date.now();
+  // Declared out here so both the explicit failure return below and the
+  // catch block can refund — same pattern as /generate-image-bg in
+  // routes/drafts.js.
+  let creditsDeducted = false;
   try {
     const { jobId, sceneIndex, castImageUrl: castUrlFromReq } = req.body || {};
     console.log(`[singleSceneImage] IN jobId=${jobId} sceneIndex=${sceneIndex} castUrl=${castUrlFromReq ? 'present' : 'missing'}`);
@@ -2453,6 +2382,19 @@ router.post('/generateSingleSceneImage', protect, checkTrial, videoAiWriteLimite
       return res.status(404).json({ success: false, message: `Scene at index ${sceneIndex} not found` });
     }
     console.log(`[singleSceneImage] scene ok · draft has ${scenesArr.length} scenes · scene.imageUrl already? ${!!scene.imageUrl}`);
+
+    // Regenerating one scene's still re-runs one real Nano Banana call —
+    // this used to be free (the same class of gap fixed for post/campaign
+    // Regenerate in routes/drafts.js).
+    const creditResult = await deductCredits(userId, 'video_scene_image', 1, 'Regenerate scene image');
+    if (!creditResult.success) {
+      return res.status(403).json({
+        success: false,
+        creditsExhausted: true,
+        message: creditResult.error || `Insufficient Quarks. Need ${CREDIT_COSTS.video_scene_image} Quarks to regenerate this scene's image.`
+      });
+    }
+    creditsDeducted = true;
 
     const castUrl = String(castUrlFromReq || draft?.castImageUrl || draft?.characterImage || '').trim();
     const characterBible = Array.isArray(draft?.characterBible) ? draft.characterBible : [];
@@ -2594,6 +2536,7 @@ Match the reference's wall colors, floor materials, ceiling, lighting fixtures, 
       }
     }
     if (!imageUrl) {
+      await refundCredits(userId, 'video_scene_image', 1, 'Refund: scene image regeneration failed').catch(() => {});
       return res.status(502).json({ success: false, message: lastResult?.error || 'Nano Banana returned no imageUrl after retries' });
     }
 
@@ -2620,6 +2563,10 @@ Match the reference's wall colors, floor materials, ceiling, lighting fixtures, 
     }));
     return res.json({ success: true, jobId, sceneIndex, imageUrl, scene: nextScenes[sceneIndex], draft: saved });
   } catch (error) {
+    if (creditsDeducted) {
+      const userId = toUserId(req.user);
+      await refundCredits(userId, 'video_scene_image', 1, 'Refund: scene image regeneration errored').catch(() => {});
+    }
     return responseError(res, error, 'Failed to generate scene image');
   }
 });
@@ -2789,6 +2736,10 @@ router.post('/applySceneLogo', protect, videoJobReadLimiter, async (req, res) =>
 // rather than just posing.
 // ============================================================
 router.post('/generateSingleVideoClip', protect, checkTrial, videoAiWriteLimiter, async (req, res) => {
+  // Declared out here so the catch block can refund — same pattern as
+  // /generate-image-bg in routes/drafts.js.
+  let creditsDeducted = false;
+  let creditUserId = null;
   try {
     const { jobId, sceneIndex, regenTweak = '', aspectRatio: aspectFromReq } = req.body || {};
     if (!jobId) return res.status(400).json({ success: false, message: 'jobId is required' });
@@ -2796,6 +2747,7 @@ router.post('/generateSingleVideoClip', protect, checkTrial, videoAiWriteLimiter
       return res.status(400).json({ success: false, message: 'sceneIndex (0-based integer) is required' });
     }
     const userId = toUserId(req.user);
+    creditUserId = userId;
     const draft = await loadDraftForUser(jobId, userId);
     // Scenes can live in any of: draft.scenes | draft.images.sceneData
     // | draft.clips.sceneData. Prefer the collection that has an
@@ -2814,6 +2766,19 @@ router.post('/generateSingleVideoClip', protect, checkTrial, videoAiWriteLimiter
       message: `Scene at index ${sceneIndex} not found (draft has ${scenesArr.length} scene${scenesArr.length === 1 ? '' : 's'})`
     });
     if (!scene.imageUrl) return res.status(400).json({ success: false, message: 'Scene image must be generated first' });
+
+    // Regenerating one scene's clip re-runs one real Kling call — this used
+    // to be free (the same class of gap fixed for post/campaign Regenerate
+    // in routes/drafts.js).
+    const creditResult = await deductCredits(userId, 'video_scene_clip', 1, 'Regenerate scene clip');
+    if (!creditResult.success) {
+      return res.status(403).json({
+        success: false,
+        creditsExhausted: true,
+        message: creditResult.error || `Insufficient Quarks. Need ${CREDIT_COSTS.video_scene_clip} Quarks to regenerate this scene's clip.`
+      });
+    }
+    creditsDeducted = true;
 
     const validAspect = new Set(['9:16', '16:9', '1:1', '4:5']);
     const rawAspect = String(aspectFromReq || draft?.input?.aspectRatio || '9:16').trim();
@@ -2966,11 +2931,19 @@ router.post('/generateSingleVideoClip', protect, checkTrial, videoAiWriteLimiter
       draft: saved
     });
   } catch (error) {
+    if (creditsDeducted && creditUserId) {
+      await refundCredits(creditUserId, 'video_scene_clip', 1, 'Refund: scene clip regeneration errored').catch(() => {});
+    }
     return responseError(res, error, 'Failed to generate scene clip');
   }
 });
 
 router.post('/generateImages', protect, checkTrial, videoAiWriteLimiter, async (req, res) => {
+  // Declared out here so the catch block can refund whatever this request
+  // actually deducted — same pattern as /generate-image-bg in
+  // routes/drafts.js. 'replace' (a manually-uploaded image) never deducts.
+  let creditsDeductedCount = 0;
+  let creditUserId = null;
   try {
     const { jobId, action = 'generateAll', sceneId, sceneData, imagePrompt, imageData, imageUrl } = req.body || {};
     if (!jobId) {
@@ -2978,6 +2951,7 @@ router.post('/generateImages', protect, checkTrial, videoAiWriteLimiter, async (
     }
 
     const userId = toUserId(req.user);
+    creditUserId = userId;
     const draft = await loadDraftForUser(jobId, userId);
     const baseUrl = reqBaseUrl(req);
     const durationSeconds = normalizedDurationSeconds(draft?.input?.durationSeconds || 60, 60);
@@ -2991,6 +2965,34 @@ router.post('/generateImages', protect, checkTrial, videoAiWriteLimiter, async (
 
     if (!sourceScenes.length) {
       return res.status(400).json({ success: false, message: 'No scene data available. Generate scenes first.' });
+    }
+
+    // Only the branches that actually call the image model cost anything —
+    // 'replace' just saves a manually-uploaded image, no vendor call.
+    // Regenerating one scene re-runs one Nano Banana call; the bulk
+    // "generate/regenerate all" path (the else branch below) re-runs one
+    // per scene. This used to be entirely free — the same gap fixed for
+    // post/campaign Regenerate in routes/drafts.js.
+    if (action === 'regenerate' && sceneId) {
+      const creditResult = await deductCredits(userId, 'video_scene_image', 1, 'Regenerate scene image');
+      if (!creditResult.success) {
+        return res.status(403).json({
+          success: false,
+          creditsExhausted: true,
+          message: creditResult.error || `Insufficient Quarks. Need ${CREDIT_COSTS.video_scene_image} Quarks to regenerate this scene's image.`
+        });
+      }
+      creditsDeductedCount = 1;
+    } else if (action !== 'replace') {
+      const creditResult = await deductCredits(userId, 'video_scene_image', sourceScenes.length, 'Regenerate all scene images');
+      if (!creditResult.success) {
+        return res.status(403).json({
+          success: false,
+          creditsExhausted: true,
+          message: creditResult.error || `Insufficient Quarks. Need ${CREDIT_COSTS.video_scene_image * sourceScenes.length} Quarks to regenerate all ${sourceScenes.length} scene images.`
+        });
+      }
+      creditsDeductedCount = sourceScenes.length;
     }
 
     let nextScenes = sourceScenes;
@@ -3022,6 +3024,7 @@ router.post('/generateImages', protect, checkTrial, videoAiWriteLimiter, async (
     } else if (action === 'regenerate' && sceneId) {
       const idx = sourceScenes.findIndex((item) => String(item.sceneId) === String(sceneId));
       if (idx === -1) {
+        await refundCredits(userId, 'video_scene_image', 1, 'Refund: scene not found').catch(() => {});
         return res.status(404).json({ success: false, message: 'Scene not found' });
       }
       const targetScene = sourceScenes[idx];
@@ -3073,6 +3076,7 @@ router.post('/generateImages', protect, checkTrial, videoAiWriteLimiter, async (
             }
           } catch (error) {
             console.error('Nano Banana API Error:', error);
+            await refundCredits(userId, 'video_scene_image', 1, 'Refund: scene image regeneration errored').catch(() => {});
             return res.status(500).json({ success: false, message: 'Nano Banana API Error: ' + error.message });
           }
       } else {
@@ -3171,11 +3175,22 @@ router.post('/generateImages', protect, checkTrial, videoAiWriteLimiter, async (
       draft: updated
     });
   } catch (error) {
+    if (creditsDeductedCount > 0 && creditUserId) {
+      await refundCredits(creditUserId, 'video_scene_image', creditsDeductedCount, 'Refund: scene image generation errored').catch(() => {});
+    }
     return responseError(res, error, 'Failed to generate images');
   }
 });
 
 router.post('/generateClips', protect, checkTrial, videoAiWriteLimiter, async (req, res) => {
+  // Declared out here so the catch block can refund — same pattern as
+  // /generate-image-bg in routes/drafts.js. Only covers the synchronous
+  // path's failures; the async/queued path (off unless VIDEO_STEP_ASYNC is
+  // explicitly set) doesn't refund on a later job failure yet — a known,
+  // smaller gap left for a follow-up rather than reworking the queue's
+  // failure handling here.
+  let creditsDeductedCount = 0;
+  let creditUserId = null;
   try {
     const { jobId, sceneData } = req.body || {};
     if (!jobId) {
@@ -3183,6 +3198,7 @@ router.post('/generateClips', protect, checkTrial, videoAiWriteLimiter, async (r
     }
 
     const userId = toUserId(req.user);
+    creditUserId = userId;
     const draft = await loadDraftForUser(jobId, userId);
     const sourceScenes = sanitizeSceneData(
       sceneData ||
@@ -3195,6 +3211,19 @@ router.post('/generateClips', protect, checkTrial, videoAiWriteLimiter, async (r
     if (!sourceScenes.length || !sourceScenes.some((scene) => scene.imageUrl)) {
       return res.status(400).json({ success: false, message: 'Scene images are required before clip generation' });
     }
+
+    // Regenerating all clips re-runs one real Kling call per scene — this
+    // used to be free (the same gap fixed for post/campaign Regenerate in
+    // routes/drafts.js).
+    const creditResult = await deductCredits(userId, 'video_scene_clip', sourceScenes.length, 'Regenerate all scene clips');
+    if (!creditResult.success) {
+      return res.status(403).json({
+        success: false,
+        creditsExhausted: true,
+        message: creditResult.error || `Insufficient Quarks. Need ${CREDIT_COSTS.video_scene_clip * sourceScenes.length} Quarks to regenerate all ${sourceScenes.length} clips.`
+      });
+    }
+    creditsDeductedCount = sourceScenes.length;
 
     const shouldQueue =
       req.body?.async === true ||
@@ -3313,6 +3342,9 @@ router.post('/generateClips', protect, checkTrial, videoAiWriteLimiter, async (r
       draft: updated
     });
   } catch (error) {
+    if (creditsDeductedCount > 0 && creditUserId) {
+      await refundCredits(creditUserId, 'video_scene_clip', creditsDeductedCount, 'Refund: clip generation errored').catch(() => {});
+    }
     return responseError(res, error, 'Failed to generate clips');
   }
 });
@@ -3371,6 +3403,9 @@ router.post('/generateAudio', protect, checkTrial, videoAiWriteLimiter, async (r
     const generated = await runGenerateAudio({
       payload: {
         jobId,
+        // Carried so the voiceover and music prompts can pick up this user's
+        // edited versions rather than always using the shipped defaults.
+        userId: req.user?.id || null,
         skipMix: true,
         description: String(sourceVoiceScript || draft?.input?.description || ''),
         // Always pass the *source* (English) script; the pipeline will translate

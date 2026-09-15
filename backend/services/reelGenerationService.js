@@ -1,4 +1,5 @@
-const { callGemini, parseGeminiJSON } = require('./geminiAI');
+const { parseGeminiJSON } = require('./geminiAI');
+const { callTextLLM } = require('./openAI');
 const { uploadBase64Image, uploadBase64Audio } = require('./imageUploader');
 const { composeImageToVideoWithAudio } = require('./mediaComposer');
 const { getPublicBaseUrl, resolveToneAudioUrl } = require('../utils/toneAudio');
@@ -379,7 +380,8 @@ ${userIntent ? `Custom user intent: ${userIntent}` : ''}
 `;
 
   try {
-    const raw = await callGemini(prompt, {
+    const raw = await callTextLLM(prompt, {
+      jsonMode: true,
       skipCache: true,
       temperature: 0.7,
       timeout: GEMINI_TIMEOUT_MS,

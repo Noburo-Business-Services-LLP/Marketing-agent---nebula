@@ -179,6 +179,15 @@ const campaignSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  // Which tiered performance checkpoints (see services/performanceTracker.js)
+  // have already run for this post. Prevents re-checking the same window
+  // twice and lets the tracker know when it's done (5 entries = stop).
+  performanceChecks: [
+    {
+      checkpoint: { type: String, enum: ['24h', '3d', '7d', '2w', '1m'], required: true },
+      checkedAt: { type: Date, default: Date.now }
+    }
+  ],
   // Used to prevent duplicate/near-duplicate posts that social networks may reject.
   // This is computed at publish time from caption + primary media URL.
   publishHash: {

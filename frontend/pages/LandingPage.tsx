@@ -367,7 +367,7 @@ const LandingPage: React.FC = () => {
             <div className="bg-[#070A12] rounded-2xl p-8 text-white relative shadow-xl">
               <div className="text-center mb-6">
                 <div className="text-4xl font-bold mb-1">₹7,500</div>
-                <div className="text-slate-400 text-sm">1,000 credits included</div>
+                <div className="text-slate-400 text-sm">1,000 Quarks included</div>
               </div>
               <ul className="space-y-3 mb-8">
                 {['Automated campaign generation', 'Multi-platform posting', 'Competitor analysis', 'Advanced analytics', 'Instant publishing', 'Priority support'].map((item, i) => (
@@ -408,7 +408,7 @@ const LandingPage: React.FC = () => {
             Start Your 7-Day Free Trial
             <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
           </button>
-          <p className={`text-sm mt-4 ${theme === 'dark' ? 'text-[#ededed]/50' : 'text-gray-500'}`}>No credit card required · 100 credits included</p>
+          <p className={`text-sm mt-4 ${theme === 'dark' ? 'text-[#ededed]/50' : 'text-gray-500'}`}>No credit card required · 100 Quarks included</p>
         </div>
       </section>
 

@@ -10,6 +10,7 @@ const XLSX = require('xlsx');
 const fetch = require('node-fetch');
 const fs = require('fs');
 const path = require('path');
+const { uploadBase64Image } = require('../services/imageUploader');
 const { buildAIContext } = require('../services/aiContextBuilder');
 const { learnCampaignGeneration } = require('../services/aiCampaignLearning');
 
@@ -100,17 +101,17 @@ function transformAndValidateRow(row) {
   if (!name) return { error: 'Product name is required' };
   if (name.length > 100) return { error: 'Product name must be ≤ 100 characters' };
 
-  const price = parseFloat(row.price);
-  if (isNaN(price) || price < 0) return { error: 'Price must be a non-negative number' };
+  // Price is optional — a service row may legitimately have none. Only a
+  // present-but-invalid value is an error.
+  const rawPrice = row.price;
+  const hasPrice = rawPrice !== undefined && rawPrice !== null && String(rawPrice).trim() !== '';
+  const price = hasPrice ? parseFloat(rawPrice) : undefined;
+  if (hasPrice && (isNaN(price) || price < 0)) return { error: 'Price must be a non-negative number' };
 
-  const stockQuantity = parseInt(row.stockQuantity ?? row.stock_quantity ?? row.stock ?? 0, 10);
-  if (isNaN(stockQuantity) || stockQuantity < 0) return { error: 'stockQuantity must be a non-negative integer' };
+  const priceNote = (row.priceNote || row.price_note || '').toString().trim().substring(0, 120);
 
-  // Auto-calculate stockStatus (mirrors the pre-save hook)
-  let stockStatus;
-  if (stockQuantity <= 0) stockStatus = 'out-of-stock';
-  else if (stockQuantity < 10) stockStatus = 'low-stock';
-  else stockStatus = 'in-stock';
+  const rawType = (row.type || '').toString().trim().toLowerCase();
+  const type = rawType === 'service' ? 'service' : 'product';
 
   const description = (row.description || '').toString().trim().substring(0, 500);
   const currency = (row.currency || 'INR').toString().trim() || 'INR';
@@ -127,14 +128,17 @@ function transformAndValidateRow(row) {
   }
 
   return {
-    data: { name, price, stockQuantity, stockStatus, description, currency, category, imageUrl, tags }
+    data: { name, type, price, priceNote, description, currency, category, imageUrl, tags }
   };
 }
 
 // Validation middleware
 const validateProduct = [
   body('name').trim().notEmpty().withMessage('Product name is required').isLength({ max: 100 }),
-  body('price').isNumeric().withMessage('Price must be a number').custom(value => value >= 0).withMessage('Price cannot be negative'),
+  // Price is optional: a service often has no single number ("from X",
+  // hourly, quote on request). priceNote carries those cases.
+  body('price').optional({ nullable: true, checkFalsy: true }).isNumeric().withMessage('Price must be a number').custom(value => value >= 0).withMessage('Price cannot be negative'),
+  body('type').optional().isIn(['product', 'service']).withMessage("Type must be 'product' or 'service'"),
   body('stockQuantity').optional().isInt({ min: 0 }).withMessage('Stock quantity must be a non-negative integer'),
   (req, res, next) => {
     const errors = validationResult(req);
@@ -212,16 +216,21 @@ router.get('/:id', protect, async (req, res) => {
 // @access  Private
 router.post('/', protect, validateProduct, async (req, res) => {
   try {
-    const { name, price, currency, imageUrl, description, stockQuantity, category, tags } = req.body;
-    
+    const { name, type, price, priceNote, currency, imageUrl, images, keyFeatures, description, stockQuantity, category, tags } = req.body;
+
     const product = await Product.create({
       user: req.user._id,
       name,
-      price,
+      type: type === 'service' ? 'service' : 'product',
+      // Empty string from a cleared form must become undefined, not NaN.
+      price: (price === '' || price === null || price === undefined) ? undefined : price,
+      priceNote: priceNote || '',
       currency: currency || 'INR',
       imageUrl,
+      images: Array.isArray(images) ? images : [],
+      keyFeatures: Array.isArray(keyFeatures) ? keyFeatures.filter(Boolean) : [],
       description,
-      stockQuantity: stockQuantity || 0,
+      ...(stockQuantity !== undefined ? { stockQuantity } : {}),
       category: category || 'General',
       tags
     });
@@ -242,6 +251,34 @@ router.post('/', protect, validateProduct, async (req, res) => {
 // @route   POST /api/products/bulk-import
 // @desc    Bulk import products from a CSV or Excel file
 // @access  Private
+// Upload a product/service image to Cloudinary and return its hosted URL.
+//
+// Pasting a remote URL also "works" — toDataUriFromImage fetches it at
+// generation time — but it refetches on every generation and returns null on
+// any failure, so a dead or slow link silently drops the product image from
+// the output. An uploaded image is stored once and always available.
+router.post('/upload-image', protect, async (req, res) => {
+  try {
+    const { imageData } = req.body;
+    if (!imageData || typeof imageData !== 'string') {
+      return res.status(400).json({ success: false, message: 'Image data is required' });
+    }
+    if (!imageData.startsWith('data:image/')) {
+      return res.status(400).json({ success: false, message: 'Only image files are supported' });
+    }
+
+    const result = await uploadBase64Image(imageData, 'nebula-product-images');
+    if (!result?.success) {
+      return res.status(500).json({ success: false, message: 'Failed to upload image to cloud storage' });
+    }
+
+    return res.json({ success: true, url: result.url, publicId: result.publicId });
+  } catch (error) {
+    console.error('Product image upload error:', error);
+    return res.status(500).json({ success: false, message: 'Failed to upload image' });
+  }
+});
+
 router.post('/bulk-import', protect, upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
@@ -329,12 +366,16 @@ router.put('/:id', protect, validateProduct, async (req, res) => {
       });
     }
 
-    const { name, price, currency, imageUrl, description, stockQuantity, category, tags } = req.body;
-    
+    const { name, type, price, priceNote, currency, imageUrl, images, keyFeatures, description, stockQuantity, category, tags } = req.body;
+
     product.name = name;
-    product.price = price;
+    if (type === 'product' || type === 'service') product.type = type;
+    product.price = (price === '' || price === null || price === undefined) ? undefined : price;
+    if (priceNote !== undefined) product.priceNote = priceNote;
     if (currency) product.currency = currency;
     if (imageUrl !== undefined) product.imageUrl = imageUrl;
+    if (Array.isArray(images)) product.images = images;
+    if (Array.isArray(keyFeatures)) product.keyFeatures = keyFeatures.filter(Boolean);
     if (description !== undefined) product.description = description;
     if (stockQuantity !== undefined) product.stockQuantity = stockQuantity;
     if (category) product.category = category;

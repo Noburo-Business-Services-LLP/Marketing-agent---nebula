@@ -3,8 +3,10 @@ import { apiService } from '../services/api';
 import { useTheme } from '../context/ThemeContext';
 import InfluencerPortalTabs from '../components/InfluencerPortalTabs';
 import { Plus, Pencil, Trash2, X } from 'lucide-react';
+import { useConfirm } from '../context/ConfirmContext';
 
 const InfluencerList: React.FC = () => {
+  const confirm = useConfirm();
   const { isDarkMode } = useTheme();
   const [items, setItems] = useState<any[]>([]);
   const [form, setForm] = useState({ name: '', email: '', category: '', username: '', platform: 'instagram', followers: 0, engagementRate: 0 });
@@ -61,7 +63,7 @@ const InfluencerList: React.FC = () => {
   };
 
   const removeInfluencer = async (id: string) => {
-    const confirmed = window.confirm('Delete this influencer?');
+    const confirmed = await confirm('Delete this influencer?', { title: 'Delete influencer?', confirmLabel: 'Delete', danger: true });
     if (!confirmed) return;
     await apiService.deleteInfluencerPortalInfluencer(id);
     load();
