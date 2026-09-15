@@ -386,13 +386,13 @@ const GravityApprove: React.FC = () => {
   // toggle — the one tab control style the whole app should share.
   const TabBar = () => (
     <div className="mb-8 overflow-x-auto">
-      <div className="inline-flex items-center gap-1 p-1 rounded-full bg-white/[0.03] border border-white/[0.06]">
+      <div className="inline-flex items-center gap-1 p-1 rounded-full bg-[var(--gv-surface-1)] border border-[var(--gv-border-subtle)]">
         {TABS.map((t) => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
             className={`whitespace-nowrap h-9 px-5 rounded-full text-[13px] font-semibold transition-colors ${
-              tab === t.key ? 'bg-white/[0.10] text-[#F5F4F1]' : 'text-white/55 hover:text-white/80'
+              tab === t.key ? 'bg-[var(--gv-surface-3)] text-[var(--gv-text-primary)]' : 'text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-secondary)]'
             }`}
           >
             {t.label}
@@ -408,13 +408,13 @@ const GravityApprove: React.FC = () => {
     const statusChip = (s: string) => {
       const v = String(s || 'draft').toLowerCase();
       const map: Record<string, string> = {
-        processing: 'bg-[#F5A623]/15 text-[#F5A623]',
+        processing: 'bg-[var(--gv-accent-fill)] text-[var(--gv-accent-text)]',
         scheduled: 'bg-blue-500/15 text-blue-300',
         published: 'bg-emerald-500/15 text-emerald-400',
-        archived: 'bg-white/[0.06] text-white/45',
+        archived: 'bg-[var(--gv-surface-2)] text-[var(--gv-text-tertiary)]',
         failed: 'bg-red-500/15 text-red-400',
       };
-      return map[v] || 'bg-white/[0.06] text-white/55';
+      return map[v] || 'bg-[var(--gv-surface-2)] text-[var(--gv-text-tertiary)]';
     };
 
     return (
@@ -423,14 +423,14 @@ const GravityApprove: React.FC = () => {
         <TabBar />
 
         {libraryLoading ? (
-          <div className="flex items-center justify-center py-20 text-white/50">
+          <div className="flex items-center justify-center py-20 text-[var(--gv-text-tertiary)]">
             <Loader2 className="w-5 h-5 animate-spin mr-2" />
             Loading…
           </div>
         ) : libraryItems.length === 0 ? (
           <div className="text-center py-24">
             <div className="gravity-label mb-3">Nothing here</div>
-            <p className="text-[14px] text-white/45">
+            <p className="text-[14px] text-[var(--gv-text-tertiary)]">
               No {activeTab.label.toLowerCase()} posts yet.
             </p>
           </div>
@@ -445,15 +445,15 @@ const GravityApprove: React.FC = () => {
                   onClick={() => !processing && openDetail(d)}
                   className={`group relative rounded-xl border overflow-hidden transition-all duration-200 ${
                     processing
-                      ? 'cursor-wait border-white/[0.08] bg-white/[0.02]'
-                      : 'cursor-pointer border-white/[0.08] bg-white/[0.02] hover:border-[#F5A623]/70 hover:bg-white/[0.05] hover:-translate-y-1 hover:shadow-[0_12px_36px_rgba(0,0,0,0.55),0_0_0_1px_rgba(245,166,35,0.25)]'
+                      ? 'cursor-wait border-[var(--gv-border-default)] bg-[var(--gv-surface-1)]'
+                      : 'cursor-pointer border-[var(--gv-border-default)] bg-[var(--gv-surface-1)] hover:border-[rgb(var(--gv-accent-rgb)/0.70)] hover:bg-[var(--gv-surface-2)] hover:-translate-y-1 hover:shadow-[0_12px_36px_rgba(0,0,0,0.55),0_0_0_1px_rgba(245,166,35,0.25)]'
                   }`}
                 >
                   <div className="relative bg-black aspect-[4/5] overflow-hidden">
                     {/* Hover affordance — makes the target unmistakable */}
                     {!processing && (
                       <div className="absolute inset-0 z-10 bg-black/45 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#F5A623] text-black text-[11.5px] font-bold">
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--gv-accent)] text-black text-[11.5px] font-bold">
                           <Pencil className="w-3.5 h-3.5" />
                           Edit
                         </span>
@@ -465,13 +465,13 @@ const GravityApprove: React.FC = () => {
                       <GeneratingFill resolution="" />
                     ) : (
                       <div className="absolute inset-0 flex items-center justify-center">
-                        <AlertCircle className="w-5 h-5 text-white/25" />
+                        <AlertCircle className="w-5 h-5 text-[var(--gv-text-muted)]" />
                       </div>
                     )}
                   </div>
                   <div className="p-3">
-                    <p className="text-[12.5px] font-semibold text-[#F5F4F1] truncate">{d.title || 'Untitled'}</p>
-                    {d.caption && <p className="text-[11px] text-white/40 line-clamp-2 mt-1">{d.caption}</p>}
+                    <p className="text-[12.5px] font-semibold text-[var(--gv-text-primary)] truncate">{d.title || 'Untitled'}</p>
+                    {d.caption && <p className="text-[11px] text-[var(--gv-text-muted)] line-clamp-2 mt-1">{d.caption}</p>}
                     <div className="flex items-center justify-between mt-2.5 gap-2">
                       <span className={`text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded ${statusChip(d.status)}`}>
                         {processing ? 'Generating' : (d.status || 'draft')}
@@ -479,17 +479,17 @@ const GravityApprove: React.FC = () => {
                       {/* Where this post is headed */}
                       <div className="flex items-center gap-1">
                         {(d.platforms || []).length === 0 ? (
-                          <span className="text-[10px] text-white/25">No platform</span>
+                          <span className="text-[10px] text-[var(--gv-text-muted)]">No platform</span>
                         ) : (d.platforms || []).slice(0, 4).map((p: string) => {
                           const meta = PLATFORM_META[String(p).toLowerCase()];
                           return meta
-                            ? <meta.Icon key={p} className="w-3.5 h-3.5 text-white/50" />
-                            : <span key={p} className="text-[10px] text-white/40">{p}</span>;
+                            ? <meta.Icon key={p} className="w-3.5 h-3.5 text-[var(--gv-text-tertiary)]" />
+                            : <span key={p} className="text-[10px] text-[var(--gv-text-muted)]">{p}</span>;
                         })}
                       </div>
                     </div>
                     {d.scheduledDate && (
-                      <div className="text-[10px] text-white/35 mt-1.5">{formatScheduleDate(d.scheduledDate)}</div>
+                      <div className="text-[10px] text-[var(--gv-text-muted)] mt-1.5">{formatScheduleDate(d.scheduledDate)}</div>
                     )}
                   </div>
                 </div>
@@ -511,7 +511,7 @@ const GravityApprove: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20 text-white/50">
+      <div className="flex items-center justify-center py-20 text-[var(--gv-text-tertiary)]">
         <Loader2 className="w-5 h-5 animate-spin mr-2" />
         Loading queue…
       </div>
@@ -528,15 +528,15 @@ const GravityApprove: React.FC = () => {
         <TabBar />
         <div className="max-w-[720px] mx-auto text-center py-16">
         <div className="gravity-label mb-4">Nothing to approve</div>
-        <h1 className="font-serif-display text-[42px] leading-[1.05] tracking-[-0.02em] text-[#F5F4F1] mb-4">
-          You're all <span className="italic text-[#F5A623]">caught up</span>.
+        <h1 className="font-serif-display text-[42px] leading-[1.05] tracking-[-0.02em] text-[var(--gv-text-primary)] mb-4">
+          You're all <span className="italic text-[var(--gv-accent-display)]">caught up</span>.
         </h1>
-        <p className="text-[14px] text-white/55 max-w-[520px] mx-auto mb-6">
+        <p className="text-[14px] text-[var(--gv-text-tertiary)] max-w-[520px] mx-auto mb-6">
           When Gravity drafts new posts, they'll wait here for your approval.
         </p>
         <button
           onClick={() => navigate('/campaigns')}
-          className="inline-flex items-center gap-2 h-11 px-5 rounded-lg bg-[#F5A623] hover:bg-[#ffb833] text-[#1A1208] text-[14px] font-semibold"
+          className="inline-flex items-center gap-2 h-11 px-5 rounded-lg bg-[var(--gv-accent)] hover:bg-[var(--gv-accent-hover)] text-[#1A1208] text-[14px] font-semibold"
         >
           <Sparkles className="w-4 h-4" />
           Draft something new
@@ -562,12 +562,12 @@ const GravityApprove: React.FC = () => {
               for the one that needs a closer look. Switching to single from
               a grid card opens that exact card, not wherever index happened
               to be pointing. */}
-          <div className="flex items-center gap-0.5 p-0.5 rounded-lg border border-white/[0.08] mr-1">
+          <div className="flex items-center gap-0.5 p-0.5 rounded-lg border border-[var(--gv-border-default)] mr-1">
             <button
               onClick={() => setReviewView('single')}
               title="Single view"
               className={`w-8 h-8 rounded-md flex items-center justify-center transition-colors ${
-                reviewView === 'single' ? 'bg-[#F5A623] text-black' : 'text-white/50 hover:text-white/80'
+                reviewView === 'single' ? 'bg-[var(--gv-accent)] text-black' : 'text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-secondary)]'
               }`}
             >
               <Rows className="w-3.5 h-3.5" />
@@ -576,7 +576,7 @@ const GravityApprove: React.FC = () => {
               onClick={() => setReviewView('grid')}
               title="Grid view"
               className={`w-8 h-8 rounded-md flex items-center justify-center transition-colors ${
-                reviewView === 'grid' ? 'bg-[#F5A623] text-black' : 'text-white/50 hover:text-white/80'
+                reviewView === 'grid' ? 'bg-[var(--gv-accent)] text-black' : 'text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-secondary)]'
               }`}
             >
               <LayoutGrid className="w-3.5 h-3.5" />
@@ -587,14 +587,14 @@ const GravityApprove: React.FC = () => {
               <button
                 onClick={goPrev}
                 disabled={index === 0}
-                className="w-9 h-9 rounded-lg border border-white/[0.08] flex items-center justify-center text-white/60 hover:text-[#F5F4F1] hover:bg-white/[0.04] disabled:opacity-30 disabled:cursor-not-allowed"
+                className="w-9 h-9 rounded-lg border border-[var(--gv-border-default)] flex items-center justify-center text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-2)] disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
               <button
                 onClick={goNext}
                 disabled={index >= total - 1}
-                className="w-9 h-9 rounded-lg border border-white/[0.08] flex items-center justify-center text-white/60 hover:text-[#F5F4F1] hover:bg-white/[0.04] disabled:opacity-30 disabled:cursor-not-allowed"
+                className="w-9 h-9 rounded-lg border border-[var(--gv-border-default)] flex items-center justify-center text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-2)] disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 <ChevronRight className="w-4 h-4" />
               </button>
@@ -616,7 +616,7 @@ const GravityApprove: React.FC = () => {
               <div
                 key={d._id}
                 onClick={() => openInSingleView(d._id)}
-                className="group relative rounded-xl border border-white/[0.08] bg-white/[0.02] overflow-hidden cursor-pointer transition-all duration-200 hover:border-[#F5A623]/50 hover:bg-white/[0.04]"
+                className="group relative rounded-xl border border-[var(--gv-border-default)] bg-[var(--gv-surface-1)] overflow-hidden cursor-pointer transition-all duration-200 hover:border-[rgb(var(--gv-accent-rgb)/0.50)] hover:bg-[var(--gv-surface-2)]"
               >
                 <div className="relative bg-black aspect-[4/5] overflow-hidden">
                   {img ? (
@@ -624,31 +624,31 @@ const GravityApprove: React.FC = () => {
                   ) : failed ? (
                     <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 px-3 text-center">
                       <AlertCircle className="w-5 h-5 text-red-400/70" />
-                      <span className="text-[10.5px] text-white/40">Generation failed</span>
+                      <span className="text-[10.5px] text-[var(--gv-text-muted)]">Generation failed</span>
                     </div>
                   ) : (
                     <GeneratingFill resolution="" />
                   )}
                 </div>
                 <div className="p-3">
-                  <p className="text-[12px] font-semibold text-[#F5F4F1] truncate">{d.title || 'Untitled'}</p>
-                  {cap && <p className="text-[10.5px] text-white/40 line-clamp-2 mt-1 leading-snug">{cap}</p>}
+                  <p className="text-[12px] font-semibold text-[var(--gv-text-primary)] truncate">{d.title || 'Untitled'}</p>
+                  {cap && <p className="text-[10.5px] text-[var(--gv-text-muted)] line-clamp-2 mt-1 leading-snug">{cap}</p>}
                   <div className="flex items-center gap-1 mt-2">
                     {(d.platforms || []).length === 0 ? (
-                      <span className="text-[9.5px] text-white/25">No platform</span>
+                      <span className="text-[9.5px] text-[var(--gv-text-muted)]">No platform</span>
                     ) : (d.platforms || []).slice(0, 4).map((p: string) => {
                       const meta = PLATFORM_META[String(p).toLowerCase()];
                       return meta
-                        ? <meta.Icon key={p} className="w-3 h-3 text-white/45" />
-                        : <span key={p} className="text-[9.5px] text-white/40">{p}</span>;
+                        ? <meta.Icon key={p} className="w-3 h-3 text-[var(--gv-text-tertiary)]" />
+                        : <span key={p} className="text-[9.5px] text-[var(--gv-text-muted)]">{p}</span>;
                     })}
                   </div>
-                  <div className="flex items-center gap-1.5 mt-3 pt-2.5 border-t border-white/[0.06]">
+                  <div className="flex items-center gap-1.5 mt-3 pt-2.5 border-t border-[var(--gv-border-subtle)]">
                     <button
                       onClick={(e) => handleGridApprove(d, e)}
                       disabled={isBusy || processing || failed}
                       title="Approve & schedule"
-                      className="flex-1 inline-flex items-center justify-center gap-1 h-8 rounded-md bg-[#F5A623] hover:bg-[#ffb833] text-black text-[11px] font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
+                      className="flex-1 inline-flex items-center justify-center gap-1 h-8 rounded-md bg-[var(--gv-accent)] hover:bg-[var(--gv-accent-hover)] text-black text-[11px] font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       {isBusy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" strokeWidth={3} />}
                       Approve
@@ -657,7 +657,7 @@ const GravityApprove: React.FC = () => {
                       onClick={(e) => handleGridRedo(d, e)}
                       disabled={isBusy || processing}
                       title="Regenerate"
-                      className="w-8 h-8 flex items-center justify-center rounded-md border border-white/[0.10] text-white/60 hover:text-white/90 hover:bg-white/[0.05] disabled:opacity-30"
+                      className="w-8 h-8 flex items-center justify-center rounded-md border border-[var(--gv-border-default)] text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-2)] disabled:opacity-30"
                     >
                       <RotateCcw className="w-3 h-3" />
                     </button>
@@ -672,34 +672,34 @@ const GravityApprove: React.FC = () => {
         {/* PREVIEW */}
         <div className="relative flex items-center justify-center min-h-[560px]">
           <div className="absolute inset-[-20px] rounded-3xl blur-3xl opacity-70" style={{ background: 'radial-gradient(60% 55% at 50% 50%, rgba(245,166,35,0.16), transparent 70%)' }} />
-          <div className="relative w-[380px] aspect-[4/5] rounded-2xl bg-[#151515] border border-white/[0.06] overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.6)]">
+          <div className="relative w-[380px] aspect-[4/5] rounded-2xl bg-[var(--gv-panel)] border border-[var(--gv-border-subtle)] overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.6)]">
             {imageUrl ? (
               <img src={imageUrl} alt={current?.title || 'draft preview'} className="w-full h-full object-contain" />
             ) : String(current?.status || '').toLowerCase() === 'failed' ? (
-              <div className="w-full h-full bg-gradient-to-br from-red-950/20 to-white/[0.01] flex flex-col items-center justify-center gap-3 px-6 text-center">
+              <div className="w-full h-full bg-gradient-to-br from-red-950/20 to-[var(--gv-surface-1)] flex flex-col items-center justify-center gap-3 px-6 text-center">
                 <AlertCircle className="w-8 h-8 text-red-400/70" />
-                <div className="text-[13px] font-semibold text-[#F5F4F1]">Image generation failed</div>
-                <div className="text-[11.5px] text-white/50 max-w-[260px] leading-relaxed">
+                <div className="text-[13px] font-semibold text-[var(--gv-text-primary)]">Image generation failed</div>
+                <div className="text-[11.5px] text-[var(--gv-text-tertiary)] max-w-[260px] leading-relaxed">
                   {current?.errorMessage || 'Something went wrong. Click Regenerate to try again.'}
                 </div>
                 <button
                   onClick={handleRedo}
-                  className="mt-2 h-8 px-3 rounded-md bg-white/[0.06] hover:bg-white/[0.12] text-[12px] font-semibold text-[#F5F4F1]"
+                  className="mt-2 h-8 px-3 rounded-md bg-[var(--gv-surface-2)] hover:bg-[var(--gv-surface-4)] text-[12px] font-semibold text-[var(--gv-text-primary)]"
                 >
                   Regenerate
                 </button>
               </div>
             ) : (
-              <div className="w-full h-full bg-gradient-to-br from-white/[0.04] to-white/[0.01] flex flex-col items-center justify-center gap-3 px-6 text-center">
+              <div className="w-full h-full bg-gradient-to-br from-[var(--gv-surface-2)] to-[var(--gv-surface-1)] flex flex-col items-center justify-center gap-3 px-6 text-center">
                 <div className="relative w-10 h-10">
-                  <div className="absolute inset-0 rounded-full border-2 border-[#F5A623]/25" />
-                  <Loader2 className="w-10 h-10 text-[#F5A623] animate-spin absolute inset-0" strokeWidth={1.5} />
+                  <div className="absolute inset-0 rounded-full border-2 border-[rgb(var(--gv-accent-rgb)/0.25)]" />
+                  <Loader2 className="w-10 h-10 text-[var(--gv-accent)] animate-spin absolute inset-0" strokeWidth={1.5} />
                 </div>
-                <div className="text-[11px] uppercase tracking-widest text-white/45">generating…</div>
-                <div className="text-[13.5px] font-semibold text-[#F5F4F1] max-w-[260px]">
+                <div className="text-[11px] uppercase tracking-widest text-[var(--gv-text-tertiary)]">generating…</div>
+                <div className="text-[13.5px] font-semibold text-[var(--gv-text-primary)] max-w-[260px]">
                   {current?.title || 'Untitled draft'}
                 </div>
-                <div className="text-[11px] text-white/40 max-w-[260px]">
+                <div className="text-[11px] text-[var(--gv-text-muted)] max-w-[260px]">
                   The image is being drafted. This usually takes 20–40 seconds.
                 </div>
               </div>
@@ -708,20 +708,20 @@ const GravityApprove: React.FC = () => {
           {/* Dot pagination */}
           <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1.5">
             {drafts.slice(0, Math.min(total, 8)).map((_, i) => (
-              <span key={i} className={`h-1.5 rounded-full transition-all ${i === index ? 'w-6 bg-[#F5A623]' : 'w-1.5 bg-white/25'}`} />
+              <span key={i} className={`h-1.5 rounded-full transition-all ${i === index ? 'w-6 bg-[var(--gv-accent)]' : 'w-1.5 bg-white/25'}`} />
             ))}
           </div>
         </div>
 
         {/* META + CAPTION */}
         <div className="flex flex-col">
-          <h1 className="font-serif-display text-[36px] leading-[1.1] tracking-[-0.02em] text-[#F5F4F1] mb-6">
+          <h1 className="font-serif-display text-[36px] leading-[1.1] tracking-[-0.02em] text-[var(--gv-text-primary)] mb-6">
             {current?.title || current?.name || 'Untitled draft'}
           </h1>
 
           <dl className="grid grid-cols-[110px_1fr] gap-y-3 gap-x-4 mb-6">
             <dt className="gravity-label pt-1">Scheduled</dt>
-            <dd className="text-[13px] text-[#F5F4F1] flex items-center gap-2">
+            <dd className="text-[13px] text-[var(--gv-text-primary)] flex items-center gap-2">
               {formatScheduleDate(current?.scheduledDate)}
             </dd>
 
@@ -732,32 +732,32 @@ const GravityApprove: React.FC = () => {
                 if (!meta) return null;
                 const { Icon, label } = meta;
                 return (
-                  <span key={p} className="inline-flex items-center gap-1.5 h-6 px-2 rounded-md bg-white/[0.05] border border-white/[0.08] text-[11.5px] text-[#F5F4F1]">
+                  <span key={p} className="inline-flex items-center gap-1.5 h-6 px-2 rounded-md bg-[var(--gv-surface-2)] border border-[var(--gv-border-default)] text-[11.5px] text-[var(--gv-text-primary)]">
                     <Icon className="w-3 h-3" />
                     {label}
                   </span>
                 );
-              }) : <span className="text-[12px] text-white/40">No platforms</span>}
+              }) : <span className="text-[12px] text-[var(--gv-text-muted)]">No platforms</span>}
             </dd>
 
             <dt className="gravity-label pt-1">Style</dt>
-            <dd className="text-[13px] text-white/70">{current?.tone || current?.creative?.style || '—'}</dd>
+            <dd className="text-[13px] text-[var(--gv-text-secondary)]">{current?.tone || current?.creative?.style || '—'}</dd>
 
             <dt className="gravity-label pt-1">Source</dt>
-            <dd className="text-[13px] text-white/70">
+            <dd className="text-[13px] text-[var(--gv-text-secondary)]">
               {current?.sourceType || 'Gravity AI'}{current?.aiGenerated !== false ? ' · Draft' : ''}
             </dd>
           </dl>
 
-          <div className="border-t border-white/[0.06] pt-5 mb-6">
+          <div className="border-t border-[var(--gv-border-subtle)] pt-5 mb-6">
             <div className="gravity-label mb-3">Caption</div>
-            <p className="text-[14px] text-[#F5F4F1] leading-relaxed whitespace-pre-line mb-3">
-              {captionBody || <span className="text-white/40">No caption yet.</span>}
+            <p className="text-[14px] text-[var(--gv-text-primary)] leading-relaxed whitespace-pre-line mb-3">
+              {captionBody || <span className="text-[var(--gv-text-muted)]">No caption yet.</span>}
             </p>
             {hashtags.length > 0 && (
               <div className="flex flex-wrap gap-x-2 gap-y-1">
                 {hashtags.map((h, i) => (
-                  <span key={i} className="text-[13px] text-[#F5A623]">{h}</span>
+                  <span key={i} className="text-[13px] text-[var(--gv-accent-text)]">{h}</span>
                 ))}
               </div>
             )}
@@ -767,16 +767,16 @@ const GravityApprove: React.FC = () => {
               Regenerate means "try this specific change" instead of "reroll
               and hope." Clearing it hands the idea back to the Creative
               Director for a fresh concept. */}
-          <div className="border-t border-white/[0.06] pt-5 mb-8">
+          <div className="border-t border-[var(--gv-border-subtle)] pt-5 mb-8">
             <div className="gravity-label mb-3">Prompt</div>
             <textarea
               value={promptDraft}
               onChange={(e) => setPromptDraft(e.target.value)}
               placeholder={current?.imagePromptResolved ? '' : 'No resolved prompt was recorded for this image. Leave blank to let the Creative Director choose a fresh concept, or write one to use exactly.'}
               rows={5}
-              className="w-full p-3 rounded-lg bg-white/[0.03] border border-white/[0.08] text-[12px] leading-relaxed text-white/75 font-mono outline-none focus:border-[#F5A623]/40 resize-y placeholder:text-white/25 placeholder:font-sans"
+              className="w-full p-3 rounded-lg bg-[var(--gv-surface-1)] border border-[var(--gv-border-default)] text-[12px] leading-relaxed text-[var(--gv-text-secondary)] font-mono outline-none focus:border-[rgb(var(--gv-accent-rgb)/0.40)] resize-y placeholder:text-[var(--gv-text-muted)] placeholder:font-sans"
             />
-            <p className="text-[10.5px] text-white/30 mt-1.5">
+            <p className="text-[10.5px] text-[var(--gv-text-muted)] mt-1.5">
               {promptDraft.trim() && promptDraft.trim() !== (current?.imagePromptResolved || '').trim()
                 ? 'Edited — Regenerate will use this exact text.'
                 : promptDraft.trim()
@@ -789,21 +789,21 @@ const GravityApprove: React.FC = () => {
               the instruction describes. Distinct from Regenerate above,
               which redraws the whole image from the prompt. */}
           {editOpen && (
-            <div className="mb-6 p-3 rounded-xl bg-[#F5A623]/[0.04] border border-[#F5A623]/20">
-              <label className="gravity-label block mb-1.5 text-[#F5A623]">Describe the change</label>
+            <div className="mb-6 p-3 rounded-xl bg-[var(--gv-accent-fill)] border border-[rgb(var(--gv-accent-rgb)/0.20)]">
+              <label className="gravity-label block mb-1.5 text-[var(--gv-accent-text)]">Describe the change</label>
               <textarea
                 value={editInstruction}
                 onChange={(e) => setEditInstruction(e.target.value)}
                 placeholder="e.g. fix the spelling in the headline, make the sky darker, remove the coffee cup"
                 rows={2}
-                className="w-full p-2.5 rounded-lg bg-black/20 border border-white/[0.08] text-[12.5px] leading-relaxed text-white/80 outline-none focus:border-[#F5A623]/40 resize-y placeholder:text-white/25"
+                className="w-full p-2.5 rounded-lg bg-black/20 border border-[var(--gv-border-default)] text-[12.5px] leading-relaxed text-[var(--gv-text-secondary)] outline-none focus:border-[rgb(var(--gv-accent-rgb)/0.40)] resize-y placeholder:text-[var(--gv-text-muted)]"
               />
               <div className="flex items-center justify-between mt-2">
-                <span className="text-[10.5px] text-white/35">Keeps the rest of the image as-is.</span>
+                <span className="text-[10.5px] text-[var(--gv-text-muted)]">Keeps the rest of the image as-is.</span>
                 <button
                   onClick={handleEditImage}
                   disabled={isEditingImage || !editInstruction.trim()}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#F5A623] text-black text-[12px] font-semibold hover:bg-[#ffb833] disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[var(--gv-accent)] text-black text-[12px] font-semibold hover:bg-[var(--gv-accent-hover)] disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {isEditingImage ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Pencil className="w-3.5 h-3.5" />}
                   Apply edit
@@ -817,7 +817,7 @@ const GravityApprove: React.FC = () => {
             <button
               onClick={handleRedo}
               disabled={busy}
-              className="flex items-center gap-2 h-11 px-5 rounded-lg border border-white/[0.10] hover:border-white/25 hover:bg-white/[0.03] text-[#F5F4F1] text-[13.5px] font-medium disabled:opacity-40"
+              className="flex items-center gap-2 h-11 px-5 rounded-lg border border-[var(--gv-border-default)] hover:border-white/25 hover:bg-[var(--gv-surface-1)] text-[var(--gv-text-primary)] text-[13.5px] font-medium disabled:opacity-40"
             >
               <RotateCcw className="w-3.5 h-3.5" />
               Regenerate
@@ -826,8 +826,8 @@ const GravityApprove: React.FC = () => {
               onClick={() => setEditOpen((v) => !v)}
               className={`flex items-center gap-2 h-11 px-5 rounded-lg border text-[13.5px] font-medium ${
                 editOpen
-                  ? 'border-[#F5A623]/50 bg-[#F5A623]/10 text-[#F5A623]'
-                  : 'border-white/[0.10] hover:border-white/25 hover:bg-white/[0.03] text-[#F5F4F1]'
+                  ? 'border-[rgb(var(--gv-accent-rgb)/0.50)] bg-[var(--gv-accent-fill)] text-[var(--gv-accent-text)]'
+                  : 'border-[var(--gv-border-default)] hover:border-white/25 hover:bg-[var(--gv-surface-1)] text-[var(--gv-text-primary)]'
               }`}
             >
               <Pencil className="w-3.5 h-3.5" />
@@ -836,7 +836,7 @@ const GravityApprove: React.FC = () => {
             <button
               onClick={handleApprove}
               disabled={busy}
-              className="flex items-center gap-2 h-11 px-5 rounded-lg bg-[#F5A623] hover:bg-[#ffb833] text-[#1A1208] text-[13.5px] font-semibold shadow-[0_8px_28px_rgba(245,166,35,0.28)] disabled:opacity-60 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 h-11 px-5 rounded-lg bg-[var(--gv-accent)] hover:bg-[var(--gv-accent-hover)] text-[#1A1208] text-[13.5px] font-semibold shadow-[0_8px_28px_rgba(245,166,35,0.28)] disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" strokeWidth={3} />}
               Approve & schedule
