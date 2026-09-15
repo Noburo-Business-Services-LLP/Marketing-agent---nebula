@@ -29,7 +29,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 const Panel: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = '' }) => (
-  <section className={`rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 ${className}`}>{children}</section>
+  <section className={`rounded-xl border border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)] p-5 ${className}`}>{children}</section>
 );
 
 const NoteRow: React.FC<{
@@ -56,8 +56,8 @@ const NoteRow: React.FC<{
   };
 
   return (
-    <div className="flex items-start gap-3 py-2.5 border-b border-white/[0.05] last:border-b-0">
-      <span className="mt-0.5 inline-flex items-center rounded-full border border-[#F5A623]/25 bg-[#F5A623]/[0.08] px-2 py-0.5 text-[10.5px] font-semibold text-[#F5A623] flex-shrink-0">
+    <div className="flex items-start gap-3 py-2.5 border-b border-[var(--gv-border-subtle)] last:border-b-0">
+      <span className="mt-0.5 inline-flex items-center rounded-full border border-[rgb(var(--gv-accent-rgb)/0.25)] bg-[var(--gv-accent-fill)] px-2 py-0.5 text-[10.5px] font-semibold text-[var(--gv-accent-text)] flex-shrink-0">
         {CATEGORY_LABELS[note.category] || note.category}
       </span>
       {editing ? (
@@ -66,23 +66,23 @@ const NoteRow: React.FC<{
             type="text"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            className="flex-1 px-2.5 py-1.5 rounded-md bg-black/30 border border-white/[0.10] text-[13px] text-[#F5F4F1] outline-none focus:border-[#F5A623]/40"
+            className="flex-1 px-2.5 py-1.5 rounded-md bg-[var(--gv-surface-2)] border border-[var(--gv-border-default)] text-[13px] text-[var(--gv-text-primary)] outline-none focus:border-[rgb(var(--gv-accent-rgb)/0.40)]"
             autoFocus
           />
-          <button onClick={save} disabled={busy} title="Save" className="p-1.5 rounded-md text-emerald-400 hover:bg-white/[0.06] disabled:opacity-40">
+          <button onClick={save} disabled={busy} title="Save" className="p-1.5 rounded-md text-emerald-500 hover:bg-[var(--gv-surface-2)] disabled:opacity-40">
             {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
           </button>
-          <button onClick={() => { setDraft(note.text); setEditing(false); }} title="Cancel" className="p-1.5 rounded-md text-white/40 hover:bg-white/[0.06]">
+          <button onClick={() => { setDraft(note.text); setEditing(false); }} title="Cancel" className="p-1.5 rounded-md text-[var(--gv-text-muted)] hover:bg-[var(--gv-surface-2)]">
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
       ) : (
         <>
-          <p className="flex-1 text-[13px] text-[#F5F4F1] leading-relaxed">{note.text}</p>
-          <button onClick={() => setEditing(true)} title="Edit" className="p-1.5 rounded-md text-white/40 hover:text-white hover:bg-white/[0.06] flex-shrink-0">
+          <p className="flex-1 text-[13px] text-[var(--gv-text-primary)] leading-relaxed">{note.text}</p>
+          <button onClick={() => setEditing(true)} title="Edit" className="p-1.5 rounded-md text-[var(--gv-text-muted)] hover:text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-2)] flex-shrink-0">
             <Pencil className="w-3.5 h-3.5" />
           </button>
-          <button onClick={async () => { if (await confirm('This removes it from what Gravity uses to plan future posts.', { title: 'Delete this note?', confirmLabel: 'Delete', danger: true })) onDelete(note._id); }} title="Delete" className="p-1.5 rounded-md text-white/40 hover:text-red-400 hover:bg-white/[0.06] flex-shrink-0">
+          <button onClick={async () => { if (await confirm('This removes it from what Gravity uses to plan future posts.', { title: 'Delete this note?', confirmLabel: 'Delete', danger: true })) onDelete(note._id); }} title="Delete" className="p-1.5 rounded-md text-[var(--gv-text-muted)] hover:text-red-500 hover:bg-[var(--gv-surface-2)] flex-shrink-0">
             <Trash2 className="w-3.5 h-3.5" />
           </button>
         </>
@@ -154,7 +154,7 @@ const AIMemory: React.FC = () => {
   if (loading) {
     return (
       <div className="min-h-[50vh] flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-[#F5A623]" />
+        <Loader2 className="w-8 h-8 animate-spin text-[var(--gv-accent)]" />
       </div>
     );
   }
@@ -170,13 +170,13 @@ const AIMemory: React.FC = () => {
           className="!mb-0"
         />
         <GravityButton variant="ghost" onClick={refreshNow} disabled={distilling} className="flex-shrink-0">
-          {distilling ? <Loader2 className="w-4 h-4 animate-spin text-[#F5A623]" /> : <RefreshCw className="w-4 h-4 text-[#F5A623]" />}
+          {distilling ? <Loader2 className="w-4 h-4 animate-spin text-[var(--gv-accent)]" /> : <RefreshCw className="w-4 h-4 text-[var(--gv-accent)]" />}
           Refresh now
         </GravityButton>
       </div>
 
       {statusMsg && (
-        <div className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-4 py-2.5 text-[12.5px] text-white/70">
+        <div className="rounded-lg border border-[var(--gv-border-default)] bg-[var(--gv-surface-2)] px-4 py-2.5 text-[12.5px] text-[var(--gv-text-secondary)]">
           {statusMsg}
         </div>
       )}
@@ -184,10 +184,10 @@ const AIMemory: React.FC = () => {
       <Panel>
         <div className="flex items-center justify-between gap-3 mb-1">
           <div className="flex items-center gap-2">
-            <Brain className="w-4 h-4 text-[#F5A623]" />
+            <Brain className="w-4 h-4 text-[var(--gv-accent)]" />
             <GravityLabel gold>Learned patterns</GravityLabel>
           </div>
-          <span className="text-[11px] text-white/40">
+          <span className="text-[11px] text-[var(--gv-text-muted)]">
             Based on {performanceCount} tracked post{performanceCount === 1 ? '' : 's'}
             {notesUpdatedAt ? ` · last updated ${new Date(notesUpdatedAt).toLocaleDateString()}` : ''}
           </span>
@@ -199,7 +199,7 @@ const AIMemory: React.FC = () => {
             ))}
           </div>
         ) : (
-          <p className="mt-3 text-[13px] text-white/45">
+          <p className="mt-3 text-[13px] text-[var(--gv-text-tertiary)]">
             Nothing learned yet — this fills in once enough published posts have been tracked
             for at least a few days. Try "Refresh now" after some posts have been live for a while.
           </p>
@@ -215,10 +215,10 @@ const AIMemory: React.FC = () => {
           <Link
             key={link.to}
             to={link.to}
-            className="group flex items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] px-5 py-4 text-[13.5px] font-semibold text-[#F5F4F1] transition-all hover:bg-white/[0.05] hover:border-white/[0.12]"
+            className="group flex items-center justify-between gap-3 rounded-xl border border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)] px-5 py-4 text-[13.5px] font-semibold text-[var(--gv-text-primary)] transition-all hover:bg-[var(--gv-surface-2)] hover:border-[var(--gv-border-default)]"
           >
             {link.label}
-            <ArrowRight className="w-4 h-4 text-white/30 group-hover:text-[#F5A623] transition-colors" />
+            <ArrowRight className="w-4 h-4 text-[var(--gv-text-muted)] group-hover:text-[var(--gv-accent-text)] transition-colors" />
           </Link>
         ))}
       </div>
