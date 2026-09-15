@@ -1234,7 +1234,7 @@ const GravityCreate: React.FC = () => {
                 onClick={() => { setSelectedLogo(l.url); setLogoPosition(l.defaultPosition); }}
                 title={l.name}
                 className={`w-11 h-11 rounded-lg border overflow-hidden bg-[var(--gv-surface-2)] transition-colors ${
-                  selectedLogo === l.url ? 'border-[var(--gv-accent)]' : 'border-[var(--gv-border-default)] hover:border-white/30'
+                  selectedLogo === l.url ? 'border-[var(--gv-accent)]' : 'border-[var(--gv-border-default)] hover:border-[var(--gv-border-strong)]'
                 }`}
               >
                 <img src={l.url} alt={l.name} className="w-full h-full object-contain p-1" />
@@ -1265,10 +1265,10 @@ const GravityCreate: React.FC = () => {
                     className={`aspect-[4/3] rounded-md border flex items-center justify-center transition-colors ${
                       logoPosition === pos
                         ? 'border-[var(--gv-accent)] bg-[var(--gv-accent-fill)]'
-                        : 'border-[var(--gv-border-default)] bg-[var(--gv-surface-1)] hover:border-white/30'
+                        : 'border-[var(--gv-border-default)] bg-[var(--gv-surface-1)] hover:border-[var(--gv-border-strong)]'
                     }`}
                   >
-                    <span className={`w-1.5 h-1.5 rounded-sm ${logoPosition === pos ? 'bg-[var(--gv-accent)]' : 'bg-white/30'}`} />
+                    <span className={`w-1.5 h-1.5 rounded-sm ${logoPosition === pos ? 'bg-[var(--gv-accent)]' : 'bg-[var(--gv-surface-3)]'}`} />
                   </button>
                 ))}
               </div>
@@ -1354,7 +1354,7 @@ const GravityCreate: React.FC = () => {
           <div className="relative text-center mb-10">
             <button
               onClick={() => { setResults([]); setActioned({}); setSchedulingId(''); }}
-              className="absolute right-0 top-0 inline-flex items-center gap-1.5 rounded-lg border border-[var(--gv-border-default)] px-3 py-2 text-[12px] text-[var(--gv-text-tertiary)] hover:text-white hover:border-white/25 transition-colors"
+              className="absolute right-0 top-0 inline-flex items-center gap-1.5 rounded-lg border border-[var(--gv-border-default)] px-3 py-2 text-[12px] text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] hover:border-[var(--gv-border-default)] transition-colors"
             >
               <RotateCcw className="w-3.5 h-3.5" />
               Start over
@@ -1484,7 +1484,7 @@ const GravityCreate: React.FC = () => {
                               <div className="gravity-label text-[var(--gv-accent-text)]">Prompt sent to the image model</div>
                               <button
                                 onClick={() => setPromptOpenFor('')}
-                                className="p-1 rounded-md text-[var(--gv-text-muted)] hover:text-white hover:bg-[var(--gv-surface-2)]"
+                                className="p-1 rounded-md text-[var(--gv-text-muted)] hover:text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-2)]"
                                 title="Close"
                               >
                                 <X className="w-3.5 h-3.5" />
@@ -1542,7 +1542,7 @@ const GravityCreate: React.FC = () => {
                               <div className="gravity-label text-[var(--gv-accent-text)]">Describe the change</div>
                               <button
                                 onClick={() => setEditImageFor('')}
-                                className="p-1 rounded-md text-[var(--gv-text-muted)] hover:text-white hover:bg-[var(--gv-surface-2)]"
+                                className="p-1 rounded-md text-[var(--gv-text-muted)] hover:text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-2)]"
                                 title="Close"
                               >
                                 <X className="w-3.5 h-3.5" />
@@ -1651,7 +1651,7 @@ const GravityCreate: React.FC = () => {
             <button
               onClick={handleDraft}
               disabled={submitting || stillRendering}
-              className="inline-flex items-center gap-2 h-11 px-5 rounded-xl border border-[var(--gv-border-strong)] text-[13px] font-semibold text-[var(--gv-text-secondary)] hover:text-white hover:border-white/30 transition-colors disabled:opacity-40"
+              className="inline-flex items-center gap-2 h-11 px-5 rounded-xl border border-[var(--gv-border-strong)] text-[13px] font-semibold text-[var(--gv-text-secondary)] hover:text-[var(--gv-text-primary)] hover:border-[var(--gv-border-strong)] transition-colors disabled:opacity-40"
             >
               {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
               Generate {results.length || 4} more
