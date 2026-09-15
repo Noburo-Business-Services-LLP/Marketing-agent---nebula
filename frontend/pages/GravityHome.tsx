@@ -33,9 +33,9 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
     return <span className="inline-flex items-center gap-1 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-[#4ADE80]"><Check className="w-3 h-3" /> Posted</span>;
   }
   if (s === 'scheduled') {
-    return <span className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-white/55">Scheduled</span>;
+    return <span className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-[var(--gv-text-tertiary)]">Scheduled</span>;
   }
-  return <span className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-white/45">{status}</span>;
+  return <span className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-[var(--gv-text-muted)]">{status}</span>;
 };
 
 const GravityHome: React.FC = () => {
@@ -194,14 +194,14 @@ const GravityHome: React.FC = () => {
     <div className="max-w-[1240px] mx-auto pb-16">
       {/* Setup notice — only shows when there's actual setup to do */}
       {drafts.length === 0 && campaigns.length === 0 && !loading && (
-        <div className="mb-8 flex items-center gap-3 px-5 py-4 rounded-xl bg-white/[0.02] border border-[#F5A623]/25 relative overflow-hidden">
-          <span className="absolute inset-y-0 left-0 w-[3px] bg-[#F5A623]" />
-          <span className="w-2 h-2 rounded-full bg-[#F5A623]" />
+        <div className="mb-8 flex items-center gap-3 px-5 py-4 rounded-xl bg-[var(--gv-surface-1)] border border-[rgb(var(--gv-accent-rgb)/0.25)] relative overflow-hidden">
+          <span className="absolute inset-y-0 left-0 w-[3px] bg-[var(--gv-accent)]" />
+          <span className="w-2 h-2 rounded-full bg-[var(--gv-accent)]" />
           <div className="flex-1 min-w-0">
-            <div className="text-[13.5px] font-semibold text-[#F5F4F1]">Finish setting up Gravity</div>
-            <div className="text-[12px] text-white/50 truncate">Connect your social accounts and confirm brand voice — 2 minutes.</div>
+            <div className="text-[13.5px] font-semibold text-[var(--gv-text-primary)]">Finish setting up Gravity</div>
+            <div className="text-[12px] text-[var(--gv-text-tertiary)] truncate">Connect your social accounts and confirm brand voice — 2 minutes.</div>
           </div>
-          <Link to="/connect-socials" className="flex items-center gap-2 text-[12px] font-semibold text-[#F5A623] hover:text-[#ffb833]">
+          <Link to="/connect-socials" className="flex items-center gap-2 text-[12px] font-semibold text-[var(--gv-accent-text)] hover:text-[var(--gv-accent-hover)]">
             <span>0 of 2 done</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </Link>
@@ -229,14 +229,14 @@ const GravityHome: React.FC = () => {
           <div className="flex items-center gap-3">
             <Link
               to="/drafts"
-              className="flex items-center gap-2 h-11 px-5 rounded-lg bg-[#F5A623] hover:bg-[#ffb833] text-[#1A1208] text-[14px] font-semibold transition-colors shadow-[0_8px_30px_rgba(245,166,35,0.25)]"
+              className="flex items-center gap-2 h-11 px-5 rounded-lg bg-[var(--gv-accent)] hover:bg-[var(--gv-accent-hover)] text-[var(--gv-accent-ink)] text-[14px] font-semibold transition-colors shadow-[0_8px_30px_rgba(245,166,35,0.25)]"
             >
               <Check className="w-4 h-4" strokeWidth={3} />
               Review queue
             </Link>
             <Link
               to="/campaigns"
-              className="flex items-center gap-2 h-11 px-5 rounded-lg border border-white/[0.10] hover:border-white/25 hover:bg-white/[0.03] text-[#F5F4F1] text-[14px] font-medium transition-colors"
+              className="flex items-center gap-2 h-11 px-5 rounded-lg border border-[var(--gv-border-default)] hover:border-[var(--gv-border-strong)] hover:bg-[var(--gv-surface-1)] text-[var(--gv-text-primary)] text-[14px] font-medium transition-colors"
             >
               <Sparkles className="w-4 h-4" />
               Start fresh
@@ -246,7 +246,7 @@ const GravityHome: React.FC = () => {
 
         {/* Photo card stack */}
         <div className="relative w-[440px] h-[300px] hidden lg:block">
-          {/* Ambient glow */}
+          {/* Ambient glow — gold-toned, unchanged by theme */}
           <div className="absolute inset-[-40px] rounded-full blur-3xl opacity-70" style={{ background: 'radial-gradient(60% 50% at 50% 50%, rgba(245,166,35,0.20), transparent 70%)' }} />
           {stackCards.map(({ img, tag, sample }: any, i) => {
             const angle = (i - 1.5) * 6;
@@ -256,7 +256,7 @@ const GravityHome: React.FC = () => {
             return (
               <div
                 key={i}
-                className="absolute top-1/2 left-1/2 w-[160px] h-[220px] rounded-xl bg-[#151515] border border-white/[0.06] overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.5)]"
+                className="absolute top-1/2 left-1/2 w-[160px] h-[220px] rounded-xl bg-[var(--gv-panel)] border border-[var(--gv-border-subtle)] overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.5)]"
                 style={{
                   transform: `translate(-50%, -50%) translateX(${offsetX}px) rotate(${angle}deg) scale(${scale})`,
                   zIndex: z,
@@ -265,7 +265,7 @@ const GravityHome: React.FC = () => {
                 {img ? (
                   <img src={img} alt="" className="w-full h-full object-cover" />
                 ) : (
-                  <div className="w-full h-full bg-gradient-to-br from-white/[0.04] to-white/[0.01]" />
+                  <div className="w-full h-full bg-gradient-to-br from-[var(--gv-surface-2)] to-[var(--gv-surface-1)]" />
                 )}
                 {tag && (
                   <div className="absolute inset-x-0 bottom-0 flex items-center justify-between px-2 py-1.5 bg-gradient-to-t from-black/70 to-transparent">
@@ -287,34 +287,34 @@ const GravityHome: React.FC = () => {
         <section>
           <div className="flex items-center justify-between mb-5">
             <div className="gravity-label">Today's Plan</div>
-            <div className="text-[11px] text-white/40">
+            <div className="text-[11px] text-[var(--gv-text-muted)]">
               {todaysPlan.length} post{todaysPlan.length !== 1 ? 's' : ''} · {weeklyStats.platforms.length} platform{weeklyStats.platforms.length !== 1 ? 's' : ''}
             </div>
           </div>
           {todaysPlan.length === 0 ? (
-            <div className="rounded-xl border border-white/[0.06] p-8 text-center">
-              <div className="text-white/40 text-[14px]">Nothing on the schedule for today. Enjoy a slower day.</div>
-              <Link to="/content-calendar" className="mt-3 inline-block text-[12px] text-[#F5A623] hover:text-[#ffb833] font-semibold">
+            <div className="rounded-xl border border-[var(--gv-border-subtle)] p-8 text-center">
+              <div className="text-[var(--gv-text-muted)] text-[14px]">Nothing on the schedule for today. Enjoy a slower day.</div>
+              <Link to="/content-calendar" className="mt-3 inline-block text-[12px] text-[var(--gv-accent-text)] hover:text-[var(--gv-accent-hover)] font-semibold">
                 Open Calendar →
               </Link>
             </div>
           ) : (
-            <div className="divide-y divide-white/[0.06]">
+            <div className="divide-y divide-[var(--gv-border-subtle)]">
               {todaysPlan.map((item: any) => (
                 <div key={item.id} className="flex items-center gap-4 py-4">
                   <div className="flex items-center gap-3 min-w-[110px]">
                     <span className={`w-1.5 h-1.5 rounded-full ${
-                      item.status === 'posted' || item.status === 'published' ? 'bg-[#F5A623]' :
-                      item.status === 'scheduled' ? 'bg-[#60A5FA]' : 'bg-white/40'
+                      item.status === 'posted' || item.status === 'published' ? 'bg-[var(--gv-accent)]' :
+                      item.status === 'scheduled' ? 'bg-[#60A5FA]' : 'bg-[var(--gv-text-muted)]'
                     }`} />
-                    <span className="text-[12px] font-medium text-white/60 tracking-wider tabular-nums">{item.time}</span>
+                    <span className="text-[12px] font-medium text-[var(--gv-text-tertiary)] tracking-wider tabular-nums">{item.time}</span>
                   </div>
-                  <div className="w-11 h-11 rounded-md bg-white/[0.04] border border-white/[0.06] overflow-hidden flex-shrink-0">
+                  <div className="w-11 h-11 rounded-md bg-[var(--gv-surface-2)] border border-[var(--gv-border-subtle)] overflow-hidden flex-shrink-0">
                     {item.image && <img src={item.image} alt="" className="w-full h-full object-cover" />}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-[13.5px] font-semibold text-[#F5F4F1] truncate">{item.title}</div>
-                    <div className="text-[12px] text-white/45 truncate">{item.subtitle}</div>
+                    <div className="text-[13.5px] font-semibold text-[var(--gv-text-primary)] truncate">{item.title}</div>
+                    <div className="text-[12px] text-[var(--gv-text-tertiary)] truncate">{item.subtitle}</div>
                   </div>
                   <StatusBadge status={item.status} />
                 </div>
@@ -327,10 +327,10 @@ const GravityHome: React.FC = () => {
         <section className="space-y-4">
           <div className="flex items-center justify-between">
             <div className="gravity-label">This Week</div>
-            <div className="text-[11px] text-white/40">vs. last 7d</div>
+            <div className="text-[11px] text-[var(--gv-text-muted)]">vs. last 7d</div>
           </div>
 
-          <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6 relative overflow-hidden">
+          <div className="rounded-2xl border border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)] p-6 relative overflow-hidden">
             <div className="absolute -top-16 -right-10 w-40 h-40 rounded-full blur-3xl opacity-40" style={{ background: 'radial-gradient(circle, rgba(245,166,35,0.25), transparent 70%)' }} />
             <div className="relative">
               {/* Posts published — a number we can actually count. Reach and
@@ -338,14 +338,14 @@ const GravityHome: React.FC = () => {
                   render postedCount * 12.4 as "reach") is worse than blank. */}
               <div className="gravity-label mb-3">Published this week</div>
               <div className="flex items-baseline gap-2">
-                <span className="font-serif-display text-[56px] leading-none text-[#F5F4F1] tabular-nums">
+                <span className="font-serif-display text-[56px] leading-none text-[var(--gv-text-primary)] tabular-nums">
                   {weeklyStats.postedCount}
                 </span>
                 {weeklyStats.totalPosts > 0 && (
-                  <span className="text-[15px] text-white/45">of {weeklyStats.totalPosts} planned</span>
+                  <span className="text-[15px] text-[var(--gv-text-tertiary)]">of {weeklyStats.totalPosts} planned</span>
                 )}
               </div>
-              <div className="text-[12px] text-white/45 mt-3">
+              <div className="text-[12px] text-[var(--gv-text-tertiary)] mt-3">
                 {weeklyStats.platforms.length > 0
                   ? `across ${weeklyStats.platforms.join(', ')}`
                   : 'No platforms connected yet'}
@@ -354,16 +354,16 @@ const GravityHome: React.FC = () => {
           </div>
 
           {campaigns.slice(0, 1).map((c: any) => (
-            <Link to="/campaigns" key={c._id} className="block rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 hover:bg-white/[0.04] transition-colors">
+            <Link to="/campaigns" key={c._id} className="block rounded-2xl border border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)] p-4 hover:bg-[var(--gv-surface-2)] transition-colors">
               <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-md bg-white/[0.04] border border-white/[0.06] overflow-hidden flex-shrink-0">
+                <div className="w-11 h-11 rounded-md bg-[var(--gv-surface-2)] border border-[var(--gv-border-subtle)] overflow-hidden flex-shrink-0">
                   {c.creative?.imageUrls?.[0] && <img src={c.creative.imageUrls[0]} alt="" className="w-full h-full object-cover" />}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-[13.5px] font-semibold text-[#F5F4F1] truncate">{c.name || 'Recent campaign'}</div>
+                  <div className="text-[13.5px] font-semibold text-[var(--gv-text-primary)] truncate">{c.name || 'Recent campaign'}</div>
                   {/* Real fields only. This line used to read "24.8K reach ·
                       3,184 likes" for every campaign — both hardcoded. */}
-                  <div className="text-[11px] text-white/45 capitalize">
+                  <div className="text-[11px] text-[var(--gv-text-tertiary)] capitalize">
                     {[c.status, (c.platforms || []).join(', ')].filter(Boolean).join(' · ') || 'No platforms set'}
                   </div>
                 </div>
