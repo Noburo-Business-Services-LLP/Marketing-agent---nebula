@@ -708,7 +708,7 @@ const GravityApprove: React.FC = () => {
           {/* Dot pagination */}
           <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1.5">
             {drafts.slice(0, Math.min(total, 8)).map((_, i) => (
-              <span key={i} className={`h-1.5 rounded-full transition-all ${i === index ? 'w-6 bg-[var(--gv-accent)]' : 'w-1.5 bg-white/25'}`} />
+              <span key={i} className={`h-1.5 rounded-full transition-all ${i === index ? 'w-6 bg-[var(--gv-accent)]' : 'w-1.5 bg-[rgb(var(--gv-ink-rgb)/0.25)]'}`} />
             ))}
           </div>
         </div>
@@ -796,7 +796,7 @@ const GravityApprove: React.FC = () => {
                 onChange={(e) => setEditInstruction(e.target.value)}
                 placeholder="e.g. fix the spelling in the headline, make the sky darker, remove the coffee cup"
                 rows={2}
-                className="w-full p-2.5 rounded-lg bg-black/20 border border-[var(--gv-border-default)] text-[12.5px] leading-relaxed text-[var(--gv-text-secondary)] outline-none focus:border-[rgb(var(--gv-accent-rgb)/0.40)] resize-y placeholder:text-[var(--gv-text-muted)]"
+                className="w-full p-2.5 rounded-lg bg-[var(--gv-surface-2)] border border-[var(--gv-border-default)] text-[12.5px] leading-relaxed text-[var(--gv-text-secondary)] outline-none focus:border-[rgb(var(--gv-accent-rgb)/0.40)] resize-y placeholder:text-[var(--gv-text-muted)]"
               />
               <div className="flex items-center justify-between mt-2">
                 <span className="text-[10.5px] text-[var(--gv-text-muted)]">Keeps the rest of the image as-is.</span>
@@ -817,7 +817,7 @@ const GravityApprove: React.FC = () => {
             <button
               onClick={handleRedo}
               disabled={busy}
-              className="flex items-center gap-2 h-11 px-5 rounded-lg border border-[var(--gv-border-default)] hover:border-white/25 hover:bg-[var(--gv-surface-1)] text-[var(--gv-text-primary)] text-[13.5px] font-medium disabled:opacity-40"
+              className="flex items-center gap-2 h-11 px-5 rounded-lg border border-[var(--gv-border-default)] hover:border-[var(--gv-border-strong)] hover:bg-[var(--gv-surface-1)] text-[var(--gv-text-primary)] text-[13.5px] font-medium disabled:opacity-40"
             >
               <RotateCcw className="w-3.5 h-3.5" />
               Regenerate
@@ -827,7 +827,7 @@ const GravityApprove: React.FC = () => {
               className={`flex items-center gap-2 h-11 px-5 rounded-lg border text-[13.5px] font-medium ${
                 editOpen
                   ? 'border-[rgb(var(--gv-accent-rgb)/0.50)] bg-[var(--gv-accent-fill)] text-[var(--gv-accent-text)]'
-                  : 'border-[var(--gv-border-default)] hover:border-white/25 hover:bg-[var(--gv-surface-1)] text-[var(--gv-text-primary)]'
+                  : 'border-[var(--gv-border-default)] hover:border-[var(--gv-border-strong)] hover:bg-[var(--gv-surface-1)] text-[var(--gv-text-primary)]'
               }`}
             >
               <Pencil className="w-3.5 h-3.5" />

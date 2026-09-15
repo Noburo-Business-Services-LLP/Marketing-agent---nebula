@@ -1419,7 +1419,7 @@ const GravityCreate: React.FC = () => {
                           value={captionDraft}
                           onChange={(e) => setCaptionDraft(e.target.value)}
                           rows={3}
-                          className="w-full rounded-lg bg-black/40 border border-[var(--gv-border-default)] px-2.5 py-2 text-[12.5px] text-[var(--gv-text-primary)] resize-none"
+                          className="w-full rounded-lg bg-[var(--gv-surface-3)] border border-[var(--gv-border-default)] px-2.5 py-2 text-[12.5px] text-[var(--gv-text-primary)] resize-none"
                         />
                         <div className="flex gap-2">
                           <button
@@ -1501,7 +1501,7 @@ const GravityCreate: React.FC = () => {
                                   value={promptDraft}
                                   onChange={(e) => setPromptDraft(e.target.value)}
                                   rows={10}
-                                  className="gravity-bare w-full bg-black/30 border border-[var(--gv-border-default)] rounded-lg p-3 text-[12px] leading-relaxed text-[var(--gv-text-secondary)] font-mono resize-y"
+                                  className="gravity-bare w-full bg-[var(--gv-surface-2)] border border-[var(--gv-border-default)] rounded-lg p-3 text-[12px] leading-relaxed text-[var(--gv-text-secondary)] font-mono resize-y"
                                 />
                                 <div className="flex flex-wrap items-center gap-2 mt-3">
                                   <button
@@ -1553,7 +1553,7 @@ const GravityCreate: React.FC = () => {
                               onChange={(e) => setEditImageInstruction(e.target.value)}
                               placeholder="e.g. fix the spelling in the headline, make the sky darker, remove the coffee cup"
                               rows={2}
-                              className="gravity-bare w-full bg-black/30 border border-[var(--gv-border-default)] rounded-lg p-3 text-[12px] leading-relaxed text-[var(--gv-text-secondary)] resize-y"
+                              className="gravity-bare w-full bg-[var(--gv-surface-2)] border border-[var(--gv-border-default)] rounded-lg p-3 text-[12px] leading-relaxed text-[var(--gv-text-secondary)] resize-y"
                             />
                             <div className="flex items-center justify-between mt-3">
                               <span className="text-[11px] text-[var(--gv-text-muted)]">Keeps the rest of the image as-is.</span>
@@ -1582,7 +1582,7 @@ const GravityCreate: React.FC = () => {
                           type="datetime-local"
                           value={scheduleFor}
                           onChange={(e) => setScheduleFor(e.target.value)}
-                          className="w-full rounded-lg bg-black/40 border border-[var(--gv-border-default)] px-2.5 py-1.5 text-[12px] text-[var(--gv-text-primary)]"
+                          className="w-full rounded-lg bg-[var(--gv-surface-3)] border border-[var(--gv-border-default)] px-2.5 py-1.5 text-[12px] text-[var(--gv-text-primary)]"
                         />
                         <div className="flex gap-2">
                           <button
