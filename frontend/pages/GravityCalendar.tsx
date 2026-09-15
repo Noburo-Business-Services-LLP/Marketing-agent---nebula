@@ -138,27 +138,27 @@ const GravityCalendar: React.FC = () => {
         <GravityHero
           align="left"
           eyebrow="Schedule"
-          headline={<>{monthLabel} <span className="italic text-[#F5A623]">{yearLabel}</span></>}
+          headline={<>{monthLabel} <span className="italic text-[var(--gv-accent-display)]">{yearLabel}</span></>}
           className="!mb-0"
         />
         <div className="flex items-center gap-2 flex-shrink-0 mt-8">
           <button
             onClick={() => setAnchorMonth((m) => addMonths(m, -1))}
             title="Previous month"
-            className="w-9 h-9 rounded-lg border border-white/[0.08] flex items-center justify-center text-white/60 hover:text-[#F5F4F1] hover:bg-white/[0.04]"
+            className="w-9 h-9 rounded-lg border border-[var(--gv-border-default)] flex items-center justify-center text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-2)]"
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
           <button
             onClick={() => setAnchorMonth(startOfMonth(new Date()))}
-            className="h-9 px-4 rounded-lg border border-white/[0.10] text-[13px] font-semibold text-[#F5F4F1] hover:bg-white/[0.04]"
+            className="h-9 px-4 rounded-lg border border-[var(--gv-border-default)] text-[13px] font-semibold text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-2)]"
           >
             Today
           </button>
           <button
             onClick={() => setAnchorMonth((m) => addMonths(m, 1))}
             title="Next month"
-            className="w-9 h-9 rounded-lg border border-white/[0.08] flex items-center justify-center text-white/60 hover:text-[#F5F4F1] hover:bg-white/[0.04]"
+            className="w-9 h-9 rounded-lg border border-[var(--gv-border-default)] flex items-center justify-center text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-2)]"
           >
             <ChevronRight className="w-4 h-4" />
           </button>
@@ -170,17 +170,17 @@ const GravityCalendar: React.FC = () => {
         <div className="flex items-center gap-4">
           {['instagram','facebook','linkedin','x'].map((p) => (
             <div key={p} className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full" style={{ background: PLATFORM_DOT[p] || '#F5F4F1' }} />
-              <span className="text-[11.5px] text-white/55 capitalize">{p === 'x' ? 'X' : p}</span>
+              <span className="w-1.5 h-1.5 rounded-full" style={{ background: PLATFORM_DOT[p] || 'var(--gv-text-primary)' }} />
+              <span className="text-[11.5px] text-[var(--gv-text-tertiary)] capitalize">{p === 'x' ? 'X' : p}</span>
             </div>
           ))}
         </div>
-        <div className="text-[11.5px] text-white/50">
-          <span className="text-[#F5F4F1] font-semibold tabular-nums">{totalPosts}</span> posts this month
+        <div className="text-[11.5px] text-[var(--gv-text-tertiary)]">
+          <span className="text-[var(--gv-text-primary)] font-semibold tabular-nums">{totalPosts}</span> posts this month
           {awaitingApproval > 0 && (
             <>
-              <span className="mx-2 text-white/25">·</span>
-              <span className="text-[#F5A623] font-semibold tabular-nums">{awaitingApproval}</span>
+              <span className="mx-2 text-[var(--gv-text-muted)]">·</span>
+              <span className="text-[var(--gv-accent-text)] font-semibold tabular-nums">{awaitingApproval}</span>
               <span> awaiting approval</span>
             </>
           )}
@@ -191,14 +191,14 @@ const GravityCalendar: React.FC = () => {
           spans 4-6 rows, so this anchors which column is which day. */}
       <div className="grid grid-cols-7 gap-3 mb-2">
         {DAY_LABELS.map((label) => (
-          <div key={label} className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/35 px-1">
+          <div key={label} className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--gv-text-muted)] px-1">
             {label}
           </div>
         ))}
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center py-20 text-white/50">
+        <div className="flex items-center justify-center py-20 text-[var(--gv-text-tertiary)]">
           <Loader2 className="w-5 h-5 animate-spin mr-2" />
           Loading calendar…
         </div>
@@ -215,14 +215,14 @@ const GravityCalendar: React.FC = () => {
                     key={d.toISOString()}
                     className={`rounded-xl border p-3 min-h-[150px] flex flex-col transition-colors ${
                       isToday
-                        ? 'border-[#F5A623]/40 bg-[#F5A623]/[0.03]'
+                        ? 'border-[rgb(var(--gv-accent-rgb)/0.40)] bg-[var(--gv-accent-fill)]'
                         : inMonth
-                          ? 'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.03]'
-                          : 'border-white/[0.03] bg-white/[0.005] opacity-40'
+                          ? 'border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)] hover:bg-[var(--gv-surface-2)]'
+                          : 'border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)] opacity-40'
                     }`}
                   >
                     <div className="flex items-baseline justify-end mb-2">
-                      <span className={`text-[14px] font-serif-display tabular-nums ${isToday ? 'text-[#F5A623]' : inMonth ? 'text-[#F5F4F1]' : 'text-white/40'}`}>
+                      <span className={`text-[14px] font-serif-display tabular-nums ${isToday ? 'text-[var(--gv-accent-text)]' : inMonth ? 'text-[var(--gv-text-primary)]' : 'text-[var(--gv-text-muted)]'}`}>
                         {d.getDate()}
                       </span>
                     </div>
@@ -231,24 +231,24 @@ const GravityCalendar: React.FC = () => {
                         <button
                           key={p.id}
                           onClick={() => navigate('/drafts')}
-                          className="w-full flex items-center gap-2 p-1.5 rounded-md bg-white/[0.03] hover:bg-white/[0.08] transition-colors text-left group"
+                          className="w-full flex items-center gap-2 p-1.5 rounded-md bg-[var(--gv-surface-1)] hover:bg-[var(--gv-surface-3)] transition-colors text-left group"
                         >
-                          <div className="w-7 h-7 rounded flex-shrink-0 bg-white/[0.05] overflow-hidden">
+                          <div className="w-7 h-7 rounded flex-shrink-0 bg-[var(--gv-surface-2)] overflow-hidden">
                             {p.image && <img src={p.image} alt="" className="w-full h-full object-cover" />}
                           </div>
                           <div className="min-w-0 flex-1">
-                            <div className="text-[9px] font-semibold text-white/50 uppercase tracking-wider tabular-nums">
+                            <div className="text-[9px] font-semibold text-[var(--gv-text-tertiary)] uppercase tracking-wider tabular-nums">
                               {p.time}
                             </div>
-                            <div className="text-[10px] text-[#F5F4F1] truncate leading-tight">
+                            <div className="text-[10px] text-[var(--gv-text-primary)] truncate leading-tight">
                               {p.title}
                             </div>
                           </div>
-                          <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: PLATFORM_DOT[String(p.platform).toLowerCase()] || '#F5F4F1' }} />
+                          <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: PLATFORM_DOT[String(p.platform).toLowerCase()] || 'var(--gv-text-primary)' }} />
                         </button>
                       ))}
                       {posts.length > 3 && (
-                        <div className="text-[9.5px] text-white/40 text-center pt-0.5">
+                        <div className="text-[9.5px] text-[var(--gv-text-muted)] text-center pt-0.5">
                           +{posts.length - 3} more
                         </div>
                       )}
@@ -264,7 +264,7 @@ const GravityCalendar: React.FC = () => {
       <div className="mt-8 flex justify-center">
         <button
           onClick={() => navigate('/campaigns')}
-          className="inline-flex items-center gap-2 h-10 px-4 rounded-lg border border-white/[0.10] hover:border-[#F5A623]/50 hover:text-[#F5A623] text-white/70 text-[13px] font-medium transition-colors"
+          className="inline-flex items-center gap-2 h-10 px-4 rounded-lg border border-[var(--gv-border-default)] hover:border-[rgb(var(--gv-accent-rgb)/0.50)] hover:text-[var(--gv-accent-text)] text-[var(--gv-text-secondary)] text-[13px] font-medium transition-colors"
         >
           <Plus className="w-3.5 h-3.5" />
           New post
