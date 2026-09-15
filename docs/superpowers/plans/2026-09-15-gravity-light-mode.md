@@ -137,6 +137,15 @@ Immediately after that closing `}`, insert:
         --gv-accent-hover: #D68C0F;
         --gv-accent-fill: rgba(245,166,35,0.10);
         --gv-accent-ink: #1A1208;
+        /* Raw channels so Tailwind's own /NN opacity-modifier syntax can be
+           applied to the accent — a bare var(--gv-accent)/NN silently
+           resolves to transparent, since Tailwind cannot inject an alpha
+           channel into an opaque var() reference. Use
+           rgb(var(--gv-accent-rgb)/0.NN) everywhere a translucent accent is
+           needed. Verified live before this plan was dispatched. Identical
+           in both themes (the accent hue itself does not change), so this
+           is declared once here and not repeated under .dark. */
+        --gv-accent-rgb: 245 166 35;
       }
       .dark {
         --gv-bg: #0A0A0A;
@@ -370,7 +379,7 @@ export const GravityMetaBox: React.FC<{
     onClick={onClick}
     className="group relative flex items-center gap-4 h-[68px] px-5 rounded-xl border border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)] hover:bg-[var(--gv-surface-2)] hover:border-[var(--gv-border-default)] transition-all text-left w-full"
   >
-    <span className="w-9 h-9 rounded-md bg-[var(--gv-accent-fill)] border border-[var(--gv-accent)]/20 flex items-center justify-center flex-shrink-0">
+    <span className="w-9 h-9 rounded-md bg-[var(--gv-accent-fill)] border border-[rgb(var(--gv-accent-rgb)/0.20)] flex items-center justify-center flex-shrink-0">
       <Icon className="w-4 h-4 text-[var(--gv-accent)]" />
     </span>
     <div className="flex-1 min-w-0">
@@ -448,9 +457,9 @@ export const GravityStepRail: React.FC<{
                 aria-current={s.state === 'active' ? 'step' : undefined}
                 className={`flex items-center justify-center rounded-full text-[11px] font-semibold transition-all ${
                   s.state === 'active'
-                    ? 'w-8 h-8 bg-[var(--gv-accent)] text-[var(--gv-accent-ink)] shadow-[0_0_18px_rgba(245,166,35,0.45)] ring-2 ring-[var(--gv-accent)]/25'
+                    ? 'w-8 h-8 bg-[var(--gv-accent)] text-[var(--gv-accent-ink)] shadow-[0_0_18px_rgba(245,166,35,0.45)] ring-2 ring-[rgb(var(--gv-accent-rgb)/0.25)]'
                     : s.state === 'done'
-                      ? 'w-7 h-7 bg-[var(--gv-accent)]/85 text-[var(--gv-accent-ink)] hover:bg-[var(--gv-accent)] cursor-pointer'
+                      ? 'w-7 h-7 bg-[rgb(var(--gv-accent-rgb)/0.85)] text-[var(--gv-accent-ink)] hover:bg-[var(--gv-accent)] cursor-pointer'
                       : 'w-7 h-7 border border-[var(--gv-border-default)] text-[var(--gv-text-muted)]'
                 } ${!s.clickable && s.state !== 'active' ? 'cursor-default' : ''}`}
               >
@@ -465,7 +474,7 @@ export const GravityStepRail: React.FC<{
             {i < steps.length - 1 && (
               <div
                 className={`flex-1 h-px mx-1.5 sm:mx-2 ${
-                  steps[i].state === 'done' ? 'bg-[var(--gv-accent)]/35' : 'bg-[var(--gv-surface-3)]'
+                  steps[i].state === 'done' ? 'bg-[rgb(var(--gv-accent-rgb)/0.35)]' : 'bg-[var(--gv-surface-3)]'
                 }`}
               />
             )}
@@ -807,7 +816,7 @@ const GravityCalendar: React.FC = () => {
                     key={d.toISOString()}
                     className={`rounded-xl border p-3 min-h-[150px] flex flex-col transition-colors ${
                       isToday
-                        ? 'border-[var(--gv-accent)]/40 bg-[var(--gv-accent-fill)]'
+                        ? 'border-[rgb(var(--gv-accent-rgb)/0.40)] bg-[var(--gv-accent-fill)]'
                         : inMonth
                           ? 'border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)] hover:bg-[var(--gv-surface-2)]'
                           : 'border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)] opacity-40'
@@ -856,7 +865,7 @@ const GravityCalendar: React.FC = () => {
       <div className="mt-8 flex justify-center">
         <button
           onClick={() => navigate('/campaigns')}
-          className="inline-flex items-center gap-2 h-10 px-4 rounded-lg border border-[var(--gv-border-default)] hover:border-[var(--gv-accent)]/50 hover:text-[var(--gv-accent-text)] text-[var(--gv-text-secondary)] text-[13px] font-medium transition-colors"
+          className="inline-flex items-center gap-2 h-10 px-4 rounded-lg border border-[var(--gv-border-default)] hover:border-[rgb(var(--gv-accent-rgb)/0.50)] hover:text-[var(--gv-accent-text)] text-[var(--gv-text-secondary)] text-[13px] font-medium transition-colors"
         >
           <Plus className="w-3.5 h-3.5" />
           New post
@@ -1100,7 +1109,7 @@ const GravityHome: React.FC = () => {
     <div className="max-w-[1240px] mx-auto pb-16">
       {/* Setup notice — only shows when there's actual setup to do */}
       {drafts.length === 0 && campaigns.length === 0 && !loading && (
-        <div className="mb-8 flex items-center gap-3 px-5 py-4 rounded-xl bg-[var(--gv-surface-1)] border border-[var(--gv-accent)]/25 relative overflow-hidden">
+        <div className="mb-8 flex items-center gap-3 px-5 py-4 rounded-xl bg-[var(--gv-surface-1)] border border-[rgb(var(--gv-accent-rgb)/0.25)] relative overflow-hidden">
           <span className="absolute inset-y-0 left-0 w-[3px] bg-[var(--gv-accent)]" />
           <span className="w-2 h-2 rounded-full bg-[var(--gv-accent)]" />
           <div className="flex-1 min-w-0">
@@ -1692,7 +1701,7 @@ const NoteRow: React.FC<{
 
   return (
     <div className="flex items-start gap-3 py-2.5 border-b border-[var(--gv-border-subtle)] last:border-b-0">
-      <span className="mt-0.5 inline-flex items-center rounded-full border border-[var(--gv-accent)]/25 bg-[var(--gv-accent-fill)] px-2 py-0.5 text-[10.5px] font-semibold text-[var(--gv-accent-text)] flex-shrink-0">
+      <span className="mt-0.5 inline-flex items-center rounded-full border border-[rgb(var(--gv-accent-rgb)/0.25)] bg-[var(--gv-accent-fill)] px-2 py-0.5 text-[10.5px] font-semibold text-[var(--gv-accent-text)] flex-shrink-0">
         {CATEGORY_LABELS[note.category] || note.category}
       </span>
       {editing ? (
@@ -1701,7 +1710,7 @@ const NoteRow: React.FC<{
             type="text"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            className="flex-1 px-2.5 py-1.5 rounded-md bg-[var(--gv-surface-2)] border border-[var(--gv-border-default)] text-[13px] text-[var(--gv-text-primary)] outline-none focus:border-[var(--gv-accent)]/40"
+            className="flex-1 px-2.5 py-1.5 rounded-md bg-[var(--gv-surface-2)] border border-[var(--gv-border-default)] text-[13px] text-[var(--gv-text-primary)] outline-none focus:border-[rgb(var(--gv-accent-rgb)/0.40)]"
             autoFocus
           />
           <button onClick={save} disabled={busy} title="Save" className="p-1.5 rounded-md text-emerald-500 hover:bg-[var(--gv-surface-2)] disabled:opacity-40">
@@ -1919,7 +1928,7 @@ Apply the decision rule from Global Constraints:
 - Line 696 (`<Loader2 ... text-[#F5A623] ...>`) — icon glyph → `text-[var(--gv-accent)]`.
 - Line 760 (hashtag chip text, `text-[13px]`) — small text → `text-[var(--gv-accent-text)]`.
 - Line 793 (a `<label>` styled with `.gravity-label`, inherently small-caps/small) → `text-[var(--gv-accent-text)]`.
-- Line 829 (an active-state pill: `border-[#F5A623]/50 bg-[#F5A623]/10 text-[#F5A623]`) — small pill text → `border-[var(--gv-accent)]/50 bg-[var(--gv-accent-fill)] text-[var(--gv-accent-text)]`.
+- Line 829 (an active-state pill: `border-[#F5A623]/50 bg-[#F5A623]/10 text-[#F5A623]`) — small pill text → `border-[rgb(var(--gv-accent-rgb)/0.50)] bg-[var(--gv-accent-fill)] text-[var(--gv-accent-text)]`.
 
 - [ ] **Step 3: Resolve the inline gradient**
 
