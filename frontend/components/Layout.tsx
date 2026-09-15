@@ -26,7 +26,9 @@ import {
   Search,
   HelpCircle,
   Plus,
-  Lightbulb
+  Lightbulb,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { User } from '../types';
@@ -51,7 +53,7 @@ interface LayoutProps {
 const STARTING_CREDITS = 100;
 
 const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
-  const { isDarkMode } = useTheme();
+  const { isDarkMode, toggleTheme } = useTheme();
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [trialInfo, setTrialInfo] = useState<TrialData | null>(null);
   const [showCreditPanel, setShowCreditPanel] = useState(false);
@@ -181,17 +183,17 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
         onClick={() => setSidebarOpen(false)}
         className={`group relative flex items-center gap-3 pl-4 pr-3 h-10 rounded-lg transition-colors ${
           active
-            ? 'bg-white/[0.06] text-[#F5F4F1]'
-            : 'text-white/60 hover:text-[#F5F4F1] hover:bg-white/[0.03]'
+            ? 'bg-[var(--gv-surface-2)] text-[var(--gv-text-primary)]'
+            : 'text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-1)]'
         }`}
       >
         {active && (
-          <span className="absolute left-0 top-2 bottom-2 w-[2px] rounded-r-full bg-[#F5A623]" />
+          <span className="absolute left-0 top-2 bottom-2 w-[2px] rounded-r-full bg-[var(--gv-accent)]" />
         )}
-        <Icon className={`w-[15px] h-[15px] ${active ? 'text-[#F5A623]' : 'text-white/45 group-hover:text-white/70'}`} />
+        <Icon className={`w-[15px] h-[15px] ${active ? 'text-[var(--gv-accent)]' : 'text-[var(--gv-text-tertiary)] group-hover:text-[var(--gv-text-secondary)]'}`} />
         <span className="text-[13.5px] font-medium tracking-[-0.005em] flex-1">{label}</span>
         {badge === 'drafts' && trialInfo && (
-          <span className="ml-auto min-w-[20px] h-[18px] px-1.5 rounded-full bg-[#F5A623] text-[#1A1208] text-[10px] font-bold flex items-center justify-center">
+          <span className="ml-auto min-w-[20px] h-[18px] px-1.5 rounded-full bg-[var(--gv-accent)] text-[#1A1208] text-[10px] font-bold flex items-center justify-center">
             5
           </span>
         )}
@@ -210,7 +212,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
         .hide-scrollbar::-webkit-scrollbar { display: none; }
       `}</style>
 
-      <div className="relative z-[1] flex h-screen font-sans text-[#F5F4F1]">
+      <div className="relative z-[1] flex h-screen font-sans text-[var(--gv-text-primary)]">
         {/* Mobile overlay */}
         {isSidebarOpen && (
           <div
@@ -221,7 +223,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
 
         {/* ================= SIDEBAR ================= */}
         <aside
-          className={`fixed inset-y-0 left-0 z-30 w-[240px] bg-[#111111] border-r border-white/[0.06] transform transition-transform duration-300 ease-in-out md:translate-x-0 md:static md:inset-auto ${
+          className={`fixed inset-y-0 left-0 z-30 w-[240px] bg-[#111111] border-r border-[var(--gv-border-subtle)] transform transition-transform duration-300 ease-in-out md:translate-x-0 md:static md:inset-auto ${
             isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
           }`}
         >
@@ -229,13 +231,13 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
             {/* Brand mark */}
             <div className="px-6 pt-6 pb-5">
               <div className="flex items-center gap-2.5">
-                <span className="w-[18px] h-[18px] rounded-full bg-[#F5A623] shadow-[0_0_18px_rgba(245,166,35,0.5)]" />
+                <span className="w-[18px] h-[18px] rounded-full bg-[var(--gv-accent)] shadow-[0_0_18px_rgba(245,166,35,0.5)]" />
                 <div className="leading-tight">
-                  <div className="text-[13px] font-semibold tracking-[0.14em] text-[#F5F4F1]">GRAVITY</div>
-                  <div className="text-[9px] tracking-[0.22em] text-white/40 mt-[1px]">BY NEBULAA</div>
+                  <div className="text-[13px] font-semibold tracking-[0.14em] text-[var(--gv-text-primary)]">GRAVITY</div>
+                  <div className="text-[9px] tracking-[0.22em] text-[var(--gv-text-muted)] mt-[1px]">BY NEBULAA</div>
                 </div>
                 <button
-                  className="ml-auto md:hidden text-white/50 hover:text-white"
+                  className="ml-auto md:hidden text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)]"
                   onClick={() => setSidebarOpen(false)}
                 >
                   <X className="w-4 h-4" />
@@ -250,16 +252,26 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
               <button
                 onClick={() => { setSidebarOpen(false); navigate('/settings?tab=business'); }}
                 title="Business profile settings"
-                className="w-full flex items-center gap-3 px-2.5 py-2 rounded-xl bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.06] transition-colors"
+                className="w-full flex items-center gap-3 px-2.5 py-2 rounded-xl bg-[var(--gv-surface-1)] border border-[var(--gv-border-subtle)] hover:bg-[var(--gv-surface-2)] transition-colors"
               >
-                <span className="w-7 h-7 rounded-md bg-gradient-to-br from-[#3a2410] to-[#1a0f04] border border-white/[0.08] text-[11px] font-semibold text-[#F5A623] flex items-center justify-center">
+                <span className="w-7 h-7 rounded-md bg-gradient-to-br from-[#3a2410] to-[#1a0f04] border border-[var(--gv-border-default)] text-[11px] font-semibold text-[#F5A623] flex items-center justify-center">
                   {businessInitial}
                 </span>
                 <div className="min-w-0 flex-1 text-left">
-                  <div className="text-[13px] font-semibold text-[#F5F4F1] truncate leading-tight">{businessName}</div>
-                  <div className="text-[10.5px] text-white/45 truncate leading-tight mt-[1px]">{businessHandle}</div>
+                  <div className="text-[13px] font-semibold text-[var(--gv-text-primary)] truncate leading-tight">{businessName}</div>
+                  <div className="text-[10.5px] text-[var(--gv-text-tertiary)] truncate leading-tight mt-[1px]">{businessHandle}</div>
                 </div>
-                <ChevronDown className="w-3.5 h-3.5 text-white/40" />
+                <ChevronDown className="w-3.5 h-3.5 text-[var(--gv-text-muted)]" />
+              </button>
+              <button
+                type="button"
+                onClick={toggleTheme}
+                title={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+                aria-label={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+                className="w-full flex items-center justify-center gap-2 mt-2 h-8 rounded-lg border border-[var(--gv-border-subtle)] text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-2)] transition-colors"
+              >
+                {isDarkMode ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
+                <span className="text-[11px] font-medium">{isDarkMode ? 'Light mode' : 'Dark mode'}</span>
               </button>
             </div>
 
@@ -270,7 +282,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
                   <NavLink key={item.path} {...item} />
                 ))}
               </nav>
-              <div className="my-4 mx-1 border-t border-white/[0.06]" />
+              <div className="my-4 mx-1 border-t border-[var(--gv-border-subtle)]" />
               <div className="px-4 mb-2 gravity-label">Setup</div>
               <nav className="space-y-0.5">
                 {secondaryNav.map((item) => (
@@ -280,21 +292,21 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
             </div>
 
             {/* Footer nav */}
-            <div className="p-3 border-t border-white/[0.06]">
+            <div className="p-3 border-t border-[var(--gv-border-subtle)]">
               <nav className="space-y-0.5">
                 <NavLink path="/settings" label="Settings" icon={Settings} />
                 <button
                   onClick={handleLogout}
-                  className="group flex items-center gap-3 pl-4 pr-3 h-10 rounded-lg text-white/60 hover:text-[#F5F4F1] hover:bg-white/[0.03] transition-colors w-full"
+                  className="group flex items-center gap-3 pl-4 pr-3 h-10 rounded-lg text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-1)] transition-colors w-full"
                 >
-                  <HelpCircle className="w-[15px] h-[15px] text-white/45 group-hover:text-white/70" />
+                  <HelpCircle className="w-[15px] h-[15px] text-[var(--gv-text-tertiary)] group-hover:text-[var(--gv-text-secondary)]" />
                   <span className="text-[13.5px] font-medium tracking-[-0.005em] flex-1 text-left">Help</span>
                 </button>
                 <button
                   onClick={handleLogout}
-                  className="group flex items-center gap-3 pl-4 pr-3 h-10 rounded-lg text-white/60 hover:text-[#F5F4F1] hover:bg-white/[0.03] transition-colors w-full"
+                  className="group flex items-center gap-3 pl-4 pr-3 h-10 rounded-lg text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-1)] transition-colors w-full"
                 >
-                  <LogOut className="w-[15px] h-[15px] text-white/45 group-hover:text-white/70" />
+                  <LogOut className="w-[15px] h-[15px] text-[var(--gv-text-tertiary)] group-hover:text-[var(--gv-text-secondary)]" />
                   <span className="text-[13.5px] font-medium tracking-[-0.005em] flex-1 text-left">Logout</span>
                 </button>
               </nav>
@@ -305,16 +317,16 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
         {/* ================= MAIN COLUMN ================= */}
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           {/* Mobile top bar */}
-          <header className="md:hidden flex items-center justify-between px-4 h-14 border-b border-white/[0.06] bg-[#0A0A0A]/80 backdrop-blur">
+          <header className="md:hidden flex items-center justify-between px-4 h-14 border-b border-[var(--gv-border-subtle)] bg-[#0A0A0A]/80 backdrop-blur">
             <button
               onClick={() => setSidebarOpen(true)}
-              className="text-white/80 hover:text-[#F5A623]"
+              className="text-[var(--gv-text-secondary)] hover:text-[var(--gv-accent-text)]"
             >
               <Menu className="w-5 h-5" />
             </button>
             <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-[#F5A623]" />
-              <span className="text-[13px] font-semibold tracking-[0.14em] text-[#F5F4F1]">GRAVITY</span>
+              <span className="w-3 h-3 rounded-full bg-[var(--gv-accent)]" />
+              <span className="text-[13px] font-semibold tracking-[0.14em] text-[var(--gv-text-primary)]">GRAVITY</span>
             </div>
             <div className="flex items-center gap-2">
               {trialInfo && (
@@ -322,7 +334,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
                   className={`flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium ${
                     trialInfo.creditsBalance <= 25
                       ? 'bg-red-500/10 text-red-400'
-                      : 'bg-white/[0.06] text-white/80'
+                      : 'bg-[var(--gv-surface-2)] text-[var(--gv-text-secondary)]'
                   }`}
                   title="Quarks"
                 >
@@ -335,19 +347,19 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
           </header>
 
           {/* Desktop top bar */}
-          <header className="hidden md:flex items-center h-16 px-8 border-b border-white/[0.04] bg-transparent">
+          <header className="hidden md:flex items-center h-16 px-8 border-b border-[var(--gv-border-subtle)] bg-transparent">
             <div className="flex items-baseline gap-3 min-w-0">
-              <h1 className="text-[15px] font-semibold text-[#F5F4F1] tracking-[-0.01em]">{topBarMeta.title}</h1>
+              <h1 className="text-[15px] font-semibold text-[var(--gv-text-primary)] tracking-[-0.01em]">{topBarMeta.title}</h1>
               {topBarMeta.crumb && (
                 <>
-                  <span className="text-white/25 text-[13px]">/</span>
-                  <span className="text-[13px] text-white/50">{topBarMeta.crumb}</span>
+                  <span className="text-[var(--gv-text-muted)] text-[13px]">/</span>
+                  <span className="text-[13px] text-[var(--gv-text-tertiary)]">{topBarMeta.crumb}</span>
                 </>
               )}
             </div>
             <div className="flex items-center gap-2 ml-auto">
               <button
-                className="w-9 h-9 rounded-lg flex items-center justify-center text-white/55 hover:text-[#F5F4F1] hover:bg-white/[0.04] transition-colors"
+                className="w-9 h-9 rounded-lg flex items-center justify-center text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-2)] transition-colors"
                 aria-label="Search"
               >
                 <Search className="w-4 h-4" />
@@ -375,58 +387,58 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
                   <div className="relative" ref={creditPanelRef}>
                     <button
                       onClick={() => setShowCreditPanel(!showCreditPanel)}
-                      className="flex items-center gap-2.5 pl-2.5 pr-3 h-9 rounded-lg border border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.06] transition-colors"
+                      className="flex items-center gap-2.5 pl-2.5 pr-3 h-9 rounded-lg border border-[var(--gv-border-default)] bg-[var(--gv-surface-1)] hover:bg-[var(--gv-surface-2)] transition-colors"
                     >
                       <span className="w-2 h-2 rounded-full" style={{ background: dotColor, boxShadow: `0 0 8px ${dotColor}` }} />
-                      <span className="text-[13px] font-semibold text-[#F5F4F1] tabular-nums">{trialInfo.creditsBalance}</span>
-                      <span className="text-[11px] text-white/45">Quarks</span>
-                      <ChevronDown className={`w-3.5 h-3.5 text-white/40 transition-transform ${showCreditPanel ? 'rotate-180' : ''}`} />
+                      <span className="text-[13px] font-semibold text-[var(--gv-text-primary)] tabular-nums">{trialInfo.creditsBalance}</span>
+                      <span className="text-[11px] text-[var(--gv-text-tertiary)]">Quarks</span>
+                      <ChevronDown className={`w-3.5 h-3.5 text-[var(--gv-text-muted)] transition-transform ${showCreditPanel ? 'rotate-180' : ''}`} />
                     </button>
                     {showCreditPanel && (
                       <div
-                        className="absolute top-full right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-2xl shadow-2xl border border-white/[0.08] bg-[#151515] z-50 overflow-hidden"
+                        className="absolute top-full right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-2xl shadow-2xl border border-[var(--gv-border-default)] bg-[var(--gv-panel)] z-50 overflow-hidden"
                         style={{ animation: 'fadeSlideDown 0.2s ease-out' }}
                       >
-                        <div className="px-5 pt-5 pb-4 bg-white/[0.02]">
+                        <div className="px-5 pt-5 pb-4 bg-[var(--gv-surface-1)]">
                           <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-[13px] font-semibold text-[#F5F4F1]">Usage Overview</h3>
+                            <h3 className="text-[13px] font-semibold text-[var(--gv-text-primary)]">Usage Overview</h3>
                             <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium tracking-wider uppercase whitespace-nowrap ${
-                              trialInfo.daysLeft <= 2 ? 'bg-red-500/10 text-red-400' : 'bg-[#F5A623]/10 text-[#F5A623]'
+                              trialInfo.daysLeft <= 2 ? 'bg-red-500/10 text-red-400' : 'bg-[var(--gv-accent-fill)] text-[var(--gv-accent-text)]'
                             }`}>Free Trial</span>
                           </div>
                           <div className="flex items-center gap-4">
                             <div className="flex items-baseline gap-1.5">
                               <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: dotColor, boxShadow: `0 0 8px ${dotColor}` }} />
-                              <span className="text-3xl font-serif-display font-semibold text-[#F5F4F1] tabular-nums leading-none">{trialInfo.creditsBalance}</span>
-                              <span className="text-[13px] text-white/45">Quarks</span>
+                              <span className="text-3xl font-serif-display font-semibold text-[var(--gv-text-primary)] tabular-nums leading-none">{trialInfo.creditsBalance}</span>
+                              <span className="text-[13px] text-[var(--gv-text-tertiary)]">Quarks</span>
                             </div>
-                            <div className="h-8 w-px bg-white/[0.08]" />
-                            <div className="text-[11px] text-white/40 leading-tight">
-                              <div className="tabular-nums text-white/60 font-medium">{trialInfo.totalUsed}</div>
+                            <div className="h-8 w-px bg-[var(--gv-surface-3)]" />
+                            <div className="text-[11px] text-[var(--gv-text-muted)] leading-tight">
+                              <div className="tabular-nums text-[var(--gv-text-tertiary)] font-medium">{trialInfo.totalUsed}</div>
                               <div>used all-time</div>
                             </div>
                           </div>
                         </div>
-                        <div className="px-5 py-3 border-t border-white/[0.06]">
+                        <div className="px-5 py-3 border-t border-[var(--gv-border-subtle)]">
                           <button
                             onClick={() => { setShowCreditPanel(false); navigate('/settings'); }}
-                            className="w-full flex items-center justify-between text-[11.5px] text-white/50 hover:text-[#F5F4F1] transition-colors"
+                            className="w-full flex items-center justify-between text-[11.5px] text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] transition-colors"
                           >
                             <span>What does each action cost?</span>
-                            <span className="text-[#F5A623]">See in Settings →</span>
+                            <span className="text-[var(--gv-accent-text)]">See in Settings →</span>
                           </button>
                         </div>
-                        <div className="px-5 py-3 border-t border-white/[0.06] bg-white/[0.02]">
+                        <div className="px-5 py-3 border-t border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)]">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                              <Clock className={`w-3.5 h-3.5 ${trialInfo.daysLeft <= 2 ? 'text-red-400' : 'text-white/40'}`} />
-                              <span className={`text-[11px] ${trialInfo.daysLeft <= 2 ? 'text-red-400 font-medium' : 'text-white/50'}`}>
+                              <Clock className={`w-3.5 h-3.5 ${trialInfo.daysLeft <= 2 ? 'text-red-400' : 'text-[var(--gv-text-muted)]'}`} />
+                              <span className={`text-[11px] ${trialInfo.daysLeft <= 2 ? 'text-red-400 font-medium' : 'text-[var(--gv-text-tertiary)]'}`}>
                                 {trialInfo.daysLeft} day{trialInfo.daysLeft !== 1 ? 's' : ''} left in trial
                               </span>
                             </div>
                             <button
                               onClick={() => navigate('/trial-expired')}
-                              className="text-[11px] font-semibold text-[#F5A623] hover:text-[#ffb833] transition-colors"
+                              className="text-[11px] font-semibold text-[var(--gv-accent-text)] hover:text-[var(--gv-accent-hover)] transition-colors"
                             >
                               Upgrade
                             </button>
@@ -441,7 +453,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
               {/* Primary CTA — Create post */}
               <Link
                 to="/campaigns"
-                className="ml-1 flex items-center gap-2 h-9 pl-3 pr-3 rounded-lg bg-[#F5A623] hover:bg-[#ffb833] text-[#1A1208] text-[13px] font-semibold shadow-[0_4px_18px_rgba(245,166,35,0.25)] transition-colors"
+                className="ml-1 flex items-center gap-2 h-9 pl-3 pr-3 rounded-lg bg-[var(--gv-accent)] hover:bg-[var(--gv-accent-hover)] text-[#1A1208] text-[13px] font-semibold shadow-[0_4px_18px_rgba(245,166,35,0.25)] transition-colors"
               >
                 <Sparkles className="w-3.5 h-3.5" />
                 <span>Create post</span>
