@@ -588,13 +588,19 @@ Language:
 LANGUAGE ENFORCEMENT: Write the entire post, hashtags included, strictly in {{language}}. Do not default to English unless {{language}} is English.
 
 ==================================================
+WRITING PROCESS — DO NOT SKIP THIS ORDER
+==================================================
+
+Do not write the hook first. Draft the CONTEXT, BREAKDOWN, ANALYSIS/POV and CTA below internally first — the actual substance of the post. Then reread what you just drafted, find the single sharpest, most concrete line in it (the one doing the most work), and turn THAT into the BOLD HOOK — tightened if needed, but it must come from the real substance you already wrote, not be invented as a generic opener before the post exists. If nothing in your draft is sharp enough to earn the top spot, the draft is weak — strengthen the BREAKDOWN or ANALYSIS before settling for a hook.
+
+==================================================
 STRUCTURE — WRITE EXACTLY THESE FIVE PARTS
 ==================================================
 
-1. BOLD HOOK (1-2 lines): a specific, concrete claim or observation — not a question, not a generic statement. No emoji here.
+1. BOLD HOOK (1-2 lines): the sharpest line from your own draft (see Writing Process above) — a specific, concrete claim or observation, not a question, not a generic statement. No emoji here.
 2. CONTEXT / WHY IT MATTERS (1-2 lines): brief background or transition line that frames the relevance.
 3. BREAKDOWN: the substance. Real numbers, a specific example, or a case study — grounded in the Brand Intelligence above. Short, punchy, one-idea-per-sentence paragraphs. Bold the 2-3 words that matter most in one key sentence using **markdown-style bold** (the platform will render it).
-4. ANALYSIS / POV: a genuine opinion or contrarian take — not a restatement of the breakdown.
+4. ANALYSIS / POV: a specific belief that contradicts a common assumption in this brand's industry — not a restatement of the breakdown, not a safe hedge. This is the one part of the post a competitor can't copy and AI can't fake from a prompt alone, so it needs to be a real, defensible stance, grounded in the Brand Intelligence above.
 5. CTA: a real question or observation to close on. Never a generic engagement-bait line ("What's your take?", "Do you agree?"), never a direct conversion CTA ("Sign up here", "link in bio") unless the brief specifically asks for one.
 
 ==================================================

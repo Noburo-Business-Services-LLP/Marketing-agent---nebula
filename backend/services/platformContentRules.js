@@ -47,11 +47,12 @@ const RULES = {
     emojiGuidance: 'minimal — 1-2 max',
     hashtagCount: '3-5',
     promptBlock:
+      '- Do not write the hook first. Draft the CONTEXT, BREAKDOWN, ANALYSIS/POV and CTA (below) first, then find the single sharpest line in that draft and turn it into the BOLD HOOK — the hook must come from the real substance, not be invented as a generic opener.\n' +
       '- Write 150-300+ words in this 5-part structure:\n' +
-      '  1. BOLD HOOK (1-2 lines): a specific, concrete claim or observation — not a question, not a generic statement. No emoji.\n' +
+      '  1. BOLD HOOK (1-2 lines): the sharpest line from your own draft — a specific, concrete claim or observation, not a question, not a generic statement. No emoji.\n' +
       '  2. CONTEXT (1-2 lines): why this matters right now, briefly.\n' +
       '  3. BREAKDOWN: the substance — real numbers, a specific example, or a case study where the brand context provides one. Short, punchy, one-idea-per-sentence paragraphs. Bold the 2-3 words that matter most in a key sentence.\n' +
-      '  4. ANALYSIS / POV: a genuine opinion or contrarian take, not a summary of the breakdown.\n' +
+      '  4. ANALYSIS / POV: a specific belief that contradicts a common assumption in this brand\'s industry — not a summary of the breakdown, not a safe hedge.\n' +
       '  5. CTA: a real question or observation to close on — never "Sign up here" or "link in bio," and never a generic "What do you think?"\n' +
       '- 1-2 emoji maximum across the whole post, never one per section.\n' +
       '- 3-5 hashtags, lowercase preferred.\n' +
