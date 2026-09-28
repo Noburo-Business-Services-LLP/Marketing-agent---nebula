@@ -4395,6 +4395,18 @@ export const draftsAPI = {
       method: 'POST',
       body: JSON.stringify({ instruction })
     }, true);
+  },
+
+  // LinkedIn long-form post — text-only generation, no image. The caption
+  // and hashtags come back immediately; an image is only generated later,
+  // opt-in, via retryImageGeneration.
+  generateLinkedInPost: async (params: {
+    idea: string; contentPillar?: string; objective?: string; tone?: string; language?: string;
+  }): Promise<{ success: boolean; caption: string; hashtags: string[]; imageDescription: string; creditsRemaining?: number; message?: string }> => {
+    return apiCall('/drafts/generate-linkedin-post', {
+      method: 'POST',
+      body: JSON.stringify(params)
+    }, true);
   }
 };
 

@@ -33,7 +33,7 @@ const getToken = () =>
 // Wires the primary CTA to apiService.createCampaign, then routes to
 // /drafts (Approve) so the user sees what got produced.
 
-type CreateMode = 'campaign' | 'single' | 'carousel';
+type CreateMode = 'campaign' | 'single' | 'carousel' | 'linkedin';
 
 const DURATIONS = ['1 week', '2 weeks', '3 weeks', '4 weeks'];
 const CADENCES = ['2 posts / week', '3 posts / week', '5 posts / week', 'Daily'];
@@ -592,6 +592,35 @@ const GravityCreate: React.FC = () => {
     setProgressMsg('');
   };
 
+  // LinkedIn mode — long-form text post. No image call at generation time;
+  // the caption/hashtags come back immediately and an image, if wanted, is
+  // generated afterwards via the "Add image" button on the result card.
+  const handleDraftLinkedInPost = async () => {
+    setProgressMsg('Writing your LinkedIn post…');
+    const res = await draftsAPI.generateLinkedInPost({
+      idea: description.trim() || name.trim(),
+      contentPillar: ideaContext.contentPillar,
+      objective: ideaContext.objective,
+      tone,
+      language: languageValueFromLabel(language)
+    });
+    if (!res.success) {
+      throw new Error(res.message || 'Failed to generate LinkedIn post.');
+    }
+    const saved = await draftsAPI.saveDraft({
+      title: name.trim() || 'Untitled LinkedIn post',
+      caption: res.caption,
+      hashtags: res.hashtags,
+      platforms: ['linkedin'],
+      sourceType: 'post',
+      contentType: 'post',
+      imageUrl: '',
+      imagePrompt: res.imageDescription || ''
+    });
+    setResults([saved.draft]);
+    setPostsGenerated(1);
+  };
+
   // Carousel mode — one post told across several slides.
   //
   // The backend plans the whole arc first, then renders slides one at a time
@@ -860,6 +889,8 @@ const GravityCreate: React.FC = () => {
         await handleDraftCarousel();
       } else if (mode === 'single') {
         await handleDraftSinglePost();
+      } else if (mode === 'linkedin') {
+        await handleDraftLinkedInPost();
       } else {
         await handleDraftCampaign();
       }
@@ -895,7 +926,7 @@ const GravityCreate: React.FC = () => {
   const productImageUrls = pickedProducts.map((p) => p.imageUrl).filter(Boolean);
 
   // How many cards this run will produce, whichever mode is active.
-  const expectedCount = mode === 'campaign' ? estimate.total : mode === 'carousel' ? slideCount : 1;
+  const expectedCount = mode === 'campaign' ? estimate.total : mode === 'carousel' ? slideCount : mode === 'linkedin' ? 1 : 1;
 
   const pendingCards = submitting && results.length === 0
     ? Array.from({ length: Math.min(expectedCount, 4) })
@@ -955,6 +986,15 @@ const GravityCreate: React.FC = () => {
           >
             <GalleryHorizontalEnd className="w-3.5 h-3.5" />
             Carousel
+          </button>
+          <button
+            onClick={() => setMode('linkedin')}
+            className={`flex items-center gap-2 h-9 px-5 rounded-full text-[13px] font-semibold transition-colors ${
+              mode === 'linkedin' ? 'bg-[var(--gv-surface-3)] text-[var(--gv-text-primary)]' : 'text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-secondary)]'
+            }`}
+          >
+            <Linkedin className="w-3.5 h-3.5" />
+            LinkedIn
           </button>
         </div>
       </div>
@@ -1038,7 +1078,7 @@ const GravityCreate: React.FC = () => {
       <PromptStudio
         open={promptStudioOpen}
         onClose={() => setPromptStudioOpen(false)}
-        focus={mode === 'campaign' ? 'campaign.content' : mode === 'carousel' ? 'carousel.content' : 'single.content'}
+        focus={mode === 'campaign' ? 'campaign.content' : mode === 'carousel' ? 'carousel.content' : mode === 'linkedin' ? 'linkedin.content' : 'single.content'}
       />
 
       {/* Name + Description card, wrapped in a travelling border beam.
@@ -1080,11 +1120,11 @@ const GravityCreate: React.FC = () => {
         <div className="pointer-events-none absolute inset-0 -z-0" style={{ background: 'radial-gradient(60% 100% at 50% 100%, rgba(245,166,35,0.09) 0%, transparent 60%)' }} />
         <div className="relative">
           <div className="flex items-baseline gap-4 mb-3">
-            <span className="gravity-label text-[var(--gv-accent-text)]">{mode === 'campaign' ? 'Campaign' : 'Post'}</span>
+            <span className="gravity-label text-[var(--gv-accent-text)]">{mode === 'campaign' ? 'Campaign' : mode === 'linkedin' ? 'LinkedIn post' : 'Post'}</span>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder={mode === 'campaign' ? 'Monsoon menu launch' : 'Sunday pour-over ritual'}
+              placeholder={mode === 'campaign' ? 'Monsoon menu launch' : mode === 'linkedin' ? '500 customers milestone' : 'Sunday pour-over ritual'}
               className="gravity-bare flex-1 bg-transparent border-none outline-none text-[16px] font-semibold text-[var(--gv-text-primary)] placeholder:text-[var(--gv-text-muted)]"
             />
           </div>
@@ -1093,8 +1133,10 @@ const GravityCreate: React.FC = () => {
             onChange={(e) => setDescription(e.target.value)}
             placeholder={mode === 'campaign'
               ? 'e.g. Launch our monsoon menu over two weeks — tease, reveal, drive footfall to the Saturday launch event.'
-              : 'e.g. Slow Sunday. Filter coffee, one hand pouring, room quiet — invite people to spend the morning with us.'}
-            rows={4}
+              : mode === 'linkedin'
+                ? 'We just crossed 500 customers — what that actually took'
+                : 'e.g. Slow Sunday. Filter coffee, one hand pouring, room quiet — invite people to spend the morning with us.'}
+            rows={mode === 'linkedin' ? 8 : 4}
             className="gravity-bare w-full bg-transparent border-none outline-none text-[14.5px] text-[var(--gv-text-tertiary)] leading-relaxed resize-none placeholder:text-[var(--gv-text-muted)]"
           />
         </div>
@@ -1155,7 +1197,9 @@ const GravityCreate: React.FC = () => {
         </div>
       </div>
 
-      {/* Platforms */}
+      {/* Platforms — not shown in LinkedIn mode, where the platform is
+          implicit and there is no image-generation step to target. */}
+      {mode !== 'linkedin' && (
       <div className="flex items-center justify-center gap-4 py-4 mb-2">
         <span className="gravity-label">Platforms</span>
         <div className="flex items-center gap-2">
@@ -1185,10 +1229,11 @@ const GravityCreate: React.FC = () => {
           </div>
         )}
       </div>
+      )}
 
-      {/* Aspect + logo — shown for BOTH modes. These used to be campaign-only
-          (aspect) or missing entirely (logo), so single posts silently
-          rendered 4:5 with no branding. */}
+      {/* Aspect + logo — shown for campaign/single/carousel. Not shown in
+          LinkedIn mode, which has no image step at generation time. */}
+      {mode !== 'linkedin' && (
       <div className="max-w-2xl mx-auto mt-8 grid gap-4 sm:grid-cols-2">
         <div>
           <div className="gravity-label mb-2">Aspect ratio</div>
@@ -1276,6 +1321,7 @@ const GravityCreate: React.FC = () => {
           )}
         </div>
       </div>
+      )}
 
       {/* Error */}
       {error && (
@@ -1406,6 +1452,22 @@ const GravityCreate: React.FC = () => {
                       <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
                         <AlertCircle className="w-6 h-6 text-red-400" />
                         <span className="text-[11px] text-red-300">Image failed</span>
+                      </div>
+                    ) : mode === 'linkedin' && !processing ? (
+                      // LinkedIn posts generate text-only — no image was
+                      // requested, so there is nothing "generating." Offer
+                      // to add one instead of showing a fill that implies
+                      // work already in flight.
+                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2.5">
+                        <ImageIcon className="w-6 h-6 text-[var(--gv-text-muted)]" />
+                        <span className="text-[11.5px] text-[var(--gv-text-muted)]">No image yet</span>
+                        <button
+                          onClick={() => regenerateImage(d)}
+                          disabled={busy}
+                          className="h-8 px-3.5 rounded-full bg-[var(--gv-surface-3)] text-[12px] font-semibold text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-2)] disabled:opacity-50 transition-colors"
+                        >
+                          Add image
+                        </button>
                       </div>
                     ) : (
                       <GeneratingFill prompt={d.imagePrompt || d.title || ''} resolution={backendAspect} />
