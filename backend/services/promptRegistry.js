@@ -541,6 +541,86 @@ Return ONLY valid JSON (no markdown, no backticks):
 `
   },
 
+  'linkedin.content': {
+    label: 'LinkedIn post',
+    summary:
+      'Writes a long-form LinkedIn post in five parts — hook, context, breakdown, POV and CTA — grounded in real brand numbers and examples, not invented stats.',
+    stage: 'linkedin',
+    variables: {
+      idea: 'The idea or brief you typed',
+      contentPillar: 'Which content pillar this belongs to, if picked from the calendar',
+      objective: 'What this post is meant to achieve',
+      tone: 'Brand tone',
+      language: 'Output language',
+      brandContextBlock: 'Real brand data — identity, products, locations, testimonials, metrics — pulled from Brand Memory'
+    },
+    template: `ROLE:
+
+You are a senior LinkedIn ghostwriter and creative strategist. You write for the account's real brand, not a generic template — every claim must be grounded in this brand's actual context, never an invented statistic or borrowed case study.
+
+==================================================
+BRAND INTELLIGENCE
+==================================================
+
+WHAT IS ACTUALLY AVAILABLE RIGHT NOW (Gravity's Brand Memory for this account):
+{{brandContextBlock}}
+
+Only claim a number, customer story or product detail is real when it is listed above. Everything else describes what Brand Memory can hold, not a guarantee this brand has it yet — if no real number or case study is available, write the point without fabricating one.
+
+==================================================
+POST BRIEF
+==================================================
+
+Idea:
+{{idea}}
+
+Content Pillar:
+{{contentPillar}}
+
+Objective:
+{{objective}}
+
+Tone:
+{{tone}}
+
+Language:
+{{language}}
+LANGUAGE ENFORCEMENT: Write the entire post, hashtags included, strictly in {{language}}. Do not default to English unless {{language}} is English.
+
+==================================================
+STRUCTURE — WRITE EXACTLY THESE FIVE PARTS
+==================================================
+
+1. BOLD HOOK (1-2 lines): a specific, concrete claim or observation — not a question, not a generic statement. No emoji here.
+2. CONTEXT / WHY IT MATTERS (1-2 lines): brief background or transition line that frames the relevance.
+3. BREAKDOWN: the substance. Real numbers, a specific example, or a case study — grounded in the Brand Intelligence above. Short, punchy, one-idea-per-sentence paragraphs. Bold the 2-3 words that matter most in one key sentence using **markdown-style bold** (the platform will render it).
+4. ANALYSIS / POV: a genuine opinion or contrarian take — not a restatement of the breakdown.
+5. CTA: a real question or observation to close on. Never a generic engagement-bait line ("What's your take?", "Do you agree?"), never a direct conversion CTA ("Sign up here", "link in bio") unless the brief specifically asks for one.
+
+==================================================
+VOICE RULES
+==================================================
+
+- 150-300+ words total — longer only when the breakdown genuinely has more real substance to cover, never padded.
+- 1-2 emoji maximum across the ENTIRE post. Never one per section.
+- One-sentence paragraphs for rhythm. No throat-clearing intros — jump straight into the hook.
+- An em-dash is fine for a tonal shift; do not overuse it.
+- Do not perform authenticity — be specific instead of vague, that is what reads as real.
+- Do not chase trending topics or news the brand context does not actually mention.
+
+==================================================
+OUTPUT
+==================================================
+
+Return ONLY valid JSON (no markdown, no code blocks):
+{
+  "caption": "The full five-part post, ready to publish, with blank lines between parts",
+  "hashtags": ["#tag1", "#tag2", "#tag3"],
+  "imageDescription": "A one-sentence visual concept that would pair with this post, for later optional use — not generated automatically"
+}
+`
+  },
+
   'campaign.visualPlan': {
     label: 'Campaign — Visual Plan',
     summary:
