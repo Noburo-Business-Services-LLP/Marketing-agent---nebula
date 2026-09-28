@@ -398,10 +398,13 @@ const GravityCreate: React.FC = () => {
   const regenerateCostFor = (d: Draft) => (d.contentType === 'campaign' ? 0 : (quarkCosts.image_generated || 0));
   const confirmRegenerate = (d: Draft) => {
     const cost = regenerateCostFor(d);
+    const hasImage = !!((d as any)?.imageUrl || (d as any)?.creative?.imageUrls?.[0]);
     const msg = cost > 0
-      ? `This costs ${cost} Quark${cost === 1 ? '' : 's'} and replaces the current image.`
-      : 'This replaces the current image.';
-    return confirmDialog(msg, { title: 'Regenerate this image?', confirmLabel: 'Regenerate' });
+      ? `This costs ${cost} Quark${cost === 1 ? '' : 's'} and ${hasImage ? 'replaces the current image.' : 'adds an image to this post.'}`
+      : hasImage ? 'This replaces the current image.' : 'This adds an image to this post.';
+    const title = hasImage ? 'Regenerate this image?' : 'Add an image?';
+    const confirmLabel = hasImage ? 'Regenerate' : 'Add';
+    return confirmDialog(msg, { title, confirmLabel });
   };
 
   const regenerateWithPrompt = async (d: Draft) => {
@@ -607,18 +610,27 @@ const GravityCreate: React.FC = () => {
     if (!res.success) {
       throw new Error(res.message || 'Failed to generate LinkedIn post.');
     }
-    const saved = await draftsAPI.saveDraft({
-      title: name.trim() || 'Untitled LinkedIn post',
-      caption: res.caption,
-      hashtags: res.hashtags,
-      platforms: ['linkedin'],
-      sourceType: 'post',
-      contentType: 'post',
-      imageUrl: '',
-      imagePrompt: res.imageDescription || ''
-    });
-    setResults([saved.draft]);
-    setPostsGenerated(1);
+    // The post is already generated and already charged for by this point —
+    // if saving it fails, the text must not just vanish. Surface it in the
+    // error so the user can copy it before retrying.
+    try {
+      const saved = await draftsAPI.saveDraft({
+        title: name.trim() || 'Untitled LinkedIn post',
+        caption: res.caption,
+        hashtags: res.hashtags,
+        platforms: ['linkedin'],
+        sourceType: 'post',
+        contentType: 'post',
+        imageUrl: '',
+        imagePrompt: res.imageDescription || ''
+      });
+      setResults([saved.draft]);
+      setPostsGenerated(1);
+    } catch (saveErr: any) {
+      throw new Error(
+        `Post generated but couldn't be saved — copy it before retrying: ${res.caption}`
+      );
+    }
   };
 
   // Carousel mode — one post told across several slides.
@@ -875,7 +887,10 @@ const GravityCreate: React.FC = () => {
 
   const handleDraft = async () => {
     if (!name.trim()) { setError('Give it a name first.'); return; }
-    if (selectedPlatforms.length === 0) { setError('Pick at least one platform.'); return; }
+    // LinkedIn mode hides the platform picker entirely — platform is
+    // implicit — so this check would otherwise leave the user stuck with no
+    // way to fix it on this tab if selectedPlatforms happened to be empty.
+    if (mode !== 'linkedin' && selectedPlatforms.length === 0) { setError('Pick at least one platform.'); return; }
     setError(null);
     setSubmitting(true);
     setPostsGenerated(0);
@@ -1453,7 +1468,7 @@ const GravityCreate: React.FC = () => {
                         <AlertCircle className="w-6 h-6 text-red-400" />
                         <span className="text-[11px] text-red-300">Image failed</span>
                       </div>
-                    ) : mode === 'linkedin' && !processing ? (
+                    ) : (d.platforms || []).includes('linkedin') && !processing ? (
                       // LinkedIn posts generate text-only — no image was
                       // requested, so there is nothing "generating." Offer
                       // to add one instead of showing a fill that implies
@@ -1501,7 +1516,7 @@ const GravityCreate: React.FC = () => {
                       </div>
                     ) : (
                       <>
-                        <p className="text-[12.5px] leading-snug text-[rgb(var(--gv-ink-rgb)/0.90)]">
+                        <p className="text-[12.5px] leading-snug whitespace-pre-line text-[rgb(var(--gv-ink-rgb)/0.90)]">
                           {d.caption || <span className="text-[var(--gv-text-muted)] italic">No caption yet</span>}
                         </p>
                         <div className="flex items-center justify-between mt-2.5">
@@ -1673,7 +1688,7 @@ const GravityCreate: React.FC = () => {
                         </button>
                         <button
                           onClick={() => approveNow(d)}
-                          disabled={busy || processing || !img}
+                          disabled={busy || processing || (!img && mode !== 'linkedin')}
                           title={processing ? 'Wait for the artwork' : 'Publish now'}
                           className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-500/15 text-emerald-400 text-[11.5px] font-semibold disabled:opacity-40"
                         >
@@ -1681,7 +1696,7 @@ const GravityCreate: React.FC = () => {
                         </button>
                         <button
                           onClick={() => { setSchedulingId(d._id); setScheduleFor(''); }}
-                          disabled={busy || processing || !img}
+                          disabled={busy || processing || (!img && mode !== 'linkedin')}
                           className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[var(--gv-accent-fill)] text-[var(--gv-accent-text)] text-[11.5px] font-semibold disabled:opacity-40"
                         >
                           <Clock className="w-3 h-3" /> Schedule

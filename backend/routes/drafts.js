@@ -12,6 +12,7 @@ const { buildPrompt } = require('../services/promptRegistry');
 const { buildBrandMemoryBlock } = require('../services/brandMemory');
 const { callTextLLM } = require('../services/openAI');
 const { parseGeminiJSON } = require('../services/geminiAI');
+const { normalizeLanguage } = require('../services/contentCalendarService');
 
 // 1. POST /save - Create or update a draft (upsert by _id if provided)
 router.post('/save', protect, async (req, res) => {
@@ -554,7 +555,7 @@ router.post('/generate-linkedin-post', protect, checkTrial, async (req, res) => 
       contentPillar: contentPillar || '',
       objective: objective || '',
       tone: tone || '',
-      language: language || 'English',
+      language: normalizeLanguage(language || 'English'),
       brandContextBlock
     });
 
