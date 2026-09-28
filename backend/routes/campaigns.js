@@ -1873,14 +1873,22 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
     let parsed = null;
     const currentPrompt = captionPrompt;
 
+    // LinkedIn posts are 150-300+ words vs. Instagram's ~150-300 chars, and
+    // this single JSON call writes every post in the campaign — a
+    // LinkedIn-heavy campaign risks running out of output tokens and
+    // silently truncating. Scale the budget up with how many of the
+    // requested slots are LinkedIn, capped well under the model's limit.
+    const linkedinSlotCount = scheduleDates.filter((s) => s.platform === 'linkedin').length;
+    const captionMaxTokens = Math.min(8000 + 600 * linkedinSlotCount, 16000);
+
     while (attempts < maxAttempts) {
       // if (aborted) return res.end(); // Removed to allow background generation
       attempts++;
-      
+
       console.log(` [CAMPAIGN_CONTENT] ${campaignContentGenerationId} call #${attempts}`, { userId, totalPosts });
       const textRes = await callTextLLM(currentPrompt, {
         jsonMode: true,
-        maxTokens: 8000,
+        maxTokens: captionMaxTokens,
         temperature: 0.85,
         skipCache: true
       });
