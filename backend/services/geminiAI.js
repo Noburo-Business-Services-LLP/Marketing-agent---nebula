@@ -7,6 +7,7 @@ const { GoogleAuth } = require('google-auth-library');
 const { buildPrompt } = require('./promptRegistry');
 const { uploadBase64Image } = require('./imageUploader');
 const { generateOpenAIImage } = require('./openaiImage');
+const { getPlatformRules } = require('./platformContentRules');
 const fs = require('fs/promises');
 const path = require('path');
 
@@ -354,18 +355,6 @@ function parseGeminiJSON(text) {
  * Generate personalized campaign suggestions based on business profile
  * Creates highly specific campaigns tailored to the company's products, audience, and brand voice
  */
-// Platform-specific caption rules for AI prompt injection
-function getPlatformCaptionRules(platform) {
-  const rules = {
-    'twitter': '- STRICT 280 character limit (including hashtags). Keep it punchy and concise.\n- Use exactly 4 hashtags, placed at the end.\n- No line breaks or long paragraphs — single impactful statement.\n- Threads are OK but each tweet must be under 280 chars.',
-    'x': '- STRICT 280 character limit (including hashtags). Keep it punchy and concise.\n- Use exactly 4 hashtags, placed at the end.\n- No line breaks or long paragraphs — single impactful statement.',
-    'instagram': '- Caption can be up to 2200 characters but keep it engaging (150-300 chars ideal for feed).\n- Use exactly 4 relevant hashtags.\n- Include line breaks for readability.\n- Start with a hook in the first line (visible before "more").\n- Use emojis generously.',
-    'linkedin': '- Professional tone, 150-300 words ideal.\n- No excessive emojis (1-2 max).\n- Use line breaks every 1-2 sentences for readability.\n- Include a thought-provoking question or CTA at the end.\n- Exactly 4 hashtags, lowercase preferred.',
-    'facebook': '- Medium length (100-250 chars ideal for engagement).\n- Conversational and relatable tone.\n- Exactly 4 hashtags.\n- Include a question or CTA to drive comments.\n- Emojis OK but moderate.',
-  };
-  return rules[platform.toLowerCase()] || rules['instagram'];
-}
-
 async function generateCampaignSuggestions(businessProfile, count = 6, allowedPlatforms = null, excludeTitles = [], contentAngle = null) {
   // Build a comprehensive context from the business profile
   const companyName = businessProfile.name || 'Your Company';
@@ -441,7 +430,7 @@ ${brandVoice === 'Bold' ? '- Use strong statements, powerful words, confident as
 ${brandVoice === 'Minimal' ? '- Use concise, clean language, fewer words, impactful statements' : ''}
 
 === PLATFORM-SPECIFIC CAPTION RULES ===
-${platformsList.map(p => `[${p.toUpperCase()}]\n${getPlatformCaptionRules(p)}`).join('\n\n')}
+${platformsList.map(p => `[${p.toUpperCase()}]\n${getPlatformRules(p).promptBlock}`).join('\n\n')}
 
 IMPORTANT: Each campaign's caption MUST strictly follow the rules of its assigned platform. Especially enforce character limits for Twitter/X.
 
@@ -637,7 +626,7 @@ Goals: ${marketingGoals}
 Timestamp: ${Date.now()}
 
 === PLATFORM CAPTION RULES FOR ${platform.toUpperCase()} ===
-${getPlatformCaptionRules(platform)}
+${getPlatformRules(platform).promptBlock}
 
 IMPORTANT: The caption MUST strictly follow the ${platform} platform rules above. ${platform.toLowerCase() === 'twitter' || platform.toLowerCase() === 'x' ? 'STRICTLY keep caption under 280 characters including hashtags!' : ''}
 
@@ -2144,10 +2133,7 @@ ${competitorClaims.length > 0 ? `- Competitor Claims to Mock: ${competitorClaims
    - Highlight: ${brandContext.usps || 'your unique value'}
 
 5. **OPTIMIZED FOR ${platform.toUpperCase()}**
-   ${platform === 'instagram' ? '- Use line breaks, emojis, and a strong visual hook. Max 2200 chars but sweet spot is 150-300 chars' : ''}
-   ${platform === 'twitter' ? '- Punchy, quotable, under 280 chars. Meme-worthy if possible' : ''}
-   ${platform === 'linkedin' ? '- Professional wit, thought leadership angle, spark discussion' : ''}
-   ${platform === 'facebook' ? '- Conversational, shareable, community-building' : ''}
+   ${getPlatformRules(platform).promptBlock}
 
 📸 IMAGE REQUIREMENTS:
 The image MUST visually one-up the competitor. Describe an image that:
