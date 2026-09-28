@@ -851,7 +851,8 @@ Return only the final image-generation prompt.
       campaignDuration: 'How long the campaign runs',
       brandContextBlock: 'Real brand data — identity, products, locations — pulled from Brand Memory',
       productBlock: 'The linked product or service, if one was chosen',
-      keyMessagesBlock: 'Mandatory content structures from your templates'
+      keyMessagesBlock: 'Mandatory content structures from your templates',
+      platformAssignmentsBlock: 'Per-post platform rules, one block per post in generation order'
     },
     template: `ROLE:
 
@@ -1185,16 +1186,14 @@ unless the concept specifically requires a different visual.
 Maintain accurate product appearance, brand identity and physical environment.
 
 ==================================================
-PLATFORM ADAPTATION
+PLATFORM ADAPTATION — FOLLOW EXACTLY, PER POST
 ==================================================
 
-When multiple platforms are selected:
+Each post below is written for a specific platform. Follow that post's platform rules exactly — length, structure and hashtag count are not optional suggestions, they are requirements. The visual concept may stay consistent across the campaign; the platform rules below govern the CAPTION TEXT ONLY, never the image direction.
 
-The core creative idea may remain consistent.
+{{platformAssignmentsBlock}}
 
-However, captions and text should respect the behaviour and communication style of each platform.
-
-Do not unnecessarily create different visual concepts simply because the platform changes.
+Match each rules block to its post by position — the first block is post 1, the second is post 2, and so on, in the same order as the posts you output below.
 
 ==================================================
 FINAL CAMPAIGN TEST

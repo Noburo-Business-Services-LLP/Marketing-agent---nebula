@@ -17,6 +17,7 @@ const crypto = require('crypto');
 const { parseGeminiJSON, generateICPAndStrategy, generateCampaignImageNanoBanana } = require('../services/geminiAI');
 const { callTextLLM } = require('../services/openAI');
 const { buildPrompt } = require('../services/promptRegistry');
+const { getPlatformRules } = require('../services/platformContentRules');
 const { buildBrandMemoryBlock } = require('../services/brandMemory');
 const { normalizeLanguage } = require('../services/contentCalendarService');
 const { planCampaignVisuals, renderCampaignSlotImage, assetsToImageOptions } = require('../services/creativeDirector');
@@ -1695,6 +1696,13 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
       platform: String(platforms[i % platforms.length] || 'instagram').trim().toLowerCase()
     }));
 
+    const platformAssignmentsBlock = scheduleDates
+      .map((slot, i) => {
+        const rules = getPlatformRules(slot.platform);
+        return `Post ${i + 1} — ${rules.platform.toUpperCase()}:\n${rules.promptBlock}`;
+      })
+      .join('\n\n');
+
     // Step 1: Generate all captions via Gemini. Everything conditional is
     // resolved here, so the template the user edits contains prose and
     // {{placeholders}} only -- no JS for an edit to break.
@@ -1718,7 +1726,8 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
         : '',
       keyMessagesBlock: keyMessages
         ? `MANDATORY CONTENT STRUCTURES (STRICTLY FOLLOW THESE):\n${keyMessages}`
-        : ''
+        : '',
+      platformAssignmentsBlock
     };
 
     const captionPrompt = await buildPrompt(req.user.id, 'campaign.content', captionVars);
@@ -1843,6 +1852,13 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
           
           if (realPlaceholders.length > 0) {
             errs.push(`Post ${i + 1} (${post.platform}) still contains unfilled placeholders: ${realPlaceholders.join(', ')}`);
+          }
+        }
+
+        if (platform === 'linkedin') {
+          const wordCount = normalizedCaption.split(/\s+/).filter(Boolean).length;
+          if (wordCount < 100) {
+            errs.push(`Post ${i + 1} (${post.platform}) is only ${wordCount} words — LinkedIn posts should be 150-300+ words`);
           }
         }
       });
