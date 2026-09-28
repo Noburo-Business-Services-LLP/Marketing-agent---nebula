@@ -287,10 +287,13 @@ const GravityApprove: React.FC = () => {
   const redoDraft = async (draft: any, promptOverride?: string) => {
     if (!draft?._id) return;
     const cost = regenerateCostFor(draft);
+    const hasImage = !!(draft?.imageUrl || draft?.creative?.imageUrls?.[0]);
     const confirmMsg = cost > 0
-      ? `This costs ${cost} Quark${cost === 1 ? '' : 's'} and replaces the current image.`
-      : 'This replaces the current image.';
-    if (!(await confirm(confirmMsg, { title: 'Regenerate this image?', confirmLabel: 'Regenerate' }))) return;
+      ? `This costs ${cost} Quark${cost === 1 ? '' : 's'} and ${hasImage ? 'replaces the current image.' : 'adds an image to this post.'}`
+      : hasImage ? 'This replaces the current image.' : 'This adds an image to this post.';
+    const dialogTitle = hasImage ? 'Regenerate this image?' : 'Add an image?';
+    const dialogConfirmLabel = hasImage ? 'Regenerate' : 'Add';
+    if (!(await confirm(confirmMsg, { title: dialogTitle, confirmLabel: dialogConfirmLabel }))) return;
     try {
       await draftsAPI.retryImageGeneration(String(draft._id), promptOverride);
       await loadDrafts();
@@ -608,7 +611,12 @@ const GravityApprove: React.FC = () => {
           {drafts.map((d: any) => {
             const img = d.imageUrl || d.creative?.imageUrls?.[0] || '';
             const status = String(d?.status || '').toLowerCase();
-            const processing = status === 'processing' || (!img && status !== 'failed');
+            // 'processing' is only true while a generation job is actually
+            // in flight (the backend sets status: 'processing' explicitly).
+            // A draft can also have no image simply by design (e.g. a
+            // LinkedIn post saved with imageUrl: '') without ever having
+            // been queued for one — that's neither processing nor failed.
+            const processing = status === 'processing';
             const failed = status === 'failed' && !img;
             const isBusy = gridBusyId === d._id;
             const cap = String(d.caption || d.creative?.textContent || '').replace(/#\w+/g, '').trim();
@@ -626,8 +634,12 @@ const GravityApprove: React.FC = () => {
                       <AlertCircle className="w-5 h-5 text-red-400/70" />
                       <span className="text-[10.5px] text-[var(--gv-text-muted)]">Generation failed</span>
                     </div>
-                  ) : (
+                  ) : processing ? (
                     <GeneratingFill resolution="" />
+                  ) : (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 px-3 text-center">
+                      <span className="text-[10.5px] text-[var(--gv-text-muted)]">No image yet</span>
+                    </div>
                   )}
                 </div>
                 <div className="p-3">
@@ -656,7 +668,7 @@ const GravityApprove: React.FC = () => {
                     <button
                       onClick={(e) => handleGridRedo(d, e)}
                       disabled={isBusy || processing}
-                      title="Regenerate"
+                      title={img ? 'Regenerate' : 'Add image'}
                       className="w-8 h-8 flex items-center justify-center rounded-md border border-[var(--gv-border-default)] text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-2)] disabled:opacity-30"
                     >
                       <RotateCcw className="w-3 h-3" />
@@ -687,6 +699,25 @@ const GravityApprove: React.FC = () => {
                   className="mt-2 h-8 px-3 rounded-md bg-[var(--gv-surface-2)] hover:bg-[var(--gv-surface-4)] text-[12px] font-semibold text-[var(--gv-text-primary)]"
                 >
                   Regenerate
+                </button>
+              </div>
+            ) : String(current?.status || '').toLowerCase() !== 'processing' ? (
+              // No image, and generation isn't actually in flight (and
+              // didn't fail) — this draft was saved without an image by
+              // design (e.g. a LinkedIn post). Distinct from both the
+              // failure state above and the genuine "generating…" spinner
+              // below: never show the spinner here, since no job is
+              // running and it would never resolve.
+              <div className="w-full h-full bg-gradient-to-br from-[var(--gv-surface-2)] to-[var(--gv-surface-1)] flex flex-col items-center justify-center gap-3 px-6 text-center">
+                <div className="text-[13px] font-semibold text-[var(--gv-text-primary)]">No image yet</div>
+                <div className="text-[11.5px] text-[var(--gv-text-tertiary)] max-w-[260px] leading-relaxed">
+                  This post doesn't have an image. Click Add image to generate one.
+                </div>
+                <button
+                  onClick={handleRedo}
+                  className="mt-2 h-8 px-3 rounded-md bg-[var(--gv-surface-2)] hover:bg-[var(--gv-surface-4)] text-[12px] font-semibold text-[var(--gv-text-primary)]"
+                >
+                  Add image
                 </button>
               </div>
             ) : (
