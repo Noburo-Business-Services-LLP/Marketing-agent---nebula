@@ -1793,19 +1793,19 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
 
     // Helper to validate captions against template structure markers
     const validateCaptionsSchema = (posts, keyMessages) => {
-      if (!keyMessages) return { isValid: true };
-      
       const pTemplates = {};
-      const blocks = keyMessages.split(/\n\n---\n\n/);
-      blocks.forEach(block => {
-        const match = block.match(/\[([A-Z]+) CONTENT FORMAT\]\n([\s\S]*)/);
-        if (match) {
-          const platform = match[1].toLowerCase();
-          const templateText = normalizeTemplateText(match[2] || '');
-          const mkrs = templateMarkersFromText(templateText);
-          pTemplates[platform] = { mkrs, templateText };
-        }
-      });
+      if (keyMessages) {
+        const blocks = keyMessages.split(/\n\n---\n\n/);
+        blocks.forEach(block => {
+          const match = block.match(/\[([A-Z]+) CONTENT FORMAT\]\n([\s\S]*)/);
+          if (match) {
+            const platform = match[1].toLowerCase();
+            const templateText = normalizeTemplateText(match[2] || '');
+            const mkrs = templateMarkersFromText(templateText);
+            pTemplates[platform] = { mkrs, templateText };
+          }
+        });
+      }
 
       const errs = [];
       posts.forEach((post, i) => {
