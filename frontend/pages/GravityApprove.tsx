@@ -190,8 +190,7 @@ const GravityApprove: React.FC = () => {
   useEffect(() => {
     const anyProcessing = drafts.some((d: any) => {
       const s = String(d?.status || '').toLowerCase();
-      const hasImage = Boolean(d?.imageUrl || d?.creative?.imageUrls?.[0]);
-      return s === 'processing' || (!hasImage && s !== 'failed');
+      return s === 'processing';
     });
     if (anyProcessing && !pollTimerRef.current) {
       pollTimerRef.current = setInterval(() => {
@@ -216,15 +215,17 @@ const GravityApprove: React.FC = () => {
     };
   }, [drafts]);
 
-  // Auto-retry image generation for drafts that don't have an image
-  // AND aren't currently processing. Fires once per draft.
+  // Auto-retry image generation only for drafts whose generation is
+  // confirmed failed (status === 'failed'). A draft with no image that
+  // isn't 'failed' may simply be done-by-design (e.g. a LinkedIn draft
+  // saved without an image) — never auto-trigger generation for that
+  // case, since it silently spends the user's Quarks. Fires once per draft.
   useEffect(() => {
     const current: any = drafts[index];
     if (!current?._id) return;
-    const hasImage = Boolean(current?.imageUrl || current?.creative?.imageUrls?.[0]);
     const status = String(current?.status || '').toLowerCase();
     const alreadyTried = autoRetriedRef.current.has(String(current._id));
-    if (!hasImage && status !== 'processing' && !alreadyTried) {
+    if (status === 'failed' && !alreadyTried) {
       autoRetriedRef.current.add(String(current._id));
       draftsAPI.retryImageGeneration(String(current._id)).catch(() => {});
       // Trigger a quick refresh so status flips to processing
