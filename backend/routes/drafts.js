@@ -8,6 +8,10 @@ const Campaign = require('../models/Campaign');
 const User = require('../models/User');
 const { publishCampaignToSocial } = require('../services/campaignPublisher');
 const { handlePublishError } = require('../utils/publishErrorHandler');
+const { buildPrompt } = require('../services/promptRegistry');
+const { buildBrandMemoryBlock } = require('../services/brandMemory');
+const { callTextLLM } = require('../services/openAI');
+const { parseGeminiJSON } = require('../services/geminiAI');
 
 // 1. POST /save - Create or update a draft (upsert by _id if provided)
 router.post('/save', protect, async (req, res) => {
@@ -518,6 +522,66 @@ router.post('/:id/apply-logo', protect, async (req, res) => {
   } catch (error) {
     console.error('Apply logo error:', error);
     res.status(500).json({ success: false, message: 'Failed to apply logo', error: error.message });
+  }
+});
+
+// Text-only LinkedIn post generation — no image call. Mirrors
+// generate-image-bg's credit-deduct/refund-on-failure shape, but meters
+// as campaign_text (caption-only cost) since no image model runs here.
+router.post('/generate-linkedin-post', protect, checkTrial, async (req, res) => {
+  let creditsDeducted = false;
+  try {
+    const userId = req.user.userId || req.user.id;
+    const { idea, contentPillar, objective, tone, language } = req.body;
+
+    if (!String(idea || '').trim()) {
+      return res.status(400).json({ success: false, message: 'Give it an idea or brief first.' });
+    }
+
+    const creditResult = await deductCredits(userId, 'campaign_text', 1, 'AI LinkedIn post generation');
+    if (!creditResult.success) {
+      return res.status(403).json({
+        success: false,
+        creditsExhausted: true,
+        message: creditResult.error || `Insufficient Quarks. Need ${CREDIT_COSTS.campaign_text} Quarks to generate a LinkedIn post.`
+      });
+    }
+    creditsDeducted = true;
+
+    const brandContextBlock = await buildBrandMemoryBlock(userId);
+    const prompt = await buildPrompt(userId, 'linkedin.content', {
+      idea: idea.trim(),
+      contentPillar: contentPillar || '',
+      objective: objective || '',
+      tone: tone || '',
+      language: language || 'English',
+      brandContextBlock
+    });
+
+    const raw = await callTextLLM(prompt, { jsonMode: true, maxTokens: 2000 });
+    const parsed = parseGeminiJSON(raw);
+
+    if (!parsed?.caption) {
+      throw new Error('Generation did not return a caption');
+    }
+
+    res.json({
+      success: true,
+      caption: parsed.caption,
+      hashtags: Array.isArray(parsed.hashtags) ? parsed.hashtags : [],
+      imageDescription: parsed.imageDescription || '',
+      creditsRemaining: creditResult.creditsRemaining
+    });
+  } catch (error) {
+    console.error('Generate LinkedIn post error:', error);
+    if (creditsDeducted) {
+      try {
+        await refundCredits(req.user.userId || req.user.id, 'campaign_text', 1, 'Refund: LinkedIn post generation failed');
+      } catch (refundErr) {
+        console.error('⚠️ Failed to refund Quarks after LinkedIn post generation error:', refundErr.message);
+      }
+    }
+    res.status(500).json({ success: false, message: 'Failed to generate LinkedIn post', error: error.message });
   }
 });
 
