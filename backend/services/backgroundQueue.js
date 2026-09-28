@@ -358,6 +358,13 @@ async function processDraftImageGenerationJob(job) {
       // idea typed in Create is a one-liner; it is not what should become the
       // caption or drive the image, only the seed for a real content-writing
       // pass — the same two-step shape campaigns already use.
+      //
+      // Guard: a draft that already has a real caption (e.g. a LinkedIn post,
+      // which never has a promptOverride or reference image and so always
+      // lands in this branch) must NOT have that caption/hashtags clobbered
+      // by this pass — this pass's job here is only to produce an image
+      // brief, not to rewrite copy that already exists.
+      const hadExistingCaption = Boolean((draft.caption || '').trim());
       let contentPrompt = null;
       try {
         const brandContextBlock = await buildBrandMemoryBlock(draft.userId);
@@ -380,15 +387,17 @@ async function processDraftImageGenerationJob(job) {
       const imageDescription = String(contentPrompt?.imageDescription || '').trim() || draft.imagePrompt || draft.caption || 'A creative poster';
 
       // Only overwrite what the content pass actually produced — a failed or
-      // partial result should not blank out what the user already had.
-      if (contentPrompt?.caption) {
+      // partial result should not blank out what the user already had. And
+      // never overwrite a caption/hashtags that already existed (see guard
+      // above) — this pass only gets to write copy when there wasn't any.
+      if (!hadExistingCaption && contentPrompt?.caption) {
         draft.caption = contentPrompt.caption;
         if (!draft.creative) draft.creative = {};
         draft.creative.textContent = contentPrompt.caption;
         draft.creative.captions = contentPrompt.caption;
         draft.markModified('creative');
       }
-      if (Array.isArray(contentPrompt?.hashtags) && contentPrompt.hashtags.length) {
+      if (!hadExistingCaption && Array.isArray(contentPrompt?.hashtags) && contentPrompt.hashtags.length) {
         draft.hashtags = contentPrompt.hashtags;
       }
       // What the visual should actually be is a separate decision from what
