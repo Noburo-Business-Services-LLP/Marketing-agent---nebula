@@ -32,6 +32,25 @@ Replace the template body (same registry key, same variables plus three new ones
 { story: { hook, tension, turn, payoff, cta }, prompt, beatSheet:[{time, beat, emotion}], dialogue, voice, qaChecklist, assumptions }
 ```
 
+**Director's brief (added from the user's "Master Cinematic Director" prompt).** The planner's template opens with a condensed director's brief (about 600-800 words, not the 20-section original) and then the compression rules. The long original is never sent to the video model: Seedance gets only the compact, timed 11-block prompt the planner produces. Adopted from the brief:
+- Think in an arc: SETUP -> TENSION -> DISCOVERY -> TRANSFORMATION -> EMOTIONAL PAYOFF, with quiet moments (hesitation, reaction, relief), not constant energy.
+- Every shot must answer one of: what must the audience know / feel / notice / anticipate; otherwise cut it. Shot grammar follows the emotion: wider and observational at setup, closer on the problem, curious on discovery, smoother on transformation, an intimate reaction for the payoff.
+- Show, don't tell: the story must be understandable with the sound off (messy desk, buzzing phone, a breath) and dialogue only reinforces it.
+- Performance: hesitation before speaking, eye movement toward objects, micro-smiles, breath, natural pauses; no constant smiling, no talking to camera unless required, no frozen listening poses.
+- Layered sound: dialogue, location ambience, specific Foley for each meaningful action, and an understated score that begins quiet, lifts at the discovery, and releases at the payoff; dialogue always intelligible, music under it.
+- Final shot gives emotional closure and is held long enough to register (this also becomes the clean frame before the end card).
+- Priority order when instructions conflict: story clarity > human performance > continuity > natural physics > composition > camera movement > product visibility > effects.
+- Continuity and failure-prevention lists (identity, wardrobe, props, hands, no morphing/floating, no warped teeth) feed the NEGATIVES block.
+
+Adapted, because a 15 s Seedance clip differs from a film:
+- "Don't stay in one angle" becomes **at most 6-7 shots in 15 s** (more cuts cause identity drift in this model), each with a stated reason; a `shotList` is returned with shot size, lens-feel, and purpose.
+- The spoken language comes from `{{language}}`, not a fixed accent. Dialogue the planner writes is then locked verbatim in the DIALOGUE LOCK block (the original's "use only the provided dialogue" rule).
+- "Product UI must remain stable and consistent" is satisfied by NOT showing legible screens (angled, glare or out of focus). If a readable product screen is required, the brand must supply a real screenshot as a reference image (reference-to-video), never generated UI.
+- "Avoid transitions/dissolves" applies inside the generated clip; the fades and end-card crossfade are added in finishing, not requested from the model.
+- Fixed lens guidance (24-35 mm environment, 50 mm human, 85 mm emotional close-ups) is kept as defaults; depth of field stays plausible with background detail visible.
+
+Output JSON therefore also returns `shotList: [{ time, shot, lens, purpose }]` (it feeds the QA checklist and the UI).
+
 Rules the template must enforce:
 1. **Story first.** The model writes `story` before the prompt: a visual hook in 0-2 s, one problem, one turn, one payoff, and a clean CTA beat at 12-15 s with a calm, uncluttered frame (the end card follows). One desire, one emotion. No invented statistics or testimonials; generated people are characters, never customers.
 2. **Four beats, not five.** Beats of about 2 / 5 / 5 / 3 s. Hard cuts only where the story turns. A cast declared once (HEADCOUNT) and respected in every beat — no shot may add people not declared.
