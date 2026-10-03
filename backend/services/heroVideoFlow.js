@@ -13,6 +13,11 @@ const MAX_PROMPT_CHARS = 6000;
 const ASPECTS = ['9:16', '16:9', '1:1'];
 const ACTION = 'hero_video_clip';
 const TERMINAL = ['completed', 'failed', 'cancelled'];
+const COUNTED_STATUSES = ['queued', 'processing', 'completed']; // must match getHeroQuota
+// A job with no falRequestId this old never reached fal (process died mid-start).
+const STALE_UNSUBMITTED_MS = 10 * 60 * 1000;
+// KNOWN GAP: a crash between deduct() and JobModel.create() leaves a charge with no job
+// record, so there is nothing here to find or refund; that case needs manual reconciliation.
 
 function defaultDeps() {
   const VideoJob = require('../models/VideoJob');
@@ -67,7 +72,7 @@ async function startHeroGeneration(deps, { userId, body }) {
   if (hasAspect && !ASPECTS.includes(b.aspectRatio)) return bad('aspectRatio must be one of 9:16, 16:9, 1:1');
   const aspectRatio = hasAspect ? b.aspectRatio : '9:16';
 
-  const { buildHeroInput } = require('./heroVideoService');
+  const { buildHeroInput, monthStartUTC } = require('./heroVideoService');
   let built;
   try {
     built = buildHeroInput({ prompt, refImageUrls: b.refImageUrls, aspectRatio, duration: b.duration });
@@ -101,6 +106,7 @@ async function startHeroGeneration(deps, { userId, body }) {
       status: 'queued',
       progress: 0,
       currentStep: 'queued',
+      createdAt: now,
       startedAt: now,
       payload: { prompt, refImageUrls, aspectRatio, model: built.model },
       metadata: { kind: 'hero', refunded: false }
@@ -116,9 +122,23 @@ async function startHeroGeneration(deps, { userId, body }) {
   try {
     const q2 = await deps.quotaFn(userId, now);
     if (q2.used > q2.limit) {
-      await failJob(deps, jobId, 'Monthly hero video limit reached', 'cancelled');
-      await refundOnce(deps, jobId, userId, 'Refund: hero quota exceeded');
-      return { status: 403, json: { success: false, quotaExhausted: true, used: q2.used, limit: q2.limit, resetsOn: q2.resetsOn } };
+      // Oldest-wins (createdAt, then jobId): only a job outside the first `limit` backs out,
+      // so two racing requests can never both cancel.
+      const winners = await deps.JobModel
+        .find({
+          userId,
+          'metadata.kind': 'hero',
+          status: { $in: COUNTED_STATUSES },
+          createdAt: { $gte: monthStartUTC(now) }
+        })
+        .sort({ createdAt: 1, jobId: 1 })
+        .limit(q2.limit)
+        .lean();
+      if (!winners.some((w) => w.jobId === jobId)) {
+        await failJob(deps, jobId, 'Monthly hero video limit reached', 'cancelled');
+        await refundOnce(deps, jobId, userId, 'Refund: hero quota exceeded');
+        return { status: 403, json: { success: false, quotaExhausted: true, used: q2.used, limit: q2.limit, resetsOn: q2.resetsOn } };
+      }
     }
   } catch (err) {
     console.error('Hero quota recheck failed:', err && err.message);
@@ -166,7 +186,16 @@ async function pollHeroJob(deps, { userId, jobId }) {
   const processing = { status: 200, json: { success: true, status: 'processing' } };
   const model = job.payload && job.payload.model;
   const requestId = job.metadata && job.metadata.falRequestId;
-  if (!requestId) return processing; // submit still in flight
+  if (!requestId) {
+    const created = new Date((job.createdAt || job.startedAt || 0)).getTime();
+    if (deps.now().getTime() - created > STALE_UNSUBMITTED_MS) {
+      const message = 'Video generation never started';
+      await failJob(deps, jobId, message, 'failed');
+      await refundOnce(deps, jobId, userId, 'Refund: hero job never submitted');
+      return { status: 200, json: { success: true, status: 'failed', error: message } };
+    }
+    return processing; // submit still in flight
+  }
 
   let st;
   try {
