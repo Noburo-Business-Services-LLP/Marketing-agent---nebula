@@ -1,3 +1,5 @@
+import { ShowcasePanel, ShowcaseBanner } from '../components/onboarding/ShowcasePanel';
+import StepGuide from '../components/onboarding/StepGuide';
 import React, { useState, useCallback, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { apiService } from '../services/api';
@@ -21,7 +23,9 @@ interface OnboardingProps {
 const ONBOARDING_STATE_KEY = 'nebulaa_onboarding_state';
 
 const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
-    const { theme, toggleTheme } = useTheme();
+    // Sign-up always uses the light, warm look of the Nebulaa website.
+    const { toggleTheme } = useTheme();
+    const theme = 'light' as 'light' | 'dark';
     const location = useLocation();
     
     // Load saved state from sessionStorage
@@ -509,11 +513,13 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
     };
 
     return (
-        <div className={`min-h-screen flex items-center justify-center p-4 ${theme === 'dark' ? 'bg-[#070A12]' : 'bg-gray-100'}`}>
+        <div className="min-h-screen flex" style={{ background: 'linear-gradient(180deg, #FBF5EA 0%, #FFEBD6 100%)' }}>
+            <ShowcasePanel />
+            <div className="flex-1 min-w-0 flex items-start lg:items-center justify-center p-4 sm:p-6 lg:p-10">
             {/* Back to landing */}
             <button
                 onClick={handleBackToLanding}
-                className={`fixed top-4 left-4 z-50 flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all backdrop-blur ${
+                className={`fixed top-4 left-4 lg:left-[calc(38%+1rem)] xl:left-[calc(40%+1rem)] z-50 flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all backdrop-blur ${
                     theme === 'dark'
                         ? 'bg-[#ededed]/5 hover:bg-[#ededed]/10 text-[#ededed]/70 hover:text-[#ededed] border border-[#ededed]/10'
                         : 'bg-white/80 hover:bg-white text-gray-700 border border-gray-200 shadow-sm'
@@ -566,68 +572,42 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                 </div>
             )}
 
-            {/* Theme Toggle Button */}
-            <button
-                onClick={toggleTheme}
-                className={`fixed top-4 right-4 p-3 rounded-full transition-all duration-300 z-50 ${
-                    theme === 'dark' 
-                        ? 'bg-[#1a1f2e] hover:bg-[#252b3d] text-yellow-400' 
-                        : 'bg-white hover:bg-gray-100 text-gray-700 shadow-md'
-                }`}
-                title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
-            >
-                {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-            </button>
+            <div className="w-full max-w-xl pt-14 lg:pt-0">
+                <ShowcaseBanner />
 
-            <div className={"rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col md:flex-row min-h-[500px] bg-[#111111] border border-white/[0.08]"}>
-                
-                {/* Sidebar. Was a solid #F5A623 slab with dark text — the
-                    loudest surface in the product, and the first thing a new
-                    user saw. Dark with gold accents matches what it leads to. */}
-                <div className="relative p-8 md:w-1/3 flex flex-col justify-between bg-[#0E0D0B] border-r border-white/[0.06] overflow-hidden">
-                    <div
-                        className="pointer-events-none absolute inset-0"
-                        style={{ background: 'radial-gradient(70% 50% at 50% 0%, rgba(245,166,35,0.10) 0%, rgba(245,166,35,0) 65%)' }}
-                    />
-                    <div className="relative">
-                        <div className="flex items-center gap-3 mb-8">
-                            <img src="/assets/logo.png" alt="Nebulaa" className="w-10 h-10" />
-                            <div className="text-left">
-                                <div className="font-serif-display text-[19px] leading-tight text-[#F5F4F1]">Nebulaa</div>
-                                <div className="font-serif-display text-[17px] leading-tight text-[#F5A623]">Nebulaa</div>
-                            </div>
-                        </div>
-                        <h2 className="font-serif-display text-[26px] leading-tight mb-2 text-[#F5F4F1]">Let's build your agent.</h2>
-                        <p className="text-[13px] text-white/50 leading-relaxed">We need to understand your business to generate high-quality content.</p>
-                    </div>
+                <div className="flex items-center gap-3 mb-5">
+                    <img src="/assets/logo-nebulaa.png" alt="Nebulaa" className="h-[42px] w-auto" />
+                </div>
+                <h1 className="mb-1" style={{ fontFamily: "'Archivo', 'Arial Narrow', Arial, sans-serif", fontWeight: 800, textTransform: 'uppercase', lineHeight: 1.05, color: '#14203A', fontSize: 'clamp(28px, 4vw, 38px)' }}>
+                    Let's set up your business
+                </h1>
+                <p className="text-[14.5px] text-[#33405C] mb-5">A few simple questions. It takes about 3 minutes.</p>
 
-                    <div className="relative space-y-5 mt-8">
-                        {steps.map((s) => {
-                            const done = step > s.num;
-                            const current = step === s.num;
-                            return (
-                                <div key={s.num} className="flex items-center gap-3">
-                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[12px] font-semibold border transition-all ${
-                                        current
-                                            ? 'bg-[#F5A623] text-[#1A1208] border-[#F5A623] shadow-[0_0_14px_rgba(245,166,35,0.40)]'
-                                            : done
-                                                ? 'bg-[#F5A623]/85 text-[#1A1208] border-transparent'
-                                                : 'border-white/[0.12] text-white/30'
-                                    }`}>
-                                        {done ? <Check className="w-4 h-4" /> : s.num}
-                                    </div>
-                                    <span className={`text-[13px] font-medium ${current ? 'text-[#F5F4F1]' : done ? 'text-white/60' : 'text-white/30'}`}>{s.title}</span>
+                {/* Progress */}
+                <div className="flex items-center gap-2 mb-5" aria-label={`Step ${step} of ${steps.length}`}>
+                    {steps.map((s) => {
+                        const done = step > s.num;
+                        const current = step === s.num;
+                        return (
+                            <div key={s.num} className="flex-1">
+                                <div className={`h-1.5 rounded-full transition-all ${done || current ? 'bg-[#F5A623]' : 'bg-[#E5D8BF]'}`} />
+                                <div className={`mt-1.5 flex items-center gap-1.5 text-[12px] font-semibold ${current ? 'text-[#14203A]' : done ? 'text-[#6D6250]' : 'text-[#8F836E]'}`}>
+                                    {done ? <Check className="w-3.5 h-3.5 text-[#1FA855]" /> : <span>{s.num}</span>}
+                                    <span className="hidden sm:inline">{s.title}</span>
                                 </div>
-                            );
-                        })}
-                    </div>
+                            </div>
+                        );
+                    })}
                 </div>
 
+                <StepGuide step={step} />
+
+                <div className="rounded-2xl w-full overflow-hidden flex flex-col bg-[#FFFDF8] border border-[#E5D8BF] shadow-[0_14px_34px_rgba(20,32,58,0.08)]">
                 {/* Form Area */}
-                <div className={"p-8 md:w-2/3 flex flex-col text-[#F5F4F1]"}>
+                <div className="p-6 sm:p-8 flex flex-col text-[#14203A]">
                     <div className="flex-1">
                         {error && (
-                            <div className="bg-red-500/20 text-red-400 p-3 rounded-lg text-sm mb-4 flex items-center gap-2 animate-in fade-in border border-red-500/30">
+                            <div className="bg-red-50 text-red-700 p-3 rounded-lg text-sm mb-4 flex items-center gap-2 animate-in fade-in border border-red-200">
                                 <AlertCircle className="w-4 h-4" /> {error}
                             </div>
                         )}
@@ -1463,6 +1443,8 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                         )}
                     </div>
                 </div>
+            </div>
+            </div>
             </div>
         </div>
     );
