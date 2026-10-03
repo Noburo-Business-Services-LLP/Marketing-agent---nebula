@@ -8,7 +8,11 @@ const { spawn } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { isPublicHttpsUrl } = require('./heroVideoService');
+const dns = require('dns');
+const net = require('net');
+const https = require('https');
+const { Readable } = require('stream');
+const { isPublicHttpsUrl, isPublicIp } = require('./heroVideoService');
 
 const PROCESS_ERROR = 'The video could not be processed.';
 const DEFAULT_TIMEOUT_MS = 180000;
@@ -202,6 +206,7 @@ async function probeMedia(filePath, opts = {}) {
   if (!vs) throw plainError('no video stream');
   const dur = parseFloat((j.format && j.format.duration) || vs.duration || 0);
   const vdur = parseFloat(vs.duration || 0);
+  const adur = as ? parseFloat(as.duration || 0) : 0;
   return {
     width: vs.width,
     height: vs.height,
@@ -211,6 +216,7 @@ async function probeMedia(filePath, opts = {}) {
     sampleRate: as ? parseInt(as.sample_rate, 10) || 0 : 0,
     channels: as ? parseInt(as.channels, 10) || 0 : 0,
     frameRate: String(vs.avg_frame_rate || vs.r_frame_rate || ''),
+    audioDurationSeconds: Number.isFinite(adur) && adur > 0 ? adur : 0,
     videoDurationSeconds: Number.isFinite(vdur) && vdur > 0 ? vdur : (Number.isFinite(dur) ? dur : 0)
   };
 }
@@ -245,21 +251,70 @@ async function readCapped(res, cap) {
   return ab.byteLength > cap ? null : Buffer.from(ab);
 }
 
+// Resolves a host and returns ONE address to connect to, or null when the host is unresolvable or ANY of
+// its addresses is not public (so a mixed answer cannot be used to slip through).
+async function resolvePublicAddress(host, lookup) {
+  const list = await lookup(host);
+  if (!Array.isArray(list) || !list.length) return null;
+  const addrs = list.map((x) => (x && typeof x === 'object' ? x.address : x));
+  if (!addrs.every((a) => isPublicIp(a))) return null;
+  return addrs[0];
+}
+
+// One GET over https/http that connects to `address` (already validated) regardless of what DNS says now,
+// while TLS (SNI), certificate checks and the Host header still use the real hostname. DNS rebinding cannot
+// swap the target after the check. Returns a standard Response; redirects are NOT followed.
+function pinnedFetch(url, init, address, transport = https) {
+  return new Promise((resolve, reject) => {
+    let u;
+    try { u = new URL(url); } catch (e) { reject(e); return; }
+    const family = address.includes(':') ? 6 : 4;
+    const signal = init && init.signal;
+    const req = transport.request({
+      protocol: u.protocol, hostname: u.hostname, port: u.port || undefined, path: `${u.pathname}${u.search}`,
+      method: 'GET', headers: { ...(init && init.headers), host: u.host },
+      servername: net.isIP(u.hostname) ? undefined : u.hostname,
+      lookup: (h, o, cb) => (o && o.all ? cb(null, [{ address, family }]) : cb(null, address, family)),
+      signal
+    }, (res) => {
+      const headers = new Headers();
+      for (const [k, v] of Object.entries(res.headers)) if (typeof v === 'string') headers.set(k, v); else if (Array.isArray(v)) headers.set(k, v.join(', '));
+      const bodyless = res.statusCode < 200 || res.statusCode === 204 || res.statusCode === 304 || (res.statusCode >= 300 && res.statusCode < 400);
+      if (bodyless) res.resume();
+      resolve(new Response(bodyless ? null : Readable.toWeb(res), { status: res.statusCode, headers }));
+    });
+    req.on('error', reject);
+    req.end();
+  });
+}
+
+const defaultLookup = (host) => dns.promises.lookup(host, { all: true, verbatim: true });
+
 /**
- * Downloads a brand logo. Public https only (every redirect hop is re-checked and followed by hand),
+ * Downloads a brand logo. Public https only. Every hop (the first URL and each redirect, followed by hand)
+ * is resolved, rejected unless every address is public, and then connected to at the checked address.
  * 10 s, 5 MB, image/* only. Resolves null on any failure; never throws.
+ * `opts.lookup` (async host -> [{address}]) and `fetchImpl` are test seams for server code only; with an
+ * injected `fetchImpl` the request is made by that function (no pinning), so production never passes one.
  */
 async function fetchLogoBuffer(url, fetchImpl, opts = {}) {
-  const f = typeof fetchImpl === 'function' ? fetchImpl : globalThis.fetch;
-  if (typeof f !== 'function' || !isPublicHttpsUrl(url)) return null;
+  const f = typeof fetchImpl === 'function' ? fetchImpl : null;
+  if (!isPublicHttpsUrl(url)) return null;
+  const lookup = typeof opts.lookup === 'function' ? opts.lookup : defaultLookup;
   const ms = Math.min(LOGO_TIMEOUT_MS, opts.timeoutMs > 0 ? opts.timeoutMs : LOGO_TIMEOUT_MS);
   const ctrl = new AbortController();
+  const aborted = new Promise((_, rej) => ctrl.signal.addEventListener('abort', () => rej(new Error('aborted'))));
+  aborted.catch(() => {});
   const timer = setTimeout(() => ctrl.abort(), ms);
   try {
     let current = url.trim();
     for (let hop = 0; hop <= LOGO_MAX_REDIRECTS; hop += 1) {
       if (!isPublicHttpsUrl(current)) return null;
-      const res = await f(current, { redirect: 'manual', signal: ctrl.signal, headers: { accept: 'image/*' } });
+      const host = new URL(current).hostname.toLowerCase().replace(/\.$/, '');
+      const address = await Promise.race([resolvePublicAddress(host, lookup), aborted]);
+      if (!address) return null;
+      const init = { redirect: 'manual', signal: ctrl.signal, headers: { accept: 'image/*' } };
+      const res = await Promise.race([f ? f(current, init) : pinnedFetch(current, init, address), aborted]);
       if (!res || !res.headers || typeof res.headers.get !== 'function') return null;
       if (res.status >= 300 && res.status < 400) {
         const loc = res.headers.get('location');
@@ -274,7 +329,7 @@ async function fetchLogoBuffer(url, fetchImpl, opts = {}) {
         await cancelBody(res);
         return null;
       }
-      const buf = await readCapped(res, LOGO_MAX_BYTES);
+      const buf = await Promise.race([readCapped(res, LOGO_MAX_BYTES), aborted]);
       return buf && buf.length ? buf : null;
     }
     return null;
@@ -357,11 +412,49 @@ function fitText(ctx, text, { family, maxW, maxH, maxLines, startPx, minPx, gap 
   return { px: lo, lines };
 }
 
+const LOGO_MAX_PIXELS = 40e6;
+
+// Reads width/height from the PNG, JPEG, WebP or GIF header without decoding. null when not recognised.
+function readImageDimensions(buf) {
+  if (!Buffer.isBuffer(buf) || buf.length < 24) return null;
+  if (buf.readUInt32BE(0) === 0x89504e47 && buf.toString('latin1', 12, 16) === 'IHDR') {
+    return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
+  }
+  if (buf.toString('latin1', 0, 3) === 'GIF') return { width: buf.readUInt16LE(6), height: buf.readUInt16LE(8) };
+  if (buf.length >= 30 && buf.toString('latin1', 0, 4) === 'RIFF' && buf.toString('latin1', 8, 12) === 'WEBP') {
+    const kind = buf.toString('latin1', 12, 16);
+    if (kind === 'VP8X') return { width: buf.readUIntLE(24, 3) + 1, height: buf.readUIntLE(27, 3) + 1 };
+    if (kind === 'VP8 ' && buf.length >= 30) return { width: buf.readUInt16LE(26) & 0x3fff, height: buf.readUInt16LE(28) & 0x3fff };
+    if (kind === 'VP8L') {
+      const bits = buf.readUInt32LE(21);
+      return { width: (bits & 0x3fff) + 1, height: ((bits >>> 14) & 0x3fff) + 1 };
+    }
+    return null;
+  }
+  if (buf[0] === 0xff && buf[1] === 0xd8) {
+    let i = 2;
+    while (i + 9 < buf.length) {
+      if (buf[i] !== 0xff) { i += 1; continue; }
+      const m = buf[i + 1];
+      if (m === 0xff) { i += 1; continue; }
+      if (m === 0xd8 || m === 0x01 || (m >= 0xd0 && m <= 0xd7)) { i += 2; continue; }
+      const len = buf.readUInt16BE(i + 2);
+      if (m >= 0xc0 && m <= 0xcf && m !== 0xc4 && m !== 0xc8 && m !== 0xcc) {
+        return { width: buf.readUInt16BE(i + 7), height: buf.readUInt16BE(i + 5) };
+      }
+      i += 2 + len;
+    }
+  }
+  return null;
+}
+
 async function loadLogoImage(buf) {
   if (!Buffer.isBuffer(buf) || !buf.length || buf.length > LOGO_MAX_BYTES) return null;
+  const dim = readImageDimensions(buf);
+  if (dim && !(dim.width > 0 && dim.height > 0 && dim.width * dim.height <= LOGO_MAX_PIXELS)) return null;
   try {
     const img = await require('canvas').loadImage(buf);
-    if (!(img.width > 0 && img.height > 0) || img.width * img.height > 40e6) return null;
+    if (!(img.width > 0 && img.height > 0) || img.width * img.height > LOGO_MAX_PIXELS) return null;
     return img;
   } catch (_) {
     return null;
@@ -491,7 +584,7 @@ async function finishInner(args, timeoutMs) {
 
     let logoPng = null;
     if ((opts.brandMark || opts.endCard.enabled) && typeof b.logoUrl === 'string' && b.logoUrl) {
-      const raw = await fetchLogoBuffer(b.logoUrl, fetchImpl, { timeoutMs: left() });
+      const raw = await fetchLogoBuffer(b.logoUrl, fetchImpl, { timeoutMs: left(), lookup: args.lookup });
       if (raw) logoPng = await normalizeLogo(raw);
     }
     left();
@@ -594,5 +687,5 @@ function finishHeroClip(args) {
 module.exports = {
   normalizeFinishOptions, buildCaptionsSrt, buildFinishFilterGraph,
   resolveFfmpegPath, runFfmpeg, probeMedia,
-  fetchLogoBuffer, renderEndCardPng, finishHeroClip, escapeFilterValue
+  fetchLogoBuffer, renderEndCardPng, readImageDimensions, loadLogoImage, _pinnedFetch: pinnedFetch, finishHeroClip, escapeFilterValue
 };

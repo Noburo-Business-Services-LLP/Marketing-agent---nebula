@@ -23,7 +23,62 @@ const DEFAULT_TEXT_MODEL = 'bytedance/seedance-2.0/text-to-video';
 const DEFAULT_REF_MODEL = 'bytedance/seedance-2.0/reference-to-video';
 const DEFAULT_LIMIT = 2;
 
+const net = require('net');
 const { HERO_CLIP_SECONDS } = require('../config/apiCosts');
+
+// True for IPv4 ranges that must never be fetched: this-network, private, loopback, link-local, CGNAT,
+// IETF/documentation/benchmark blocks, multicast and reserved.
+function isBlockedIPv4(a, b, c) {
+  if (a === 0 || a === 10 || a === 127 || a >= 224) return true;
+  if (a === 169 && b === 254) return true;
+  if (a === 172 && b >= 16 && b <= 31) return true;
+  if (a === 192 && b === 168) return true;
+  if (a === 100 && b >= 64 && b <= 127) return true;
+  if (a === 198 && (b === 18 || b === 19)) return true;
+  if (a === 192 && b === 0 && (c === 0 || c === 2)) return true; // 192.0.0.0/24, 192.0.2.0/24
+  if (a === 198 && b === 51 && c === 100) return true;
+  if (a === 203 && b === 0 && c === 113) return true;
+  return false;
+}
+
+// Expands an IPv6 literal into 8 16-bit groups, or null when malformed. Handles :: and a trailing dotted quad.
+function parseIPv6(ip) {
+  let s = String(ip).toLowerCase().split('%')[0];
+  const dq = s.match(/^(.*:)(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+  if (dq) {
+    const o = dq.slice(2).map(Number);
+    if (o.some((n) => n > 255)) return null;
+    s = `${dq[1]}${((o[0] << 8) | o[1]).toString(16)}:${((o[2] << 8) | o[3]).toString(16)}`;
+  }
+  const halves = s.split('::');
+  if (halves.length > 2) return null;
+  const head = halves[0] ? halves[0].split(':') : [];
+  const tail = halves.length === 2 && halves[1] ? halves[1].split(':') : [];
+  const fill = 8 - head.length - tail.length;
+  if (halves.length === 2 ? fill < 1 : fill !== 0) return null;
+  const groups = [...head, ...Array(halves.length === 2 ? fill : 0).fill('0'), ...tail];
+  if (groups.length !== 8 || groups.some((g) => !/^[0-9a-f]{1,4}$/.test(g))) return null;
+  return groups.map((g) => parseInt(g, 16));
+}
+
+// True only for a globally routable unicast address (IPv4 or IPv6). Anything unparsable is not public.
+function isPublicIp(ip) {
+  if (typeof ip !== 'string') return false;
+  const kind = net.isIP(ip.split('%')[0]);
+  if (kind === 4) {
+    const [a, b, c] = ip.split('.').map(Number);
+    return !isBlockedIPv4(a, b, c);
+  }
+  if (kind !== 6) return false;
+  const g = parseIPv6(ip);
+  if (!g) return false;
+  const v4 = (hi, lo) => !isBlockedIPv4(hi >> 8, hi & 255, lo >> 8);
+  if (g.slice(0, 5).every((x) => x === 0) && g[5] === 0xffff) return v4(g[6], g[7]); // IPv4-mapped
+  if (g[0] === 0x2002) return v4(g[1], g[2]); // 6to4 embeds an IPv4 address
+  if ((g[0] & 0xe000) !== 0x2000) return false; // only 2000::/3 is global unicast (drops ::, ::1, fc00::/7, fe80::/10, ff00::/8, NAT64)
+  if (g[0] === 0x2001 && g[1] === 0x0db8) return false; // documentation
+  return true;
+}
 
 // True only for a public https: URL (<= 2048 chars). Rejects http, loopback, private,
 // link-local, CGNAT, .local/.internal/.localhost hosts, single-label hosts and IPv6 literals.
@@ -39,15 +94,7 @@ function isPublicHttpsUrl(url) {
   if (host === 'localhost' || !host.includes('.')) return false;
   if (/\.(localhost|local|internal|lan|home|corp|test)$/.test(host)) return false;
   const m = host.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
-  if (m) {
-    const [a, b] = [Number(m[1]), Number(m[2])];
-    if (a === 0 || a === 10 || a === 127 || a >= 224) return false;
-    if (a === 169 && b === 254) return false;
-    if (a === 172 && b >= 16 && b <= 31) return false;
-    if (a === 192 && b === 168) return false;
-    if (a === 100 && b >= 64 && b <= 127) return false;
-    if (a === 198 && (b === 18 || b === 19)) return false;
-  }
+  if (m && isBlockedIPv4(Number(m[1]), Number(m[2]), Number(m[3]))) return false;
   return true;
 }
 
@@ -183,7 +230,7 @@ async function copyClipToStorage(remoteUrl, deps = {}) {
 }
 
 module.exports = {
-  HERO_RESOLUTION, HERO_MAX_REFS, isPublicHttpsUrl, buildHeroInput, validateRefUrls,
+  HERO_RESOLUTION, HERO_MAX_REFS, isPublicHttpsUrl, isPublicIp, buildHeroInput, validateRefUrls,
   heroMonthlyLimit, monthStartUTC, nextMonthStartUTC, getHeroQuota,
   submitHeroClip, getHeroClipStatus, copyClipToStorage
 };

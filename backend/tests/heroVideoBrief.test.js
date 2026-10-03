@@ -8,7 +8,8 @@ test('isPublicHttpsUrl', () => {
   assert.equal(brief.isPublicHttpsUrl('https://res.cloudinary.com/a.jpg'), true);
   for (const bad of ['http://x', 'https://localhost/a', 'https://127.0.0.1/a', 'https://10.0.0.5/a',
     'https://192.168.1.2/a', 'https://169.254.169.254/a', 'https://[::1]/a', 'https://x.local/a',
-    'https://x.internal/a', 'https://172.16.0.1/a', 'javascript:alert(1)', 'data:image/png;base64,AAA',
+    'https://x.internal/a', 'https://172.16.0.1/a', 'https://192.0.0.8/a', 'https://192.0.2.1/a',
+    'https://198.51.100.7/a', 'https://203.0.113.9/a', 'https://198.18.0.1/a', 'https://198.19.255.1/a', 'javascript:alert(1)', 'data:image/png;base64,AAA',
     'https://a.com/' + 'x'.repeat(3000), 5, null, undefined, {}]) {
     assert.equal(brief.isPublicHttpsUrl(bad), false, String(bad).slice(0, 40));
   }
