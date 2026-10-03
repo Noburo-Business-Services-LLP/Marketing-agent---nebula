@@ -1,6 +1,6 @@
 # Hero Video Quality — Story, Performance, Sound, Finish
 
-Status: draft for review. Branch: `dev-dk`. Builds on `2026-10-03-hero-video-design.md` (the pipeline, already built and live-tested).
+Status: SUPERSEDED by 2026-10-03-hero-studio-design.md (inputs, references, scenes) - Part A/B content still applies. Branch: `dev-dk`. Builds on `2026-10-03-hero-video-design.md` (the pipeline, already built and live-tested).
 
 ## Why
 

@@ -1,5 +1,7 @@
 # Hero Video Quality Implementation Plan
 
+> **SUPERSEDED** by `2026-10-03-hero-studio.md` (adds the wizard brief, references and Hero Studio; same finishing and prompt work).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Turn the raw Seedance clip into a finished hero video: a story-first prompt with performance and sound direction (Part A), and a server-side finishing layer with realism grade, brand mark, fades, CTA end card, optional captions and loudness (Part B), plus three small fixes.
