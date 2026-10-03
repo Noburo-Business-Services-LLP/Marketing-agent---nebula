@@ -13,6 +13,7 @@ plan). The baseline report is `docs/superpowers/specs/assets/nebulaa-contrast-ba
 | `vite.audit.config.mjs` | Vite config that injects `mock-session.js` before the app boots, binds 127.0.0.1:3100, removes the backend proxy and writes results to disk. |
 | `routes.json` | Every route in `frontend/App.tsx`, with the session mode it needs and the tab to click. |
 | `summarize.mjs` | Turns the saved results into the Markdown report and a compact JSON summary; `--compare` gives a before/after table. |
+| `gate-logic.mjs` | The gate's pure rules (route status, PASS/PARTIAL/FAIL), unit tested in `frontend/tests/audit-gate.test.mjs`. |
 
 ## Safety model
 
@@ -82,8 +83,13 @@ plan). The baseline report is `docs/superpowers/specs/assets/nebulaa-contrast-ba
 
    ```sh
    node scripts/visual-audit/summarize.mjs --results $AUDIT_OUT/results \
-     --md report.md --json summary.json [--compare ../docs/superpowers/specs/assets/nebulaa-contrast-baseline/summary.json]
+     --md report.md --json summary.json [--compare ../docs/superpowers/specs/assets/nebulaa-contrast-baseline/summary.json] \
+     [--since 2026-10-04T09:00:00Z]
    ```
+
+   Pass `--since <time the run started>` (ISO or epoch ms) whenever the results directory may
+   hold files from an earlier run: any result saved before it is `STALE` and fails the gate.
+   Without `--since` the file times are not checked, so use a fresh `AUDIT_OUT` per run.
 
    It prints one line per width and `GATE: PASS|FAIL` (exit 1 on FAIL; see "The gate").
    An audit that throws is saved as an `ERROR` result; a crash stops the run, and the routes not
@@ -127,7 +133,8 @@ plan). The baseline report is `docs/superpowers/specs/assets/nebulaa-contrast-ba
 `GATE: PASS` (exit 0) only when, for every route in scope (all except `otherSession` pages):
 
 1. a result exists and the page rendered where expected: no `MISSING` (no result file, e.g. after
-   a crash stopped the run), `BLANK` (the app crashed), `ERROR` (the audit threw), `REDIRECT`
+   a crash stopped the run), `STALE` (saved before `--since`), `BLANK` (the app crashed), `EMPTY`
+   (the audit checked 0 elements, so nothing was measured), `ERROR` (the audit threw), `REDIRECT`
    (landed elsewhere than `expectHash`/`path`) or `TAB-NOT-FOUND`. None of these ever counts as
    0 failures; and
 2. `failures` is 0; and
@@ -135,7 +142,9 @@ plan). The baseline report is `docs/superpowers/specs/assets/nebulaa-contrast-ba
    (entry: `kind`, `route`, optional `width`, `text` prefix or `*` or exact `selector`, `reason`,
    `verifiedBy` = who checked it by eye, how and when).
 
-Otherwise it prints `GATE: FAIL` and exits 1 (it still writes the report). `--compare` totals
+Otherwise it prints `GATE: FAIL` and exits 1 (it still writes the report). A run narrowed with
+`--widths` that leaves out 1280 or 375 never prints PASS: when everything measured passes it
+prints `GATE: PARTIAL (widths: ...)` and still exits 1. `--compare` totals
 only routes that rendered in both runs, so a broken route cannot make the total drop.
 
 ## Adding mock data

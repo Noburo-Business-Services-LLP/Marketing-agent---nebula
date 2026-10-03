@@ -4,17 +4,22 @@
 //
 //   node scripts/visual-audit/summarize.mjs --results <dir> [--md <report.md>] [--json <summary.json>]
 //        [--compare <earlier summary.json>] [--widths 1280,375] [--signoff <file>] [--title "..."]
+//        [--since <ISO time | epoch ms>]
 //
 // Every routes.json entry x every width is expected. A missing result is MISSING; a page that
-// crashed is BLANK; an audit that threw is ERROR; landing elsewhere than expected is REDIRECT.
-// None of those ever counts as "0 failures".
+// crashed is BLANK; an audit that threw is ERROR; landing elsewhere than expected is REDIRECT;
+// a page where the audit checked 0 elements is EMPTY; with --since, a result saved before that
+// time is STALE. None of those ever counts as "0 failures" (rules in gate-logic.mjs).
 //
 // GATE (Tasks 7-8): PASS only when, for every in-scope route (routes.json minus otherSession)
 // at every width: status ok, 0 failures, and every unknown-background item, unparsed colour and
-// gradient-text item is listed in unknown-signoff.json. Otherwise FAIL, exit code 1.
+// gradient-text item is listed in unknown-signoff.json. Otherwise FAIL, exit code 1. A run
+// narrowed with --widths that leaves out 1280 or 375 never prints PASS: it prints
+// "PARTIAL (widths: ...)" and exits 1.
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { rowStatus, gateVerdict, parseSince } from './gate-logic.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const args = Object.fromEntries(process.argv.slice(2).reduce((acc, a, i, all) => {
@@ -23,6 +28,7 @@ const args = Object.fromEntries(process.argv.slice(2).reduce((acc, a, i, all) =>
 }, []));
 const resultsDir = resolve(args.results || join(here, 'out/results'));
 const widths = String(args.widths || '1280,375').split(',').map(Number);
+const since = parseSince(args.since);
 const routes = JSON.parse(readFileSync(join(here, 'routes.json'), 'utf8')).routes;
 const signoffPath = resolve(args.signoff || join(here, 'unknown-signoff.json'));
 const signoff = existsSync(signoffPath) ? JSON.parse(readFileSync(signoffPath, 'utf8')) : { signedOff: [] };
@@ -41,16 +47,7 @@ for (const spec of routes) {
   for (const w of widths) {
     const d = files.get(`${w}__${slug(spec.label)}.json`);
     const row = { spec, label: spec.label, width: w, d, scope: spec.otherSession ? 'other' : spec.duplicateOf ? 'duplicate' : 'in' };
-    if (!d) row.status = 'MISSING';
-    else if (d.error) row.status = 'ERROR';
-    else if (d.blank) row.status = 'BLANK';
-    else {
-      const want = '#' + (spec.expectHash || spec.path);
-      const got = d.finalHash || '';
-      if (got !== want && !(want === '#/' && (got === '' || got === '#'))) row.status = 'REDIRECT';
-      else if (spec.click && d.clicked === false) row.status = 'TAB-NOT-FOUND';
-      else row.status = 'ok';
-    }
+    row.status = rowStatus(spec, d, { since });
     if (row.status === 'ok') {
       row.checked = d.checked;
       row.failures = d.failureCount;
@@ -79,7 +76,7 @@ const totalsFor = (w) => {
   const count = (st) => gated.filter((r) => r.width === w && r.status === st).length;
   return {
     expected: rs.length, ok: okRows(rs).length, missing: count('MISSING'), blank: count('BLANK'), error: count('ERROR'),
-    redirect: count('REDIRECT'), tabNotFound: count('TAB-NOT-FOUND'),
+    redirect: count('REDIRECT'), tabNotFound: count('TAB-NOT-FOUND'), empty: count('EMPTY'), stale: count('STALE'),
     checked: sum(rs, 'checked'), failures: sum(rs, 'failures'), routesWithFailures: okRows(rs).filter((r) => r.failures > 0).length,
     unknown: sum(rs, 'unknown'), unknownUnsigned: sum(rs, 'unknownUnsigned'), unparsed: sum(rs, 'unparsed'), unparsedUnsigned: sum(rs, 'unparsedUnsigned'),
     gradientText: sum(rs, 'gradientText'), gradientTextUnsigned: sum(rs, 'gradientTextUnsigned'),
@@ -88,13 +85,13 @@ const totalsFor = (w) => {
   };
 };
 const totals = Object.fromEntries(widths.map((w) => [w, totalsFor(w)]));
-const gatePass = gated.every((r) => r.status === 'ok') && inScope.every((r) => r.pass);
+const verdict = gateVerdict(rows, widths);
 
-const summary = { generatedAt: new Date().toISOString(), widths, gate: gatePass ? 'PASS' : 'FAIL', totals, routes: {}, otherSession: {} };
+const summary = { generatedAt: new Date().toISOString(), widths, since: since ? new Date(since).toISOString() : null, gate: verdict.gate, totals, routes: {}, otherSession: {} };
 for (const r of rows) {
   const tgt = r.scope === 'other' ? summary.otherSession : summary.routes;
   tgt[r.label] ??= { path: r.spec.path, group: r.spec.group, scope: r.scope, widths: {} };
-  tgt[r.label].widths[r.width] = r.status !== 'ok' ? { status: r.status, error: r.d && r.d.error, finalHash: r.d && r.d.finalHash } : {
+  tgt[r.label].widths[r.width] = r.status !== 'ok' ? { status: r.status, error: r.d && r.d.error, finalHash: r.d && r.d.finalHash, at: r.d && r.d.at } : {
     status: 'ok', checked: r.checked, failures: r.failures, unknown: r.unknown, unknownUnsigned: r.unknownUnsigned,
     unparsed: r.unparsed, gradientText: r.gradientText, kinds: r.kinds, svgFailures: r.svgFailures, worst: r.worst,
     top: r.d.failures.slice(0, 10).map((f) => [f.text.slice(0, 40), f.ratio, f.effectiveColor, f.background, f.textClass, f.failureKind || 'contrast', f.kind]),
@@ -110,7 +107,7 @@ const L = [];
 L.push(`# ${args.title || 'Nebulaa contrast audit'}`, '');
 L.push(`Generated ${summary.generatedAt.slice(0, 10)} by \`frontend/scripts/visual-audit/summarize.mjs\`. Expected: ${routes.length} routes.json entries x ${widths.join(' and ')} px. Standard: WCAG AA, 4.5:1 normal text, 3:1 large text (>= 24px, or >= 18.66px at 700+).`, '');
 L.push(`**GATE: ${summary.gate}**`, '');
-L.push('Gate rule (Tasks 7-8): every route in scope (all of routes.json except the pages built in the other session) renders at every width (no MISSING / BLANK / ERROR / REDIRECT), has 0 failures, and every unknown-background item, unparsed colour and gradient-text item is signed off in `frontend/scripts/visual-audit/unknown-signoff.json` after a by-eye check.', '');
+L.push('Gate rule (Tasks 7-8): every route in scope (all of routes.json except the pages built in the other session) renders at both 1280 and 375 (no MISSING / STALE / BLANK / EMPTY / ERROR / REDIRECT; a run narrowed to fewer widths is PARTIAL, never PASS), has 0 failures, and every unknown-background item, unparsed colour and gradient-text item is signed off in `frontend/scripts/visual-audit/unknown-signoff.json` after a by-eye check.', '');
 
 if (args.compare && args.compare !== true) {
   const prev = JSON.parse(readFileSync(resolve(args.compare), 'utf8'));
@@ -129,14 +126,15 @@ if (args.compare && args.compare !== true) {
   L.push('');
 }
 
-L.push('## Totals (in scope)', '', '| Width | Expected | Rendered ok | Missing | Blank | Error | Redirect | Checked | Failures | Routes with failures | Unknown (unsigned) | Unparsed colours | Gradient text | of which SVG text | over positioned layers | image layers |', '|---:|' + '---:|'.repeat(15));
-for (const w of widths) { const t = totals[w]; L.push(`| ${w} | ${t.expected} | ${t.ok} | ${t.missing} | ${t.blank} | ${t.error} | ${t.redirect + t.tabNotFound} | ${t.checked} | ${t.failures} | ${t.routesWithFailures} | ${t.unknown} (${t.unknownUnsigned}) | ${t.unparsed} | ${t.gradientText} | ${t.svgFailures} | ${t.positionedFailures} | ${t.imageFailures} |`); }
+L.push('## Totals (in scope)', '', '| Width | Expected | Rendered ok | Missing / stale | Blank / empty | Error | Redirect | Checked | Failures | Routes with failures | Unknown (unsigned) | Unparsed colours | Gradient text | of which SVG text | over positioned layers | image layers |', '|---:|' + '---:|'.repeat(15));
+for (const w of widths) { const t = totals[w]; L.push(`| ${w} | ${t.expected} | ${t.ok} | ${t.missing + t.stale} | ${t.blank + t.empty} | ${t.error} | ${t.redirect + t.tabNotFound} | ${t.checked} | ${t.failures} | ${t.routesWithFailures} | ${t.unknown} (${t.unknownUnsigned}) | ${t.unparsed} | ${t.gradientText} | ${t.svgFailures} | ${t.positionedFailures} | ${t.imageFailures} |`); }
 L.push('', 'Missing/Blank/Error/Redirect counts include the redirect route kept out of the failure totals. "of which ..." columns break the failures down: SVG `<text>` labels, text measured against a positioned (non-ancestor) layer, and failures involving an image layer (`image-underlying`: fails on the colour beneath the image; `image-any`: no opaque image could make it pass).', '');
 
 const bad = gated.filter((r) => r.status !== 'ok');
 if (bad.length) {
   L.push('## Routes that did not render as expected', '', '| Route | Width | Status | Detail |', '|---|---:|---|---|');
-  for (const r of bad) L.push(`| ${r.label} | ${r.width} | ${r.status} | ${esc(r.d ? (r.d.error || `landed on ${r.d.finalHash}`) : 'no result file')} |`);
+  const detail = (r) => !r.d ? 'no result file' : r.d.error || (r.status === 'STALE' ? `saved ${r.d.at || '(no time)'}, before --since` : r.status === 'EMPTY' ? `checked 0 elements (landed on ${r.d.finalHash})` : `landed on ${r.d.finalHash}`);
+  for (const r of bad) L.push(`| ${r.label} | ${r.width} | ${r.status} | ${esc(detail(r))} |`);
   L.push('');
 }
 
@@ -225,7 +223,7 @@ if (args.md) writeFileSync(resolve(args.md), L.join('\n') + '\n');
 if (args.json) writeFileSync(resolve(args.json), JSON.stringify(summary, null, 1) + '\n');
 for (const w of widths) {
   const t = totals[w];
-  console.log(`${w}px: expected ${t.expected}, ok ${t.ok}, MISSING ${t.missing}, BLANK ${t.blank}, ERROR ${t.error}, REDIRECT ${t.redirect + t.tabNotFound}; failures ${t.failures} on ${t.routesWithFailures} routes; unknown ${t.unknown} (${t.unknownUnsigned} not signed off); unparsed ${t.unparsed}; gradient text ${t.gradientText}`);
+  console.log(`${w}px: expected ${t.expected}, ok ${t.ok}, MISSING ${t.missing}, STALE ${t.stale}, BLANK ${t.blank}, EMPTY ${t.empty}, ERROR ${t.error}, REDIRECT ${t.redirect + t.tabNotFound}; failures ${t.failures} on ${t.routesWithFailures} routes; unknown ${t.unknown} (${t.unknownUnsigned} not signed off); unparsed ${t.unparsed}; gradient text ${t.gradientText}`);
 }
 console.log(`GATE: ${summary.gate}`);
-if (!gatePass) process.exitCode = 1;
+if (verdict.exitCode) process.exitCode = verdict.exitCode;
