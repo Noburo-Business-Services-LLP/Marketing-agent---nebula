@@ -1,0 +1,3526 @@
+{
+ "generatedAt": "2026-10-03T21:00:13.587Z",
+ "widths": [
+  1280,
+  375
+ ],
+ "since": "2026-10-03T20:55:18.000Z",
+ "gate": "FAIL",
+ "totals": {
+  "375": {
+   "expected": 51,
+   "ok": 51,
+   "missing": 0,
+   "blank": 0,
+   "error": 0,
+   "redirect": 0,
+   "tabNotFound": 0,
+   "empty": 0,
+   "stale": 0,
+   "checked": 1587,
+   "failures": 72,
+   "routesWithFailures": 7,
+   "unknown": 4,
+   "unknownUnsigned": 4,
+   "unparsed": 0,
+   "unparsedUnsigned": 0,
+   "gradientText": 3,
+   "gradientTextUnsigned": 3,
+   "svgFailures": 0,
+   "positionedFailures": 9,
+   "imageFailures": 9
+  },
+  "1280": {
+   "expected": 51,
+   "ok": 51,
+   "missing": 0,
+   "blank": 0,
+   "error": 0,
+   "redirect": 0,
+   "tabNotFound": 0,
+   "empty": 0,
+   "stale": 0,
+   "checked": 2733,
+   "failures": 80,
+   "routesWithFailures": 8,
+   "unknown": 7,
+   "unknownUnsigned": 7,
+   "unparsed": 0,
+   "unparsedUnsigned": 0,
+   "gradientText": 3,
+   "gradientTextUnsigned": 3,
+   "svgFailures": 0,
+   "positionedFailures": 14,
+   "imageFailures": 14
+  }
+ },
+ "routes": {
+  "dashboard": {
+   "path": "/dashboard",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 25,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 56,
+     "failures": 5,
+     "unknown": 3,
+     "unknownUnsigned": 3,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "image-underlying": 5
+     },
+     "svgFailures": 0,
+     "worst": 1.6,
+     "top": [
+      [
+       "IN · TUE",
+       1.6,
+       "#ffffff",
+       "#ceccc8",
+       "text-white/80",
+       "image-underlying",
+       "text"
+      ],
+      [
+       "3 / 4",
+       2.15,
+       "#f5f5f4",
+       "#aaa9a6",
+       "text-white/60",
+       "image-underlying",
+       "text"
+      ],
+      [
+       "IN · WED",
+       2.17,
+       "#ffffff",
+       "#b1b0ad",
+       "text-white/80",
+       "image-underlying",
+       "text"
+      ],
+      [
+       "IN · THU",
+       2.61,
+       "#ffffff",
+       "#a1a09d",
+       "text-white/80",
+       "image-underlying",
+       "text"
+      ],
+      [
+       "4 / 4",
+       2.78,
+       "#f2f2f2",
+       "#93928f",
+       "text-white/60",
+       "image-underlying",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "dashboard-classic": {
+   "path": "/dashboard-classic",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 62,
+     "failures": 4,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 4
+     },
+     "svgFailures": 0,
+     "worst": 2.8,
+     "top": [
+      [
+       "National",
+       2.8,
+       "#ffffff",
+       "#f97316",
+       "text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Festival",
+       3.53,
+       "#ffffff",
+       "#ec4899",
+       "text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "International",
+       3.68,
+       "#ffffff",
+       "#3b82f6",
+       "text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "❤️",
+       4.4,
+       "#14203a",
+       "#3b82f6",
+       "text-[var(--gv-text-primary)]",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 121,
+     "failures": 7,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 7
+     },
+     "svgFailures": 0,
+     "worst": 2.8,
+     "top": [
+      [
+       "Gandhi Jayanti",
+       2.8,
+       "#ffffff",
+       "#f97316",
+       "text-white",
+       "contrast",
+       "text"
+      ],
+      [
+       "National",
+       2.8,
+       "#ffffff",
+       "#f97316",
+       "text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Navratri Begins",
+       3.53,
+       "#ffffff",
+       "#ec4899",
+       "text-white",
+       "contrast",
+       "text"
+      ],
+      [
+       "Festival",
+       3.53,
+       "#ffffff",
+       "#ec4899",
+       "text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "World Heart Day",
+       3.68,
+       "#ffffff",
+       "#3b82f6",
+       "text-white",
+       "contrast",
+       "text"
+      ],
+      [
+       "International",
+       3.68,
+       "#ffffff",
+       "#3b82f6",
+       "text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "❤️",
+       4.4,
+       "#14203a",
+       "#3b82f6",
+       "text-[var(--gv-text-primary)]",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "content-calendar-plan": {
+   "path": "/content-calendar",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 17,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 40,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "content-calendar-schedule": {
+   "path": "/content-calendar",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 60,
+     "failures": 4,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 4
+     },
+     "svgFailures": 0,
+     "worst": 1.73,
+     "top": [
+      [
+       "28",
+       1.73,
+       "#c2baac",
+       "#f8f2e8",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "29",
+       1.73,
+       "#c2baac",
+       "#f8f2e8",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "30",
+       1.73,
+       "#c2baac",
+       "#f8f2e8",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "1",
+       1.73,
+       "#c2baac",
+       "#f8f2e8",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 89,
+     "failures": 4,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 4
+     },
+     "svgFailures": 0,
+     "worst": 1.73,
+     "top": [
+      [
+       "28",
+       1.73,
+       "#c2baac",
+       "#f8f2e8",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "29",
+       1.73,
+       "#c2baac",
+       "#f8f2e8",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "30",
+       1.73,
+       "#c2baac",
+       "#f8f2e8",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "1",
+       1.73,
+       "#c2baac",
+       "#f8f2e8",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "content-calendar-grid": {
+   "path": "/content-calendar-grid",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 58,
+     "failures": 4,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 4
+     },
+     "svgFailures": 0,
+     "worst": 1.73,
+     "top": [
+      [
+       "28",
+       1.73,
+       "#c2baac",
+       "#f8f2e8",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "29",
+       1.73,
+       "#c2baac",
+       "#f8f2e8",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "30",
+       1.73,
+       "#c2baac",
+       "#f8f2e8",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "1",
+       1.73,
+       "#c2baac",
+       "#f8f2e8",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 87,
+     "failures": 4,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 4
+     },
+     "svgFailures": 0,
+     "worst": 1.73,
+     "top": [
+      [
+       "28",
+       1.73,
+       "#c2baac",
+       "#f8f2e8",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "29",
+       1.73,
+       "#c2baac",
+       "#f8f2e8",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "30",
+       1.73,
+       "#c2baac",
+       "#f8f2e8",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "1",
+       1.73,
+       "#c2baac",
+       "#f8f2e8",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "content-calendar-classic": {
+   "path": "/content-calendar-classic",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 15,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 38,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "idea-inbox": {
+   "path": "/idea-inbox",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 23,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 46,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "campaigns": {
+   "path": "/campaigns",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 44,
+     "failures": 0,
+     "unknown": 3,
+     "unknownUnsigned": 3,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 69,
+     "failures": 0,
+     "unknown": 3,
+     "unknownUnsigned": 3,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "campaigns-classic": {
+   "path": "/campaigns-classic",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 22,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 49,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "drafts-review": {
+   "path": "/drafts",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 34,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 57,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "drafts-all": {
+   "path": "/drafts",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 28,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 51,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "reels": {
+   "path": "/reels",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 15,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 38,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "reels-hero": {
+   "path": "/reels/hero",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 7,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 30,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "upload": {
+   "path": "/upload",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 8,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 31,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "ad-campaigns": {
+   "path": "/ad-campaigns",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 5,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 28,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "competitors": {
+   "path": "/competitors",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 14,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 37,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "connect-socials": {
+   "path": "/connect-socials",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 47,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 70,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "connect-socials-permissions": {
+   "path": "/connect-socials?tab=permissions",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 23,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 46,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "connect-socials-sync": {
+   "path": "/connect-socials?tab=sync",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 25,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 48,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "connect-socials-auto-reply": {
+   "path": "/connect-socials?tab=auto-reply",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 42,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 65,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "connect-socials-inbox": {
+   "path": "/connect-socials/inbox",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 27,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 52,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "brand-assets": {
+   "path": "/brand-assets",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 46,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 69,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "brand-assets-products": {
+   "path": "/brand-assets?tab=products",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 41,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 64,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "brand-assets-environment": {
+   "path": "/brand-assets?tab=environment",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 17,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 40,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "brand-assets-voice": {
+   "path": "/brand-assets?tab=voice",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 29,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 52,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "inventory-redirect": {
+   "path": "/inventory",
+   "group": "shell",
+   "scope": "duplicate",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 41,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 64,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "analytics": {
+   "path": "/analytics",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 22,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 45,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "analytics-classic": {
+   "path": "/analytics-classic",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 43,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 70,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "seo": {
+   "path": "/seo",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 26,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 49,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "seo-keywords": {
+   "path": "/seo/keywords",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 13,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 38,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "seo-metadata": {
+   "path": "/seo/metadata",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 15,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 40,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "seo-hashtags": {
+   "path": "/seo/hashtags",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 18,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 43,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "seo-competitor": {
+   "path": "/seo/competitor",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 13,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 38,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "influencer-portal": {
+   "path": "/influencer-portal",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 17,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 42,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "influencer-list": {
+   "path": "/influencer-portal/list",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 15,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 40,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "influencer-collaborations": {
+   "path": "/influencer-portal/collaborations",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 22,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 47,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "influencer-submissions": {
+   "path": "/influencer-portal/submissions",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 6,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 31,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "influencer-analytics": {
+   "path": "/influencer-portal/analytics",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 11,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 36,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "influencer-profile": {
+   "path": "/influencer-portal/profile",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 7,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 32,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "ai-memory": {
+   "path": "/ai-memory",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 13,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 36,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "ai-history": {
+   "path": "/ai-history",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 8,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 31,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "ai-performance": {
+   "path": "/ai-performance",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 6,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 29,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "settings-profile": {
+   "path": "/settings",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 26,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 49,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "settings-business": {
+   "path": "/settings?tab=business",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 63,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 86,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "settings-notifications": {
+   "path": "/settings",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 12,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 35,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "settings-security": {
+   "path": "/settings",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 17,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 40,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "settings-billing": {
+   "path": "/settings",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 25,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 48,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "trial-expired": {
+   "path": "/trial-expired",
+   "group": "public",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 30,
+     "failures": 9,
+     "unknown": 1,
+     "unknownUnsigned": 1,
+     "unparsed": 0,
+     "gradientText": 3,
+     "kinds": {
+      "image-underlying": 9
+     },
+     "svgFailures": 0,
+     "worst": 1.93,
+     "top": [
+      [
+       "Secured by Razorpay · UPI, Cards, Net Ba",
+       1.93,
+       "#3e3f41",
+       "#030507",
+       "text-[#ededed]/25",
+       "image-underlying",
+       "text"
+      ],
+      [
+       "Log out",
+       1.93,
+       "#3e3f41",
+       "#030507",
+       "text-[#ededed]/25 hover:text-[#ededed]/50",
+       "image-underlying",
+       "text"
+      ],
+      [
+       "per month · Auto-renews · Cancel anytime",
+       2.88,
+       "#595b60",
+       "#090d14",
+       "text-[#ededed]/35",
+       "image-underlying",
+       "text"
+      ],
+      [
+       "per month · Auto-renews · Cancel anytime",
+       2.88,
+       "#595b60",
+       "#090d14",
+       "text-[#ededed]/35",
+       "image-underlying",
+       "text"
+      ],
+      [
+       "per month · Auto-renews · Cancel anytime",
+       2.9,
+       "#5b5d63",
+       "#0c1018",
+       "text-[#ededed]/35",
+       "image-underlying",
+       "text"
+      ],
+      [
+       "All plans include AI campaign generation",
+       3.92,
+       "#7a7b84",
+       "#1b1f2e",
+       "text-[#ededed]/45",
+       "image-underlying",
+       "text"
+      ],
+      [
+       "Audit placeholder plan.",
+       4.01,
+       "#76787b",
+       "#14181e",
+       "text-[#ededed]/45",
+       "image-underlying",
+       "text"
+      ],
+      [
+       "Audit placeholder plan.",
+       4.03,
+       "#73767a",
+       "#0f141b",
+       "text-[#ededed]/45",
+       "image-underlying",
+       "text"
+      ],
+      [
+       "Audit placeholder plan.",
+       4.03,
+       "#72757a",
+       "#0e131c",
+       "text-[#ededed]/45",
+       "image-underlying",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 30,
+     "failures": 9,
+     "unknown": 1,
+     "unknownUnsigned": 1,
+     "unparsed": 0,
+     "gradientText": 3,
+     "kinds": {
+      "image-underlying": 9
+     },
+     "svgFailures": 0,
+     "worst": 1.93,
+     "top": [
+      [
+       "Secured by Razorpay · UPI, Cards, Net Ba",
+       1.93,
+       "#3e3f41",
+       "#030507",
+       "text-[#ededed]/25",
+       "image-underlying",
+       "text"
+      ],
+      [
+       "Log out",
+       1.93,
+       "#3e3f41",
+       "#030507",
+       "text-[#ededed]/25 hover:text-[#ededed]/50",
+       "image-underlying",
+       "text"
+      ],
+      [
+       "per month · Auto-renews · Cancel anytime",
+       2.88,
+       "#595b60",
+       "#090d14",
+       "text-[#ededed]/35",
+       "image-underlying",
+       "text"
+      ],
+      [
+       "per month · Auto-renews · Cancel anytime",
+       2.88,
+       "#595b60",
+       "#090d14",
+       "text-[#ededed]/35",
+       "image-underlying",
+       "text"
+      ],
+      [
+       "per month · Auto-renews · Cancel anytime",
+       2.9,
+       "#5b5d63",
+       "#0c1018",
+       "text-[#ededed]/35",
+       "image-underlying",
+       "text"
+      ],
+      [
+       "All plans include AI campaign generation",
+       3.96,
+       "#6c6d6f",
+       "#030507",
+       "text-[#ededed]/45",
+       "image-underlying",
+       "text"
+      ],
+      [
+       "Audit placeholder plan.",
+       4.01,
+       "#76787b",
+       "#14181e",
+       "text-[#ededed]/45",
+       "image-underlying",
+       "text"
+      ],
+      [
+       "Audit placeholder plan.",
+       4.03,
+       "#72757a",
+       "#0e131c",
+       "text-[#ededed]/45",
+       "image-underlying",
+       "text"
+      ],
+      [
+       "Audit placeholder plan.",
+       4.03,
+       "#73757a",
+       "#0f141b",
+       "text-[#ededed]/45",
+       "image-underlying",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "terms": {
+   "path": "/terms",
+   "group": "public",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 188,
+     "failures": 12,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 12
+     },
+     "svgFailures": 0,
+     "worst": 1.44,
+     "top": [
+      [
+       "support@nebulaa.ai",
+       1.44,
+       "#ffcc29",
+       "#f9fafb",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "https://www.nebulaa.ai",
+       1.44,
+       "#ffcc29",
+       "#f9fafb",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Terms & Conditions of Service",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "support@nebulaa.ai",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "support@nebulaa.ai",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Privacy Policy",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "support@nebulaa.ai",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "legal@nebulaa.ai",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "© 2024 Noburo Business Services LLP. All",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "text-gray-400",
+       "contrast",
+       "text"
+      ],
+      [
+       "Privacy Policy",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "hover:text-[#ffcc29]",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 188,
+     "failures": 12,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 12
+     },
+     "svgFailures": 0,
+     "worst": 1.44,
+     "top": [
+      [
+       "support@nebulaa.ai",
+       1.44,
+       "#ffcc29",
+       "#f9fafb",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "https://www.nebulaa.ai",
+       1.44,
+       "#ffcc29",
+       "#f9fafb",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Terms & Conditions of Service",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "support@nebulaa.ai",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "support@nebulaa.ai",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Privacy Policy",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "support@nebulaa.ai",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "legal@nebulaa.ai",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "© 2024 Noburo Business Services LLP. All",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "text-gray-400",
+       "contrast",
+       "text"
+      ],
+      [
+       "Privacy Policy",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "hover:text-[#ffcc29]",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "privacy-policy": {
+   "path": "/privacy-policy",
+   "group": "public",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 187,
+     "failures": 10,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 10
+     },
+     "svgFailures": 0,
+     "worst": 1.44,
+     "top": [
+      [
+       "support@nebulaa.ai",
+       1.44,
+       "#ffcc29",
+       "#f9fafb",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "support@nebulaa.ai",
+       1.44,
+       "#ffcc29",
+       "#f9fafb",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "support@nebulaa.ai",
+       1.44,
+       "#ffcc29",
+       "#f9fafb",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Privacy Policy",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "privacy@nebulaa.ai",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "privacy@nebulaa.ai",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "© 2024 Noburo Business Services LLP. All",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "text-gray-400",
+       "contrast",
+       "text"
+      ],
+      [
+       "Terms & Conditions",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "hover:text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "|",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "text-gray-400",
+       "contrast",
+       "text"
+      ],
+      [
+       "nebulaa.ai",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "hover:text-[#ffcc29]",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 187,
+     "failures": 10,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 10
+     },
+     "svgFailures": 0,
+     "worst": 1.44,
+     "top": [
+      [
+       "support@nebulaa.ai",
+       1.44,
+       "#ffcc29",
+       "#f9fafb",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "support@nebulaa.ai",
+       1.44,
+       "#ffcc29",
+       "#f9fafb",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "support@nebulaa.ai",
+       1.44,
+       "#ffcc29",
+       "#f9fafb",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Privacy Policy",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "privacy@nebulaa.ai",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "privacy@nebulaa.ai",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "© 2024 Noburo Business Services LLP. All",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "text-gray-400",
+       "contrast",
+       "text"
+      ],
+      [
+       "Terms & Conditions",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "hover:text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "|",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "text-gray-400",
+       "contrast",
+       "text"
+      ],
+      [
+       "nebulaa.ai",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "hover:text-[#ffcc29]",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "admin-login": {
+   "path": "/admin/login",
+   "group": "admin",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 8,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 8,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "admin": {
+   "path": "/admin",
+   "group": "admin",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 42,
+     "failures": 29,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 29
+     },
+     "svgFailures": 0,
+     "worst": 1.8,
+     "top": [
+      [
+       "No users found",
+       1.8,
+       "#3c3d44",
+       "#0b0d15",
+       "text-white/20",
+       "contrast",
+       "text"
+      ],
+      [
+       "Search by email or company...",
+       1.88,
+       "#44454b",
+       "#15171e",
+       "text-white placeholder-white/20",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "demo.nebulaa.ai",
+       2.57,
+       "#515258",
+       "#060810",
+       "text-white/30",
+       "contrast",
+       "text"
+      ],
+      [
+       "User",
+       2.63,
+       "#54565b",
+       "#0b0d15",
+       "text-white/30",
+       "contrast",
+       "text"
+      ],
+      [
+       "Credits",
+       2.63,
+       "#54565b",
+       "#0b0d15",
+       "text-white/30",
+       "contrast",
+       "text"
+      ],
+      [
+       "Activity",
+       2.63,
+       "#54565b",
+       "#0b0d15",
+       "text-white/30",
+       "contrast",
+       "text"
+      ],
+      [
+       "Trial",
+       2.63,
+       "#54565b",
+       "#0b0d15",
+       "text-white/30",
+       "contrast",
+       "text"
+      ],
+      [
+       "Last Login",
+       2.63,
+       "#54565b",
+       "#0b0d15",
+       "text-white/30",
+       "contrast",
+       "text"
+      ],
+      [
+       "Status",
+       2.63,
+       "#54565b",
+       "#0b0d15",
+       "text-white/30",
+       "contrast",
+       "text"
+      ],
+      [
+       "Active today",
+       2.66,
+       "#56575d",
+       "#0d0f17",
+       "text-white/30",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 42,
+     "failures": 29,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 29
+     },
+     "svgFailures": 0,
+     "worst": 1.8,
+     "top": [
+      [
+       "No users found",
+       1.8,
+       "#3c3d44",
+       "#0b0d15",
+       "text-white/20",
+       "contrast",
+       "text"
+      ],
+      [
+       "Search by email or company...",
+       1.88,
+       "#44454b",
+       "#15171e",
+       "text-white placeholder-white/20",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "demo.nebulaa.ai",
+       2.57,
+       "#515258",
+       "#060810",
+       "text-white/30",
+       "contrast",
+       "text"
+      ],
+      [
+       "User",
+       2.63,
+       "#54565b",
+       "#0b0d15",
+       "text-white/30",
+       "contrast",
+       "text"
+      ],
+      [
+       "Credits",
+       2.63,
+       "#54565b",
+       "#0b0d15",
+       "text-white/30",
+       "contrast",
+       "text"
+      ],
+      [
+       "Activity",
+       2.63,
+       "#54565b",
+       "#0b0d15",
+       "text-white/30",
+       "contrast",
+       "text"
+      ],
+      [
+       "Trial",
+       2.63,
+       "#54565b",
+       "#0b0d15",
+       "text-white/30",
+       "contrast",
+       "text"
+      ],
+      [
+       "Last Login",
+       2.63,
+       "#54565b",
+       "#0b0d15",
+       "text-white/30",
+       "contrast",
+       "text"
+      ],
+      [
+       "Status",
+       2.63,
+       "#54565b",
+       "#0b0d15",
+       "text-white/30",
+       "contrast",
+       "text"
+      ],
+      [
+       "Active today",
+       2.66,
+       "#56575d",
+       "#0d0f17",
+       "text-white/30",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  }
+ },
+ "otherSession": {
+  "landing": {
+   "path": "/",
+   "group": "public",
+   "scope": "other",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 57,
+     "failures": 6,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 1,
+     "kinds": {
+      "contrast": 6
+     },
+     "svgFailures": 0,
+     "worst": 1.24,
+     "top": [
+      [
+       "01",
+       1.24,
+       "#e5e7eb",
+       "#ffffff",
+       "text-gray-200",
+       "contrast",
+       "text"
+      ],
+      [
+       "02",
+       1.24,
+       "#e5e7eb",
+       "#ffffff",
+       "text-gray-200",
+       "contrast",
+       "text"
+      ],
+      [
+       "03",
+       1.24,
+       "#e5e7eb",
+       "#ffffff",
+       "text-gray-200",
+       "contrast",
+       "text"
+      ],
+      [
+       "2.4M",
+       1.36,
+       "#ffda64",
+       "#ffffff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "18.2%",
+       1.44,
+       "#ffd243",
+       "#ffffff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "24",
+       1.44,
+       "#ffd243",
+       "#ffffff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 60,
+     "failures": 6,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 1,
+     "kinds": {
+      "contrast": 6
+     },
+     "svgFailures": 0,
+     "worst": 1.24,
+     "top": [
+      [
+       "01",
+       1.24,
+       "#e5e7eb",
+       "#ffffff",
+       "text-gray-200",
+       "contrast",
+       "text"
+      ],
+      [
+       "02",
+       1.24,
+       "#e5e7eb",
+       "#ffffff",
+       "text-gray-200",
+       "contrast",
+       "text"
+      ],
+      [
+       "03",
+       1.24,
+       "#e5e7eb",
+       "#ffffff",
+       "text-gray-200",
+       "contrast",
+       "text"
+      ],
+      [
+       "2.4M",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "18.2%",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "24",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "login": {
+   "path": "/login",
+   "group": "auth",
+   "scope": "other",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 11,
+     "failures": 5,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 5
+     },
+     "svgFailures": 0,
+     "worst": 2.43,
+     "top": [
+      [
+       "you@company.com",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "text-gray-900 placeholder-gray-400",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "••••••••",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "text-gray-900 placeholder-gray-400",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "Email Address",
+       2.5,
+       "#4b5563",
+       "#111111",
+       "text-gray-600",
+       "contrast",
+       "text"
+      ],
+      [
+       "Password",
+       2.5,
+       "#4b5563",
+       "#111111",
+       "text-gray-600",
+       "contrast",
+       "text"
+      ],
+      [
+       "Don't have an account?",
+       2.5,
+       "#4b5563",
+       "#111111",
+       "text-gray-600",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 11,
+     "failures": 5,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 5
+     },
+     "svgFailures": 0,
+     "worst": 2.43,
+     "top": [
+      [
+       "you@company.com",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "text-gray-900 placeholder-gray-400",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "••••••••",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "text-gray-900 placeholder-gray-400",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "Email Address",
+       2.5,
+       "#4b5563",
+       "#111111",
+       "text-gray-600",
+       "contrast",
+       "text"
+      ],
+      [
+       "Password",
+       2.5,
+       "#4b5563",
+       "#111111",
+       "text-gray-600",
+       "contrast",
+       "text"
+      ],
+      [
+       "Don't have an account?",
+       2.5,
+       "#4b5563",
+       "#111111",
+       "text-gray-600",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "signup": {
+   "path": "/login?mode=signup",
+   "group": "auth",
+   "scope": "other",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 22,
+     "failures": 12,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 12
+     },
+     "svgFailures": 0,
+     "worst": 1.94,
+     "top": [
+      [
+       "Password Requirements:",
+       1.94,
+       "#f5a623",
+       "#f9fafb",
+       "text-[#F5A623]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Jane",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "text-gray-900 placeholder-gray-400",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "Acme Inc.",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "text-gray-900 placeholder-gray-400",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "acme.com",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "text-gray-900 placeholder-gray-400",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "you@company.com",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "text-gray-900 placeholder-gray-400",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "••••••••",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "text-gray-900 placeholder-gray-400",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "First Name",
+       2.5,
+       "#4b5563",
+       "#111111",
+       "text-gray-600",
+       "contrast",
+       "text"
+      ],
+      [
+       "Company Name",
+       2.5,
+       "#4b5563",
+       "#111111",
+       "text-gray-600",
+       "contrast",
+       "text"
+      ],
+      [
+       "Company Website",
+       2.5,
+       "#4b5563",
+       "#111111",
+       "text-gray-600",
+       "contrast",
+       "text"
+      ],
+      [
+       "Email Address",
+       2.5,
+       "#4b5563",
+       "#111111",
+       "text-gray-600",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 22,
+     "failures": 12,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 12
+     },
+     "svgFailures": 0,
+     "worst": 1.94,
+     "top": [
+      [
+       "Password Requirements:",
+       1.94,
+       "#f5a623",
+       "#f9fafb",
+       "text-[#F5A623]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Jane",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "text-gray-900 placeholder-gray-400",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "Acme Inc.",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "text-gray-900 placeholder-gray-400",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "acme.com",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "text-gray-900 placeholder-gray-400",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "you@company.com",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "text-gray-900 placeholder-gray-400",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "••••••••",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "text-gray-900 placeholder-gray-400",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "First Name",
+       2.5,
+       "#4b5563",
+       "#111111",
+       "text-gray-600",
+       "contrast",
+       "text"
+      ],
+      [
+       "Company Name",
+       2.5,
+       "#4b5563",
+       "#111111",
+       "text-gray-600",
+       "contrast",
+       "text"
+      ],
+      [
+       "Company Website",
+       2.5,
+       "#4b5563",
+       "#111111",
+       "text-gray-600",
+       "contrast",
+       "text"
+      ],
+      [
+       "Email Address",
+       2.5,
+       "#4b5563",
+       "#111111",
+       "text-gray-600",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "onboarding": {
+   "path": "/onboarding",
+   "group": "onboarding",
+   "scope": "other",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 61,
+     "failures": 41,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 41
+     },
+     "svgFailures": 0,
+     "worst": 1.06,
+     "top": [
+      [
+       "Business Essentials",
+       1.06,
+       "#111827",
+       "#111111",
+       "text-gray-900",
+       "contrast",
+       "text"
+      ],
+      [
+       "Business to Business",
+       1.82,
+       "#3a414a",
+       "#111111",
+       "text-gray-600",
+       "contrast",
+       "text"
+      ],
+      [
+       "Business to Consumer",
+       1.82,
+       "#3a414a",
+       "#111111",
+       "text-gray-600",
+       "contrast",
+       "text"
+      ],
+      [
+       "B2B & B2C",
+       1.82,
+       "#3a414a",
+       "#111111",
+       "text-gray-600",
+       "contrast",
+       "text"
+      ],
+      [
+       "Well known locally",
+       1.82,
+       "#3a414a",
+       "#111111",
+       "text-gray-600",
+       "contrast",
+       "text"
+      ],
+      [
+       "Building our name",
+       1.82,
+       "#3a414a",
+       "#111111",
+       "text-gray-600",
+       "contrast",
+       "text"
+      ],
+      [
+       "Company Name",
+       1.83,
+       "#374151",
+       "#111111",
+       "text-gray-700",
+       "contrast",
+       "text"
+      ],
+      [
+       "Mobile Number",
+       1.83,
+       "#374151",
+       "#111111",
+       "text-gray-700",
+       "contrast",
+       "text"
+      ],
+      [
+       "Website",
+       1.83,
+       "#374151",
+       "#111111",
+       "text-gray-700",
+       "contrast",
+       "text"
+      ],
+      [
+       "Niche",
+       1.83,
+       "#374151",
+       "#111111",
+       "text-gray-700",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 61,
+     "failures": 41,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 41
+     },
+     "svgFailures": 0,
+     "worst": 1.06,
+     "top": [
+      [
+       "Business Essentials",
+       1.06,
+       "#111827",
+       "#111111",
+       "text-gray-900",
+       "contrast",
+       "text"
+      ],
+      [
+       "Business to Business",
+       1.82,
+       "#3a414a",
+       "#111111",
+       "text-gray-600",
+       "contrast",
+       "text"
+      ],
+      [
+       "Business to Consumer",
+       1.82,
+       "#3a414a",
+       "#111111",
+       "text-gray-600",
+       "contrast",
+       "text"
+      ],
+      [
+       "B2B & B2C",
+       1.82,
+       "#3a414a",
+       "#111111",
+       "text-gray-600",
+       "contrast",
+       "text"
+      ],
+      [
+       "Well known locally",
+       1.82,
+       "#3a414a",
+       "#111111",
+       "text-gray-600",
+       "contrast",
+       "text"
+      ],
+      [
+       "Building our name",
+       1.82,
+       "#3a414a",
+       "#111111",
+       "text-gray-600",
+       "contrast",
+       "text"
+      ],
+      [
+       "Company Name",
+       1.83,
+       "#374151",
+       "#111111",
+       "text-gray-700",
+       "contrast",
+       "text"
+      ],
+      [
+       "Mobile Number",
+       1.83,
+       "#374151",
+       "#111111",
+       "text-gray-700",
+       "contrast",
+       "text"
+      ],
+      [
+       "Website",
+       1.83,
+       "#374151",
+       "#111111",
+       "text-gray-700",
+       "contrast",
+       "text"
+      ],
+      [
+       "Niche",
+       1.83,
+       "#374151",
+       "#111111",
+       "text-gray-700",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  }
+ }
+}
