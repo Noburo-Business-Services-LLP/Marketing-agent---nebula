@@ -60,8 +60,19 @@ const PROVIDER_RATES = {
   elevenlabs_music_per_30s: 0.12,
 
   // Serper / scraping for competitor intel — per lookup.
-  serper_per_search: 0.001
+  serper_per_search: 0.001,
+
+  // fal.ai bytedance/seedance-2.0 (text-to-video and reference-to-video) —
+  // billed per output second at 720p, so a clip's cost scales with its
+  // length. LIST PRICE: verify against the first fal.ai invoice, because
+  // 1080p and audio-on are billed differently and we only generate 720p.
+  seedance_720p_per_sec: 0.3034
 };
+
+// Length of one hero clip. Seedance bills by the second, so this is what turns
+// the per-second rate into a per-clip price; heroVideoService also uses it as
+// the cap on a requested duration, so price and output cannot drift apart.
+const HERO_CLIP_SECONDS = 15;
 
 // ---------------------------------------------------------------------------
 // 1b. Infrastructure we pay for whether or not a model is involved
@@ -207,7 +218,15 @@ const ACTION_USD = {
   strategic_post: gpt4o(TOKENS.creative_director) + gpt4o(TOKENS.art_director) + image + gpt4o(TOKENS.caption_only) + assetCost(INFRA.mb_per_image),
   event_post: gpt4o(TOKENS.creative_director) + gpt4o(TOKENS.art_director) + image + gpt4o(TOKENS.caption_only) + assetCost(INFRA.mb_per_image),
 
-  competitor_scrape: PROVIDER_RATES.serper_per_search
+  competitor_scrape: PROVIDER_RATES.serper_per_search,
+
+  // --- hero video ----------------------------------------------------------
+  // One Seedance clip of HERO_CLIP_SECONDS, plus storing and serving it once
+  // as a scene-sized clip. No image, narration or merge step: the model returns
+  // a finished clip.
+  hero_video_clip:
+    (PROVIDER_RATES.seedance_720p_per_sec * HERO_CLIP_SECONDS) +
+    assetCost(INFRA.mb_per_scene_clip)
 };
 
 // ---------------------------------------------------------------------------
@@ -223,11 +242,13 @@ const ACTION_USD = {
 //
 // Video carries more because its failure profile is worse in both directions:
 // a Kling clip fails or comes back unusable far more often than an image does,
-// and each miss costs several times what an image miss costs. The old model
+// and each miss costs several times what an image miss costs. hero_video_clip
+// takes the same 3.2x: it is a single 15s generation at ~$4.5, so a clip that
+// comes back unusable costs several times an image miss and gets re-rolled. The old model
 // (see the original ai_feature_costs sheet) used a flat 2.2x across the board,
 // but that sheet had no video in it at all — every line was an image or a
 // text call.
-const MARGIN = { default: 2.5, video_base: 3.2, video_generated: 3.2 };
+const MARGIN = { default: 2.5, video_base: 3.2, video_generated: 3.2, hero_video_clip: 3.2 };
 const marginFor = (action) => MARGIN[action] || MARGIN.default;
 
 // What one Quark is worth.
@@ -292,6 +313,7 @@ const ACTION_UNITS = {
   rival_post: 'per post',
   strategic_post: 'per post',
   event_post: 'per post',
+  hero_video_clip: 'per clip',
   competitor_scrape: 'free'
 };
 
@@ -500,7 +522,7 @@ for (const [name, plan] of Object.entries(PLANS)) {
 }
 
 module.exports = {
-  PROVIDER_RATES, INFRA, ACTION_USD, QUARK_COSTS, ACTION_UNITS,
+  PROVIDER_RATES, HERO_CLIP_SECONDS, INFRA, ACTION_USD, QUARK_COSTS, ACTION_UNITS,
   MARGIN, marginFor, USD_PER_QUARK, INR_PER_USD, PLANS,
   LABOUR, RETRY_FACTOR, OBSERVED_CAMPAIGN_FAILURE_RATE, DELIVERED, SERVICE_MARKUP,
   PIPELINE_SECONDS, videoWallClockSeconds

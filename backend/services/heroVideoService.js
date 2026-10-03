@@ -22,11 +22,7 @@ const DEFAULT_TEXT_MODEL = 'bytedance/seedance-2.0/text-to-video';
 const DEFAULT_REF_MODEL = 'bytedance/seedance-2.0/reference-to-video';
 const DEFAULT_LIMIT = 2;
 
-let HERO_CLIP_SECONDS = 15; // TODO Task 2: import from ../config/apiCosts
-try {
-  const c = require('../config/apiCosts');
-  if (Number.isFinite(c && c.HERO_CLIP_SECONDS)) HERO_CLIP_SECONDS = c.HERO_CLIP_SECONDS;
-} catch (_) { /* fallback to 15 */ }
+const { HERO_CLIP_SECONDS } = require('../config/apiCosts');
 
 function validateRefUrls(urls) {
   if (urls === undefined || urls === null) return [];
