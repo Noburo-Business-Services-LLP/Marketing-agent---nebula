@@ -97,6 +97,7 @@ const productRoutes = require('./routes/products');
 const promptRoutes = require('./routes/prompts');
 const carouselRoutes = require('./routes/carousels');
 const videoGenerationRoutes = require('./routes/videoGeneration');
+const heroVideoRoutes = require('./routes/heroVideo');
 const aiMemoryRoutes = require('./routes/aiMemory');
 const influencerRoutes = require('./routes/influencerRoutes');
 const collaborationRoutes = require('./routes/collaborationRoutes');
@@ -445,6 +446,7 @@ app.use('/api/prompts', promptRoutes);
 app.use('/api/carousels', carouselRoutes);
 // Video generation has its own per-route limiters (job polling must not trip AI limiter).
 app.use('/api/video-generation', videoGenerationRoutes);
+app.use('/api/hero-video', heroVideoRoutes);
 app.use('/api/ai-memory', aiMemoryRoutes);
 app.use('/api/influencers', influencerRoutes);
 app.use('/api/collaborations', collaborationRoutes);
