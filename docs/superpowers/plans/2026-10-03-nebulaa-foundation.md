@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Correction (2026-10-03, owner instruction):** the shell uses the NEW logo `/assets/brand/logo-nebulaa.png` (navy wordmark with sun, as on the website navbar). Wherever this plan says `logo-horizontal-light.png`, read `logo-nebulaa.png`; the old horizontal "Founder OS" logo was removed in commit 5a54ad7.
+
 **Goal:** Turn the Gravity app shell into Nebulaa: website palette and font in the design tokens, light only, the Nebulaa logo, an app switcher (Content active, Outreach and Lead generation "Coming soon"), and no customer-visible "Gravity" text.
 
 **Architecture:** The app already styles the `Gravity*` pages and the shell through `--gv-*` CSS tokens in `frontend/index.html`, so one token remap re-skins them. `ThemeContext` keeps its API (36 files import it) but is forced to light. The switcher is a small component driven by one data array in a pure module that has real tests. Visible-string renames are protected by a scanning test with an explicit allowlist.
