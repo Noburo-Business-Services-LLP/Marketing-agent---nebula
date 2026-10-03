@@ -1,0 +1,6150 @@
+{
+ "generatedAt": "2026-10-03T16:42:05.072Z",
+ "widths": [
+  1280,
+  375
+ ],
+ "totals": {
+  "375": {
+   "routes": 51,
+   "checked": 1556,
+   "failures": 432,
+   "unknown": 32,
+   "routesWithFailures": 46
+  },
+  "1280": {
+   "routes": 51,
+   "checked": 2703,
+   "failures": 512,
+   "unknown": 40,
+   "routesWithFailures": 49
+  }
+ },
+ "routes": {
+  "dashboard": {
+   "path": "/dashboard",
+   "group": "shell",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 25,
+     "failures": 4,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 2.99,
+     "top": [
+      [
+       "your eye",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]"
+      ],
+      [
+       "1 post · 2 platforms",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "draft",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "vs. last 7d",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 56,
+     "failures": 5,
+     "unknown": 8,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 2.99,
+     "top": [
+      [
+       "your eye",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]"
+      ],
+      [
+       "1 post · 2 platforms",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "draft",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "vs. last 7d",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70"
+      ]
+     ]
+    }
+   }
+  },
+  "dashboard-classic": {
+   "path": "/dashboard-classic",
+   "group": "shell",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 91,
+     "failures": 47,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1,
+     "top": [
+      [
+       "Sat",
+       1,
+       "#f5a623",
+       "#f5a623",
+       "text-[#ffcc29]"
+      ],
+      [
+       "Content Strategist",
+       1.65,
+       "#f5a623",
+       "#fee3d0",
+       "text-[#ffcc29]"
+      ],
+      [
+       "i",
+       1.72,
+       "#f5a623",
+       "#e5ecff",
+       "text-[#ffcc29]"
+      ],
+      [
+       "i",
+       1.72,
+       "#f5a623",
+       "#e5ecff",
+       "text-[#ffcc29]"
+      ],
+      [
+       "Diwali sweets box",
+       1.95,
+       "#f5f4f1",
+       "#f59e0b",
+       "text-white"
+      ],
+      [
+       "09:00 • instagram",
+       1.95,
+       "#f5f4f1",
+       "#f59e0b",
+       "text-white/80"
+      ],
+      [
+       "National",
+       2.55,
+       "#f5f4f1",
+       "#f97316",
+       "text-white/80"
+      ],
+      [
+       "Festival",
+       3.21,
+       "#f5f4f1",
+       "#ec4899",
+       "text-white/80"
+      ],
+      [
+       "International",
+       3.34,
+       "#f5f4f1",
+       "#3b82f6",
+       "text-white/80"
+      ],
+      [
+       "Add competitors to track their activity",
+       3.65,
+       "#7e8084",
+       "#f5f5f5",
+       "text-[#070A12]/50"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 123,
+     "failures": 53,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1,
+     "top": [
+      [
+       "Sat",
+       1,
+       "#f5a623",
+       "#f5a623",
+       "text-[#ffcc29]"
+      ],
+      [
+       "Content Strategist",
+       1.65,
+       "#f5a623",
+       "#fee3d0",
+       "text-[#ffcc29]"
+      ],
+      [
+       "i",
+       1.72,
+       "#f5a623",
+       "#e5ecff",
+       "text-[#ffcc29]"
+      ],
+      [
+       "i",
+       1.72,
+       "#f5a623",
+       "#e5ecff",
+       "text-[#ffcc29]"
+      ],
+      [
+       "i",
+       1.72,
+       "#f5a623",
+       "#e5ecff",
+       "text-[#ffcc29]"
+      ],
+      [
+       "Diwali sweets box",
+       1.95,
+       "#f5f4f1",
+       "#f59e0b",
+       "text-white"
+      ],
+      [
+       "09:00 • instagram",
+       1.95,
+       "#f5f4f1",
+       "#f59e0b",
+       "text-white/80"
+      ],
+      [
+       "week",
+       2.03,
+       "#f5a623",
+       "#ffffff",
+       "text-[#ffcc29]"
+      ],
+      [
+       "Gandhi Jayanti",
+       2.55,
+       "#f5f4f1",
+       "#f97316",
+       "text-white"
+      ],
+      [
+       "National",
+       2.55,
+       "#f5f4f1",
+       "#f97316",
+       "text-white/80"
+      ]
+     ]
+    }
+   }
+  },
+  "content-calendar-plan": {
+   "path": "/content-calendar",
+   "group": "shell",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 17,
+     "failures": 10,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 1,
+     "worst": 1.02,
+     "top": [
+      [
+       "Plan",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Schedule",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "My default language",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "10",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1] group-hover:text-[#F5A623]"
+      ],
+      [
+       "Business Plan",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/50"
+      ],
+      [
+       "english",
+       1.02,
+       "#f5f4f1",
+       "#fbf6eb",
+       "text-white/45"
+      ],
+      [
+       "0 Weeks",
+       1.02,
+       "#f5f4f1",
+       "#fbf6eb",
+       "text-white/45"
+      ],
+      [
+       "Off",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/40"
+      ],
+      [
+       "Anything specific to focus on this month",
+       1.03,
+       "#fcf8f0",
+       "#fbf5ea",
+       "text-[#F5F4F1] placeholder:text-white/30"
+      ],
+      [
+       "planned",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 40,
+     "failures": 11,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 1,
+     "worst": 1.02,
+     "top": [
+      [
+       "Plan",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Schedule",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "My default language",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "10",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1] group-hover:text-[#F5A623]"
+      ],
+      [
+       "Business Plan",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/50"
+      ],
+      [
+       "english",
+       1.02,
+       "#f5f4f1",
+       "#fbf6eb",
+       "text-white/45"
+      ],
+      [
+       "0 Weeks",
+       1.02,
+       "#f5f4f1",
+       "#fbf6eb",
+       "text-white/45"
+      ],
+      [
+       "Off",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/40"
+      ],
+      [
+       "Anything specific to focus on this month",
+       1.03,
+       "#fcf8f0",
+       "#fbf5ea",
+       "text-[#F5F4F1] placeholder:text-white/30"
+      ],
+      [
+       "planned",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]"
+      ]
+     ]
+    }
+   }
+  },
+  "content-calendar-schedule": {
+   "path": "/content-calendar",
+   "group": "shell",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 60,
+     "failures": 15,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "Plan",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Schedule",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "28",
+       1.5,
+       "#d0c7b8",
+       "#f8f2e8",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "29",
+       1.5,
+       "#d0c7b8",
+       "#f8f2e8",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "30",
+       1.5,
+       "#d0c7b8",
+       "#f8f2e8",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "1",
+       1.5,
+       "#d0c7b8",
+       "#f8f2e8",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "2026",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]"
+      ],
+      [
+       "·",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "MON",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "TUE",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 89,
+     "failures": 16,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "Plan",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Schedule",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "28",
+       1.5,
+       "#d0c7b8",
+       "#f8f2e8",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "29",
+       1.5,
+       "#d0c7b8",
+       "#f8f2e8",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "30",
+       1.5,
+       "#d0c7b8",
+       "#f8f2e8",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "1",
+       1.5,
+       "#d0c7b8",
+       "#f8f2e8",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "2026",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]"
+      ],
+      [
+       "·",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "MON",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "TUE",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]"
+      ]
+     ]
+    }
+   }
+  },
+  "content-calendar-grid": {
+   "path": "/content-calendar-grid",
+   "group": "shell",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 58,
+     "failures": 13,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1.5,
+     "top": [
+      [
+       "28",
+       1.5,
+       "#d0c7b8",
+       "#f8f2e8",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "29",
+       1.5,
+       "#d0c7b8",
+       "#f8f2e8",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "30",
+       1.5,
+       "#d0c7b8",
+       "#f8f2e8",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "1",
+       1.5,
+       "#d0c7b8",
+       "#f8f2e8",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "2026",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]"
+      ],
+      [
+       "·",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "MON",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "TUE",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "WED",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "THU",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 87,
+     "failures": 14,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1.5,
+     "top": [
+      [
+       "28",
+       1.5,
+       "#d0c7b8",
+       "#f8f2e8",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "29",
+       1.5,
+       "#d0c7b8",
+       "#f8f2e8",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "30",
+       1.5,
+       "#d0c7b8",
+       "#f8f2e8",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "1",
+       1.5,
+       "#d0c7b8",
+       "#f8f2e8",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "2026",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]"
+      ],
+      [
+       "·",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "MON",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "TUE",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "WED",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "THU",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]"
+      ]
+     ]
+    }
+   }
+  },
+  "content-calendar-classic": {
+   "path": "/content-calendar-classic",
+   "group": "shell",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 15,
+     "failures": 8,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 1,
+     "worst": 1.02,
+     "top": [
+      [
+       "My default language",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "10",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1] group-hover:text-[#F5A623]"
+      ],
+      [
+       "Business Plan",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/50"
+      ],
+      [
+       "english",
+       1.02,
+       "#f5f4f1",
+       "#fbf6eb",
+       "text-white/45"
+      ],
+      [
+       "0 Weeks",
+       1.02,
+       "#f5f4f1",
+       "#fbf6eb",
+       "text-white/45"
+      ],
+      [
+       "Off",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/40"
+      ],
+      [
+       "Anything specific to focus on this month",
+       1.03,
+       "#fcf8f0",
+       "#fbf5ea",
+       "text-[#F5F4F1] placeholder:text-white/30"
+      ],
+      [
+       "planned",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 38,
+     "failures": 9,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 1,
+     "worst": 1.02,
+     "top": [
+      [
+       "My default language",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "10",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1] group-hover:text-[#F5A623]"
+      ],
+      [
+       "Business Plan",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/50"
+      ],
+      [
+       "english",
+       1.02,
+       "#f5f4f1",
+       "#fbf6eb",
+       "text-white/45"
+      ],
+      [
+       "0 Weeks",
+       1.02,
+       "#f5f4f1",
+       "#fbf6eb",
+       "text-white/45"
+      ],
+      [
+       "Off",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/40"
+      ],
+      [
+       "Anything specific to focus on this month",
+       1.03,
+       "#fcf8f0",
+       "#fbf5ea",
+       "text-[#F5F4F1] placeholder:text-white/30"
+      ],
+      [
+       "planned",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]"
+      ],
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70"
+      ]
+     ]
+    }
+   }
+  },
+  "idea-inbox": {
+   "path": "/idea-inbox",
+   "group": "shell",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 23,
+     "failures": 14,
+     "unknown": 0,
+     "disabled": 1,
+     "placeholdersFailing": 2,
+     "worst": 1.02,
+     "top": [
+      [
+       "Saw a great ad about founder burnout — w",
+       1.02,
+       "#fcf8f1",
+       "#fbf5eb",
+       "text-[#F5F4F1] placeholder-white/30"
+      ],
+      [
+       "Attach image",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/70"
+      ],
+      [
+       "Link (optional)",
+       1.02,
+       "#fcf8f1",
+       "#fbf5eb",
+       "text-white/80 placeholder-white/30"
+      ],
+      [
+       "Have a list already?",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Paste rows, or upload a spreadsheet — on",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/45"
+      ],
+      [
+       "Upload file",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/70"
+      ],
+      [
+       "Paste a list",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/70"
+      ],
+      [
+       "Show the 5am bake in a reel",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Dismiss",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/60"
+      ],
+      [
+       "Customer birthday cake gallery",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 46,
+     "failures": 15,
+     "unknown": 0,
+     "disabled": 1,
+     "placeholdersFailing": 2,
+     "worst": 1.02,
+     "top": [
+      [
+       "Saw a great ad about founder burnout — w",
+       1.02,
+       "#fcf8f1",
+       "#fbf5eb",
+       "text-[#F5F4F1] placeholder-white/30"
+      ],
+      [
+       "Attach image",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/70"
+      ],
+      [
+       "Link (optional)",
+       1.02,
+       "#fcf8f1",
+       "#fbf5eb",
+       "text-white/80 placeholder-white/30"
+      ],
+      [
+       "Have a list already?",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Paste rows, or upload a spreadsheet — on",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/45"
+      ],
+      [
+       "Upload file",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/70"
+      ],
+      [
+       "Paste a list",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/70"
+      ],
+      [
+       "Show the 5am bake in a reel",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Dismiss",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/60"
+      ],
+      [
+       "Customer birthday cake gallery",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]"
+      ]
+     ]
+    }
+   }
+  },
+  "campaigns": {
+   "path": "/campaigns",
+   "group": "shell",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 44,
+     "failures": 8,
+     "unknown": 3,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 2.99,
+     "top": [
+      [
+       "working on",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]"
+      ],
+      [
+       "Edit",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)] group-hover:text-[var(--gv-accent-text)]"
+      ],
+      [
+       "Edit",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)] group-hover:text-[var(--gv-accent-text)]"
+      ],
+      [
+       "Edit",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)] group-hover:text-[var(--gv-accent-text)]"
+      ],
+      [
+       "Edit",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)] group-hover:text-[var(--gv-accent-text)]"
+      ],
+      [
+       "Edit",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)] group-hover:text-[var(--gv-accent-text)]"
+      ],
+      [
+       "·",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "Logo position",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 69,
+     "failures": 10,
+     "unknown": 3,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 2.99,
+     "top": [
+      [
+       "working on",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]"
+      ],
+      [
+       "Edit",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)] group-hover:text-[var(--gv-accent-text)]"
+      ],
+      [
+       "Edit",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)] group-hover:text-[var(--gv-accent-text)]"
+      ],
+      [
+       "Edit",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)] group-hover:text-[var(--gv-accent-text)]"
+      ],
+      [
+       "Edit",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)] group-hover:text-[var(--gv-accent-text)]"
+      ],
+      [
+       "Edit",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)] group-hover:text-[var(--gv-accent-text)]"
+      ],
+      [
+       "/",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "·",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "Logo position",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70"
+      ]
+     ]
+    }
+   }
+  },
+  "campaigns-classic": {
+   "path": "/campaigns-classic",
+   "group": "shell",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 22,
+     "failures": 6,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1.87,
+     "top": [
+      [
+       "Create",
+       1.87,
+       "#f5a623",
+       "#fbf5ea",
+       "text-[#ffcc29]"
+      ],
+      [
+       "All Campaigns",
+       1.87,
+       "#f5a623",
+       "#fbf5ea",
+       "text-[#070A12] hover:text-[#ffcc29]"
+      ],
+      [
+       "Drafts",
+       1.87,
+       "#f5a623",
+       "#fbf5ea",
+       "text-[#070A12] hover:text-[#ffcc29]"
+      ],
+      [
+       "Scheduled",
+       1.87,
+       "#f5a623",
+       "#fbf5ea",
+       "text-[#070A12] hover:text-[#ffcc29]"
+      ],
+      [
+       "Template-Based",
+       3.19,
+       "#d97706",
+       "#ffffff",
+       "text-amber-600"
+      ],
+      [
+       "Direct Upload",
+       3.3,
+       "#16a34a",
+       "#ffffff",
+       "text-green-600"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 49,
+     "failures": 10,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1.87,
+     "top": [
+      [
+       "Create",
+       1.87,
+       "#f5a623",
+       "#fbf5ea",
+       "text-[#ffcc29]"
+      ],
+      [
+       "All Campaigns",
+       1.87,
+       "#f5a623",
+       "#fbf5ea",
+       "text-[#070A12] hover:text-[#ffcc29]"
+      ],
+      [
+       "Drafts",
+       1.87,
+       "#f5a623",
+       "#fbf5ea",
+       "text-[#070A12] hover:text-[#ffcc29]"
+      ],
+      [
+       "Scheduled",
+       1.87,
+       "#f5a623",
+       "#fbf5ea",
+       "text-[#070A12] hover:text-[#ffcc29]"
+      ],
+      [
+       "Posted",
+       1.87,
+       "#f5a623",
+       "#fbf5ea",
+       "text-[#070A12] hover:text-[#ffcc29]"
+      ],
+      [
+       "Archived",
+       1.87,
+       "#f5a623",
+       "#fbf5ea",
+       "text-[#070A12] hover:text-[#ffcc29]"
+      ],
+      [
+       "Template-Based",
+       3.19,
+       "#d97706",
+       "#ffffff",
+       "text-amber-600"
+      ],
+      [
+       "Direct Upload",
+       3.3,
+       "#16a34a",
+       "#ffffff",
+       "text-green-600"
+      ],
+      [
+       "/",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70"
+      ]
+     ]
+    }
+   }
+  },
+  "drafts-review": {
+   "path": "/drafts",
+   "group": "shell",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 32,
+     "failures": 3,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 1,
+     "worst": 2.99,
+     "top": [
+      [
+       "once-over",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]"
+      ],
+      [
+       "Empty — Regenerate will ask the Creative",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "No resolved prompt was recorded for this",
+       3.44,
+       "#8f836e",
+       "#fbf5eb",
+       "text-[var(--gv-text-secondary)] placeholder:text-[var(--gv-text-muted)]"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 57,
+     "failures": 4,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 1,
+     "worst": 2.99,
+     "top": [
+      [
+       "once-over",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]"
+      ],
+      [
+       "Empty — Regenerate will ask the Creative",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "No resolved prompt was recorded for this",
+       3.44,
+       "#8f836e",
+       "#fbf5eb",
+       "text-[var(--gv-text-secondary)] placeholder:text-[var(--gv-text-muted)]"
+      ],
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70"
+      ]
+     ]
+    }
+   }
+  },
+  "drafts-all": {
+   "path": "/drafts",
+   "group": "shell",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 26,
+     "failures": 11,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1.34,
+     "top": [
+      [
+       "scheduled",
+       1.34,
+       "#93c5fd",
+       "#d8dee7",
+       "text-blue-300"
+      ],
+      [
+       "published",
+       1.47,
+       "#34d399",
+       "#d2e7d6",
+       "text-emerald-400"
+      ],
+      [
+       "once-over",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]"
+      ],
+      [
+       "Fresh out of the oven at 7am. Come early",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "Tomorrow · 22:07",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "Fresh out of the oven at 7am. Come early",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "Mon 5 Oct · 22:07",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "Fresh out of the oven at 7am. Come early",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "Tue 6 Oct · 22:07",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "Fresh out of the oven at 7am. Come early",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)]"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 51,
+     "failures": 12,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1.34,
+     "top": [
+      [
+       "scheduled",
+       1.34,
+       "#93c5fd",
+       "#d8dee7",
+       "text-blue-300"
+      ],
+      [
+       "published",
+       1.47,
+       "#34d399",
+       "#d2e7d6",
+       "text-emerald-400"
+      ],
+      [
+       "once-over",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]"
+      ],
+      [
+       "Fresh out of the oven at 7am. Come early",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "Tomorrow · 22:02",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "Fresh out of the oven at 7am. Come early",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "Mon 5 Oct · 22:02",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "Fresh out of the oven at 7am. Come early",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "Tue 6 Oct · 22:02",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "Fresh out of the oven at 7am. Come early",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)]"
+      ]
+     ]
+    }
+   }
+  },
+  "reels": {
+   "path": "/reels",
+   "group": "shell",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 13,
+     "failures": 5,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1.05,
+     "top": [
+      [
+       "Edit the prompts",
+       1.05,
+       "#f5f4f1",
+       "#f8fafc",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Create",
+       1.05,
+       "#f5f4f1",
+       "#f8fafc",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Drafts",
+       1.05,
+       "#f5f4f1",
+       "#f8fafc",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Created",
+       1.05,
+       "#f5f4f1",
+       "#f8fafc",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "All AI Videos",
+       1.06,
+       "#f5f4f1",
+       "#f9fbfc",
+       "text-[#F5F4F1]"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 38,
+     "failures": 8,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1.05,
+     "top": [
+      [
+       "Edit the prompts",
+       1.05,
+       "#f5f4f1",
+       "#f8fafc",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Create",
+       1.05,
+       "#f5f4f1",
+       "#f8fafc",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Drafts",
+       1.05,
+       "#f5f4f1",
+       "#f8fafc",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Created",
+       1.05,
+       "#f5f4f1",
+       "#f8fafc",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Scheduled",
+       1.05,
+       "#f5f4f1",
+       "#f8fafc",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Posted",
+       1.05,
+       "#f5f4f1",
+       "#f8fafc",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "All AI Videos",
+       1.06,
+       "#f5f4f1",
+       "#f9fbfc",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70"
+      ]
+     ]
+    }
+   }
+  },
+  "reels-hero": {
+   "path": "/reels/hero",
+   "group": "shell",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 7,
+     "failures": 1,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 2.99,
+     "top": [
+      [
+       "Reels",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 30,
+     "failures": 2,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 2.99,
+     "top": [
+      [
+       "Reels",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]"
+      ],
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70"
+      ]
+     ]
+    }
+   }
+  },
+  "upload": {
+   "path": "/upload",
+   "group": "shell",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 8,
+     "failures": 3,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "Drop a file, or click to choose",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Images and video · up to 120MB",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/40"
+      ],
+      [
+       "something",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 31,
+     "failures": 4,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "Drop a file, or click to choose",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Images and video · up to 120MB",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/40"
+      ],
+      [
+       "something",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]"
+      ],
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70"
+      ]
+     ]
+    }
+   }
+  },
+  "ad-campaigns": {
+   "path": "/ad-campaigns",
+   "group": "shell",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 5,
+     "failures": 0,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 28,
+     "failures": 1,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 3.8,
+     "top": [
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70"
+      ]
+     ]
+    }
+   }
+  },
+  "competitors": {
+   "path": "/competitors",
+   "group": "shell",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 14,
+     "failures": 6,
+     "unknown": 0,
+     "disabled": 1,
+     "placeholdersFailing": 2,
+     "worst": 1.02,
+     "top": [
+      [
+       "Complete onboarding with your business l",
+       1.02,
+       "#f5f4f1",
+       "#fbf1e0",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Competitor Activity Feed",
+       1.1,
+       "#f5f4f1",
+       "#ffffff",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Competitors (0)",
+       1.1,
+       "#f5f4f1",
+       "#ffffff",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Filter by keyword...",
+       2.54,
+       "#9ca3af",
+       "#ffffff",
+       "text-[#070A12]"
+      ],
+      [
+       "Add a competitor by name...",
+       2.54,
+       "#9ca3af",
+       "#ffffff",
+       "text-[#070A12]"
+      ],
+      [
+       "room",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 37,
+     "failures": 7,
+     "unknown": 0,
+     "disabled": 1,
+     "placeholdersFailing": 2,
+     "worst": 1.02,
+     "top": [
+      [
+       "Complete onboarding with your business l",
+       1.02,
+       "#f5f4f1",
+       "#fbf1e0",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Competitor Activity Feed",
+       1.1,
+       "#f5f4f1",
+       "#ffffff",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Competitors (0)",
+       1.1,
+       "#f5f4f1",
+       "#ffffff",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Filter by keyword...",
+       2.54,
+       "#9ca3af",
+       "#ffffff",
+       "text-[#070A12]"
+      ],
+      [
+       "Add a competitor by name...",
+       2.54,
+       "#9ca3af",
+       "#ffffff",
+       "text-[#070A12]"
+      ],
+      [
+       "room",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]"
+      ],
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70"
+      ]
+     ]
+    }
+   }
+  },
+  "connect-socials": {
+   "path": "/connect-socials",
+   "group": "shell",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 45,
+     "failures": 17,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1,
+     "top": [
+      [
+       "Unlink",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-400 hover:text-red-500"
+      ],
+      [
+       "Secure OAuth 2.0",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/60"
+      ],
+      [
+       "Accounts",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Permissions",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Sync Status",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "instagram",
+       1.02,
+       "#f5f4f1",
+       "#f2f3e6",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "sunrisebakery",
+       1.02,
+       "#f5f4f1",
+       "#f2f3e6",
+       "text-white/55"
+      ],
+      [
+       "facebook",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Not connected",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/35"
+      ],
+      [
+       "Not connected",
+       1.03,
+       "#fcfdfe",
+       "#f8fafc",
+       "text-slate-400"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 70,
+     "failures": 20,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1,
+     "top": [
+      [
+       "Unlink",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-400 hover:text-red-500"
+      ],
+      [
+       "Secure OAuth 2.0",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/60"
+      ],
+      [
+       "Accounts",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Permissions",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Sync Status",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Social Inbox",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "AI Auto Reply",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "instagram",
+       1.02,
+       "#f5f4f1",
+       "#f2f3e6",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "sunrisebakery",
+       1.02,
+       "#f5f4f1",
+       "#f2f3e6",
+       "text-white/55"
+      ],
+      [
+       "facebook",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]"
+      ]
+     ]
+    }
+   }
+  },
+  "connect-socials-permissions": {
+   "path": "/connect-socials?tab=permissions",
+   "group": "shell",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 21,
+     "failures": 6,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "Secure OAuth 2.0",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/60"
+      ],
+      [
+       "Accounts",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Permissions",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Sync Status",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Permissions",
+       1.1,
+       "#f5f4f1",
+       "#ffffff",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "publish",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 46,
+     "failures": 9,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "Secure OAuth 2.0",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/60"
+      ],
+      [
+       "Accounts",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Permissions",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Sync Status",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Social Inbox",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "AI Auto Reply",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Permissions",
+       1.1,
+       "#f5f4f1",
+       "#ffffff",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "publish",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]"
+      ],
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70"
+      ]
+     ]
+    }
+   }
+  },
+  "connect-socials-sync": {
+   "path": "/connect-socials?tab=sync",
+   "group": "shell",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 23,
+     "failures": 6,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "Secure OAuth 2.0",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/60"
+      ],
+      [
+       "Accounts",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Permissions",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Sync Status",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Sync Status",
+       1.1,
+       "#f5f4f1",
+       "#ffffff",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "publish",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 48,
+     "failures": 9,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "Secure OAuth 2.0",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/60"
+      ],
+      [
+       "Accounts",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Permissions",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Sync Status",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Social Inbox",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "AI Auto Reply",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Sync Status",
+       1.1,
+       "#f5f4f1",
+       "#ffffff",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "publish",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]"
+      ],
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70"
+      ]
+     ]
+    }
+   }
+  },
+  "connect-socials-auto-reply": {
+   "path": "/connect-socials?tab=auto-reply",
+   "group": "shell",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 40,
+     "failures": 10,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "Secure OAuth 2.0",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/60"
+      ],
+      [
+       "Accounts",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Permissions",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Sync Status",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "3",
+       1.05,
+       "#f5f4f1",
+       "#f8fafc",
+       "text-[#070A12] placeholder-[#070A12]/50"
+      ],
+      [
+       "Suggested replies only",
+       1.1,
+       "#f5f4f1",
+       "#ffffff",
+       "text-[#070A12] placeholder-[#070A12]/50"
+      ],
+      [
+       "Professional",
+       1.1,
+       "#f5f4f1",
+       "#ffffff",
+       "text-[#070A12] placeholder-[#070A12]/50"
+      ],
+      [
+       "Friendly",
+       1.1,
+       "#f5f4f1",
+       "#ffffff",
+       "text-[#070A12] placeholder-[#070A12]/50"
+      ],
+      [
+       "Rule",
+       2.03,
+       "#f5a623",
+       "#ffffff",
+       "text-[#ffcc29]"
+      ],
+      [
+       "publish",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 65,
+     "failures": 13,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "Secure OAuth 2.0",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/60"
+      ],
+      [
+       "Accounts",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Permissions",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Sync Status",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Social Inbox",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "AI Auto Reply",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "3",
+       1.05,
+       "#f5f4f1",
+       "#f8fafc",
+       "text-[#070A12] placeholder-[#070A12]/50"
+      ],
+      [
+       "Suggested replies only",
+       1.1,
+       "#f5f4f1",
+       "#ffffff",
+       "text-[#070A12] placeholder-[#070A12]/50"
+      ],
+      [
+       "Professional",
+       1.1,
+       "#f5f4f1",
+       "#ffffff",
+       "text-[#070A12] placeholder-[#070A12]/50"
+      ],
+      [
+       "Friendly",
+       1.1,
+       "#f5f4f1",
+       "#ffffff",
+       "text-[#070A12] placeholder-[#070A12]/50"
+      ]
+     ]
+    }
+   }
+  },
+  "connect-socials-inbox": {
+   "path": "/connect-socials/inbox",
+   "group": "shell",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 27,
+     "failures": 17,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 2,
+     "worst": 1,
+     "top": [
+      [
+       "0 unread conversations",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500"
+      ],
+      [
+       "Live",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-400"
+      ],
+      [
+       "New comments, DMs, mentions, and replies",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500"
+      ],
+      [
+       "Connect social accounts and webhooks to ",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500"
+      ],
+      [
+       "Secure OAuth 2.0",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/60"
+      ],
+      [
+       "Accounts",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Permissions",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Sync Status",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Unified Social Inbox",
+       1.1,
+       "#f5f4f1",
+       "#ffffff",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Unified Inbox",
+       1.1,
+       "#f5f4f1",
+       "#ffffff",
+       "text-[#F5F4F1]"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 52,
+     "failures": 20,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 2,
+     "worst": 1,
+     "top": [
+      [
+       "0 unread conversations",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500"
+      ],
+      [
+       "Live",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-400"
+      ],
+      [
+       "New comments, DMs, mentions, and replies",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500"
+      ],
+      [
+       "Connect social accounts and webhooks to ",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500"
+      ],
+      [
+       "Secure OAuth 2.0",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/60"
+      ],
+      [
+       "Accounts",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Permissions",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Sync Status",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Social Inbox",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "AI Auto Reply",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ]
+     ]
+    }
+   }
+  },
+  "brand-assets": {
+   "path": "/brand-assets",
+   "group": "shell",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 45,
+     "failures": 16,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 2,
+     "worst": 1.02,
+     "top": [
+      [
+       "Brand",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Products & Services",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Environment",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Brand Logos",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "PNG recommended, max 10MB",
+       1.02,
+       "#fcfcfd",
+       "#f9fafb",
+       "text-gray-500"
+      ],
+      [
+       "Position: Bottom right",
+       1.02,
+       "#fcfcfd",
+       "#f9fafb",
+       "text-gray-500 hover:text-gray-700"
+      ],
+      [
+       "Brand Profile",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Select brand font",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-gray-900"
+      ],
+      [
+       "Strict (always follow brand)",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-gray-900"
+      ],
+      [
+       "Auto detect",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-gray-900"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 69,
+     "failures": 18,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 2,
+     "worst": 1.02,
+     "top": [
+      [
+       "Brand",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Products & Services",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Environment",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Voice",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Brand Logos",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "PNG recommended, max 10MB",
+       1.02,
+       "#fcfcfd",
+       "#f9fafb",
+       "text-gray-500"
+      ],
+      [
+       "Position: Bottom right",
+       1.02,
+       "#fcfcfd",
+       "#f9fafb",
+       "text-gray-500 hover:text-gray-700"
+      ],
+      [
+       "Brand Profile",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Select brand font",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-gray-900"
+      ],
+      [
+       "Strict (always follow brand)",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-gray-900"
+      ]
+     ]
+    }
+   }
+  },
+  "brand-assets-products": {
+   "path": "/brand-assets?tab=products",
+   "group": "shell",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 40,
+     "failures": 19,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 1,
+     "worst": 1.01,
+     "top": [
+      [
+       "Products & Services",
+       1.01,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "What the business offers, with images an",
+       1.01,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/45"
+      ],
+      [
+       "Brand",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Products & Services",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Environment",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "2",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "2",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "0",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "2",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "All Categories",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-slate-900"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 64,
+     "failures": 21,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 1,
+     "worst": 1.01,
+     "top": [
+      [
+       "Products & Services",
+       1.01,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "What the business offers, with images an",
+       1.01,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/45"
+      ],
+      [
+       "Brand",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Products & Services",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Environment",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Voice",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "2",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "2",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "0",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "2",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]"
+      ]
+     ]
+    }
+   }
+  },
+  "brand-assets-environment": {
+   "path": "/brand-assets?tab=environment",
+   "group": "shell",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 16,
+     "failures": 8,
+     "unknown": 1,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "Brand",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Products & Services",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Environment",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Your space",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Photos of your shop, showroom, workshop ",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/45"
+      ],
+      [
+       "1 saved",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55"
+      ],
+      [
+       "Add photos",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/40 hover:text-[#F5A623]"
+      ],
+      [
+       "look",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 40,
+     "failures": 10,
+     "unknown": 1,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "Brand",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Products & Services",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Environment",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Voice",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Your space",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Photos of your shop, showroom, workshop ",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/45"
+      ],
+      [
+       "1 saved",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55"
+      ],
+      [
+       "Add photos",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/40 hover:text-[#F5A623]"
+      ],
+      [
+       "look",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]"
+      ],
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70"
+      ]
+     ]
+    }
+   }
+  },
+  "brand-assets-voice": {
+   "path": "/brand-assets?tab=voice",
+   "group": "shell",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 28,
+     "failures": 11,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 1,
+     "worst": 1.02,
+     "top": [
+      [
+       "Brand",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Products & Services",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Environment",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Teach Nebulaa your voice",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Paste captions from posts you have alrea",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/45"
+      ],
+      [
+       "instagram",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-gray-900"
+      ],
+      [
+       "No signals yet",
+       1.02,
+       "#fcfcfd",
+       "#f9fafb",
+       "text-gray-500"
+      ],
+      [
+       "No hashtags yet",
+       1.02,
+       "#fcfcfd",
+       "#f9fafb",
+       "text-gray-500"
+      ],
+      [
+       "Add past posts to teach your preferred m",
+       1.04,
+       "#fdfaf4",
+       "#fbf5ea",
+       "text-gray-500"
+      ],
+      [
+       "Paste a past post caption to teach struc",
+       2.35,
+       "#9ca3af",
+       "#fbf5eb",
+       "text-gray-900 placeholder-gray-400"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 52,
+     "failures": 13,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 1,
+     "worst": 1.02,
+     "top": [
+      [
+       "Brand",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Products & Services",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Environment",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Voice",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Teach Nebulaa your voice",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Paste captions from posts you have alrea",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/45"
+      ],
+      [
+       "instagram",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-gray-900"
+      ],
+      [
+       "No signals yet",
+       1.02,
+       "#fcfcfd",
+       "#f9fafb",
+       "text-gray-500"
+      ],
+      [
+       "No hashtags yet",
+       1.02,
+       "#fcfcfd",
+       "#f9fafb",
+       "text-gray-500"
+      ],
+      [
+       "Add past posts to teach your preferred m",
+       1.04,
+       "#fdfaf4",
+       "#fbf5ea",
+       "text-gray-500"
+      ]
+     ]
+    }
+   }
+  },
+  "analytics": {
+   "path": "/analytics",
+   "group": "shell",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 22,
+     "failures": 5,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1.52,
+     "top": [
+      [
+       "+3%",
+       1.52,
+       "#4ade80",
+       "#f4efe5",
+       "text-[#4ADE80]"
+      ],
+      [
+       "0",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]"
+      ],
+      [
+       "awaiting data",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "No reach data yet.",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "No posts yet. Once you publish, your bes",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)]"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 45,
+     "failures": 6,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1.52,
+     "top": [
+      [
+       "+3%",
+       1.52,
+       "#4ade80",
+       "#f4efe5",
+       "text-[#4ADE80]"
+      ],
+      [
+       "0",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]"
+      ],
+      [
+       "awaiting data",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "No reach data yet.",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "No posts yet. Once you publish, your bes",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70"
+      ]
+     ]
+    }
+   }
+  },
+  "analytics-classic": {
+   "path": "/analytics-classic",
+   "group": "shell",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 11,
+     "failures": 1,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1,
+     "top": [
+      [
+       "Refresh",
+       1,
+       "#070a12",
+       "#0a0a0a",
+       "text-[#070A12]"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 38,
+     "failures": 5,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1,
+     "top": [
+      [
+       "Refresh",
+       1,
+       "#070a12",
+       "#0a0a0a",
+       "text-[#070A12]"
+      ],
+      [
+       "Post Analytics",
+       1.04,
+       "#f8f9fa",
+       "#f3f4f6",
+       "text-gray-500 hover:text-[#070A12]"
+      ],
+      [
+       "Boosted Ads",
+       1.04,
+       "#f8f9fa",
+       "#f3f4f6",
+       "text-gray-500 hover:text-[#070A12]"
+      ],
+      [
+       "Ad History",
+       1.04,
+       "#f8f9fa",
+       "#f3f4f6",
+       "text-gray-500 hover:text-[#070A12]"
+      ],
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70"
+      ]
+     ]
+    }
+   }
+  },
+  "seo": {
+   "path": "/seo",
+   "group": "shell",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 24,
+     "failures": 11,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1,
+     "top": [
+      [
+       "Refresh",
+       1,
+       "#070a12",
+       "#0a0a0a",
+       "text-[#070A12]"
+      ],
+      [
+       "SEO Score",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500"
+      ],
+      [
+       "/100",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500"
+      ],
+      [
+       "Content Score",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500"
+      ],
+      [
+       "/100",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500"
+      ],
+      [
+       "Hashtag Score",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500"
+      ],
+      [
+       "/100",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500"
+      ],
+      [
+       "Competitor Score",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500"
+      ],
+      [
+       "/100",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500"
+      ],
+      [
+       "Run an SEO tool to generate recommendati",
+       3.72,
+       "#838589",
+       "#ffffff",
+       "text-[#070A12]/50"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 49,
+     "failures": 12,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1,
+     "top": [
+      [
+       "Refresh",
+       1,
+       "#070a12",
+       "#0a0a0a",
+       "text-[#070A12]"
+      ],
+      [
+       "SEO Score",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500"
+      ],
+      [
+       "/100",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500"
+      ],
+      [
+       "Content Score",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500"
+      ],
+      [
+       "/100",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500"
+      ],
+      [
+       "Hashtag Score",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500"
+      ],
+      [
+       "/100",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500"
+      ],
+      [
+       "Competitor Score",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500"
+      ],
+      [
+       "/100",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500"
+      ],
+      [
+       "Run an SEO tool to generate recommendati",
+       3.72,
+       "#838589",
+       "#ffffff",
+       "text-[#070A12]/50"
+      ]
+     ]
+    }
+   }
+  },
+  "seo-keywords": {
+   "path": "/seo/keywords",
+   "group": "shell",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 13,
+     "failures": 3,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 1,
+     "worst": 1,
+     "top": [
+      [
+       "Refresh",
+       1,
+       "#070a12",
+       "#0a0a0a",
+       "text-[#070A12]"
+      ],
+      [
+       "Business, product, campaign, or topic",
+       3.72,
+       "#838589",
+       "#ffffff",
+       "text-[#070A12] placeholder-[#070A12]/50"
+      ],
+      [
+       "Enter a topic to generate primary, relat",
+       3.72,
+       "#838589",
+       "#ffffff",
+       "text-[#070A12]/50"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 38,
+     "failures": 4,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 1,
+     "worst": 1,
+     "top": [
+      [
+       "Refresh",
+       1,
+       "#070a12",
+       "#0a0a0a",
+       "text-[#070A12]"
+      ],
+      [
+       "Business, product, campaign, or topic",
+       3.72,
+       "#838589",
+       "#ffffff",
+       "text-[#070A12] placeholder-[#070A12]/50"
+      ],
+      [
+       "Enter a topic to generate primary, relat",
+       3.72,
+       "#838589",
+       "#ffffff",
+       "text-[#070A12]/50"
+      ],
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70"
+      ]
+     ]
+    }
+   }
+  },
+  "seo-metadata": {
+   "path": "/seo/metadata",
+   "group": "shell",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 15,
+     "failures": 5,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 2,
+     "worst": 1,
+     "top": [
+      [
+       "Refresh",
+       1,
+       "#070a12",
+       "#0a0a0a",
+       "text-[#070A12]"
+      ],
+      [
+       "Landing page",
+       1.1,
+       "#f5f4f1",
+       "#ffffff",
+       "text-[#070A12] placeholder-[#070A12]/50"
+      ],
+      [
+       "Website page, blog, product, or campaign",
+       3.72,
+       "#838589",
+       "#ffffff",
+       "text-[#070A12] placeholder-[#070A12]/50"
+      ],
+      [
+       "Optional focus keyword",
+       3.72,
+       "#838589",
+       "#ffffff",
+       "text-[#070A12] placeholder-[#070A12]/50"
+      ],
+      [
+       "Generate titles, descriptions, focus key",
+       3.72,
+       "#838589",
+       "#ffffff",
+       "text-[#070A12]/50"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 40,
+     "failures": 6,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 2,
+     "worst": 1,
+     "top": [
+      [
+       "Refresh",
+       1,
+       "#070a12",
+       "#0a0a0a",
+       "text-[#070A12]"
+      ],
+      [
+       "Landing page",
+       1.1,
+       "#f5f4f1",
+       "#ffffff",
+       "text-[#070A12] placeholder-[#070A12]/50"
+      ],
+      [
+       "Website page, blog, product, or campaign",
+       3.72,
+       "#838589",
+       "#ffffff",
+       "text-[#070A12] placeholder-[#070A12]/50"
+      ],
+      [
+       "Optional focus keyword",
+       3.72,
+       "#838589",
+       "#ffffff",
+       "text-[#070A12] placeholder-[#070A12]/50"
+      ],
+      [
+       "Generate titles, descriptions, focus key",
+       3.72,
+       "#838589",
+       "#ffffff",
+       "text-[#070A12]/50"
+      ],
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70"
+      ]
+     ]
+    }
+   }
+  },
+  "seo-hashtags": {
+   "path": "/seo/hashtags",
+   "group": "shell",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 18,
+     "failures": 3,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 1,
+     "worst": 1,
+     "top": [
+      [
+       "Refresh",
+       1,
+       "#070a12",
+       "#0a0a0a",
+       "text-[#070A12]"
+      ],
+      [
+       "Paste post content or describe your camp",
+       3.72,
+       "#838589",
+       "#ffffff",
+       "text-[#070A12] placeholder-[#070A12]/50"
+      ],
+      [
+       "Generate platform-specific hashtags for ",
+       3.72,
+       "#838589",
+       "#ffffff",
+       "text-[#070A12]/50"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 43,
+     "failures": 4,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 1,
+     "worst": 1,
+     "top": [
+      [
+       "Refresh",
+       1,
+       "#070a12",
+       "#0a0a0a",
+       "text-[#070A12]"
+      ],
+      [
+       "Paste post content or describe your camp",
+       3.72,
+       "#838589",
+       "#ffffff",
+       "text-[#070A12] placeholder-[#070A12]/50"
+      ],
+      [
+       "Generate platform-specific hashtags for ",
+       3.72,
+       "#838589",
+       "#ffffff",
+       "text-[#070A12]/50"
+      ],
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70"
+      ]
+     ]
+    }
+   }
+  },
+  "seo-competitor": {
+   "path": "/seo/competitor",
+   "group": "shell",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 13,
+     "failures": 3,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 1,
+     "worst": 1,
+     "top": [
+      [
+       "Refresh",
+       1,
+       "#070a12",
+       "#0a0a0a",
+       "text-[#070A12]"
+      ],
+      [
+       "https://competitor.com",
+       3.72,
+       "#838589",
+       "#ffffff",
+       "text-[#070A12] placeholder-[#070A12]/50"
+      ],
+      [
+       "Analyze a competitor URL to identify key",
+       3.72,
+       "#838589",
+       "#ffffff",
+       "text-[#070A12]/50"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 38,
+     "failures": 4,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 1,
+     "worst": 1,
+     "top": [
+      [
+       "Refresh",
+       1,
+       "#070a12",
+       "#0a0a0a",
+       "text-[#070A12]"
+      ],
+      [
+       "https://competitor.com",
+       3.72,
+       "#838589",
+       "#ffffff",
+       "text-[#070A12] placeholder-[#070A12]/50"
+      ],
+      [
+       "Analyze a competitor URL to identify key",
+       3.72,
+       "#838589",
+       "#ffffff",
+       "text-[#070A12]/50"
+      ],
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70"
+      ]
+     ]
+    }
+   }
+  },
+  "influencer-portal": {
+   "path": "/influencer-portal",
+   "group": "shell",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 17,
+     "failures": 5,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1,
+     "top": [
+      [
+       "Unified multi-platform creator collabora",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500"
+      ],
+      [
+       "Total Influencers",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500"
+      ],
+      [
+       "Pending Approvals",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500"
+      ],
+      [
+       "Active Collaborations",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500"
+      ],
+      [
+       "Platform Analytics",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 42,
+     "failures": 6,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1,
+     "top": [
+      [
+       "Unified multi-platform creator collabora",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500"
+      ],
+      [
+       "Total Influencers",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500"
+      ],
+      [
+       "Pending Approvals",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500"
+      ],
+      [
+       "Active Collaborations",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500"
+      ],
+      [
+       "Platform Analytics",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500"
+      ],
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70"
+      ]
+     ]
+    }
+   }
+  },
+  "influencer-list": {
+   "path": "/influencer-portal/list",
+   "group": "shell",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 15,
+     "failures": 2,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1,
+     "top": [
+      [
+       "Create and manage multi-platform influen",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500"
+      ],
+      [
+       "No influencers yet. Add your first creat",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 40,
+     "failures": 3,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1,
+     "top": [
+      [
+       "Create and manage multi-platform influen",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500"
+      ],
+      [
+       "No influencers yet. Add your first creat",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500"
+      ],
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70"
+      ]
+     ]
+    }
+   }
+  },
+  "influencer-collaborations": {
+   "path": "/influencer-portal/collaborations",
+   "group": "shell",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 20,
+     "failures": 5,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1,
+     "top": [
+      [
+       "Manage multi-platform influencer partner",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500"
+      ],
+      [
+       "No collaborations yet. Click Create Coll",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500"
+      ],
+      [
+       "Total Collaborations",
+       1.02,
+       "#fbfcfd",
+       "#f8fafc",
+       "text-slate-500"
+      ],
+      [
+       "Influencers",
+       1.02,
+       "#fbfcfd",
+       "#f8fafc",
+       "text-slate-500"
+      ],
+      [
+       "Campaigns",
+       1.02,
+       "#fbfcfd",
+       "#f8fafc",
+       "text-slate-500"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 47,
+     "failures": 6,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1,
+     "top": [
+      [
+       "Manage multi-platform influencer partner",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500"
+      ],
+      [
+       "No collaborations yet. Click Create Coll",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500"
+      ],
+      [
+       "Total Collaborations",
+       1.02,
+       "#fbfcfd",
+       "#f8fafc",
+       "text-slate-500"
+      ],
+      [
+       "Influencers",
+       1.02,
+       "#fbfcfd",
+       "#f8fafc",
+       "text-slate-500"
+      ],
+      [
+       "Campaigns",
+       1.02,
+       "#fbfcfd",
+       "#f8fafc",
+       "text-slate-500"
+      ],
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70"
+      ]
+     ]
+    }
+   }
+  },
+  "influencer-submissions": {
+   "path": "/influencer-portal/submissions",
+   "group": "shell",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 6,
+     "failures": 0,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 31,
+     "failures": 1,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 3.8,
+     "top": [
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70"
+      ]
+     ]
+    }
+   }
+  },
+  "influencer-analytics": {
+   "path": "/influencer-portal/analytics",
+   "group": "shell",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 11,
+     "failures": 0,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 36,
+     "failures": 1,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 3.8,
+     "top": [
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70"
+      ]
+     ]
+    }
+   }
+  },
+  "influencer-profile": {
+   "path": "/influencer-portal/profile",
+   "group": "shell",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 7,
+     "failures": 1,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1,
+     "top": [
+      [
+       "Profile detail view scaffold for multi-p",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 32,
+     "failures": 2,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1,
+     "top": [
+      [
+       "Profile detail view scaffold for multi-p",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500"
+      ],
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70"
+      ]
+     ]
+    }
+   }
+  },
+  "ai-memory": {
+   "path": "/ai-memory",
+   "group": "shell",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 13,
+     "failures": 2,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 2.99,
+     "top": [
+      [
+       "learned",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]"
+      ],
+      [
+       "Based on 0 tracked posts",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)]"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 36,
+     "failures": 3,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 2.99,
+     "top": [
+      [
+       "learned",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]"
+      ],
+      [
+       "Based on 0 tracked posts",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)]"
+      ],
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70"
+      ]
+     ]
+    }
+   }
+  },
+  "ai-history": {
+   "path": "/ai-history",
+   "group": "shell",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 8,
+     "failures": 3,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1.1,
+     "top": [
+      [
+       "All platforms",
+       1.1,
+       "#f5f4f1",
+       "#ffffff",
+       "text-[#070A12]"
+      ],
+      [
+       "Review prompts, captions, generated asse",
+       3.65,
+       "#81807e",
+       "#fbf5ea",
+       "text-[#070A12]/50"
+      ],
+      [
+       "No AI history yet. Generate a campaign o",
+       3.65,
+       "#81807e",
+       "#fbf5ea",
+       "text-[#070A12]/50"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 31,
+     "failures": 4,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1.1,
+     "top": [
+      [
+       "All platforms",
+       1.1,
+       "#f5f4f1",
+       "#ffffff",
+       "text-[#070A12]"
+      ],
+      [
+       "Review prompts, captions, generated asse",
+       3.65,
+       "#81807e",
+       "#fbf5ea",
+       "text-[#070A12]/50"
+      ],
+      [
+       "No AI history yet. Generate a campaign o",
+       3.65,
+       "#81807e",
+       "#fbf5ea",
+       "text-[#070A12]/50"
+      ],
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70"
+      ]
+     ]
+    }
+   }
+  },
+  "ai-performance": {
+   "path": "/ai-performance",
+   "group": "shell",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 6,
+     "failures": 3,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "All platforms",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-slate-900"
+      ],
+      [
+       "See what Nebulaa learned from engagement",
+       3.65,
+       "#81807e",
+       "#fbf5ea",
+       "text-[#070A12]/50"
+      ],
+      [
+       "No performance records yet. Open post an",
+       3.65,
+       "#81807e",
+       "#fbf5ea",
+       "text-[#070A12]/50"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 29,
+     "failures": 4,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "All platforms",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-slate-900"
+      ],
+      [
+       "See what Nebulaa learned from engagement",
+       3.65,
+       "#81807e",
+       "#fbf5ea",
+       "text-[#070A12]/50"
+      ],
+      [
+       "No performance records yet. Open post an",
+       3.65,
+       "#81807e",
+       "#fbf5ea",
+       "text-[#070A12]/50"
+      ],
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70"
+      ]
+     ]
+    }
+   }
+  },
+  "settings-profile": {
+   "path": "/settings",
+   "group": "shell",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 25,
+     "failures": 17,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "Profile",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Business Profile",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Notifications",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Security",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Profile Settings",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Asha",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-slate-900"
+      ],
+      [
+       "Kumar",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-slate-900"
+      ],
+      [
+       "Sunrise Bakery",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-slate-900"
+      ],
+      [
+       "Food & Beverage",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-slate-900"
+      ],
+      [
+       "owner@sunrise-bakery.example",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-slate-900"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 49,
+     "failures": 19,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "Profile",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Business Profile",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Notifications",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Security",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Billing",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Profile Settings",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Asha",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-slate-900"
+      ],
+      [
+       "Kumar",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-slate-900"
+      ],
+      [
+       "Sunrise Bakery",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-slate-900"
+      ],
+      [
+       "Food & Beverage",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-slate-900"
+      ]
+     ]
+    }
+   }
+  },
+  "settings-business": {
+   "path": "/settings?tab=business",
+   "group": "shell",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 62,
+     "failures": 21,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 1,
+     "worst": 1.02,
+     "top": [
+      [
+       "Profile",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Business Profile",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Notifications",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Security",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Business Profile",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Food & Beverage",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-slate-900"
+      ],
+      [
+       "B2C",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-slate-900"
+      ],
+      [
+       "4",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-slate-900"
+      ],
+      [
+       "Growing",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-slate-900"
+      ],
+      [
+       "A neighbourhood bakery baking sourdough,",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-slate-900"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 86,
+     "failures": 23,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 1,
+     "worst": 1.02,
+     "top": [
+      [
+       "Profile",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Business Profile",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Notifications",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Security",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Billing",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Business Profile",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Food & Beverage",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-slate-900"
+      ],
+      [
+       "B2C",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-slate-900"
+      ],
+      [
+       "4",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-slate-900"
+      ],
+      [
+       "Growing",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-slate-900"
+      ]
+     ]
+    }
+   }
+  },
+  "settings-notifications": {
+   "path": "/settings",
+   "group": "shell",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 11,
+     "failures": 6,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "Profile",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Business Profile",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Notifications",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Security",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Advanced notification settings coming so",
+       1.03,
+       "#fcfdfe",
+       "#f8fafc",
+       "text-slate-400"
+      ],
+      [
+       "rules",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 35,
+     "failures": 8,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "Profile",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Business Profile",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Notifications",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Security",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Billing",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Advanced notification settings coming so",
+       1.03,
+       "#fcfdfe",
+       "#f8fafc",
+       "text-slate-400"
+      ],
+      [
+       "rules",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]"
+      ],
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70"
+      ]
+     ]
+    }
+   }
+  },
+  "settings-security": {
+   "path": "/settings",
+   "group": "shell",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 16,
+     "failures": 10,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "Profile",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Business Profile",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Notifications",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Security",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Change Password",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Current Password",
+       1.05,
+       "#fdfbf6",
+       "#fbf5ea",
+       "text-slate-400"
+      ],
+      [
+       "New Password",
+       1.05,
+       "#fdfbf6",
+       "#fbf5ea",
+       "text-slate-400"
+      ],
+      [
+       "Must be at least 8 characters",
+       1.05,
+       "#fdfbf6",
+       "#fbf5ea",
+       "text-slate-400"
+      ],
+      [
+       "Confirm New Password",
+       1.05,
+       "#fdfbf6",
+       "#fbf5ea",
+       "text-slate-400"
+      ],
+      [
+       "rules",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 40,
+     "failures": 12,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "Profile",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Business Profile",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Notifications",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Security",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Billing",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Change Password",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Current Password",
+       1.05,
+       "#fdfbf6",
+       "#fbf5ea",
+       "text-slate-400"
+      ],
+      [
+       "New Password",
+       1.05,
+       "#fdfbf6",
+       "#fbf5ea",
+       "text-slate-400"
+      ],
+      [
+       "Must be at least 8 characters",
+       1.05,
+       "#fdfbf6",
+       "#fbf5ea",
+       "text-slate-400"
+      ],
+      [
+       "Confirm New Password",
+       1.05,
+       "#fdfbf6",
+       "#fbf5ea",
+       "text-slate-400"
+      ]
+     ]
+    }
+   }
+  },
+  "settings-billing": {
+   "path": "/settings",
+   "group": "shell",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 24,
+     "failures": 12,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "Profile",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Business Profile",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Notifications",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Security",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Billing & Invoices",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Current Plan",
+       1.03,
+       "#fcfdfe",
+       "#f8fafc",
+       "text-slate-400"
+      ],
+      [
+       "Quarks",
+       1.03,
+       "#fcfdfe",
+       "#f8fafc",
+       "text-slate-400"
+      ],
+      [
+       "Quark Costs",
+       1.03,
+       "#fcfdfe",
+       "#f8fafc",
+       "text-slate-400"
+      ],
+      [
+       "No payments yet.",
+       1.03,
+       "#fcfdfe",
+       "#f8fafc",
+       "text-slate-400"
+      ],
+      [
+       "Payment History",
+       1.05,
+       "#fdfbf6",
+       "#fbf5ea",
+       "text-slate-400"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 48,
+     "failures": 14,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "Profile",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Business Profile",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Notifications",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Security",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80"
+      ],
+      [
+       "Billing",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Billing & Invoices",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]"
+      ],
+      [
+       "Current Plan",
+       1.03,
+       "#fcfdfe",
+       "#f8fafc",
+       "text-slate-400"
+      ],
+      [
+       "Quarks",
+       1.03,
+       "#fcfdfe",
+       "#f8fafc",
+       "text-slate-400"
+      ],
+      [
+       "Quark Costs",
+       1.03,
+       "#fcfdfe",
+       "#f8fafc",
+       "text-slate-400"
+      ],
+      [
+       "No payments yet.",
+       1.03,
+       "#fcfdfe",
+       "#f8fafc",
+       "text-slate-400"
+      ]
+     ]
+    }
+   }
+  },
+  "trial-expired": {
+   "path": "/trial-expired",
+   "group": "public",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 30,
+     "failures": 0,
+     "unknown": 28,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 30,
+     "failures": 0,
+     "unknown": 28,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "terms": {
+   "path": "/terms",
+   "group": "public",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 188,
+     "failures": 12,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1.44,
+     "top": [
+      [
+       "support@nebulaa.ai",
+       1.44,
+       "#ffcc29",
+       "#f9fafb",
+       "text-[#ffcc29]"
+      ],
+      [
+       "https://www.nebulaa.ai",
+       1.44,
+       "#ffcc29",
+       "#f9fafb",
+       "text-[#ffcc29]"
+      ],
+      [
+       "Terms & Conditions of Service",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]"
+      ],
+      [
+       "support@nebulaa.ai",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]"
+      ],
+      [
+       "support@nebulaa.ai",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]"
+      ],
+      [
+       "Privacy Policy",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]"
+      ],
+      [
+       "support@nebulaa.ai",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]"
+      ],
+      [
+       "legal@nebulaa.ai",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]"
+      ],
+      [
+       "© 2024 Noburo Business Services LLP. All",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "text-gray-400"
+      ],
+      [
+       "Privacy Policy",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "hover:text-[#ffcc29]"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 188,
+     "failures": 12,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1.44,
+     "top": [
+      [
+       "support@nebulaa.ai",
+       1.44,
+       "#ffcc29",
+       "#f9fafb",
+       "text-[#ffcc29]"
+      ],
+      [
+       "https://www.nebulaa.ai",
+       1.44,
+       "#ffcc29",
+       "#f9fafb",
+       "text-[#ffcc29]"
+      ],
+      [
+       "Terms & Conditions of Service",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]"
+      ],
+      [
+       "support@nebulaa.ai",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]"
+      ],
+      [
+       "support@nebulaa.ai",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]"
+      ],
+      [
+       "Privacy Policy",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]"
+      ],
+      [
+       "support@nebulaa.ai",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]"
+      ],
+      [
+       "legal@nebulaa.ai",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]"
+      ],
+      [
+       "© 2024 Noburo Business Services LLP. All",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "text-gray-400"
+      ],
+      [
+       "Privacy Policy",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "hover:text-[#ffcc29]"
+      ]
+     ]
+    }
+   }
+  },
+  "privacy-policy": {
+   "path": "/privacy-policy",
+   "group": "public",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 187,
+     "failures": 10,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1.44,
+     "top": [
+      [
+       "support@nebulaa.ai",
+       1.44,
+       "#ffcc29",
+       "#f9fafb",
+       "text-[#ffcc29]"
+      ],
+      [
+       "support@nebulaa.ai",
+       1.44,
+       "#ffcc29",
+       "#f9fafb",
+       "text-[#ffcc29]"
+      ],
+      [
+       "support@nebulaa.ai",
+       1.44,
+       "#ffcc29",
+       "#f9fafb",
+       "text-[#ffcc29]"
+      ],
+      [
+       "Privacy Policy",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]"
+      ],
+      [
+       "privacy@nebulaa.ai",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]"
+      ],
+      [
+       "privacy@nebulaa.ai",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]"
+      ],
+      [
+       "© 2024 Noburo Business Services LLP. All",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "text-gray-400"
+      ],
+      [
+       "Terms & Conditions",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "hover:text-[#ffcc29]"
+      ],
+      [
+       "|",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "text-gray-400"
+      ],
+      [
+       "nebulaa.ai",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "hover:text-[#ffcc29]"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 187,
+     "failures": 10,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": 1.44,
+     "top": [
+      [
+       "support@nebulaa.ai",
+       1.44,
+       "#ffcc29",
+       "#f9fafb",
+       "text-[#ffcc29]"
+      ],
+      [
+       "support@nebulaa.ai",
+       1.44,
+       "#ffcc29",
+       "#f9fafb",
+       "text-[#ffcc29]"
+      ],
+      [
+       "support@nebulaa.ai",
+       1.44,
+       "#ffcc29",
+       "#f9fafb",
+       "text-[#ffcc29]"
+      ],
+      [
+       "Privacy Policy",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]"
+      ],
+      [
+       "privacy@nebulaa.ai",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]"
+      ],
+      [
+       "privacy@nebulaa.ai",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]"
+      ],
+      [
+       "© 2024 Noburo Business Services LLP. All",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "text-gray-400"
+      ],
+      [
+       "Terms & Conditions",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "hover:text-[#ffcc29]"
+      ],
+      [
+       "|",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "text-gray-400"
+      ],
+      [
+       "nebulaa.ai",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "hover:text-[#ffcc29]"
+      ]
+     ]
+    }
+   }
+  },
+  "admin-login": {
+   "path": "/admin/login",
+   "group": "admin",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 8,
+     "failures": 0,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 8,
+     "failures": 0,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "admin": {
+   "path": "/admin",
+   "group": "admin",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 41,
+     "failures": 28,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 1,
+     "worst": 1.8,
+     "top": [
+      [
+       "No users found",
+       1.8,
+       "#3c3d44",
+       "#0b0d15",
+       "text-white/20"
+      ],
+      [
+       "Search by email or company...",
+       1.88,
+       "#44454b",
+       "#15171e",
+       "text-white placeholder-white/20"
+      ],
+      [
+       "demo.nebulaa.ai",
+       2.57,
+       "#515258",
+       "#060810",
+       "text-white/30"
+      ],
+      [
+       "User",
+       2.63,
+       "#54565b",
+       "#0b0d15",
+       "text-white/30"
+      ],
+      [
+       "Credits",
+       2.63,
+       "#54565b",
+       "#0b0d15",
+       "text-white/30"
+      ],
+      [
+       "Activity",
+       2.63,
+       "#54565b",
+       "#0b0d15",
+       "text-white/30"
+      ],
+      [
+       "Trial",
+       2.63,
+       "#54565b",
+       "#0b0d15",
+       "text-white/30"
+      ],
+      [
+       "Last Login",
+       2.63,
+       "#54565b",
+       "#0b0d15",
+       "text-white/30"
+      ],
+      [
+       "Active today",
+       2.66,
+       "#56575d",
+       "#0d0f17",
+       "text-white/30"
+      ],
+      [
+       "Last 7 days",
+       2.66,
+       "#56575d",
+       "#0d0f17",
+       "text-white/30"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 42,
+     "failures": 29,
+     "unknown": 0,
+     "disabled": 0,
+     "placeholdersFailing": 1,
+     "worst": 1.8,
+     "top": [
+      [
+       "No users found",
+       1.8,
+       "#3c3d44",
+       "#0b0d15",
+       "text-white/20"
+      ],
+      [
+       "Search by email or company...",
+       1.88,
+       "#44454b",
+       "#15171e",
+       "text-white placeholder-white/20"
+      ],
+      [
+       "demo.nebulaa.ai",
+       2.57,
+       "#515258",
+       "#060810",
+       "text-white/30"
+      ],
+      [
+       "User",
+       2.63,
+       "#54565b",
+       "#0b0d15",
+       "text-white/30"
+      ],
+      [
+       "Credits",
+       2.63,
+       "#54565b",
+       "#0b0d15",
+       "text-white/30"
+      ],
+      [
+       "Activity",
+       2.63,
+       "#54565b",
+       "#0b0d15",
+       "text-white/30"
+      ],
+      [
+       "Trial",
+       2.63,
+       "#54565b",
+       "#0b0d15",
+       "text-white/30"
+      ],
+      [
+       "Last Login",
+       2.63,
+       "#54565b",
+       "#0b0d15",
+       "text-white/30"
+      ],
+      [
+       "Status",
+       2.63,
+       "#54565b",
+       "#0b0d15",
+       "text-white/30"
+      ],
+      [
+       "Active today",
+       2.66,
+       "#56575d",
+       "#0d0f17",
+       "text-white/30"
+      ]
+     ]
+    }
+   }
+  }
+ },
+ "otherSession": {
+  "landing@1280": {
+   "failures": 6,
+   "checked": 60,
+   "unknown": 0
+  },
+  "landing@375": {
+   "failures": 6,
+   "checked": 57,
+   "unknown": 0
+  },
+  "login@1280": {
+   "failures": 5,
+   "checked": 11,
+   "unknown": 0
+  },
+  "login@375": {
+   "failures": 5,
+   "checked": 11,
+   "unknown": 0
+  },
+  "signup@1280": {
+   "failures": 12,
+   "checked": 22,
+   "unknown": 0
+  },
+  "signup@375": {
+   "failures": 12,
+   "checked": 22,
+   "unknown": 0
+  },
+  "onboarding@1280": {
+   "failures": 41,
+   "checked": 61,
+   "unknown": 0
+  },
+  "onboarding@375": {
+   "failures": 41,
+   "checked": 61,
+   "unknown": 0
+  }
+ }
+}
