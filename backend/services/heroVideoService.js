@@ -82,7 +82,77 @@ async function getHeroQuota(userId, now = new Date(), JobModel) {
   return { used, limit: heroMonthlyLimit(), resetsOn: nextMonthStartUTC(now).toISOString() };
 }
 
+// ---- fal queue (client bootstrap copied from videoService.getFalClient; that file is untouched) ----
+let falClientPromise = null;
+
+async function getFalClient() {
+  const apiKey = String(process.env.FAL_KEY || '').trim();
+  if (!apiKey) throw new Error('FAL_KEY environment variable is required for hero video generation');
+  if (!falClientPromise) {
+    falClientPromise = import('@fal-ai/serverless-client').then((mod) => {
+      const fal = mod.default || mod;
+      if (typeof fal.config === 'function') fal.config({ credentials: apiKey });
+      return fal;
+    });
+  }
+  return falClientPromise;
+}
+
+async function submitHeroClip({ model, input }, fal) {
+  const client = fal || await getFalClient();
+  const res = await client.queue.submit(model, { input });
+  const id = res && (res.request_id || res.requestId);
+  if (!id) throw new Error('fal did not return a request id');
+  return id;
+}
+
+function extractVideoUrl(result) {
+  const r = result || {};
+  const url = (r.video && r.video.url) || (r.data && r.data.video && r.data.video.url);
+  return typeof url === 'string' && url ? url : null;
+}
+
+async function getHeroClipStatus(model, requestId, fal) {
+  const client = fal || await getFalClient();
+  const st = await client.queue.status(model, { requestId });
+  const status = st && st.status;
+  if (status === 'IN_QUEUE') return { state: 'queued' };
+  if (status === 'IN_PROGRESS') return { state: 'processing' };
+  if (status !== 'COMPLETED') return { state: 'failed', error: `Unexpected fal status: ${status}` };
+  try {
+    const result = await client.queue.result(model, { requestId });
+    const videoUrl = extractVideoUrl(result);
+    if (!videoUrl) return { state: 'failed', error: 'fal completed without a video URL' };
+    return { state: 'completed', videoUrl };
+  } catch (err) {
+    return { state: 'failed', error: (err && err.message) || 'fal result fetch failed' };
+  }
+}
+
+// deps (download/upload/unlink) are injectable for tests; defaults are lazy-required so the module imports without Mongo/Cloudinary.
+async function copyClipToStorage(remoteUrl, deps = {}) {
+  let filePath = null;
+  try {
+    const download = deps.download || require('./videoDownload').downloadVideoFromUrl;
+    const upload = deps.upload || require('./imageUploader').uploadVideoFile;
+    const d = await download(remoteUrl);
+    filePath = d && d.filePath;
+    if (!filePath) throw new Error('Download returned no file path');
+    const up = await upload(filePath, 'nebula-hero-videos');
+    if (!up || !up.url) throw new Error('Upload returned no URL');
+    return up.url;
+  } catch (err) {
+    console.error('Hero clip storage copy failed, using remote URL:', err && err.message);
+    return remoteUrl;
+  } finally {
+    if (filePath) {
+      try { await (deps.unlink || require('fs').promises.unlink)(filePath); } catch (_) { /* best effort */ }
+    }
+  }
+}
+
 module.exports = {
   HERO_RESOLUTION, HERO_MAX_REFS, buildHeroInput, validateRefUrls,
-  heroMonthlyLimit, monthStartUTC, nextMonthStartUTC, getHeroQuota
+  heroMonthlyLimit, monthStartUTC, nextMonthStartUTC, getHeroQuota,
+  submitHeroClip, getHeroClipStatus, copyClipToStorage
 };
