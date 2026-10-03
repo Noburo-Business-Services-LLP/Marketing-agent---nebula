@@ -224,6 +224,11 @@ test('cover script --dry-run prints 13 photographic 3:4 prompts and touches no A
     assert.match(prompt, /no text/i, l);
     assert.doesNotMatch(prompt, /caption|subtitle|headline|lower-third|title card|typography|slogan|\bwords?\b/i, l);
     assert.doesNotMatch(prompt, /customer|review|celebrity/i, l);
+    assert.doesNotMatch(prompt, /["\u201c\u201d]/, `${l}: no quoted label`);
+    assert.doesNotMatch(prompt, /style card|video style/i, l);
+    const productOnly = ['product-advertisement', 'product-showcase', 'luxury-advertisement'].includes(l.split(':')[0]);
+    if (productOnly) assert.doesNotMatch(prompt, /skin texture|fictional/i, l);
+    else assert.match(prompt, /fictional/i, l);
   }
   assert.equal(coverDirListing(), before, 'nothing written');
 });

@@ -107,6 +107,7 @@ function validateRefUrls(urls) {
     const s = u.trim();
     try { new URL(s); } catch (_) { throw new Error('Invalid reference image URL'); }
     if (!isPublicHttpsUrl(s)) throw new Error('Reference image URLs must be public https:// URLs');
+    if (/\.(svg|gif|avif|heic|heif|bmp|tiff?)$/i.test(new URL(s).pathname)) throw new Error("This image type isn't supported, use a JPG, PNG or WebP photo");
     return s;
   });
 }

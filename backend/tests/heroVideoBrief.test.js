@@ -156,3 +156,25 @@ test('stageReferences drops when upload fails', async () => {
     { uploadBase64Image: async () => ({ success: false }) });
   assert.equal(r.refs.length, 0); assert.equal(r.dropped.length, 1);
 });
+
+test('selectReferences skips unsupported image types so the next candidate fills the slot', () => {
+  const b = { cast: [
+    { id: 'c1', name: 'A', portraitUrl: 'https://res.cloudinary.com/x/a.SVG?v=2' },
+    { id: 'c2', name: 'B', portraitUrl: U('b') }
+  ], scenes: [], environment: { enabled: false } };
+  const brand = { productImages: ['gif', 'avif', 'heic', 'heif', 'bmp', 'tif', 'tiff', 'svg'].map((e) => ({ url: `https://res.cloudinary.com/x/p.${e}?x=1.jpg`, alt: e })).concat([{ url: U('ok.png'), alt: 'ok' }]),
+    logoUrl: 'https://res.cloudinary.com/x/logo.svg' };
+  const refs = brief.selectReferences(b, brand);
+  assert.deepEqual(refs.map((r) => r.url), [U('b'), U('ok.png')]);
+});
+
+test('stageReferences drops unsupported image types with a plain reason', async () => {
+  const r = await brief.stageReferences([
+    { tag: '@image1', kind: 'brand', label: 'Logo', url: 'https://res.cloudinary.com/x/logo.svg', source: 'b' },
+    { tag: '@image2', kind: 'brand', label: 'Anim', url: 'https://res.cloudinary.com/x/a.GIF?v=1', source: 'b' },
+    { tag: '@image3', kind: 'brand', label: 'Fine', url: U('f'), source: 'b' }
+  ], {});
+  assert.deepEqual(r.refs.map((x) => x.label), ['Fine']);
+  assert.deepEqual(r.dropped.map((d) => d.label), ['Logo', 'Anim']);
+  for (const d of r.dropped) assert.match(d.reason, /isn't supported, use a JPG, PNG or WebP/);
+});

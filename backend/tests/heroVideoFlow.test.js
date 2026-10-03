@@ -561,6 +561,8 @@ test('10 refs, http, loopback, private and non-string refs -> 400, no deduct, no
     ['https://localhost/a.png'],
     ['https://127.0.0.1/a.png'],
     ['https://192.168.1.5/a.png'],
+    ['https://cdn.example.com/logo.svg'],
+    ['https://cdn.example.com/a.GIF?v=1'],
     [42],
     'https://cdn.example.com/a.png'
   ];

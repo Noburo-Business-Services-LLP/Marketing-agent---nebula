@@ -255,3 +255,50 @@ test('every style block is short and carries the integrity and realism rules', (
   assert.doesNotMatch(getStyleBlock('cinematic-commercial'), /35-40 words/);
   assert.equal(getStyleBlock('unknown-style'), getStyleBlock('cinematic-commercial'));
 });
+
+// ---- stale Prompt Studio override guard ----
+async function withOverride(template, fn) {
+  const modelPath = require.resolve('../models/PromptOverride');
+  const saved = require.cache[modelPath];
+  require.cache[modelPath] = {
+    id: modelPath, filename: modelPath, loaded: true,
+    exports: { findOne: () => ({ lean: async () => ({ template }) }) }
+  };
+  const logs = [];
+  const orig = console.warn;
+  console.warn = (...a) => logs.push(a.join(' '));
+  try { return await fn(logs); } finally {
+    console.warn = orig;
+    if (saved) require.cache[modelPath] = saved; else delete require.cache[modelPath];
+  }
+}
+const GUARD_VARS = { castBlock: 'CAST_MARKER', environmentBlock: 'ENV_MARKER', brandBlock: 'BRAND_MARKER',
+  scenesBlock: 'SCENES_MARKER', referencesBlock: 'REFS_MARKER', styleBlock: 'STYLE_MARKER', conceptTitle: 'T' };
+
+test('an override missing a v2 placeholder falls back to the shipped template (logged once, no prompt text)', async () => {
+  const stale = 'OLD PRE-HERO-STUDIO TEMPLATE SECRET-TEXT for {{conceptTitle}} {{brandContextBlock}}';
+  await withOverride(stale, async (logs) => {
+    const out = await buildPrompt('u1', ID, GUARD_VARS);
+    assert.match(out, /CAST_MARKER/);
+    assert.match(out, /STYLE_MARKER/);
+    assert.doesNotMatch(out, /OLD PRE-HERO-STUDIO/);
+    await buildPrompt('u1', ID, GUARD_VARS);
+    assert.equal(logs.length, 1, 'logged once per process');
+    assert.doesNotMatch(logs[0], /SECRET-TEXT|OLD PRE-HERO/);
+  });
+});
+
+test('an override containing every required v2 placeholder is honoured', async () => {
+  const mine = 'MINE {{castBlock}} {{referencesBlock}} {{brandBlock}} {{environmentBlock}} {{scenesBlock}} {{styleBlock}}';
+  await withOverride(mine, async () => {
+    const out = await buildPrompt('u1', ID, GUARD_VARS);
+    assert.match(out, /^MINE CAST_MARKER REFS_MARKER BRAND_MARKER ENV_MARKER SCENES_MARKER STYLE_MARKER$/);
+  });
+});
+
+test('the guard does not touch other prompts', async () => {
+  const other = Object.keys(PROMPTS).find((k) => k !== ID);
+  await withOverride('CUSTOM NO PLACEHOLDERS', async () => {
+    assert.equal(await buildPrompt('u1', other, {}), 'CUSTOM NO PLACEHOLDERS');
+  });
+});

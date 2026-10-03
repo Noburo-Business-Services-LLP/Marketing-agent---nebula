@@ -2319,6 +2319,26 @@ function getPrompt(id) {
   return PROMPTS[id] || null;
 }
 
+// A hero planner override saved before Hero Studio lacks these placeholders, and unknown
+// placeholders render empty, so the planner would get no cast, place, brand, references or style.
+const REQUIRED_PLACEHOLDERS = {
+  'hero_video.plan': ['castBlock', 'referencesBlock', 'brandBlock', 'environmentBlock', 'scenesBlock', 'styleBlock']
+};
+const warnedStale = new Set();
+
+function isStaleOverride(id, template) {
+  const required = REQUIRED_PLACEHOLDERS[id];
+  if (!required) return false;
+  const present = new Set([...String(template).matchAll(/\{\{\s*(\w+)\s*\}\}/g)].map((m) => m[1]));
+  const missing = required.filter((n) => !present.has(n));
+  if (!missing.length) return false;
+  if (!warnedStale.has(id)) {
+    warnedStale.add(id);
+    console.warn(`[promptRegistry] saved override of ${id} is missing placeholders (${missing.join(', ')}); using the shipped default`);
+  }
+  return true;
+}
+
 /**
  * The template to actually use for this user: their edit if they have one,
  * otherwise the shipped default. A lookup failure falls back to the default
@@ -2333,6 +2353,7 @@ async function resolveTemplate(userId, id) {
     const PromptOverride = require('../models/PromptOverride');
     const override = await PromptOverride.findOne({ user: userId, promptId: id }).lean();
     if (override && override.template && override.template.trim()) {
+      if (isStaleOverride(id, override.template)) return prompt.template;
       return override.template;
     }
   } catch (err) {

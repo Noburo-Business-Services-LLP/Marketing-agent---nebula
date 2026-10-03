@@ -34,15 +34,21 @@ const SCENES = {
   'luxury-advertisement': 'an unbranded gold watch resting on black velvet, a narrow hard light raking across its face, deep shadow, restrained and premium'
 };
 
+// Scenes with no person in them: the people-only wording would be wrong for these.
+const PRODUCT_ONLY = new Set(['product-advertisement', 'product-showcase', 'luxury-advertisement']);
+
 function promptFor(style) {
   const scene = SCENES[style.slug];
+  const people = !PRODUCT_ONLY.has(style.slug);
   return [
-    `Photograph, vertical 3:4 portrait frame, for a "${style.label}" video style card.`,
+    'Photograph, vertical 3:4 portrait frame.',
     `Scene: ${scene}.`,
-    'Real-world photography with natural imperfections: real skin texture, real light with real shadows, subtle film grain.',
-    'Every person is fictional; no recognisable real person.',
+    people
+      ? 'Real-world photography with natural imperfections: real skin texture, real light with real shadows, subtle film grain.'
+      : 'Real-world photography with natural imperfections: real light with real shadows, subtle film grain.',
+    people ? 'Every person is fictional; no recognisable real person.' : '',
     'No text, no letters, no numbers, no logos, no brand marks, no watermark, no on-screen graphics.'
-  ].join(' ');
+  ].filter(Boolean).join(' ');
 }
 
 async function saveImage(imageUrl, file) {

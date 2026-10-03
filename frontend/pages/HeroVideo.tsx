@@ -166,6 +166,8 @@ const HeroVideo: React.FC = () => {
   const timerRef = useRef<number | null>(null);
   const mountedRef = useRef(true);
   const briefRequestedRef = useRef(false);
+  // Synchronous double-submit guard: state updates are async, so two fast clicks could both pass canGenerate.
+  const submittingRef = useRef(false);
   // Bumped on every start/stop so a request that settles after a stop never reschedules.
   const pollGenRef = useRef(0);
 
@@ -392,7 +394,9 @@ const HeroVideo: React.FC = () => {
   const canGenerate = !!plan && !!prompt.trim() && !planStale && !quotaUsedUp && !inFlight && !cannotAfford;
 
   const generate = async () => {
+    if (submittingRef.current) return;
     if (!canGenerate || !plan) return;
+    submittingRef.current = true;
     setSubmitting(true);
     setGenError('');
     setJobError('');
@@ -435,6 +439,7 @@ const HeroVideo: React.FC = () => {
     } finally {
       window.removeEventListener('trial-expired', onExpired);
       refreshCredits();
+      submittingRef.current = false;
       if (mountedRef.current) setSubmitting(false);
     }
   };

@@ -101,6 +101,12 @@ async function loadBrand(userId, deps = {}) {
   return brand;
 }
 
+const UNSUPPORTED_IMAGE_EXT = /\.(svg|gif|avif|heic|heif|bmp|tiff?)$/i;
+// fal accepts only jpeg/png/webp; judge by the URL path, ignoring any query string.
+function hasUnsupportedImageType(url) {
+  try { return UNSUPPORTED_IMAGE_EXT.test(new URL(String(url)).pathname); } catch (_) { return false; }
+}
+
 function selectReferences(brief, brand, opts = {}) {
   if (!isObj(brief)) return [];
   const b = isObj(brand) ? brand : {};
@@ -109,7 +115,7 @@ function selectReferences(brief, brand, opts = {}) {
   const counts = { cast: 0, environment: 0, brand: 0, keyframe: 0 };
   const add = (kind, label, url, source, dataUrl) => {
     const key = url || dataUrl;
-    if (!key || seen.has(key) || out.length >= MAX_REFS || counts[kind] >= CAPS[kind]) return;
+    if (!key || (url && hasUnsupportedImageType(url)) || seen.has(key) || out.length >= MAX_REFS || counts[kind] >= CAPS[kind]) return;
     seen.add(key); counts[kind]++;
     const ref = { tag: '', kind, label: String(label || kind), url: url || '', source };
     if (!url && dataUrl) ref.dataUrl = dataUrl;
@@ -152,6 +158,9 @@ async function stageReferences(refs, deps = {}) {
     } else if (!isPublicHttpsUrl(r.url)) {
       dropped.push({ label, reason: 'The image address is not a public https link.' });
       continue;
+    } else if (hasUnsupportedImageType(r.url)) {
+      dropped.push({ label, reason: "This image type isn't supported, use a JPG, PNG or WebP photo" });
+      continue;
     }
     kept.push(next);
   }
@@ -161,4 +170,4 @@ async function stageReferences(refs, deps = {}) {
   return { refs: capped, dropped };
 }
 
-module.exports = { isPublicHttpsUrl, normalizeHeroBrief, loadBrand, selectReferences, stageReferences };
+module.exports = { hasUnsupportedImageType, isPublicHttpsUrl, normalizeHeroBrief, loadBrand, selectReferences, stageReferences };
