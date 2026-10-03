@@ -500,7 +500,8 @@ const ReelGenerator: React.FC = () => {
       return;
     }
     setHeroEntryNote('');
-    navigate('/reels/hero', { state: { brief: buildHeroBrief() } });
+    const styleSlug = VIDEO_STYLES.find((s) => s.value === videoStyle)?.slug;
+    navigate('/reels/hero', { state: { brief: buildHeroBrief(), style: styleSlug } });
   };
   type StoryArc = {
     hook: string; beginning: string; emotionalProgression: string;

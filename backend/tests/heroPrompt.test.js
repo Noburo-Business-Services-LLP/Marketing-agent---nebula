@@ -1,7 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { PROMPTS, buildPrompt, renderTemplate } = require('../services/promptRegistry');
-const { HERO_STYLES, isHeroStyle, groupForStyle, getStyleBlock } = require('../services/heroVideoStyles');
+// getStyleBlock is async (registry-backed) since Task 8; these checks use the same text synchronously.
+const { HERO_STYLES, isHeroStyle, groupForStyle, getBuiltInStyleBlock: getStyleBlock } = require('../services/heroVideoStyles');
 const { buildPlanVars } = require('../routes/heroVideo');
 
 const ID = 'hero_video.plan';

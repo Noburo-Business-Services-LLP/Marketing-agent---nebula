@@ -14,10 +14,10 @@ function routes(r) {
   }));
 }
 
-test('router exposes the six routes with protect first', () => {
+test('router exposes the seven routes with protect first', () => {
   const found = routes(router.router || router);
   const key = (r) => `${r.methods[0]} ${r.path}`;
-  assert.deepStrictEqual(found.map(key).sort(), ['get /jobs', 'get /jobs/:jobId', 'get /quota', 'post /brief', 'post /generate', 'post /plan']);
+  assert.deepStrictEqual(found.map(key).sort(), ['get /jobs', 'get /jobs/:jobId', 'get /quota', 'get /styles', 'post /brief', 'post /generate', 'post /plan']);
   for (const r of found) assert.strictEqual(r.names[0], 'protect', key(r));
   for (const r of found.filter((x) => x.path === '/plan' || x.path === '/generate' || x.path === '/brief')) {
     assert.ok(r.names.includes('checkTrial'), key(r));

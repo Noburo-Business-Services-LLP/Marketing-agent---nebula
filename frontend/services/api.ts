@@ -3802,7 +3802,13 @@ export interface HeroJobSummary {
   prompt?: string;
 }
 
+export interface HeroStyleOption { slug: string; label: string; group: string; blurb: string; coverUrl: string }
+
 export const heroVideoAPI = {
+  styles: async (): Promise<{ success: boolean; styles: HeroStyleOption[] }> => {
+    return apiCall('/hero-video/styles', { method: 'GET' }, true);
+  },
+
   quota: async (): Promise<{ success: boolean; used: number; limit: number; resetsOn: string }> => {
     return apiCall('/hero-video/quota', { method: 'GET' }, true);
   },

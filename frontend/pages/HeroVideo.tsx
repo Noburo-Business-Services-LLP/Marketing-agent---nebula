@@ -3,7 +3,9 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Loader2, Download, Check, X } from 'lucide-react';
 import {
   apiService, heroVideoAPI, HeroAspectRatio, HeroAudioMode, HeroBrandSummary, HeroBrief, HeroJobSummary, HeroPlan, HeroReference,
+  HeroStyleOption,
 } from '../services/api';
+import HeroStylePicker from '../components/HeroStylePicker';
 import { GravityHero, GravityEmphasis, GravityPanel, GravityLabel, GravityButton } from '../components/gravity';
 
 // Hero Studio: one premium 15-second clip built from the Reels wizard's story, cast and place,
@@ -24,6 +26,7 @@ const FINISH_NOTE =
 const ASPECTS: HeroAspectRatio[] = ['9:16', '16:9', '1:1'];
 const ASPECT_CSS: Record<HeroAspectRatio, string> = { '9:16': '9 / 16', '16:9': '16 / 9', '1:1': '1 / 1' };
 const MAX_CTA = 60;
+const DEFAULT_STYLE = 'cinematic-commercial';
 const SOUND_OPTIONS: { value: HeroAudioMode; label: string }[] = [
   { value: 'native', label: 'Music and effects from the video model' },
   { value: 'sfx_only', label: 'Effects only' },
@@ -105,8 +108,10 @@ html:not(.dark) .hero-studio .gravity-label:not([class*="gv-accent-text"]) { col
 const HeroVideo: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const incoming = (location.state || {}) as { brief?: unknown };
+  const incoming = (location.state || {}) as { brief?: unknown; style?: unknown };
   const incomingBrief = isBrief(incoming.brief) ? incoming.brief : null;
+  // The wizard's chosen style (a slug) is the starting pick; the list from /styles validates it.
+  const incomingStyle = typeof incoming.style === 'string' && incoming.style ? incoming.style : DEFAULT_STYLE;
 
   // ---- brief, brand and references (from /brief) ----
   const [preparing, setPreparing] = useState(!!incomingBrief);
@@ -121,6 +126,11 @@ const HeroVideo: React.FC = () => {
   // Scenes kept in the hero cut. `cutTouched` = the user (or a plan) chose; untouched sends no preference.
   const [keptIds, setKeptIds] = useState<string[]>([]);
   const [cutTouched, setCutTouched] = useState(false);
+
+  // ---- style (from /styles) ----
+  const [styleOptions, setStyleOptions] = useState<HeroStyleOption[]>([]);
+  const [stylesFailed, setStylesFailed] = useState(false);
+  const [style, setStyle] = useState<string>(incomingStyle);
 
   // ---- plan ----
   const [plan, setPlan] = useState<HeroPlan | null>(null);
@@ -301,13 +311,32 @@ const HeroVideo: React.FC = () => {
     })();
   }, [incomingBrief]);
 
+  // The style cards (no charge). If they cannot load, the prompt is built with the default style.
+  useEffect(() => {
+    if (!incomingBrief) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await heroVideoAPI.styles();
+        const list = r?.success && Array.isArray(r.styles) ? r.styles : [];
+        if (cancelled || !mountedRef.current) return;
+        if (!list.length) throw new Error('no styles');
+        setStyleOptions(list);
+        setStyle((cur) => (list.some((s) => s.slug === cur) ? cur : DEFAULT_STYLE));
+      } catch {
+        if (!cancelled && mountedRef.current) { setStylesFailed(true); setStyle(DEFAULT_STYLE); }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [incomingBrief]);
+
   // The CTA input shows the planner's CTA, else the brand name, until the user types their own.
   const ctaValue = ctaEdited ? ctaText : (plan?.story.cta || brand?.name || '').slice(0, MAX_CTA);
 
   // What the current prompt was written from; any change makes it out of date.
   const inputsKey = useMemo(
-    () => JSON.stringify({ refs: refs.map((r) => r.url), kept: cutTouched ? keptIds : null, audioMode, aspectRatio }),
-    [refs, keptIds, cutTouched, audioMode, aspectRatio]
+    () => JSON.stringify({ refs: refs.map((r) => r.url), kept: cutTouched ? keptIds : null, audioMode, aspectRatio, style }),
+    [refs, keptIds, cutTouched, audioMode, aspectRatio, style]
   );
   const planStale = !!plan && planKey !== inputsKey;
 
@@ -329,6 +358,7 @@ const HeroVideo: React.FC = () => {
       const keptInOrder = brief.scenes.map((s) => s.sceneId).filter((id) => keptIds.includes(id));
       const r = await heroVideoAPI.plan({
         brief: { ...brief, aspectRatio },
+        style,
         audioMode,
         ctaText: ctaEdited ? ctaText.trim() : undefined,
         references: refs.map((x) => x.url),
@@ -346,7 +376,7 @@ const HeroVideo: React.FC = () => {
       setRefs(nextRefs);
       setKeptIds(nextKept);
       setCutTouched(nextTouched);
-      setPlanKey(JSON.stringify({ refs: nextRefs.map((x) => x.url), kept: nextTouched ? nextKept : null, audioMode, aspectRatio }));
+      setPlanKey(JSON.stringify({ refs: nextRefs.map((x) => x.url), kept: nextTouched ? nextKept : null, audioMode, aspectRatio, style }));
     } catch (e: any) {
       if (mountedRef.current) setPlanError(e?.message || 'Could not build a prompt. Please try again.');
     } finally {
@@ -774,9 +804,31 @@ const HeroVideo: React.FC = () => {
           )}
         </GravityPanel>
 
-        {/* 6 · Prompt */}
+        {/* 6 · Style */}
+        <GravityPanel>
+          <SectionTitle n={6} title="Style" aside={styleOptions.find((s) => s.slug === style)?.label} />
+          <p className="text-[12px] text-[var(--gv-text-tertiary)] mb-3">
+            How the clip is shot and spoken. The prompt follows the rules for the style you pick; change it, then rebuild the prompt.
+          </p>
+          {styleOptions.length > 0 ? (
+            <HeroStylePicker styles={styleOptions} value={style} onChange={setStyle} disabled={planning || inFlight} />
+          ) : stylesFailed ? (
+            <p className="text-[13px] text-[var(--gv-text-tertiary)]">The styles could not load, so the prompt will use Cinematic Commercial.</p>
+          ) : (
+            <div className="flex items-center gap-2 text-[12.5px] text-[var(--gv-text-tertiary)]">
+              <Loader2 className="w-4 h-4 animate-spin text-[var(--gv-accent)]" />Loading styles…
+            </div>
+          )}
+          {style === 'testimonial' && (
+            <p className="mt-3 text-[12px] text-[var(--gv-text-tertiary)]">
+              A creator recommendation is spoken by a creator character, never presented as a real customer, and makes no claims about results.
+            </p>
+          )}
+        </GravityPanel>
+
+        {/* 7 · Prompt */}
         <GravityPanel contentClassName="space-y-4">
-          <SectionTitle n={6} title="Prompt" />
+          <SectionTitle n={7} title="Prompt" />
           <div className="flex flex-wrap items-center gap-3">
             <GravityButton onClick={buildPrompt} disabled={planning || inFlight} variant={plan && !planStale ? 'ghost' : 'primary'}>
               {planning ? <><Loader2 className="w-4 h-4 animate-spin" />Building prompt…</> : plan ? 'Rebuild prompt' : 'Build prompt'}
@@ -785,7 +837,7 @@ const HeroVideo: React.FC = () => {
           </div>
           {planStale && (
             <p role="status" className="text-[12.5px] text-[var(--gv-text-primary)]">
-              You changed the scenes, references, sound or frame since this prompt was written. Rebuild it so they match.
+              You changed the scenes, references, style, sound or frame since this prompt was written. Rebuild it so they match.
             </p>
           )}
           {plan && (
@@ -867,9 +919,9 @@ const HeroVideo: React.FC = () => {
           )}
         </GravityPanel>
 
-        {/* 7 · Finish */}
+        {/* 8 · Finish */}
         <GravityPanel>
-          <SectionTitle n={7} title="Finish" />
+          <SectionTitle n={8} title="Finish" />
           <div className="divide-y divide-[var(--gv-border-subtle)]">
             <Switch on={endCard} onChange={setEndCard} label="End card" hint="A closing card with your logo, call to action and website." />
             <Switch on={captions} onChange={setCaptions} label="Captions" hint="Burn the spoken lines into the video." />
@@ -890,7 +942,7 @@ const HeroVideo: React.FC = () => {
           </div>
         </GravityPanel>
 
-        {/* 8 · Generate */}
+        {/* 9 · Generate */}
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
             {cannotAfford ? (

@@ -16,6 +16,9 @@
 // live next door and are merged in here. Same contract either way.
 const VIDEO_PROMPTS = require('./promptRegistry.video');
 const VIDEO_PROMPTS_2 = require('./promptRegistry.video2');
+// Hero video style rules: plain prose (no placeholders). Required here, not the other way round,
+// so heroVideoStyles can load the registry lazily without a cycle.
+const { GROUP_BLOCKS: HERO_STYLE_RULES } = require('./heroVideoStyles');
 
 const PROMPTS = {
   ...VIDEO_PROMPTS,
@@ -738,6 +741,42 @@ STRICT JSON only, no markdown; "prompt" is a single-line string (escape line bre
   "assumptions": ["3-6 inferences or gaps"]
 }
 `
+  },
+
+  'hero_video.style.cinematic': {
+    label: 'Hero video style: Cinematic',
+    summary:
+      'Rules the hero video planner follows for Cinematic Commercial, Storytelling, Documentary and Luxury Advertisement: light, story arc, camera and dialogue. Change this if those clips feel flat or over-produced. Keep the integrity and realism lines.',
+    stage: 'hero-video',
+    variables: {},
+    template: HERO_STYLE_RULES.cinematic
+  },
+
+  'hero_video.style.ugc': {
+    label: 'Hero video style: Creator and phone',
+    summary:
+      'Rules for Daily Life Vlog, Social Media Reel and Creator recommendation: phone-camera look, casual speech and a higher dialogue budget. Change this if those clips look too polished or the speech sounds scripted. Keep the integrity and realism lines.',
+    stage: 'hero-video',
+    variables: {},
+    template: HERO_STYLE_RULES.ugc
+  },
+
+  'hero_video.style.product': {
+    label: 'Hero video style: Product',
+    summary:
+      'Rules for Product Advertisement and Product Showcase: the exact product, label and scale, hands, and short product shots. Change this if the product drifts, floats or loses its label. Keep the integrity and realism lines.',
+    stage: 'hero-video',
+    variables: {},
+    template: HERO_STYLE_RULES.product
+  },
+
+  'hero_video.style.explainer': {
+    label: 'Hero video style: Explainer',
+    summary:
+      'Rules for Educational, Motivational, Corporate Presentation and News Update: one clear idea, shown rather than claimed. Change this if those clips feel like a lecture or try to draw text on screen. Keep the integrity and realism lines.',
+    stage: 'hero-video',
+    variables: {},
+    template: HERO_STYLE_RULES.explainer
   },
 
   'campaign.visualPlan': {

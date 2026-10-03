@@ -20,7 +20,7 @@ const STAGE_LABELS: Record<string, string> = {
   carousel: 'Carousels (legacy copy)',
   image: 'Images',
   video: 'Videos',
-  'hero-video': 'Hero videos'
+  'hero-video': 'Hero videos (prompt and style rules)'
 };
 
 const PromptStudio: React.FC<{
@@ -195,25 +195,31 @@ const PromptStudio: React.FC<{
                     className="gravity-bare w-full p-4 rounded-xl bg-white/[0.03] border border-white/[0.08] text-[12.5px] leading-relaxed text-[#F5F4F1] font-mono outline-none focus:border-[#F5A623]/40 resize-y"
                   />
 
-                  <div>
-                    <div className="text-[10px] uppercase tracking-wide text-white/30 mb-2">
-                      Placeholders you can use
+                  {Object.keys(active.variables).length > 0 ? (
+                    <div>
+                      <div className="text-[10px] uppercase tracking-wide text-white/30 mb-2">
+                        Placeholders you can use
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1.5">
+                        {Object.entries(active.variables).map(([name, meaning]) => (
+                          <div key={name} className="flex gap-2 text-[11.5px]">
+                            <button
+                              onClick={() => setDraft(`${draft}{{${name}}}`)}
+                              className="font-mono text-[#F5A623] hover:underline shrink-0"
+                              title="Add to the end of the prompt"
+                            >
+                              {`{{${name}}}`}
+                            </button>
+                            <span className="text-white/40">{meaning}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1.5">
-                      {Object.entries(active.variables).map(([name, meaning]) => (
-                        <div key={name} className="flex gap-2 text-[11.5px]">
-                          <button
-                            onClick={() => setDraft(`${draft}{{${name}}}`)}
-                            className="font-mono text-[#F5A623] hover:underline shrink-0"
-                            title="Add to the end of the prompt"
-                          >
-                            {`{{${name}}}`}
-                          </button>
-                          <span className="text-white/40">{meaning}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                  ) : (
+                    <p className="text-[11.5px] text-white/40">
+                      Plain rules with no placeholders: the text is used as written.
+                    </p>
+                  )}
 
                   {missing.length > 0 && (
                     <div className="flex gap-2.5 rounded-lg border border-[#F5A623]/25 bg-[#F5A623]/[0.06] px-3.5 py-2.5">

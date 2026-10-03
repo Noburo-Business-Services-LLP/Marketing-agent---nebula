@@ -5,7 +5,9 @@ const { ipKeyGenerator } = rateLimit;
 const { protect } = require('../middleware/auth');
 const { checkTrial } = require('../middleware/trialGuard');
 const { normalizeHeroBrief, selectReferences } = require('../services/heroVideoBrief');
-const { DEFAULT_STYLE, isHeroStyle } = require('../services/heroVideoStyles');
+const fs = require('fs');
+const path = require('path');
+const { DEFAULT_STYLE, HERO_STYLES, isHeroStyle } = require('../services/heroVideoStyles');
 const { HERO_CLIP_SECONDS } = require('../config/apiCosts');
 // Same semantics as videoDraftStore.toUserId; kept local because that module drags in timers.
 const toUserId = (user) => (!user ? null : user._id ? String(user._id) : user.id ? String(user.id) : null);
@@ -42,8 +44,8 @@ const sentence = (s) => (s && !/[.!?…]$/.test(s) ? `${s}.` : s);
 const MAX_SHOTS = 7;
 const MAX_HERO_CUT = 12;
 const MAX_CTA = 60;
-const STYLE_BLOCK_MAX = 1200;
-const CAST_BUDGET = 1000; // all cast lines together // an edited style prompt longer than this is clipped, keeping the planner under 14,000 characters
+const STYLE_BLOCK_MAX = 1200; // an edited style prompt longer than this is clipped, keeping the planner under 14,000 characters
+const CAST_BUDGET = 1000; // all cast lines together
 const AUDIO_MODES = ['native', 'sfx_only'];
 const AUDIO_DIRECTIONS = {
   native: 'Music and effects both come from the video model. In 10 SFX write an actual music line: genre, two or three instruments, tempo, starting quiet under the setup, lifting at the discovery and resolving on the final held frame, always under the dialogue. Add a specific diegetic sound for every meaningful action.',
@@ -244,6 +246,25 @@ function fail(res, err, context) {
 const ACTIVE = ['queued', 'processing'];
 const MAX_RECONCILE = 3;
 
+// Style covers: a photographic <slug>.jpg (made by scripts/generate-hero-style-covers.js) when one
+// has been added, else the illustrated <slug>.svg that ships with the wizard. The built app serves
+// frontend/public from backend/public, so both places are checked.
+const COVER_PATH = '/assets/video-styles';
+const DEFAULT_COVER_DIRS = [
+  path.join(__dirname, '..', 'public', 'assets', 'video-styles'),
+  path.join(__dirname, '..', '..', 'frontend', 'public', 'assets', 'video-styles')
+];
+function heroStyleList(coverDirs = DEFAULT_COVER_DIRS) {
+  const hasJpg = (slug) => coverDirs.some((d) => { try { return fs.existsSync(path.join(d, `${slug}.jpg`)); } catch (_) { return false; } });
+  return HERO_STYLES.map((s) => ({
+    slug: s.slug,
+    label: s.label,
+    group: s.group,
+    blurb: s.blurb,
+    coverUrl: `${COVER_PATH}/${s.slug}.${hasJpg(s.slug) ? 'jpg' : 'svg'}`
+  }));
+}
+
 function lazyPlanDeps() {
   return {
     buildPrompt: (...a) => require('../services/promptRegistry').buildPrompt(...a),
@@ -265,6 +286,14 @@ function createHeroVideoRouter(planDepsIn, impl = {}) {
   let deps = impl.deps || null;
   const getDeps = () => (deps = deps || require('../services/heroVideoFlow').defaultDeps());
   const jobModel = () => impl.JobModel || require('../models/HeroVideoJob');
+
+  router.get('/styles', protect, heroReadLimiter, async (req, res) => {
+    try {
+      return res.json({ success: true, styles: heroStyleList(impl.coverDirs) });
+    } catch (err) {
+      return fail(res, err, 'Failed to load styles');
+    }
+  });
 
   router.get('/quota', protect, heroReadLimiter, async (req, res) => {
     try {
@@ -404,4 +433,5 @@ const router = createHeroVideoRouter();
 router.createHeroVideoRouter = createHeroVideoRouter;
 router.normalizePlan = normalizePlan;
 router.buildPlanVars = buildPlanVars;
+router.STYLE_BLOCK_MAX = STYLE_BLOCK_MAX;
 module.exports = router;
