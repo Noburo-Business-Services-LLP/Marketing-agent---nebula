@@ -48,7 +48,7 @@ import AssetPicker, { PickedAsset } from '../components/AssetPicker';
 import { getThemeClasses, useTheme } from '../context/ThemeContext';
 import { contentCalendarAPI, inventoryAPI, videoGenerationAPI, draftsAPI } from '../services/api';
 import { Product, Draft } from '../types';
-import { useLocation, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { updateBackgroundReel } from '../utils/backgroundReel';
 
 type AudioMode = 'off' | 'auto' | 'upload';
@@ -388,6 +388,7 @@ const ReelGenerator: React.FC = () => {
   // Aspect ratio chosen on Step 1 — propagated into every image + clip
   // gen call so images and Kling clips render in the correct format.
   type AspectRatio = '9:16' | '16:9' | '1:1' | '4:5';
+  const navigate = useNavigate();
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('9:16');
   // Scene previews are framed to the chosen aspect and use object-contain,
   // so the whole generated frame is always visible — never centre-cropped.
@@ -3063,6 +3064,14 @@ setCharacterAge(nextDraft?.characterAge || '');
                         <><RefreshCcw className="w-4 h-4" />Regenerate concepts</>
                       )}
                     </button>
+                    {acceptedConcept && (
+                      <button
+                        onClick={() => navigate('/reels/hero', { state: { concept: acceptedConcept, aspectRatio } })}
+                        className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-[13px] font-semibold transition-all border border-[#F5A623]/40 text-[#F5A623] hover:bg-[#F5A623]/10"
+                      >
+                        Make a Hero video instead
+                      </button>
+                    )}
                     {!acceptedConceptId && (
                       <span className="text-[12px] text-white/40">Accept a concept above to continue.</span>
                     )}

@@ -3742,6 +3742,57 @@ export const videoGenerationAPI = {
   }
 };
 
+// Gravity Hero video (/api/hero-video): one premium 15s clip per concept.
+export type HeroAspectRatio = '9:16' | '16:9' | '1:1';
+export interface HeroPlan {
+  prompt: string;
+  beatSheet: Array<{ time: string; beat: string }>;
+  dialogue: string;
+  qaChecklist: string[];
+  assumptions: string[];
+}
+export type HeroJobStatus = 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled';
+export interface HeroJobSummary {
+  jobId: string;
+  status: HeroJobStatus;
+  createdAt: string;
+  videoUrl?: string;
+  prompt?: string;
+}
+
+export const heroVideoAPI = {
+  quota: async (): Promise<{ success: boolean; used: number; limit: number; resetsOn: string }> => {
+    return apiCall('/hero-video/quota', { method: 'GET' }, true);
+  },
+
+  plan: async (payload: {
+    concept: { title?: string; storySummary?: string; coreEmotion?: string; visualStyle?: string };
+    aspectRatio?: HeroAspectRatio;
+    language?: string;
+    refImageUrls?: string[];
+  }): Promise<{ success: boolean; plan?: HeroPlan; message?: string }> => {
+    return apiCall('/hero-video/plan', { method: 'POST', body: JSON.stringify(payload) }, true);
+  },
+
+  // 403 quotaExhausted / creditsExhausted come back as thrown errors from apiCall;
+  // callers read err.data (see apiCall) or err.message.
+  generate: async (payload: {
+    prompt: string;
+    refImageUrls?: string[];
+    aspectRatio: HeroAspectRatio;
+  }): Promise<{ success: boolean; jobId?: string; quotaExhausted?: boolean; creditsExhausted?: boolean; used?: number; limit?: number; message?: string }> => {
+    return apiCall('/hero-video/generate', { method: 'POST', body: JSON.stringify(payload) }, true);
+  },
+
+  job: async (jobId: string): Promise<{ success: boolean; status: HeroJobStatus; videoUrl?: string; error?: string }> => {
+    return apiCall(`/hero-video/jobs/${encodeURIComponent(jobId)}`, { method: 'GET' }, true);
+  },
+
+  list: async (): Promise<{ success: boolean; jobs: HeroJobSummary[] }> => {
+    return apiCall('/hero-video/jobs', { method: 'GET' }, true);
+  }
+};
+
 // ============================================
 // ICP & CHANNEL STRATEGY API
 // ============================================

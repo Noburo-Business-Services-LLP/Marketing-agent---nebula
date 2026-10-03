@@ -20,6 +20,7 @@ import ContentCalendar from './pages/ContentCalendar';
 import CalendarHome from './pages/CalendarHome';
 import IdeaInbox from './pages/IdeaInbox';
 import ReelGenerator from './pages/ReelGenerator';
+import HeroVideo from './pages/HeroVideo';
 import AdCampaigns from './pages/AdCampaigns';
 import Competitors from './pages/Competitors';
 import ConnectSocials from './pages/ConnectSocials';
@@ -200,6 +201,7 @@ const App: React.FC = () => {
                     <Route path="/campaigns-classic" element={<Campaigns />} />
                     <Route path="/drafts" element={<GravityApprove />} />
                     <Route path="/reels" element={<ReelGenerator />} />
+                    <Route path="/reels/hero" element={<HeroVideo />} />
                     <Route path="/upload" element={<UploadAndSchedule />} />
                     <Route path="/ad-campaigns" element={<AdCampaigns />} />
                     <Route path="/competitors" element={<Competitors />} />
