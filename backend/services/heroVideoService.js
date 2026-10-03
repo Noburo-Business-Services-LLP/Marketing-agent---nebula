@@ -72,7 +72,7 @@ function nextMonthStartUTC(now = new Date()) {
 }
 
 async function getHeroQuota(userId, now = new Date(), JobModel) {
-  const Model = JobModel || require('../models/VideoJob');
+  const Model = JobModel || require('../models/HeroVideoJob');
   const used = await Model.countDocuments({
     userId,
     'metadata.kind': 'hero',

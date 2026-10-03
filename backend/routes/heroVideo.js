@@ -91,7 +91,7 @@ function createHeroVideoRouter(planDeps = lazyPlanDeps(), impl = {}) {
   });
   let deps = impl.deps || null;
   const getDeps = () => (deps = deps || require('../services/heroVideoFlow').defaultDeps());
-  const jobModel = () => impl.JobModel || require('../models/VideoJob');
+  const jobModel = () => impl.JobModel || require('../models/HeroVideoJob');
 
   router.get('/quota', protect, heroReadLimiter, async (req, res) => {
     try {

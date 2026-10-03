@@ -20,12 +20,12 @@ const STALE_UNSUBMITTED_MS = 10 * 60 * 1000;
 // record, so there is nothing here to find or refund; that case needs manual reconciliation.
 
 function defaultDeps() {
-  const VideoJob = require('../models/VideoJob');
+  const HeroVideoJob = require('../models/HeroVideoJob');
   const hero = require('./heroVideoService');
   const { deductCredits, refundCredits } = require('../middleware/trialGuard');
   return {
-    JobModel: VideoJob,
-    quotaFn: (userId, now) => hero.getHeroQuota(userId, now, VideoJob),
+    JobModel: HeroVideoJob,
+    quotaFn: (userId, now) => hero.getHeroQuota(userId, now, HeroVideoJob),
     deduct: deductCredits,
     refund: refundCredits,
     submit: hero.submitHeroClip,

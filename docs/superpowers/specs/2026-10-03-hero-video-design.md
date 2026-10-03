@@ -49,14 +49,14 @@ All additive. No existing function in `videoService.js` or `videoGeneration.js` 
      1. validate prompt (non-empty, length cap) and that refs are public https URLs (≤ 4);
      2. quota check (below) → 403 `{ quotaExhausted: true, used, limit }`;
      3. `deductCredits(userId, 'hero_video_clip', 1, 'Hero video')` → 403 `{ creditsExhausted: true }`;
-     4. create `VideoJob` with `metadata.kind = 'hero'`, store payload, `submitHeroClip`, save `metadata.falRequestId`, status `processing`; on submit error refund and mark failed;
+     4. create a `HeroVideoJob` with `metadata.kind = 'hero'`, store payload, `submitHeroClip`, save `metadata.falRequestId`, status `processing`; on submit error refund and mark failed;
      5. return `{ jobId }`.
    - `GET /jobs/:jobId` (owner only): while non-terminal, calls `getHeroClipStatus`; on completion copies the video to Cloudinary via the existing upload helper and stores `result.videoUrl`; on failure sets `failed` and refunds exactly once (guarded by `metadata.refunded`). Returns `{ status, progress?, videoUrl?, error? }`.
    - `GET /jobs` (owner, `metadata.kind='hero'`, newest first, limit 20) for history.
 
-5. **Quota** — `heroQuotaForUser(userId, now)` in `heroVideoService.js`: count of the user's `VideoJob` with `metadata.kind='hero'`, `createdAt` ≥ start of the current UTC calendar month, status in `queued|processing|completed`. Failed/cancelled jobs do not count (they were refunded). Limit = `HERO_VIDEO_MONTHLY_LIMIT` env, default 2. Race note: two simultaneous generates could both pass the check; acceptable at this scale because each is separately paid, and the check re-runs after job creation (if over the limit, cancel and refund the newer job).
+5. **Quota** — `heroQuotaForUser(userId, now)` in `heroVideoService.js`: count of the user's `HeroVideoJob` documents with `metadata.kind='hero'`, `createdAt` ≥ start of the current UTC calendar month, status in `queued|processing|completed`. Failed/cancelled jobs do not count (they were refunded). Limit = `HERO_VIDEO_MONTHLY_LIMIT` env, default 2. Race note: two simultaneous generates could both pass the check; acceptable at this scale because each is separately paid, and the check re-runs after job creation (if over the limit, cancel and refund the newer job).
 
-6. **`VideoJob` model** — no schema change (`metadata` and `payload` are Mixed). Hero jobs are distinguished by `metadata.kind`. Existing queue/worker ignores them because they never enter `videoGenerationQueue`.
+6. **`HeroVideoJob` model (separate collection)** — hero jobs live in their own model, `backend/models/HeroVideoJob.js` (collection `hero_video_jobs`), with the same schema shape as `VideoJob` plus an index on `{ userId: 1, createdAt: -1 }` for the quota count and history list. They must not live in `video_jobs`: the Kling queue worker (`videoGenerationQueue.startWorker()`) runs maintenance loops on every `VideoJob` document regardless of kind (startup and stale recovery fail and refund `processing` jobs, GC deletes old rows, the drain picks up any `queued` job and counts `processing` ones against its concurrency), so a hero job there would be failed, refunded at the Kling price, or deleted. `metadata.kind = 'hero'` is still set and filtered on. `VideoJob`, the Kling queue and its routes are unchanged.
 
 ### Frontend
 
