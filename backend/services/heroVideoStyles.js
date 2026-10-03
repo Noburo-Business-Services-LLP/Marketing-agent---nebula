@@ -32,7 +32,7 @@ const GROUP_BLOCKS = {
     'Story: a felt arc of SETUP, TENSION, DISCOVERY, TRANSFORMATION and EMOTIONAL PAYOFF, with a quiet beat (a held breath, a glance) before the turn.',
     'Camera: physically operated and motivated: observational wide at the setup, closer on the problem, a slow push on the discovery, an intimate close reaction for the payoff; plausible depth of field.',
     'Dialogue: the planner default, at most two short lines, about 25 words; faces and hands carry the rest.',
-    'Score: understated, lifting at the discovery, resolving on the final held frame.',
+    'Score (only when AUDIO allows music): understated, lifting at the discovery, resolving on the final held frame.',
     INTEGRITY,
     REALISM
   ].join('\n'),
@@ -41,7 +41,7 @@ const GROUP_BLOCKS = {
     'Speech: casual, to the lens, like a voice note to a friend, with contractions and a small stumble or laugh. Higher dialogue budget: about 35-40 words in 15 s, one short line per beat; this replaces the planner default.',
     'Story: a hook in the first 2 seconds (an interrupted thought, a reveal), one honest first impression, a natural sign-off.',
     'Creator recommendation: the speaker is a creator persona or a labelled dramatization, never a real customer; no claims of long-term use or results.',
-    'Sound: phone-mic room tone and the real sounds of the place; any music stays low under the voice.',
+    'Sound: phone-mic room tone and the real sounds of the place; any music (only when AUDIO allows music) stays low under the voice.',
     INTEGRITY,
     REALISM
   ].join('\n'),

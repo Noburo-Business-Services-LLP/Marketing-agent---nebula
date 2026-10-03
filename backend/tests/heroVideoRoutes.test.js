@@ -228,8 +228,8 @@ test('/plan happy path: blocks, style, audio and references reach buildPrompt', 
   assert.match(v.brandBlock, /Hero product[^\n]*@image3/);
   assert.match(v.brandBlock, /Logo @image4/);
   assert.match(v.brandBlock, /#F5A623/);
-  assert.match(v.scenesBlock, /scene-1/);
-  assert.match(v.scenesBlock, /scene-2/);
+  assert.match(v.scenesBlock, /\[S1\] Hook/);
+  assert.match(v.scenesBlock, /\[S2\] Turn/);
   assert.match(v.referencesBlock, /@image1[^\n]*Maya/);
   assert.strictEqual(v.conceptTitle, 'Late shift');
   assert.strictEqual(v.aspectRatio, '9:16');
@@ -286,15 +286,28 @@ test('/plan keptSceneIds limit keyframes to the kept scenes and mark them in the
   assert.strictEqual(res.code, 200);
   const kf = res.body.references.filter((r) => r.kind === 'keyframe').map((r) => r.url);
   assert.deepStrictEqual(kf, [`${CDN}/kf2.png`]);
-  assert.match(calls.build.vars.scenesBlock, /scene-2[^\n]*KEEP/);
-  assert.doesNotMatch(calls.build.vars.scenesBlock, /scene-1[^\n]*KEEP/);
+  assert.match(calls.build.vars.scenesBlock, /\[S2\] KEEP/);
+  assert.match(calls.build.vars.scenesBlock, /\[S1\] \(dropped\)/);
 });
 
-test('/plan heroCut drops scene ids that are not in the brief', async () => {
-  const { deps } = mkDeps({ callTextLLM: async () => JSON.stringify({ prompt: 'p', heroCut: [{ sceneId: 'scene-1', keep: true }, { sceneId: 'ghost', keep: true }] }) });
+test('/plan heroCut maps S-labels back to real scene ids and drops unknown ones', async () => {
+  const { deps } = mkDeps({ callTextLLM: async () => JSON.stringify({ prompt: 'p', heroCut: [{ sceneId: 'scene-1', keep: true }, { sceneId: 'S2', keep: false }, { sceneId: 'S9', keep: true }, { sceneId: 'ghost', keep: true }] }) });
   const res = mkRes();
   await planHandler(deps)(reqOf({ brief: mkBrief() }), res);
-  assert.deepStrictEqual(res.body.plan.heroCut.map((h) => h.sceneId), ['scene-1']);
+  assert.deepStrictEqual(res.body.plan.heroCut.map((h) => [h.sceneId, h.keep]), [['scene-1', true], ['scene-2', false]]);
+});
+
+test('/plan ignores keptSceneIds that are not in the brief; none left means no preference', async () => {
+  const { deps, calls } = mkDeps();
+  const res = mkRes();
+  await planHandler(deps)(reqOf({ brief: mkBrief(), keptSceneIds: ['ghost', 'other'] }), res);
+  assert.strictEqual(res.code, 200);
+  assert.doesNotMatch(calls.build.vars.scenesBlock, /KEEP|\(dropped\)/);
+  assert.deepStrictEqual(res.body.references.filter((r) => r.kind === 'keyframe').map((r) => r.url), [`${CDN}/kf1.png`, `${CDN}/kf2.png`]);
+  const { deps: d2, calls: c2 } = mkDeps();
+  await planHandler(d2)(reqOf({ brief: mkBrief(), keptSceneIds: ['ghost', 'scene-2'] }), mkRes());
+  assert.match(c2.build.vars.scenesBlock, /\[S2\] KEEP/);
+  assert.match(c2.build.vars.scenesBlock, /\[S1\] \(dropped\)/);
 });
 
 test('/plan CastError -> 404', async () => {

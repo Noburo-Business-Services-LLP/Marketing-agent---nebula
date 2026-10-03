@@ -42,7 +42,8 @@ const sentence = (s) => (s && !/[.!?…]$/.test(s) ? `${s}.` : s);
 const MAX_SHOTS = 7;
 const MAX_HERO_CUT = 12;
 const MAX_CTA = 60;
-const STYLE_BLOCK_MAX = 1300; // an edited style prompt longer than this is clipped, keeping the planner under 14,000 characters
+const STYLE_BLOCK_MAX = 1200;
+const CAST_BUDGET = 1000; // all cast lines together // an edited style prompt longer than this is clipped, keeping the planner under 14,000 characters
 const AUDIO_MODES = ['native', 'sfx_only'];
 const AUDIO_DIRECTIONS = {
   native: 'Music and effects both come from the video model. In 10 SFX write an actual music line: genre, two or three instruments, tempo, starting quiet under the setup, lifting at the discovery and resolving on the final held frame, always under the dialogue. Add a specific diegetic sound for every meaningful action.',
@@ -55,11 +56,14 @@ function normalizePlan(parsed, opts = {}) {
   if (!prompt) return null;
   const objs = (v) => (Array.isArray(v) ? v.filter(isObj) : []);
   const s = isObj(parsed.story) ? parsed.story : {};
-  const known = Array.isArray(opts.sceneIds) ? new Set(opts.sceneIds) : null;
+  const ids = Array.isArray(opts.sceneIds) ? opts.sceneIds : null;
+  const known = ids ? new Set(ids) : null;
+  // The planner sees scenes as S1..Sn (ids can be 80 chars); map labels back to the real ids.
+  const realId = (id) => (!ids || known.has(id) ? id : (/^S(\d+)$/i.test(id) && ids[Number(id.slice(1)) - 1]) || id);
   return {
     story: { hook: str(s.hook), tension: str(s.tension), turn: str(s.turn), payoff: str(s.payoff), cta: str(s.cta) },
     heroCut: objs(parsed.heroCut)
-      .map((h) => ({ sceneId: str(h.sceneId), keep: h.keep === true || h.keep === 'true', reason: str(h.reason), time: str(h.time) }))
+      .map((h) => ({ sceneId: realId(str(h.sceneId)), keep: h.keep === true || h.keep === 'true', reason: str(h.reason), time: str(h.time) }))
       .filter((h) => h.sceneId && (!known || known.has(h.sceneId)))
       .slice(0, MAX_HERO_CUT),
     shotList: objs(parsed.shotList).slice(0, MAX_SHOTS)
@@ -87,7 +91,7 @@ function referencesBlockFrom(refs) {
   if (!refs.length) return 'No reference images: write no image tags; describe people, place and product physically.';
   return refs.map((r) => {
     const role = REF_ROLES[r.source] || (() => `${String(r.kind || 'reference').toUpperCase()}: appearance only.`);
-    return `${r.tag} - ${role(clip(r.label, 18) || r.kind)}`;
+    return `${r.tag} - ${role(clip(r.label, 14) || r.kind)}`;
   }).join('\n');
 }
 
@@ -97,15 +101,15 @@ function castBlockFrom(cast, refs) {
   const cap = (n) => Math.round(n * k);
   const lines = cast.map((c) => {
     const tag = tagOf(c.portraitUrl);
-    const who = [clip(c.age, 12), clip(c.gender, 20)].filter(Boolean).join(', ');
+    const who = [clip(c.age, 12), clip(c.gender, 16)].filter(Boolean).join(', ');
     const parts = [
-      `- ${clip(c.name, 30) || 'Unnamed'}${tag ? ` ${tag}` : ''}${who ? `: ${who}` : ''}${c.role ? `; ${clip(c.role, cap(50))}` : ''}.`,
+      `- ${clip(c.name, 24) || 'Unnamed'}${tag ? ` ${tag}` : ''}${who ? `: ${who}` : ''}${c.role ? `; ${clip(c.role, cap(50))}` : ''}.`,
       c.appearance && `Looks: ${clip(c.appearance, cap(120))}.`,
       (c.hairStyle || c.hairColor) && `Hair: ${clip(`${c.hairColor} ${c.hairStyle}`, cap(40))}.`,
       c.clothing && `Wears: ${clip(c.clothing, cap(80))}.`,
       c.personality && `Manner: ${clip(c.personality, cap(60))}.`
     ];
-    return parts.filter(Boolean).join(' ');
+    return cut(parts.filter(Boolean).join(' '), Math.floor(CAST_BUDGET / Math.max(1, cast.length)) - 1);
   });
   const sheet = refs.find((r) => r.source === 'cast-sheet');
   if (sheet) lines.push(`Cast sheet: ${sheet.tag} shows the cast together.`);
@@ -116,7 +120,7 @@ function environmentBlockFrom(env, refs) {
   const tags = refs.filter((r) => r.kind === 'environment').map((r) => r.tag);
   if (!env || !env.enabled) return 'No location chosen: pick one believable real place that fits the story and the audience, described with concrete objects.';
   const lines = [];
-  if (env.notes) lines.push(`Notes: ${clip(env.notes, 180)}`);
+  if (env.notes) lines.push(`Notes: ${clip(env.notes, 150)}`);
   lines.push(tags.length
     ? `Location photos ${tags.join(', ')}: stage every beat in this place; keep its layout, surfaces and light.`
     : 'No location photo: build the place concretely from the notes.');
@@ -134,35 +138,45 @@ function brandBlockFrom(brand, refs) {
     lines.push('No hero product on file: show the brand through what it does in the story; never invent packaging.');
   }
   if (logo) lines.push(`Logo ${logo.tag}: only on a physical item that belongs in the scene, if at all.`);
-  if (brand.colors && brand.colors.length) lines.push(`Brand colours ${brand.colors.slice(0, 6).map((c) => clip(c, 20)).join(', ')}: as wardrobe or prop accents, never as graphics.`);
-  if (brand.website) lines.push('The website, logo and CTA go on the end card added after generation; never render them as text in the clip.');
+  if (brand.colors && brand.colors.length) lines.push(`Brand colours ${brand.colors.slice(0, 4).map((c) => clip(c, 20)).join(', ')}: as wardrobe or prop accents, never as graphics.`);
+  if (brand.website) lines.push('The website and CTA go on the end card added after generation; never render them as text in the clip.');
   return lines.join('\n');
 }
 
+const SCENES_BUDGET = 900;
+// Every character of a scene line (label, mark, title, cast, script, visual) counts inside its share of the budget.
 function scenesBlockFrom(scenes, cast, kept) {
   const nameOf = new Map(cast.map((c) => [c.id, c.name || c.id]));
-  const per = Math.floor(1050 / Math.max(1, scenes.length));
-  return scenes.map((s) => {
+  const n = Math.max(1, scenes.length);
+  const per = Math.floor(SCENES_BUDGET / n) - 1; // minus the newline
+  const roomy = n <= 6;
+  const lines = scenes.map((s, i) => {
     const mark = kept ? (kept.includes(s.sceneId) ? ' KEEP' : ' (dropped)') : '';
-    const who = (s.charactersRequired || []).slice(0, 4).map((id) => clip(nameOf.get(id) || id, 16)).join(', ');
-    const head = `- [${clip(s.sceneId, 24)}]${mark} ${clip(s.title, 24) || 'Untitled'}, ${s.durationSeconds || '?'}s${who ? `, cast: ${who}` : ''}.`;
-    const room = per - head.length;
-    // Long breakdowns keep only a short script line per scene; short ones get script and visual.
-    if (room < 70) return [head, s.script && `Script: ${sentence(clip(s.script, Math.max(30, room)))}`].filter(Boolean).join(' ');
-    const scriptLen = Math.round((room - 18) * 0.6);
-    const visualLen = room - 18 - scriptLen;
-    return [head, s.script && `Script: ${sentence(clip(s.script, scriptLen))}`, s.visual && `Visual: ${sentence(clip(s.visual, visualLen))}`].filter(Boolean).join(' ');
-  }).join('\n');
+    const req = s.charactersRequired || [];
+    const names = req.slice(0, 2).map((id) => clip(nameOf.get(id) || id, roomy ? 20 : 12));
+    const who = names.length ? `, cast: ${names.join(', ')}${req.length > 2 ? ` +${req.length - 2}` : ''}` : '';
+    const head = `- [S${i + 1}]${mark} ${clip(s.title, roomy ? 40 : 16) || 'Untitled'}, ${s.durationSeconds || '?'}s${who}.`;
+    const room = per - head.length - 1;
+    let body = '';
+    if (room >= 90) {
+      const scriptLen = Math.round((room - 18) * 0.6);
+      body = [s.script && `Script: ${sentence(clip(s.script, scriptLen))}`, s.visual && `Visual: ${sentence(clip(s.visual, room - 18 - scriptLen))}`].filter(Boolean).join(' ');
+    } else if (room >= 20 && s.script) {
+      body = `Script: ${sentence(clip(s.script, room - 9))}`;
+    }
+    return cut([head, body].filter(Boolean).join(' '), per);
+  });
+  return cut(lines.join('\n'), SCENES_BUDGET);
 }
 
 function brandContextFrom(brand) {
-  const tone = Array.isArray(brand.tone) ? brand.tone.map((t) => clip(t, 30)).filter(Boolean).join(', ') : '';
+  const tone = Array.isArray(brand.tone) ? brand.tone.slice(0, 4).map((t) => clip(t, 20)).filter(Boolean).join(', ') : '';
   const lines = [
     ['Brand', clip(brand.name, 60)],
     ['Industry', clip(brand.industry, 60)],
     ['Hero product', clip(brand.heroProduct, 80)],
-    ['Audience', clip(brand.audience, 100)],
-    ['Ideal customer', clip(brand.icp, 140)],
+    ['Audience', clip(brand.audience, 80)],
+    ['Ideal customer', clip(brand.icp, 120)],
     ['Tone', tone]
   ].filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`);
   return lines.length ? lines.join('\n') : 'No brand profile on file.';
@@ -177,10 +191,10 @@ function buildPlanVars({ brief, brand, refs, styleBlock, audioMode, ctaText, kep
   const cta = clip(ctaText, MAX_CTA);
   return {
     brandContextBlock: brandContextFrom(b),
-    conceptTitle: clip(c.title, 100),
-    conceptStory: clip(c.storySummary, 360),
+    conceptTitle: clip(c.title, 80),
+    conceptStory: clip(c.storySummary, 320),
     conceptEmotion: clip(c.coreEmotion, 80),
-    conceptVisualStyle: clip(c.visualStyle, 150),
+    conceptVisualStyle: clip(c.visualStyle, 120),
     castBlock: castBlockFrom(cast, r),
     environmentBlock: environmentBlockFrom(brief.environment, r),
     brandBlock: brandBlockFrom(b, r),
@@ -298,6 +312,10 @@ function createHeroVideoRouter(planDepsIn, impl = {}) {
       const n = normalizeHeroBrief(body.brief);
       if (!n.ok) return res.status(400).json({ success: false, message: n.message });
       const brief = n.brief;
+      const sceneIds = brief.scenes.map((s) => s.sceneId);
+      // Unknown ids are ignored; nothing left means "no preference".
+      const kept = (opts.keptSceneIds || []).filter((id) => sceneIds.includes(id));
+      opts.keptSceneIds = kept.length ? kept : null;
       const userId = toUserId(req.user);
       // Brand and references are recomputed here; the client's list can only select from them.
       const brand = (await planDeps.loadBrand(userId)) || {};
@@ -316,7 +334,7 @@ function createHeroVideoRouter(planDepsIn, impl = {}) {
       const raw = await planDeps.callTextLLM(prompt, { jsonMode: true, maxTokens: 6000 });
       let parsed = null;
       try { parsed = planDeps.parseGeminiJSON(raw); } catch (_) { parsed = null; }
-      const plan = normalizePlan(parsed, { sceneIds: brief.scenes.map((s) => s.sceneId) });
+      const plan = normalizePlan(parsed, { sceneIds });
       if (!plan) return res.status(502).json({ success: false, message: 'Model returned no prompt. Please try again.' });
       return res.json({ success: true, plan, references: refs });
     } catch (err) {
