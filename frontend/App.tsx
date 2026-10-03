@@ -138,6 +138,9 @@ const App: React.FC = () => {
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route path="/admin" element={<AdminDashboard />} />
 
+        {/* Development only: look at the sign-up steps without an account. Not part of a production build. */}
+        {(import.meta as any).env?.DEV && <Route path="/__onboarding-preview" element={<Onboarding onComplete={() => {}} />} />}
+
         {/* Onboarding Route - Protected but outside main Layout if needed, or redirect check */}
         <Route 
             path="/onboarding"
