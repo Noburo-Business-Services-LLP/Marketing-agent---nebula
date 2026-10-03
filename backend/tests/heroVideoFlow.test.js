@@ -616,3 +616,220 @@ test('non-array references metadata is ignored, never a 400', async () => {
   assert.strictEqual(r.status, 200);
   assert.deepStrictEqual(d.JobModel.docs[0].payload.references, []);
 });
+
+// ---- Task 6: finish options, finalizeClip, raw-clip fallback ----
+const fsp = require('fs').promises;
+const os = require('os');
+const pathMod = require('path');
+
+const doneStatus = (d) => { d.getStatus = async () => ({ state: 'completed', videoUrl: 'https://fal/v.mp4' }); };
+const FINISHED = { videoUrl: 'https://cdn.example/finished.mp4', rawVideoUrl: 'https://cdn.example/raw.mp4' };
+
+test('start stores normalized finish options; bad input falls back to defaults and never throws', async () => {
+  for (const bad of [undefined, null, 'x', 42, [], { endCard: 'no', unknown: 1 }]) {
+    const d = makeDeps();
+    const r = await startHeroGeneration(d, { userId: 'u1', body: body({ finish: bad }) });
+    assert.strictEqual(r.status, 200, JSON.stringify(bad));
+    const f = d.JobModel.docs[0].payload.finish;
+    assert.strictEqual(f.fades, true);
+    assert.strictEqual(f.captions, false);
+    assert.strictEqual(f.endCard.enabled, true);
+  }
+  const d = makeDeps();
+  await startHeroGeneration(d, { userId: 'u1', body: body({ finish: { captions: true, endCard: { ctaText: 'Buy now', website: 'https://example.com' } } }) });
+  const f = d.JobModel.docs[0].payload.finish;
+  assert.strictEqual(f.captions, true);
+  assert.strictEqual(f.endCard.ctaText, 'Buy now');
+});
+
+test('start stores beatSheet and dialogue only when supplied, capped', async () => {
+  const d0 = makeDeps();
+  await startHeroGeneration(d0, { userId: 'u1', body: body() });
+  assert.ok(!('beatSheet' in d0.JobModel.docs[0].payload));
+  assert.ok(!('dialogue' in d0.JobModel.docs[0].payload));
+  const d = makeDeps();
+  const beatSheet = Array.from({ length: 40 }, (_, i) => ({ time: '0-2s', beat: 'b'.repeat(900) + i, emotion: 'calm', junk: 'x' }));
+  await startHeroGeneration(d, { userId: 'u1', body: body({ beatSheet, dialogue: '"Hi" '.repeat(1000) }) });
+  const p = d.JobModel.docs[0].payload;
+  assert.ok(p.beatSheet.length > 0 && p.beatSheet.length <= 12);
+  assert.ok(p.beatSheet.every((b) => b.beat.length <= 200 && !('junk' in b)));
+  assert.ok(p.dialogue.length <= 2000);
+  const d2 = makeDeps();
+  await startHeroGeneration(d2, { userId: 'u1', body: body({ beatSheet: 'nope', dialogue: 7 }) });
+  assert.ok(!('beatSheet' in d2.JobModel.docs[0].payload) && !('dialogue' in d2.JobModel.docs[0].payload));
+});
+
+test('completion with finalizeClip sets finished videoUrl and rawVideoUrl; copyToStorage not used', async () => {
+  const calls = [];
+  const { d, jobId } = await startedJob({ finalizeClip: async (a) => { calls.push(a); return { ...FINISHED }; } });
+  doneStatus(d);
+  const r = await pollHeroJob(d, { userId: 'u1', jobId });
+  assert.strictEqual(r.json.status, 'completed');
+  assert.strictEqual(r.json.videoUrl, FINISHED.videoUrl);
+  assert.strictEqual(r.json.rawVideoUrl, FINISHED.rawVideoUrl);
+  assert.ok(!('finishError' in r.json));
+  assert.strictEqual(calls.length, 1);
+  assert.strictEqual(calls[0].remoteUrl, 'https://fal/v.mp4');
+  assert.strictEqual(calls[0].job.userId, 'u1');
+  assert.ok(calls[0].job.payload.finish);
+  assert.strictEqual(d.calls.copy.length, 0);
+  const job = d.JobModel.docs[0];
+  assert.deepStrictEqual(job.result, { videoUrl: FINISHED.videoUrl, rawVideoUrl: FINISHED.rawVideoUrl });
+  const r2 = await pollHeroJob(d, { userId: 'u1', jobId });
+  assert.strictEqual(r2.json.rawVideoUrl, FINISHED.rawVideoUrl);
+});
+
+test('finalizeClip may report finishError: job completes with raw clip and the message', async () => {
+  const { d, jobId } = await startedJob({ finalizeClip: async () => ({ videoUrl: 'https://cdn.example/raw.mp4', rawVideoUrl: 'https://cdn.example/raw.mp4', finishError: 'Plain message.' }) });
+  doneStatus(d);
+  const r = await pollHeroJob(d, { userId: 'u1', jobId });
+  assert.strictEqual(r.json.status, 'completed');
+  assert.strictEqual(r.json.finishError, 'Plain message.');
+  assert.strictEqual(d.JobModel.docs[0].result.finishError, 'Plain message.');
+  assert.strictEqual(d.calls.refund.length, 0);
+});
+
+test('finalizeClip rejecting: completed with raw copy, finishError set (plain, no vendor names), no refund', async () => {
+  const { d, jobId } = await startedJob({ finalizeClip: async () => { throw new Error('ffmpeg exploded via fal Cloudinary canvas'); } });
+  doneStatus(d);
+  const r = await pollHeroJob(d, { userId: 'u1', jobId });
+  assert.strictEqual(r.json.status, 'completed');
+  assert.strictEqual(r.json.videoUrl, 'https://cdn.example/stored.mp4');
+  assert.strictEqual(r.json.rawVideoUrl, 'https://cdn.example/stored.mp4');
+  assert.ok(r.json.finishError && r.json.finishError.length > 10);
+  assert.ok(!/ffmpeg|fal|cloudinary|canvas/i.test(r.json.finishError));
+  assert.deepStrictEqual(d.calls.copy, ['https://fal/v.mp4']);
+  assert.strictEqual(d.calls.refund.length, 0);
+  assert.strictEqual(d.JobModel.docs[0].status, 'completed');
+});
+
+test('finalizeClip that never resolves within the injected cap: raw fallback, poll does not hang', async () => {
+  const { d, jobId } = await startedJob({ finishCapMs: 25, finalizeClip: () => new Promise(() => {}) });
+  doneStatus(d);
+  const r = await pollHeroJob(d, { userId: 'u1', jobId });
+  assert.strictEqual(r.json.status, 'completed');
+  assert.strictEqual(r.json.videoUrl, 'https://cdn.example/stored.mp4');
+  assert.ok(r.json.finishError);
+  assert.strictEqual(d.calls.refund.length, 0);
+});
+
+test('fallback copy also failing keeps the job processing and releases the lease', async () => {
+  const { d, jobId } = await startedJob({ finalizeClip: async () => { throw new Error('x'); }, copyToStorage: async () => { throw new Error('storage down'); } });
+  doneStatus(d);
+  const r = await pollHeroJob(d, { userId: 'u1', jobId });
+  assert.strictEqual(r.json.status, 'processing');
+  assert.ok(!d.JobModel.docs[0].metadata.copyingAt);
+  assert.strictEqual(d.calls.refund.length, 0);
+});
+
+test('two concurrent polls at completion call finalizeClip exactly once', async () => {
+  let n = 0;
+  const { d, jobId } = await startedJob({ finalizeClip: async () => { n++; await new Promise((r) => setTimeout(r, 20)); return { ...FINISHED }; } });
+  doneStatus(d);
+  const [a, b] = await Promise.all([pollHeroJob(d, { userId: 'u1', jobId }), pollHeroJob(d, { userId: 'u1', jobId })]);
+  assert.strictEqual(n, 1);
+  assert.deepStrictEqual([a.json.status, b.json.status].sort(), ['completed', 'processing']);
+});
+
+test('a job without payload.finish completes through copyToStorage, finalizeClip untouched', async () => {
+  let n = 0;
+  const { d, jobId } = await startedJob({ finalizeClip: async () => { n++; return { ...FINISHED }; } });
+  delete d.JobModel.docs[0].payload.finish;
+  doneStatus(d);
+  const r = await pollHeroJob(d, { userId: 'u1', jobId });
+  assert.strictEqual(r.json.videoUrl, 'https://cdn.example/stored.mp4');
+  assert.ok(!('rawVideoUrl' in r.json));
+  assert.strictEqual(n, 0);
+  assert.deepStrictEqual(d.JobModel.docs[0].result, { videoUrl: 'https://cdn.example/stored.mp4' });
+});
+
+test('submit failure logs fal status and detail, never the prompt', async () => {
+  const logs = [];
+  const orig = console.error;
+  console.error = (...a) => logs.push(a.join(' '));
+  try {
+    const err = new Error('Unprocessable Entity: echo SECRET-PROMPT-XYZ');
+    err.status = 422;
+    err.body = { detail: [{ msg: 'image rejected by content checker for SECRET-PROMPT-XYZ' }] };
+    const d = makeDeps({ submit: async () => { throw err; } });
+    await startHeroGeneration(d, { userId: 'u1', body: body({ prompt: 'SECRET-PROMPT-XYZ' }) });
+  } finally { console.error = orig; }
+  const text = logs.join('\n');
+  assert.ok(text.includes('422'));
+  assert.ok(text.includes('image rejected by content checker'));
+  assert.ok(!text.includes('SECRET-PROMPT-XYZ'));
+});
+
+// default finalizeClip (all I/O injected)
+function mkIo(over = {}) {
+  const io = { uploads: [], tmpDirs: [], finishArgs: [] };
+  Object.assign(io, {
+    mkdtemp: async () => { const dir = await fsp.mkdtemp(pathMod.join(os.tmpdir(), 'hero-test-')); io.tmpDirs.push(dir); return dir; },
+    download: async (url, opts) => { const p = pathMod.join(opts.downloadsDir, 'raw.mp4'); await fsp.writeFile(p, 'raw'); return { filePath: p }; },
+    upload: async (p, folder) => { io.uploads.push([pathMod.basename(p), folder]); return { url: `https://cdn.example/${pathMod.basename(p)}` }; },
+    loadBrand: async () => ({ name: 'Acme', website: 'https://acme.com', logoUrl: 'https://acme.com/l.png', colors: ['red', '#12ab34', '#000000'] }),
+    finishHeroClip: async (a) => { io.finishArgs.push(a); await fsp.writeFile(a.outputPath, 'fin'); return { outputPath: a.outputPath }; },
+    ...over
+  });
+  return io;
+}
+const job0 = { userId: 'u1', payload: { finish: { realism: true }, beatSheet: [{ time: '0-2s', beat: 'b' }], dialogue: '"Hi"' } };
+
+test('default finalizeClip: finished + raw uploaded to the hero folder, brand adapted, temp dir removed', async () => {
+  const { finalizeClipDefault } = require('../services/heroVideoFlow');
+  const io = mkIo();
+  const r = await finalizeClipDefault({ remoteUrl: 'https://fal/v.mp4', job: job0 }, io);
+  assert.deepStrictEqual(r, { videoUrl: 'https://cdn.example/finished.mp4', rawVideoUrl: 'https://cdn.example/raw.mp4' });
+  assert.ok(io.uploads.every(([, folder]) => folder === 'nebula-hero-videos'));
+  assert.strictEqual(io.uploads.length, 2);
+  const a = io.finishArgs[0];
+  assert.deepStrictEqual(a.brand, { name: 'Acme', logoUrl: 'https://acme.com/l.png', color: '#12ab34', website: 'https://acme.com' });
+  assert.deepStrictEqual(a.options, job0.payload.finish);
+  assert.deepStrictEqual(a.beatSheet, job0.payload.beatSheet);
+  assert.strictEqual(a.dialogue, '"Hi"');
+  assert.ok(!('lookup' in a) && !('fetchImpl' in a));
+  await assert.rejects(fsp.stat(io.tmpDirs[0]));
+});
+
+test('default finalizeClip: no valid brand colour omits color', async () => {
+  const { finalizeClipDefault } = require('../services/heroVideoFlow');
+  const io = mkIo({ loadBrand: async () => ({ name: 'A', colors: ['blue'] }) });
+  await finalizeClipDefault({ remoteUrl: 'https://fal/v.mp4', job: job0 }, io);
+  assert.ok(!('color' in io.finishArgs[0].brand));
+});
+
+test('default finalizeClip: finishing error returns raw only with a plain finishError and cleans up', async () => {
+  const { finalizeClipDefault } = require('../services/heroVideoFlow');
+  const io = mkIo({ finishHeroClip: async () => { throw new Error('ffmpeg fal Cloudinary canvas'); } });
+  const r = await finalizeClipDefault({ remoteUrl: 'https://fal/v.mp4', job: job0 }, io);
+  assert.strictEqual(r.videoUrl, 'https://cdn.example/raw.mp4');
+  assert.strictEqual(r.rawVideoUrl, 'https://cdn.example/raw.mp4');
+  assert.ok(r.finishError && !/ffmpeg|fal|cloudinary|canvas/i.test(r.finishError));
+  assert.strictEqual(io.uploads.length, 1);
+  await assert.rejects(fsp.stat(io.tmpDirs[0]));
+});
+
+test('default finalizeClip: finishing that hangs hits the cap and falls back to raw', async () => {
+  const { finalizeClipDefault } = require('../services/heroVideoFlow');
+  const io = mkIo({ capMs: 30, finishHeroClip: () => new Promise(() => {}) });
+  const r = await finalizeClipDefault({ remoteUrl: 'https://fal/v.mp4', job: job0 }, io);
+  assert.strictEqual(r.videoUrl, 'https://cdn.example/raw.mp4');
+  assert.ok(r.finishError);
+  await assert.rejects(fsp.stat(io.tmpDirs[0]));
+});
+
+test('default finalizeClip: upload of the finished file failing falls back to raw; raw upload failing rejects; both clean up', async () => {
+  const { finalizeClipDefault } = require('../services/heroVideoFlow');
+  const io = mkIo({ upload: async (p) => { if (p.endsWith('finished.mp4')) throw new Error('up'); return { url: 'https://cdn.example/raw.mp4' }; } });
+  const r = await finalizeClipDefault({ remoteUrl: 'https://fal/v.mp4', job: job0 }, io);
+  assert.strictEqual(r.videoUrl, 'https://cdn.example/raw.mp4');
+  assert.ok(r.finishError);
+  await assert.rejects(fsp.stat(io.tmpDirs[0]));
+  const io2 = mkIo({ upload: async () => { throw new Error('up'); } });
+  await assert.rejects(finalizeClipDefault({ remoteUrl: 'https://fal/v.mp4', job: job0 }, io2));
+  await assert.rejects(fsp.stat(io2.tmpDirs[0]));
+});
+
+test('defaultDeps provides finalizeClip', () => {
+  assert.strictEqual(typeof require('../services/heroVideoFlow').defaultDeps().finalizeClip, 'function');
+});

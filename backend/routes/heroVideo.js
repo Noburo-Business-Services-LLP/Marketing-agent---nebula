@@ -374,7 +374,11 @@ function createHeroVideoRouter(planDepsIn, impl = {}) {
       }
       const jobs = rows.map((j) => {
         const o = { jobId: j.jobId, status: j.status, createdAt: j.createdAt };
-        if (j.status === 'completed' && j.result && j.result.videoUrl) o.videoUrl = j.result.videoUrl;
+        if (j.status === 'completed' && j.result && j.result.videoUrl) {
+          o.videoUrl = j.result.videoUrl;
+          if (j.result.rawVideoUrl) o.rawVideoUrl = j.result.rawVideoUrl;
+          if (j.result.finishError) o.finishError = j.result.finishError;
+        }
         if (j.payload && j.payload.prompt) o.prompt = j.payload.prompt;
         return o;
       });

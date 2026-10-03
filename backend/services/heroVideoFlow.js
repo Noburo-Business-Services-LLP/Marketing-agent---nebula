@@ -8,6 +8,10 @@
  * never logged.
  */
 const crypto = require('crypto');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const { normalizeFinishOptions, finishHeroClip: realFinishHeroClip } = require('./heroVideoFinish');
 
 const MAX_PROMPT_CHARS = 6000;
 const ASPECTS = ['9:16', '16:9', '1:1'];
@@ -26,6 +30,15 @@ const HERO_HARD_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 // One poll at a time may download+upload a finished clip; a lease older than this is
 // treated as abandoned (process died mid-copy) and can be re-claimed.
 const COPY_LEASE_MS = 5 * 60 * 1000;
+// Finishing (grade, brand mark, end card) is capped at 120 s inside the default finalizeClip; the poll
+// itself also stops waiting after FINISH_POLL_CAP_MS (finishing + two uploads) so it can never outlive
+// the copy lease. Either way the job completes with the raw clip.
+const FINISH_CAP_MS = 120 * 1000;
+const FINISH_POLL_CAP_MS = 4 * 60 * 1000;
+const HERO_FOLDER = 'nebula-hero-videos';
+const FINISH_FAILED_MESSAGE = 'We could not add the finishing touches, so this is the original clip.';
+const MAX_BEATS = 12;
+const MAX_DIALOGUE_CHARS = 2000;
 const MAX_AGE_MESSAGE = 'This video took too long to finish, so we stopped it.';
 // KNOWN GAP: a crash between deduct() and JobModel.create() leaves a charge with no job
 // record, so there is nothing here to find or refund; that case needs manual reconciliation.
@@ -42,9 +55,97 @@ function defaultDeps() {
     submit: hero.submitHeroClip,
     getStatus: hero.getHeroClipStatus,
     copyToStorage: hero.copyClipToStorage,
+    finalizeClip: (args) => finalizeClipDefault(args),
     hasFalKey: () => Boolean(String(process.env.FAL_KEY || '').trim()),
     now: () => new Date()
   };
+}
+
+function withTimeout(promise, ms) {
+  let timer;
+  const guard = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('timed out')), ms); });
+  return Promise.race([promise, guard]).finally(() => clearTimeout(timer));
+}
+
+const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
+const firstHex = (colors) => (Array.isArray(colors) ? colors.find((c) => typeof c === 'string' && HEX_COLOR.test(c.trim())) : undefined);
+
+/**
+ * Default finalizeClip: downloads the fal clip once into a private temp dir, uploads it as the raw clip,
+ * then finishes it (brand loaded for job.userId) within a 120 s cap and uploads the result. Any finishing
+ * or finished-upload problem returns the raw clip with a plain `finishError`; only a failed download or
+ * raw upload rejects (the caller then falls back / retries). The temp dir is removed on every path.
+ * `io` injects the I/O for tests.
+ */
+async function finalizeClipDefault({ remoteUrl, job }, io = {}) {
+  const mkdtemp = io.mkdtemp || (() => fs.promises.mkdtemp(path.join(os.tmpdir(), 'hero-finish-')));
+  const download = io.download || ((u, o) => require('./videoDownload').downloadVideoFromUrl(u, o));
+  const upload = io.upload || ((p, f) => require('./imageUploader').uploadVideoFile(p, f));
+  const loadBrand = io.loadBrand || ((id) => require('./heroVideoBrief').loadBrand(id));
+  const finish = io.finishHeroClip || realFinishHeroClip;
+  const capMs = io.capMs || FINISH_CAP_MS;
+  const userId = job && job.userId;
+  const payload = (job && job.payload) || {};
+
+  const dir = await mkdtemp();
+  try {
+    const dl = await download(remoteUrl, { downloadsDir: dir });
+    const rawPath = dl && dl.filePath;
+    if (!rawPath) throw new Error('Download returned no file path');
+    const rawUp = await upload(rawPath, HERO_FOLDER);
+    if (!rawUp || !rawUp.url) throw new Error('Upload returned no URL');
+    const rawVideoUrl = rawUp.url;
+    try {
+      const outputPath = path.join(dir, 'finished.mp4');
+      await withTimeout((async () => {
+        let b = {};
+        try { b = (await loadBrand(userId)) || {}; } catch (_) { b = {}; }
+        const brand = { name: b.name || '', logoUrl: b.logoUrl || '', website: b.website || '' };
+        const color = firstHex(b.colors);
+        if (color) brand.color = color.trim();
+        await finish({
+          inputPath: rawPath,
+          outputPath,
+          options: payload.finish,
+          brand,
+          beatSheet: payload.beatSheet,
+          dialogue: payload.dialogue,
+          timeoutMs: capMs
+        });
+      })(), capMs);
+      const up = await upload(outputPath, HERO_FOLDER);
+      if (!up || !up.url) throw new Error('Upload returned no URL');
+      return { videoUrl: up.url, rawVideoUrl };
+    } catch (err) {
+      console.error('Hero finishing failed, delivering the raw clip:', err && err.message);
+      return { videoUrl: rawVideoUrl, rawVideoUrl, finishError: FINISH_FAILED_MESSAGE };
+    }
+  } finally {
+    await fs.promises.rm(dir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+const strCap = (v, n) => (typeof v === 'string' ? v.trim().slice(0, n) : '');
+function sanitizeBeatSheet(v) {
+  if (!Array.isArray(v)) return [];
+  return v
+    .filter((b) => b && typeof b === 'object' && !Array.isArray(b))
+    .slice(0, MAX_BEATS)
+    .map((b) => ({ time: strCap(b.time, 20), beat: strCap(b.beat, 200), emotion: strCap(b.emotion, 60) }))
+    .filter((b) => b.time || b.beat);
+}
+
+// fal's rejection reason for the server log: HTTP status and fal's detail text only (never the prompt).
+function describeSubmitError(err, prompt) {
+  const status = err && typeof err.status === 'number' ? err.status : 'n/a';
+  const d = err && err.body && err.body.detail;
+  let detail = '';
+  if (typeof d === 'string') detail = d;
+  else if (Array.isArray(d)) detail = d.map((x) => (x && (x.msg || x.message)) || (typeof x === 'string' ? x : '')).filter(Boolean).join('; ');
+  if (!detail) detail = (err && err.message) || '';
+  detail = String(detail);
+  if (prompt) detail = detail.split(prompt).join('[prompt]');
+  return { status, detail: detail.slice(0, 500) };
 }
 
 const REF_CAPS = { tag: 12, kind: 16, label: 80, url: 2048 };
@@ -142,6 +243,12 @@ async function startHeroGeneration(deps, { userId, body }) {
     return { status: 403, json: { success: false, creditsExhausted: true, message: (dres && dres.error) || 'Insufficient credits' } };
   }
 
+  const payload = { prompt, refImageUrls, references, aspectRatio, model: built.model, finish: normalizeFinishOptions(b.finish) };
+  const beatSheet = sanitizeBeatSheet(b.beatSheet);
+  if (beatSheet.length) payload.beatSheet = beatSheet;
+  const dialogue = strCap(b.dialogue, MAX_DIALOGUE_CHARS);
+  if (dialogue) payload.dialogue = dialogue;
+
   const jobId = crypto.randomUUID();
   try {
     await deps.JobModel.create({
@@ -152,7 +259,7 @@ async function startHeroGeneration(deps, { userId, body }) {
       currentStep: 'queued',
       createdAt: now,
       startedAt: now,
-      payload: { prompt, refImageUrls, references, aspectRatio, model: built.model },
+      payload,
       metadata: { kind: 'hero', refunded: false }
     });
   } catch (err) {
@@ -199,7 +306,8 @@ async function startHeroGeneration(deps, { userId, body }) {
       { $set: { status: 'processing', currentStep: 'processing', 'metadata.falRequestId': requestId } }
     );
   } catch (err) {
-    console.error('Hero submit failed:', err && err.message);
+    const { status: falStatus, detail } = describeSubmitError(err, prompt);
+    console.error(`Hero submit failed: status=${falStatus} detail=${detail}`);
     await failJob(deps, jobId, 'Video generation could not be started', 'failed').catch(() => {});
     await refundOnce(deps, jobId, userId, 'Refund: hero submit failed');
     return { status: 500, json: { success: false, message: 'Could not start video generation. Your credit was refunded.' } };
@@ -210,7 +318,11 @@ async function startHeroGeneration(deps, { userId, body }) {
 
 function terminalResponse(job) {
   const json = { success: true, status: job.status };
-  if (job.status === 'completed' && job.result && job.result.videoUrl) json.videoUrl = job.result.videoUrl;
+  if (job.status === 'completed' && job.result && job.result.videoUrl) {
+    json.videoUrl = job.result.videoUrl;
+    if (job.result.rawVideoUrl) json.rawVideoUrl = job.result.rawVideoUrl;
+    if (job.result.finishError) json.finishError = job.result.finishError;
+  }
   if (job.status !== 'completed') json.error = (job.error && job.error.message) || (job.status === 'cancelled' ? 'Cancelled' : 'Generation failed');
   return { status: 200, json };
 }
@@ -296,9 +408,32 @@ async function pollHeroJob(deps, { userId, jobId }) {
       { $set: { 'metadata.copyingAt': leaseAt } }
     );
     if (!claimed) return processing;
-    let url;
+    let result;
     try {
-      url = await deps.copyToStorage(st.videoUrl);
+      const finishing = job.payload && job.payload.finish && typeof deps.finalizeClip === 'function';
+      if (finishing) {
+        let fin = null;
+        try {
+          const capMs = Number.isFinite(deps.finishCapMs) && deps.finishCapMs > 0 ? deps.finishCapMs : FINISH_POLL_CAP_MS;
+          const p = Promise.resolve().then(() => deps.finalizeClip({ remoteUrl: st.videoUrl, job }));
+          p.catch(() => {}); // an abandoned run must not become an unhandled rejection
+          fin = await withTimeout(p, capMs);
+          if (!fin || typeof fin.videoUrl !== 'string' || !fin.videoUrl) throw new Error('finalizeClip returned no video URL');
+        } catch (err) {
+          console.error(`Hero finishing failed for job ${jobId}, using the raw clip:`, err && err.message);
+          fin = null;
+        }
+        if (fin) {
+          result = { videoUrl: fin.videoUrl };
+          if (fin.rawVideoUrl) result.rawVideoUrl = fin.rawVideoUrl;
+          if (fin.finishError) result.finishError = String(fin.finishError);
+        } else {
+          const raw = await deps.copyToStorage(st.videoUrl);
+          result = { videoUrl: raw, rawVideoUrl: raw, finishError: FINISH_FAILED_MESSAGE };
+        }
+      } else {
+        result = { videoUrl: await deps.copyToStorage(st.videoUrl) };
+      }
     } catch (err) {
       console.error(`Hero storage copy failed for job ${jobId} (will retry):`, err && err.message);
       try {
@@ -308,14 +443,14 @@ async function pollHeroJob(deps, { userId, jobId }) {
     }
     const done = await deps.JobModel.updateOne(
       { jobId, status: { $in: ACTIVE } },
-      { $set: { status: 'completed', progress: 100, currentStep: 'completed', result: { videoUrl: url }, completedAt: deps.now() } }
+      { $set: { status: 'completed', progress: 100, currentStep: 'completed', result, completedAt: deps.now() } }
     );
     if (done && done.matchedCount === 0) {
       // Job left the active states while we copied (e.g. timed out after the lease expired).
       const fresh = await deps.JobModel.findOne({ jobId, userId, 'metadata.kind': 'hero' });
       if (fresh) return terminalResponse(fresh);
     }
-    return { status: 200, json: { success: true, status: 'completed', videoUrl: url } };
+    return { status: 200, json: { success: true, status: 'completed', ...result } };
   }
 
   // fal has still not delivered after HERO_MAX_AGE_MS.
@@ -328,4 +463,4 @@ async function pollHeroJob(deps, { userId, jobId }) {
   return processing;
 }
 
-module.exports = { startHeroGeneration, pollHeroJob, defaultDeps, HERO_MAX_AGE_MS, HERO_HARD_MAX_AGE_MS, COPY_LEASE_MS };
+module.exports = { startHeroGeneration, pollHeroJob, defaultDeps, finalizeClipDefault, FINISH_CAP_MS, HERO_MAX_AGE_MS, HERO_HARD_MAX_AGE_MS, COPY_LEASE_MS };

@@ -341,6 +341,16 @@ test('GET /jobs returns only whitelisted fields and filters by owner + kind', as
   for (const bad of ['falRequestId', 'metadata', 'payload', 'stack', 'fal1']) assert.ok(!text.includes(bad), bad);
 });
 
+test('GET /jobs whitelist includes rawVideoUrl and finishError, still nothing internal', async () => {
+  const rows = [{ jobId: 'a', status: 'completed', createdAt: 'T1', result: { videoUrl: 'http://v', rawVideoUrl: 'http://raw', finishError: 'Plain.' }, payload: { prompt: 'P', finish: { realism: true } }, metadata: { falRequestId: 'fal1' }, error: { stack: 'S' } }];
+  const JobModel = { find() { const q = { sort: () => q, limit: () => q, lean: async () => rows }; return q; } };
+  const res = mkRes();
+  await routeHandler({ JobModel }, '/jobs', 'get')({ user: { id: 'u1' } }, res);
+  assert.deepStrictEqual(res.body.jobs, [{ jobId: 'a', status: 'completed', createdAt: 'T1', videoUrl: 'http://v', rawVideoUrl: 'http://raw', finishError: 'Plain.', prompt: 'P' }]);
+  const text = JSON.stringify(res.body);
+  for (const bad of ['falRequestId', 'metadata', 'payload', 'stack', 'fal1', 'realism']) assert.ok(!text.includes(bad), bad);
+});
+
 test('GET /jobs/:jobId CastError -> 404', async () => {
   const pollHeroJob = async () => { const e = new Error('bad id'); e.name = 'CastError'; throw e; };
   const res = mkRes();
