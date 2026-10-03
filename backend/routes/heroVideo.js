@@ -68,11 +68,17 @@ function brandContextFrom(bp = {}) {
 }
 
 const isCastError = (e) => e && (e.name === 'CastError' || e.name === 'BSONError' || e.name === 'BSONTypeError');
-function fail(res, err, fallback) {
+const GENERIC_ERROR = 'Something went wrong. Please try again.';
+// Never echo internal error text (Mongo, fal, stack) to the client; log it server-side.
+// `context` names the failing operation; the request body (the user's prompt) is never logged.
+function fail(res, err, context) {
   if (isCastError(err)) return res.status(404).json({ success: false, message: 'Not found' });
-  console.error('[heroVideo]', err && err.message);
-  return res.status(500).json({ success: false, message: (err && err.message) || fallback });
+  console.error(`[heroVideo] ${context}:`, err && err.message, err && err.stack);
+  return res.status(500).json({ success: false, message: GENERIC_ERROR });
 }
+
+const ACTIVE = ['queued', 'processing'];
+const MAX_RECONCILE = 3;
 
 function lazyPlanDeps() {
   return {
@@ -151,11 +157,25 @@ function createHeroVideoRouter(planDeps = lazyPlanDeps(), impl = {}) {
 
   router.get('/jobs', protect, heroReadLimiter, async (req, res) => {
     try {
-      const rows = await jobModel()
-        .find({ userId: toUserId(req.user), 'metadata.kind': 'hero' })
+      const userId = toUserId(req.user);
+      const load = () => jobModel()
+        .find({ userId, 'metadata.kind': 'hero' })
         .sort({ createdAt: -1 })
         .limit(20)
         .lean();
+      let rows = await load();
+      // Jobs only move forward when polled; reconcile a few in-flight rows here so a job whose
+      // page was closed still completes / fails / refunds when the user next opens the list.
+      const pending = rows.filter((j) => ACTIVE.includes(j.status)).slice(0, MAX_RECONCILE);
+      if (pending.length) {
+        const poll = flow().pollHeroJob;
+        await Promise.all(pending.map((j) =>
+          Promise.resolve()
+            .then(() => poll(getDeps(), { userId, jobId: String(j.jobId) }))
+            .catch((err) => console.error(`[heroVideo] reconcile failed for job ${j.jobId}:`, err && err.message))
+        ));
+        rows = await load();
+      }
       const jobs = rows.map((j) => {
         const o = { jobId: j.jobId, status: j.status, createdAt: j.createdAt };
         if (j.status === 'completed' && j.result && j.result.videoUrl) o.videoUrl = j.result.videoUrl;

@@ -173,3 +173,72 @@ test('checkTrial before handler on exactly /plan and /generate; limiter on every
     assert.ok(r.names.slice(1, -1).some((n) => n !== 'checkTrial'), `limiter on ${r.path}`);
   }
 });
+
+// ---- C2(a): GET /jobs reconciles non-terminal rows through the real poll flow ----
+const { makeDeps: makeFlowDeps } = require('./heroFakes');
+async function seedJob(d, jobId, over = {}) {
+  await d.JobModel.create({
+    jobId, userId: 'u1', status: 'processing', createdAt: d.now(), payload: { prompt: 'P-' + jobId, model: 'm' },
+    metadata: { kind: 'hero', refunded: false, falRequestId: 'fal-' + jobId }, ...over
+  });
+}
+async function listVia(d, impl = {}) {
+  const res = mkRes();
+  await routeHandler({ deps: d, JobModel: d.JobModel, ...impl }, '/jobs', 'get')({ user: { id: 'u1' } }, res);
+  return res;
+}
+const quiet = async (fn) => { const e = console.error; console.error = () => {}; try { return await fn(); } finally { console.error = e; } };
+
+test('GET /jobs: completed-on-fal job is finished and returned with videoUrl', async () => {
+  const d = makeFlowDeps({ getStatus: async () => ({ state: 'completed', videoUrl: 'https://fal/v.mp4' }) });
+  await seedJob(d, 'j1');
+  const res = await listVia(d);
+  assert.strictEqual(res.code, 200);
+  assert.deepStrictEqual(res.body.jobs, [{ jobId: 'j1', status: 'completed', createdAt: d.JobModel.docs[0].createdAt, videoUrl: 'https://cdn.example/stored.mp4', prompt: 'P-j1' }]);
+  assert.strictEqual(d.calls.copy.length, 1);
+});
+
+test('GET /jobs: failed-on-fal job is failed and refunded once', async () => {
+  const d = makeFlowDeps({ getStatus: async () => ({ state: 'failed', error: 'nsfw' }) });
+  await seedJob(d, 'j1');
+  const res = await listVia(d);
+  assert.strictEqual(res.body.jobs[0].status, 'failed');
+  await listVia(d);
+  assert.strictEqual(d.calls.refund.length, 1);
+});
+
+test('GET /jobs: a per-row reconcile error does not break the list', async () => {
+  const d = makeFlowDeps();
+  await seedJob(d, 'bad');
+  await seedJob(d, 'good', { status: 'completed', result: { videoUrl: 'https://v' } });
+  const pollHeroJob = async () => { throw new Error('mongo blip'); };
+  const res = await quiet(() => listVia(d, { pollHeroJob }));
+  assert.strictEqual(res.code, 200);
+  assert.deepStrictEqual(res.body.jobs.map((j) => [j.jobId, j.status]).sort(), [['bad', 'processing'], ['good', 'completed']]);
+});
+
+test('GET /jobs reconciles at most 3 non-terminal rows and skips terminal ones', async () => {
+  const d = makeFlowDeps();
+  for (const id of ['a', 'b', 'c', 'e']) await seedJob(d, id);
+  await seedJob(d, 'done', { status: 'completed', result: { videoUrl: 'https://v' } });
+  const polled = [];
+  const pollHeroJob = async (deps, a) => { polled.push(a); return { status: 200, json: { success: true, status: 'processing' } }; };
+  await listVia(d, { pollHeroJob });
+  assert.strictEqual(polled.length, 3);
+  for (const p of polled) assert.strictEqual(p.userId, 'u1');
+  assert.ok(!polled.some((p) => p.jobId === 'done'));
+});
+
+// ---- M1: 500s never echo internal error text ----
+test('500 responses use a fixed generic message', async () => {
+  const { deps } = mkDeps({ callTextLLM: async () => { throw new Error('E11000 duplicate key mongo internals'); } });
+  const res = mkRes();
+  await quiet(() => planHandler(deps)(reqOf({ concept }), res));
+  assert.strictEqual(res.code, 500);
+  assert.deepStrictEqual(res.body, { success: false, message: 'Something went wrong. Please try again.' });
+  const res2 = mkRes();
+  const startHeroGeneration = async () => { throw new Error('secret internals'); };
+  await quiet(() => routeHandler({ startHeroGeneration, deps: {} }, '/generate', 'post')({ user: { id: 'u1' }, body: { prompt: 'p' } }, res2));
+  assert.strictEqual(res2.code, 500);
+  assert.strictEqual(res2.body.message, 'Something went wrong. Please try again.');
+});
