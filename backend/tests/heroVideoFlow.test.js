@@ -1,95 +1,9 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const { startHeroGeneration, pollHeroJob } = require('../services/heroVideoFlow');
+const { startHeroGeneration, pollHeroJob, HERO_MAX_AGE_MS, COPY_LEASE_MS } = require('../services/heroVideoFlow');
 
-// ---- in-memory fake JobModel (create / findOne / findOneAndUpdate / updateOne) ----
-function getPath(obj, path) {
-  return path.split('.').reduce((o, k) => (o == null ? undefined : o[k]), obj);
-}
-function setPath(obj, path, value) {
-  const keys = path.split('.');
-  let o = obj;
-  for (let i = 0; i < keys.length - 1; i++) {
-    if (o[keys[i]] == null || typeof o[keys[i]] !== 'object') o[keys[i]] = {};
-    o = o[keys[i]];
-  }
-  o[keys[keys.length - 1]] = value;
-}
-function matches(doc, filter) {
-  return Object.entries(filter).every(([k, cond]) => {
-    const v = getPath(doc, k);
-    if (cond && typeof cond === 'object' && !Array.isArray(cond)) {
-      if ('$ne' in cond) return String(v) !== String(cond.$ne) && v !== cond.$ne;
-      if ('$in' in cond) return cond.$in.includes(v);
-      if ('$gte' in cond) return new Date(v) >= new Date(cond.$gte);
-      throw new Error('fake: unsupported operator ' + JSON.stringify(cond));
-    }
-    return String(v) === String(cond);
-  });
-}
-function makeJobModel() {
-  const docs = [];
-  return {
-    docs,
-    async create(data) { const d = JSON.parse(JSON.stringify(data)); docs.push(d); return d; },
-    // Mongoose-like chainable query: find().sort().limit().lean(), awaitable
-    find(filter) {
-      let res = docs.filter((d) => matches(d, filter));
-      const q = {
-        sort(spec) {
-          const keys = Object.entries(spec);
-          res = [...res].sort((a, b) => {
-            for (const [k, dir] of keys) {
-              const av = k === 'createdAt' ? new Date(a[k]).getTime() : a[k];
-              const bv = k === 'createdAt' ? new Date(b[k]).getTime() : b[k];
-              if (av < bv) return -dir;
-              if (av > bv) return dir;
-            }
-            return 0;
-          });
-          return q;
-        },
-        limit(n) { res = res.slice(0, n); return q; },
-        lean() { return q; },
-        then(ok, bad) { return Promise.resolve(res.map((d) => JSON.parse(JSON.stringify(d)))).then(ok, bad); }
-      };
-      return q;
-    },
-    async findOne(filter) { return docs.find((d) => matches(d, filter)) || null; },
-    // atomic in-memory: find + mutate in one synchronous step; returns pre-update doc (Mongoose default)
-    async findOneAndUpdate(filter, update) {
-      const d = docs.find((x) => matches(x, filter));
-      if (!d) return null;
-      const before = JSON.parse(JSON.stringify(d));
-      for (const [k, v] of Object.entries(update.$set || {})) setPath(d, k, v);
-      return before;
-    },
-    async updateOne(filter, update) {
-      const d = docs.find((x) => matches(x, filter));
-      if (!d) return { matchedCount: 0 };
-      for (const [k, v] of Object.entries(update.$set || {})) setPath(d, k, v);
-      return { matchedCount: 1 };
-    }
-  };
-}
+const { makeDeps } = require('./heroFakes');
 
-function makeDeps(over = {}) {
-  const JobModel = makeJobModel();
-  const calls = { deduct: [], refund: [], submit: [], getStatus: [], copy: [], quota: 0 };
-  const deps = {
-    JobModel,
-    calls,
-    quotaFn: async () => { calls.quota++; return { used: 0, limit: 2, resetsOn: 'x' }; },
-    deduct: async (...a) => { calls.deduct.push(a); return { success: true }; },
-    refund: async (...a) => { calls.refund.push(a); return { success: true }; },
-    submit: async (...a) => { calls.submit.push(a); return 'req-1'; },
-    getStatus: async (...a) => { calls.getStatus.push(a); return { state: 'processing' }; },
-    copyToStorage: async (u) => { calls.copy.push(u); return 'https://cdn.example/' + 'stored.mp4'; },
-    now: () => new Date('2026-10-03T00:00:00Z'),
-    ...over
-  };
-  return deps;
-}
 const body = (o = {}) => ({ prompt: 'a hero shot', ...o });
 
 test('happy path creates processing hero job with falRequestId', async () => {
@@ -337,8 +251,8 @@ test('fresh unsubmitted orphan stays processing, no refund', async () => {
   assert.strictEqual(d.calls.refund.length, 0);
 });
 
-test('job with falRequestId is never an orphan regardless of age', async () => {
-  const d = await orphan(T0, T0 + 5 * 60 * 60 * 1000, { falRequestId: 'req-9' });
+test('job with falRequestId is never an unsubmitted orphan (30 min old, under max age)', async () => {
+  const d = await orphan(T0, T0 + 30 * 60 * 1000, { falRequestId: 'req-9' });
   const r = await pollHeroJob(d, { userId: 'u1', jobId: 'orph' });
   assert.strictEqual(r.json.status, 'processing');
   assert.strictEqual(d.calls.refund.length, 0);
@@ -399,6 +313,148 @@ test('race tie on createdAt broken by jobId ascending', async () => {
     try { res[mine] = (await startHeroGeneration(d, { userId: 'u1', body: body() })).status; } finally { crypto.randomUUID = orig; }
   }
   assert.deepStrictEqual(res, { 'job-a': 200, 'job-b': 403 });
+});
+
+// ---- I3: missing FAL_KEY is caught before any charge ----
+test('no FAL_KEY: 500 friendly message, no quota/deduct/create/submit', async () => {
+  const d = makeDeps({ hasFalKey: () => false });
+  const r = await startHeroGeneration(d, { userId: 'u1', body: body() });
+  assert.strictEqual(r.status, 500);
+  assert.deepStrictEqual(r.json, { success: false, message: 'Hero video is not available right now.' });
+  assert.strictEqual(d.calls.quota, 0);
+  assert.strictEqual(d.calls.deduct.length, 0);
+  assert.strictEqual(d.calls.submit.length, 0);
+  assert.strictEqual(d.JobModel.docs.length, 0);
+});
+
+test('hasFalKey dep absent defaults to available', async () => {
+  const d = makeDeps();
+  delete d.hasFalKey;
+  const r = await startHeroGeneration(d, { userId: 'u1', body: body() });
+  assert.strictEqual(r.status, 200);
+});
+
+test('defaultDeps().hasFalKey reflects FAL_KEY', () => {
+  const saved = process.env.FAL_KEY;
+  try {
+    const { defaultDeps } = require('../services/heroVideoFlow');
+    process.env.FAL_KEY = '   ';
+    assert.strictEqual(defaultDeps().hasFalKey(), false);
+    process.env.FAL_KEY = 'k';
+    assert.strictEqual(defaultDeps().hasFalKey(), true);
+  } finally {
+    if (saved === undefined) delete process.env.FAL_KEY; else process.env.FAL_KEY = saved;
+  }
+});
+
+// ---- I2: a transient result-fetch error through the real status mapper keeps the job processing ----
+test('getStatus rejecting (fal 503 on result) keeps job processing, no refund', async () => {
+  const hero = require('../services/heroVideoService');
+  const fal = { queue: {
+    status: async () => ({ status: 'COMPLETED' }),
+    result: async () => { throw Object.assign(new Error('upstream'), { status: 503 }); }
+  } };
+  const { d, jobId } = await startedJob({ getStatus: (m, r) => hero.getHeroClipStatus(m, r, fal) });
+  const origErr = console.error; console.error = () => {};
+  let r;
+  try { r = await pollHeroJob(d, { userId: 'u1', jobId }); } finally { console.error = origErr; }
+  assert.strictEqual(r.json.status, 'processing');
+  assert.strictEqual(d.JobModel.docs[0].status, 'processing');
+  assert.strictEqual(d.calls.refund.length, 0);
+});
+
+// ---- C2(b): max job age ----
+test('HERO_MAX_AGE_MS is 60 minutes', () => {
+  assert.strictEqual(HERO_MAX_AGE_MS, 60 * 60 * 1000);
+});
+
+test('submitted job older than max age: failed, refunded once, later polls do not refund again', async () => {
+  const d = await orphan(T0, T0 + HERO_MAX_AGE_MS + 1000, { falRequestId: 'req-9' });
+  d.JobModel.docs[0].status = 'processing';
+  const r = await pollHeroJob(d, { userId: 'u1', jobId: 'orph' });
+  assert.strictEqual(r.json.status, 'failed');
+  assert.ok(r.json.error);
+  assert.strictEqual(d.JobModel.docs[0].status, 'failed');
+  await pollHeroJob(d, { userId: 'u1', jobId: 'orph' });
+  await pollHeroJob(d, { userId: 'u1', jobId: 'orph' });
+  assert.strictEqual(d.calls.refund.length, 1);
+  assert.strictEqual(d.calls.getStatus.length, 0);
+});
+
+test('job just under max age is untouched', async () => {
+  const d = await orphan(T0, T0 + HERO_MAX_AGE_MS - 1000, { falRequestId: 'req-9' });
+  d.JobModel.docs[0].status = 'processing';
+  const r = await pollHeroJob(d, { userId: 'u1', jobId: 'orph' });
+  assert.strictEqual(r.json.status, 'processing');
+  assert.strictEqual(d.JobModel.docs[0].status, 'processing');
+  assert.strictEqual(d.calls.refund.length, 0);
+  assert.strictEqual(d.calls.getStatus.length, 1);
+});
+
+// ---- I1: copy lease ----
+test('COPY_LEASE_MS is 5 minutes', () => {
+  assert.strictEqual(COPY_LEASE_MS, 5 * 60 * 1000);
+});
+
+test('two concurrent polls on a completed-on-fal job copy exactly once', async () => {
+  const { d, jobId } = await startedJob();
+  d.getStatus = async () => ({ state: 'completed', videoUrl: 'https://fal/v.mp4' });
+  d.copyToStorage = async (u) => { d.calls.copy.push(u); await new Promise((ok) => setTimeout(ok, 20)); return 'https://cdn.example/stored.mp4'; };
+  const rs = await Promise.all([1, 2, 3].map(() => pollHeroJob(d, { userId: 'u1', jobId })));
+  assert.strictEqual(d.calls.copy.length, 1);
+  const statuses = rs.map((r) => r.json.status).sort();
+  assert.deepStrictEqual(statuses, ['completed', 'processing', 'processing']);
+  for (const r of rs.filter((x) => x.json.status === 'processing')) assert.deepStrictEqual(r, { status: 200, json: { success: true, status: 'processing' } });
+  assert.strictEqual(d.JobModel.docs[0].status, 'completed');
+  assert.strictEqual(d.JobModel.docs[0].result.videoUrl, 'https://cdn.example/stored.mp4');
+});
+
+test('an active (unexpired) copy lease blocks another copy', async () => {
+  const { d, jobId } = await startedJob();
+  d.getStatus = async () => ({ state: 'completed', videoUrl: 'https://fal/v.mp4' });
+  d.JobModel.docs[0].metadata.copyingAt = new Date(d.now().getTime() - 60 * 1000).toISOString();
+  const r = await pollHeroJob(d, { userId: 'u1', jobId });
+  assert.strictEqual(r.json.status, 'processing');
+  assert.strictEqual(d.calls.copy.length, 0);
+});
+
+test('an expired copy lease can be re-claimed', async () => {
+  const { d, jobId } = await startedJob();
+  d.getStatus = async () => ({ state: 'completed', videoUrl: 'https://fal/v.mp4' });
+  d.JobModel.docs[0].metadata.copyingAt = new Date(d.now().getTime() - COPY_LEASE_MS - 1000).toISOString();
+  const r = await pollHeroJob(d, { userId: 'u1', jobId });
+  assert.strictEqual(r.json.status, 'completed');
+  assert.strictEqual(d.calls.copy.length, 1);
+});
+
+test('a thrown copy releases the lease so the next poll retries and completes', async () => {
+  const { d, jobId } = await startedJob();
+  d.getStatus = async () => ({ state: 'completed', videoUrl: 'https://fal/v.mp4' });
+  let fail = true;
+  d.copyToStorage = async (u) => { d.calls.copy.push(u); if (fail) throw new Error('disk full'); return 'https://cdn.example/stored.mp4'; };
+  const origErr = console.error; console.error = () => {};
+  try {
+    const r1 = await pollHeroJob(d, { userId: 'u1', jobId });
+    assert.strictEqual(r1.json.status, 'processing');
+    assert.strictEqual(d.JobModel.docs[0].metadata.copyingAt, undefined);
+    fail = false;
+    const r2 = await pollHeroJob(d, { userId: 'u1', jobId });
+    assert.strictEqual(r2.json.status, 'completed');
+  } finally { console.error = origErr; }
+  assert.strictEqual(d.calls.copy.length, 2);
+  assert.strictEqual(d.calls.refund.length, 0);
+});
+
+test('copy falling back to the remote URL still completes the job', async () => {
+  const hero = require('../services/heroVideoService');
+  const { d, jobId } = await startedJob();
+  d.getStatus = async () => ({ state: 'completed', videoUrl: 'https://fal/v.mp4' });
+  d.copyToStorage = (u) => hero.copyClipToStorage(u, { download: async () => { throw new Error('nope'); } });
+  const origErr = console.error; console.error = () => {};
+  let r;
+  try { r = await pollHeroJob(d, { userId: 'u1', jobId }); } finally { console.error = origErr; }
+  assert.strictEqual(r.json.status, 'completed');
+  assert.strictEqual(r.json.videoUrl, 'https://fal/v.mp4');
 });
 
 test('module imports without Mongo/FAL_KEY', () => {

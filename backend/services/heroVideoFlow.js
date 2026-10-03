@@ -13,9 +13,17 @@ const MAX_PROMPT_CHARS = 6000;
 const ASPECTS = ['9:16', '16:9', '1:1'];
 const ACTION = 'hero_video_clip';
 const TERMINAL = ['completed', 'failed', 'cancelled'];
+const ACTIVE = ['queued', 'processing'];
 const COUNTED_STATUSES = ['queued', 'processing', 'completed']; // must match getHeroQuota
 // A job with no falRequestId this old never reached fal (process died mid-start).
 const STALE_UNSUBMITTED_MS = 10 * 60 * 1000;
+// Any non-terminal job older than this is failed and refunded, even if fal has it. Bounds
+// every "stays processing, retry later" path (transient fal/storage errors, lost polls).
+const HERO_MAX_AGE_MS = 60 * 60 * 1000;
+// One poll at a time may download+upload a finished clip; a lease older than this is
+// treated as abandoned (process died mid-copy) and can be re-claimed.
+const COPY_LEASE_MS = 5 * 60 * 1000;
+const MAX_AGE_MESSAGE = 'This video took too long to finish, so we stopped it.';
 // KNOWN GAP: a crash between deduct() and JobModel.create() leaves a charge with no job
 // record, so there is nothing here to find or refund; that case needs manual reconciliation.
 
@@ -31,6 +39,7 @@ function defaultDeps() {
     submit: hero.submitHeroClip,
     getStatus: hero.getHeroClipStatus,
     copyToStorage: hero.copyClipToStorage,
+    hasFalKey: () => Boolean(String(process.env.FAL_KEY || '').trim()),
     now: () => new Date()
   };
 }
@@ -64,6 +73,10 @@ async function failJob(deps, jobId, message, status = 'failed') {
 }
 
 async function startHeroGeneration(deps, { userId, body }) {
+  // Before any charge: without a fal key the clip can never be generated.
+  if (typeof deps.hasFalKey === 'function' && !deps.hasFalKey()) {
+    return { status: 500, json: { success: false, message: 'Hero video is not available right now.' } };
+  }
   const b = body || {};
   const prompt = typeof b.prompt === 'string' ? b.prompt.trim() : '';
   if (!prompt) return bad('Prompt is required');
@@ -184,11 +197,28 @@ async function pollHeroJob(deps, { userId, jobId }) {
   }
 
   const processing = { status: 200, json: { success: true, status: 'processing' } };
+  const nowMs = deps.now().getTime();
+  const created = new Date((job.createdAt || job.startedAt || 0)).getTime();
+  const copyingAt = job.metadata && job.metadata.copyingAt ? new Date(job.metadata.copyingAt).getTime() : null;
+  const copyInFlight = copyingAt !== null && nowMs - copyingAt < COPY_LEASE_MS;
+  if (nowMs - created > HERO_MAX_AGE_MS && !copyInFlight) {
+    // Conditional on still being active so a job completed by a concurrent poll is never failed/refunded.
+    const upd = await deps.JobModel.updateOne(
+      { jobId, status: { $in: ACTIVE } },
+      { $set: { status: 'failed', currentStep: 'failed', error: { message: MAX_AGE_MESSAGE }, completedAt: deps.now() } }
+    );
+    if (!upd || !upd.matchedCount) {
+      const fresh = await deps.JobModel.findOne({ jobId, userId, 'metadata.kind': 'hero' });
+      return fresh ? terminalResponse(fresh) : processing;
+    }
+    await refundOnce(deps, jobId, userId, 'Refund: hero clip timed out');
+    return { status: 200, json: { success: true, status: 'failed', error: MAX_AGE_MESSAGE } };
+  }
+
   const model = job.payload && job.payload.model;
   const requestId = job.metadata && job.metadata.falRequestId;
   if (!requestId) {
-    const created = new Date((job.createdAt || job.startedAt || 0)).getTime();
-    if (deps.now().getTime() - created > STALE_UNSUBMITTED_MS) {
+    if (nowMs - created > STALE_UNSUBMITTED_MS) {
       const message = 'Video generation never started';
       await failJob(deps, jobId, message, 'failed');
       await refundOnce(deps, jobId, userId, 'Refund: hero job never submitted');
@@ -213,17 +243,40 @@ async function pollHeroJob(deps, { userId, jobId }) {
   }
 
   if (st.state === 'completed') {
+    // Copying takes 10-60 s and the page keeps polling: claim an atomic lease so only one
+    // request downloads/uploads the clip. Losers report processing and pick up the result later.
+    const leaseAt = deps.now();
+    const claimed = await deps.JobModel.findOneAndUpdate(
+      {
+        jobId,
+        status: { $in: ACTIVE },
+        $or: [
+          { 'metadata.copyingAt': { $exists: false } },
+          { 'metadata.copyingAt': { $lt: new Date(leaseAt.getTime() - COPY_LEASE_MS) } }
+        ]
+      },
+      { $set: { 'metadata.copyingAt': leaseAt } }
+    );
+    if (!claimed) return processing;
     let url;
     try {
       url = await deps.copyToStorage(st.videoUrl);
     } catch (err) {
       console.error(`Hero storage copy failed for job ${jobId} (will retry):`, err && err.message);
+      try {
+        await deps.JobModel.updateOne({ jobId }, { $unset: { 'metadata.copyingAt': '' } });
+      } catch (_) { /* lease expires on its own */ }
       return processing;
     }
-    await deps.JobModel.updateOne(
-      { jobId },
+    const done = await deps.JobModel.updateOne(
+      { jobId, status: { $in: ACTIVE } },
       { $set: { status: 'completed', progress: 100, currentStep: 'completed', result: { videoUrl: url }, completedAt: deps.now() } }
     );
+    if (done && done.matchedCount === 0) {
+      // Job left the active states while we copied (e.g. timed out after the lease expired).
+      const fresh = await deps.JobModel.findOne({ jobId, userId, 'metadata.kind': 'hero' });
+      if (fresh) return terminalResponse(fresh);
+    }
     return { status: 200, json: { success: true, status: 'completed', videoUrl: url } };
   }
 
@@ -234,4 +287,4 @@ async function pollHeroJob(deps, { userId, jobId }) {
   return processing;
 }
 
-module.exports = { startHeroGeneration, pollHeroJob, defaultDeps };
+module.exports = { startHeroGeneration, pollHeroJob, defaultDeps, HERO_MAX_AGE_MS, COPY_LEASE_MS };
