@@ -15,7 +15,8 @@
  *  - Also exist (unused): .../us/... and .../fast/... variants.
  */
 const HERO_RESOLUTION = '720p';
-const HERO_MAX_REFS = 4;
+const HERO_MAX_REFS = 9; // the model's limit (was 4 before Hero Studio)
+const MAX_URL_LENGTH = 2048;
 const MIN_SECONDS = 4;
 const ASPECTS = ['9:16', '16:9', '1:1'];
 const DEFAULT_TEXT_MODEL = 'bytedance/seedance-2.0/text-to-video';
@@ -24,6 +25,32 @@ const DEFAULT_LIMIT = 2;
 
 const { HERO_CLIP_SECONDS } = require('../config/apiCosts');
 
+// True only for a public https: URL (<= 2048 chars). Rejects http, loopback, private,
+// link-local, CGNAT, .local/.internal/.localhost hosts, single-label hosts and IPv6 literals.
+function isPublicHttpsUrl(url) {
+  if (typeof url !== 'string') return false;
+  const s = url.trim();
+  if (!s || s.length > MAX_URL_LENGTH) return false;
+  let u;
+  try { u = new URL(s); } catch (_) { return false; }
+  if (u.protocol !== 'https:') return false;
+  const host = u.hostname.toLowerCase().replace(/\.$/, '');
+  if (!host || host.startsWith('[') || host.includes(':')) return false; // IPv6 literal
+  if (host === 'localhost' || !host.includes('.')) return false;
+  if (/\.(localhost|local|internal|lan|home|corp|test)$/.test(host)) return false;
+  const m = host.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+  if (m) {
+    const [a, b] = [Number(m[1]), Number(m[2])];
+    if (a === 0 || a === 10 || a === 127 || a >= 224) return false;
+    if (a === 169 && b === 254) return false;
+    if (a === 172 && b >= 16 && b <= 31) return false;
+    if (a === 192 && b === 168) return false;
+    if (a === 100 && b >= 64 && b <= 127) return false;
+    if (a === 198 && (b === 18 || b === 19)) return false;
+  }
+  return true;
+}
+
 function validateRefUrls(urls) {
   if (urls === undefined || urls === null) return [];
   if (!Array.isArray(urls)) throw new Error('refImageUrls must be an array');
@@ -31,9 +58,8 @@ function validateRefUrls(urls) {
   return urls.map((u) => {
     if (typeof u !== 'string') throw new Error('Reference image URLs must be strings');
     const s = u.trim();
-    let parsed;
-    try { parsed = new URL(s); } catch (_) { throw new Error('Invalid reference image URL'); }
-    if (parsed.protocol !== 'https:' || !parsed.hostname) throw new Error('Reference image URLs must be public https:// URLs');
+    try { new URL(s); } catch (_) { throw new Error('Invalid reference image URL'); }
+    if (!isPublicHttpsUrl(s)) throw new Error('Reference image URLs must be public https:// URLs');
     return s;
   });
 }
@@ -157,7 +183,7 @@ async function copyClipToStorage(remoteUrl, deps = {}) {
 }
 
 module.exports = {
-  HERO_RESOLUTION, HERO_MAX_REFS, buildHeroInput, validateRefUrls,
+  HERO_RESOLUTION, HERO_MAX_REFS, isPublicHttpsUrl, buildHeroInput, validateRefUrls,
   heroMonthlyLimit, monthStartUTC, nextMonthStartUTC, getHeroQuota,
   submitHeroClip, getHeroClipStatus, copyClipToStorage
 };
