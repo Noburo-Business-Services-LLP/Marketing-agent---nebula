@@ -113,7 +113,12 @@ const HeroVideo: React.FC = () => {
           refreshHistory();
         } else if (j.status === 'failed' || j.status === 'cancelled') {
           stopPolling();
-          setJobError(j.error || (j.status === 'cancelled' ? 'This video was cancelled.' : 'The video could not be created.'));
+          if (j.error) console.warn('[HeroVideo] job failed:', j.error);
+          setJobError(
+            j.status === 'cancelled'
+              ? 'This video was cancelled. Please try again.'
+              : "We couldn't finish this video. Your Quarks have been returned and this one doesn't count toward your monthly limit. Please try again."
+          );
           refreshQuota();
           refreshHistory();
         }
@@ -152,6 +157,11 @@ const HeroVideo: React.FC = () => {
     setGenError('');
     setJobError('');
     setVideoUrl('');
+    // apiCall throws a status-less Error for credit/trial 403s but first fires
+    // 'trial-expired'; catch that to detect it without reading message wording.
+    let outOfCredits = false;
+    const onExpired = (ev: Event) => { if ((ev as CustomEvent).detail?.reason === 'credits') outOfCredits = true; };
+    window.addEventListener('trial-expired', onExpired);
     try {
       const r = await heroVideoAPI.generate({ prompt: prompt.trim(), refImageUrls: refs, aspectRatio });
       if (!r?.success || !r.jobId) throw new Error(r?.message || 'Could not start your Hero video.');
@@ -163,12 +173,13 @@ const HeroVideo: React.FC = () => {
       if (d?.quotaExhausted) {
         setQuota((q) => ({ used: d.used ?? q?.used ?? 0, limit: d.limit ?? q?.limit ?? 0, resetsOn: q?.resetsOn || '' }));
         setGenError('You have used all your Hero videos for this month.');
-      } else if (d?.creditsExhausted || /credit/i.test(e?.message || '')) {
-        setGenError(e?.message || 'You do not have enough Quarks for a Hero video. Top up and try again.');
+      } else if (d?.creditsExhausted || outOfCredits || e?.status === 403) {
+        setGenError("You're out of Quarks. Top up to make a Hero video.");
       } else {
         setGenError(e?.message || 'Could not start your Hero video. Please try again.');
       }
     } finally {
+      window.removeEventListener('trial-expired', onExpired);
       setSubmitting(false);
     }
   };
