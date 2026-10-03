@@ -443,3 +443,14 @@ test('500 responses use a fixed generic message', async () => {
   assert.strictEqual(res2.code, 500);
   assert.strictEqual(res2.body.message, 'Something went wrong. Please try again.');
 });
+
+test('POST /generate forwards refImageUrls and references untouched and relays a 400 verbatim', async () => {
+  const body = { prompt: 'p', refImageUrls: ['https://cdn.example.com/a.png'], references: [{ tag: '@a', kind: 'logo', label: 'A', url: 'https://cdn.example.com/a.png' }] };
+  let seen;
+  const startHeroGeneration = async (d, a) => { seen = a; return { status: 400, json: { success: false, message: 'At most 9 reference images allowed' } }; };
+  const res = mkRes();
+  await routeHandler({ startHeroGeneration, deps: {} }, '/generate', 'post')({ user: { id: 'u1' }, body }, res);
+  assert.deepStrictEqual(seen.body, body);
+  assert.strictEqual(res.code, 400);
+  assert.strictEqual(res.body.message, 'At most 9 reference images allowed');
+});

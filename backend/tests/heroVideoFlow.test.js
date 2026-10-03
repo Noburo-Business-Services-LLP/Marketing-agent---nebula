@@ -535,3 +535,84 @@ test('copy falling back to the remote URL still completes the job', async () => 
 test('module imports without Mongo/FAL_KEY', () => {
   assert.strictEqual(typeof require('../services/heroVideoFlow').defaultDeps, 'function');
 });
+
+// ---- Task 3: confirmed references ----
+const refUrls = (n) => Array.from({ length: n }, (_, i) => `https://cdn.example.com/ref-${i + 1}.png`);
+
+test('9 valid references: reference model, 9 urls submitted, payload.references stored', async () => {
+  const urls = refUrls(9);
+  const references = urls.map((url, i) => ({ tag: `@image${i + 1}`, kind: 'logo', label: `Ref ${i + 1}`, url }));
+  const d = makeDeps();
+  const r = await startHeroGeneration(d, { userId: 'u1', body: body({ refImageUrls: urls, references }) });
+  assert.strictEqual(r.status, 200);
+  assert.strictEqual(d.calls.submit.length, 1);
+  const arg = d.calls.submit[0][0];
+  assert.deepStrictEqual(arg.input.image_urls, urls);
+  assert.ok(/reference/.test(arg.model));
+  const job = d.JobModel.docs[0];
+  assert.deepStrictEqual(job.payload.refImageUrls, urls);
+  assert.deepStrictEqual(job.payload.references, references);
+});
+
+test('10 refs, http, loopback, private and non-string refs -> 400, no deduct, no job', async () => {
+  const cases = [
+    refUrls(10),
+    ['http://cdn.example.com/a.png'],
+    ['https://localhost/a.png'],
+    ['https://127.0.0.1/a.png'],
+    ['https://192.168.1.5/a.png'],
+    [42],
+    'https://cdn.example.com/a.png'
+  ];
+  for (const refs of cases) {
+    const d = makeDeps();
+    const r = await startHeroGeneration(d, { userId: 'u1', body: body({ refImageUrls: refs }) });
+    assert.strictEqual(r.status, 400, JSON.stringify(refs));
+    assert.strictEqual(typeof r.json.message, 'string');
+    assert.strictEqual(d.calls.deduct.length, 0);
+    assert.strictEqual(d.JobModel.docs.length, 0);
+  }
+});
+
+test('duplicate reference urls collapse; metadata filtered to validated set, capped and deduped', async () => {
+  const a = 'https://cdn.example.com/a.png';
+  const b = 'https://cdn.example.com/b.png';
+  const d = makeDeps();
+  const r = await startHeroGeneration(d, {
+    userId: 'u1',
+    body: body({
+      refImageUrls: [a, b, a, ` ${b} `],
+      references: [
+        { tag: 'T'.repeat(40), kind: 'k'.repeat(40), label: 'l'.repeat(200), url: a },
+        { tag: '@x', kind: 'logo', label: 'not validated', url: 'https://cdn.example.com/other.png' },
+        { tag: '@dup', kind: 'logo', label: 'dup', url: a },
+        'junk',
+        { tag: 5, kind: null, label: undefined, url: b }
+      ]
+    })
+  });
+  assert.strictEqual(r.status, 200);
+  assert.deepStrictEqual(d.calls.submit[0][0].input.image_urls, [a, b]);
+  const refs = d.JobModel.docs[0].payload.references;
+  assert.strictEqual(refs.length, 2);
+  assert.deepStrictEqual(refs[0], { tag: 'T'.repeat(12), kind: 'k'.repeat(16), label: 'l'.repeat(80), url: a });
+  assert.deepStrictEqual(refs[1], { tag: '', kind: '', label: '', url: b });
+});
+
+test('no references: text-to-video, empty payload.references', async () => {
+  const d = makeDeps();
+  const r = await startHeroGeneration(d, { userId: 'u1', body: body({ references: [{ tag: 'a', kind: 'b', label: 'c', url: 'https://cdn.example.com/a.png' }] }) });
+  assert.strictEqual(r.status, 200);
+  const arg = d.calls.submit[0][0];
+  assert.strictEqual(arg.input.image_urls, undefined);
+  assert.ok(/text-to-video/.test(arg.model));
+  assert.deepStrictEqual(d.JobModel.docs[0].payload.references, []);
+  assert.deepStrictEqual(d.JobModel.docs[0].payload.refImageUrls, []);
+});
+
+test('non-array references metadata is ignored, never a 400', async () => {
+  const d = makeDeps();
+  const r = await startHeroGeneration(d, { userId: 'u1', body: body({ references: 'nope' }) });
+  assert.strictEqual(r.status, 200);
+  assert.deepStrictEqual(d.JobModel.docs[0].payload.references, []);
+});

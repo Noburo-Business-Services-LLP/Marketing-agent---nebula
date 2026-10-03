@@ -47,6 +47,27 @@ function defaultDeps() {
   };
 }
 
+const REF_CAPS = { tag: 12, kind: 16, label: 80, url: 2048 };
+
+// Display metadata for the confirmed references. Only entries whose url is in the validated
+// set survive (first entry per url wins); strings are capped. Malformed input is dropped, not an error.
+function sanitizeReferences(references, validUrls) {
+  if (!Array.isArray(references)) return [];
+  const allowed = new Set(validUrls);
+  const seen = new Set();
+  const out = [];
+  for (const r of references) {
+    if (out.length >= validUrls.length) break;
+    if (!r || typeof r !== 'object' || typeof r.url !== 'string') continue;
+    const url = r.url.trim();
+    if (!allowed.has(url) || seen.has(url)) continue;
+    seen.add(url);
+    const str = (v, n) => (typeof v === 'string' ? v.slice(0, n) : '');
+    out.push({ tag: str(r.tag, REF_CAPS.tag), kind: str(r.kind, REF_CAPS.kind), label: str(r.label, REF_CAPS.label), url: url.slice(0, REF_CAPS.url) });
+  }
+  return out;
+}
+
 const bad = (message) => ({ status: 400, json: { success: false, message } });
 
 // Refund at most once per job. The flag is claimed atomically BEFORE refunding; if the
@@ -88,14 +109,21 @@ async function startHeroGeneration(deps, { userId, body }) {
   if (hasAspect && !ASPECTS.includes(b.aspectRatio)) return bad('aspectRatio must be one of 9:16, 16:9, 1:1');
   const aspectRatio = hasAspect ? b.aspectRatio : '9:16';
 
-  const { buildHeroInput, monthStartUTC } = require('./heroVideoService');
+  const { buildHeroInput, monthStartUTC, HERO_MAX_REFS } = require('./heroVideoService');
   let built;
   try {
-    built = buildHeroInput({ prompt, refImageUrls: b.refImageUrls, aspectRatio, duration: b.duration });
+    // The cap applies to what the client sent; duplicate links then collapse into one.
+    let rawRefs = b.refImageUrls;
+    if (Array.isArray(rawRefs)) {
+      if (rawRefs.length > HERO_MAX_REFS) return bad(`At most ${HERO_MAX_REFS} reference images allowed`);
+      rawRefs = [...new Set(rawRefs.map((u) => (typeof u === 'string' ? u.trim() : u)))];
+    }
+    built = buildHeroInput({ prompt, refImageUrls: rawRefs, aspectRatio, duration: b.duration });
   } catch (err) {
     return bad((err && err.message) || 'Invalid request');
   }
   const refImageUrls = built.input.image_urls || [];
+  const references = sanitizeReferences(b.references, refImageUrls);
 
   const now = deps.now();
   const q = await deps.quotaFn(userId, now);
@@ -124,7 +152,7 @@ async function startHeroGeneration(deps, { userId, body }) {
       currentStep: 'queued',
       createdAt: now,
       startedAt: now,
-      payload: { prompt, refImageUrls, aspectRatio, model: built.model },
+      payload: { prompt, refImageUrls, references, aspectRatio, model: built.model },
       metadata: { kind: 'hero', refunded: false }
     });
   } catch (err) {
