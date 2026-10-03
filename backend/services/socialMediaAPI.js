@@ -2328,7 +2328,7 @@ async function boostPost(profileKey, params = {}) {
     const body = {
       postId: params.postId,
       accountId: params.adAccountId,
-      adName: params.adName || `Gravity Boost - ${params.postId}`,
+      adName: params.adName || `Nebulaa Boost - ${params.postId}`,
       goal: params.goal || 'engagement',
       budget: params.dailyBudget || params.budget || 1,
       bidAmount: params.bidAmount || 1,

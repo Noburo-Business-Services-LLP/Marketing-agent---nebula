@@ -280,7 +280,7 @@ class EmailService {
     return this.sendEmail({
       to,
       from: to,
-      subject: 'Test Email from Nebulaa Gravity',
+      subject: 'Test Email from Nebulaa',
       body: `This is a test email to verify your email configuration is working correctly.
 
 If you received this, your email setup is complete!

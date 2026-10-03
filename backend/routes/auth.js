@@ -799,7 +799,7 @@ router.post('/verify-otp', [
 
     res.status(200).json({
       success: true,
-      message: 'Email verified successfully! Welcome to Gravity.',
+      message: 'Email verified successfully! Welcome to Nebulaa.',
       token,
       user: user.toPublicJSON()
     });

@@ -228,7 +228,7 @@ router.post('/create-event', protect, async (req, res) => {
 
     const event = {
       summary: `📱 ${title || 'Scheduled Post'}`,
-      description: `${description || ''}\n\nPlatform: ${platform || 'Social Media'}\n\n— Created by Nebulaa Gravity`,
+      description: `${description || ''}\n\nPlatform: ${platform || 'Social Media'}\n\n— Created by Nebulaa`,
       start: {
         dateTime: startDate.toISOString(),
         timeZone: 'Asia/Kolkata'

@@ -28,7 +28,7 @@ const checkTrial = async (req, res, next) => {
       return res.status(403).json({
         success: false,
         creditsExhausted: true,
-        message: 'You\'ve used all your credits. Subscribe to continue using Nebulaa Gravity.',
+        message: 'You\'ve used all your credits. Subscribe to continue using Nebulaa.',
         creditsRemaining: 0
       });
     }

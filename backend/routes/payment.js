@@ -41,7 +41,7 @@ async function getOrCreatePlan(amount = MONTHLY_AMOUNT) {
     period: 'monthly',
     interval: 1,
     item: {
-      name: amount === MONTHLY_AMOUNT ? 'Nebulaa Gravity — Starter Pack' : 'Nebulaa Gravity — Discounted Pack',
+      name: amount === MONTHLY_AMOUNT ? 'Nebulaa — Starter Pack' : 'Nebulaa — Discounted Pack',
       amount: amount * 100,
       currency: PLAN_CURRENCY,
       description: '1,000 credits per month'
@@ -423,7 +423,7 @@ router.post('/create-order', protect, async (req, res) => {
         currency: order.currency
       },
       key: process.env.RAZORPAY_KEY_ID,
-      description: `Nebulaa Gravity — ${credits} credits`,
+      description: `Nebulaa — ${credits} credits`,
       prefill: {
         name: `${user.firstName} ${user.lastName || ''}`.trim(),
         email: user.email,
@@ -717,11 +717,11 @@ async function sendWelcomeEmail(email, firstName) {
   await resend.emails.send({
     from: process.env.RESEND_FROM_EMAIL || 'noreply@nebulaa.ai',
     to: email,
-    subject: '🚀 Welcome to Nebulaa Gravity — Your Production Account is Ready!',
+    subject: '🚀 Welcome to Nebulaa — Your Production Account is Ready!',
     html: `
       <div style="font-family: 'Inter', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #070A12; color: #ededed; padding: 40px; border-radius: 16px;">
         <div style="text-align: center; margin-bottom: 32px;">
-          <h1 style="color: #ffcc29; font-size: 28px; margin: 0;">Nebulaa Gravity</h1>
+          <h1 style="color: #ffcc29; font-size: 28px; margin: 0;">Nebulaa</h1>
           <p style="color: #ededed99; font-size: 14px; margin-top: 8px;">Your AI Marketing Command Center</p>
         </div>
         
@@ -751,7 +751,7 @@ async function sendWelcomeEmail(email, firstName) {
         </div>
         
         <a href="https://gravity.nebulaa.ai" style="display: block; background: #ffcc29; color: #070A12; text-align: center; padding: 16px; border-radius: 10px; text-decoration: none; font-weight: 700; font-size: 16px; margin: 32px 0;">
-          Go to Gravity →
+          Go to Nebulaa →
         </a>
         
         <p style="color: #ededed60; font-size: 12px; text-align: center; margin-top: 32px;">

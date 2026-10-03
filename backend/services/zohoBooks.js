@@ -204,8 +204,8 @@ async function createInvoice(params) {
     tax_exemption_id: '3659166000000048005',
     place_of_supply: 'TN',
     line_items: [{
-      name: `Nebulaa Gravity - ${credits} Credits`,
-      description: `${credits} AI marketing credits for Nebulaa Gravity platform`,
+      name: `Nebulaa - ${credits} Credits`,
+      description: `${credits} AI marketing credits for Nebulaa platform`,
       rate: amount,
       quantity: 1
     }],

@@ -58,7 +58,7 @@ class OTPService {
     }
 
     const { data, error } = await this.resend.emails.send({
-      from: `Nebulaa Gravity <${this.fromEmail}>`,
+      from: `Nebulaa <${this.fromEmail}>`,
       to: [email],
       subject: `${otp} — Your Verification Code`,
       html: this._buildEmailTemplate(otp, firstName),
@@ -95,7 +95,7 @@ class OTPService {
           <!-- Header -->
           <tr>
             <td style="background:linear-gradient(135deg,#ffcc29,#e6b825);padding:32px;text-align:center;">
-              <h1 style="margin:0;font-size:24px;font-weight:800;color:#070A12;letter-spacing:-0.5px;">Nebulaa Gravity</h1>
+              <h1 style="margin:0;font-size:24px;font-weight:800;color:#070A12;letter-spacing:-0.5px;">Nebulaa</h1>
               <p style="margin:6px 0 0;font-size:13px;color:#070A12;opacity:0.7;">Email Verification</p>
             </td>
           </tr>
@@ -130,7 +130,7 @@ class OTPService {
           <tr>
             <td style="padding:20px 32px;border-top:1px solid rgba(139,148,158,0.15);text-align:center;">
               <p style="margin:0;font-size:11px;color:#484f58;">
-                &copy; ${new Date().getFullYear()} Nebulaa Gravity &mdash; Marketing Agent & Growth Engine
+                &copy; ${new Date().getFullYear()} Nebulaa &mdash; Marketing Agent & Growth Engine
               </p>
             </td>
           </tr>
