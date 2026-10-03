@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { HashRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import Layout from './components/Layout';
 import ChatBot from './components/ChatBot';
 import CampaignReminderPopup from './components/CampaignReminderPopup';
@@ -48,6 +48,19 @@ import { apiService } from './services/api';
 import { User } from './types';
 import { Loader2 } from 'lucide-react';
 
+// Calls onChange after every route change (not on first render). Must sit inside the Router.
+const RouteChangeWatcher: React.FC<{ onChange: () => void }> = ({ onChange }) => {
+  const { pathname } = useLocation();
+  const cb = useRef(onChange);
+  cb.current = onChange;
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) { first.current = false; return; }
+    cb.current();
+  }, [pathname]);
+  return null;
+};
+
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -76,15 +89,56 @@ const App: React.FC = () => {
     checkAuth();
   }, []);
 
+  // The paywall replaces EVERY route, so for credits it must only stand while the balance is
+  // really empty (the same rule checkAuth applies on load). A 403 `creditsExhausted` also comes
+  // back when one action costs more than the balance (a Hero clip, a long reel); that is a
+  // per-action refusal the page reports itself. Treating it as "account empty" used to lock the
+  // whole app on the plans page until a reload, because nothing ever cleared this state.
+  const balanceIsEmpty = useCallback(async (): Promise<boolean> => {
+    const res = await apiService.getCredits();
+    const balance = res?.success ? res.credits?.balance : undefined;
+    // Unknown balance (network error): keep the old behaviour and show the paywall.
+    return !(typeof balance === 'number' && balance > 0);
+  }, []);
+
+  const clearCreditsPaywall = useCallback(() => {
+    setTrialExpired((t) => (t.expired && t.reason === 'credits' ? { expired: false, reason: 'time' } : t));
+  }, []);
+
+  const trialExpiredRef = useRef(trialExpired);
+  trialExpiredRef.current = trialExpired;
+
+  // On navigation, a credits paywall is re-checked and lifted when the balance is no longer empty.
+  const recheckPaywallOnNavigate = useCallback(() => {
+    const t = trialExpiredRef.current;
+    if (!t.expired || t.reason !== 'credits') return;
+    balanceIsEmpty().then((empty) => { if (!empty) clearCreditsPaywall(); });
+  }, [balanceIsEmpty, clearCreditsPaywall]);
+
   // Listen for trial-expired events from API interceptor
   useEffect(() => {
     const handleTrialExpired = (e: Event) => {
       const detail = (e as CustomEvent).detail;
-      setTrialExpired({ expired: true, reason: detail?.reason || 'time' });
+      const reason: 'time' | 'credits' = detail?.reason === 'credits' ? 'credits' : 'time';
+      if (reason !== 'credits') {
+        setTrialExpired({ expired: true, reason });
+        return;
+      }
+      if (typeof detail?.creditsRemaining === 'number' && detail.creditsRemaining > 0) return;
+      balanceIsEmpty().then((empty) => { if (empty) setTrialExpired({ expired: true, reason: 'credits' }); });
+    };
+    // A top-up or any response that reports a positive balance lifts a credits paywall.
+    const handleCreditsUpdated = (e: Event) => {
+      const left = (e as CustomEvent).detail?.creditsRemaining;
+      if (typeof left === 'number' && left > 0) clearCreditsPaywall();
     };
     window.addEventListener('trial-expired', handleTrialExpired);
-    return () => window.removeEventListener('trial-expired', handleTrialExpired);
-  }, []);
+    window.addEventListener('credits-updated', handleCreditsUpdated);
+    return () => {
+      window.removeEventListener('trial-expired', handleTrialExpired);
+      window.removeEventListener('credits-updated', handleCreditsUpdated);
+    };
+  }, [balanceIsEmpty, clearCreditsPaywall]);
 
   const handleLoginSuccess = (userData: User) => {
     setUser(userData);
@@ -119,6 +173,7 @@ const App: React.FC = () => {
     <ThemeProvider>
     <ConfirmProvider>
     <Router>
+      <RouteChangeWatcher onChange={recheckPaywallOnNavigate} />
       <Routes>
         {/* Landing Page - shown when not logged in */}
         <Route 

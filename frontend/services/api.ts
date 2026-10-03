@@ -3742,14 +3742,54 @@ export const videoGenerationAPI = {
   }
 };
 
-// Gravity Hero video (/api/hero-video): one premium 15s clip per concept.
+// Gravity Hero video (/api/hero-video): Hero Studio builds one premium 15s clip from the
+// wizard's story, cast, place and the client's brand (brand is loaded server-side).
 export type HeroAspectRatio = '9:16' | '16:9' | '1:1';
+export type HeroAudioMode = 'native' | 'sfx_only';
+
+export interface HeroBriefCastMember {
+  id: string; name?: string; age?: string; gender?: string; role?: string; appearance?: string;
+  clothing?: string; hairStyle?: string; hairColor?: string; personality?: string; portraitUrl?: string;
+}
+export interface HeroBriefScene {
+  sceneId: string; title?: string; script?: string; visual?: string; durationSeconds?: number;
+  charactersRequired?: string[]; imageUrl?: string;
+}
+export interface HeroBrief {
+  concept: { title?: string; storySummary?: string; coreEmotion?: string; visualStyle?: string };
+  aspectRatio: HeroAspectRatio;
+  language?: string;
+  cast: HeroBriefCastMember[];
+  castSheetUrl?: string;
+  environment: { enabled: boolean; notes?: string; images: Array<{ url?: string; dataUrl?: string; alt?: string }> };
+  scenes: HeroBriefScene[];
+}
+export interface HeroReference {
+  tag: string;
+  kind: 'cast' | 'environment' | 'brand' | 'keyframe' | string;
+  label: string;
+  url: string;
+  source?: string;
+}
+export interface HeroBrandSummary { name: string; website: string; logoUrl: string; colors: string[]; heroProduct: string }
 export interface HeroPlan {
+  story: { hook: string; tension: string; turn: string; payoff: string; cta: string };
+  heroCut: Array<{ sceneId: string; keep: boolean; reason: string; time: string }>;
+  shotList: Array<{ time: string; shot: string; lens: string; purpose: string }>;
   prompt: string;
-  beatSheet: Array<{ time: string; beat: string }>;
+  beatSheet: Array<{ time: string; beat: string; emotion?: string }>;
   dialogue: string;
+  voice?: string;
   qaChecklist: string[];
   assumptions: string[];
+}
+export interface HeroFinishOptions {
+  realism?: boolean;
+  brandMark?: boolean;
+  fades?: boolean;
+  endCard?: { enabled?: boolean; ctaText?: string; website?: string; tagline?: string };
+  captions?: boolean;
+  loudnorm?: boolean;
 }
 export type HeroJobStatus = 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled';
 export interface HeroJobSummary {
@@ -3757,6 +3797,8 @@ export interface HeroJobSummary {
   status: HeroJobStatus;
   createdAt: string;
   videoUrl?: string;
+  rawVideoUrl?: string;
+  finishError?: string;
   prompt?: string;
 }
 
@@ -3765,12 +3807,22 @@ export const heroVideoAPI = {
     return apiCall('/hero-video/quota', { method: 'GET' }, true);
   },
 
+  // Validates the wizard brief, loads the brand and stages the reference images. No charge.
+  brief: async (brief: HeroBrief): Promise<{
+    success: boolean; brief?: HeroBrief; brand?: HeroBrandSummary; references?: HeroReference[];
+    dropped?: Array<{ label?: string; reason?: string }>; message?: string;
+  }> => {
+    return apiCall('/hero-video/brief', { method: 'POST', body: JSON.stringify({ brief }) }, true);
+  },
+
   plan: async (payload: {
-    concept: { title?: string; storySummary?: string; coreEmotion?: string; visualStyle?: string };
-    aspectRatio?: HeroAspectRatio;
-    language?: string;
-    refImageUrls?: string[];
-  }): Promise<{ success: boolean; plan?: HeroPlan; message?: string }> => {
+    brief: HeroBrief;
+    style?: string;
+    audioMode?: HeroAudioMode;
+    ctaText?: string;
+    references?: string[];
+    keptSceneIds?: string[];
+  }): Promise<{ success: boolean; plan?: HeroPlan; references?: HeroReference[]; message?: string }> => {
     return apiCall('/hero-video/plan', { method: 'POST', body: JSON.stringify(payload) }, true);
   },
 
@@ -3778,13 +3830,19 @@ export const heroVideoAPI = {
   // callers read err.data (see apiCall) or err.message.
   generate: async (payload: {
     prompt: string;
-    refImageUrls?: string[];
     aspectRatio: HeroAspectRatio;
+    refImageUrls?: string[];
+    references?: HeroReference[];
+    finish?: HeroFinishOptions;
+    beatSheet?: HeroPlan['beatSheet'];
+    dialogue?: string;
   }): Promise<{ success: boolean; jobId?: string; quotaExhausted?: boolean; creditsExhausted?: boolean; used?: number; limit?: number; message?: string }> => {
     return apiCall('/hero-video/generate', { method: 'POST', body: JSON.stringify(payload) }, true);
   },
 
-  job: async (jobId: string): Promise<{ success: boolean; status: HeroJobStatus; videoUrl?: string; error?: string }> => {
+  job: async (jobId: string): Promise<{
+    success: boolean; status: HeroJobStatus; videoUrl?: string; rawVideoUrl?: string; finishError?: string; error?: string;
+  }> => {
     return apiCall(`/hero-video/jobs/${encodeURIComponent(jobId)}`, { method: 'GET' }, true);
   },
 

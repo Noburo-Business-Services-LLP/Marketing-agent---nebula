@@ -47,6 +47,7 @@ import { useConfirm } from '../context/ConfirmContext';
 import AssetPicker, { PickedAsset } from '../components/AssetPicker';
 import { getThemeClasses, useTheme } from '../context/ThemeContext';
 import { contentCalendarAPI, inventoryAPI, videoGenerationAPI, draftsAPI } from '../services/api';
+import type { HeroBrief } from '../services/api';
 import { Product, Draft } from '../types';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { updateBackgroundReel } from '../utils/backgroundReel';
@@ -444,6 +445,63 @@ const ReelGenerator: React.FC = () => {
   // any state declaration further down the function body). ----
   const [promptText, setPromptText] = useState('');
   const [scenes, setScenes] = useState<any[]>([]);
+  // ---- Hero Studio entry (shown from Step 4 onward) ----
+  // Assembles the compact hero brief from the wizard state; Hero Studio sends it to
+  // /api/hero-video/brief, which validates it and loads the brand server-side.
+  const [heroEntryNote, setHeroEntryNote] = useState<string>('');
+  const buildHeroBrief = (): HeroBrief => {
+    const accepted = generatedCharacters.find((c) => c.id === acceptedCharacterId);
+    const ordered = accepted ? [accepted, ...generatedCharacters.filter((c) => c.id !== acceptedCharacterId)] : generatedCharacters;
+    const langLabel = (LANGUAGE_OPTIONS.find((o) => o.value === languageCode)?.label || 'English').split(' (')[0];
+    return {
+      concept: {
+        title: acceptedConcept?.title || '',
+        storySummary: acceptedConcept?.storySummary || '',
+        coreEmotion: acceptedConcept?.coreEmotion || '',
+        visualStyle: acceptedConcept?.visualStyle || '',
+      },
+      // The Hero clip has no 4:5; the nearest supported frame is square.
+      aspectRatio: aspectRatio === '4:5' ? '1:1' : aspectRatio,
+      language: langLabel,
+      cast: ordered.map((c) => ({
+        id: c.id, name: c.name, age: c.age, gender: c.gender, role: c.role, appearance: c.appearance,
+        clothing: c.clothing, hairStyle: c.hairStyle, hairColor: c.hairColor, personality: c.personality,
+        portraitUrl: c.portraitUrl || undefined,
+      })),
+      castSheetUrl: castImageUrl || undefined,
+      environment: {
+        enabled: environmentEnabled,
+        notes: environmentEnabled ? environmentNotes : '',
+        images: environmentEnabled
+          ? environmentRefs.slice(0, 5).map((r) => (r.url ? { url: r.url, alt: r.alt } : { dataUrl: r.dataUrl, alt: r.alt }))
+          : [],
+      },
+      scenes: scenes.map((s, i) => ({
+        sceneId: String(s.sceneId || `scene-${i + 1}`),
+        title: s.title || '',
+        script: s.scriptLine || s.voiceLine || '',
+        visual: s.visualDescription || '',
+        durationSeconds: Number(s.durationSeconds) || undefined,
+        charactersRequired: Array.isArray(s.charactersRequired) ? s.charactersRequired.map(String) : undefined,
+        imageUrl: s.imageUrl || undefined,
+      })),
+    };
+  };
+  const openHeroStudio = () => {
+    const hasScript = scenes.some((s) => String(s.scriptLine || s.voiceLine || s.visualDescription || '').trim());
+    if (!generatedCharacters.length) {
+      setHeroEntryNote('A Hero video is made with your cast. Create your cast here first, then press "Make this a Hero video" again from the script step.');
+      setStep(2);
+      return;
+    }
+    if (!hasScript) {
+      setHeroEntryNote('A Hero video is cut from your script and scenes. Write them here first, then press "Make this a Hero video" again.');
+      setStep(4);
+      return;
+    }
+    setHeroEntryNote('');
+    navigate('/reels/hero', { state: { brief: buildHeroBrief() } });
+  };
   type StoryArc = {
     hook: string; beginning: string; emotionalProgression: string;
     climax: string; brandReveal: string; ending: string;
@@ -2597,6 +2655,39 @@ setCharacterAge(nextDraft?.characterAge || '');
               </button>
             )}
 
+            {heroEntryNote && (
+              <div role="status" className="rounded-xl border border-[rgb(var(--gv-accent-rgb)/0.35)] bg-[var(--gv-accent-fill)] px-5 py-3.5 flex items-start justify-between gap-4">
+                <div className="flex-1 text-[13px] text-[var(--gv-text-primary)]">{heroEntryNote}</div>
+                <button
+                  type="button"
+                  onClick={() => setHeroEntryNote('')}
+                  aria-label="Dismiss"
+                  className="flex-shrink-0 p-1 rounded-md text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
+            {step >= 4 && (
+              <div className="rounded-xl border border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)] px-5 py-3.5 flex flex-wrap items-center justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="text-[13px] font-semibold text-[var(--gv-text-primary)]">Hero video</div>
+                  <div className="text-[12px] text-[var(--gv-text-tertiary)]">
+                    One premium 15-second clip from this story, cast and place. Scene images are optional and help keep faces consistent.
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={openHeroStudio}
+                  disabled={busy}
+                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-[13px] font-semibold transition-all border border-[rgb(var(--gv-accent-rgb)/0.45)] text-[var(--gv-accent-text)] hover:bg-[var(--gv-accent-fill)] disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Make this a Hero video
+                </button>
+              </div>
+            )}
+
             {error && (
               <div className="rounded-xl border border-red-500/30 bg-red-500/[0.08] px-5 py-3.5 flex items-start justify-between gap-4">
                 <div className="flex-1">
@@ -3064,14 +3155,6 @@ setCharacterAge(nextDraft?.characterAge || '');
                         <><RefreshCcw className="w-4 h-4" />Regenerate concepts</>
                       )}
                     </button>
-                    {acceptedConcept && (
-                      <button
-                        onClick={() => navigate('/reels/hero', { state: { concept: acceptedConcept, aspectRatio } })}
-                        className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-[13px] font-semibold transition-all border border-[#F5A623]/40 text-[#F5A623] hover:bg-[#F5A623]/10"
-                      >
-                        Make a Hero video instead
-                      </button>
-                    )}
                     {!acceptedConceptId && (
                       <span className="text-[12px] text-white/40">Accept a concept above to continue.</span>
                     )}
