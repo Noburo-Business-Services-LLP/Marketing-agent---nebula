@@ -150,6 +150,8 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
     if (pathname.startsWith('/competitors')) return { title: 'Competitors', crumb: '' };
     if (pathname.startsWith('/ai-memory') || pathname.startsWith('/ai-history') || pathname.startsWith('/ai-performance')) return { title: 'AI Memory', crumb: '' };
     if (pathname.startsWith('/drafts')) return { title: 'Approve', crumb: '' };
+    if (pathname.startsWith('/idea-inbox')) return { title: 'Idea Inbox', crumb: '' };
+    if (pathname.startsWith('/upload')) return { title: 'Upload & Schedule', crumb: '' };
     if (pathname.startsWith('/settings')) return { title: 'Settings', crumb: '' };
     return { title: 'Dashboard', crumb: '' };
   };
@@ -228,10 +230,11 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
             {/* Brand mark */}
             <div className="px-6 pt-6 pb-5">
               <div className="flex items-center gap-2.5">
-                <img src="/assets/brand/logo-horizontal-light.png" alt="Nebulaa" className="h-8 w-auto" />
+                <img src="/assets/brand/logo-nebulaa.png" alt="Nebulaa" width={784} height={360} className="h-10 w-auto" />
                 <button
                   className="ml-auto md:hidden text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)]"
                   onClick={() => setSidebarOpen(false)}
+                  aria-label="Close menu"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -239,7 +242,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
             </div>
 
             <div className="px-4 mb-2">
-              <AppSwitcher />
+              <AppSwitcher onNavigate={() => setSidebarOpen(false)} />
             </div>
 
             {/* Account chip — opens Settings straight into Business Profile,
@@ -308,10 +311,11 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
             <button
               onClick={() => setSidebarOpen(true)}
               className="text-[var(--gv-text-secondary)] hover:text-[var(--gv-accent-text)]"
+              aria-label="Open menu"
             >
               <Menu className="w-5 h-5" />
             </button>
-            <img src="/assets/brand/logo-horizontal-light.png" alt="Nebulaa" className="h-7 w-auto" />
+            <img src="/assets/brand/logo-nebulaa.png" alt="Nebulaa" width={784} height={360} className="h-8 w-auto" />
             <div className="flex items-center gap-2">
               {trialInfo && (
                 <div
@@ -366,7 +370,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
                 // actually being tracked.
                 const isLow = trialInfo.creditsBalance <= 25;
                 const isMed = trialInfo.creditsBalance > 25 && trialInfo.creditsBalance <= 75;
-                const dotColor = isLow ? '#ef4444' : isMed ? '#F5A623' : '#4ADE80';
+                const dotColor = isLow ? '#ef4444' : isMed ? 'var(--gv-accent)' : '#4ADE80';
                 return (
                   <div className="relative" ref={creditPanelRef}>
                     <button
