@@ -91,17 +91,23 @@
          Auto-restyles common Tailwind patterns on ALL pages when the
          Gravity shell is active — buttons, cards, inputs, borders,
          old yellow #ffcc29 becomes gold #F5A623, etc. Non-breaking.
+         Light only: the dark-era classes (text-white, bg-slate-900,
+         bg-white/5, ...) are mapped onto the cream --gv-* palette so
+         text, boxes and borders keep WCAG AA contrast; text on a
+         saturated/gradient fill or an intentionally dark surface keeps
+         its light colour (see LIGHT SEMANTICS below).
          ============================================================ */
       body.gravity-shell {
         --grav-gold: #F5A623;
         --grav-gold-hover: #ffb833;
-        --grav-bg: #0A0A0A;
-        --grav-surface: #151515;
-        --grav-surface-2: #1A1A1A;
-        --grav-border: rgba(255,255,255,0.06);
-        --grav-border-strong: rgba(255,255,255,0.12);
-        --grav-text: #F5F4F1;
-        --grav-text-muted: rgba(255,255,255,0.55);
+        /* Light semantics: the layer follows the cream palette (was the dark theme). */
+        --grav-bg: var(--gv-bg);
+        --grav-surface: var(--gv-panel);
+        --grav-surface-2: var(--gv-panel-2);
+        --grav-border: var(--gv-border-subtle);
+        --grav-border-strong: var(--gv-border-default);
+        --grav-text: var(--gv-text-primary);
+        --grav-text-muted: var(--gv-text-tertiary);
       }
       /* ============================================================
          NEBULAA LIGHT PALETTE (warm cream)
@@ -171,35 +177,14 @@
         --gv-accent-hover: #ffb833;
         --gv-accent-fill: rgba(245,166,35,0.06);
       }
-      /* Backgrounds — legacy dark tones become Gravity black */
-      body.gravity-shell [class*="bg-[#070A12]"],
-      body.gravity-shell [class*="bg-[#0d1117]"],
-      body.gravity-shell [class*="bg-[#0f1419]"],
-      body.gravity-shell [class*="bg-slate-900"],
-      body.gravity-shell [class*="bg-slate-950"] {
-        background-color: var(--grav-bg) !important;
-      }
-      body.gravity-shell [class*="bg-[#151515]"],
-      body.gravity-shell [class*="bg-slate-800"],
-      body.gravity-shell [class*="bg-gray-800"] {
-        background-color: var(--grav-surface) !important;
-      }
-      /* Legacy yellow → Gravity gold */
-      body.gravity-shell [class*="bg-[#ffcc29]"]:not(aside) {
+      /* Legacy yellow → Gravity gold (solid fills only: exact class token, not hover:/dark: variants
+         and not translucent tints such as bg-[#ffcc29]/10, which stay light) */
+      body.gravity-shell :is([class^="bg-[#ffcc29]"],[class*=" bg-[#ffcc29]"]):not([class^="bg-[#ffcc29]/"]):not([class*=" bg-[#ffcc29]/"]):not(aside) {
         background-color: var(--grav-gold) !important;
         color: #1A1208 !important;
       }
-      body.gravity-shell [class*="text-[#ffcc29]"],
-      body.gravity-shell [class*="text-[#d4a800]"],
-      body.gravity-shell [class*="text-[#e6b800]"],
-      body.gravity-shell [class*="text-[#e6b825]"] {
-        color: var(--grav-gold) !important;
-      }
       body.gravity-shell [class*="border-[#ffcc29]"] {
         border-color: var(--grav-gold) !important;
-      }
-      body.gravity-shell [class*="hover:text-[#ffcc29]"]:hover {
-        color: var(--grav-gold) !important;
       }
       /* Borders — soften harsh dark borders */
       body.gravity-shell [class*="border-slate-700"],
@@ -213,22 +198,368 @@
       body.gravity-shell [class*="divide-gray-700"] > * {
         border-color: var(--grav-border) !important;
       }
-      /* Text — muted grays become warm off-white shades */
-      body.gravity-shell [class*="text-slate-500"],
-      body.gravity-shell [class*="text-gray-500"] { color: rgba(255,255,255,0.45) !important; }
-      body.gravity-shell [class*="text-slate-400"],
-      body.gravity-shell [class*="text-gray-400"] { color: rgba(255,255,255,0.55) !important; }
-      body.gravity-shell [class*="text-slate-300"],
-      body.gravity-shell [class*="text-gray-300"] { color: rgba(255,255,255,0.70) !important; }
-      body.gravity-shell [class*="text-slate-200"],
-      body.gravity-shell [class*="text-gray-200"] { color: rgba(255,255,255,0.85) !important; }
-      body.gravity-shell [class*="text-white"] { color: var(--grav-text) !important; }
+      /* ------------------------------------------------------------
+         LIGHT SEMANTICS for the dark-era Tailwind classes (legibility pass,
+         Task 7). Selector lists hold only class names the frontend uses.
+         ------------------------------------------------------------ */
+      /* Surface context. Text classes made for the dark theme read their colour from these variables.
+         On the cream page and light panels they are ink; inside a saturated or gradient fill, or an
+         intentionally dark surface (media frame, black scrim, dark banner), they stay light; inside a
+         gold fill they are dark ink. Inherited, so the nearest surface wins. */
+      body.gravity-shell {
+        --nb-t1: var(--gv-text-primary);
+        --nb-t2: var(--gv-text-secondary);
+        --nb-t3: var(--gv-text-tertiary);
+        --nb-acc: var(--gv-accent-text);
+        --nb-green: #166534;
+        --nb-emerald: #065F46;
+        --nb-teal: #115E59;
+        --nb-cyan: #155E75;
+        --nb-sky: #075985;
+        --nb-blue: #1D4ED8;
+        --nb-indigo: #4338CA;
+        --nb-violet: #6D28D9;
+        --nb-purple: #7E22CE;
+        --nb-fuchsia: #A21CAF;
+        --nb-pink: #BE185D;
+        --nb-rose: #BE123C;
+        --nb-red: #B91C1C;
+        --nb-orange: #9A3412;
+        --nb-lime: #3F6212;
+      }
+      body.gravity-shell :where([class^="bg-red-400"],[class*=" bg-red-400"],[class^="bg-red-500"],
+        [class*=" bg-red-500"],[class^="from-red-500"],[class*=" from-red-500"],[class^="bg-red-600"],
+        [class*=" bg-red-600"],[class^="bg-orange-400"],[class*=" bg-orange-400"],[class^="bg-orange-500"],
+        [class*=" bg-orange-500"],[class^="bg-green-400"],[class*=" bg-green-400"],[class^="bg-green-500"],
+        [class*=" bg-green-500"],[class^="from-green-500"],[class*=" from-green-500"],[class^="bg-green-600"],
+        [class*=" bg-green-600"],[class^="bg-emerald-400"],[class*=" bg-emerald-400"],[class^="bg-emerald-500"],
+        [class*=" bg-emerald-500"],[class^="from-emerald-500"],[class*=" from-emerald-500"],[class^="bg-teal-500"],
+        [class*=" bg-teal-500"],[class^="bg-cyan-500"],[class*=" bg-cyan-500"],[class^="bg-sky-400"],
+        [class*=" bg-sky-400"],[class^="from-sky-400"],[class*=" from-sky-400"],[class^="bg-sky-500"],
+        [class*=" bg-sky-500"],[class^="bg-blue-400"],[class*=" bg-blue-400"],[class^="from-blue-400"],
+        [class*=" from-blue-400"],[class^="bg-blue-500"],[class*=" bg-blue-500"],[class^="from-blue-500"],
+        [class*=" from-blue-500"],[class^="bg-blue-600"],[class*=" bg-blue-600"],[class^="from-blue-600"],
+        [class*=" from-blue-600"],[class^="bg-indigo-500"],[class*=" bg-indigo-500"],[class^="from-indigo-500"],
+        [class*=" from-indigo-500"],[class^="bg-violet-500"],[class*=" bg-violet-500"],[class^="bg-purple-500"],
+        [class*=" bg-purple-500"],[class^="from-purple-500"],[class*=" from-purple-500"],[class^="bg-pink-500"],
+        [class*=" bg-pink-500"],[class^="from-pink-500"],[class*=" from-pink-500"],[class^="bg-[#1877F2]"],
+        [class*=" bg-[#1877F2]"],[class^="bg-[#4ADE80]"],[class*=" bg-[#4ADE80]"],[class~="bg-black"],
+        [class*="bg-black/"][class*="absolute"],[class*="fixed"]:is([class*=" bg-black/85"],[class*=" bg-black/9"]),
+        [class^="from-black"],[class*=" from-black"],[class^="bg-[#141414]"],[class*=" bg-[#141414]"],.igCanvas,
+        [style*="#0b0b0e"]) {
+        --nb-t1: #FFFFFF;
+        --nb-t2: rgb(255 255 255 / 0.88);
+        --nb-t3: rgb(255 255 255 / 0.78);
+        --nb-acc: #F5A623;
+        --nb-green: #86EFAC;
+        --nb-emerald: #6EE7B7;
+        --nb-teal: #5EEAD4;
+        --nb-cyan: #67E8F9;
+        --nb-sky: #7DD3FC;
+        --nb-blue: #93C5FD;
+        --nb-indigo: #A5B4FC;
+        --nb-violet: #C4B5FD;
+        --nb-purple: #D8B4FE;
+        --nb-fuchsia: #F0ABFC;
+        --nb-pink: #F9A8D4;
+        --nb-rose: #FDA4AF;
+        --nb-red: #FCA5A5;
+        --nb-orange: #FDBA74;
+        --nb-lime: #BEF264;
+      }
+      body.gravity-shell :where([class~="bg-white"],[class^="bg-[var(--gv-panel)]"],[class*=" bg-[var(--gv-panel)]"],
+        [class^="bg-[var(--gv-panel-2)]"],[class*=" bg-[var(--gv-panel-2)]"],[class^="bg-[var(--gv-bg)]"],
+        [class*=" bg-[var(--gv-bg)]"],[class^="bg-slate-50"],[class*=" bg-slate-50"],[class^="bg-gray-50"],
+        [class*=" bg-gray-50"],[class^="bg-slate-100"],[class*=" bg-slate-100"],[class^="bg-gray-100"],
+        [class*=" bg-gray-100"],[style*="var(--gv-panel)"]) {
+        --nb-t1: var(--gv-text-primary);
+        --nb-t2: var(--gv-text-secondary);
+        --nb-t3: var(--gv-text-tertiary);
+        --nb-acc: var(--gv-accent-text);
+        --nb-green: #166534;
+        --nb-emerald: #065F46;
+        --nb-teal: #115E59;
+        --nb-cyan: #155E75;
+        --nb-sky: #075985;
+        --nb-blue: #1D4ED8;
+        --nb-indigo: #4338CA;
+        --nb-violet: #6D28D9;
+        --nb-purple: #7E22CE;
+        --nb-fuchsia: #A21CAF;
+        --nb-pink: #BE185D;
+        --nb-rose: #BE123C;
+        --nb-red: #B91C1C;
+        --nb-orange: #9A3412;
+        --nb-lime: #3F6212;
+      }
+      body.gravity-shell :where([class^="bg-[#ffcc29]"],[class*=" bg-[#ffcc29]"],[class^="bg-[#F5A623]"],
+        [class*=" bg-[#F5A623]"],[class^="bg-[var(--gv-accent)]"],[class*=" bg-[var(--gv-accent)]"],
+        [class^="from-[#ffcc29]"],[class*=" from-[#ffcc29]"],[class^="from-[#F5A623]"],[class*=" from-[#F5A623]"],
+        [class^="bg-amber-400"],[class*=" bg-amber-400"],[class^="bg-amber-500"],[class*=" bg-amber-500"],
+        [class^="bg-yellow-400"],[class*=" bg-yellow-400"],[class^="from-yellow-400"],[class*=" from-yellow-400"],
+        [class^="bg-yellow-500"],[class*=" bg-yellow-500"],[class^="from-yellow-500"],[class*=" from-yellow-500"]) {
+        --nb-t1: var(--gv-accent-ink);
+        --nb-t2: rgb(26 18 8 / 0.88);
+        --nb-t3: rgb(26 18 8 / 0.80);
+        --nb-acc: var(--gv-accent-ink);
+        --nb-green: #166534;
+        --nb-emerald: #065F46;
+        --nb-teal: #115E59;
+        --nb-cyan: #155E75;
+        --nb-sky: #075985;
+        --nb-blue: #1D4ED8;
+        --nb-indigo: #4338CA;
+        --nb-violet: #6D28D9;
+        --nb-purple: #7E22CE;
+        --nb-fuchsia: #A21CAF;
+        --nb-pink: #BE185D;
+        --nb-rose: #BE123C;
+        --nb-red: #B91C1C;
+        --nb-orange: #9A3412;
+        --nb-lime: #3F6212;
+      }
+      body.gravity-shell :where([class^="bg-red-500/"],[class*=" bg-red-500/"],[class^="from-red-500/"],
+        [class*=" from-red-500/"],[class^="bg-orange-500/"],[class*=" bg-orange-500/"],[class^="bg-amber-400/"],
+        [class*=" bg-amber-400/"],[class^="bg-amber-500/"],[class*=" bg-amber-500/"],[class^="bg-yellow-500/"],
+        [class*=" bg-yellow-500/"],[class^="from-yellow-500/"],[class*=" from-yellow-500/"],[class^="bg-green-500/"],
+        [class*=" bg-green-500/"],[class^="bg-green-600/"],[class*=" bg-green-600/"],[class^="bg-emerald-500/"],
+        [class*=" bg-emerald-500/"],[class^="from-emerald-500/"],[class*=" from-emerald-500/"],[class^="bg-teal-500/"],
+        [class*=" bg-teal-500/"],[class^="bg-cyan-500/"],[class*=" bg-cyan-500/"],[class^="bg-sky-400/"],
+        [class*=" bg-sky-400/"],[class^="bg-sky-500/"],[class*=" bg-sky-500/"],[class^="bg-blue-400/"],
+        [class*=" bg-blue-400/"],[class^="bg-blue-500/"],[class*=" bg-blue-500/"],[class^="from-blue-500/"],
+        [class*=" from-blue-500/"],[class^="bg-indigo-500/"],[class*=" bg-indigo-500/"],[class^="from-indigo-500/"],
+        [class*=" from-indigo-500/"],[class^="bg-violet-500/"],[class*=" bg-violet-500/"],[class^="bg-purple-500/"],
+        [class*=" bg-purple-500/"],[class^="from-purple-500/"],[class*=" from-purple-500/"],[class^="bg-pink-500/"],
+        [class*=" bg-pink-500/"],[class^="bg-[#ffcc29]/"],[class*=" bg-[#ffcc29]/"],[class^="bg-[#F5A623]/"],
+        [class*=" bg-[#F5A623]/"],[class^="from-[#ffcc29]/"],[class*=" from-[#ffcc29]/"],[class^="from-[#F5A623]/"],
+        [class*=" from-[#F5A623]/"],[class^="bg-amber-400/"],[class*=" bg-amber-400/"],[class^="bg-amber-500/"],
+        [class*=" bg-amber-500/"],[class^="bg-yellow-500/"],[class*=" bg-yellow-500/"],[class^="from-yellow-500/"],
+        [class*=" from-yellow-500/"]) {
+        --nb-t1: var(--gv-text-primary);
+        --nb-t2: var(--gv-text-secondary);
+        --nb-t3: var(--gv-text-tertiary);
+        --nb-acc: var(--gv-accent-text);
+        --nb-green: #166534;
+        --nb-emerald: #065F46;
+        --nb-teal: #115E59;
+        --nb-cyan: #155E75;
+        --nb-sky: #075985;
+        --nb-blue: #1D4ED8;
+        --nb-indigo: #4338CA;
+        --nb-violet: #6D28D9;
+        --nb-purple: #7E22CE;
+        --nb-fuchsia: #A21CAF;
+        --nb-pink: #BE185D;
+        --nb-rose: #BE123C;
+        --nb-red: #B91C1C;
+        --nb-orange: #9A3412;
+        --nb-lime: #3F6212;
+      }
+      /* Text: exact class tokens only, so variants (dark:text-white, hover:text-white) no longer leak
+         into the resting colour. */
+      body.gravity-shell :is([class^="text-white"],[class*=" text-white"],[class^="text-[#ededed]"],
+        [class*=" text-[#ededed]"],[class^="text-[#F5F4F1]"],[class*=" text-[#F5F4F1]"],[class^="text-slate-100"],
+        [class*=" text-slate-100"],[class^="text-slate-200"],[class*=" text-slate-200"],[class^="text-gray-200"],
+        [class*=" text-gray-200"],[class^="text-[rgba(245,244,241"],[class*=" text-[rgba(245,244,241"]) {
+        color: var(--nb-t1) !important;
+      }
+      body.gravity-shell :is([class^="text-white/60"],[class*=" text-white/60"],[class^="text-white/70"],
+        [class*=" text-white/70"],[class^="text-white/75"],[class*=" text-white/75"],[class^="text-[#ededed]/60"],
+        [class*=" text-[#ededed]/60"],[class^="text-[#ededed]/70"],[class*=" text-[#ededed]/70"],
+        [class^="text-slate-300"],[class*=" text-slate-300"],[class^="text-gray-300"],[class*=" text-gray-300"]) {
+        color: var(--nb-t2) !important;
+      }
+      body.gravity-shell :is([class^="text-white/5"],[class*=" text-white/5"],[class^="text-white/4"],
+        [class*=" text-white/4"],[class^="text-white/3"],[class*=" text-white/3"],[class^="text-white/2"],
+        [class*=" text-white/2"],[class^="text-white/1"],[class*=" text-white/1"],[class^="text-[#ededed]/5"],
+        [class*=" text-[#ededed]/5"],[class^="text-[#ededed]/4"],[class*=" text-[#ededed]/4"],
+        [class^="text-[#ededed]/3"],[class*=" text-[#ededed]/3"],[class^="text-[#ededed]/2"],
+        [class*=" text-[#ededed]/2"],[class^="text-[#ededed]/1"],[class*=" text-[#ededed]/1"],
+        [class^="text-slate-400"],[class*=" text-slate-400"],[class^="text-slate-500"],[class*=" text-slate-500"],
+        [class^="text-slate-600"],[class*=" text-slate-600"],[class^="text-gray-400"],[class*=" text-gray-400"],
+        [class^="text-gray-500"],[class*=" text-gray-500"],[class^="text-gray-600"],[class*=" text-gray-600"],
+        [class^="text-[rgba(245,244,241,0.5"],[class*=" text-[rgba(245,244,241,0.5"]) {
+        color: var(--nb-t3) !important;
+      }
+      body.gravity-shell :is([class*="hover:text-white"],[class*="hover:text-[#F5F4F1]"],
+        [class*="hover:text-[#ededed]"]):hover {
+        color: var(--nb-t1) !important;
+      }
+      /* Legacy dark backgrounds become the light page / panel tokens (exact class tokens only, so
+         dark:bg-* variants no longer paint over the light classes). */
+      body.gravity-shell :is([class^="bg-[#070A12]"],[class*=" bg-[#070A12]"],[class^="bg-[#0A0A0A]"],
+        [class*=" bg-[#0A0A0A]"],[class^="bg-slate-950"],[class*=" bg-slate-950"],[class^="bg-[#060810]"],
+        [class*=" bg-[#060810]"]) {
+        background-color: var(--gv-bg) !important;
+      }
+      body.gravity-shell :is([class^="bg-[#0d1117]"],[class*=" bg-[#0d1117]"],[class^="bg-[#0D1117]"],
+        [class*=" bg-[#0D1117]"],[class^="bg-[#0f1419]"],[class*=" bg-[#0f1419]"],[class^="bg-[#151515]"],
+        [class*=" bg-[#151515]"],[class^="bg-[#161b22]"],[class*=" bg-[#161b22]"],[class^="bg-[#111111]"],
+        [class*=" bg-[#111111]"],[class^="bg-[#111827]"],[class*=" bg-[#111827]"],[class^="bg-slate-900"],
+        [class*=" bg-slate-900"],[class^="bg-gray-900"],[class*=" bg-gray-900"],[class^="bg-slate-800"],
+        [class*=" bg-slate-800"],[class^="bg-[#131920]"],[class*=" bg-[#131920]"]) {
+        background-color: var(--gv-panel) !important;
+      }
+      body.gravity-shell :is([class^="bg-slate-700"],[class*=" bg-slate-700"]) {
+        background-color: var(--gv-panel-2) !important;
+      }
+      /* Translucent black cards become an ink tint; black scrims/overlays (absolute/fixed) stay dark. */
+      body.gravity-shell :is([class^="bg-black/"],
+        [class*=" bg-black/"]):not([class*="absolute"]):not([class*="fixed"]) {
+        background-color: var(--gv-surface-2) !important;
+      }
+      /* White-alpha surfaces and borders (made for a dark page) become ink-alpha tints and cream rules.
+         Not inside an intentionally dark surface, where they still read as intended. */
+      body.gravity-shell :is([class^="bg-white/"],[class*=" bg-white/"]):not(:is([class~="bg-black"],
+        [class*="bg-black/"][class*="absolute"],[class*="fixed"]:is([class*=" bg-black/85"],[class*=" bg-black/9"]),
+        [class^="from-black"],[class*=" from-black"],[class^="bg-[#141414]"],[class*=" bg-[#141414]"],.igCanvas,
+        [style*="#0b0b0e"]) *):not(input):not(textarea):not(select) {
+        background-color: var(--gv-surface-2) !important;
+      }
+      body.gravity-shell :is([class^="bg-white/[0.0"],[class*=" bg-white/[0.0"],[class^="bg-white/5"],
+        [class*=" bg-white/5"],[class^="bg-white/[0.02"],[class*=" bg-white/[0.02"],[class^="bg-white/[0.03"],
+        [class*=" bg-white/[0.03"]):not(:is([class~="bg-black"],[class*="bg-black/"][class*="absolute"],
+        [class*="fixed"]:is([class*=" bg-black/85"],[class*=" bg-black/9"]),[class^="from-black"],
+        [class*=" from-black"],[class^="bg-[#141414]"],[class*=" bg-[#141414]"],.igCanvas,
+        [style*="#0b0b0e"]) *):not(input):not(textarea):not(select) {
+        background-color: var(--gv-surface-1) !important;
+      }
+      body.gravity-shell :is([class^="bg-white/10"],[class*=" bg-white/10"],[class^="bg-white/[0.1"],
+        [class*=" bg-white/[0.1"]):not(:is([class~="bg-black"],[class*="bg-black/"][class*="absolute"],
+        [class*="fixed"]:is([class*=" bg-black/85"],[class*=" bg-black/9"]),[class^="from-black"],
+        [class*=" from-black"],[class^="bg-[#141414]"],[class*=" bg-[#141414]"],.igCanvas,
+        [style*="#0b0b0e"]) *):not(input):not(textarea):not(select) {
+        background-color: var(--gv-surface-3) !important;
+      }
+      body.gravity-shell :is([class^="bg-white/2"],[class*=" bg-white/2"]):not(:is([class~="bg-black"],
+        [class*="bg-black/"][class*="absolute"],[class*="fixed"]:is([class*=" bg-black/85"],[class*=" bg-black/9"]),
+        [class^="from-black"],[class*=" from-black"],[class^="bg-[#141414]"],[class*=" bg-[#141414]"],.igCanvas,
+        [style*="#0b0b0e"]) *):not(input):not(textarea):not(select) {
+        background-color: var(--gv-surface-4) !important;
+      }
+      body.gravity-shell :is([class^="border-white/"],[class*=" border-white/"]):not(:is([class~="bg-black"],
+        [class*="bg-black/"][class*="absolute"],[class*="fixed"]:is([class*=" bg-black/85"],[class*=" bg-black/9"]),
+        [class^="from-black"],[class*=" from-black"],[class^="bg-[#141414]"],[class*=" bg-[#141414]"],.igCanvas,
+        [style*="#0b0b0e"]) *) {
+        border-color: var(--gv-border-subtle) !important;
+      }
+      body.gravity-shell :is([class^="border-white/1"],[class*=" border-white/1"],[class^="border-white/2"],
+        [class*=" border-white/2"],[class^="border-white/[0.1"],
+        [class*=" border-white/[0.1"]):not(:is([class~="bg-black"],[class*="bg-black/"][class*="absolute"],
+        [class*="fixed"]:is([class*=" bg-black/85"],[class*=" bg-black/9"]),[class^="from-black"],
+        [class*=" from-black"],[class^="bg-[#141414]"],[class*=" bg-[#141414]"],.igCanvas,[style*="#0b0b0e"]) *) {
+        border-color: var(--gv-border-default) !important;
+      }
+      /* Legacy yellows / gold used as TEXT become the AA-safe accent text colour on light surfaces. */
+      body.gravity-shell :is([class^="text-[#ffcc29]"],[class*=" text-[#ffcc29]"],[class^="text-[#d4a800]"],
+        [class*=" text-[#d4a800]"],[class^="text-[#F5A623]"],[class*=" text-[#F5A623]"],[class^="text-yellow-300"],
+        [class*=" text-yellow-300"],[class^="text-yellow-400"],[class*=" text-yellow-400"],[class^="text-yellow-500"],
+        [class*=" text-yellow-500"],[class^="text-amber-300"],[class*=" text-amber-300"],[class^="text-amber-400"],
+        [class*=" text-amber-400"],[class^="text-amber-500"],[class*=" text-amber-500"],
+        [class^="text-[var(--gv-accent)]"],[class*=" text-[var(--gv-accent)]"]) {
+        color: var(--nb-acc) !important;
+      }
+      body.gravity-shell :is([class*="hover:text-[#ffcc29]"],[class*="hover:text-[#F5A623]"]):hover {
+        color: var(--nb-acc) !important;
+      }
+      /* Pale status colours (made for a dark page) become their dark shades on light surfaces. */
+      body.gravity-shell :is([class^="text-green-300"],[class*=" text-green-300"],[class^="text-green-400"],
+        [class*=" text-green-400"],[class^="text-green-500"],[class*=" text-green-500"],[class^="text-green-600"],
+        [class*=" text-green-600"]) {
+        color: var(--nb-green) !important;
+      }
+      body.gravity-shell :is([class^="text-emerald-200"],[class*=" text-emerald-200"],[class^="text-emerald-300"],
+        [class*=" text-emerald-300"],[class^="text-emerald-400"],[class*=" text-emerald-400"],
+        [class^="text-emerald-500"],[class*=" text-emerald-500"],[class^="text-emerald-600"],
+        [class*=" text-emerald-600"]) {
+        color: var(--nb-emerald) !important;
+      }
+      body.gravity-shell :is([class^="text-teal-400"],[class*=" text-teal-400"],[class^="text-teal-600"],
+        [class*=" text-teal-600"]) {
+        color: var(--nb-teal) !important;
+      }
+      body.gravity-shell :is([class^="text-cyan-400"],[class*=" text-cyan-400"],[class^="text-cyan-600"],
+        [class*=" text-cyan-600"]) {
+        color: var(--nb-cyan) !important;
+      }
+      body.gravity-shell :is([class^="text-sky-300"],[class*=" text-sky-300"],[class^="text-sky-400"],
+        [class*=" text-sky-400"],[class^="text-sky-500"],[class*=" text-sky-500"]) {
+        color: var(--nb-sky) !important;
+      }
+      body.gravity-shell :is([class^="text-blue-300"],[class*=" text-blue-300"],[class^="text-blue-400"],
+        [class*=" text-blue-400"],[class^="text-blue-500"],[class*=" text-blue-500"]) {
+        color: var(--nb-blue) !important;
+      }
+      body.gravity-shell :is([class^="text-indigo-400"],[class*=" text-indigo-400"],[class^="text-indigo-500"],
+        [class*=" text-indigo-500"]) {
+        color: var(--nb-indigo) !important;
+      }
+      body.gravity-shell :is([class^="text-violet-400"],[class*=" text-violet-400"]) {
+        color: var(--nb-violet) !important;
+      }
+      body.gravity-shell :is([class^="text-purple-400"],[class*=" text-purple-400"],[class^="text-purple-500"],
+        [class*=" text-purple-500"]) {
+        color: var(--nb-purple) !important;
+      }
+      body.gravity-shell :is() {
+        color: var(--nb-fuchsia) !important;
+      }
+      body.gravity-shell :is([class^="text-pink-400"],[class*=" text-pink-400"],[class^="text-pink-500"],
+        [class*=" text-pink-500"]) {
+        color: var(--nb-pink) !important;
+      }
+      body.gravity-shell :is() {
+        color: var(--nb-rose) !important;
+      }
+      body.gravity-shell :is([class^="text-red-200"],[class*=" text-red-200"],[class^="text-red-300"],
+        [class*=" text-red-300"],[class^="text-red-400"],[class*=" text-red-400"],[class^="text-red-500"],
+        [class*=" text-red-500"]) {
+        color: var(--nb-red) !important;
+      }
+      body.gravity-shell :is([class^="text-orange-300"],[class*=" text-orange-300"],[class^="text-orange-400"],
+        [class*=" text-orange-400"],[class^="text-orange-500"],[class*=" text-orange-500"]) {
+        color: var(--nb-orange) !important;
+      }
+      body.gravity-shell :is() {
+        color: var(--nb-lime) !important;
+      }
+      body.gravity-shell :is([class^="text-amber-600"],[class*=" text-amber-600"]) {
+        color: var(--nb-acc) !important;
+      }
+      /* Pale chart labels (SVG axis ticks drawn in slate-400 for the dark theme). */
+      body.gravity-shell svg :is(text, tspan):is([fill="#94a3b8"],[fill="#94A3B8"],[fill="#9ca3af"],
+        [fill="#64748b"]) {
+        fill: var(--gv-text-tertiary) !important;
+      }
+      body.gravity-shell :is([class^="text-[#4ADE80]"],[class*=" text-[#4ADE80]"]) {
+        color: var(--nb-green) !important;
+      }
+      body.gravity-shell :is() {
+        color: var(--nb-blue) !important;
+      }
+      /* Token misuse: --gv-text-muted (3:1, large text only) on body text, and translucent ink hints. */
+      body.gravity-shell :is([class^="text-[var(--gv-text-muted)]"],[class*=" text-[var(--gv-text-muted)]"],
+        [class^="text-[#070A12]/5"],[class*=" text-[#070A12]/5"]) {
+        color: var(--gv-text-tertiary) !important;
+      }
+      body.gravity-shell :is([class^="text-[#1A1208]/70"],[class*=" text-[#1A1208]/70"]) {
+        color: var(--gv-accent-ink) !important;
+      }
+      body.gravity-shell [class*="placeholder:text-[var(--gv-text-muted)]"]::placeholder {
+        color: var(--gv-text-tertiary) !important;
+      }
+      /* The italic display accent (#D07A00) is 2.99:1 on cream at headline size; #C57503 (the token mixed
+         with 6% ink) is 3.3:1 and keeps the hue. The token itself is unchanged. */
+      body.gravity-shell :is([class^="text-[var(--gv-accent-display)]"],[class*=" text-[var(--gv-accent-display)]"]) {
+        color: #C57503 !important;
+      }
+      /* ---- end LIGHT SEMANTICS ---- */
       /* Card / panel wrappers — soften and warm */
       body.gravity-shell [class*="rounded-xl"][class*="border"][class*="bg-"],
       body.gravity-shell [class*="rounded-2xl"][class*="border"][class*="bg-"] {
         border-color: var(--grav-border) !important;
       }
-      /* Inputs — dark neutral bg with subtle border */
+      /* Inputs — light panel fill, cream border, ink text */
       body.gravity-shell input[type="text"],
       body.gravity-shell input[type="email"],
       body.gravity-shell input[type="password"],
@@ -237,11 +568,29 @@
       body.gravity-shell input[type="number"],
       body.gravity-shell input[type="date"],
       body.gravity-shell input[type="time"],
+      body.gravity-shell input:not([type]),
       body.gravity-shell textarea,
       body.gravity-shell select {
-        background-color: rgba(255,255,255,0.03) !important;
-        border-color: var(--grav-border) !important;
-        color: var(--grav-text) !important;
+        background-color: var(--gv-panel) !important;
+        border-color: var(--gv-border-default) !important;
+        color: var(--gv-text-primary) !important;
+      }
+      /* Placeholders: tertiary ink (5.9:1 on the panel); --gv-text-muted is 3:1, too light for hint text */
+      body.gravity-shell input::placeholder,
+      body.gravity-shell textarea::placeholder {
+        color: var(--gv-text-tertiary) !important;
+        opacity: 1 !important;
+      }
+      /* Fields on an intentionally dark surface (DraftPreviewModal, lightboxes) keep the dark styling */
+      body.gravity-shell :where([class~="bg-black"], [class*="fixed"]:is([class*=" bg-black/85"],[class*=" bg-black/9"]), [style*="#0b0b0e"]) input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+      body.gravity-shell :where([class~="bg-black"], [class*="fixed"]:is([class*=" bg-black/85"],[class*=" bg-black/9"]), [style*="#0b0b0e"]) textarea,
+      body.gravity-shell :where([class~="bg-black"], [class*="fixed"]:is([class*=" bg-black/85"],[class*=" bg-black/9"]), [style*="#0b0b0e"]) select {
+        background-color: rgb(255 255 255 / 0.04) !important;
+        border-color: rgb(255 255 255 / 0.10) !important;
+        color: #F5F4F1 !important;
+      }
+      body.gravity-shell :where([class~="bg-black"], [class*="fixed"]:is([class*=" bg-black/85"],[class*=" bg-black/9"]), [style*="#0b0b0e"]) :is(input, textarea)::placeholder {
+        color: rgb(255 255 255 / 0.60) !important;
       }
       body.gravity-shell input:focus,
       body.gravity-shell textarea:focus,
@@ -264,15 +613,13 @@
         box-shadow: none !important;
         outline: none !important;
       }
-      /* Primary action buttons (gold in old code) — Gravity gold with shadow */
-      body.gravity-shell button[class*="bg-[#ffcc29]"],
-      body.gravity-shell a[class*="bg-[#ffcc29]"] {
+      /* Primary action buttons (gold in old code) — Gravity gold with shadow, dark ink text */
+      body.gravity-shell :is(button, a):is([class^="bg-[#ffcc29]"],[class*=" bg-[#ffcc29]"]):not([class^="bg-[#ffcc29]/"]):not([class*=" bg-[#ffcc29]/"]) {
         background-color: var(--grav-gold) !important;
         color: #1A1208 !important;
         box-shadow: 0 4px 18px rgba(245,166,35,0.20) !important;
       }
-      body.gravity-shell button[class*="bg-[#ffcc29]"]:hover,
-      body.gravity-shell a[class*="bg-[#ffcc29]"]:hover {
+      body.gravity-shell :is(button, a):is([class^="bg-[#ffcc29]"],[class*=" bg-[#ffcc29]"]):not([class^="bg-[#ffcc29]/"]):not([class*=" bg-[#ffcc29]/"]):hover {
         background-color: var(--grav-gold-hover) !important;
       }
       /* Focus rings — gold */
@@ -283,12 +630,13 @@
       /* Scrollbar for Gravity shell */
       body.gravity-shell ::-webkit-scrollbar { width: 8px; height: 8px; }
       body.gravity-shell ::-webkit-scrollbar-track { background: transparent; }
+      /* Thumbs in ink alpha (white alpha was invisible on cream) */
       body.gravity-shell ::-webkit-scrollbar-thumb {
-        background: rgba(255,255,255,0.08);
+        background: rgb(var(--gv-ink-rgb) / 0.18);
         border-radius: 4px;
       }
       body.gravity-shell ::-webkit-scrollbar-thumb:hover {
-        background: rgba(255,255,255,0.16);
+        background: rgb(var(--gv-ink-rgb) / 0.30);
       }
       /* Small-caps meta label used across Gravity screens */
       .gravity-label {
