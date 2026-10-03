@@ -53,7 +53,7 @@ Use WebFetch on fal's Seedance 2.0 text-to-video and reference-to-video model pa
   - `duration: 99` clamps to 15; `duration: 2` clamps to 4.
   - Throws on empty/whitespace prompt; throws with 5 refs; throws for `http://x`, `javascript:alert(1)`, `''`, and non-array/non-string entries.
   - `monthStartUTC(new Date('2026-10-31T23:30:00Z'))` equals `2026-10-01T00:00:00.000Z`; `nextMonthStartUTC` of the same equals `2026-11-01T00:00:00.000Z`.
-  - `heroMonthlyLimit()` returns 2 by default and 5 when `HERO_VIDEO_MONTHLY_LIMIT='5'`; returns 2 for `'abc'` or `'0'`... (0 is invalid: fall back to 2).
+  - `heroMonthlyLimit()` returns 2 by default and 5 when `HERO_VIDEO_MONTHLY_LIMIT='5'`; returns 2 for `'abc'` and for `'0'` (zero is invalid, fall back to 2).
   - `getHeroQuota('u1', now, fakeModel)` where `fakeModel.countDocuments(filter)` records its filter: assert the filter has `userId: 'u1'`, `'metadata.kind': 'hero'`, `status: { $in: ['queued','processing','completed'] }`, `createdAt: { $gte: monthStartUTC(now) }`, and the returned `{ used, limit, resetsOn }` uses the fake's count and `nextMonthStartUTC(now).toISOString()`.
 
 - [ ] **Step 3: Run** `cd backend && node --test tests/heroVideoService.test.js`. Expected: FAIL (module not found).
