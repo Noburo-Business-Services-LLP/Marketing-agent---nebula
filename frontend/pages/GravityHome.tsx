@@ -198,7 +198,7 @@ const GravityHome: React.FC = () => {
           <span className="absolute inset-y-0 left-0 w-[3px] bg-[var(--gv-accent)]" />
           <span className="w-2 h-2 rounded-full bg-[var(--gv-accent)]" />
           <div className="flex-1 min-w-0">
-            <div className="text-[13.5px] font-semibold text-[var(--gv-text-primary)]">Finish setting up Gravity</div>
+            <div className="text-[13.5px] font-semibold text-[var(--gv-text-primary)]">Finish setting up Nebulaa</div>
             <div className="text-[12px] text-[var(--gv-text-tertiary)] truncate">Connect your social accounts and confirm brand voice — 2 minutes.</div>
           </div>
           <Link to="/connect-socials" className="flex items-center gap-2 text-[12px] font-semibold text-[var(--gv-accent-text)] hover:text-[var(--gv-accent-hover)]">
@@ -222,7 +222,7 @@ const GravityHome: React.FC = () => {
                 <span>.</span>
               </>
             }
-            subcopy="Gravity drafted the week ahead while you slept. Take a minute, tap through, and we'll handle the rest — scheduled, posted, measured."
+            subcopy="Nebulaa drafted the week ahead while you slept. Take a minute, tap through, and we'll handle the rest — scheduled, posted, measured."
             className="!mb-8"
           />
 

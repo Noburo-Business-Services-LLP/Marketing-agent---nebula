@@ -581,7 +581,7 @@ const ConnectSocials: React.FC = () => {
         <GravityHero
           align="left"
           eyebrow="Connect Socials"
-          headline={<>Where should Gravity <GravityEmphasis>publish</GravityEmphasis>?</>}
+          headline={<>Where should Nebulaa <GravityEmphasis>publish</GravityEmphasis>?</>}
           subcopy="Securely connect your platforms to enable auto-posting and analytics."
           className="!mb-0"
         />
@@ -953,9 +953,9 @@ const ConnectSocials: React.FC = () => {
                                   {getCustomIcon(connectingPlatform || '')}
                               </div>
                               <div>
-                                  <h3 className="font-serif-display text-[20px] text-[#F5F4F1]">Authorize Nebulaa Gravity</h3>
+                                  <h3 className="font-serif-display text-[20px] text-[#F5F4F1]">Authorize Nebulaa</h3>
                                   <p className={`text-sm mt-2 ${theme.textSecondary}`}>
-                                      Nebulaa Gravity is requesting access to your {connectingPlatform} account to publish posts and view analytics.
+                                      Nebulaa is requesting access to your {connectingPlatform} account to publish posts and view analytics.
                                   </p>
                               </div>
 
@@ -969,7 +969,7 @@ const ConnectSocials: React.FC = () => {
                                     className={`w-full p-2 border rounded focus:ring-2 focus:ring-[#F5A623] outline-none ${
                                       isDarkMode ? 'bg-[#0f1419] border-slate-700/50 text-white' : 'bg-white border-slate-300 text-slate-900'
                                     }`}
-                                    placeholder="e.g. gravity_official"
+                                    placeholder="e.g. nebulaa_official"
                                     value={usernameInput}
                                     onChange={(e) => setUsernameInput(e.target.value)}
                                   />

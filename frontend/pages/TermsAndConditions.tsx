@@ -49,7 +49,7 @@ const TermsAndConditions: React.FC = () => {
               <p className="mb-3">For the purposes of these Terms, the following definitions apply:</p>
               <ul className="list-disc pl-6 space-y-2">
                 <li><strong className={text}>"Company", "We", "Us", or "Our"</strong> refers to Noburo Business Services LLP, the legal entity operating the Nebulaa platform under the laws of India.</li>
-                <li><strong className={text}>"Platform"</strong> refers to the Nebulaa application, website (nebulaa.ai), associated APIs, tools, dashboards, and any related services, including Founder OS and all named product modules (Gravity, Pulsar, Infinity, Singularity, Atom, etc.).</li>
+                <li><strong className={text}>"Platform"</strong> refers to the Nebulaa application, website (nebulaa.ai), associated APIs, tools, dashboards, and any related services, including Founder OS and all named product modules (Infinity, Singularity, Atom, etc.).</li>
                 <li><strong className={text}>"User", "You", or "Your"</strong> refers to any individual or entity that registers for, accesses, or uses the Platform.</li>
                 <li><strong className={text}>"Trial Period"</strong> means the free, time-limited access period granted before a paid subscription commences.</li>
                 <li><strong className={text}>"Subscription"</strong> means a paid plan that grants continued access to the Platform after the Trial Period.</li>
@@ -152,7 +152,7 @@ const TermsAndConditions: React.FC = () => {
               <p className="mb-3">8.2 These Terms do not grant you any ownership rights in the Platform. You receive only a limited, non-exclusive, non-transferable, revocable licence to use the Platform during the term of your Subscription in accordance with these Terms.</p>
               <p className="mb-3">8.3 You retain ownership of the original input data and business information you provide to the Platform. By submitting content, you grant us a non-exclusive, royalty-free, worldwide licence to use, process, and analyse your content solely for the purpose of providing and improving the Services.</p>
               <p className="mb-3">8.4 Any feedback, suggestions, or ideas you provide regarding the Platform may be used by us without restriction, compensation, or attribution.</p>
-              <p>8.5 "Nebulaa", "Founder OS", "Gravity", "Pulsar", "Infinity", "Singularity", "Atom", and all associated logos and marks are proprietary to Noburo Business Services LLP. You may not use our trademarks or branding without prior written permission.</p>
+              <p>8.5 "Nebulaa", "Founder OS", "Infinity", "Singularity", "Atom", and all associated logos and marks are proprietary to Noburo Business Services LLP. You may not use our trademarks or branding without prior written permission.</p>
             </section>
 
             {/* 9 */}

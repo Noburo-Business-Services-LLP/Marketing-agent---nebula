@@ -673,10 +673,9 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
           }}
         >
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[#070A12]/20 mb-4 backdrop-blur-sm">
-            <img src="/assets/logo.png" alt="Nebulaa Gravity" className="w-12 h-12" />
+            <img src="/assets/logo.png" alt="Nebulaa" className="w-12 h-12" />
           </div>
           <h1 className="text-2xl font-bold text-[#070A12] tracking-tight">Nebulaa</h1>
-          <h2 className="text-xl font-bold text-[#070A12] tracking-tight">Gravity</h2>
           <p className="text-[#070A12]/80 text-sm mt-2">Marketing Agent & Growth Engine</p>
         </div>
 

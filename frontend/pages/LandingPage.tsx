@@ -73,9 +73,9 @@ const LandingPage: React.FC = () => {
           <div className="flex items-center justify-between h-20">
             <div className="flex items-center gap-3">
               <div className="relative w-10 h-10 bg-gradient-to-br from-[#ffcc29] to-[#e6b825] rounded-xl flex items-center justify-center shadow-lg shadow-[#ffcc29]/20">
-                <img src="/assets/logo.png" alt="Nebulaa Gravity" className="w-6 h-6" />
+                <img src="/assets/logo.png" alt="Nebulaa" className="w-6 h-6" />
               </div>
-              <span className={`text-xl font-semibold tracking-tight ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>Nebulaa Gravity</span>
+              <span className={`text-xl font-semibold tracking-tight ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>Nebulaa</span>
             </div>
             
             <div className="hidden md:flex items-center gap-10">
@@ -131,7 +131,7 @@ const LandingPage: React.FC = () => {
 
             {/* Subheadline */}
             <p className={`text-lg md:text-xl leading-relaxed mb-10 max-w-2xl mx-auto ${theme === 'dark' ? 'text-[#ededed]/70' : 'text-gray-600'}`}>
-              Nebulaa Gravity automates your marketing campaigns, analyzes competitors, and finds the perfect influencers — all from one beautiful dashboard.
+              Nebulaa automates your marketing campaigns, analyzes competitors, and finds the perfect influencers — all from one beautiful dashboard.
             </p>
 
             {/* CTAs */}
@@ -322,12 +322,12 @@ const LandingPage: React.FC = () => {
               {
                 step: "02",
                 title: "Set your goals",
-                description: "Tell us what you want to achieve and Gravity will create a personalized strategy."
+                description: "Tell us what you want to achieve and Nebulaa will create a personalized strategy."
               },
               {
                 step: "03",
                 title: "Watch it grow",
-                description: "Sit back as Nebulaa Gravity optimizes your campaigns and delivers results."
+                description: "Sit back as Nebulaa optimizes your campaigns and delivers results."
               }
             ].map((item, index) => (
               <div key={index} className="relative">
@@ -395,7 +395,7 @@ const LandingPage: React.FC = () => {
             Ready to transform your marketing?
           </h2>
           <p className={`text-lg mb-10 ${theme === 'dark' ? 'text-[#ededed]/70' : 'text-gray-600'}`}>
-            Join thousands of marketers who trust Nebulaa Gravity to grow their business.
+            Join thousands of marketers who trust Nebulaa to grow their business.
           </p>
           <button 
             onClick={() => navigate('/login')}
@@ -420,7 +420,7 @@ const LandingPage: React.FC = () => {
               <div className="w-8 h-8 bg-gradient-to-br from-[#ffcc29] to-[#ffcc29] rounded-lg flex items-center justify-center">
                 <Sparkles className="w-4 h-4 text-[#070A12]" />
               </div>
-              <span className={`text-lg font-semibold ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>Nebulaa Gravity</span>
+              <span className={`text-lg font-semibold ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>Nebulaa</span>
             </div>
             <div className={`flex items-center gap-8 text-sm ${theme === 'dark' ? 'text-[#ededed]/70' : 'text-gray-600'}`}>
               <a href="/#/privacy-policy" className={`transition-colors ${theme === 'dark' ? 'hover:text-[#ffcc29]' : 'hover:text-[#070A12]'}`}>Privacy</a>
@@ -428,7 +428,7 @@ const LandingPage: React.FC = () => {
               <button onClick={() => setShowContact(true)} className={`transition-colors ${theme === 'dark' ? 'hover:text-[#ffcc29]' : 'hover:text-[#070A12]'}`}>Contact</button>
             </div>
             <div className={`text-sm ${theme === 'dark' ? 'text-[#ededed]/50' : 'text-gray-500'}`}>
-              © 2025 Nebulaa Gravity. All rights reserved.
+              © 2025 Nebulaa. All rights reserved.
             </div>
           </div>
         </div>

@@ -82,7 +82,7 @@ const NoteRow: React.FC<{
           <button onClick={() => setEditing(true)} title="Edit" className="p-1.5 rounded-md text-[var(--gv-text-muted)] hover:text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-2)] flex-shrink-0">
             <Pencil className="w-3.5 h-3.5" />
           </button>
-          <button onClick={async () => { if (await confirm('This removes it from what Gravity uses to plan future posts.', { title: 'Delete this note?', confirmLabel: 'Delete', danger: true })) onDelete(note._id); }} title="Delete" className="p-1.5 rounded-md text-[var(--gv-text-muted)] hover:text-red-500 hover:bg-[var(--gv-surface-2)] flex-shrink-0">
+          <button onClick={async () => { if (await confirm('This removes it from what Nebulaa uses to plan future posts.', { title: 'Delete this note?', confirmLabel: 'Delete', danger: true })) onDelete(note._id); }} title="Delete" className="p-1.5 rounded-md text-[var(--gv-text-muted)] hover:text-red-500 hover:bg-[var(--gv-surface-2)] flex-shrink-0">
             <Trash2 className="w-3.5 h-3.5" />
           </button>
         </>
@@ -165,7 +165,7 @@ const AIMemory: React.FC = () => {
         <GravityHero
           align="left"
           eyebrow="AI Memory"
-          headline={<>What Gravity has <GravityEmphasis>learned</GravityEmphasis></>}
+          headline={<>What Nebulaa has <GravityEmphasis>learned</GravityEmphasis></>}
           subcopy="A small, curated set of patterns learned from your real published-post performance — not a raw log."
           className="!mb-0"
         />

@@ -120,7 +120,7 @@ const UploadAndSchedule: React.FC = () => {
       <GravityHero
         eyebrow="Upload · your own media"
         headline={<>Already have <GravityEmphasis>something</GravityEmphasis>?</>}
-        subcopy="Drop in a photo or a video. Gravity writes the caption and puts it out."
+        subcopy="Drop in a photo or a video. Nebulaa writes the caption and puts it out."
       />
 
       {!file ? (
@@ -176,7 +176,7 @@ const UploadAndSchedule: React.FC = () => {
                 value={caption}
                 onChange={(e) => setCaption(e.target.value)}
                 rows={5}
-                placeholder="Write it, or let Gravity."
+                placeholder="Write it, or let Nebulaa."
                 className="w-full px-4 py-3 rounded-xl bg-black/40 border border-white/[0.09] text-[14px] leading-relaxed text-[#F5F4F1] placeholder:text-white/20 focus:outline-none focus:border-[#F5A623]/60 transition-colors resize-none"
               />
               <button

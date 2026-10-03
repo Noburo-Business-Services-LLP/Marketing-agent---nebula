@@ -473,7 +473,7 @@ export async function generateAnalyticsPDF(data: AnalyticsPDFData): Promise<void
   // Brand name
   doc.setTextColor(ar, ag, ab);
   doc.setFontSize(24); doc.setFont('helvetica', 'bold');
-  doc.text('NEBULAA GRAVITY', M, 20);
+  doc.text('NEBULAA', M, 20);
 
   // Subtitle
   doc.setTextColor(255, 255, 255);
@@ -864,7 +864,7 @@ export async function generateAnalyticsPDF(data: AnalyticsPDFData): Promise<void
     // Brand
     doc.setTextColor(ar, ag, ab);
     doc.setFontSize(7); doc.setFont('helvetica', 'bold');
-    doc.text('NEBULAA GRAVITY', M, PH - 4.5);
+    doc.text('NEBULAA', M, PH - 4.5);
     // Tagline
     doc.setTextColor(140, 140, 155); doc.setFont('helvetica', 'normal');
     doc.text('Powered by AI', M + 35, PH - 4.5);
