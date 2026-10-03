@@ -234,7 +234,7 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, onLogout }) => {
               </p>
               <a href="https://gravity.nebulaa.ai" target="_blank" rel="noopener noreferrer"
                 className="w-full py-4 bg-[#ffcc29] hover:bg-[#e6b825] text-[#070A12] font-bold text-lg rounded-2xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#ffcc29]/20">
-                Go to Nebulaa <ExternalLink className="w-5 h-5" />
+                Open the production app <ExternalLink className="w-5 h-5" />
               </a>
               <p className="text-[#ededed]/30 text-xs mt-4">gravity.nebulaa.ai</p>
               <button onClick={onLogout} className="text-[#ededed]/25 hover:text-[#ededed]/50 text-sm transition-colors underline mt-6">
@@ -263,7 +263,7 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, onLogout }) => {
               </p>
               <a href="https://gravity.nebulaa.ai" target="_blank" rel="noopener noreferrer"
                 className="w-full py-4 bg-[#ffcc29] hover:bg-[#e6b825] text-[#070A12] font-bold text-lg rounded-2xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#ffcc29]/20">
-                Go to Nebulaa <ExternalLink className="w-5 h-5" />
+                Open the production app <ExternalLink className="w-5 h-5" />
               </a>
               <p className="text-[#ededed]/30 text-xs mt-4">gravity.nebulaa.ai</p>
             </div>

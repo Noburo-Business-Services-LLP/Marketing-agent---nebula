@@ -39,6 +39,18 @@ test('scanner flags visible names and ignores identifiers and comments', () => {
   assert.deepEqual(v.map((x) => `${x.file}:${x.line}`), ['index.html:1', 'pages/A.tsx:1', 'pages/A.tsx:10']);
 });
 
+test('comment markers inside strings or line comments do not hide later lines', () => {
+  const dir = fixture({
+    'a.tsx': '<input accept="image/*" />\n<h1>Gravity</h1>',
+    'b.tsx': '// see /audio/*\n<h1>Gravity</h1>',
+    'c.tsx': '<p>a // b Gravity</p>',
+    'd.tsx': '/* one\n Gravity\n */\n{/* Gravity */}\n// Gravity\nconst u = "https://gravity.nebulaa.ai";',
+    'e.tsx': 'const p = "/*"; <b>Gravity</b>',
+  });
+  const v = findBrandViolations(dir).map((x) => `${x.file}:${x.line}`);
+  assert.deepEqual(v, ['a.tsx:2', 'b.tsx:2', 'c.tsx:1', 'e.tsx:1']);
+});
+
 test('scanner honours the allowlist', () => {
   const dir = fixture({
     'pages/B.tsx': '<p>Gravity internal</p>\n<p>Gravity shown</p>',

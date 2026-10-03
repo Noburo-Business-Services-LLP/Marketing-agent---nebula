@@ -1,4 +1,6 @@
 // Finds customer-visible old product/agent names (Gravity, Pulsar, Orbit) in the frontend source.
+// Matches only the capitalised / all-caps forms (Gravity, GRAVITY, Pulsar, Orbit). Lowercase visible
+// text (e.g. a placeholder like gravity_official) must be checked by hand.
 // Usage: findBrandViolations(rootDir) -> [{ file, line, text }]
 import fs from 'node:fs';
 import path from 'node:path';
@@ -18,26 +20,55 @@ function walk(dir, out) {
   }
 }
 
+/** Copy of the line with the contents of "..", '..' and `..` blanked (same length). */
+function blankStrings(line) {
+  let out = '';
+  let q = null;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (q) {
+      if (c === '\\') { out += '  '; i++; continue; }
+      if (c === q) { q = null; out += c; } else out += ' ';
+    } else if (c === '"' || c === '`' || (c === "'" && line.indexOf("'", i + 1) !== -1)) {
+      q = c; out += c;
+    } else out += c;
+  }
+  return out;
+}
+
 /** Remove comment text from one line; returns '' when the whole line is a comment. */
 function stripComments(line, state) {
-  let s = line;
-  if (state.inBlock) {
-    const end = s.indexOf('*/');
-    if (end === -1) return '';
-    state.inBlock = false;
-    s = s.slice(end + 2);
+  if (!state.inBlock && line.trim().startsWith('//')) return '';
+  const blank = blankStrings(line);
+  const chars = line.split('');
+  let i = 0;
+  while (i < blank.length) {
+    if (state.inBlock) {
+      const end = blank.indexOf('*/', i);
+      const stop = end === -1 ? blank.length : end + 2;
+      for (let k = i; k < stop; k++) chars[k] = ' ';
+      if (end === -1) return '';
+      state.inBlock = false;
+      i = stop;
+      continue;
+    }
+    const open = blank.indexOf('/*', i);
+    if (open === -1) break;
+    const end = blank.indexOf('*/', open + 2);
+    const stop = end === -1 ? blank.length : end + 2;
+    for (let k = open; k < stop; k++) chars[k] = ' ';
+    if (end === -1) { state.inBlock = true; break; }
+    i = stop;
   }
-  s = s.replace(/\/\*.*?\*\//g, '').replace(/<!--.*?-->/g, '');
-  const open = s.indexOf('/*');
-  if (open !== -1) {
-    state.inBlock = true;
-    s = s.slice(0, open);
-  }
-  const trimmed = s.trim();
-  if (trimmed.startsWith('//') || trimmed.startsWith('*')) return '';
-  // trailing "// ..." (not the one in "https://")
-  s = s.replace(/(^|\s)\/\/.*$/, '$1');
-  return s;
+  let s = chars.join('');
+  const b2 = blankStrings(s);
+  const t = s.trim();
+  if (t.startsWith('*') || t === '') return t === '' ? '' : '';
+  // Trailing "// ..." comment: only in code context (not after a JSX tag, which would be text),
+  // and never the "//" of a URL.
+  const m = /(^|\s)\/\/(?!\/)/.exec(b2);
+  if (m && !/<[A-Za-z]/.test(b2.slice(0, m.index))) s = s.slice(0, m.index);
+  return s.replace(/<!--.*?-->/g, '');
 }
 
 function loadAllowlist(rootDir) {
