@@ -20,6 +20,9 @@ const STALE_UNSUBMITTED_MS = 10 * 60 * 1000;
 // Any non-terminal job older than this is failed and refunded, even if fal has it. Bounds
 // every "stays processing, retry later" path (transient fal/storage errors, lost polls).
 const HERO_MAX_AGE_MS = 60 * 60 * 1000;
+// A submitted job past HERO_MAX_AGE_MS is still checked with fal first (a finished clip must
+// be delivered however old). If fal cannot be reached at all, give up only past this cap.
+const HERO_HARD_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 // One poll at a time may download+upload a finished clip; a lease older than this is
 // treated as abandoned (process died mid-copy) and can be re-claimed.
 const COPY_LEASE_MS = 5 * 60 * 1000;
@@ -201,8 +204,11 @@ async function pollHeroJob(deps, { userId, jobId }) {
   const created = new Date((job.createdAt || job.startedAt || 0)).getTime();
   const copyingAt = job.metadata && job.metadata.copyingAt ? new Date(job.metadata.copyingAt).getTime() : null;
   const copyInFlight = copyingAt !== null && nowMs - copyingAt < COPY_LEASE_MS;
-  if (nowMs - created > HERO_MAX_AGE_MS && !copyInFlight) {
-    // Conditional on still being active so a job completed by a concurrent poll is never failed/refunded.
+  const overAge = nowMs - created > HERO_MAX_AGE_MS && !copyInFlight;
+  const hasRequestId = Boolean(job.metadata && job.metadata.falRequestId);
+
+  // Conditional on still being active so a job completed by a concurrent poll is never failed/refunded.
+  const ageFail = async () => {
     const upd = await deps.JobModel.updateOne(
       { jobId, status: { $in: ACTIVE } },
       { $set: { status: 'failed', currentStep: 'failed', error: { message: MAX_AGE_MESSAGE }, completedAt: deps.now() } }
@@ -213,7 +219,10 @@ async function pollHeroJob(deps, { userId, jobId }) {
     }
     await refundOnce(deps, jobId, userId, 'Refund: hero clip timed out');
     return { status: 200, json: { success: true, status: 'failed', error: MAX_AGE_MESSAGE } };
-  }
+  };
+
+  // Never reached fal: nothing to ask, age-fail. Submitted jobs fall through and ask fal first.
+  if (overAge && !hasRequestId) return ageFail();
 
   const model = job.payload && job.payload.model;
   const requestId = job.metadata && job.metadata.falRequestId;
@@ -232,6 +241,7 @@ async function pollHeroJob(deps, { userId, jobId }) {
     st = await deps.getStatus(model, requestId);
   } catch (err) {
     console.error(`Hero status check failed for job ${jobId} (will retry):`, err && err.message);
+    if (overAge && nowMs - created > HERO_HARD_MAX_AGE_MS) return ageFail(); // fal unreachable for a day: stop retrying
     return processing; // transient: never refund or fail on a thrown error
   }
 
@@ -280,6 +290,9 @@ async function pollHeroJob(deps, { userId, jobId }) {
     return { status: 200, json: { success: true, status: 'completed', videoUrl: url } };
   }
 
+  // fal has still not delivered after HERO_MAX_AGE_MS.
+  if (overAge) return ageFail();
+
   await deps.JobModel.updateOne(
     { jobId },
     { $set: { status: 'processing', currentStep: st.state === 'queued' ? 'queued' : 'processing' } }
@@ -287,4 +300,4 @@ async function pollHeroJob(deps, { userId, jobId }) {
   return processing;
 }
 
-module.exports = { startHeroGeneration, pollHeroJob, defaultDeps, HERO_MAX_AGE_MS, COPY_LEASE_MS };
+module.exports = { startHeroGeneration, pollHeroJob, defaultDeps, HERO_MAX_AGE_MS, HERO_HARD_MAX_AGE_MS, COPY_LEASE_MS };

@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const { startHeroGeneration, pollHeroJob, HERO_MAX_AGE_MS, COPY_LEASE_MS } = require('../services/heroVideoFlow');
+const { startHeroGeneration, pollHeroJob, HERO_MAX_AGE_MS, HERO_HARD_MAX_AGE_MS, COPY_LEASE_MS } = require('../services/heroVideoFlow');
 
 const { makeDeps } = require('./heroFakes');
 
@@ -378,7 +378,8 @@ test('submitted job older than max age: failed, refunded once, later polls do no
   await pollHeroJob(d, { userId: 'u1', jobId: 'orph' });
   await pollHeroJob(d, { userId: 'u1', jobId: 'orph' });
   assert.strictEqual(d.calls.refund.length, 1);
-  assert.strictEqual(d.calls.getStatus.length, 0);
+  // fal is now asked once (on the first poll) before age-failing; terminal polls do not ask again.
+  assert.strictEqual(d.calls.getStatus.length, 1);
 });
 
 test('job just under max age is untouched', async () => {
@@ -389,6 +390,80 @@ test('job just under max age is untouched', async () => {
   assert.strictEqual(d.JobModel.docs[0].status, 'processing');
   assert.strictEqual(d.calls.refund.length, 0);
   assert.strictEqual(d.calls.getStatus.length, 1);
+});
+
+// ---- max-age: ask fal before giving up ----
+const MAXAGE_MSG = 'This video took too long to finish, so we stopped it.';
+const OLD = HERO_MAX_AGE_MS + 5 * 60 * 1000; // 65 min
+const quiet = async (fn) => { const o = console.error; console.error = () => {}; try { return await fn(); } finally { console.error = o; } };
+
+test('HERO_HARD_MAX_AGE_MS is 24 hours', () => {
+  assert.strictEqual(HERO_HARD_MAX_AGE_MS, 24 * 60 * 60 * 1000);
+});
+
+test('old job (>60min) that fal finished is delivered, not refunded', async () => {
+  const d = await orphan(T0, T0 + OLD, { falRequestId: 'req-9' });
+  d.getStatus = async (...a) => { d.calls.getStatus.push(a); return { state: 'completed', videoUrl: 'https://fal/x.mp4' }; };
+  const r = await pollHeroJob(d, { userId: 'u1', jobId: 'orph' });
+  assert.strictEqual(r.json.status, 'completed');
+  assert.strictEqual(r.json.videoUrl, 'https://cdn.example/stored.mp4');
+  assert.strictEqual(d.JobModel.docs[0].status, 'completed');
+  assert.strictEqual(d.JobModel.docs[0].result.videoUrl, 'https://cdn.example/stored.mp4');
+  assert.strictEqual(d.calls.refund.length, 0);
+  assert.strictEqual(d.calls.copy.length, 1);
+});
+
+test('old job where fal reports failed: failed, one refund, second poll no second refund', async () => {
+  const d = await orphan(T0, T0 + OLD, { falRequestId: 'req-9' });
+  d.getStatus = async (...a) => { d.calls.getStatus.push(a); return { state: 'failed', error: 'bad prompt' }; };
+  const r = await pollHeroJob(d, { userId: 'u1', jobId: 'orph' });
+  assert.strictEqual(r.json.status, 'failed');
+  assert.strictEqual(d.JobModel.docs[0].status, 'failed');
+  await pollHeroJob(d, { userId: 'u1', jobId: 'orph' });
+  assert.strictEqual(d.calls.refund.length, 1);
+});
+
+test('old job fal still processing: age-failed with max-age message, one refund', async () => {
+  const d = await orphan(T0, T0 + OLD, { falRequestId: 'req-9' });
+  const r = await pollHeroJob(d, { userId: 'u1', jobId: 'orph' });
+  assert.strictEqual(d.calls.getStatus.length, 1);
+  assert.strictEqual(r.json.status, 'failed');
+  assert.strictEqual(r.json.error, MAXAGE_MSG);
+  assert.strictEqual(d.JobModel.docs[0].status, 'failed');
+  assert.strictEqual(d.JobModel.docs[0].error.message, MAXAGE_MSG);
+  await pollHeroJob(d, { userId: 'u1', jobId: 'orph' });
+  assert.strictEqual(d.calls.refund.length, 1);
+});
+
+test('old job (between 60min and 24h) getStatus throws: stays processing, no refund', async () => {
+  const d = await orphan(T0, T0 + OLD, { falRequestId: 'req-9' });
+  d.getStatus = async () => { throw new Error('fal 503'); };
+  const r = await quiet(() => pollHeroJob(d, { userId: 'u1', jobId: 'orph' }));
+  assert.strictEqual(r.status, 200);
+  assert.strictEqual(r.json.status, 'processing');
+  assert.strictEqual(d.JobModel.docs[0].status, 'queued');
+  assert.strictEqual(d.calls.refund.length, 0);
+});
+
+test('job older than hard cap and getStatus throws: age-failed, one refund', async () => {
+  const d = await orphan(T0, T0 + HERO_HARD_MAX_AGE_MS + 1000, { falRequestId: 'req-9' });
+  d.getStatus = async () => { throw new Error('fal 503'); };
+  const r = await quiet(() => pollHeroJob(d, { userId: 'u1', jobId: 'orph' }));
+  assert.strictEqual(r.json.status, 'failed');
+  assert.strictEqual(r.json.error, MAXAGE_MSG);
+  assert.strictEqual(d.JobModel.docs[0].status, 'failed');
+  await quiet(() => pollHeroJob(d, { userId: 'u1', jobId: 'orph' }));
+  assert.strictEqual(d.calls.refund.length, 1);
+});
+
+test('old job WITHOUT falRequestId: failed, one refund, getStatus never called', async () => {
+  const d = await orphan(T0, T0 + OLD);
+  const r = await pollHeroJob(d, { userId: 'u1', jobId: 'orph' });
+  assert.strictEqual(r.json.status, 'failed');
+  assert.strictEqual(r.json.error, MAXAGE_MSG);
+  await pollHeroJob(d, { userId: 'u1', jobId: 'orph' });
+  assert.strictEqual(d.calls.refund.length, 1);
+  assert.strictEqual(d.calls.getStatus.length, 0);
 });
 
 // ---- I1: copy lease ----
