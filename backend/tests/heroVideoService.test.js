@@ -54,7 +54,12 @@ test('invalid prompt throws', () => {
 
 test('invalid refs throw', () => {
   const ok = 'https://a.com/1.png';
-  assert.throws(() => hero.buildHeroInput({ prompt: 'p', refImageUrls: Array(5).fill(ok) }));
+  // Hero Studio raises the cap from 4 to 9 (the model's limit): 9 are accepted, 10 rejected.
+  assert.equal(hero.HERO_MAX_REFS, 9);
+  assert.equal(hero.buildHeroInput({ prompt: 'p', refImageUrls: Array(9).fill(ok) }).input.image_urls.length, 9);
+  assert.throws(() => hero.buildHeroInput({ prompt: 'p', refImageUrls: Array(10).fill(ok) }));
+  assert.throws(() => hero.validateRefUrls(['https://localhost/a.png']));
+  assert.throws(() => hero.validateRefUrls(['https://127.0.0.1/a.png']));
   for (const bad of ['http://x', 'javascript:alert(1)', '', 5, null, {}]) {
     assert.throws(() => hero.validateRefUrls([bad]), String(bad));
   }
