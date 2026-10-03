@@ -6,8 +6,9 @@ plan). The baseline report is `docs/superpowers/specs/assets/nebulaa-contrast-ba
 
 | File | What it is |
 |---|---|
-| `contrast-math.mjs` | Pure maths: `parseColor`, `composite`, `luminance`, `ratio`, `isLargeText`, `requiredRatio`, plus gradient helpers (`parseBackgroundImage`, `gradientColorAt`, `gradientT`). Tested by `frontend/tests/contrast-math.test.mjs`. |
-| `contrast-audit.js` | Body of an async function run inside the page. Returns `{ route, checked, failureCount, failures[], unknown[], disabled[], placeholders[], gradientText[], ... }`. The header comment explains exactly how backgrounds and text colours are measured and what is skipped. |
+| `contrast-math.mjs` | Pure maths, all unit tested in `frontend/tests/contrast-math.test.mjs`: `parseColor`, `composite`, `luminance`, `ratio`, `isLargeText`, `requiredRatio`; gradients (`parseBackgroundImage`, `gradientColorAt`, `gradientT`); compositing (`over`, `overGroup`, `flatten` with opacity groups, image substitutes and covers; `assemblePaints` for positioned layers; `expandAlternatives`; `classifyUncertain`). |
+| `contrast-audit.js` | Body of an async function run inside the page. Returns `{ route, checked, failureCount, failures[], unknown[], disabled[], placeholders[], gradientText[], unparsedColors[], ... }`. The header comment explains exactly how backgrounds and text colours are measured and what is skipped. |
+| `unknown-signoff.json` | Items the audit cannot measure that a person has checked by eye (see the gate). Starts empty. |
 | `mock-session.js` | Fake session + stub for `fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource`, `sendBeacon`, and the in-page runner (`__auditRoute`, `__auditRun`, `__auditStart`, `__auditShot`). |
 | `vite.audit.config.mjs` | Vite config that injects `mock-session.js` before the app boots, binds 127.0.0.1:3100, removes the backend proxy and writes results to disk. |
 | `routes.json` | Every route in `frontend/App.tsx`, with the session mode it needs and the tab to click. |
@@ -25,7 +26,11 @@ plan). The baseline report is `docs/superpowers/specs/assets/nebulaa-contrast-ba
 - Backstop: the audit server itself answers `/api`, `/audio` and `/generated-media` with 503 and
   has no proxy, so even a request that escaped the stub could not reach port 5000.
 - Open the app as `127.0.0.1`, never `localhost` (several files switch to `localhost:5000` when the
-  host is literally `localhost`). Never use ports 3000 or 5000 (the config refuses them).
+  host is literally `localhost`, and `<img>`/`<video>` URLs built from it would bypass the stub).
+  The server answers any other Host with 403, and the stub refuses to boot the app (console error,
+  page replaced) if it ever runs on `localhost`. Never use ports 3000 or 5000 (the config refuses them).
+- The audit config reads no `.env` (empty `envDir`) and defines `process.env.API_KEY` /
+  `GEMINI_API_KEY` as empty strings, so no key can be inlined into the served code.
 - Not stubbed (they are `<script>`/`<link>`/`<img>` tags, part of the app as built): Tailwind
   CDN, Google Fonts, esm.sh (import map), Razorpay `checkout.js` (which loads `api.razorpay.com` /
   `cdn.razorpay.com`; its `sendBeacon` log call is blocked). No user data goes to them.
@@ -80,6 +85,10 @@ plan). The baseline report is `docs/superpowers/specs/assets/nebulaa-contrast-ba
      --md report.md --json summary.json [--compare ../docs/superpowers/specs/assets/nebulaa-contrast-baseline/summary.json]
    ```
 
+   It prints one line per width and `GATE: PASS|FAIL` (exit 1 on FAIL; see "The gate").
+   An audit that throws is saved as an `ERROR` result; a crash stops the run, and the routes not
+   reached show as `MISSING` until you reload and run them.
+
 8. Stop the dev server you started (Ctrl-C, or kill its PID; `lsof -nP -iTCP:3100 -sTCP:LISTEN`).
    Never touch the processes on 3000 or 5000.
 
@@ -87,16 +96,47 @@ plan). The baseline report is `docs/superpowers/specs/assets/nebulaa-contrast-ba
 
 - `failures` are sorted worst first. `ratio` is the text colour (alpha composited) against the
   effective background; `required` is 4.5, or 3 for large text (>= 24px, or >= 18.66px at 700+).
+- How the background is found: the text box is sampled at 5 points; at each,
+  `document.elementsFromPoint` (with pointer-events forced on) gives the real paint stack, so
+  positioned overlays, cards and SVG shapes under the text count, in paint order, with `opacity`
+  as a group over the real backdrop. Non-descendant layers above the text are drawn over it.
+- `kind`: `text`, `value` (typed input value), `placeholder`, `svg-text` (SVG `<text>`/`<tspan>`,
+  colour = computed `fill` x `fill-opacity`).
+- `failureKind`: `contrast` (background fully known); `image-underlying` (an image of unknown
+  colour - url()/unsupported background layer, img/video/canvas/picture/iframe - is in the stack,
+  and the text already fails on the colour beneath it); `image-any` (fails even against both
+  opaque black and opaque white, so no opaque image can make it pass). `positioned: true` means a
+  non-ancestor layer contributed to the background.
+- `unknown`: cannot be decided: over an image where it passes on black or white but not both
+  (`black`/`white`/`ratioUnder` given), covered by an opaque layer at every point, not
+  hit-testable, or transparent text. `unparsedColors`: colours neither the parser nor a 1x1 canvas
+  could resolve. `gradientText`: background-clip:text or SVG `fill: url(#...)`.
 - `textClass` / `bgClass` are the nearest Tailwind colour classes, to find the source quickly.
-  The colours are the computed ones, i.e. after the `index.html` GRAVITY OVERRIDE LAYER, so
-  `text-slate-900` can show as `#f5f4f1` when the layer overrides it.
-- `unknown`: text over a url() background image or an img/video/canvas: check by eye.
-- `disabled`: inactive controls below AA (WCAG exempts them; listed for information).
-- `placeholders`: checked via `getComputedStyle(el, '::placeholder')`; failing ones are also in
-  `failures` with `kind: "placeholder"`.
-- Limits (also in the result's `limits`): ancestors only, apart from the media check; no
-  pseudo-element backgrounds, shadows, blend modes or backdrop filters; SVG text not checked;
-  only the first screen state of each page and tab (no modals, no hover states).
+  The colours are the computed ones (after the `index.html` override layer), so `text-slate-900`
+  can show as `#f5f4f1`.
+- `disabled`: inactive controls below AA (exempt, listed). `placeholders`: via
+  `getComputedStyle(el, '::placeholder')`; failing ones are also in `failures`.
+- Limits (also in each result's `limits`): no mix-blend-mode, filters, backdrop-filter,
+  box-shadow, masks or clip-path; pseudo-element (`::before/::after`) backgrounds and `content`
+  text are not seen; `display: contents` text is sampled through its text range; SVG strokes and
+  text-shadow ignored; only the current state of each page/tab (no modals, hover, focus).
+
+## The gate (Tasks 7-8)
+
+`summarize.mjs` expects every `routes.json` entry at every width (default 1280 and 375) and prints
+`GATE: PASS` (exit 0) only when, for every route in scope (all except `otherSession` pages):
+
+1. a result exists and the page rendered where expected: no `MISSING` (no result file, e.g. after
+   a crash stopped the run), `BLANK` (the app crashed), `ERROR` (the audit threw), `REDIRECT`
+   (landed elsewhere than `expectHash`/`path`) or `TAB-NOT-FOUND`. None of these ever counts as
+   0 failures; and
+2. `failures` is 0; and
+3. every `unknown`, `unparsedColors` and `gradientText` item is listed in `unknown-signoff.json`
+   (entry: `kind`, `route`, optional `width`, `text` prefix or `*` or exact `selector`, `reason`,
+   `verifiedBy` = who checked it by eye, how and when).
+
+Otherwise it prints `GATE: FAIL` and exits 1 (it still writes the report). `--compare` totals
+only routes that rendered in both runs, so a broken route cannot make the total drop.
 
 ## Adding mock data
 

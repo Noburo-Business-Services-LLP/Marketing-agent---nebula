@@ -114,3 +114,75 @@ test('gradientT maps a point to the gradient line', () => {
   assert.equal(gradientT(90, box, { x: 25, y: 10 }), 0.25);
   assert.equal(gradientT(90, box, { x: -50, y: 10 }), 0);
 });
+
+// Compositing model used by the in-page audit (fix round 1: moved here from contrast-audit.js).
+import { flatten, assemblePaints, expandAlternatives, classifyUncertain } from '../scripts/visual-audit/contrast-math.mjs';
+
+const C = (hex, a = 1) => ({ ...parseColor(hex), a });
+const near = (c, e, msg) => ['r', 'g', 'b'].forEach((k) => close(c[k], e[k], 0.01, `${msg} ${k}`));
+
+test('parseBackgroundImage tells url() apart from unsupported image functions', () => {
+  const [u, x] = parseBackgroundImage('url("a.png"), cross-fade(url(a.png), url(b.png), 50%)');
+  assert.equal(u.type, 'url');
+  assert.equal(x.type, 'unsupported');
+});
+
+test('flatten: plain layers over the white canvas, and text on top', () => {
+  near(flatten([{ colors: [C('#FBF5EA')], opacity: 1 }], null), { r: 251, g: 245, b: 234 }, 'cream');
+  near(flatten([{ colors: [C('#FBF5EA')], opacity: 1 }, { colors: [C('#000000', 0.9)], opacity: 1 }], C('#14203A')),
+    { r: 0x14 * 0.1 * 0 + 20, g: 32, b: 58 }, 'opaque text wins');
+});
+
+test('flatten: opacity is a group over the real backdrop, not per layer and not over white', () => {
+  // red then blue (opaque) inside a 50% group over white: the group is blue, so 50% blue + 50% white.
+  near(flatten([{ colors: [C('#ffffff')], opacity: 1 }, { colors: [C('#ff0000'), C('#0000ff')], opacity: 0.5 }], null),
+    { r: 127.5, g: 127.5, b: 255 }, 'group');
+  // A 50% white card over navy: half navy shows through (the old audit composited it over white).
+  const navy = C('#14203A');
+  const bg = flatten([{ colors: [navy], opacity: 1 }, { colors: [C('#ffffff')], opacity: 0.5 }], null);
+  near(bg, { r: (20 + 255) / 2, g: (32 + 255) / 2, b: (58 + 255) / 2 }, 'navy backdrop kept');
+  // Text inside the group fades with it.
+  const fg = flatten([{ colors: [navy], opacity: 1 }, { colors: [C('#ffffff')], opacity: 0.5 }], C('#000000'));
+  near(fg, { r: 10, g: 16, b: 29 }, 'text in group');
+});
+
+test('flatten: uncertain layers are dropped or replaced by the substitute; covers paint over everything', () => {
+  const paints = [{ colors: [C('#FBF5EA'), { uncertain: true, kind: 'media', alpha: 1 }], opacity: 1 }];
+  near(flatten(paints, null), { r: 251, g: 245, b: 234 }, 'image ignored');
+  near(flatten(paints, null, { substitute: C('#000000') }), { r: 0, g: 0, b: 0 }, 'image as black');
+  const half = [{ colors: [C('#ffffff'), { uncertain: true, kind: 'media', alpha: 0.5 }], opacity: 1 }];
+  near(flatten(half, null, { substitute: C('#000000') }), { r: 127.5, g: 127.5, b: 127.5 }, 'half image');
+  near(flatten([{ colors: [C('#ffffff')], opacity: 1 }], C('#000000'), { covers: [C('#ffffff', 0.5)] }),
+    { r: 127.5, g: 127.5, b: 127.5 }, 'cover over text');
+});
+
+test('assemblePaints puts positioned layers above the ancestor they are painted after', () => {
+  const chain = [{ colors: [C('#FBF5EA')], opacity: 1 }, { colors: [C('#ffffff', 0)], opacity: 1 }, { colors: [], opacity: 1 }];
+  // Stack below the text, bottom -> top: html(0), card(1), overlay (not an ancestor), content(2).
+  const below = [{ ancestor: 0 }, { ancestor: 1 }, { colors: [C('#000000', 0.9)], opacity: 1 }, { ancestor: 2 }];
+  const paints = assemblePaints(chain, below);
+  assert.equal(paints[1].colors.length, 2);
+  assert.equal(paints[1].colors[1].a, 0.9);
+  const bg = flatten(paints, null);
+  assert.ok(ratio(flatten(paints, C('#14203A')), bg) < 1.5, 'dark ink on the black overlay fails');
+  assert.ok(ratio(flatten(paints, C('#F5F4F1')), bg) > 10, 'light text on the black overlay passes');
+  // The layer's own opacity scales its colours (and uncertain layers keep it as alpha).
+  const p2 = assemblePaints(chain, [{ ancestor: 1 }, { colors: [C('#000000'), { uncertain: true, kind: 'media' }], opacity: 0.5 }]);
+  assert.equal(p2[1].colors[1].a, 0.5);
+  assert.equal(p2[1].colors[2].alpha, 0.5);
+});
+
+test('expandAlternatives gives every combination of alternative colours, capped', () => {
+  const paints = [{ colors: [C('#ffffff'), { alts: [C('#000000'), C('#ff0000')] }], opacity: 1 }, { colors: [{ alts: [C('#00ff00'), C('#0000ff')] }], opacity: 1 }];
+  const all = expandAlternatives(paints, 64);
+  assert.equal(all.length, 4);
+  assert.ok(all.every((p) => p[0].colors.every((c) => !c.alts)));
+  assert.equal(expandAlternatives(paints, 3).length, 3);
+});
+
+test('classifyUncertain: fail on the colour underneath, fail if no opaque image could pass, else pass/unknown', () => {
+  assert.equal(classifyUncertain({ under: 3, black: 10, white: 10 }, 4.5), 'fail-underlying');
+  assert.equal(classifyUncertain({ under: 5, black: 2, white: 3 }, 4.5), 'fail-any');
+  assert.equal(classifyUncertain({ under: 5, black: 6, white: 7 }, 4.5), 'pass');
+  assert.equal(classifyUncertain({ under: 5, black: 1.2, white: 9 }, 4.5), 'unknown');
+});

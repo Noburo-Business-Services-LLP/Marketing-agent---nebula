@@ -1,5 +1,5 @@
 {
-  "_comment": "Every route in frontend/App.tsx. path = hash path (HashRouter). mode = the mock session mode the page needs (load the app with ?audit=<mode> first; the mode is kept for the tab). click = visible text of a tab/toggle button to press before auditing (tabs only; never a button that generates, saves or sends). label must be unique; it names the result file. group: shell = inside Layout; public / auth / onboarding / admin = outside it. otherSession = page redesigned in another session (rebrand-on-prod / rebrand-nebulaa-landing): audited read-only, reported separately and left out of the totals. duplicateOf = a redirect that lands on another listed route: audited to prove the redirect, left out of totals.",
+  "_comment": "Every route in frontend/App.tsx. path = hash path (HashRouter). mode = the mock session mode the page needs (load the app with ?audit=<mode> first; the mode is kept for the tab). click = visible text of a tab/toggle button to press before auditing (tabs only; never a button that generates, saves or sends). label must be unique; it names the result file. group: shell = inside Layout; public / auth / onboarding / admin = outside it. otherSession = page redesigned in another session (rebrand-on-prod / rebrand-nebulaa-landing): audited read-only, reported separately and left out of the totals. expectHash = where the route is expected to land (default: path). duplicateOf = a redirect that lands on another listed route: audited to prove the redirect, left out of totals.",
   "routes": [
     { "label": "dashboard", "path": "/dashboard", "mode": "normal", "group": "shell", "nav": "Dashboard" },
     { "label": "dashboard-classic", "path": "/dashboard-classic", "mode": "normal", "group": "shell" },
@@ -26,7 +26,7 @@
     { "label": "brand-assets-products", "path": "/brand-assets?tab=products", "mode": "normal", "group": "shell" },
     { "label": "brand-assets-environment", "path": "/brand-assets?tab=environment", "mode": "normal", "group": "shell" },
     { "label": "brand-assets-voice", "path": "/brand-assets?tab=voice", "mode": "normal", "group": "shell" },
-    { "label": "inventory-redirect", "path": "/inventory", "mode": "normal", "group": "shell", "note": "redirects to /brand-assets?tab=products", "duplicateOf": "brand-assets-products" },
+    { "label": "inventory-redirect", "path": "/inventory", "mode": "normal", "group": "shell", "note": "redirects to /brand-assets?tab=products", "expectHash": "/brand-assets?tab=products", "duplicateOf": "brand-assets-products" },
     { "label": "analytics", "path": "/analytics", "mode": "normal", "group": "shell", "nav": "Insights" },
     { "label": "analytics-classic", "path": "/analytics-classic", "mode": "normal", "group": "shell" },
     { "label": "seo", "path": "/seo", "mode": "normal", "group": "shell" },

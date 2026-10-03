@@ -163,14 +163,16 @@ function parseStops(args) {
 /**
  * Parse a computed background-image into layers (topmost first):
  * { type: 'linear', angle, stops:[{color,pos}] } | { type: 'other', stops } (radial, conic,
- * repeating) | { type: 'url' }. `none` gives [].
+ * repeating) | { type: 'url' } (url(), image-set()) | { type: 'unsupported' } (cross-fade(),
+ * element(), anything else). `none` gives []. The audit treats url/unsupported as an image of
+ * unknown colour (see classifyUncertain).
  */
 export function parseBackgroundImage(str) {
   if (!str || str === 'none') return [];
   return splitTopLevel(str).map((layer) => {
     if (/^url\(/i.test(layer) || /^image-set\(/i.test(layer)) return { type: 'url', raw: layer.slice(0, 120) };
     const m = layer.match(/^([a-z-]+)\((.*)\)$/is);
-    if (!m) return { type: 'url', raw: layer.slice(0, 120) };
+    if (!m) return { type: 'unsupported', raw: layer.slice(0, 120) };
     const args = splitTopLevel(m[2]);
     if (m[1] === 'linear-gradient') {
       let angle = 180;
@@ -190,7 +192,7 @@ export function parseBackgroundImage(str) {
       const stops = parseStops(args.filter((a) => COLOR_HEAD.test(a) && parseColor((a.match(COLOR_HEAD) || [])[1] || '')));
       return { type: 'other', stops };
     }
-    return { type: 'url', raw: layer.slice(0, 120) };
+    return { type: 'unsupported', raw: layer.slice(0, 120) };
   });
 }
 
@@ -227,4 +229,109 @@ export function gradientT(angle, box, point) {
   const t = ((point.x - cx) * dx + (point.y - cy) * dy) / len + 0.5;
   const r = Math.round(Math.max(0, Math.min(1, t)) * 1e9) / 1e9;
   return r;
+}
+
+// ---- compositing ------------------------------------------------------------------------------
+// A "paint" is one element: { colors: [...bottom -> top], opacity }. A colour is {r,g,b,a}, or
+// { uncertain: true, kind, alpha? } for an image of unknown colour (url() background, img, video,
+// canvas), or { alts: [colour...] } for alternatives (radial/conic gradient stops) that
+// expandAlternatives turns into separate paint lists.
+
+/** Premultiplied dst, straight-alpha src: source-over. */
+export function over(dst, src) {
+  const a = src.a;
+  return { r: src.r * a + dst.r * (1 - a), g: src.g * a + dst.g * (1 - a), b: src.b * a + dst.b * (1 - a), a: a + dst.a * (1 - a) };
+}
+
+/** Premultiplied group composited with group opacity o over premultiplied dst. */
+export function overGroup(dst, grp, o) {
+  const a = grp.a * o;
+  return { r: grp.r * o + dst.r * (1 - a), g: grp.g * o + dst.g * (1 - a), b: grp.b * o + dst.b * (1 - a), a: a + dst.a * (1 - a) };
+}
+
+/**
+ * Draw paints (root -> element) over an opaque white canvas, `opacity` < 1 as a group over the
+ * real backdrop, then the text colour (if any) inside the innermost paint, then `covers` (things
+ * painted above the text) over the result. Uncertain colours are skipped, or drawn as
+ * `substitute` (with their alpha). Returns an opaque {r,g,b}.
+ */
+export function flatten(paints, text, { substitute = null, covers = [] } = {}) {
+  const stack = [{ r: 255, g: 255, b: 255, a: 1 }];
+  const ops = [];
+  for (const P of paints) {
+    const o = P.opacity ?? 1;
+    if (o < 1) { stack.push({ r: 0, g: 0, b: 0, a: 0 }); ops.push(o); } else ops.push(null);
+    for (let c of P.colors || []) {
+      if (!c) continue;
+      if (c.uncertain) {
+        if (!substitute) continue;
+        c = { r: substitute.r, g: substitute.g, b: substitute.b, a: (substitute.a ?? 1) * (c.alpha ?? 1) };
+      }
+      if (c.alts) throw new Error('flatten: expand alternatives first');
+      if (c.a > 0) stack[stack.length - 1] = over(stack[stack.length - 1], c);
+    }
+  }
+  if (text && text.a > 0) stack[stack.length - 1] = over(stack[stack.length - 1], text);
+  for (let i = ops.length - 1; i >= 0; i--) {
+    if (ops[i] === null) continue;
+    const grp = stack.pop();
+    stack[stack.length - 1] = overGroup(stack[stack.length - 1], grp, ops[i]);
+  }
+  let out = stack[0];
+  for (const c of covers) if (c && !c.uncertain && c.a > 0) out = over(out, c);
+  return { r: out.r, g: out.g, b: out.b };
+}
+
+const scaleAlpha = (c, o) => {
+  if (o === 1) return c;
+  if (c.uncertain) return { ...c, alpha: (c.alpha ?? 1) * o };
+  if (c.alts) return { alts: c.alts.map((x) => scaleAlpha(x, o)) };
+  return { ...c, a: c.a * o };
+};
+
+/**
+ * Merge the ancestor chain (root -> element: { colors, opacity }) with what elementsFromPoint
+ * found below the text. `below` is bottom -> top; an item is { ancestor: chainIndex } or a
+ * non-ancestor layer { colors, opacity } (opacity = its own and its ancestors' below the common
+ * ancestor). A layer is drawn after the colours of the last ancestor seen below it.
+ */
+export function assemblePaints(chain, below) {
+  const paints = chain.map((n) => ({ colors: [...(n.colors || [])], opacity: n.opacity ?? 1 }));
+  let at = 0;
+  for (const item of below) {
+    if (item.ancestor != null) { at = item.ancestor; continue; }
+    for (const c of item.colors || []) paints[at].colors.push(scaleAlpha(c, item.opacity ?? 1));
+  }
+  return paints;
+}
+
+/** Every combination of { alts } choices, as plain paint lists (at most `cap`). */
+export function expandAlternatives(paints, cap = 32) {
+  let out = [paints.map((p) => ({ ...p, colors: [] }))];
+  paints.forEach((p, i) => {
+    for (const c of p.colors) {
+      const choices = c && c.alts ? c.alts : [c];
+      const next = [];
+      for (const ps of out) for (const ch of choices) {
+        if (next.length >= cap) break;
+        const copy = ps.map((q, j) => (j === i ? { ...q, colors: [...q.colors, ch] } : q));
+        next.push(copy);
+      }
+      out = next;
+    }
+  });
+  return out.slice(0, cap);
+}
+
+/**
+ * Text over an image of unknown colour: `under` = ratio with the image left out (the colour
+ * beneath it), `black`/`white` = ratio with the image drawn opaque black / white (the extremes
+ * any opaque image can reach). fail-underlying: fails on the colour beneath; fail-any: no opaque
+ * image could make it pass; pass: passes whatever the image is; unknown: depends on the image.
+ */
+export function classifyUncertain({ under, black, white }, required) {
+  if (under < required) return 'fail-underlying';
+  if (Math.max(black, white) < required) return 'fail-any';
+  if (Math.min(black, white) >= required) return 'pass';
+  return 'unknown';
 }

@@ -1,12 +1,18 @@
 #!/usr/bin/env node
-// Turn the per-route audit results (out/results/<width>__<label>.json, written by the in-page
-// runner) into a Markdown report and a compact JSON summary.
+// Turn the per-route audit results (results/<width>__<label>.json, written by the in-page runner)
+// into a Markdown report, a compact JSON summary and a PASS/FAIL gate.
 //
-//   node scripts/visual-audit/summarize.mjs --results <dir> --md <report.md> --json <summary.json>
-//        [--compare <earlier summary.json>] [--title "..."] [--shots <relative dir for links>]
+//   node scripts/visual-audit/summarize.mjs --results <dir> [--md <report.md>] [--json <summary.json>]
+//        [--compare <earlier summary.json>] [--widths 1280,375] [--signoff <file>] [--title "..."]
 //
-// With --compare, the report starts with a before/after table per route (Tasks 7-8).
-import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
+// Every routes.json entry x every width is expected. A missing result is MISSING; a page that
+// crashed is BLANK; an audit that threw is ERROR; landing elsewhere than expected is REDIRECT.
+// None of those ever counts as "0 failures".
+//
+// GATE (Tasks 7-8): PASS only when, for every in-scope route (routes.json minus otherSession)
+// at every width: status ok, 0 failures, and every unknown-background item, unparsed colour and
+// gradient-text item is listed in unknown-signoff.json. Otherwise FAIL, exit code 1.
+import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -16,161 +22,210 @@ const args = Object.fromEntries(process.argv.slice(2).reduce((acc, a, i, all) =>
   return acc;
 }, []));
 const resultsDir = resolve(args.results || join(here, 'out/results'));
+const widths = String(args.widths || '1280,375').split(',').map(Number);
 const routes = JSON.parse(readFileSync(join(here, 'routes.json'), 'utf8')).routes;
-const order = new Map(routes.map((r, i) => [r.label, i]));
+const signoffPath = resolve(args.signoff || join(here, 'unknown-signoff.json'));
+const signoff = existsSync(signoffPath) ? JSON.parse(readFileSync(signoffPath, 'utf8')) : { signedOff: [] };
 const slug = (s) => String(s).replace(/^[#/]+/, '').replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'root';
-const byName = new Map(routes.map((r) => [slug(r.label), r]));
 
-const allRuns = readdirSync(resultsDir).filter((f) => /^\d+__.+\.json$/.test(f)).map((f) => {
-  const d = JSON.parse(readFileSync(join(resultsDir, f), 'utf8'));
-  const [, width, name] = f.match(/^(\d+)__(.+)\.json$/);
-  const spec = byName.get(name);
-  return { file: f, width: Number(width), name, spec, d };
-}).filter((r) => r.spec);
-allRuns.sort((a, b) => (order.get(a.spec.label) - order.get(b.spec.label)) || (b.width - a.width));
-// Pages redesigned in another session (landing, sign-in, onboarding) are reported on their own
-// and kept out of totals, patterns and per-route tables.
-const runs = allRuns.filter((r) => !r.spec.otherSession && !r.spec.duplicateOf);
-const dupRuns = allRuns.filter((r) => r.spec.duplicateOf);
-const otherRuns = allRuns.filter((r) => r.spec.otherSession);
-const widths = [...new Set(allRuns.map((r) => r.width))].sort((a, b) => b - a);
+const files = new Map(readdirSync(resultsDir).filter((f) => /^\d+__.+\.json$/.test(f)).map((f) => [f, JSON.parse(readFileSync(join(resultsDir, f), 'utf8'))]));
 
+// Sign-off entries: { kind: unknown|unparsed|gradientText, route, width?, text? ('*' = all), selector?, reason, verifiedBy }
+const isSignedOff = (kind, label, width, item) => (signoff.signedOff || []).some((s) =>
+  s.kind === kind && s.route === label && (s.width == null || Number(s.width) === width) &&
+  (s.text === '*' || (s.text && String(item.text || '').startsWith(s.text)) || (s.selector && s.selector === item.selector)));
+
+// ---- one row per route x width ---------------------------------------------------------------
+const rows = [];
+for (const spec of routes) {
+  for (const w of widths) {
+    const d = files.get(`${w}__${slug(spec.label)}.json`);
+    const row = { spec, label: spec.label, width: w, d, scope: spec.otherSession ? 'other' : spec.duplicateOf ? 'duplicate' : 'in' };
+    if (!d) row.status = 'MISSING';
+    else if (d.error) row.status = 'ERROR';
+    else if (d.blank) row.status = 'BLANK';
+    else {
+      const want = '#' + (spec.expectHash || spec.path);
+      const got = d.finalHash || '';
+      if (got !== want && !(want === '#/' && (got === '' || got === '#'))) row.status = 'REDIRECT';
+      else if (spec.click && d.clicked === false) row.status = 'TAB-NOT-FOUND';
+      else row.status = 'ok';
+    }
+    if (row.status === 'ok') {
+      row.checked = d.checked;
+      row.failures = d.failureCount;
+      row.unknown = d.unknown.length;
+      row.unknownUnsigned = d.unknown.filter((u) => !isSignedOff('unknown', spec.label, w, u)).length;
+      row.unparsed = (d.unparsedColors || []).length;
+      row.unparsedUnsigned = (d.unparsedColors || []).filter((u) => !isSignedOff('unparsed', spec.label, w, u)).length;
+      row.gradientText = (d.gradientText || []).length;
+      row.gradientTextUnsigned = (d.gradientText || []).filter((u) => !isSignedOff('gradientText', spec.label, w, u)).length;
+      row.kinds = {};
+      for (const f of d.failures) row.kinds[f.failureKind || 'contrast'] = (row.kinds[f.failureKind || 'contrast'] || 0) + 1;
+      row.svgFailures = d.failures.filter((f) => f.kind === 'svg-text').length;
+      row.positionedFailures = d.failures.filter((f) => f.positioned).length;
+      row.worst = d.failures[0] ? d.failures[0].ratio : null;
+    }
+    row.pass = row.status === 'ok' && row.failures === 0 && row.unknownUnsigned === 0 && row.unparsedUnsigned === 0 && row.gradientTextUnsigned === 0;
+    rows.push(row);
+  }
+}
+const inScope = rows.filter((r) => r.scope === 'in');
+const gated = rows.filter((r) => r.scope !== 'other'); // duplicates must render too
+const okRows = (rs) => rs.filter((r) => r.status === 'ok');
+const sum = (rs, k) => okRows(rs).reduce((s, r) => s + (r[k] || 0), 0);
+const totalsFor = (w) => {
+  const rs = inScope.filter((r) => r.width === w);
+  const count = (st) => gated.filter((r) => r.width === w && r.status === st).length;
+  return {
+    expected: rs.length, ok: okRows(rs).length, missing: count('MISSING'), blank: count('BLANK'), error: count('ERROR'),
+    redirect: count('REDIRECT'), tabNotFound: count('TAB-NOT-FOUND'),
+    checked: sum(rs, 'checked'), failures: sum(rs, 'failures'), routesWithFailures: okRows(rs).filter((r) => r.failures > 0).length,
+    unknown: sum(rs, 'unknown'), unknownUnsigned: sum(rs, 'unknownUnsigned'), unparsed: sum(rs, 'unparsed'), unparsedUnsigned: sum(rs, 'unparsedUnsigned'),
+    gradientText: sum(rs, 'gradientText'), gradientTextUnsigned: sum(rs, 'gradientTextUnsigned'),
+    svgFailures: sum(rs, 'svgFailures'), positionedFailures: sum(rs, 'positionedFailures'),
+    imageFailures: okRows(rs).reduce((s, r) => s + (r.kinds['image-underlying'] || 0) + (r.kinds['image-any'] || 0), 0),
+  };
+};
+const totals = Object.fromEntries(widths.map((w) => [w, totalsFor(w)]));
+const gatePass = gated.every((r) => r.status === 'ok') && inScope.every((r) => r.pass);
+
+const summary = { generatedAt: new Date().toISOString(), widths, gate: gatePass ? 'PASS' : 'FAIL', totals, routes: {}, otherSession: {} };
+for (const r of rows) {
+  const tgt = r.scope === 'other' ? summary.otherSession : summary.routes;
+  tgt[r.label] ??= { path: r.spec.path, group: r.spec.group, scope: r.scope, widths: {} };
+  tgt[r.label].widths[r.width] = r.status !== 'ok' ? { status: r.status, error: r.d && r.d.error, finalHash: r.d && r.d.finalHash } : {
+    status: 'ok', checked: r.checked, failures: r.failures, unknown: r.unknown, unknownUnsigned: r.unknownUnsigned,
+    unparsed: r.unparsed, gradientText: r.gradientText, kinds: r.kinds, svgFailures: r.svgFailures, worst: r.worst,
+    top: r.d.failures.slice(0, 10).map((f) => [f.text.slice(0, 40), f.ratio, f.effectiveColor, f.background, f.textClass, f.failureKind || 'contrast', f.kind]),
+  };
+}
+
+// ---- markdown ---------------------------------------------------------------------------------
 const esc = (s) => String(s ?? '').replace(/\|/g, '\\|').replace(/\n/g, ' ');
 const code = (s) => (s ? '`' + String(s).replace(/`/g, "'") + '`' : '');
 const baseClasses = (s) => String(s || '').split(/\s+/).filter((c) => c && !/^(hover|focus|active|group-hover|dark|disabled|focus-visible|placeholder):/.test(c)).join(' ');
-const status = (r) => {
-  if (r.d.blank) return 'BLANK';
-  const want = '#' + r.spec.path;
-  if (r.d.finalHash && r.d.finalHash !== want && !(r.spec.path === '/' && r.d.finalHash === '')) return 'redirect ' + r.d.finalHash;
-  if (r.spec.click && r.d.clicked === false) return 'tab not found';
-  return 'ok';
-};
-
-// ---- per route/width summary ----------------------------------------------------------------
-const summary = { generatedAt: new Date().toISOString(), widths, totals: {}, routes: {} };
-for (const r of runs) {
-  const key = r.spec.label;
-  summary.routes[key] ??= { path: r.spec.path, group: r.spec.group, widths: {} };
-  summary.routes[key].widths[r.width] = {
-    status: status(r), checked: r.d.checked, failures: r.d.failureCount, unknown: r.d.unknown.length,
-    disabled: r.d.disabled.length, placeholdersFailing: r.d.placeholders.filter((p) => p.ratio < p.required).length,
-    worst: r.d.failures[0] ? r.d.failures[0].ratio : null,
-    top: r.d.failures.slice(0, 10).map((f) => [f.text.slice(0, 40), f.ratio, f.effectiveColor, f.background, f.textClass]),
-  };
-}
-for (const w of widths) {
-  const rs = runs.filter((r) => r.width === w);
-  summary.totals[w] = { routes: rs.length, checked: rs.reduce((s, r) => s + r.d.checked, 0), failures: rs.reduce((s, r) => s + r.d.failureCount, 0), unknown: rs.reduce((s, r) => s + r.d.unknown.length, 0), routesWithFailures: rs.filter((r) => r.d.failureCount > 0).length };
-}
-
-// ---- class patterns ---------------------------------------------------------------------------
-const group = (keyFn) => {
-  const m = new Map();
-  for (const r of runs) for (const f of r.d.failures) {
-    const k = keyFn(f);
-    const g = m.get(k) || { count: 0, routes: new Set(), minRatio: 99, sample: f };
-    g.count++; g.routes.add(r.spec.label); g.minRatio = Math.min(g.minRatio, f.ratio);
-    m.set(k, g);
-  }
-  return [...m.entries()].sort((a, b) => b[1].count - a[1].count);
-};
-const textPatterns = group((f) => baseClasses(f.textClass) || '(no text-colour class: inherited/default)');
-const bgPatterns = group((f) => baseClasses(f.bgClass) || '(no bg class up to the opaque layer)');
-const colourPairs = group((f) => `${f.effectiveColor} on ${f.background}`);
-
-// ---- markdown ---------------------------------------------------------------------------------
+const cell = (r) => (!r ? '-' : r.status !== 'ok' ? `**${r.status}**` : `${r.failures} / ${r.checked}`);
 const L = [];
-const title = args.title || 'Nebulaa contrast baseline';
-L.push(`# ${title}`, '');
-L.push(`Generated ${summary.generatedAt.slice(0, 10)} by \`frontend/scripts/visual-audit/summarize.mjs\` from ${allRuns.length} audit runs (${otherRuns.length} of them on pages built in another session, reported separately) (${widths.join(' and ')} px wide). Standard: WCAG AA, 4.5:1 for normal text, 3:1 for large text (>= 24px, or >= 18.66px at weight 700+).`, '');
+L.push(`# ${args.title || 'Nebulaa contrast audit'}`, '');
+L.push(`Generated ${summary.generatedAt.slice(0, 10)} by \`frontend/scripts/visual-audit/summarize.mjs\`. Expected: ${routes.length} routes.json entries x ${widths.join(' and ')} px. Standard: WCAG AA, 4.5:1 normal text, 3:1 large text (>= 24px, or >= 18.66px at 700+).`, '');
+L.push(`**GATE: ${summary.gate}**`, '');
+L.push('Gate rule (Tasks 7-8): every route in scope (all of routes.json except the pages built in the other session) renders at every width (no MISSING / BLANK / ERROR / REDIRECT), has 0 failures, and every unknown-background item, unparsed colour and gradient-text item is signed off in `frontend/scripts/visual-audit/unknown-signoff.json` after a by-eye check.', '');
 
 if (args.compare && args.compare !== true) {
   const prev = JSON.parse(readFileSync(resolve(args.compare), 'utf8'));
   L.push('## Before / after', '', `| Route | ${widths.map((w) => `${w} before | ${w} after`).join(' | ')} |`, `|---|${widths.map(() => '---:|---:').join('|')}|`);
-  for (const [k, v] of Object.entries(summary.routes)) {
-    L.push(`| ${k} | ${widths.map((w) => `${prev.routes?.[k]?.widths?.[w]?.failures ?? '-'} | ${v.widths[w]?.failures ?? '-'}`).join(' | ')} |`);
+  const v = (x) => (!x ? 'MISSING' : x.status !== 'ok' ? x.status : `${x.failures} (+${x.unknown ?? 0} unk)`);
+  const comparable = [];
+  for (const [k, cur] of Object.entries(summary.routes)) {
+    L.push(`| ${k} | ${widths.map((w) => `${v(prev.routes?.[k]?.widths?.[w])} | ${v(cur.widths[w])}`).join(' | ')} |`);
+    for (const w of widths) { const a = prev.routes?.[k]?.widths?.[w]; const b = cur.widths[w]; if (a?.status === 'ok' && b?.status === 'ok') comparable.push([w, a, b]); }
   }
-  L.push('', `Totals: ${widths.map((w) => `${w}px ${prev.totals?.[w]?.failures ?? '-'} -> ${summary.totals[w].failures}`).join('; ')}.`, '');
+  L.push('', 'Totals over routes that rendered in BOTH runs (a route missing or broken in either run is not counted, so it cannot make the total drop):', '');
+  for (const w of widths) {
+    const c = comparable.filter((x) => x[0] === w);
+    L.push(`- ${w}px: ${c.length} routes compared, failures ${c.reduce((s, x) => s + x[1].failures, 0)} -> ${c.reduce((s, x) => s + x[2].failures, 0)}, unknown ${c.reduce((s, x) => s + (x[1].unknown || 0), 0)} -> ${c.reduce((s, x) => s + (x[2].unknown || 0), 0)}; not comparable: ${Object.keys(summary.routes).length - c.length}.`);
+  }
+  L.push('');
 }
 
-L.push('## Totals', '', '| Width | Routes | Text elements checked | Failures | Routes with failures | Unknown background |', '|---:|---:|---:|---:|---:|---:|');
-for (const w of widths) { const t = summary.totals[w]; L.push(`| ${w} | ${t.routes} | ${t.checked} | ${t.failures} | ${t.routesWithFailures} | ${t.unknown} |`); }
-L.push('');
+L.push('## Totals (in scope)', '', '| Width | Expected | Rendered ok | Missing | Blank | Error | Redirect | Checked | Failures | Routes with failures | Unknown (unsigned) | Unparsed colours | Gradient text | of which SVG text | over positioned layers | image layers |', '|---:|' + '---:|'.repeat(15));
+for (const w of widths) { const t = totals[w]; L.push(`| ${w} | ${t.expected} | ${t.ok} | ${t.missing} | ${t.blank} | ${t.error} | ${t.redirect + t.tabNotFound} | ${t.checked} | ${t.failures} | ${t.routesWithFailures} | ${t.unknown} (${t.unknownUnsigned}) | ${t.unparsed} | ${t.gradientText} | ${t.svgFailures} | ${t.positionedFailures} | ${t.imageFailures} |`); }
+L.push('', 'Missing/Blank/Error/Redirect counts include the redirect route kept out of the failure totals. "of which ..." columns break the failures down: SVG `<text>` labels, text measured against a positioned (non-ancestor) layer, and failures involving an image layer (`image-underlying`: fails on the colour beneath the image; `image-any`: no opaque image could make it pass).', '');
 
-L.push('## Per route', '', `| Route | Path | ${widths.map((w) => `${w}: fail / checked`).join(' | ')} | Worst ratio | Unknown bg | Status |`, `|---|---|${widths.map(() => '---:').join('|')}|---:|---:|---|`);
-for (const [k, v] of Object.entries(summary.routes)) {
-  const ws = widths.map((w) => v.widths[w] ? `${v.widths[w].failures} / ${v.widths[w].checked}` : '-').join(' | ');
-  const worst = Math.min(...widths.map((w) => v.widths[w]?.worst ?? 99));
-  const unk = widths.map((w) => v.widths[w]?.unknown ?? '-').join(' / ');
-  const st = [...new Set(widths.map((w) => v.widths[w]?.status).filter(Boolean))].join(', ');
-  L.push(`| ${k} | ${code(v.path)} | ${ws} | ${worst === 99 ? '-' : worst.toFixed(2)} | ${unk} | ${st} |`);
+const bad = gated.filter((r) => r.status !== 'ok');
+if (bad.length) {
+  L.push('## Routes that did not render as expected', '', '| Route | Width | Status | Detail |', '|---|---:|---|---|');
+  for (const r of bad) L.push(`| ${r.label} | ${r.width} | ${r.status} | ${esc(r.d ? (r.d.error || `landed on ${r.d.finalHash}`) : 'no result file')} |`);
+  L.push('');
+}
+
+L.push('## Per route', '', `| Route | Path | ${widths.map((w) => `${w}: fail / checked`).join(' | ')} | Worst ratio | Unknown | Unparsed / gradient text |`, `|---|---|${widths.map(() => '---:').join('|')}|---:|---:|---:|`);
+for (const spec of routes.filter((s) => !s.otherSession)) {
+  const rs = widths.map((w) => rows.find((r) => r.label === spec.label && r.width === w));
+  const worst = Math.min(...rs.map((r) => (r && r.status === 'ok' && r.worst != null ? r.worst : 99)));
+  L.push(`| ${spec.label}${spec.duplicateOf ? ' (redirect, not in totals)' : ''} | ${code(spec.path)} | ${rs.map(cell).join(' | ')} | ${worst === 99 ? '-' : worst.toFixed(2)} | ${rs.map((r) => (r && r.status === 'ok' ? r.unknown : '-')).join(' / ')} | ${rs.map((r) => (r && r.status === 'ok' ? `${r.unparsed}/${r.gradientText}` : '-')).join(' ; ')} |`);
 }
 L.push('');
 
-if (dupRuns.length) L.push(`Redirect routes audited but left out of the totals: ${[...new Set(dupRuns.map((r) => `${r.spec.label} (${code(r.spec.path)} -> ${code(r.d.finalHash)}, same result as ${r.spec.duplicateOf})`))].join('; ')}.`, '');
-L.push('## Failing class patterns', '', 'Grouped by the nearest text-colour class on the element or an ancestor (state variants such as `hover:` dropped). Counts are failures across all routes and widths. The computed colour is what the browser drew, after the `index.html` override layer.', '');
+const failRows = okRows(inScope).flatMap((r) => r.d.failures.map((f) => ({ ...f, route: r.label })));
+const group = (keyFn) => {
+  const m = new Map();
+  for (const f of failRows) {
+    const k = keyFn(f);
+    const g = m.get(k) || { count: 0, routes: new Set(), minRatio: 99, sample: f };
+    g.count++; g.routes.add(f.route); g.minRatio = Math.min(g.minRatio, f.ratio);
+    m.set(k, g);
+  }
+  return [...m.entries()].sort((a, b) => b[1].count - a[1].count);
+};
+L.push('## Failing class patterns', '', 'Nearest text-colour class on the element or an ancestor (state variants dropped). Counts are failures across in-scope routes and both widths. Colours are as drawn, i.e. after the `index.html` override layer.', '');
 L.push('| Text-colour classes | Failures | Routes | Worst | Example (computed colour on background) |', '|---|---:|---:|---:|---|');
-for (const [k, g] of textPatterns.slice(0, 30)) L.push(`| ${code(k)} | ${g.count} | ${g.routes.size} | ${g.minRatio.toFixed(2)} | ${esc(g.sample.text.slice(0, 30))}: ${g.sample.effectiveColor} on ${g.sample.background} |`);
-L.push('', '| Background classes (up to the nearest opaque layer) | Failures | Routes | Worst |', '|---|---:|---:|---:|');
-for (const [k, g] of bgPatterns.slice(0, 25)) L.push(`| ${code(k)} | ${g.count} | ${g.routes.size} | ${g.minRatio.toFixed(2)} |`);
+for (const [k, g] of group((f) => baseClasses(f.textClass) || '(no text-colour class)').slice(0, 30)) L.push(`| ${code(k)} | ${g.count} | ${g.routes.size} | ${g.minRatio.toFixed(2)} | ${esc(g.sample.text.slice(0, 30))}: ${g.sample.effectiveColor} on ${g.sample.background} |`);
+L.push('', '| Background classes (nearest) | Failures | Routes | Worst |', '|---|---:|---:|---:|');
+for (const [k, g] of group((f) => baseClasses(f.bgClass) || '(no bg class)').slice(0, 25)) L.push(`| ${code(k)} | ${g.count} | ${g.routes.size} | ${g.minRatio.toFixed(2)} |`);
 L.push('', '| Computed text colour on background | Failures | Routes | Ratio |', '|---|---:|---:|---:|');
-for (const [k, g] of colourPairs.slice(0, 20)) L.push(`| ${k} | ${g.count} | ${g.routes.size} | ${g.minRatio.toFixed(2)} |`);
+for (const [k, g] of group((f) => `${f.effectiveColor} on ${f.background}`).slice(0, 20)) L.push(`| ${k} | ${g.count} | ${g.routes.size} | ${g.minRatio.toFixed(2)} |`);
 L.push('');
 
-L.push('## Worst 10 per route', '', `From the ${widths[0]}px run (the ${widths.slice(1).join('/')}px count is in the table above). Ratio is text against its effective background; "req" is the AA minimum for that size.`, '');
-for (const k of Object.keys(summary.routes)) {
-  const r = runs.find((x) => x.spec.label === k && x.width === widths[0]) || runs.find((x) => x.spec.label === k);
+L.push('## Worst 10 per route', '', `From the ${widths[0]}px run. "req" is the AA minimum for that size; kind/failureKind as defined in the README.`, '');
+for (const spec of routes.filter((s) => !s.otherSession && !s.duplicateOf)) {
+  const r = rows.find((x) => x.label === spec.label && x.width === widths[0]);
   if (!r) continue;
-  L.push(`### ${k} (${code(r.spec.path)}${r.spec.click ? `, tab "${r.spec.click}"` : ''}) - ${r.d.failureCount} failing of ${r.d.checked}`, '');
+  if (r.status !== 'ok') { L.push(`### ${spec.label} - ${r.status}`, ''); continue; }
+  L.push(`### ${spec.label} (${code(spec.path)}${spec.click ? `, tab "${spec.click}"` : ''}) - ${r.failures} failing of ${r.checked}`, '');
   if (!r.d.failures.length) { L.push('No failures.', ''); continue; }
-  L.push('| Ratio | req | Text | Colour on background | Selector | Text class |', '|---:|---:|---|---|---|---|');
-  for (const f of r.d.failures.slice(0, 10)) L.push(`| ${f.ratio.toFixed(2)} | ${f.required} | ${esc(f.text.slice(0, 40))} | ${f.effectiveColor} on ${f.background}${f.kind !== 'text' ? ` (${f.kind})` : ''} | ${code(esc(f.selector.slice(-80)))} | ${code(esc(baseClasses(f.textClass)))} |`);
+  L.push('| Ratio | req | Text | Colour on background | Kind | Selector | Text class |', '|---:|---:|---|---|---|---|---|');
+  for (const f of r.d.failures.slice(0, 10)) L.push(`| ${f.ratio.toFixed(2)} | ${f.required} | ${esc(f.text.slice(0, 40))} | ${f.effectiveColor} on ${f.background} | ${[f.kind !== 'text' ? f.kind : '', f.failureKind && f.failureKind !== 'contrast' ? f.failureKind : '', f.positioned ? 'positioned' : ''].filter(Boolean).join(', ')} | ${code(esc(f.selector.slice(-80)))} | ${code(esc(baseClasses(f.textClass)))} |`);
   L.push('');
 }
 
-L.push('## Built in the other session (read-only, will be replaced by that branch\'s version)', '', 'Landing, sign-in/sign-up and onboarding were redesigned in a separate session (branches rebrand-on-prod / rebrand-nebulaa-landing) and will be brought in as-is. They were audited here for information only: not fixed in Tasks 7-8 and not counted in any total above.', '');
-if (!otherRuns.length) L.push('Not audited.', '');
+L.push('## Unknown, unparsed and gradient-text items (gated unless signed off)', '');
+const unk = okRows(gated).flatMap((r) => [
+  ...r.d.unknown.map((u) => ({ r, type: 'unknown', u, signed: isSignedOff('unknown', r.label, r.width, u) })),
+  ...(r.d.unparsedColors || []).map((u) => ({ r, type: 'unparsed', u, signed: isSignedOff('unparsed', r.label, r.width, u) })),
+  ...(r.d.gradientText || []).map((u) => ({ r, type: 'gradientText', u, signed: isSignedOff('gradientText', r.label, r.width, u) })),
+]);
+if (!unk.length) L.push('None.', '');
 else {
-  L.push('| Route | Path | Width | Failures / checked | Unknown bg | Worst 3 |', '|---|---|---:|---:|---:|---|');
-  for (const r of otherRuns) L.push(`| ${r.spec.label} | ${code(r.spec.path)} | ${r.width} | ${r.d.failureCount} / ${r.d.checked} | ${r.d.unknown.length} | ${esc(r.d.failures.slice(0, 3).map((f) => `"${f.text.slice(0, 24)}" ${f.ratio} (${f.effectiveColor} on ${f.background})`).join('; '))} |`);
+  L.push('| Route | Width | Type | Text | Reason / detail | Signed off |', '|---|---:|---|---|---|---|');
+  for (const { r, type, u, signed } of unk) L.push(`| ${r.label} | ${r.width} | ${type} | ${esc(String(u.text).slice(0, 30))} | ${esc(u.reason || u.color || u.fill || u.backgroundImage || '')}${u.black != null ? ` (black ${u.black}, white ${u.white}, beneath ${u.ratioUnder})` : ''} | ${signed ? 'yes' : '**no**'} |`);
   L.push('');
 }
-summary.otherSession = Object.fromEntries(otherRuns.map((r) => [`${r.spec.label}@${r.width}`, { failures: r.d.failureCount, checked: r.d.checked, unknown: r.d.unknown.length }]));
-
-L.push('## Unknown backgrounds (not counted as failures)', '', 'Text over a url() background image, or over an img/video/canvas that covers most of the text box. These need a visual check.', '');
-L.push('| Route | Width | Count | Reasons | Examples |', '|---|---:|---:|---|---|');
-for (const r of runs) {
-  if (!r.d.unknown.length) continue;
-  const reasons = [...new Set(r.d.unknown.map((u) => u.reason))].join(', ');
-  L.push(`| ${r.spec.label} | ${r.width} | ${r.d.unknown.length} | ${reasons} | ${esc(r.d.unknown.slice(0, 3).map((u) => `"${u.text.slice(0, 20)}" (${u.color})`).join('; '))} |`);
+if ((signoff.needsByEyeCheck || []).length) {
+  L.push('Pending by-eye checks listed in the sign-off file:', '');
+  for (const n of signoff.needsByEyeCheck) L.push(`- ${n.route}: ${n.reason}`);
+  L.push('');
 }
-L.push('');
 
-const dis = runs.filter((r) => r.d.disabled.length);
+const dis = okRows(gated).filter((r) => r.d.disabled.length);
 L.push('## Disabled controls below AA (reported, exempt)', '');
 if (!dis.length) L.push('None.', '');
-else { L.push('| Route | Width | Count | Examples |', '|---|---:|---:|---|'); for (const r of dis) L.push(`| ${r.spec.label} | ${r.width} | ${r.d.disabled.length} | ${esc(r.d.disabled.slice(0, 3).map((f) => `"${f.text.slice(0, 20)}" ${f.ratio}`).join('; '))} |`); L.push(''); }
+else { L.push('| Route | Width | Count | Examples |', '|---|---:|---:|---|'); for (const r of dis) L.push(`| ${r.label} | ${r.width} | ${r.d.disabled.length} | ${esc(r.d.disabled.slice(0, 3).map((f) => `"${f.text.slice(0, 20)}" ${f.ratio}`).join('; '))} |`); L.push(''); }
 
-const ph = runs.filter((r) => r.d.placeholders.some((p) => p.ratio < p.required));
+const ph = okRows(gated).filter((r) => r.d.placeholders.some((p) => p.ratio < p.required));
 L.push('## Placeholders below AA (also counted in failures)', '');
 if (!ph.length) L.push('None.', '');
-else { L.push('| Route | Width | Failing | Examples |', '|---|---:|---:|---|'); for (const r of ph) { const f = r.d.placeholders.filter((p) => p.ratio < p.required); L.push(`| ${r.spec.label} | ${r.width} | ${f.length} | ${esc(f.slice(0, 3).map((p) => `"${p.text.slice(0, 24)}" ${p.ratio}`).join('; '))} |`); } L.push(''); }
+else { L.push('| Route | Width | Failing | Examples |', '|---|---:|---:|---|'); for (const r of ph) { const f = r.d.placeholders.filter((p) => p.ratio < p.required); L.push(`| ${r.label} | ${r.width} | ${f.length} | ${esc(f.slice(0, 3).map((p) => `"${p.text.slice(0, 24)}" ${p.ratio}`).join('; '))} |`); } L.push(''); }
 
-const gt = runs.filter((r) => r.d.gradientText.length);
-if (gt.length) {
-  L.push('## Gradient (background-clip:text) text, not measured', '', '| Route | Width | Count | Example |', '|---|---:|---:|---|');
-  for (const r of gt) L.push(`| ${r.spec.label} | ${r.width} | ${r.d.gradientText.length} | ${esc(r.d.gradientText[0].text.slice(0, 30))} |`);
-  L.push('');
-}
+const other = rows.filter((r) => r.scope === 'other');
+L.push("## Built in the other session (read-only, will be replaced by that branch's version)", '', 'Landing, sign-in/sign-up and onboarding were redesigned in a separate session (branches rebrand-on-prod / rebrand-nebulaa-landing) and will be brought in as-is. Audited for information only: not fixed in Tasks 7-8, not counted in any total, not part of the gate.', '');
+L.push('| Route | Path | Width | Failures / checked | Unknown | Worst 3 |', '|---|---|---:|---:|---:|---|');
+for (const r of other) L.push(`| ${r.label} | ${code(r.spec.path)} | ${r.width} | ${cell(r)} | ${r.status === 'ok' ? r.unknown : '-'} | ${r.status === 'ok' ? esc(r.d.failures.slice(0, 3).map((f) => `"${f.text.slice(0, 24)}" ${f.ratio} (${f.effectiveColor} on ${f.background})`).join('; ')) : ''} |`);
+L.push('');
 
-const errs = runs.filter((r) => r.d.consoleErrors && r.d.consoleErrors.length);
+const errs = okRows(gated).filter((r) => r.d.consoleErrors && r.d.consoleErrors.length);
 if (errs.length) {
   L.push('## Console errors during the run', '', '| Route | Width | Errors (first 2) |', '|---|---:|---|');
-  for (const r of errs) L.push(`| ${r.spec.label} | ${r.width} | ${esc(r.d.consoleErrors.slice(0, 2).map((e) => e.slice(0, 120)).join(' / '))} |`);
+  for (const r of errs) L.push(`| ${r.label} | ${r.width} | ${esc(r.d.consoleErrors.slice(0, 2).map((e) => e.slice(0, 120)).join(' / '))} |`);
   L.push('');
 }
 
 if (args.md) writeFileSync(resolve(args.md), L.join('\n') + '\n');
 if (args.json) writeFileSync(resolve(args.json), JSON.stringify(summary, null, 1) + '\n');
-const worstPages = Object.entries(summary.routes).map(([k, v]) => [k, v.widths[widths[0]]?.failures ?? 0]).sort((a, b) => b[1] - a[1]);
-console.log(JSON.stringify({ totals: summary.totals, worstPages: worstPages.slice(0, 10), textPatterns: textPatterns.slice(0, 8).map(([k, g]) => [k, g.count]) }, null, 1));
+for (const w of widths) {
+  const t = totals[w];
+  console.log(`${w}px: expected ${t.expected}, ok ${t.ok}, MISSING ${t.missing}, BLANK ${t.blank}, ERROR ${t.error}, REDIRECT ${t.redirect + t.tabNotFound}; failures ${t.failures} on ${t.routesWithFailures} routes; unknown ${t.unknown} (${t.unknownUnsigned} not signed off); unparsed ${t.unparsed}; gradient text ${t.gradientText}`);
+}
+console.log(`GATE: ${summary.gate}`);
+if (!gatePass) process.exitCode = 1;

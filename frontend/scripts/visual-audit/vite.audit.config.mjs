@@ -26,6 +26,10 @@ export default async (env) => {
   return {
     ...base,
     root: frontendDir,
+    // No .env is read for the audit (vite.config.ts inlines GEMINI_API_KEY through `define`):
+    // env files come from an empty directory and the keys are defined as empty strings.
+    envDir: resolve(here, 'no-env'),
+    define: { 'process.env.API_KEY': '""', 'process.env.GEMINI_API_KEY': '""' },
     server: {
       host: '127.0.0.1',
       port: PORT,
@@ -37,6 +41,17 @@ export default async (env) => {
       {
         name: 'nebulaa-audit-backstop',
         configureServer(server) {
+          // The app must be opened as 127.0.0.1: on "localhost" several files call localhost:5000.
+          server.middlewares.use((req, res, next) => {
+            const host = String(req.headers.host || '');
+            if (!host.startsWith('127.0.0.1:')) {
+              res.statusCode = 403;
+              res.setHeader('Content-Type', 'text/plain');
+              res.end(`Audit server: open http://127.0.0.1:${PORT}/ (Host "${host}" refused).`);
+              return;
+            }
+            next();
+          });
           // Local-only helpers the in-page runner uses to write results and screenshots to disk.
           server.middlewares.use((req, res, next) => {
             const url = req.url || '';

@@ -1,0 +1,7 @@
+{
+  "_comment": "Items the audit cannot measure (unknown background, unparsed colour, gradient text) that a person has checked by eye. summarize.mjs fails the gate for any such item not listed here. Entry: { kind: unknown|unparsed|gradientText, route: <routes.json label>, width?: 1280|375 (omit = both), text?: start of the text ('*' = every item of that kind on the route), selector?: exact selector, reason: why it cannot be measured, verifiedBy: who checked it, how (screenshot path, ratio read with a colour picker), and when }. Do not add entries without a by-eye check.",
+  "signedOff": [],
+  "needsByEyeCheck": [
+    { "route": "trial-expired", "reason": "Text sits over the animated starfield <canvas> on a dark radial gradient; measured against absent/black/white the result depends on the canvas pixels. Check the plan cards and the '/35'-'/45' alpha lines by eye, then sign off or fix." }
+  ]
+}

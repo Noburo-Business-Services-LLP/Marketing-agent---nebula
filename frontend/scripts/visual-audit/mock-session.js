@@ -24,6 +24,16 @@
 (function () {
   'use strict';
   if (window.__AUDIT) return;
+  // On "localhost" several files build http://localhost:5000 URLs, and media tags (<img>, <video>,
+  // <audio>) with those URLs would bypass this stub. Refuse to boot the app at all.
+  if (location.hostname === 'localhost' || location.hostname === '[::1]') {
+    var msg = 'Nebulaa audit stub: refusing to run on "' + location.hostname + '". Open http://127.0.0.1:' + location.port + '/ instead.';
+    console.error(msg);
+    window.stop();
+    document.documentElement.innerHTML = '<head><title>Audit refused</title></head><body style="font:16px sans-serif;padding:24px"><h1>Audit refused</h1><p>' + msg + '</p></body>';
+    window.__AUDIT_REFUSED = true;
+    return;
+  }
 
   var AUDIT = (window.__AUDIT = { log: [], blocked: [], unmatched: [], startedAt: Date.now() });
 
@@ -195,6 +205,15 @@
     ['GET', /^\/ad-campaigns\/summary/, ok({ summary: { totalAdCampaigns: 0, activeAdCampaigns: 0, metrics: { clicks: 0, impressions: 0, ctr: 0, spend: 0 } } })],
     ['GET', /^\/ad-campaigns/, ok({ campaigns: [], adCampaigns: [] })],
     ['GET', /^\/ads\//, ok({ accounts: [], ads: [], history: [] })],
+    // A few weeks of snapshots so the classic Insights chart (SVG axis labels) renders.
+    ['GET', /^\/analytics\/history/, function () {
+      var h = [];
+      for (var i = 7; i >= 0; i--) {
+        var f = 1200 + (7 - i) * 35;
+        h.push({ date: iso(-i * 4), platforms: { instagram: { followers: f, reach: f * 3, impressions: f * 5, engagementRate: 3.1 + i * 0.1, posts: 20 - i, likes: 300 + i * 12 } }, totals: { followers: f, reach: f * 3, impressions: f * 5, posts: 20 - i } });
+      }
+      return ok({ history: h });
+    }],
     ['GET', /^\/analytics\//, ok({ data: [], analytics: [], snapshots: [], posts: [], history: [] })],
     ['GET', /^\/dashboard\//, ok({ data: {}, followers: {}, competitors: [] })],
     ['GET', /^\/seo\//, ok({ data: {}, keywords: [], hashtags: [] })],
@@ -421,7 +440,14 @@
         out.push([s.name, s.finalHash, s.checked, s.failures, s.unknown, s.blank ? 'BLANK' : '', s.errors, s.clicked === false ? 'NOCLICK' : ''].join(' '));
         // A crash unmounts the whole app; later routes would all be blank. Stop and say where to resume.
         if (s.blank) { out.push('STOPPED: app crashed; reload and resume with labels ' + JSON.stringify(todo.slice(i + 1).map(function (r) { return r.label; }))); break; }
-      } catch (e) { out.push(todo[i].label + ' ERROR ' + (e && e.message)); if (/viewport is/.test(e && e.message)) break; }
+      } catch (e) {
+        var em = String(e && e.message);
+        out.push(todo[i].label + ' ERROR ' + em);
+        if (/viewport is/.test(em)) break;
+        // An audit that throws is recorded as ERROR for that route, never as "0 failures".
+        await save('save', Math.min(window.innerWidth, screen.width || window.innerWidth) + '__' + slug(todo[i].label),
+          JSON.stringify({ route: todo[i].path, label: todo[i].label, path: todo[i].path, error: em, width: Math.min(window.innerWidth, screen.width || window.innerWidth), mode: MODE, at: new Date().toISOString() }));
+      }
     }
     return out;
   };
