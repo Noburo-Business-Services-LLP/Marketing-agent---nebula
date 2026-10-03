@@ -1,12 +1,14 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <title>Nebulaa AI - Marketing Agent</title>
     <!-- Tailwind CSS via Play CDN - more reliable -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Montserrat:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&family=Playfair+Display:wght@400;500;600;700&family=Lora:wght@400;500;600;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&family=Playfair+Display:wght@400;500;600;700&family=Lora:wght@400;500;600;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
     <script>
       // Configure tailwind when it loads
       function configureTailwind() {
@@ -40,7 +42,7 @@
                 },
                 fontFamily: {
                   serif: ['"Playfair Display"', 'Georgia', 'serif'],
-                  sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+                  sans: ['"Plus Jakarta Sans"', 'Inter', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
                 }
               }
             }
@@ -62,7 +64,7 @@
     </script>
     <style>
       body {
-        font-family: 'Inter', sans-serif;
+        font-family: 'Plus Jakarta Sans', Inter, -apple-system, BlinkMacSystemFont, sans-serif;
       }
       /* Gravity redesign — applied when body has .gravity-shell class.
          Uses the token pair above so this now actually varies by theme —
@@ -110,24 +112,33 @@
          See docs/superpowers/specs/2026-09-15-gravity-light-mode-design.md
          ============================================================ */
       :root {
-        --gv-bg: #FAF9F6;
-        --gv-panel: #FFFFFF;
-        --gv-panel-2: #F2F0EA;
-        --gv-ink-rgb: 23 23 26;
-        --gv-text-primary: #17171A;
-        --gv-text-secondary: #44433F;
-        --gv-text-tertiary: #78756D;
-        --gv-text-muted: #9C998F;
+        --gv-bg: #FBF5EA;
+        --gv-panel: #FFFDF8;
+        --gv-panel-2: #F3E8D4;
+        --gv-ink-rgb: 20 32 58;
+        --gv-text-primary: #14203A;
+        --gv-text-secondary: #33405C;
+        --gv-text-tertiary: #6D6250;
+        --gv-text-muted: #8F836E;
         --gv-surface-1: rgb(var(--gv-ink-rgb) / 0.03);
         --gv-surface-2: rgb(var(--gv-ink-rgb) / 0.05);
         --gv-surface-3: rgb(var(--gv-ink-rgb) / 0.08);
         --gv-surface-4: rgb(var(--gv-ink-rgb) / 0.12);
-        --gv-border-subtle: rgb(var(--gv-ink-rgb) / 0.10);
-        --gv-border-default: rgb(var(--gv-ink-rgb) / 0.16);
-        --gv-border-strong: rgb(var(--gv-ink-rgb) / 0.24);
+        /* Borders: website rule colours (#E5D8BF / #D4C4A4), strong a step darker */
+        --gv-border-subtle: #E5D8BF;
+        --gv-border-default: #D4C4A4;
+        --gv-border-strong: #BFAC85;
         --gv-accent: #F5A623;
-        --gv-accent-text: #96650A;
-        --gv-accent-display: #B0770F;
+        --gv-accent-text: #9A5A00;
+        --gv-accent-display: #D07A00;
+        /* Nebulaa accent family */
+        --gv-coral: #EE6330;
+        --gv-coral-text: #C4471A;
+        --gv-peach: #FFE3D0;
+        --gv-mint: #DDF2E6;
+        --gv-sky: #DCEBFA;
+        --gv-lav: #ECE6FB;
+        --gv-shadow-card: 0 1px 2px rgba(20,32,58,.05), 0 12px 32px rgba(20,32,58,.07);
         --gv-accent-hover: #D68C0F;
         --gv-accent-fill: rgba(245,166,35,0.10);
         --gv-accent-ink: #1A1208;
@@ -141,6 +152,8 @@
            is declared once here and not repeated under .dark. */
         --gv-accent-rgb: 245 166 35;
       }
+      /* INTENTIONALLY UNUSED: Nebulaa is light only (ThemeContext never adds
+         the `dark` class). Kept so a dark theme can return later. */
       .dark {
         --gv-bg: #0A0A0A;
         --gv-panel: #151515;
@@ -156,7 +169,7 @@
         --gv-border-subtle: rgb(var(--gv-ink-rgb) / 0.06);
         --gv-border-default: rgb(var(--gv-ink-rgb) / 0.10);
         --gv-border-strong: rgb(var(--gv-ink-rgb) / 0.14);
-        --gv-accent-text: #F5A623;
+        --gv-accent-text: #9A5A00;
         --gv-accent-display: #F5A623;
         --gv-accent-hover: #ffb833;
         --gv-accent-fill: rgba(245,166,35,0.06);
@@ -282,7 +295,7 @@
       }
       /* Small-caps meta label used across Gravity screens */
       .gravity-label {
-        font-family: 'Inter', sans-serif;
+        font-family: 'Plus Jakarta Sans', Inter, -apple-system, BlinkMacSystemFont, sans-serif;
         text-transform: uppercase;
         letter-spacing: 0.14em;
         font-size: 10.5px;
@@ -513,7 +526,7 @@
         position: absolute;
         top: 10px;
         right: 12px;
-        font-family: 'Inter', sans-serif;
+        font-family: 'Plus Jakarta Sans', Inter, -apple-system, BlinkMacSystemFont, sans-serif;
         font-size: 10px;
         letter-spacing: 0.08em;
         font-variant-numeric: tabular-nums;
@@ -527,7 +540,7 @@
       }
       /* Shimmer sweep across the label — that is ig-shine. */
       .igLabel {
-        font-family: 'Inter', sans-serif;
+        font-family: 'Plus Jakarta Sans', Inter, -apple-system, BlinkMacSystemFont, sans-serif;
         font-size: 12.5px;
         font-weight: 500;
         letter-spacing: 0.01em;
@@ -542,7 +555,7 @@
         animation: ig-shine 2.6s linear infinite;
       }
       .igPrompt {
-        font-family: 'Inter', sans-serif;
+        font-family: 'Plus Jakarta Sans', Inter, -apple-system, BlinkMacSystemFont, sans-serif;
         font-size: 11px;
         color: rgba(255,255,255,0.35);
         overflow: hidden;
