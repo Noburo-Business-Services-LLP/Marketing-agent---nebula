@@ -47,9 +47,28 @@ test('COMPLETED without URL -> failed', async () => {
   assert.ok(s.error);
 });
 
-test('result() throwing -> failed with message', async () => {
-  const s = await hero.getHeroClipStatus(M, 'r', fakeFal({ status: 'COMPLETED', resultErr: new Error('boom') }));
-  assert.deepEqual(s, { state: 'failed', error: 'boom' });
+const httpErr = (status, message = 'http ' + status) => Object.assign(new Error(message), { status });
+
+test('result() network error (no status) rejects so the flow retries (I2)', async () => {
+  await assert.rejects(
+    () => hero.getHeroClipStatus(M, 'r', fakeFal({ status: 'COMPLETED', resultErr: new Error('ECONNRESET') })),
+    /ECONNRESET/
+  );
+});
+
+test('result() 5xx and 429 reject (transient)', async () => {
+  for (const code of [500, 503, 429]) {
+    await assert.rejects(
+      () => hero.getHeroClipStatus(M, 'r', fakeFal({ status: 'COMPLETED', resultErr: httpErr(code) })),
+      undefined,
+      String(code)
+    );
+  }
+});
+
+test('result() 4xx (not 429) -> failed with message', async () => {
+  const s = await hero.getHeroClipStatus(M, 'r', fakeFal({ status: 'COMPLETED', resultErr: httpErr(422, 'content policy') }));
+  assert.deepEqual(s, { state: 'failed', error: 'content policy' });
 });
 
 test('missing FAL_KEY throws before network', async () => {

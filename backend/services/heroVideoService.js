@@ -125,6 +125,11 @@ async function getHeroClipStatus(model, requestId, fal) {
     if (!videoUrl) return { state: 'failed', error: 'fal completed without a video URL' };
     return { state: 'completed', videoUrl };
   } catch (err) {
+    // A finished clip is paid for: only a definite client error (4xx other than 429) fails it.
+    // Network errors (no numeric status), 5xx and 429 are rethrown so the flow treats them as
+    // transient and retries on the next poll (bounded by the flow's max job age).
+    const code = err && typeof err.status === 'number' ? err.status : null;
+    if (code === null || code >= 500 || code === 429 || code < 400) throw err;
     return { state: 'failed', error: (err && err.message) || 'fal result fetch failed' };
   }
 }
