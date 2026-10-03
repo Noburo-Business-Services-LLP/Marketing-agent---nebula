@@ -130,7 +130,7 @@ const VOICE_GENDER_OPTIONS = [
 ];
 
 const SCENE_COUNT_OPTIONS = [
-  { value: '', label: 'Auto — let Gravity decide' },
+  { value: '', label: 'Auto — let Nebulaa decide' },
   ...Array.from({ length: 10 }, (_, i) => ({ value: String(i + 1), label: `${i + 1} scene${i ? 's' : ''}` })),
 ];
 
@@ -2709,7 +2709,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                 <GravityHero
                   eyebrow="Videos"
                   headline={<>What are we <GravityEmphasis>filming</GravityEmphasis>?</>}
-                  subcopy="Describe the video once. Gravity writes the script, casts the voice, and renders every scene."
+                  subcopy="Describe the video once. Nebulaa writes the script, casts the voice, and renders every scene."
                 />
                 {/* Ideas already planned in the calendar. A button, not a
                     permanent tile wall — the brief is what this step is for. */}

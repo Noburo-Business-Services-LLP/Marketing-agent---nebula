@@ -362,7 +362,7 @@ const Inventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
           <div>
             <h2 className="font-serif-display text-[22px] text-[#F5F4F1]">Products &amp; Services</h2>
             <p className="text-[12.5px] text-white/45 mt-1 max-w-[560px]">
-              What the business offers, with images and details Gravity draws on when it creates campaigns.
+              What the business offers, with images and details Nebulaa draws on when it creates campaigns.
             </p>
           </div>
         ) : (
@@ -370,7 +370,7 @@ const Inventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
             align="left"
             eyebrow="Products & Services"
             headline={<>Everything you <GravityEmphasis>offer</GravityEmphasis></>}
-            subcopy="Your products and services, with images and details Gravity draws on when it creates campaigns, images and videos."
+            subcopy="Your products and services, with images and details Nebulaa draws on when it creates campaigns, images and videos."
             className="!mb-0"
           />
         )}
@@ -479,7 +479,7 @@ const Inventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
           </div>
           <h2 className={`text-xl font-bold ${theme.text}`}>Nothing here yet</h2>
           <p className={`text-sm mt-2 max-w-sm mx-auto ${theme.textSecondary}`}>
-            Add a product or service so Gravity has real images and details to build campaigns from.
+            Add a product or service so Nebulaa has real images and details to build campaigns from.
           </p>
           <button 
             onClick={handleOpenAdd}
@@ -614,7 +614,7 @@ const Inventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
                 </div>
                 <div>
                   <h3 className={`text-xl font-black ${theme.text}`}>{editingProduct ? 'Edit Entry' : (formData.type === 'service' ? 'Add New Service' : 'Add New Product')}</h3>
-                  <p className={`text-xs font-medium ${theme.textSecondary}`}>Details Gravity will draw on when generating campaigns.</p>
+                  <p className={`text-xs font-medium ${theme.textSecondary}`}>Details Nebulaa will draw on when generating campaigns.</p>
                 </div>
               </div>
               <button 

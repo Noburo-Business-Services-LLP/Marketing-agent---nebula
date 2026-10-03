@@ -970,7 +970,7 @@ const Competitors: React.FC = () => {
                   </div>
                   <p className={`text-lg font-semibold ${theme.text} mb-2`}>Crafting Your Viral Post</p>
                   <p className={`text-sm ${theme.textMuted} text-center max-w-sm`}>
-                    Gravity is analyzing the competitor's content and creating a unique, engaging post that will help you stand out...
+                    Nebulaa is analyzing the competitor's content and creating a unique, engaging post that will help you stand out...
                   </p>
                   <div className="flex items-center gap-2 mt-4">
                     <div className="w-2 h-2 rounded-full bg-[#F5A623] animate-bounce" style={{ animationDelay: '0ms' }} />
