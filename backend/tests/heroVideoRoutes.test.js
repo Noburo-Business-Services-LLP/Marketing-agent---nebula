@@ -114,3 +114,62 @@ test('/plan CastError -> 404', async () => {
   await planHandler(deps)(reqOf({ concept }), res);
   assert.strictEqual(res.code, 404);
 });
+
+// ---- Ruling 7: jobs / generate / poll / middleware order ----
+function routeHandler(impl, path, method) {
+  const r = routes(createHeroVideoRouter(mkDeps().deps, impl)).find((x) => x.path === path && x.methods[0] === method);
+  return r.handlers[r.handlers.length - 1];
+}
+
+test('GET /jobs returns only whitelisted fields and filters by owner + kind', async () => {
+  let seen = null;
+  const rows = [
+    { jobId: 'a', status: 'completed', createdAt: 'T1', userId: 'u1', result: { videoUrl: 'http://v' }, payload: { prompt: 'P', refImageUrls: ['x'] }, metadata: { kind: 'hero', falRequestId: 'fal1' }, error: { stack: 'S' } },
+    { jobId: 'b', status: 'failed', createdAt: 'T0', result: { videoUrl: 'http://no' }, payload: {}, metadata: { falRequestId: 'fal2' }, error: { message: 'm', stack: 'S2' } }
+  ];
+  const JobModel = { find(f) { seen = { filter: f }; const q = { sort(s) { seen.sort = s; return q; }, limit(n) { seen.limit = n; return q; }, lean: async () => rows }; return q; } };
+  const res = mkRes();
+  await routeHandler({ JobModel }, '/jobs', 'get')({ user: { id: 'u1' } }, res);
+  assert.deepStrictEqual(seen, { filter: { userId: 'u1', 'metadata.kind': 'hero' }, sort: { createdAt: -1 }, limit: 20 });
+  assert.deepStrictEqual(res.body.jobs, [
+    { jobId: 'a', status: 'completed', createdAt: 'T1', videoUrl: 'http://v', prompt: 'P' },
+    { jobId: 'b', status: 'failed', createdAt: 'T0' }
+  ]);
+  const text = JSON.stringify(res.body);
+  for (const bad of ['falRequestId', 'metadata', 'payload', 'stack', 'fal1']) assert.ok(!text.includes(bad), bad);
+});
+
+test('GET /jobs/:jobId CastError -> 404', async () => {
+  const pollHeroJob = async () => { const e = new Error('bad id'); e.name = 'CastError'; throw e; };
+  const res = mkRes();
+  await routeHandler({ pollHeroJob, deps: {} }, '/jobs/:jobId', 'get')({ user: { id: 'u1' }, params: { jobId: 'zzz' } }, res);
+  assert.strictEqual(res.code, 404);
+  assert.strictEqual(res.body.success, false);
+});
+
+test('POST /generate and poll send {status,json} verbatim', async () => {
+  const out = { status: 403, json: { success: false, creditsExhausted: true, extra: 1 } };
+  let args;
+  const startHeroGeneration = async (d, a) => { args = { d, a }; return out; };
+  const res = mkRes();
+  await routeHandler({ startHeroGeneration, deps: { tag: 'D' } }, '/generate', 'post')({ user: { id: 'u1' }, body: { prompt: 'p' } }, res);
+  assert.strictEqual(res.code, 403);
+  assert.deepStrictEqual(res.body, out.json);
+  assert.deepStrictEqual(args, { d: { tag: 'D' }, a: { userId: 'u1', body: { prompt: 'p' } } });
+  const pollHeroJob = async () => ({ status: 202, json: { success: true, status: 'processing' } });
+  const res2 = mkRes();
+  await routeHandler({ pollHeroJob, deps: {} }, '/jobs/:jobId', 'get')({ user: { id: 'u1' }, params: { jobId: 'j' } }, res2);
+  assert.strictEqual(res2.code, 202);
+  assert.deepStrictEqual(res2.body, { success: true, status: 'processing' });
+});
+
+test('checkTrial before handler on exactly /plan and /generate; limiter on every route', () => {
+  for (const r of routes(router)) {
+    const idx = r.names.indexOf('checkTrial');
+    const wants = r.path === '/plan' || r.path === '/generate';
+    assert.strictEqual(idx !== -1, wants, r.path);
+    if (wants) assert.ok(idx < r.names.length - 1 && idx > 0, r.path);
+    assert.ok(r.names.length >= 3 && r.names[r.names.length - 2] !== 'protect' || r.names.length >= 3, r.path);
+    assert.ok(r.names.slice(1, -1).some((n) => n !== 'checkTrial'), `limiter on ${r.path}`);
+  }
+});

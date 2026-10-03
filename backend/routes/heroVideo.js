@@ -4,8 +4,8 @@ const rateLimit = require('express-rate-limit');
 const { ipKeyGenerator } = rateLimit;
 const { protect } = require('../middleware/auth');
 const { checkTrial } = require('../middleware/trialGuard');
-// videoDraftStore pulls in the Kling pipeline, which holds a timer open; load it lazily so requiring this router stays side-effect free.
-const toUserId = (user) => require('../services/videoDraftStore').toUserId(user);
+// Same semantics as videoDraftStore.toUserId; kept local because that module drags in timers.
+const toUserId = (user) => (!user ? null : user._id ? String(user._id) : user.id ? String(user.id) : null);
 
 const ASPECTS = ['9:16', '16:9', '1:1'];
 
@@ -83,11 +83,15 @@ function lazyPlanDeps() {
   };
 }
 
-function createHeroVideoRouter(planDeps = lazyPlanDeps(), flowDeps) {
+function createHeroVideoRouter(planDeps = lazyPlanDeps(), impl = {}) {
   const router = express.Router();
-  const flow = () => require('../services/heroVideoFlow');
-  let deps = flowDeps || null;
-  const getDeps = () => (deps = deps || flow().defaultDeps());
+  const flow = () => ({
+    startHeroGeneration: impl.startHeroGeneration || require('../services/heroVideoFlow').startHeroGeneration,
+    pollHeroJob: impl.pollHeroJob || require('../services/heroVideoFlow').pollHeroJob
+  });
+  let deps = impl.deps || null;
+  const getDeps = () => (deps = deps || require('../services/heroVideoFlow').defaultDeps());
+  const jobModel = () => impl.JobModel || require('../models/VideoJob');
 
   router.get('/quota', protect, heroReadLimiter, async (req, res) => {
     try {
@@ -147,7 +151,7 @@ function createHeroVideoRouter(planDeps = lazyPlanDeps(), flowDeps) {
 
   router.get('/jobs', protect, heroReadLimiter, async (req, res) => {
     try {
-      const rows = await require('../models/VideoJob')
+      const rows = await jobModel()
         .find({ userId: toUserId(req.user), 'metadata.kind': 'hero' })
         .sort({ createdAt: -1 })
         .limit(20)
