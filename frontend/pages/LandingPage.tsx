@@ -3,17 +3,23 @@ import { useNavigate } from 'react-router-dom';
 import {
   ArrowRight,
   CheckCircle2,
-  CalendarCheck,
-  Users,
+  Check,
+  PenLine,
+  ImageIcon,
+  Clapperboard,
+  CalendarDays,
   MessageCircle,
+  Radar,
   Mail,
   Menu,
   X,
+  ChevronDown,
 } from 'lucide-react';
+import { SHOWCASE_SLIDES } from '../components/onboarding/showcaseData';
 
 /**
- * The public page for the Nebulaa app. It matches nebulaa.ai: a warm light
- * page, plain words, and the same two plans. It always shows the light look,
+ * The public page for the Nebulaa app. Everything here leads to one action:
+ * sign up and start the 7-day trial. It always shows the light, warm look,
  * whatever theme the signed-in app uses.
  */
 
@@ -27,11 +33,7 @@ const RULE = '#E5D8BF';
 const CORAL = '#EE6330';
 const CORAL_TEXT = '#C4471A';
 const SUN = '#FFCB2E';
-const WA = '#1FA855';
-
-const WHATSAPP_NUMBER = '919384801049';
-const waLink = (message = "Hi, I'd like to know more about Nebulaa.") =>
-  `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
+const GOLD = '#F5A623';
 
 const display: React.CSSProperties = {
   fontFamily: "'Archivo', 'Arial Narrow', 'Helvetica Neue', Arial, sans-serif",
@@ -64,77 +66,94 @@ const Swash: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 );
 
 const Label: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <p
-    style={{ ...body, color: CORAL_TEXT, letterSpacing: '0.16em' }}
-    className="text-[12px] font-bold uppercase mb-4"
-  >
+  <p style={{ ...body, color: CORAL_TEXT, letterSpacing: '0.16em' }} className="text-[12px] font-bold uppercase mb-4">
     {children}
   </p>
 );
+
+/** Posts shown in the hero and in the "made with Nebulaa" grid. */
+const pick = (label: string, n = 0) => SHOWCASE_SLIDES.filter(s => s.label === label)[n];
+const HERO_POSTS = [pick('Hotels & stays', 0), pick('Jewellery & retail'), pick('Food & FMCG', 0)].filter(Boolean);
+const GRID_POSTS = [
+  pick('Textiles & apparel', 0),
+  pick('Real estate', 0),
+  pick('Automobiles', 0),
+  pick('Hotels & stays', 2),
+  pick('Financial services', 0),
+  pick('Furniture & appliances', 0),
+  pick('Food & FMCG', 1),
+  pick('Industrial & B2B', 0),
+].filter(Boolean);
+
+const PAINS = [
+  { title: 'You do not know what to write.', text: 'Every post needs an idea, a caption and the right words.' },
+  { title: 'Good photos and videos cost money.', text: 'A designer or an agency for every offer and festival adds up fast.' },
+  { title: 'Customers wait while you work.', text: 'Messages come in when you are busy with the shop or the guests.' },
+];
+
+const TOOLS = [
+  { icon: PenLine, tint: '#FFE3D0', title: 'Captions', text: 'Written in English, Tamil, Hindi, Telugu and more. You choose the language.' },
+  { icon: ImageIcon, tint: '#DCEBFA', title: 'Images and posters', text: 'For offers, festivals and new products. Your name, colours and style on every one.' },
+  { icon: Clapperboard, tint: '#ECE6FB', title: 'Reels and videos', text: 'Short videos for Instagram and Facebook, made from a one-line idea.' },
+  { icon: CalendarDays, tint: '#DDF2E6', title: 'A plan for the whole month', text: 'Every post on a calendar, built around your festivals and offers.' },
+  { icon: MessageCircle, tint: '#DDF2E6', title: 'Replies to customers', text: 'Reply drafts for WhatsApp, email and SMS enquiries, ready in minutes.' },
+  { icon: Radar, tint: '#FFE3D0', title: 'What others are posting', text: 'See what businesses like yours post, and what works for them.' },
+];
+
+const STEPS = [
+  { title: 'Sign up', text: 'It takes one minute. No card needed.' },
+  { title: 'Answer a few simple questions', text: 'Add your website if you have one and Nebulaa fills in most of it. Pick your language.' },
+  { title: 'Approve your month', text: 'Check each post on your phone, change what you like, and post.' },
+];
 
 const PLANS = [
   {
     name: 'Starter',
     price: 999,
     note: 'For one person getting started',
-    features: [
-      '60 credits a month',
-      'A full month of posts, planned and posted',
-      'New customers found for you',
-      'WhatsApp, email and SMS enquiries answered',
-      '1 team member',
-    ],
+    features: ['60 credits a month', 'A full month of posts, planned and ready', 'Replies to customer enquiries', '1 team member'],
   },
   {
     name: 'Professional',
     price: 1999,
-    note: 'Most popular',
+    note: 'For more posts and more people',
     popular: true,
-    features: [
-      '200 credits a month',
-      'Everything in Starter',
-      'More customers found each month',
-      'Voice calls to your best leads',
-      'Up to 5 team members',
-    ],
+    features: ['200 credits a month', 'Everything in Starter', 'Voice calls to your best leads', 'Up to 5 team members'],
   },
 ];
 
-const THINGS = [
-  {
-    icon: CalendarCheck,
-    tint: '#FFE3D0',
-    title: 'Regular posts on your page',
-    text: 'Posts, photos and offers go out all month. You do not have to remember.',
-  },
-  {
-    icon: Users,
-    tint: '#DCEBFA',
-    title: 'New customers find you',
-    text: 'We find people nearby who may buy from you, and contact them for you.',
-  },
-  {
-    icon: MessageCircle,
-    tint: '#DDF2E6',
-    title: 'Quick replies to every message',
-    text: 'WhatsApp, email and SMS messages get a reply in minutes, at any hour.',
-  },
+const FAQS = [
+  { q: 'Do I need design or writing skills?', a: 'No. Nebulaa writes the captions and makes the images and videos. You only check them and press approve.' },
+  { q: 'Which languages does it write in?', a: 'English, Tamil, Hindi, Telugu, Kannada, Malayalam and more. You choose when you sign up and can change it any time.' },
+  { q: 'Do I need a website?', a: 'No. If you have one, add it and Nebulaa fills in most of your details. If you do not, answer a few simple questions.' },
+  { q: 'Where do my posts go?', a: 'You connect your Instagram, Facebook and other pages. A post goes out only after you approve it.' },
+  { q: 'What are credits?', a: 'Credits are what the app uses each time it makes something for you, like an image or a video. Running low? Add more any time from inside the app.' },
+  { q: 'What happens after the 7 days?', a: 'You pick a plan or stop. Nothing is charged automatically.' },
 ];
 
-const STEPS = [
-  { title: 'Sign up', text: 'Create your account and tell us about your business.' },
-  { title: 'We make a month of posts', text: 'Photos, posts and reels for your customers. You approve them on your phone.' },
-  { title: 'Customers message you', text: 'New enquiries reach you with a reply already sent.' },
-];
+const CtaButton: React.FC<{ onClick: () => void; children: React.ReactNode; className?: string }> = ({ onClick, children, className = '' }) => (
+  <button
+    onClick={onClick}
+    className={`group inline-flex items-center justify-center gap-2 rounded-full font-bold transition-transform hover:scale-[1.03] active:scale-[0.98] ${className}`}
+    style={{ background: GOLD, color: INK, boxShadow: '0 8px 22px rgba(245,166,35,0.38)' }}
+  >
+    {children}
+    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+  </button>
+);
 
 const LandingPage: React.FC = () => {
   const navigate = useNavigate();
   const [scrolled, setScrolled] = useState(false);
+  const [pastHero, setPastHero] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [showContact, setShowContact] = useState(false);
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 20);
+    const onScroll = () => {
+      setScrolled(window.scrollY > 20);
+      setPastHero(window.scrollY > 520);
+    };
     onScroll();
     window.addEventListener('scroll', onScroll);
     return () => window.removeEventListener('scroll', onScroll);
@@ -144,7 +163,16 @@ const LandingPage: React.FC = () => {
   const signIn = () => navigate('/login');
 
   return (
-    <div className="min-h-screen overflow-x-hidden antialiased" style={{ ...body, background: GROUND, color: INK }}>
+    <div className="min-h-screen overflow-x-hidden antialiased pb-20 md:pb-0" style={{ ...body, background: GROUND, color: INK }}>
+      <style>{`
+        @keyframes nb-float { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-8px) } }
+        .nb-float { animation: nb-float 5s ease-in-out infinite; }
+        @media (prefers-reduced-motion: reduce) { .nb-float { animation: none; } }
+        details > summary { list-style: none; }
+        details > summary::-webkit-details-marker { display: none; }
+        details[open] .nb-chev { transform: rotate(180deg); }
+      `}</style>
+
       {/* Navigation */}
       <nav
         className="fixed top-0 left-0 right-0 z-50 transition-all duration-300"
@@ -157,19 +185,17 @@ const LandingPage: React.FC = () => {
             </a>
 
             <div className="hidden md:flex items-center gap-9 text-[14.5px] font-medium" style={{ color: INK2 }}>
-              <a href="#what-you-get" className="hover:opacity-70">What you get</a>
+              <a href="#what-it-makes" className="hover:opacity-70">What it makes</a>
               <a href="#how-it-works" className="hover:opacity-70">How it works</a>
               <a href="#pricing" className="hover:opacity-70">Pricing</a>
             </div>
 
             <div className="hidden md:flex items-center gap-3">
-              <button onClick={signIn} className="px-4 py-2.5 text-[14px] font-semibold hover:opacity-70" style={{ color: INK }}>
-                Sign in
-              </button>
+              <button onClick={signIn} className="px-4 py-2.5 text-[14px] font-semibold hover:opacity-70">Sign in</button>
               <button
                 onClick={signUp}
                 className="px-5 py-2.5 text-[14px] font-bold rounded-full transition-transform hover:scale-[1.03]"
-                style={{ background: '#F5A623', color: INK, boxShadow: '0 6px 18px rgba(245,166,35,0.35)' }}
+                style={{ background: GOLD, color: INK, boxShadow: '0 6px 18px rgba(245,166,35,0.35)' }}
               >
                 Start free
               </button>
@@ -182,12 +208,12 @@ const LandingPage: React.FC = () => {
 
           {menuOpen && (
             <div className="md:hidden pb-5 flex flex-col gap-1 text-[16px] font-medium">
-              {[['What you get', '#what-you-get'], ['How it works', '#how-it-works'], ['Pricing', '#pricing']].map(([label, href]) => (
+              {[['What it makes', '#what-it-makes'], ['How it works', '#how-it-works'], ['Pricing', '#pricing']].map(([label, href]) => (
                 <a key={href} href={href} onClick={() => setMenuOpen(false)} className="py-2.5">{label}</a>
               ))}
               <div className="flex gap-3 pt-2">
                 <button onClick={signIn} className="flex-1 py-3 rounded-full border-[1.5px] font-semibold" style={{ borderColor: INK }}>Sign in</button>
-                <button onClick={signUp} className="flex-1 py-3 rounded-full font-bold" style={{ background: '#F5A623', color: INK }}>Start free</button>
+                <button onClick={signUp} className="flex-1 py-3 rounded-full font-bold" style={{ background: GOLD, color: INK }}>Start free</button>
               </div>
             </div>
           )}
@@ -195,7 +221,7 @@ const LandingPage: React.FC = () => {
       </nav>
 
       {/* Hero */}
-      <section className="relative isolate pt-[120px] pb-16 md:pt-[150px] md:pb-24 overflow-hidden">
+      <section className="relative isolate pt-[112px] pb-14 md:pt-[140px] md:pb-24 overflow-hidden">
         <div
           className="absolute inset-0 -z-10"
           style={{
@@ -203,61 +229,118 @@ const LandingPage: React.FC = () => {
               'radial-gradient(60% 80% at 92% 8%, rgba(255,203,46,0.55) 0%, rgba(255,203,46,0) 62%), radial-gradient(55% 70% at 100% 100%, rgba(238,99,48,0.26) 0%, rgba(238,99,48,0) 66%), linear-gradient(180deg, #FBF5EA 0%, #FFEBD6 100%)',
           }}
         />
-        <div className="max-w-6xl mx-auto px-5 md:px-6">
-          <div className="max-w-[760px]">
+        <div className="max-w-6xl mx-auto px-5 md:px-6 grid lg:grid-cols-[1.05fr_0.95fr] gap-12 items-center">
+          <div>
             <p style={{ color: CORAL_TEXT, letterSpacing: '0.16em' }} className="text-[12px] font-bold uppercase mb-5">
-              For hotels, shops, showrooms and small businesses
+              For shops, hotels, restaurants and small businesses
             </p>
-            <h1 style={display} className="text-[46px] sm:text-[66px] lg:text-[88px] mb-6">
-              We do your marketing.
+            <h1 style={display} className="text-[44px] sm:text-[62px] lg:text-[76px] mb-6">
+              Your month of posts
               <br />
-              <span style={script} className="text-[1.12em] leading-none">You get customers.</span>
+              <span style={script} className="text-[1.12em] leading-none">ready in minutes.</span>
             </h1>
-            <p className="text-[17px] sm:text-[20px] leading-[1.55] mb-8 max-w-[560px]" style={{ color: INK2 }}>
-              We post on your Instagram and Facebook, find new customers for you, and reply to every WhatsApp message within minutes.
+            <p className="text-[17px] sm:text-[19px] leading-[1.6] mb-8 max-w-[520px]" style={{ color: INK2 }}>
+              Tell Nebulaa about your business once. It writes the captions, makes the images and videos, and plans every post. You check them and post.
             </p>
-            <div className="flex flex-wrap items-center gap-3 mb-5">
-              <button
-                onClick={signUp}
-                className="group inline-flex items-center gap-2 px-8 py-4 rounded-full text-[15px] font-bold transition-transform hover:scale-[1.03]"
-                style={{ background: '#F5A623', color: INK, boxShadow: '0 6px 18px rgba(245,166,35,0.35)' }}
-              >
-                Start free for 7 days
-                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-              </button>
+            <div className="flex flex-wrap items-center gap-3 mb-4">
+              <CtaButton onClick={signUp} className="px-8 py-4 text-[15.5px]">Start free for 7 days</CtaButton>
               <a
-                href={waLink()}
-                className="inline-flex items-center gap-2 px-7 py-[15px] rounded-full text-[15px] font-bold text-white transition-transform hover:scale-[1.03]"
-                style={{ background: WA, boxShadow: '0 6px 18px rgba(31,168,85,0.32)' }}
+                href="#how-it-works"
+                className="inline-flex items-center px-7 py-[14px] rounded-full text-[15px] font-bold transition-transform hover:scale-[1.03]"
+                style={{ border: `1.5px solid ${INK}` }}
               >
-                WhatsApp us
+                See how it works
               </a>
             </div>
-            <p className="text-[13.5px]" style={{ color: MUTED }}>From ₹999 a month · No card to start · Set up in a day</p>
+            <p className="text-[13.5px] mb-6" style={{ color: MUTED }}>No card needed. Set up in 3 minutes.</p>
+            <p className="max-w-[460px] border-l-2 pl-3 text-[13.5px] leading-[1.5]" style={{ borderColor: 'rgba(238,99,48,0.5)', color: INK2 }}>
+              Built on real experience with 2,000+ MSMEs and startups.
+            </p>
+          </div>
+
+          {/* Posts made by the app */}
+          <div className="relative mx-auto w-full max-w-[470px] h-[300px] sm:h-[400px] lg:h-[470px]" aria-hidden="true">
+            {HERO_POSTS[1] && (
+              <img src={HERO_POSTS[1].src} alt="" className="absolute left-0 top-[8%] w-[48%] rounded-[18px] shadow-[0_18px_40px_rgba(20,32,58,0.22)] border-4 border-white -rotate-6" />
+            )}
+            {HERO_POSTS[2] && (
+              <img src={HERO_POSTS[2].src} alt="" className="absolute right-0 top-0 w-[46%] rounded-[18px] shadow-[0_18px_40px_rgba(20,32,58,0.22)] border-4 border-white rotate-6" />
+            )}
+            {HERO_POSTS[0] && (
+              <img src={HERO_POSTS[0].src} alt="Sample post made with Nebulaa" className="absolute left-1/2 -translate-x-1/2 bottom-0 w-[60%] rounded-[22px] shadow-[0_24px_54px_rgba(20,32,58,0.3)] border-[5px] border-white" />
+            )}
+            <span className="nb-float absolute left-[2%] bottom-[22%] inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-[12px] font-bold shadow-lg" style={{ color: INK }}>
+              <Check className="w-3.5 h-3.5" style={{ color: '#1FA855' }} strokeWidth={3} /> Caption written
+            </span>
+            <span className="nb-float absolute right-[0%] bottom-[34%] inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-[12px] font-bold shadow-lg" style={{ color: INK, animationDelay: '1.2s' }}>
+              <Check className="w-3.5 h-3.5" style={{ color: '#1FA855' }} strokeWidth={3} /> Image made
+            </span>
           </div>
         </div>
       </section>
 
-      {/* What you get */}
-      <section id="what-you-get" className="py-[72px] md:py-[96px]">
+      {/* Proof: posts made with the app */}
+      <section className="py-[64px] md:py-[88px]">
         <div className="max-w-6xl mx-auto px-5 md:px-6">
-          <div className="max-w-[720px] mb-11">
-            <Label>What you get</Label>
-            <h2 style={display} className="text-[34px] md:text-[52px]">
-              What we do <Swash>for you every month.</Swash>
+          <div className="max-w-[640px] mb-9">
+            <Label>Made with Nebulaa</Label>
+            <h2 style={display} className="text-[32px] md:text-[48px]">
+              Posts for <Swash>every kind of business.</Swash>
             </h2>
           </div>
-          <div className="grid md:grid-cols-3 gap-5">
-            {THINGS.map(({ icon: Icon, tint, title, text }) => (
-              <div key={title} className="rounded-[24px] p-7" style={{ background: SURFACE, border: `1px solid ${RULE}`, boxShadow: '0 14px 34px rgba(20,32,58,0.08)' }}>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-5">
+            {GRID_POSTS.map(s => (
+              <figure key={s.src} className="m-0">
+                <img src={s.src} alt={`A ${s.label.toLowerCase()} post made with Nebulaa`} loading="lazy" className="w-full aspect-square object-cover rounded-[18px]" style={{ border: `1px solid ${RULE}`, boxShadow: '0 12px 28px rgba(20,32,58,0.1)' }} />
+                <figcaption className="mt-2.5 text-[13px] font-semibold" style={{ color: INK2 }}>{s.label}</figcaption>
+              </figure>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* The problem */}
+      <section className="py-[64px] md:py-[88px]" style={{ background: SURFACE2 }}>
+        <div className="max-w-6xl mx-auto px-5 md:px-6">
+          <div className="max-w-[720px] mb-10">
+            <Label>Sound familiar?</Label>
+            <h2 style={display} className="text-[32px] md:text-[48px]">
+              Posting every day takes <Swash>more time than you have.</Swash>
+            </h2>
+          </div>
+          <div className="grid md:grid-cols-3 gap-5 mb-8">
+            {PAINS.map(p => (
+              <div key={p.title} className="rounded-[22px] p-6" style={{ background: SURFACE, border: `1px solid ${RULE}` }}>
+                <h3 className="text-[18px] font-bold leading-tight mb-2">{p.title}</h3>
+                <p className="text-[15px] leading-[1.6]" style={{ color: INK2 }}>{p.text}</p>
+              </div>
+            ))}
+          </div>
+          <p className="text-[18px] md:text-[20px] font-semibold max-w-[640px]">Nebulaa makes the first version of all of it. You check it and post.</p>
+        </div>
+      </section>
+
+      {/* What it makes */}
+      <section id="what-it-makes" className="py-[72px] md:py-[96px]">
+        <div className="max-w-6xl mx-auto px-5 md:px-6">
+          <div className="max-w-[720px] mb-11">
+            <Label>What it makes</Label>
+            <h2 style={display} className="text-[32px] md:text-[48px]">
+              Everything for your posts, <Swash>in one app.</Swash>
+            </h2>
+          </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {TOOLS.map(({ icon: Icon, tint, title, text }) => (
+              <div key={title} className="rounded-[24px] p-7" style={{ background: SURFACE, border: `1px solid ${RULE}`, boxShadow: '0 14px 34px rgba(20,32,58,0.07)' }}>
                 <span className="w-12 h-12 rounded-full flex items-center justify-center mb-5" style={{ background: tint }}>
                   <Icon className="w-5 h-5" style={{ color: INK }} />
                 </span>
-                <h3 className="text-[20px] font-bold leading-tight mb-2">{title}</h3>
+                <h3 className="text-[19px] font-bold leading-tight mb-2">{title}</h3>
                 <p className="text-[15px] leading-[1.6]" style={{ color: INK2 }}>{text}</p>
               </div>
             ))}
           </div>
+          <div className="mt-10"><CtaButton onClick={signUp} className="px-8 py-4 text-[15.5px]">Try it free for 7 days</CtaButton></div>
         </div>
       </section>
 
@@ -266,14 +349,14 @@ const LandingPage: React.FC = () => {
         <div className="max-w-6xl mx-auto px-5 md:px-6">
           <div className="max-w-[720px] mb-11">
             <Label>How it works</Label>
-            <h2 style={display} className="text-[34px] md:text-[52px]">
-              How it works <Swash>in three steps.</Swash>
+            <h2 style={display} className="text-[32px] md:text-[48px]">
+              Start in <Swash>three steps.</Swash>
             </h2>
           </div>
-          <div className="grid md:grid-cols-3 gap-6">
+          <div className="grid md:grid-cols-3 gap-8">
             {STEPS.map((s, i) => (
               <div key={s.title} className="flex gap-4">
-                <span className="flex-shrink-0 w-9 h-9 rounded-full text-[15px] font-extrabold flex items-center justify-center" style={{ background: INK, color: GROUND }}>
+                <span className="flex-shrink-0 w-10 h-10 rounded-full text-[16px] font-extrabold flex items-center justify-center" style={{ background: INK, color: GROUND }}>
                   {i + 1}
                 </span>
                 <div>
@@ -283,6 +366,7 @@ const LandingPage: React.FC = () => {
               </div>
             ))}
           </div>
+          <div className="mt-10"><CtaButton onClick={signUp} className="px-8 py-4 text-[15.5px]">Start free for 7 days</CtaButton></div>
         </div>
       </section>
 
@@ -291,12 +375,11 @@ const LandingPage: React.FC = () => {
         <div className="max-w-6xl mx-auto px-5 md:px-6">
           <div className="max-w-[720px] mb-11">
             <Label>Pricing</Label>
-            <h2 style={display} className="text-[34px] md:text-[52px] mb-5">
+            <h2 style={display} className="text-[32px] md:text-[48px] mb-5">
               Two plans. <Swash>Start from ₹999.</Swash>
             </h2>
             <p className="text-[16.5px] leading-[1.6]" style={{ color: INK2 }}>
-              Both plans do everything: posts, new customers and WhatsApp replies. The bigger plan just gives you more each month.
-              Running low on credits? Top up any time from inside the app.
+              Try any plan free for 7 days. No card needed. Both plans do the same things. The bigger plan gives you more each month.
             </p>
           </div>
           <div className="grid md:grid-cols-2 gap-6 max-w-[860px]">
@@ -304,11 +387,7 @@ const LandingPage: React.FC = () => {
               <div
                 key={plan.name}
                 className="rounded-[26px] p-8 flex flex-col"
-                style={{
-                  background: SURFACE,
-                  border: plan.popular ? `2px solid #F5A623` : `1px solid ${RULE}`,
-                  boxShadow: '0 14px 34px rgba(20,32,58,0.08)',
-                }}
+                style={{ background: SURFACE, border: plan.popular ? `2px solid ${GOLD}` : `1px solid ${RULE}`, boxShadow: '0 14px 34px rgba(20,32,58,0.08)' }}
               >
                 <p style={{ color: CORAL_TEXT, letterSpacing: '0.14em' }} className="text-[12px] font-bold uppercase mb-3">
                   {plan.name}{plan.popular ? ' · Most popular' : ''}
@@ -329,14 +408,34 @@ const LandingPage: React.FC = () => {
                 <button
                   onClick={signUp}
                   className="w-full py-3.5 rounded-full text-[15px] font-bold transition-transform hover:scale-[1.02]"
-                  style={plan.popular ? { background: '#F5A623', color: INK, boxShadow: '0 6px 18px rgba(245,166,35,0.35)' } : { border: `1.5px solid ${INK}`, color: INK }}
+                  style={plan.popular ? { background: GOLD, color: INK, boxShadow: '0 6px 18px rgba(245,166,35,0.35)' } : { border: `1.5px solid ${INK}`, color: INK }}
                 >
-                  Start with {plan.name}
+                  Start free with {plan.name}
                 </button>
               </div>
             ))}
           </div>
-          <p className="text-[13.5px] mt-6" style={{ color: MUTED }}>7-day free trial · No card to start</p>
+        </div>
+      </section>
+
+      {/* Questions */}
+      <section className="pb-[72px] md:pb-[96px]">
+        <div className="max-w-3xl mx-auto px-5 md:px-6">
+          <div className="mb-8">
+            <Label>Questions</Label>
+            <h2 style={display} className="text-[32px] md:text-[44px]">Common <Swash>questions.</Swash></h2>
+          </div>
+          <div className="divide-y" style={{ borderTop: `1px solid ${RULE}`, borderBottom: `1px solid ${RULE}`, borderColor: RULE }}>
+            {FAQS.map(f => (
+              <details key={f.q} className="group py-4">
+                <summary className="flex cursor-pointer items-center justify-between gap-4 text-[16.5px] font-bold">
+                  {f.q}
+                  <ChevronDown className="nb-chev w-5 h-5 flex-shrink-0 transition-transform" />
+                </summary>
+                <p className="mt-3 text-[15px] leading-[1.65] max-w-[620px]" style={{ color: INK2 }}>{f.a}</p>
+              </details>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -350,31 +449,19 @@ const LandingPage: React.FC = () => {
               'radial-gradient(60% 90% at 95% 0%, rgba(255,203,46,0.6) 0%, rgba(255,203,46,0) 62%), radial-gradient(60% 80% at 100% 100%, rgba(238,99,48,0.3) 0%, rgba(238,99,48,0) 66%), linear-gradient(160deg, #FFF3E0 0%, #FFE2C4 100%)',
           }}
         >
-          <h2 style={display} className="text-[38px] md:text-[64px] mb-5">
-            Try it free
+          <h2 style={display} className="text-[36px] md:text-[60px] mb-5 max-w-[760px]">
+            Your first month of posts is
             <br />
-            <span style={script} className="text-[1.15em] leading-none">for 7 days.</span>
+            <span style={script} className="text-[1.15em] leading-none">3 minutes away.</span>
           </h2>
           <p className="text-[17px] md:text-[18px] leading-[1.6] max-w-[500px] mb-8" style={{ color: INK2 }}>
-            Sign up, connect your page and see your first month of posts. No card needed.
+            Sign up, answer a few questions and see your posts. Free for 7 days. No card needed.
           </p>
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              onClick={signUp}
-              className="group inline-flex items-center gap-2 px-8 py-4 rounded-full text-[15px] font-bold transition-transform hover:scale-[1.03]"
-              style={{ background: '#F5A623', color: INK, boxShadow: '0 6px 18px rgba(245,166,35,0.35)' }}
-            >
-              Start free
-              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-            </button>
-            <a
-              href={waLink()}
-              className="inline-flex items-center gap-2 px-7 py-[15px] rounded-full text-[15px] font-bold text-white transition-transform hover:scale-[1.03]"
-              style={{ background: WA, boxShadow: '0 6px 18px rgba(31,168,85,0.32)' }}
-            >
-              WhatsApp us
-            </a>
-          </div>
+          <CtaButton onClick={signUp} className="px-9 py-4 text-[16px]">Start free for 7 days</CtaButton>
+          <p className="mt-5 text-[14px]" style={{ color: INK2 }}>
+            Already have an account?{' '}
+            <button onClick={signIn} className="font-bold underline underline-offset-2">Sign in</button>
+          </p>
         </div>
       </section>
 
@@ -391,6 +478,20 @@ const LandingPage: React.FC = () => {
         </div>
       </footer>
 
+      {/* Sign-up bar for phones */}
+      <div
+        className={`md:hidden fixed bottom-0 inset-x-0 z-40 px-4 pt-3 transition-transform duration-300 ${pastHero ? 'translate-y-0' : 'translate-y-full'}`}
+        style={{ background: 'linear-gradient(to top, #FBF5EA 60%, rgba(251,245,234,0))', paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}
+      >
+        <button
+          onClick={signUp}
+          className="w-full flex items-center justify-center gap-2 rounded-full py-3.5 text-[15.5px] font-bold"
+          style={{ background: GOLD, color: INK, boxShadow: '0 8px 22px rgba(245,166,35,0.45)' }}
+        >
+          Start free for 7 days <ArrowRight className="w-4 h-4" />
+        </button>
+      </div>
+
       {/* Contact */}
       {showContact && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center" style={{ background: 'rgba(20,32,58,0.5)', backdropFilter: 'blur(4px)' }} onClick={() => setShowContact(false)}>
@@ -399,12 +500,9 @@ const LandingPage: React.FC = () => {
               <Mail className="w-6 h-6" style={{ color: CORAL }} />
             </div>
             <h3 className="text-xl font-bold mb-2">Contact us</h3>
-            <p className="text-sm mb-4" style={{ color: MUTED }}>Write to us any time, or message us on WhatsApp.</p>
-            <a href="mailto:support@nebulaa.ai" className="font-bold text-lg hover:opacity-70 block mb-2" style={{ color: INK }}>
+            <p className="text-sm mb-4" style={{ color: MUTED }}>Write to us any time.</p>
+            <a href="mailto:support@nebulaa.ai" className="font-bold text-lg hover:opacity-70" style={{ color: INK }}>
               support@nebulaa.ai
-            </a>
-            <a href={waLink()} className="font-semibold text-[15px] hover:opacity-70" style={{ color: WA }}>
-              WhatsApp +91 93848 01049
             </a>
             <button onClick={() => setShowContact(false)} className="mt-6 block w-full py-2.5 rounded-full font-semibold" style={{ background: INK, color: GROUND }}>
               Close
