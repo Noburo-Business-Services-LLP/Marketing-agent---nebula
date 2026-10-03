@@ -20,20 +20,42 @@ function walk(dir, out) {
   }
 }
 
-/** Copy of the line with the contents of "..", '..' and `..` blanked (same length). */
+/**
+ * Copy of the line with the contents of same-line "..." and `...` strings blanked (same length).
+ * Single quotes are NOT treated as delimiters: apostrophes in JSX text and comments are ambiguous,
+ * and over-reporting is acceptable here while missing a violation is not.
+ */
 function blankStrings(line) {
-  let out = '';
-  let q = null;
-  for (let i = 0; i < line.length; i++) {
+  const chars = line.split('');
+  let i = 0;
+  while (i < line.length) {
     const c = line[i];
-    if (q) {
-      if (c === '\\') { out += '  '; i++; continue; }
-      if (c === q) { q = null; out += c; } else out += ' ';
-    } else if (c === '"' || c === '`' || (c === "'" && line.indexOf("'", i + 1) !== -1)) {
-      q = c; out += c;
-    } else out += c;
+    if (c === '"' || c === '`') {
+      let j = i + 1;
+      while (j < line.length && line[j] !== c) j += line[j] === '\\' ? 2 : 1;
+      if (j < line.length) {
+        for (let k = i + 1; k < j; k++) chars[k] = ' ';
+        i = j + 1;
+        continue;
+      }
+    }
+    i++;
   }
-  return out;
+  return chars.join('');
+}
+
+/** Index of the next real block-comment opener at or after `from`, or -1. */
+function findOpener(blank, from) {
+  let at = from;
+  for (;;) {
+    const idx = blank.indexOf('/*', at);
+    if (idx === -1) return -1;
+    const prev = idx === 0 ? ' ' : blank[idx - 1];
+    // After a JSX tag, a bare /* is text unless it is the {/* ... */} form.
+    const jsxText = prev !== '{' && /<[A-Za-z]/.test(blank.slice(0, idx));
+    if (/[\s{};,(]/.test(prev) && !jsxText) return idx;
+    at = idx + 1;
+  }
 }
 
 /** Remove comment text from one line; returns '' when the whole line is a comment. */
@@ -44,7 +66,7 @@ function stripComments(line, state) {
   let i = 0;
   while (i < blank.length) {
     if (state.inBlock) {
-      const end = blank.indexOf('*/', i);
+      const end = line.indexOf('*/', i);
       const stop = end === -1 ? blank.length : end + 2;
       for (let k = i; k < stop; k++) chars[k] = ' ';
       if (end === -1) return '';
@@ -52,9 +74,9 @@ function stripComments(line, state) {
       i = stop;
       continue;
     }
-    const open = blank.indexOf('/*', i);
+    const open = findOpener(blank, i);
     if (open === -1) break;
-    const end = blank.indexOf('*/', open + 2);
+    const end = line.indexOf('*/', open + 2);
     const stop = end === -1 ? blank.length : end + 2;
     for (let k = open; k < stop; k++) chars[k] = ' ';
     if (end === -1) { state.inBlock = true; break; }

@@ -51,6 +51,20 @@ test('comment markers inside strings or line comments do not hide later lines', 
   assert.deepEqual(v, ['a.tsx:2', 'b.tsx:2', 'c.tsx:1', 'e.tsx:1']);
 });
 
+test('apostrophes, regex literals and stray markers never blind the scanner', () => {
+  const dir = fixture({
+    'a.tsx': "{/* don't touch */} <p>it's Gravity</p>\n<b>Gravity</b>",
+    'b.tsx': "/* don't */ const a = 'x'; <b>Gravity</b>",
+    'c.tsx': "{/* what's */} <b>Gravity</b> <i>don't</i>",
+    'd.tsx': 'const r = /\\/*foo/;\n<b>Gravity</b>',
+    'e.tsx': "<p>Don't /* </p>\n<b>Gravity</b>",
+    'f.tsx': "/* don't Gravity */\nconst ok = 1;",
+    'g.tsx': 'const g = "src/**/*.ts";\n<b>Gravity</b>',
+  });
+  const v = findBrandViolations(dir).map((x) => `${x.file}:${x.line}`);
+  assert.deepEqual(v, ['a.tsx:1', 'a.tsx:2', 'b.tsx:1', 'c.tsx:1', 'd.tsx:2', 'e.tsx:2', 'g.tsx:2']);
+});
+
 test('scanner honours the allowlist', () => {
   const dir = fixture({
     'pages/B.tsx': '<p>Gravity internal</p>\n<p>Gravity shown</p>',
