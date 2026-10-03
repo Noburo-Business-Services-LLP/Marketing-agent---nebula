@@ -174,7 +174,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
     label: string;
     icon: React.ComponentType<{ className?: string }>;
     badge?: 'drafts';
-  }> = ({ path, label, icon: Icon, badge }) => {
+  }> = ({ path, label, icon: Icon }) => {
     const active = isActive(path);
     return (
       <Link
@@ -191,11 +191,8 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
         )}
         <Icon className={`w-[15px] h-[15px] ${active ? 'text-[var(--gv-accent)]' : 'text-[var(--gv-text-tertiary)] group-hover:text-[var(--gv-text-secondary)]'}`} />
         <span className="text-[13.5px] font-medium tracking-[-0.005em] flex-1">{label}</span>
-        {badge === 'drafts' && trialInfo && (
-          <span className="ml-auto min-w-[20px] h-[18px] px-1.5 rounded-full bg-[var(--gv-accent)] text-[#1A1208] text-[10px] font-bold flex items-center justify-center">
-            5
-          </span>
-        )}
+        {/* The drafts badge used to show a hard-coded "5" for everyone. No real
+            count is loaded here, so nothing is shown until one is. */}
       </Link>
     );
   };

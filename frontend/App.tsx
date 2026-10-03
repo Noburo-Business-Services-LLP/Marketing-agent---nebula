@@ -163,8 +163,8 @@ const App: React.FC = () => {
 
   if (loading) {
     return (
-        <div className="min-h-screen flex items-center justify-center bg-[#070A12]">
-            <Loader2 className="w-8 h-8 animate-spin text-[#ffcc29]" />
+        <div className="min-h-screen flex items-center justify-center bg-[var(--gv-bg)]">
+            <Loader2 className="w-8 h-8 animate-spin text-[var(--gv-accent)]" />
         </div>
     );
   }

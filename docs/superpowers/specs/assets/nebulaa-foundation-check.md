@@ -1,6 +1,6 @@
 # Nebulaa foundation: visual check (part 1, Task 5)
 
-Date: 2026-10-03. Branch `nebulaa-redesign`. Shell fixes from this check are in commit `5a54ad7` (`fix: Nebulaa shell polish from visual check`).
+Date: 2026-10-03. Branch `nebulaa-redesign`. Shell fixes from this check are in commits `5a54ad7` (`fix: Nebulaa shell polish from visual check`) and the round 2 commit (`fix: Nebulaa shell polish round 2 - dark modal labels, light loader, no fake Approve badge`).
 Screenshots are in `nebulaa-foundation-check/` next to this file (prefix numbers are used below). Screenshots 20-40 were taken after the logo fix and before the top-bar title fix.
 
 ## How it was checked
@@ -25,14 +25,15 @@ Screenshots are in `nebulaa-foundation-check/` next to this file (prefix numbers
 | 8 | Mobile drawer shows logo and switcher | PASS | PASS | 11, 12. |
 | 9 | No theme toggle anywhere | PASS | PASS | No toggle in the sidebar, drawer or top bar. |
 | 10 | Light with stored `nebulaa-theme='dark'` and with the system in dark | PASS | PASS | `html.dark` never present; the stored value is removed on load; `prefers-color-scheme: dark` was true and the app stayed light. |
-| 11 | No dark flash on load | **FAIL (not fixed, outside shell files)** | **FAIL** | While `/auth/me` is pending, `App.tsx` (l.164-169) renders a full-screen loader with `bg-[#070A12]` and a `#ffcc29` spinner, before `Layout` adds `gravity-shell` (00). With the mock it lasts a few hundred ms; on a real network it is longer. Fix for later: `bg-[var(--gv-bg)]` and `text-[var(--gv-accent)]` on that loader. Before the app boots, the plain `body` is `#ededed` (light grey, not dark, but not cream). |
+| 11 | No dark flash on load | PASS (after round 2 fix) | PASS | Was FAIL: while `/auth/me` is pending, `App.tsx` (l.164-169) rendered a full-screen loader on `bg-[#070A12]` with a `#ffcc29` spinner, before `Layout` adds `gravity-shell` (00). Now `bg-[var(--gv-bg)]` and `text-[var(--gv-accent)]`. Verified by holding `/auth/me` for 2.5s in the mock: the loader computed `rgb(251,245,234)` (cream), spinner `rgb(245,166,35)`, no `dark` class (50). Before the app boots, the plain `body` is `#ededed` (light grey, not dark, but not cream). |
 | 12 | Text on cream readable | PASS (after fix) in the shell | PASS | `.gravity-label` was `rgba(255,255,255,.45)`, so the sidebar "Setup" heading (and every `gravity-label` without its own colour across 15 files) was invisible on cream (01). Now `var(--gv-text-tertiary)`: 5.88:1 on panel. Other measured pairs: "Coming soon" pill (accent-text on accent-fill over panel) 5.03:1; disabled item text (muted) 3.66:1 on panel. |
 | 13 | Focus rings visible | PASS (after fix) | PASS | Trigger: 2px `--gv-accent-text` ring with a panel-coloured offset (5.38:1 against panel) (04); menu items: inset ring when focused by keyboard (05). Account chip and nav links show the browser default focus outline. |
+| 14 | Global `.gravity-label` colour does not break labels on remaining dark surfaces | PASS (after round 2 fix) | n/a | Found in review: changing `.gravity-label` to tertiary (`#6D6250`) left the labels inside `DraftPreviewModal` (a literal dark panel, gradient `#131316` to `#0b0b0e`, on Approve, Drafts and Campaigns) at 3.10:1 / 3.29:1. Those 7 labels (source type, Prompt, Title, Caption, Hashtags, Call to action, Posting to) now carry `text-[rgba(245,244,241,0.55)]`, the old dark-era look: 5.72:1 on `#131316`, 5.79:1 on `#0b0b0e` (computed; the old white 45% was 4.53:1). The two labels that already set gold are unchanged. The two `ContentCalendar` labels (Auto Generation, Limit) sit on `bg-white/[0.02]` over cream, not on a dark card, so tertiary is right there: 5.52:1 (measured live, 53). The modal is otherwise untouched (part 2) (52). |
 
 Other shell fixes in the same commit: the top bar said "Dashboard" on `/idea-inbox` and `/upload`; it now says "Idea Inbox" and "Upload & Schedule" (the existing nav labels). The trial dot uses `var(--gv-accent)` instead of the literal hex. The icon-only drawer open/close buttons got `aria-label`s. The focus `requestAnimationFrame` is cancelled on re-open and unmount.
 
 Shell observations not fixed (needs a decision, or out of scope):
-- The Approve nav badge always shows a hard-coded **5** (`Layout.tsx`, `badge === 'drafts'`), even with no drafts. Wiring the real count is a behaviour change; flag for part 2.
+- (Fixed in round 2) The Approve nav badge showed a hard-coded **5** for every user, a pre-existing fake count. No real drafts count is loaded in `Layout`, so the badge element is removed; the `badge` field stays on the nav data so a real count can be wired later (51).
 - At 800px tall the sidebar nav scrolls (AI Memory sits under the footer) with the scrollbar hidden, so it is easy to miss. The switcher adds 48px. Worth a look in part 2's nav review.
 - The mobile header logo is between the hamburger and the right group (`justify-between`), so it sits slightly left of centre (10).
 
@@ -43,7 +44,7 @@ Shell observations not fixed (needs a decision, or out of scope):
 | Home | `/dashboard` | New look, clean. | 02, 10 |
 | Create | `/campaigns` | New look, clean. | 20 |
 | Approve | `/drafts` | New look, clean (empty state). | 21 |
-| Calendar | `/content-calendar` | **Mixed**: the empty-state card is near black (the `index.html` override maps the legacy `bg-[#070A12]` to `#0A0A0A`), and the toggle pill top-left is near invisible (light on cream). `ContentCalendar.tsx` still has 15 `isDarkMode` uses. | 22 |
+| Calendar | `/content-calendar` | **Mixed (part 2 item)**: the "No plans found" empty-state card is near black (`bg-slate-900` mapped to `#0A0A0A` by the `index.html` override layer); the toggle pill top-left is near invisible (light on cream); a plan card has a black cover band and white month/theme/language text that is invisible on cream (only the Auto Generation/Limit labels and the switch read). `ContentCalendar.tsx` still has 15 `isDarkMode` uses. | 22, 53 |
 | AI Memory | `/ai-memory` | New look, clean. | 23 |
 | Hero Studio | `/reels/hero` | New look, clean (no-story state). | 24 |
 | Insights | `/analytics` | New look, clean. | 33 |
@@ -70,8 +71,8 @@ Not opened in this check (listed by `isDarkMode` count only): `Dashboard.tsx` (c
 ## Not verified
 
 - Old Firefox Space behaviour (only Chromium in the Browser pane); the fix removes the cause.
-- Real network timing of the dark loader (the mock answers instantly).
-- Pages past their first screen, modals, and states with real data (all lists were empty).
+- Real network timing of the loader (now light either way).
+- Pages past their first screen, most modals, and states with real data (lists were empty, except one fake draft and one fake plan in round 2).
 - Sign-in, onboarding and landing (part 3).
 - Safari / iOS rendering; only the Chromium-based pane with mobile emulation.
 
