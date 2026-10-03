@@ -19,6 +19,11 @@ interface QuotaInfo { used: number; limit: number; resetsOn: string }
 
 const MAX_REFS = 4;
 const POLL_MS = 5000;
+// Server fails any job older than 60 min; stop client polling a little after that.
+const MAX_POLL_MS = 65 * 60 * 1000;
+const SLOW_COPY = 'This is taking longer than usual. Check back in a few minutes; it will appear in your history.';
+const FAILED_COPY =
+  "We couldn't finish this video. Your Quarks have been returned and this one doesn't count toward your monthly limit. Please try again.";
 const ASPECTS: HeroAspectRatio[] = ['9:16', '16:9', '1:1'];
 const ASPECT_CSS: Record<HeroAspectRatio, string> = { '9:16': '9 / 16', '16:9': '16 / 9', '1:1': '1 / 1' };
 
@@ -57,16 +62,21 @@ const HeroVideo: React.FC = () => {
   const [jobStatus, setJobStatus] = useState<string>('');
   const [videoUrl, setVideoUrl] = useState('');
   const [jobError, setJobError] = useState('');
+  const [polling, setPolling] = useState(false);
   const [history, setHistory] = useState<HeroJobSummary[]>([]);
 
   const timerRef = useRef<number | null>(null);
   const mountedRef = useRef(true);
+  // Bumped on every start/stop so a request that settles after a stop never reschedules.
+  const pollGenRef = useRef(0);
 
   const stopPolling = useCallback(() => {
+    pollGenRef.current += 1;
     if (timerRef.current !== null) {
-      window.clearInterval(timerRef.current);
+      window.clearTimeout(timerRef.current);
       timerRef.current = null;
     }
+    if (mountedRef.current) setPolling(false);
   }, []);
 
   const refreshQuota = useCallback(async () => {
@@ -76,17 +86,82 @@ const HeroVideo: React.FC = () => {
     } catch { /* quota line simply stays hidden */ }
   }, []);
 
-  const refreshHistory = useCallback(async () => {
+  const refreshHistory = useCallback(async (): Promise<HeroJobSummary[]> => {
     try {
       const r = await heroVideoAPI.list();
-      if (mountedRef.current && r?.success) setHistory(Array.isArray(r.jobs) ? r.jobs : []);
+      if (mountedRef.current && r?.success) {
+        const jobs = Array.isArray(r.jobs) ? r.jobs : [];
+        setHistory(jobs);
+        return jobs;
+      }
     } catch { /* history is optional */ }
+    return [];
   }, []);
+
+  // Chained setTimeout: the next poll is scheduled only after the previous request settles,
+  // so a slow response (the server may be copying the clip) never overlaps another poll.
+  const startPolling = useCallback((id: string) => {
+    stopPolling();
+    const gen = pollGenRef.current;
+    const startedAt = Date.now();
+    const live = () => mountedRef.current && pollGenRef.current === gen;
+    setPolling(true);
+
+    const giveUp = (msg: string) => {
+      stopPolling();
+      setJobError(msg);
+      refreshQuota();
+      refreshHistory();
+    };
+
+    const tick = async () => {
+      timerRef.current = null;
+      if (!live()) return;
+      if (Date.now() - startedAt > MAX_POLL_MS) { giveUp(SLOW_COPY); return; }
+      try {
+        const j = await heroVideoAPI.job(id);
+        if (!live()) return;
+        if (j?.status) setJobStatus(j.status);
+        if (j?.status === 'completed') {
+          stopPolling();
+          if (j.videoUrl) setVideoUrl(j.videoUrl);
+          else setJobError(SLOW_COPY);
+          refreshQuota();
+          refreshHistory();
+          return;
+        }
+        if (j?.status === 'failed' || j?.status === 'cancelled') {
+          if (j.error) console.warn('[HeroVideo] job failed:', j.error);
+          giveUp(j.status === 'cancelled' ? 'This video was cancelled. Please try again.' : FAILED_COPY);
+          return;
+        }
+      } catch (e: any) {
+        if (!live()) return;
+        if (e?.status === 404) { giveUp(SLOW_COPY); return; }
+        /* transient network error: keep polling */
+      }
+      if (live()) timerRef.current = window.setTimeout(tick, POLL_MS);
+    };
+
+    timerRef.current = window.setTimeout(tick, POLL_MS);
+  }, [stopPolling, refreshQuota, refreshHistory]);
 
   useEffect(() => {
     mountedRef.current = true;
     refreshQuota();
-    refreshHistory();
+    // Resume an in-flight job (the user left and came back): the list call also nudges
+    // the server to reconcile it.
+    const genAtMount = pollGenRef.current;
+    refreshHistory().then((jobs) => {
+      const newest = jobs[0];
+      if (!mountedRef.current || !newest || (newest.status !== 'queued' && newest.status !== 'processing')) return;
+      if (pollGenRef.current !== genAtMount) return; // a generate already started (or stopped) polling
+      setJobId(newest.jobId);
+      setJobStatus(newest.status);
+      setVideoUrl('');
+      setJobError('');
+      startPolling(newest.jobId);
+    });
     (async () => {
       try {
         const resp: any = await videoGenerationAPI.listBrandAssetImages();
@@ -97,36 +172,7 @@ const HeroVideo: React.FC = () => {
       mountedRef.current = false;
       stopPolling();
     };
-  }, [refreshQuota, refreshHistory, stopPolling]);
-
-  const startPolling = useCallback((id: string) => {
-    stopPolling();
-    timerRef.current = window.setInterval(async () => {
-      try {
-        const j = await heroVideoAPI.job(id);
-        if (!mountedRef.current || !j) return;
-        setJobStatus(j.status);
-        if (j.status === 'completed') {
-          stopPolling();
-          setVideoUrl(j.videoUrl || '');
-          refreshQuota();
-          refreshHistory();
-        } else if (j.status === 'failed' || j.status === 'cancelled') {
-          stopPolling();
-          if (j.error) console.warn('[HeroVideo] job failed:', j.error);
-          setJobError(
-            j.status === 'cancelled'
-              ? 'This video was cancelled. Please try again.'
-              : "We couldn't finish this video. Your Quarks have been returned and this one doesn't count toward your monthly limit. Please try again."
-          );
-          refreshQuota();
-          refreshHistory();
-        }
-      } catch {
-        /* transient network error: keep polling */
-      }
-    }, POLL_MS);
-  }, [stopPolling, refreshQuota, refreshHistory]);
+  }, [refreshQuota, refreshHistory, stopPolling, startPolling]);
 
   const toggleRef = (url: string) =>
     setRefs((prev) => (prev.includes(url) ? prev.filter((u) => u !== url) : prev.length >= MAX_REFS ? prev : [...prev, url]));
@@ -148,7 +194,8 @@ const HeroVideo: React.FC = () => {
   };
 
   const quotaUsedUp = !!quota && quota.used >= quota.limit;
-  const inFlight = submitting || (!!jobId && !videoUrl && !jobError);
+  // Only an active submit or poll loop counts as in flight; every poll exit path clears it.
+  const inFlight = submitting || polling;
   const canGenerate = !!prompt.trim() && !quotaUsedUp && !inFlight;
 
   const generate = async () => {
@@ -184,6 +231,39 @@ const HeroVideo: React.FC = () => {
     }
   };
 
+  const jobPanel = jobId ? (
+    <GravityPanel contentClassName="space-y-3">
+      <GravityLabel>Your Hero video</GravityLabel>
+      {videoUrl ? (
+        <div className="space-y-3">
+          <video
+            src={videoUrl}
+            controls
+            playsInline
+            className="w-full max-h-[70vh] rounded-xl bg-black"
+            style={{ aspectRatio: ASPECT_CSS[aspectRatio] }}
+          />
+          <a
+            href={videoUrl}
+            download
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-2 text-[13px] font-semibold text-[var(--gv-accent-text)] hover:underline"
+          >
+            <Download className="w-4 h-4" />Download video
+          </a>
+        </div>
+      ) : jobError ? (
+        <p role="alert" className="text-[13px] text-[var(--gv-text-primary)]">{jobError}</p>
+      ) : (
+        <div className="flex items-center gap-3 text-[13px] text-[var(--gv-text-secondary)]">
+          <Loader2 className="w-4 h-4 animate-spin text-[var(--gv-accent)]" />
+          {STATUS_LABEL[jobStatus] || 'Working'}… this usually takes a few minutes. You can leave this page; it will keep going.
+        </div>
+      )}
+    </GravityPanel>
+  ) : null;
+
   const inputCls =
     'w-full rounded-lg border border-[var(--gv-border-default)] bg-[var(--gv-surface-1)] text-[var(--gv-text-primary)] text-[13.5px] leading-relaxed p-3 focus:outline-none focus:border-[var(--gv-accent)]';
 
@@ -203,6 +283,7 @@ const HeroVideo: React.FC = () => {
             Go to Reels
           </Link>
         </div>
+        {jobPanel && <div className="mt-8">{jobPanel}</div>}
       </div>
     );
   }
@@ -371,38 +452,7 @@ const HeroVideo: React.FC = () => {
         )}
         {genError && <p role="alert" className="text-[12.5px] text-[var(--gv-text-primary)]">{genError}</p>}
 
-        {jobId && (
-          <GravityPanel contentClassName="space-y-3">
-            <GravityLabel>Your Hero video</GravityLabel>
-            {videoUrl ? (
-              <div className="space-y-3">
-                <video
-                  src={videoUrl}
-                  controls
-                  playsInline
-                  className="w-full max-h-[70vh] rounded-xl bg-black"
-                  style={{ aspectRatio: ASPECT_CSS[aspectRatio] }}
-                />
-                <a
-                  href={videoUrl}
-                  download
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-2 text-[13px] font-semibold text-[var(--gv-accent-text)] hover:underline"
-                >
-                  <Download className="w-4 h-4" />Download video
-                </a>
-              </div>
-            ) : jobError ? (
-              <p role="alert" className="text-[13px] text-[var(--gv-text-primary)]">{jobError}</p>
-            ) : (
-              <div className="flex items-center gap-3 text-[13px] text-[var(--gv-text-secondary)]">
-                <Loader2 className="w-4 h-4 animate-spin text-[var(--gv-accent)]" />
-                {STATUS_LABEL[jobStatus] || 'Working'}… this usually takes a few minutes. You can leave this page open.
-              </div>
-            )}
-          </GravityPanel>
-        )}
+        {jobPanel}
 
         {history.length > 0 && (
           <div>
