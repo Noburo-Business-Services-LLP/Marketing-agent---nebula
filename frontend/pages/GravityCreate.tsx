@@ -979,10 +979,10 @@ const GravityCreate: React.FC = () => {
         }
         subcopy={
           mode === 'campaign'
-            ? 'Describe the campaign once. Gravity drafts the full run — across platforms, spaced out, in your voice.'
+            ? 'Describe the campaign once. Nebulaa drafts the full run — across platforms, spaced out, in your voice.'
             : mode === 'carousel'
-              ? 'One idea, told across slides. Gravity plans the arc, then renders every slide in the same look.'
-              : 'One sentence is enough. Gravity turns it into a scroll-stopping post.'
+              ? 'One idea, told across slides. Nebulaa plans the arc, then renders every slide in the same look.'
+              : 'One sentence is enough. Nebulaa turns it into a scroll-stopping post.'
         }
       />
 

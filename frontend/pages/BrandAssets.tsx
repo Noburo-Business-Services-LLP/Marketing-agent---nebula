@@ -526,7 +526,7 @@ const BrandAssets: React.FC = () => {
           <GravityHero
             align="left"
             eyebrow="Brand Assets"
-            headline={<>Teach Gravity your <GravityEmphasis>look</GravityEmphasis></>}
+            headline={<>Teach Nebulaa your <GravityEmphasis>look</GravityEmphasis></>}
             subcopy="Save your brand identity once and auto-apply it in every campaign."
             className="!mb-0"
           />
@@ -947,10 +947,10 @@ const BrandAssets: React.FC = () => {
             <div>
               <h2 className={"font-serif-display text-[20px] text-[#F5F4F1] flex items-center gap-2"}>
                 <Sparkles className="w-5 h-5 text-[#F5A623]" />
-                Teach Gravity your voice
+                Teach Nebulaa your voice
               </h2>
               <p className="text-[12.5px] text-white/45 mt-1 max-w-[560px]">
-                Paste captions from posts you have already published. Gravity reads them for your
+                Paste captions from posts you have already published. Nebulaa reads them for your
                 recurring hashtags, openers, CTA phrasing and rhythm, and writes in that voice.
               </p>
             </div>

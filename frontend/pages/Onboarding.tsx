@@ -591,10 +591,10 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                     />
                     <div className="relative">
                         <div className="flex items-center gap-3 mb-8">
-                            <img src="/assets/logo.png" alt="Nebulaa Gravity" className="w-10 h-10" />
+                            <img src="/assets/logo.png" alt="Nebulaa" className="w-10 h-10" />
                             <div className="text-left">
                                 <div className="font-serif-display text-[19px] leading-tight text-[#F5F4F1]">Nebulaa</div>
-                                <div className="font-serif-display text-[17px] leading-tight text-[#F5A623]">Gravity</div>
+                                <div className="font-serif-display text-[17px] leading-tight text-[#F5A623]">Nebulaa</div>
                             </div>
                         </div>
                         <h2 className="font-serif-display text-[26px] leading-tight mb-2 text-[#F5F4F1]">Let's build your agent.</h2>
@@ -644,7 +644,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                                 ? 'bg-[#070A12] border-[#F5A623]/30 text-[#ededed] placeholder-[#ededed]/40' 
                                                 : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
                                         }`}
-                                        placeholder="e.g. Gravity Corp"
+                                        placeholder="e.g. Nebulaa Corp"
                                         value={formData.name}
                                         onChange={e => handleChange('name', e.target.value)}
                                     />
@@ -1146,7 +1146,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                         Your Competitors <span className={`text-xs font-normal ${theme === 'dark' ? 'text-[#ededed]/50' : 'text-gray-400'}`}>(optional)</span>
                                     </label>
                                     <p className={`text-xs mb-3 ${theme === 'dark' ? 'text-[#ededed]/50' : 'text-gray-500'}`}>
-                                        Add specific competitors you'd like to track, or skip this — Gravity will automatically discover competitors based on your business and location.
+                                        Add specific competitors you'd like to track, or skip this — Nebulaa will automatically discover competitors based on your business and location.
                                     </p>
                                     <div className={`mb-3 p-3 rounded-lg flex items-start gap-2 ${theme === 'dark' ? 'bg-[#F5A623]/10 border border-slate-700/50' : 'bg-yellow-50 border border-yellow-200'}`}>
                                         <span className="text-[#F5A623] text-lg">✨</span>

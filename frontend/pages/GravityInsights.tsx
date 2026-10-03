@@ -166,7 +166,7 @@ const GravityInsights: React.FC = () => {
           </h1>
           <p className="text-[14px] text-[var(--gv-text-secondary)] max-w-[540px]">
             {hasAnyReach
-              ? `${stats.reachChangePct >= 0 ? 'Up' : 'Down'} ${Math.abs(stats.reachChangePct)}% week-over-week. Keep the cadence Gravity set for you.`
+              ? `${stats.reachChangePct >= 0 ? 'Up' : 'Down'} ${Math.abs(stats.reachChangePct)}% week-over-week. Keep the cadence Nebulaa set for you.`
               : `Once your posts go live, this is where you'll see how many people saw them — no dashboards to build, no spreadsheets to open.`}
           </p>
         </div>

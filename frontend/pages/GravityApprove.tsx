@@ -378,7 +378,7 @@ const GravityApprove: React.FC = () => {
       align="left"
       eyebrow="Approve"
       headline={<>Give everything the <GravityEmphasis>once-over</GravityEmphasis></>}
-      subcopy="Review what Gravity drafted, approve what's ready, and send back what needs work."
+      subcopy="Review what Nebulaa drafted, approve what's ready, and send back what needs work."
     />
   );
 
@@ -532,7 +532,7 @@ const GravityApprove: React.FC = () => {
           You're all <span className="italic text-[var(--gv-accent-display)]">caught up</span>.
         </h1>
         <p className="text-[14px] text-[var(--gv-text-tertiary)] max-w-[520px] mx-auto mb-6">
-          When Gravity drafts new posts, they'll wait here for your approval.
+          When Nebulaa drafts new posts, they'll wait here for your approval.
         </p>
         <button
           onClick={() => navigate('/campaigns')}
@@ -745,7 +745,7 @@ const GravityApprove: React.FC = () => {
 
             <dt className="gravity-label pt-1">Source</dt>
             <dd className="text-[13px] text-[var(--gv-text-secondary)]">
-              {current?.sourceType || 'Gravity AI'}{current?.aiGenerated !== false ? ' · Draft' : ''}
+              {current?.sourceType || 'Nebulaa AI'}{current?.aiGenerated !== false ? ' · Draft' : ''}
             </dd>
           </dl>
 

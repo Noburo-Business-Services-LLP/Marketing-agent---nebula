@@ -2356,7 +2356,7 @@ const Dashboard: React.FC = () => {
                   </div>
                   <p className={`text-lg font-semibold ${theme.text} mb-2`}>Crafting Your Viral Post</p>
                   <p className={`text-sm ${theme.textMuted} text-center max-w-sm`}>
-                    Gravity is analyzing the competitor's content and creating a unique, engaging post that will help you stand out...
+                    Nebulaa is analyzing the competitor's content and creating a unique, engaging post that will help you stand out...
                   </p>
                   <div className="flex items-center gap-2 mt-4">
                     <div className="w-2 h-2 rounded-full bg-[#ffcc29] animate-bounce" style={{ animationDelay: '0ms' }} />
@@ -4341,7 +4341,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                 <div className="flex gap-1 mt-1.5 mb-3">
                                   {([
                                     { key: 'upload' as const, label: 'Upload', icon: <Upload className="w-3.5 h-3.5" /> },
-                                    { key: 'ai' as const, label: 'Gravity Generate', icon: <Sparkles className="w-3.5 h-3.5" /> },
+                                    { key: 'ai' as const, label: 'Nebulaa Generate', icon: <Sparkles className="w-3.5 h-3.5" /> },
                                     { key: 'reference' as const, label: 'From Reference', icon: <ImageIcon className="w-3.5 h-3.5" /> },
                                   ]).map(tab => (
                                     <button
@@ -4434,7 +4434,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                           alt="Generated poster"
                                           className={`w-full max-h-80 object-contain rounded-xl border ${isDarkMode ? 'border-slate-700/50 bg-[#161b22]' : 'border-slate-200 bg-slate-50'}`}
                                         />
-                                        <span className="absolute top-2 left-2 bg-purple-500/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-md">Gravity Generated</span>
+                                        <span className="absolute top-2 left-2 bg-purple-500/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-md">Nebulaa Generated</span>
                                         <div className="absolute inset-0 bg-black/40 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
                                           <button
                                             onClick={async () => {
@@ -4480,7 +4480,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                           value={generatedPoster ? posterEditInstructions : posterContent}
                                           onChange={(e) => generatedPoster ? setPosterEditInstructions(e.target.value) : setPosterContent(e.target.value)}
                                           placeholder={generatedPoster
-                                            ? 'Tell Gravity what to change... e.g., Make the title bigger, use blue theme'
+                                            ? 'Tell Nebulaa what to change... e.g., Make the title bigger, use blue theme'
                                             : 'Describe what poster to create... e.g., Dark-themed marketing poster for a ChatGPT workshop'
                                           }
                                           rows={2}
@@ -4513,7 +4513,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
 
                                     {!generatedPoster && (
                                       <p className={`text-[10px] ${theme.textMuted}`}>
-                                        Gravity generates a poster from your description · Press Enter to send
+                                        Nebulaa generates a poster from your description · Press Enter to send
                                         {calendarSelectedLogo && <span className="ml-1">· Logo: selected</span>}
                                         {calendarAspectRatio !== '1:1' && <span className="ml-1">· {calendarAspectRatio}</span>}
                                       </p>
@@ -4533,7 +4533,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                           className={`w-full max-h-80 object-contain rounded-xl border ${isDarkMode ? 'border-slate-700/50 bg-[#161b22]' : 'border-slate-200 bg-slate-50'}`}
                                         />
                                         {generatedPoster && (
-                                          <span className="absolute top-2 left-2 bg-purple-500/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-md">Gravity Generated</span>
+                                          <span className="absolute top-2 left-2 bg-purple-500/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-md">Nebulaa Generated</span>
                                         )}
                                         {!generatedPoster && (
                                           <span className={`absolute top-2 left-2 ${isDarkMode ? 'bg-slate-800/90 text-slate-300' : 'bg-white/90 text-slate-600'} text-[10px] font-bold px-2 py-0.5 rounded-md`}>Reference</span>
@@ -4587,7 +4587,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                       >
                                         <ImageIcon className={`w-8 h-8 mx-auto mb-2 ${theme.textMuted}`} />
                                         <p className={`text-sm font-medium ${theme.text}`}>Upload a reference image</p>
-                                        <p className={`text-xs ${theme.textMuted} mt-1`}>Gravity will create a new poster inspired by this · Max 10MB</p>
+                                        <p className={`text-xs ${theme.textMuted} mt-1`}>Nebulaa will create a new poster inspired by this · Max 10MB</p>
                                       </div>
                                     )}
 
@@ -4604,8 +4604,8 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                           value={generatedPoster ? posterEditInstructions : posterContent}
                                           onChange={(e) => generatedPoster ? setPosterEditInstructions(e.target.value) : setPosterContent(e.target.value)}
                                           placeholder={generatedPoster
-                                            ? 'Tell Gravity what to change... e.g., Make the title bigger, use blue theme, add my phone number'
-                                            : 'Tell Gravity what poster to create from this reference... e.g., Dark-themed marketing poster for a ChatGPT workshop'
+                                            ? 'Tell Nebulaa what to change... e.g., Make the title bigger, use blue theme, add my phone number'
+                                            : 'Tell Nebulaa what poster to create from this reference... e.g., Dark-themed marketing poster for a ChatGPT workshop'
                                           }
                                           rows={2}
                                           className={`flex-1 px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:border-purple-400 resize-none ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
@@ -4637,7 +4637,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
 
                                     {!generatedPoster && (
                                       <p className={`text-[10px] ${theme.textMuted}`}>
-                                        Gravity creates a new poster inspired by your reference image · Press Enter to send
+                                        Nebulaa creates a new poster inspired by your reference image · Press Enter to send
                                         {calendarSelectedLogo && <span className="ml-1">· Logo: selected</span>}
                                         {calendarAspectRatio !== '1:1' && <span className="ml-1">· {calendarAspectRatio}</span>}
                                       </p>
@@ -4698,7 +4698,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                     title={(!scheduleImage && !generatedPoster) ? 'Upload an image first to generate caption' : 'Generate caption & hashtags from image'}
                                   >
                                     {aiGenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wand2 className="w-3.5 h-3.5" />}
-                                    {aiGenerating ? 'Generating...' : 'Gravity Generate'}
+                                    {aiGenerating ? 'Generating...' : 'Nebulaa Generate'}
                                   </button>
                                 </div>
                                 <textarea

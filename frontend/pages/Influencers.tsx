@@ -500,7 +500,7 @@ const Influencers: React.FC = () => {
                   <div className="flex justify-between items-center mb-1.5">
                     <span className={`text-xs font-bold flex items-center gap-1 ${theme.text}`}>
                       <Sparkles className="w-3 h-3 text-[#ffcc29]" />
-                      Gravity AI Score
+                      Nebulaa AI Score
                     </span>
                     <span className={`text-sm font-bold ${getScoreColor(inf.aiMatchScore?.score || 0)}`}>
                       {inf.aiMatchScore?.score || 0}/100

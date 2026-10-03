@@ -235,7 +235,7 @@ const IdeaInbox: React.FC = () => {
     <div className="max-w-[1100px] mx-auto pb-16">
       <GravityHero
         eyebrow="Idea Inbox"
-        headline={<>Ideas that didn't come from <GravityEmphasis>Gravity</GravityEmphasis></>}
+        headline={<>Ideas that didn't come from <GravityEmphasis>Nebulaa</GravityEmphasis></>}
         subcopy="Drop a thought, a link, an ad you liked — or paste a whole list. Turn any of them into a real post whenever you're ready."
         align="left"
       />
