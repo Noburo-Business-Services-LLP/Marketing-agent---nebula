@@ -4,6 +4,9 @@ const rateLimit = require('express-rate-limit');
 const { ipKeyGenerator } = rateLimit;
 const { protect } = require('../middleware/auth');
 const { checkTrial } = require('../middleware/trialGuard');
+const { normalizeHeroBrief, selectReferences } = require('../services/heroVideoBrief');
+const { DEFAULT_STYLE, isHeroStyle } = require('../services/heroVideoStyles');
+const { HERO_CLIP_SECONDS } = require('../config/apiCosts');
 // Same semantics as videoDraftStore.toUserId; kept local because that module drags in timers.
 const toUserId = (user) => (!user ? null : user._id ? String(user._id) : user.id ? String(user.id) : null);
 
@@ -29,42 +32,189 @@ const heroReadLimiter = rateLimit({
 
 const str = (v) => (typeof v === 'string' ? v.trim() : '');
 const strList = (v) => (Array.isArray(v) ? v.map((x) => str(x)).filter(Boolean) : []);
+const isObj = (v) => v && typeof v === 'object' && !Array.isArray(v);
+// Planner inputs are clipped so the rendered prompt stays under 14,000 characters at the brief's caps.
+const cut = (s, n) => (s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s);
+const clip = (v, n) => cut(str(v).replace(/\s+/g, ' '), n); // one line
+const clipBlock = (v, n) => cut(str(v).replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n'), n); // keeps line breaks
+const sentence = (s) => (s && !/[.!?…]$/.test(s) ? `${s}.` : s);
 
-function normalizePlan(parsed) {
+const MAX_SHOTS = 7;
+const MAX_HERO_CUT = 12;
+const MAX_CTA = 60;
+const STYLE_BLOCK_MAX = 1300; // an edited style prompt longer than this is clipped, keeping the planner under 14,000 characters
+const AUDIO_MODES = ['native', 'sfx_only'];
+const AUDIO_DIRECTIONS = {
+  native: 'Music and effects both come from the video model. In 10 SFX write an actual music line: genre, two or three instruments, tempo, starting quiet under the setup, lifting at the discovery and resolving on the final held frame, always under the dialogue. Add a specific diegetic sound for every meaningful action.',
+  sfx_only: 'Effects only: no music and no score (music is added later). Room tone plus a specific diegetic sound for every meaningful action.'
+};
+
+function normalizePlan(parsed, opts = {}) {
   if (!parsed || typeof parsed !== 'object') return null;
   const prompt = str(parsed.prompt);
   if (!prompt) return null;
-  const beatSheet = Array.isArray(parsed.beatSheet)
-    ? parsed.beatSheet
-        .filter((b) => b && typeof b === 'object')
-        .map((b) => ({ time: str(b.time), beat: str(b.beat) }))
-    : [];
+  const objs = (v) => (Array.isArray(v) ? v.filter(isObj) : []);
+  const s = isObj(parsed.story) ? parsed.story : {};
+  const known = Array.isArray(opts.sceneIds) ? new Set(opts.sceneIds) : null;
   return {
+    story: { hook: str(s.hook), tension: str(s.tension), turn: str(s.turn), payoff: str(s.payoff), cta: str(s.cta) },
+    heroCut: objs(parsed.heroCut)
+      .map((h) => ({ sceneId: str(h.sceneId), keep: h.keep === true || h.keep === 'true', reason: str(h.reason), time: str(h.time) }))
+      .filter((h) => h.sceneId && (!known || known.has(h.sceneId)))
+      .slice(0, MAX_HERO_CUT),
+    shotList: objs(parsed.shotList).slice(0, MAX_SHOTS)
+      .map((x) => ({ time: str(x.time), shot: str(x.shot), lens: str(x.lens), purpose: str(x.purpose) })),
     prompt,
-    beatSheet,
+    beatSheet: objs(parsed.beatSheet).map((b) => ({ time: str(b.time), beat: str(b.beat), emotion: str(b.emotion) })),
     dialogue: str(parsed.dialogue),
+    voice: str(parsed.voice),
     qaChecklist: strList(parsed.qaChecklist),
     assumptions: strList(parsed.assumptions)
   };
 }
 
-function describeReferences(urls) {
-  if (!urls.length) return 'No reference images';
-  const tags = urls.map((_, i) => `@image${i + 1}`).join(', ');
-  return `Yes - ${urls.length} reference image${urls.length === 1 ? '' : 's'}, tagged ${tags}`;
+// ---- planner blocks (pure; exported for tests) ----
+const REF_ROLES = {
+  'cast-portrait': (l) => `CAST ${l}: appearance only (face, hair, build, wardrobe); ignore background.`,
+  'cast-sheet': () => 'CAST SHEET: appearance only for every cast member; ignore its layout.',
+  environment: (l) => `LOCATION ${l}: the place only (layout, surfaces, light); no people or text.`,
+  'brand-product': (l) => `PRODUCT ${l}: appearance only; exact shape, colour and packaging; never re-lettered.`,
+  'brand-logo': () => 'LOGO: appearance only; at most on a physical object in the scene; never an overlay.',
+  'scene-keyframe': (l) => `FRAME ${l}: composition and light only; identity from the cast refs.`
+};
+
+function referencesBlockFrom(refs) {
+  if (!refs.length) return 'No reference images: write no image tags; describe people, place and product physically.';
+  return refs.map((r) => {
+    const role = REF_ROLES[r.source] || (() => `${String(r.kind || 'reference').toUpperCase()}: appearance only.`);
+    return `${r.tag} - ${role(clip(r.label, 18) || r.kind)}`;
+  }).join('\n');
 }
 
-function brandContextFrom(bp = {}) {
-  const pick = (...vals) => vals.map(str).find(Boolean) || '';
-  const tone = Array.isArray(bp.brandVoice) ? bp.brandVoice.map(str).filter(Boolean).join(', ') : pick(bp.brandVoice, bp.tone);
+function castBlockFrom(cast, refs) {
+  const tagOf = (url) => (url && (refs.find((r) => r.url === url && r.kind === 'cast') || {}).tag) || '';
+  const k = cast.length > 2 ? 2 / cast.length : 1; // 4 people get half the detail each
+  const cap = (n) => Math.round(n * k);
+  const lines = cast.map((c) => {
+    const tag = tagOf(c.portraitUrl);
+    const who = [clip(c.age, 12), clip(c.gender, 20)].filter(Boolean).join(', ');
+    const parts = [
+      `- ${clip(c.name, 30) || 'Unnamed'}${tag ? ` ${tag}` : ''}${who ? `: ${who}` : ''}${c.role ? `; ${clip(c.role, cap(50))}` : ''}.`,
+      c.appearance && `Looks: ${clip(c.appearance, cap(120))}.`,
+      (c.hairStyle || c.hairColor) && `Hair: ${clip(`${c.hairColor} ${c.hairStyle}`, cap(40))}.`,
+      c.clothing && `Wears: ${clip(c.clothing, cap(80))}.`,
+      c.personality && `Manner: ${clip(c.personality, cap(60))}.`
+    ];
+    return parts.filter(Boolean).join(' ');
+  });
+  const sheet = refs.find((r) => r.source === 'cast-sheet');
+  if (sheet) lines.push(`Cast sheet: ${sheet.tag} shows the cast together.`);
+  return lines.join('\n');
+}
+
+function environmentBlockFrom(env, refs) {
+  const tags = refs.filter((r) => r.kind === 'environment').map((r) => r.tag);
+  if (!env || !env.enabled) return 'No location chosen: pick one believable real place that fits the story and the audience, described with concrete objects.';
+  const lines = [];
+  if (env.notes) lines.push(`Notes: ${clip(env.notes, 180)}`);
+  lines.push(tags.length
+    ? `Location photos ${tags.join(', ')}: stage every beat in this place; keep its layout, surfaces and light.`
+    : 'No location photo: build the place concretely from the notes.');
+  return lines.join('\n');
+}
+
+function brandBlockFrom(brand, refs) {
+  const products = refs.filter((r) => r.source === 'brand-product').map((r) => r.tag);
+  const logo = refs.find((r) => r.source === 'brand-logo');
+  const lines = [];
+  if (brand.heroProduct || products.length) {
+    const name = brand.heroProduct ? 'Hero product (see BRAND CONTEXT)' : 'Product';
+    lines.push(`${name}${products.length ? ` ${products.join(', ')}` : ''}: show it in real use inside the story, not posed.`);
+  } else {
+    lines.push('No hero product on file: show the brand through what it does in the story; never invent packaging.');
+  }
+  if (logo) lines.push(`Logo ${logo.tag}: only on a physical item that belongs in the scene, if at all.`);
+  if (brand.colors && brand.colors.length) lines.push(`Brand colours ${brand.colors.slice(0, 6).map((c) => clip(c, 20)).join(', ')}: as wardrobe or prop accents, never as graphics.`);
+  if (brand.website) lines.push('The website, logo and CTA go on the end card added after generation; never render them as text in the clip.');
+  return lines.join('\n');
+}
+
+function scenesBlockFrom(scenes, cast, kept) {
+  const nameOf = new Map(cast.map((c) => [c.id, c.name || c.id]));
+  const per = Math.floor(1050 / Math.max(1, scenes.length));
+  return scenes.map((s) => {
+    const mark = kept ? (kept.includes(s.sceneId) ? ' KEEP' : ' (dropped)') : '';
+    const who = (s.charactersRequired || []).slice(0, 4).map((id) => clip(nameOf.get(id) || id, 16)).join(', ');
+    const head = `- [${clip(s.sceneId, 24)}]${mark} ${clip(s.title, 24) || 'Untitled'}, ${s.durationSeconds || '?'}s${who ? `, cast: ${who}` : ''}.`;
+    const room = per - head.length;
+    // Long breakdowns keep only a short script line per scene; short ones get script and visual.
+    if (room < 70) return [head, s.script && `Script: ${sentence(clip(s.script, Math.max(30, room)))}`].filter(Boolean).join(' ');
+    const scriptLen = Math.round((room - 18) * 0.6);
+    const visualLen = room - 18 - scriptLen;
+    return [head, s.script && `Script: ${sentence(clip(s.script, scriptLen))}`, s.visual && `Visual: ${sentence(clip(s.visual, visualLen))}`].filter(Boolean).join(' ');
+  }).join('\n');
+}
+
+function brandContextFrom(brand) {
+  const tone = Array.isArray(brand.tone) ? brand.tone.map((t) => clip(t, 30)).filter(Boolean).join(', ') : '';
   const lines = [
-    ['Brand', pick(bp.name, bp.companyName)],
-    ['Industry', pick(bp.industry)],
-    ['About', pick(bp.description, bp.bio, bp.about)],
-    ['Target audience', pick(bp.targetAudience)],
-    ['Brand tone', tone]
+    ['Brand', clip(brand.name, 60)],
+    ['Industry', clip(brand.industry, 60)],
+    ['Hero product', clip(brand.heroProduct, 80)],
+    ['Audience', clip(brand.audience, 100)],
+    ['Ideal customer', clip(brand.icp, 140)],
+    ['Tone', tone]
   ].filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`);
   return lines.length ? lines.join('\n') : 'No brand profile on file.';
+}
+
+function buildPlanVars({ brief, brand, refs, styleBlock, audioMode, ctaText, keptSceneIds }) {
+  const b = isObj(brand) ? brand : {};
+  const r = Array.isArray(refs) ? refs : [];
+  const c = brief.concept || {};
+  const cast = brief.cast || [];
+  const kept = Array.isArray(keptSceneIds) && keptSceneIds.length ? keptSceneIds : null;
+  const cta = clip(ctaText, MAX_CTA);
+  return {
+    brandContextBlock: brandContextFrom(b),
+    conceptTitle: clip(c.title, 100),
+    conceptStory: clip(c.storySummary, 360),
+    conceptEmotion: clip(c.coreEmotion, 80),
+    conceptVisualStyle: clip(c.visualStyle, 150),
+    castBlock: castBlockFrom(cast, r),
+    environmentBlock: environmentBlockFrom(brief.environment, r),
+    brandBlock: brandBlockFrom(b, r),
+    scenesBlock: scenesBlockFrom(brief.scenes || [], cast, kept),
+    referencesBlock: referencesBlockFrom(r),
+    styleBlock: clipBlock(styleBlock, STYLE_BLOCK_MAX),
+    duration: String(HERO_CLIP_SECONDS),
+    aspectRatio: brief.aspectRatio || '9:16',
+    language: clip(brief.language, 40) || 'English',
+    audioMode: AUDIO_DIRECTIONS[audioMode] || AUDIO_DIRECTIONS.native,
+    ctaText: cta ? `"${cta}" (the last beat leads into it; the end card shows it)` : 'None given: propose one short, honest CTA in story.cta.',
+    brandName: clip(b.name, 80) || 'the brand'
+  };
+}
+
+const publicRef = (r) => ({ tag: r.tag, kind: r.kind, label: r.label, url: r.url, source: r.source });
+const brandSummary = (b) => ({ name: b.name || '', website: b.website || '', logoUrl: b.logoUrl || '', colors: Array.isArray(b.colors) ? b.colors : [], heroProduct: b.heroProduct || '' });
+
+// Validates the /plan options; returns { error } or the cleaned options.
+function readPlanOptions(body) {
+  const style = body.style == null || body.style === '' ? DEFAULT_STYLE : body.style;
+  if (!isHeroStyle(style)) return { error: 'Choose one of the listed video styles.' };
+  const audioMode = body.audioMode == null || body.audioMode === '' ? 'native' : body.audioMode;
+  if (!AUDIO_MODES.includes(audioMode)) return { error: 'Sound must be "native" or "sfx_only".' };
+  if (body.ctaText != null && typeof body.ctaText !== 'string') return { error: 'The call to action must be text.' };
+  const ctaText = str(body.ctaText);
+  if (ctaText.length > MAX_CTA) return { error: `Keep the call to action to ${MAX_CTA} characters or fewer.` };
+  if (body.references != null && !Array.isArray(body.references)) return { error: 'references must be a list of image links.' };
+  if (body.keptSceneIds != null && !Array.isArray(body.keptSceneIds)) return { error: 'keptSceneIds must be a list of scene ids.' };
+  const references = body.references == null ? null : [...new Set(strList(body.references))].slice(0, 50);
+  const keptSceneIds = body.keptSceneIds == null ? null : [...new Set(strList(body.keptSceneIds))].slice(0, 12);
+  const rawAspect = isObj(body.brief) ? body.brief.aspectRatio : undefined;
+  if (rawAspect != null && rawAspect !== '' && !ASPECTS.includes(rawAspect)) return { error: `aspectRatio must be one of ${ASPECTS.join(', ')}` };
+  return { style, audioMode, ctaText, references, keptSceneIds: keptSceneIds && keptSceneIds.length ? keptSceneIds : null };
 }
 
 const isCastError = (e) => e && (e.name === 'CastError' || e.name === 'BSONError' || e.name === 'BSONTypeError');
@@ -85,11 +235,14 @@ function lazyPlanDeps() {
     buildPrompt: (...a) => require('../services/promptRegistry').buildPrompt(...a),
     callTextLLM: (...a) => require('../services/openAI').callTextLLM(...a),
     parseGeminiJSON: (...a) => require('../services/geminiAI').parseGeminiJSON(...a),
-    findUser: (id) => require('../models/User').findById(id).lean()
+    loadBrand: (...a) => require('../services/heroVideoBrief').loadBrand(...a),
+    stageReferences: (...a) => require('../services/heroVideoBrief').stageReferences(...a),
+    getStyleBlock: (...a) => require('../services/heroVideoStyles').getStyleBlock(...a)
   };
 }
 
-function createHeroVideoRouter(planDeps = lazyPlanDeps(), impl = {}) {
+function createHeroVideoRouter(planDepsIn, impl = {}) {
+  const planDeps = { ...lazyPlanDeps(), ...(planDepsIn || {}) };
   const router = express.Router();
   const flow = () => ({
     startHeroGeneration: impl.startHeroGeneration || require('../services/heroVideoFlow').startHeroGeneration,
@@ -109,38 +262,63 @@ function createHeroVideoRouter(planDeps = lazyPlanDeps(), impl = {}) {
     }
   });
 
+  // Validates the wizard's hero brief, loads the client's brand server-side and stages the references.
+  // No LLM call and no charge. Environment data URLs come back replaced by their staged https URL,
+  // so the client sends a brief to /plan whose references can be matched against the staged set.
+  router.post('/brief', protect, checkTrial, heroReadLimiter, async (req, res) => {
+    try {
+      const body = req.body || {};
+      const n = normalizeHeroBrief(body.brief);
+      if (!n.ok) return res.status(400).json({ success: false, message: n.message });
+      const brief = n.brief;
+      const brand = await planDeps.loadBrand(toUserId(req.user));
+      const candidates = selectReferences(brief, brand).map((r) => (r.dataUrl && !r.url ? { ...r, _src: r.dataUrl } : r));
+      const staged = await planDeps.stageReferences(candidates);
+      const uploaded = new Map(staged.refs.filter((r) => r._src).map((r) => [r._src, r.url]));
+      brief.environment.images = brief.environment.images
+        .map((im) => (im.url ? { url: im.url, alt: im.alt } : uploaded.has(im.dataUrl) ? { url: uploaded.get(im.dataUrl), alt: im.alt } : null))
+        .filter(Boolean);
+      return res.json({
+        success: true,
+        brief,
+        brand: brandSummary(brand || {}),
+        references: staged.refs.map(publicRef),
+        dropped: staged.dropped || []
+      });
+    } catch (err) {
+      return fail(res, err, 'Failed to prepare brief');
+    }
+  });
+
   router.post('/plan', protect, checkTrial, heroWriteLimiter, async (req, res) => {
     try {
       const body = req.body || {};
-      const c = body.concept;
-      const title = str(c && c.title);
-      const story = str(c && c.storySummary);
-      if (!c || typeof c !== 'object' || (!title && !story)) {
-        return res.status(400).json({ success: false, message: 'concept is required' });
+      const opts = readPlanOptions(body);
+      if (opts.error) return res.status(400).json({ success: false, message: opts.error });
+      const n = normalizeHeroBrief(body.brief);
+      if (!n.ok) return res.status(400).json({ success: false, message: n.message });
+      const brief = n.brief;
+      const userId = toUserId(req.user);
+      // Brand and references are recomputed here; the client's list can only select from them.
+      const brand = (await planDeps.loadBrand(userId)) || {};
+      let candidates = selectReferences(brief, brand, { keptSceneIds: opts.keptSceneIds || undefined });
+      if (opts.references) {
+        const order = opts.references;
+        candidates = candidates
+          .filter((r) => r.url && order.includes(r.url))
+          .sort((a, b) => order.indexOf(a.url) - order.indexOf(b.url));
       }
-      const aspectRatio = body.aspectRatio == null || body.aspectRatio === '' ? '9:16' : body.aspectRatio;
-      if (!ASPECTS.includes(aspectRatio)) {
-        return res.status(400).json({ success: false, message: `aspectRatio must be one of ${ASPECTS.join(', ')}` });
-      }
-      const refs = strList(body.refImageUrls);
-      const user = await planDeps.findUser(toUserId(req.user));
-      const prompt = await planDeps.buildPrompt(req.user.id, 'hero_video.plan', {
-        brandContextBlock: brandContextFrom(user && user.businessProfile),
-        conceptTitle: title,
-        conceptStory: story,
-        conceptEmotion: str(c.coreEmotion),
-        conceptVisualStyle: str(c.visualStyle),
-        duration: 15,
-        aspectRatio,
-        language: str(body.language) || 'English',
-        hasReferences: describeReferences(refs)
-      });
-      const raw = await planDeps.callTextLLM(prompt, { jsonMode: true, maxTokens: 3000 });
+      const staged = await planDeps.stageReferences(candidates);
+      const refs = staged.refs.map(publicRef);
+      const styleBlock = await planDeps.getStyleBlock(opts.style, userId);
+      const vars = buildPlanVars({ brief, brand, refs, styleBlock, audioMode: opts.audioMode, ctaText: opts.ctaText, keptSceneIds: opts.keptSceneIds });
+      const prompt = await planDeps.buildPrompt(userId, 'hero_video.plan', vars);
+      const raw = await planDeps.callTextLLM(prompt, { jsonMode: true, maxTokens: 6000 });
       let parsed = null;
       try { parsed = planDeps.parseGeminiJSON(raw); } catch (_) { parsed = null; }
-      const plan = normalizePlan(parsed);
+      const plan = normalizePlan(parsed, { sceneIds: brief.scenes.map((s) => s.sceneId) });
       if (!plan) return res.status(502).json({ success: false, message: 'Model returned no prompt. Please try again.' });
-      return res.json({ success: true, plan });
+      return res.json({ success: true, plan, references: refs });
     } catch (err) {
       return fail(res, err, 'Failed to build plan');
     }
@@ -203,4 +381,5 @@ function createHeroVideoRouter(planDeps = lazyPlanDeps(), impl = {}) {
 const router = createHeroVideoRouter();
 router.createHeroVideoRouter = createHeroVideoRouter;
 router.normalizePlan = normalizePlan;
+router.buildPlanVars = buildPlanVars;
 module.exports = router;

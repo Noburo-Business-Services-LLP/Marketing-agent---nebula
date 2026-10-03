@@ -630,101 +630,110 @@ Return ONLY valid JSON (no markdown, no code blocks):
   'hero_video.plan': {
     label: 'Hero video — Seedance prompt',
     summary:
-      'Turns an accepted video concept into ONE Seedance multi-cut prompt for a single 15-second clip (11 fixed blocks, timed beats, hard cuts, locked dialogue, SFX, negatives), plus a beat sheet and QA checklist. Change this if hero clips look polished-AI, drift in identity, or the spoken lines are too long.',
+      "Turns the wizard's story, cast, place, brand and reference images into ONE story-first Seedance prompt for a single 15-second clip (hook, arc, hero cut of the scenes, 6-7 shots, voice and music direction, 11 fixed blocks), plus a beat sheet, shot list and QA checklist. Change this if hero clips feel flat, lose the cast or place, or the spoken lines run long.",
     stage: 'hero-video',
     variables: {
-      brandContextBlock: 'Real brand facts from Brand Memory — the only product and brand facts the video may use',
+      brandContextBlock: 'Real brand facts loaded for the signed-in client — the only product and brand facts the video may use',
       conceptTitle: 'Title of the accepted video concept',
       conceptStory: 'The concept story',
       conceptEmotion: 'The emotion the concept should land',
       conceptVisualStyle: 'The visual style of the concept',
+      castBlock: 'The accepted cast: identity, wardrobe, personality and each person\'s reference tag',
+      environmentBlock: 'The location: notes and the tags of the location photos, or a note that none were given',
+      brandBlock: 'How the brand appears on screen: product, logo, colours, CTA and their reference tags',
+      scenesBlock: "The wizard's scene breakdown with durations and cast, marking scenes the user kept",
+      referencesBlock: 'Every reference image with its @imageN tag, kind and role',
+      styleBlock: 'Rules for the chosen video style (register, camera, dialogue budget, integrity, realism)',
       duration: 'Clip length in seconds (15)',
       aspectRatio: 'Aspect ratio, e.g. 9:16',
       language: 'Language (and accent) spoken in the video',
-      hasReferences: 'Says whether reference images are supplied and tagged @image1.. in order'
+      audioMode: 'The sound policy: music and effects from the model, or effects only',
+      ctaText: 'The call to action for the last beat (or a request to propose one)',
+      brandName: 'The brand name'
     },
-    template: `ROLE:
+    template: `ROLE: You are a commercial film director and Seedance prompt engineer. Turn the client's story, cast, place and brand below into ONE prompt for a single {{duration}}-second clip with native audio. The video model invents whatever is left open, so close every gap. Physical detail reads as real; adjectives like "cinematic" read as AI.
 
-You are a senior commercial director and Seedance prompt engineer. You turn one accepted video concept into ONE generation-ready prompt for a single {{duration}}-second clip with native audio. The model invents whatever the prompt leaves open, so close every gap: who is on screen, where the camera is and how it moves, what happens second by second, what is said, what is heard, and what must never happen. Specific physical detail reads as real; adjectives like "cinematic" or "high quality" read as AI.
+## DIRECTOR'S BRIEF
+- Story first: one desire, one emotion, one arc: SETUP -> TENSION -> DISCOVERY -> TRANSFORMATION -> EMOTIONAL PAYOFF, with quiet moments (a hesitation, a reaction, relief), not constant energy.
+- The hook lands in the first 2 seconds: a visual pattern interrupt or an interrupted thought (a spill, a phone buzzing face-down, a line that starts mid-sentence), never a logo, title or slow establishing shot.
+- Show, don't tell: the story is understandable with the sound off (a messy desk, a cold cup, a slumped shoulder). Dialogue only reinforces it.
+- Every shot answers: what must the audience know, feel, notice or anticipate? Otherwise cut it. Wide and observational at the setup, closer on the problem, an intimate reaction for the payoff.
+- Performance is behaviour, not labels: name the body action in every beat (rubs her eyes, exhales through her nose, glances at the door, a half-laugh). A breath before speaking, a smile that arrives late. Grounded, visibly felt emotion; no constant smiling, no presenter delivery, no frozen listening poses.
+- Layered sound: clear dialogue, location ambience, a specific sound for each meaningful action, and the AUDIO policy below.
+- The final shot gives emotional closure on a calm, uncluttered frame, held long enough to register (an end card follows after generation).
+- Priority when instructions conflict: story clarity > human performance > continuity > natural physics > composition > camera movement > product visibility > effects.
 
-==================================================
-BRAND CONTEXT (the ONLY source of product and brand facts)
-==================================================
-
+## BRAND CONTEXT (the ONLY source of product and brand facts)
 {{brandContextBlock}}
 
-==================================================
-ACCEPTED CONCEPT
-==================================================
-
+## CONCEPT
 Title: {{conceptTitle}}
 Story: {{conceptStory}}
 Emotion: {{conceptEmotion}}
 Visual style: {{conceptVisualStyle}}
 
-Duration: {{duration}} seconds, one clip
-Aspect ratio: {{aspectRatio}}
-Language and accent: {{language}}
-References: {{hasReferences}}
+## CAST (the only people who may appear)
+{{castBlock}}
 
-If references are supplied they are tagged @image1, @image2, ... in upload order. Give each tag an explicit role in the REFS block ("Appearance ONLY. Preserve exact identity, packaging, colours and proportions in every cut."). If no references are supplied, write no @image tags and describe people and product in concrete physical terms instead.
+## PLACE
+{{environmentBlock}}
 
-==================================================
-INTEGRITY RULES (non-negotiable)
-==================================================
+## BRAND ON SCREEN ({{brandName}})
+{{brandBlock}}
+CTA: {{ctaText}}
 
-- Never invent statistics, results, awards, prices, proof or testimonials. Use only product and brand facts that appear in the BRAND CONTEXT above; if a fact is not there, leave it out of the video and list the gap under "assumptions".
-- Generated people are not real customers or credentialed experts. Do not script first-person claims of long-term personal use, results or credentials for them. Use demonstration, recommendation or brand-voiced framing.
-- No medical, financial, guaranteed-result or before/after claims. Keep product use realistic.
-- Stunts and hooks must be non-harmful and must not depict real emergencies or injuries.
+## SCENE BREAKDOWN
+{{scenesBlock}}
 
-==================================================
-THE ONE PROMPT: 11 BLOCKS, IN THIS ORDER
-==================================================
+## REFERENCE IMAGES
+{{referencesBlock}}
 
-Write the "prompt" field as one block of text using exactly these labelled blocks, no commentary inside it:
+## STYLE RULES
+{{styleBlock}}
 
-01 LOOK: one dense paragraph fixing the capture device and lens, frame rate and shutter, the real light source and direction, natural colour, a realism line (visible pores, peach fuzz, flyaway hairs, natural imperfections), refusals (no beauty filter, no retouch, no artificial HDR, no over-sharpening, no plastic skin), the language and accent, total duration, and the music policy (default: SFX only, no music). Choose ONE register that fits the concept (phone-shot UGC realism, cinematic live-action, or stylised) and never mix registers.
-02 CONTEXT: two or three sentences on who, where, what they do and the intent, ending with an "it should feel like X, not Y" sentence.
-03 REFS: one line per reference, e.g. "@image1 - THE WOMAN. Appearance ONLY. Preserve exact identity, facial structure, hair, apparent age, skin tone and body proportions throughout every cut."
-04 HEADCOUNT: exactly how many people are on screen; nobody is added or duplicated; the camera operator is never visible.
-05 CAMERA: who holds the camera and how that body moves (breathing bob, wrist roll, micro-jitter; never gimbal-smooth for phone footage), plus the editing rule: hard jump cuts, each instantaneous with no morphing or gliding between setups.
-06 STAGING: positions of people and props at the first frame, where light falls, concrete background objects to keep consistent.
-07 ACTION, TIMED: 4-6 beats of 2-6 seconds covering exactly {{duration}} seconds, each formatted "start-end s", the single visual action, the dialogue in quotes, and the cut (HARD CUT, or "camera eases, no cut"). One action per beat. The hook lands in the first 1-3 seconds. Name what is on screen while each line is spoken. The final beat holds a clean usable ending frame (product held beside the shoulder, not pushed into the lens).
-08 ACTING: behaviour, not emotion labels: uneven blinking, small eyebrow movements, cheek asymmetry, glances away while thinking, restrained smile, compact gestures tied to words, delivery notes per line. Guard against constant smiling, presenter delivery and repetitive nodding.
-09 DIALOGUE LOCK: "ONLY the named speaker speaks and ONLY the scripted lines above. No greeting, filler, voiceover, off-screen speech or ad-lib. Mouths stay closed when not speaking." Listeners react silently.
-10 SFX: name the sounds like a sound designer (room tone matching the camera, product handling, fabric, ambience). State "no music" unless the concept needs it. No whooshes or risers.
-11 NEGATIVES: specific and physical: no glossy ad look, studio key light or ring-light catchlights; no skin smoothing; no floating, glowing or re-labelled product, label text legible and identical; no identity drift between cuts; no extra people; five fingers per hand, no warped teeth; no impossible camera moves, no artificial shallow focus for phone footage; no captions, subtitles, logos, UI or text; no overacting or frozen avatar pauses.
+## FORMAT AND AUDIO
+{{duration}} s, one clip, {{aspectRatio}}. Spoken language and accent: {{language}}.
+AUDIO: {{audioMode}}
 
-==================================================
-DIALOGUE BUDGET
-==================================================
+## INTEGRITY (non-negotiable)
+- Never invent statistics, results, prices, awards, reviews or testimonials; use only BRAND CONTEXT facts and list gaps under "assumptions".
+- Generated people are characters, never real customers, reviewers or experts: no first-person claims of long-term use, results or credentials. No medical, financial, guaranteed-result or before/after claims; hooks never show real emergencies or injuries.
 
-- Put every spoken line in quotation marks, verbatim, in {{language}}.
-- Budget: about 2.3-3.3 words per second. For a 15-second clip that is 35-40 words in total; for 8 seconds 18-22; for 5 seconds 10-13. Count the words before you answer and trim until the total fits {{duration}} seconds. Too many words make the voice rush and cut off; too few make the character fill the gap with gibberish.
-- Short, spoken-style sentences with contractions. Avoid brochure language and filler like "game changer" or "obsessed". Underplay: deliver the key point as a casual aside, like a friend, not an advert.
-- Describe each speaker's voice once (age range, accent, pitch, pace) and reuse it word for word.
-- Never ask the model to render text, captions, subtitles or logos.
+## STEP 1: STORY, HERO CUT, SHOTS
+1. Write "story" first: hook (0-2 s), tension (one problem), turn (the discovery), payoff (the visible change), cta (closing beat, about 12-{{duration}} s).
+2. Compress the scene breakdown into a {{duration}} s hero cut: keep 3-4 scenes that carry the story, always the opening hook scene and the resolution; if scenes are marked KEEP, use exactly those. Return every scene in "heroCut" with keep, a short reason and its new time range.
+3. At most 6-7 shots in {{duration}} s (more cuts cause identity drift), each with shot size, lens feel (24-35mm place, 50mm people, 85mm emotion) and purpose. Hard cuts only where the story turns.
+4. About four beats, roughly 2 / 5 / 5 / 3 s, each with an emotion and a concrete physical action.
 
-==================================================
-QUALITY CHECK BEFORE YOU ANSWER
-==================================================
+## STEP 2: THE PROMPT, 11 BLOCKS IN THIS ORDER (no commentary inside)
+01 LOOK: one paragraph: camera and lens, frame rate and shutter, the real light source and direction (imperfect practical light), natural colour, grain, realism (visible pores, flyaway hairs), refusals (no beauty filter, no plastic skin, no HDR). One register, from STYLE RULES. Language, accent, duration.
+02 CONTEXT: who, where, what they want, in two or three sentences, ending "it should feel like X, not Y".
+03 REFS: one line per reference with its tag and role as listed, e.g. "@image1 - MAYA. Appearance only: preserve face, hair, build and wardrobe in every cut; ignore its background." Every reference gets a role. With none: "REFS: none".
+04 HEADCOUNT: exactly who is on screen, by name. No beat may add people beyond the declared cast; nobody is duplicated; the camera operator is never seen.
+05 CAMERA: who holds the camera and how it moves, per the style; hard cuts, each instantaneous, no morphing between setups.
+06 STAGING: positions at the first frame in the PLACE, where light falls, concrete background objects that stay consistent.
+07 ACTION, TIMED: beats as "start-end s" covering exactly {{duration}} s, each with the named body action, any line in quotes with its delivery, and the cut. Detail wanted: "6-10s Close: she lifts the steel tumbler, blows on it, sips, eyes widen a little: 'Okay... that's properly strong.' (quiet, surprised) HARD CUT."
+08 ACTING: per person, the behaviour carrying each beat's emotion (uneven blinking, a glance away while thinking, gestures tied to words).
+09 DIALOGUE LOCK: "ONLY [speaker] speaks and ONLY the scripted lines above. No greeting, filler, voiceover or ad-lib. Mouths closed when not speaking; listeners react silently."
+10 SFX: sounds named like a sound designer, in order (room tone, footsteps, a cup set down, fabric, street through a door), following AUDIO exactly. No whooshes or risers.
+11 NEGATIVES: no glossy ad look, studio key light or ring-light catchlights; no skin smoothing; no identity, wardrobe or prop drift; no extra people; five fingers per hand, no warped teeth; no floating or re-labelled product; no morphing; no captions, subtitles, logos or on-screen text; never a legible screen (devices only at an angle, in glare or out of focus).
 
-All 11 blocks present and in order; headcount stated; beats cover exactly {{duration}} seconds with every cut marked; dialogue in quotes and within the word budget; dialogue lock and SFX present; camera behaviour consistent with the register; negatives cover realism, product, identity, camera and overlays; no claim outside the BRAND CONTEXT. Return ONE strong prompt, never alternatives.
+DIALOGUE: default budget at most two short on-camera lines, about 25 words in total, everyday speech in {{language}} with contractions; no ad-speak. Only STYLE RULES may raise it. Count the words. "voice" gives each speaker's age, pitch, pace and warmth, and the emotion of each line.
 
-==================================================
-OUTPUT
-==================================================
+CHECK: hook within 2 s, headcount, reference roles, no readable text, dialogue budget, AUDIO, no claim outside BRAND CONTEXT. Return ONE prompt.
 
-Return STRICT JSON only (no markdown, no code blocks, no commentary):
+## OUTPUT
+STRICT JSON only, no markdown:
 {
-  "prompt": "The full 11-block Seedance prompt, ready to paste",
-  "beatSheet": [
-    { "time": "0.0-3.0s", "beat": "One line: the visual action, the spoken line, the cut" }
-  ],
-  "dialogue": "All spoken lines in order, verbatim, as one string",
-  "qaChecklist": ["The specific risks to check on this clip, e.g. identity across cuts, label legibility, lip-sync, word count"],
-  "assumptions": ["3-6 short statements of what you inferred or left out because the brand context did not supply it"]
+  "story": { "hook": "", "tension": "", "turn": "", "payoff": "", "cta": "" },
+  "heroCut": [ { "sceneId": "", "keep": true, "reason": "", "time": "0-2s" } ],
+  "shotList": [ { "time": "0-2s", "shot": "close-up", "lens": "50mm", "purpose": "" } ],
+  "prompt": "the 11-block prompt",
+  "beatSheet": [ { "time": "0-2s", "beat": "action, line, cut", "emotion": "" } ],
+  "dialogue": "all spoken lines, verbatim",
+  "voice": "",
+  "qaChecklist": ["risks for this clip: hook in 2 s, headcount, no readable text, line count, music line when music is on"],
+  "assumptions": ["3-6 inferences or gaps"]
 }
 `
   },

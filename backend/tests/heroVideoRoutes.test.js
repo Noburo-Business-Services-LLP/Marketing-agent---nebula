@@ -3,6 +3,8 @@ const assert = require('node:assert');
 const { createHeroVideoRouter, normalizePlan } = require('../routes/heroVideo');
 const router = require('../routes/heroVideo');
 
+const quiet = async (fn) => { const e = console.error; console.error = () => {}; try { return await fn(); } finally { console.error = e; } };
+
 function routes(r) {
   return r.stack.filter((l) => l.route).map((l) => ({
     path: l.route.path,
@@ -12,106 +14,293 @@ function routes(r) {
   }));
 }
 
-test('router exposes the five routes with protect first', () => {
+test('router exposes the six routes with protect first', () => {
   const found = routes(router.router || router);
   const key = (r) => `${r.methods[0]} ${r.path}`;
-  assert.deepStrictEqual(found.map(key).sort(), ['get /jobs', 'get /jobs/:jobId', 'get /quota', 'post /generate', 'post /plan']);
+  assert.deepStrictEqual(found.map(key).sort(), ['get /jobs', 'get /jobs/:jobId', 'get /quota', 'post /brief', 'post /generate', 'post /plan']);
   for (const r of found) assert.strictEqual(r.names[0], 'protect', key(r));
-  for (const r of found.filter((x) => x.path === '/plan' || x.path === '/generate')) {
+  for (const r of found.filter((x) => x.path === '/plan' || x.path === '/generate' || x.path === '/brief')) {
     assert.ok(r.names.includes('checkTrial'), key(r));
   }
 });
 
-test('normalizePlan', () => {
+test('normalizePlan: safe defaults and the v2 fields', () => {
   assert.strictEqual(normalizePlan(null), null);
   assert.strictEqual(normalizePlan({ prompt: '   ' }), null);
   assert.strictEqual(normalizePlan({}), null);
-  const p = normalizePlan({ prompt: '  hi ', beatSheet: 'x', qaChecklist: 5, assumptions: null, dialogue: 7 });
-  assert.deepStrictEqual(p, { prompt: 'hi', beatSheet: [], dialogue: '', qaChecklist: [], assumptions: [] });
-  const q = normalizePlan({ prompt: 'a', dialogue: ' yo ', beatSheet: [{ time: ' 0-3s ', beat: ' open ' }], qaChecklist: [' a '], assumptions: [' b '] });
-  assert.deepStrictEqual(q.beatSheet, [{ time: '0-3s', beat: 'open' }]);
+  const p = normalizePlan({ prompt: '  hi ', beatSheet: 'x', qaChecklist: 5, assumptions: null, dialogue: 7, story: 'x', heroCut: {}, shotList: 3, voice: [] });
+  assert.deepStrictEqual(p, {
+    story: { hook: '', tension: '', turn: '', payoff: '', cta: '' },
+    heroCut: [], shotList: [], prompt: 'hi', beatSheet: [], dialogue: '', voice: '', qaChecklist: [], assumptions: []
+  });
+  const q = normalizePlan({
+    prompt: 'a', dialogue: ' yo ', voice: ' warm ',
+    story: { hook: ' h ', tension: 't', turn: 'u', payoff: 'p', cta: 'c', extra: 'x' },
+    heroCut: [{ sceneId: ' scene-1 ', keep: true, reason: ' r ', time: ' 0-2s ' }, { sceneId: 's2', keep: 'true' }, { sceneId: 's3', keep: 'yes' }, 'junk', { keep: true }],
+    shotList: Array.from({ length: 10 }, (_, i) => ({ time: `${i}`, shot: ' wide ', lens: '35mm', purpose: 'p', junk: 1 })),
+    beatSheet: [{ time: ' 0-3s ', beat: ' open ', emotion: ' curious ' }, null], qaChecklist: [' a ', 3], assumptions: [' b ']
+  });
+  assert.deepStrictEqual(q.story, { hook: 'h', tension: 't', turn: 'u', payoff: 'p', cta: 'c' });
+  assert.deepStrictEqual(q.heroCut, [
+    { sceneId: 'scene-1', keep: true, reason: 'r', time: '0-2s' },
+    { sceneId: 's2', keep: true, reason: '', time: '' },
+    { sceneId: 's3', keep: false, reason: '', time: '' }
+  ]);
+  assert.strictEqual(q.shotList.length, 7);
+  assert.deepStrictEqual(q.shotList[0], { time: '0', shot: 'wide', lens: '35mm', purpose: 'p' });
+  assert.deepStrictEqual(q.beatSheet, [{ time: '0-3s', beat: 'open', emotion: 'curious' }]);
   assert.strictEqual(q.dialogue, 'yo');
+  assert.strictEqual(q.voice, 'warm');
   assert.deepStrictEqual(q.qaChecklist, ['a']);
   assert.deepStrictEqual(q.assumptions, ['b']);
 });
 
-// ---- /plan handler via injected deps ----
+// ---- /brief and /plan handlers via injected deps ----
 function mkRes() {
   return { code: 200, body: null, status(c) { this.code = c; return this; }, json(b) { this.body = b; return this; } };
 }
-function planHandler(deps) {
-  const r = routes(createHeroVideoRouter(deps)).find((x) => x.path === '/plan');
+function handlerFor(deps, path) {
+  const r = routes(createHeroVideoRouter(deps)).find((x) => x.path === path);
   return r.handlers[r.handlers.length - 1];
 }
+const planHandler = (deps) => handlerFor(deps, '/plan');
+const briefHandler = (deps) => handlerFor(deps, '/brief');
+
+const CDN = 'https://res.cloudinary.com/demo/image/upload';
+const BRAND = {
+  name: 'Gravity Cafe', website: 'https://gravity.example', industry: 'Cafe', audience: 'Students', icp: 'Night owls', tone: ['warm'],
+  heroProduct: 'Filter coffee', logoUrl: `${CDN}/logo.png`, colors: ['#F5A623'],
+  productImages: [{ url: `${CDN}/product.png`, alt: 'Tumbler' }],
+  secretField: 'SHOULD_NOT_LEAK'
+};
+function mkBrief(over = {}) {
+  return {
+    concept: { title: 'Late shift', storySummary: 'A tired student finds the cafe.', coreEmotion: 'relief', visualStyle: 'warm night' },
+    aspectRatio: '9:16', language: 'English',
+    cast: [{ id: 'cast-1', name: 'Maya', age: '22', gender: 'female', role: 'student', appearance: 'tall', clothing: 'hoodie', portraitUrl: `${CDN}/maya.png` }],
+    environment: { enabled: true, notes: 'corner seat', images: [{ url: `${CDN}/room.png`, alt: 'Room' }] },
+    scenes: [
+      { sceneId: 'scene-1', title: 'Hook', script: 'Yawn', visual: 'desk', durationSeconds: 5, charactersRequired: ['cast-1'], imageUrl: `${CDN}/kf1.png` },
+      { sceneId: 'scene-2', title: 'Turn', script: 'Sip', visual: 'cup', durationSeconds: 5, charactersRequired: ['cast-1'], imageUrl: `${CDN}/kf2.png` }
+    ],
+    ...over
+  };
+}
 function mkDeps(over = {}) {
-  const calls = {};
+  const calls = { stage: [], loadBrand: [], style: [] };
   return {
     calls,
     deps: {
       buildPrompt: async (uid, key, vars) => { calls.build = { uid, key, vars }; return 'PROMPT'; },
-      callTextLLM: async (p, o) => { calls.llm = { p, o }; return '{"prompt":" Shot ","beatSheet":[{"time":"0s","beat":"x"}]}'; },
+      callTextLLM: async (p, o) => { calls.llm = { p, o }; return JSON.stringify({ prompt: ' Shot ', beatSheet: [{ time: '0s', beat: 'x', emotion: 'e' }], heroCut: [{ sceneId: 'scene-1', keep: true }], story: { hook: 'h' } }); },
       parseGeminiJSON: (s) => JSON.parse(s),
-      findUser: async () => ({ businessProfile: { name: 'Gravity', industry: 'SaaS', brandVoice: ['bold', 'warm'] } }),
+      loadBrand: async (uid) => { calls.loadBrand.push(uid); return { ...BRAND, productImages: BRAND.productImages.map((x) => ({ ...x })) }; },
+      stageReferences: async (refs) => {
+        calls.stage.push(refs.map((r) => ({ ...r })));
+        const out = refs.map((r) => (r.dataUrl && !r.url ? { ...r, url: `${CDN}/uploaded-${calls.stage.length}.png`, dataUrl: undefined } : { ...r }));
+        out.forEach((r, i) => { delete r.dataUrl; r.tag = `@image${i + 1}`; });
+        return { refs: out, dropped: [] };
+      },
+      getStyleBlock: async (slug, uid) => { calls.style.push({ slug, uid }); return `STYLE_BLOCK_${slug}`; },
       ...over
     }
   };
 }
-const concept = { title: 'T', storySummary: 'S', coreEmotion: 'E', visualStyle: 'V' };
 const reqOf = (body) => ({ user: { id: 'u1' }, body });
 
-test('/plan missing concept -> 400', async () => {
+test('/brief: missing cast -> 400 with the plain message, no staging', async () => {
+  const { deps, calls } = mkDeps();
+  const res = mkRes();
+  await briefHandler(deps)(reqOf({ brief: mkBrief({ cast: [] }) }), res);
+  assert.strictEqual(res.code, 400);
+  assert.deepStrictEqual(res.body, { success: false, message: 'Create your cast first: finish the cast step, then make the hero video.' });
+  assert.strictEqual(calls.stage.length, 0);
+  assert.strictEqual(calls.build, undefined);
+});
+
+test('/brief: staged references numbered @image1.. and a whitelisted brand summary', async () => {
+  const { deps, calls } = mkDeps();
+  const res = mkRes();
+  await briefHandler(deps)(reqOf({ brief: mkBrief(), brand: { name: 'Evil', logoUrl: 'https://evil.example/x.png' } }), res);
+  assert.strictEqual(res.code, 200);
+  assert.strictEqual(res.body.success, true);
+  assert.deepStrictEqual(calls.loadBrand, ['u1']);
+  assert.deepStrictEqual(Object.keys(res.body.brand).sort(), ['colors', 'heroProduct', 'logoUrl', 'name', 'website']);
+  assert.strictEqual(res.body.brand.name, 'Gravity Cafe');
+  assert.ok(!JSON.stringify(res.body).includes('SHOULD_NOT_LEAK'));
+  assert.ok(!JSON.stringify(res.body).includes('evil.example'));
+  const refs = res.body.references;
+  assert.deepStrictEqual(refs.map((r) => r.tag), refs.map((_, i) => `@image${i + 1}`));
+  assert.deepStrictEqual(refs.map((r) => r.kind), ['cast', 'environment', 'brand', 'brand', 'keyframe', 'keyframe']);
+  for (const r of refs) assert.deepStrictEqual(Object.keys(r).sort(), ['kind', 'label', 'source', 'tag', 'url']);
+  assert.deepStrictEqual(res.body.dropped, []);
+  assert.strictEqual(res.body.brief.cast[0].name, 'Maya');
+  assert.strictEqual(calls.build, undefined, 'no LLM work on /brief');
+});
+
+test('/brief: environment data URLs come back replaced by their staged URL', async () => {
+  const { deps } = mkDeps();
+  const res = mkRes();
+  const dataUrl = 'data:image/png;base64,iVBORw0KGgo=';
+  await briefHandler(deps)(reqOf({ brief: mkBrief({ environment: { enabled: true, notes: '', images: [{ dataUrl, alt: 'Shop' }] } }) }), res);
+  assert.strictEqual(res.code, 200);
+  const env = res.body.references.find((r) => r.kind === 'environment');
+  assert.match(env.url, /uploaded-1\.png$/);
+  assert.deepStrictEqual(res.body.brief.environment.images, [{ url: env.url, alt: 'Shop' }]);
+  assert.ok(!JSON.stringify(res.body).includes('base64'));
+});
+
+test('/plan: missing brief or cast -> 400', async () => {
   const { deps } = mkDeps();
   const res = mkRes();
   await planHandler(deps)(reqOf({}), res);
   assert.strictEqual(res.code, 400);
+  const res2 = mkRes();
+  await planHandler(deps)(reqOf({ brief: mkBrief({ cast: [] }) }), res2);
+  assert.strictEqual(res2.code, 400);
+  assert.match(res2.body.message, /Create your cast first/);
 });
 
-test('/plan bad aspect -> 400', async () => {
-  const { deps } = mkDeps();
-  const res = mkRes();
-  await planHandler(deps)(reqOf({ concept, aspectRatio: '4:3' }), res);
-  assert.strictEqual(res.code, 400);
+test('/plan: bad aspect, audioMode, style, ctaText, references -> 400 without any LLM call', async () => {
+  const bad = [
+    { brief: mkBrief({ aspectRatio: '4:3' }) },
+    { brief: mkBrief(), audioMode: 'loud' },
+    { brief: mkBrief(), audioMode: 7 },
+    { brief: mkBrief(), style: 'not-a-style' },
+    { brief: mkBrief(), style: 'Cinematic Commercial' },
+    { brief: mkBrief(), ctaText: 'x'.repeat(61) },
+    { brief: mkBrief(), ctaText: 5 },
+    { brief: mkBrief(), references: 'https://a' },
+    { brief: mkBrief(), keptSceneIds: 'scene-1' }
+  ];
+  for (const body of bad) {
+    const { deps, calls } = mkDeps();
+    const res = mkRes();
+    await planHandler(deps)(reqOf(body), res);
+    assert.strictEqual(res.code, 400, JSON.stringify(Object.keys(body)));
+    assert.strictEqual(res.body.success, false);
+    assert.ok(res.body.message);
+    assert.strictEqual(calls.llm, undefined);
+  }
 });
 
 test('/plan no prompt from model -> 502', async () => {
   const { deps } = mkDeps({ callTextLLM: async () => '{"prompt":""}' });
   const res = mkRes();
-  await planHandler(deps)(reqOf({ concept }), res);
+  await planHandler(deps)(reqOf({ brief: mkBrief() }), res);
   assert.strictEqual(res.code, 502);
 });
 
 test('/plan LLM throws -> 500', async () => {
   const { deps } = mkDeps({ callTextLLM: async () => { throw new Error('boom'); } });
   const res = mkRes();
-  await planHandler(deps)(reqOf({ concept }), res);
+  await quiet(() => planHandler(deps)(reqOf({ brief: mkBrief() }), res));
   assert.strictEqual(res.code, 500);
   assert.strictEqual(res.body.success, false);
 });
 
-test('/plan happy path with descriptive hasReferences', async () => {
+test('/plan happy path: blocks, style, audio and references reach buildPrompt', async () => {
   const { deps, calls } = mkDeps();
   const res = mkRes();
-  await planHandler(deps)(reqOf({ concept, refImageUrls: ['https://a/1.png', 'https://a/2.png'] }), res);
+  await planHandler(deps)(reqOf({ brief: mkBrief(), style: 'daily-life-vlog', audioMode: 'sfx_only', ctaText: ' Visit tonight ' }), res);
   assert.strictEqual(res.code, 200);
   assert.strictEqual(res.body.success, true);
   assert.strictEqual(res.body.plan.prompt, 'Shot');
-  assert.deepStrictEqual(res.body.plan.qaChecklist, []);
+  assert.deepStrictEqual(res.body.plan.beatSheet, [{ time: '0s', beat: 'x', emotion: 'e' }]);
+  assert.deepStrictEqual(res.body.plan.heroCut, [{ sceneId: 'scene-1', keep: true, reason: '', time: '' }]);
+  assert.strictEqual(res.body.plan.story.hook, 'h');
   assert.strictEqual(calls.build.key, 'hero_video.plan');
-  assert.strictEqual(calls.build.vars.hasReferences, 'Yes - 2 reference images, tagged @image1, @image2');
-  assert.strictEqual(calls.build.vars.aspectRatio, '9:16');
-  assert.strictEqual(calls.build.vars.conceptTitle, 'T');
-  assert.match(calls.build.vars.brandContextBlock, /Gravity/);
-  assert.deepStrictEqual(calls.llm.o, { jsonMode: true, maxTokens: 3000 });
+  assert.strictEqual(calls.build.uid, 'u1');
+  assert.deepStrictEqual(calls.style, [{ slug: 'daily-life-vlog', uid: 'u1' }]);
+  const v = calls.build.vars;
+  assert.deepStrictEqual(Object.keys(v).sort(), ['aspectRatio', 'audioMode', 'brandBlock', 'brandContextBlock', 'brandName', 'castBlock',
+    'conceptEmotion', 'conceptStory', 'conceptTitle', 'conceptVisualStyle', 'ctaText', 'duration', 'environmentBlock', 'language',
+    'referencesBlock', 'scenesBlock', 'styleBlock'].sort());
+  assert.strictEqual(v.styleBlock, 'STYLE_BLOCK_daily-life-vlog');
+  assert.match(v.audioMode, /no music/i);
+  assert.match(v.ctaText, /Visit tonight/);
+  assert.strictEqual(v.brandName, 'Gravity Cafe');
+  assert.match(v.brandContextBlock, /Gravity Cafe/);
+  assert.match(v.castBlock, /Maya[\s\S]*@image1/);
+  assert.match(v.environmentBlock, /corner seat/);
+  assert.match(v.environmentBlock, /@image2/);
+  assert.match(v.brandContextBlock, /Hero product: Filter coffee/);
+  assert.match(v.brandBlock, /Hero product[^\n]*@image3/);
+  assert.match(v.brandBlock, /Logo @image4/);
+  assert.match(v.brandBlock, /#F5A623/);
+  assert.match(v.scenesBlock, /scene-1/);
+  assert.match(v.scenesBlock, /scene-2/);
+  assert.match(v.referencesBlock, /@image1[^\n]*Maya/);
+  assert.strictEqual(v.conceptTitle, 'Late shift');
+  assert.strictEqual(v.aspectRatio, '9:16');
+  assert.strictEqual(v.duration, '15');
+  assert.deepStrictEqual(calls.llm.o, { jsonMode: true, maxTokens: 6000 });
+  assert.deepStrictEqual(res.body.references.map((r) => r.tag), res.body.references.map((_, i) => `@image${i + 1}`));
+  for (const r of res.body.references) assert.deepStrictEqual(Object.keys(r).sort(), ['kind', 'label', 'source', 'tag', 'url']);
+});
 
+test('/plan defaults: cinematic-commercial style and native audio with a music line', async () => {
+  const { deps, calls } = mkDeps();
+  const res = mkRes();
+  await planHandler(deps)(reqOf({ brief: mkBrief() }), res);
+  assert.strictEqual(res.code, 200);
+  assert.deepStrictEqual(calls.style, [{ slug: 'cinematic-commercial', uid: 'u1' }]);
+  assert.match(calls.build.vars.audioMode, /music/i);
+  assert.doesNotMatch(calls.build.vars.audioMode, /no music/i);
+});
+
+test('/plan ignores any brand in the body; brand comes from loadBrand(user)', async () => {
+  const { deps, calls } = mkDeps();
+  const res = mkRes();
+  const evil = { name: 'EvilCorp', logoUrl: 'https://evil.example/logo.png', productImages: [{ url: 'https://evil.example/p.png' }], heroProduct: 'EVIL_PRODUCT' };
+  await planHandler(deps)(reqOf({ brief: { ...mkBrief(), brand: evil }, brand: evil, references: ['https://evil.example/logo.png', 'https://evil.example/p.png'] }), res);
+  assert.strictEqual(res.code, 200);
+  assert.deepStrictEqual(calls.loadBrand, ['u1']);
+  const text = JSON.stringify(calls.build.vars) + JSON.stringify(res.body);
+  for (const bad of ['EvilCorp', 'evil.example', 'EVIL_PRODUCT']) assert.ok(!text.includes(bad), bad);
+});
+
+test('/plan reference selection can only choose from the server-staged set', async () => {
+  const { deps, calls } = mkDeps();
+  const res = mkRes();
+  const references = [`${CDN}/product.png`, 'https://attacker.example/x.png', `${CDN}/maya.png`, `${CDN}/maya.png`, 'not a url'];
+  await planHandler(deps)(reqOf({ brief: mkBrief(), references }), res);
+  assert.strictEqual(res.code, 200);
+  // only the two staged URLs the user kept, in the user's order, re-tagged from @image1
+  assert.deepStrictEqual(res.body.references.map((r) => [r.tag, r.url]), [['@image1', `${CDN}/product.png`], ['@image2', `${CDN}/maya.png`]]);
+  assert.deepStrictEqual(calls.stage[0].map((r) => r.url), [`${CDN}/product.png`, `${CDN}/maya.png`]);
+  assert.ok(!JSON.stringify(calls.build.vars).includes('attacker.example'));
+  assert.match(calls.build.vars.referencesBlock, /@image1[^\n]*product/i);
+  // an empty selection means no references at all
+  const { deps: d2, calls: c2 } = mkDeps();
   const res2 = mkRes();
-  await planHandler(deps)(reqOf({ concept }), res2);
-  assert.strictEqual(calls.build.vars.hasReferences, 'No reference images');
+  await planHandler(d2)(reqOf({ brief: mkBrief(), references: [] }), res2);
+  assert.deepStrictEqual(res2.body.references, []);
+  assert.match(c2.build.vars.referencesBlock, /no reference images/i);
+});
+
+test('/plan keptSceneIds limit keyframes to the kept scenes and mark them in the scenes block', async () => {
+  const { deps, calls } = mkDeps();
+  const res = mkRes();
+  await planHandler(deps)(reqOf({ brief: mkBrief(), keptSceneIds: ['scene-2'] }), res);
+  assert.strictEqual(res.code, 200);
+  const kf = res.body.references.filter((r) => r.kind === 'keyframe').map((r) => r.url);
+  assert.deepStrictEqual(kf, [`${CDN}/kf2.png`]);
+  assert.match(calls.build.vars.scenesBlock, /scene-2[^\n]*KEEP/);
+  assert.doesNotMatch(calls.build.vars.scenesBlock, /scene-1[^\n]*KEEP/);
+});
+
+test('/plan heroCut drops scene ids that are not in the brief', async () => {
+  const { deps } = mkDeps({ callTextLLM: async () => JSON.stringify({ prompt: 'p', heroCut: [{ sceneId: 'scene-1', keep: true }, { sceneId: 'ghost', keep: true }] }) });
+  const res = mkRes();
+  await planHandler(deps)(reqOf({ brief: mkBrief() }), res);
+  assert.deepStrictEqual(res.body.plan.heroCut.map((h) => h.sceneId), ['scene-1']);
 });
 
 test('/plan CastError -> 404', async () => {
-  const { deps } = mkDeps({ findUser: async () => { const e = new Error('x'); e.name = 'CastError'; throw e; } });
+  const { deps } = mkDeps({ loadBrand: async () => { const e = new Error('x'); e.name = 'CastError'; throw e; } });
   const res = mkRes();
-  await planHandler(deps)(reqOf({ concept }), res);
+  await planHandler(deps)(reqOf({ brief: mkBrief() }), res);
   assert.strictEqual(res.code, 404);
 });
 
@@ -163,10 +352,10 @@ test('POST /generate and poll send {status,json} verbatim', async () => {
   assert.deepStrictEqual(res2.body, { success: true, status: 'processing' });
 });
 
-test('checkTrial before handler on exactly /plan and /generate; limiter on every route', () => {
+test('checkTrial before handler on exactly /brief, /plan and /generate; limiter on every route', () => {
   for (const r of routes(router)) {
     const idx = r.names.indexOf('checkTrial');
-    const wants = r.path === '/plan' || r.path === '/generate';
+    const wants = r.path === '/plan' || r.path === '/generate' || r.path === '/brief';
     assert.strictEqual(idx !== -1, wants, r.path);
     if (wants) assert.ok(idx < r.names.length - 1 && idx > 0, r.path);
     assert.ok(r.names.length >= 3 && r.names[r.names.length - 2] !== 'protect' || r.names.length >= 3, r.path);
@@ -187,7 +376,6 @@ async function listVia(d, impl = {}) {
   await routeHandler({ deps: d, JobModel: d.JobModel, ...impl }, '/jobs', 'get')({ user: { id: 'u1' } }, res);
   return res;
 }
-const quiet = async (fn) => { const e = console.error; console.error = () => {}; try { return await fn(); } finally { console.error = e; } };
 
 test('GET /jobs: completed-on-fal job is finished and returned with videoUrl', async () => {
   const d = makeFlowDeps({ getStatus: async () => ({ state: 'completed', videoUrl: 'https://fal/v.mp4' }) });
@@ -233,7 +421,7 @@ test('GET /jobs reconciles at most 3 non-terminal rows and skips terminal ones',
 test('500 responses use a fixed generic message', async () => {
   const { deps } = mkDeps({ callTextLLM: async () => { throw new Error('E11000 duplicate key mongo internals'); } });
   const res = mkRes();
-  await quiet(() => planHandler(deps)(reqOf({ concept }), res));
+  await quiet(() => planHandler(deps)(reqOf({ brief: mkBrief() }), res));
   assert.strictEqual(res.code, 500);
   assert.deepStrictEqual(res.body, { success: false, message: 'Something went wrong. Please try again.' });
   const res2 = mkRes();
