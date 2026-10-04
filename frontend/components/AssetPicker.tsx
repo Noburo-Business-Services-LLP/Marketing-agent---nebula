@@ -139,7 +139,7 @@ const AssetPicker: React.FC<{
                 {source === 'products'
                   ? <Package className="w-5 h-5 text-[#F5A623]" />
                   : <ImageIcon className="w-5 h-5 text-[#F5A623]" />}
-                {source === 'products' ? 'Products & services' : 'Environments'}
+                {source === 'products' ? 'Products and services' : 'Environments'}
               </h3>
               <p className="text-[12.5px] text-white/45 mt-1">
                 {max === 1

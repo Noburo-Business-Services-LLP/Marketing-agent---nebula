@@ -360,7 +360,7 @@ const Inventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
         {embedded ? (
           <div>
-            <h2 className="font-serif-display text-[22px] text-[#F5F4F1]">Products &amp; Services</h2>
+            <h2 className="font-serif-display text-[22px] text-[#F5F4F1]">Products and services</h2>
             <p className="text-[12.5px] text-white/45 mt-1 max-w-[560px]">
               What the business offers, with images and details Nebulaa draws on when it creates campaigns.
             </p>
@@ -368,7 +368,7 @@ const Inventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
         ) : (
           <GravityHero
             align="left"
-            eyebrow="Products & Services"
+            eyebrow="Products and services"
             headline={<>Everything you <GravityEmphasis>offer</GravityEmphasis></>}
             subcopy="Your products and services, with images and details Nebulaa draws on when it creates campaigns, images and videos."
             className="!mb-0"
