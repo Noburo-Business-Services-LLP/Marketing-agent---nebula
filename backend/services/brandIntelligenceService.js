@@ -18,9 +18,6 @@ function normalizeHexColor(color) {
   return `#${full[1].toUpperCase()}`;
 }
 
-const DEFAULT_PRIMARY_COLOR = '#111111';
-const DEFAULT_SECONDARY_COLOR = '#FFCC29';
-
 const NAMED_COLORS = Object.freeze({
   black: '#000000',
   white: '#FFFFFF',
@@ -257,7 +254,7 @@ function extractColorsFromDeclarations(declarations = '', baseWeight = 0, bucket
 
 function deriveSecondaryColor(primaryColor) {
   const rgb = parseHexToRgb(primaryColor);
-  if (!rgb) return DEFAULT_SECONDARY_COLOR;
+  if (!rgb) return '';
   const hsl = rgbToHsl(rgb.r, rgb.g, rgb.b);
   const shiftedHue = (hsl.h + 34) % 360;
   const sat = Math.max(0.45, Math.min(0.85, hsl.s || 0.55));
@@ -267,8 +264,9 @@ function deriveSecondaryColor(primaryColor) {
 }
 
 function ensureDistinctSecondary(primaryColor, secondaryColor) {
-  const normalizedPrimary = normalizeHexColor(primaryColor) || DEFAULT_PRIMARY_COLOR;
+  const normalizedPrimary = normalizeHexColor(primaryColor);
   const normalizedSecondary = normalizeHexColor(secondaryColor);
+  if (!normalizedPrimary) return normalizedSecondary;
   if (!normalizedSecondary) return deriveSecondaryColor(normalizedPrimary);
   if (normalizedSecondary === normalizedPrimary || colorDistance(normalizedPrimary, normalizedSecondary) < 26) {
     return deriveSecondaryColor(normalizedPrimary);
@@ -361,47 +359,68 @@ function computeWebsiteConfidence({
   return Math.max(0, Math.min(100, Math.round(confidence)));
 }
 
-function buildManualColorResponse(primaryColor = '', secondaryColor = '', reason = '') {
+const NO_COLORS_REASON = 'No brand colours could be detected.';
+
+function buildNoColorResponse() {
+  return { primary_color: '', secondary_color: '', source: 'none', confidence: 0, reason: NO_COLORS_REASON };
+}
+
+// Used when no website colour is available: manual colours first, then the logo, otherwise nothing.
+async function buildFallbackColorResponse(primaryColor = '', secondaryColor = '', reason = '', logoBuffer = null) {
   const manualPrimary = normalizeHexColor(primaryColor);
   const manualSecondary = normalizeHexColor(secondaryColor);
-  const primary = manualPrimary || DEFAULT_PRIMARY_COLOR;
-  const secondary = ensureDistinctSecondary(primary, manualSecondary || DEFAULT_SECONDARY_COLOR);
-  const confidence =
-    manualPrimary && manualSecondary ? 96 :
-    manualPrimary || manualSecondary ? 84 : 68;
-
-  return {
-    primary_color: primary,
-    secondary_color: secondary,
-    source: 'manual',
-    confidence,
-    reason: reason || 'Used manually provided colors because website color signals were unavailable.'
-  };
+  if (manualPrimary || manualSecondary) {
+    const secondary = manualPrimary ? ensureDistinctSecondary(manualPrimary, manualSecondary) : manualSecondary;
+    return {
+      primary_color: manualPrimary,
+      secondary_color: secondary,
+      source: 'manual',
+      confidence: manualPrimary && manualSecondary ? 96 : 84,
+      reason: reason || 'Used manually provided colors because website color signals were unavailable.'
+    };
+  }
+  if (logoBuffer) {
+    const { extractLogoColors } = require('./logoColorService');
+    const fromLogo = await extractLogoColors(logoBuffer);
+    if (fromLogo.primary) {
+      return {
+        primary_color: fromLogo.primary,
+        secondary_color: fromLogo.secondary,
+        source: 'logo',
+        confidence: fromLogo.secondary ? 70 : 60,
+        reason: 'Colours were taken from your logo.'
+      };
+    }
+  }
+  return buildNoColorResponse();
 }
 
 async function determineBrandColors({
   websiteUrl = '',
   primaryColor = '',
   secondaryColor = '',
-  scrapeWebsite = null
+  scrapeWebsite = null,
+  logoBuffer = null
 } = {}) {
   const websiteInput = String(websiteUrl || '').trim();
   const manualPrimary = normalizeHexColor(primaryColor);
   const manualSecondary = normalizeHexColor(secondaryColor);
 
   if (!websiteInput) {
-    return buildManualColorResponse(
+    return buildFallbackColorResponse(
       manualPrimary,
       manualSecondary,
-      'No website URL was provided, so manual colors were used.'
+      'No website URL was provided, so manual colors were used.',
+      logoBuffer
     );
   }
 
   if (typeof scrapeWebsite !== 'function') {
-    return buildManualColorResponse(
+    return buildFallbackColorResponse(
       manualPrimary,
       manualSecondary,
-      'Website analysis is unavailable, so manual colors were used.'
+      'Website analysis is unavailable, so manual colors were used.',
+      logoBuffer
     );
   }
 
@@ -415,20 +434,22 @@ async function determineBrandColors({
       throw new Error('Invalid protocol');
     }
   } catch (error) {
-    return buildManualColorResponse(
+    return buildFallbackColorResponse(
       manualPrimary,
       manualSecondary,
-      'Website URL was invalid, so manual colors were used.'
+      'Website URL was invalid, so manual colors were used.',
+      logoBuffer
     );
   }
 
   try {
     const scrapeResult = await scrapeWebsite(parsedUrl.origin);
     if (!scrapeResult?.success) {
-      return buildManualColorResponse(
+      return buildFallbackColorResponse(
         manualPrimary,
         manualSecondary,
-        'Website could not be analyzed, so manual colors were used.'
+        'Website could not be analyzed, so manual colors were used.',
+        logoBuffer
       );
     }
 
@@ -446,17 +467,18 @@ async function determineBrandColors({
       '';
 
     if (!primaryCandidate) {
-      return buildManualColorResponse(
+      return buildFallbackColorResponse(
         manualPrimary,
         manualSecondary,
-        'No reliable website colors were detected, so manual colors were used.'
+        'No reliable website colors were detected, so manual colors were used.',
+        logoBuffer
       );
     }
 
     const primary = primaryCandidate;
     const secondary = ensureDistinctSecondary(
       primary,
-      contrastingSecondary || manualSecondary || DEFAULT_SECONDARY_COLOR
+      contrastingSecondary || manualSecondary
     );
     const primaryFromWebsite = Boolean(primaryCandidate);
     const secondaryFromWebsite = Boolean(contrastingSecondary);
@@ -474,10 +496,11 @@ async function determineBrandColors({
       reason: 'Colors were extracted from website UI signals (theme, buttons, headers, links, and CSS).'
     };
   } catch (error) {
-    return buildManualColorResponse(
+    return buildFallbackColorResponse(
       manualPrimary,
       manualSecondary,
-      'Website analysis failed, so manual colors were used.'
+      'Website analysis failed, so manual colors were used.',
+      logoBuffer
     );
   }
 }
@@ -864,6 +887,8 @@ function buildGenerationGuidelines(profile = {}) {
 
 module.exports = {
   normalizeHexColor,
+  deriveSecondaryColor,
+  ensureDistinctSecondary,
   normalizeToneValue,
   normalizePastPost,
   analyzeBrandInputs,

@@ -473,9 +473,9 @@ async function detectWebsiteBrandColors(websiteInput) {
   });
 
   return {
-    primary: result?.primary_color || '#111111',
-    secondary: result?.secondary_color || '#FFCC29',
-    source: result?.source || 'manual',
+    primary: result?.primary_color || '',
+    secondary: result?.secondary_color || '',
+    source: result?.source || 'none',
     confidence: result?.confidence || 0,
     reason: result?.reason || ''
   };
@@ -566,7 +566,7 @@ router.post('/signup', [
       try {
         const colors = await detectWebsiteBrandColors(normalizedWebsite);
         brandAssets = {
-          brandColors: [colors.primary, colors.secondary]
+          brandColors: [colors.primary, colors.secondary].filter(Boolean)
         };
       } catch (colorError) {
         console.error('Website color detection failed during signup:', colorError.message);

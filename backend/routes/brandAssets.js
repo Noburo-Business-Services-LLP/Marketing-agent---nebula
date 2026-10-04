@@ -14,6 +14,21 @@ const {
   normalizePastPost
 } = require('../services/brandIntelligenceService');
 
+const { extractLogoColors, colorsFromLogoUrl } = require('../services/logoColorService');
+
+// Replaceable in tests; production always uses these defaults.
+const deps = { uploadBase64Image, deepScrapeWebsite, extractLogoColors, colorsFromLogoUrl };
+
+function bufferFromImageData(imageData) {
+  try {
+    const raw = String(imageData || '');
+    const base64 = raw.includes(',') ? raw.slice(raw.indexOf(',') + 1) : raw;
+    return Buffer.from(base64, 'base64');
+  } catch (error) {
+    return null;
+  }
+}
+
 function getUserId(req) {
   return req.user?._id || req.user?.id || req.user?.userId || null;
 }
@@ -234,7 +249,7 @@ router.post('/upload', protect, async (req, res) => {
       : type === 'environment'
         ? 'nebula-brand-environment'
         : 'nebula-brand-templates';
-    const uploadResult = await uploadBase64Image(imageData, folder);
+    const uploadResult = await deps.uploadBase64Image(imageData, folder);
     
     if (!uploadResult.success) {
       return res.status(500).json({ success: false, message: 'Failed to upload image to cloud storage' });
@@ -276,11 +291,37 @@ router.post('/upload', protect, async (req, res) => {
       );
     }
     
+    // First logo and no colours yet: take them from the logo. Never overwrites colours the client has.
+    let colorsFromLogo = null;
+    if (type === 'logo') {
+      try {
+        const profile = await BrandIntelligenceProfile.findOne({ userId });
+        const user = await User.findById(userId).select('businessProfile');
+        const savedColors = Array.isArray(user?.businessProfile?.brandAssets?.brandColors)
+          ? user.businessProfile.brandAssets.brandColors
+          : [];
+        const primarySaved = normalizeHexColor(profile?.assets?.primaryColor || savedColors[0] || '');
+        const secondarySaved = normalizeHexColor(profile?.assets?.secondaryColor || savedColors[1] || '');
+        if (!primarySaved && !secondarySaved) {
+          const found = await deps.extractLogoColors(bufferFromImageData(imageData));
+          if (found.primary) {
+            const set = { 'assets.primaryColor': found.primary };
+            if (found.secondary) set['assets.secondaryColor'] = found.secondary;
+            await BrandIntelligenceProfile.findOneAndUpdate({ userId }, { $set: set }, { upsert: true });
+            colorsFromLogo = { primary: found.primary, secondary: found.secondary };
+          }
+        }
+      } catch (colorError) {
+        console.error('Could not read colours from the uploaded logo:', colorError.message);
+      }
+    }
+
     console.log(`✅ Brand ${type} uploaded for user ${userId}: ${name}`);
     
     res.status(201).json({
       success: true,
       asset,
+      ...(colorsFromLogo ? { colorsFromLogo } : {}),
       message: `${type === 'logo' ? 'Logo' : 'Template'} uploaded successfully`
     });
   } catch (error) {
@@ -518,23 +559,67 @@ router.post('/intelligence-profile/colors', protect, async (req, res) => {
     const primaryColor = String(req.body?.primary_color || req.body?.primaryColor || '').trim();
     const secondaryColor = String(req.body?.secondary_color || req.body?.secondaryColor || '').trim();
 
+    // Only look at the stored logo when the client typed no colours (typed colours always win).
+    let logoBuffer = null;
+    if (!normalizeHexColor(primaryColor) && !normalizeHexColor(secondaryColor)) {
+      try {
+        const storedLogoUrl = await getPrimaryLogoUrlForUser(getUserId(req));
+        if (storedLogoUrl) {
+          const { fetchLogoBuffer } = require('../services/heroVideoFinish');
+          logoBuffer = await fetchLogoBuffer(storedLogoUrl);
+        }
+      } catch (logoError) {
+        logoBuffer = null;
+      }
+    }
+
     const result = await determineBrandColors({
       websiteUrl,
       primaryColor,
       secondaryColor,
-      scrapeWebsite: async (url) => deepScrapeWebsite(url, { forceRefresh: true })
+      logoBuffer,
+      scrapeWebsite: async (url) => deps.deepScrapeWebsite(url, { forceRefresh: true })
     });
 
     res.json(result);
   } catch (error) {
     console.error('Error resolving brand colors:', error);
     res.status(500).json({
-      primary_color: '#111111',
-      secondary_color: '#FFCC29',
-      source: 'manual',
-      confidence: 50,
-      reason: 'Brand color detection failed, so default manual colors were used.'
+      primary_color: '',
+      secondary_color: '',
+      source: 'none',
+      confidence: 0,
+      reason: 'Nebulaa could not detect brand colours right now. Choose your colours yourself.'
     });
+  }
+});
+
+/**
+ * @route   POST /api/brand-assets/colors-from-logo
+ * @desc    Read colours from the signed-in user's own stored logo. Does not save them.
+ * @access  Private
+ */
+router.post('/colors-from-logo', protect, async (req, res) => {
+  try {
+    const logoUrl = await getPrimaryLogoUrlForUser(getUserId(req));
+    if (!logoUrl) {
+      return res.status(400).json({
+        success: false,
+        message: 'Upload your logo first, then Nebulaa can read its colours.'
+      });
+    }
+    const found = await deps.colorsFromLogoUrl(logoUrl);
+    const hasColors = Boolean(found?.primary);
+    res.json({
+      success: true,
+      primary_color: hasColors ? found.primary : '',
+      secondary_color: hasColors ? found.secondary || '' : '',
+      source: 'logo',
+      reason: hasColors ? 'Colours were taken from your logo.' : 'Nebulaa could not read colours from this logo.'
+    });
+  } catch (error) {
+    console.error('Error reading colours from logo:', error);
+    res.status(500).json({ success: false, message: 'Nebulaa could not read colours from this logo.' });
   }
 });
 
@@ -801,4 +886,5 @@ router.get('/primary-logo', protect, async (req, res) => {
   }
 });
 
+router._deps = deps;
 module.exports = router;

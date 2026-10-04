@@ -383,7 +383,7 @@ async function generateCampaignSuggestions(businessProfile, count = 6, allowedPl
   // Get brand assets if available
   const brandAssets = businessProfile.brandAssets || {};
   const logoUrl = brandAssets.logoUrl || brandAssets.ogImage || '';
-  const brandColors = (brandAssets.brandColors || []).slice(0, 5).join(', ');
+  const brandColors = (brandAssets.brandColors || []).filter(Boolean).slice(0, 5).join(', ');
   const brandImages = brandAssets.images || [];
 
   // Find product/service images from brand assets
@@ -715,7 +715,7 @@ async function generateAIImage(campaignTitle, campaignDescription, objective, pl
   if (brandContext.description) brandDetails.push(`About: ${brandContext.description.substring(0, 400)}`);
 
   // Add brand colors if available
-  const brandColors = brandContext.brandColors || [];
+  const brandColors = (brandContext.brandColors || []).filter(Boolean);
   if (brandColors.length > 0) {
     brandDetails.push(`Brand colors: ${brandColors.slice(0, 3).join(', ')} (incorporate these colors)`);
   }
