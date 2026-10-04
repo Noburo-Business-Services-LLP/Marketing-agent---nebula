@@ -30,3 +30,31 @@ No real video generation or fal call without the owner's OK for that run. No app
   - "Change your answers" does not restore earlier answers (the API returns no input).
   - `coverStyle` uses the visitor's first colour as the band and the second as a stripe (two side-by-side halves failed contrast).
 - Everything above, and the deploy checklist in item 5 of the list above, still applies. Nothing is pushed or deployed.
+
+## Update 2, 2026-10-04 night: quick Blueprint review done (mid-tier model, one pass)
+
+Result: **no Critical issues; three Important issues to fix before any deploy.** Backend 416, frontend 98, tsc 3 pre-existing errors (re-run by the reviewer). No secrets or build output in the diff.
+
+**Important (fix before deploy)**
+1. `backend/services/blueprint/qa.js:7-34` `scanClaimText` is regex-only and lets invented claims through: number words ("twenty percent", "twenty five years of craft", "established in nineteen ninety eight"), non-ASCII digits (Arabic-Indic and fullwidth; `DIGITS` is `\d`), bare domains ("example.com"), spaced emails ("hello @ example . com"), superlative or place phrasing ("the best in Chennai", "ranked first in town", "top-rated", "voted favourite by locals", "our cakes cure stress"), and curly single quotes. `planner.js:16-26` only checks that a cited fact id exists, not that the fact supports the text. Fix: scan with `\p{Nd}`, English number words (tens, "first/second"), bare-domain and spaced-email patterns, superlative and "in <place>" phrases, curly single quotes; add the hostile samples as table-driven tests (scratch scripts used by the reviewer were `qa1.js` and `ssrf1.js` in that session's scratchpad, now gone: rebuild from this list).
+2. `backend/services/blueprint/service.js:184-192`: if `deduct` succeeds but the next write (`charge.state: 'charged'`) throws, the document stays `pending`, nothing is enqueued, and the customer paid with no refund path (`refundOnce` at line 113 only claims `charged`; the stale poll at line 273 calls the same function). Fix: retry that write, or refund directly and mark the document failed.
+3. `service.js:105-109` `findExisting` is not scoped to the user and `alreadyUsed` (line 109) returns `ex.blueprintId`: user B entering user A's website or Instagram handle gets a 409 carrying A's id; `BlueprintStart.tsx:110` shows "Open existing", which 404s. No content leaks, but it is an id leak, an existence oracle, and lets anyone block a business's free slot. Fix: return the id only when `ex.userId` equals the caller.
+
+**Deploy-time facts to confirm**
+- After deploy, `db.blueprints.getIndexes()` must list `one_free_per_email` and `one_free_per_business` (only tested with fakes; the Atlas disk limit could make the index build fail; check sizes first).
+- Production proxy depth must match `app.set('trust proxy', 1)`: with two proxies in front every user shares one IP and the 3-per-day free cap becomes global.
+
+**Minor (follow-ups)**
+- `discovery.js:146` counts only `get()` toward the 9-fetch cap; `robots.txt` fetches add up to 3 (12 total).
+- `safeFetch.js:104-122` honours only the `User-agent: *` robots group.
+- The "no outside-service import" tests are weak (regex/substring, no transitive imports, `routes/blueprint.js` not covered in one of them).
+- Logo: only the `data:` header MIME and size are checked server-side before the Cloudinary upload (an outside call a free user can trigger, capped by the IP limit); upload happens before the charge, so a failed charge leaves an orphan file.
+- A guided Blueprint in `awaiting_approval` is not in the stale reconcile (`ACTIVE` is queued and processing only), so an abandoned one holds its charge (free accounts cannot use guided mode, so no free slot is held).
+- Every failed attempt, including `no_quarks`, counts toward the 3-per-day IP cap (`service.js:159`).
+- Competitor-page text enters the locked prompt without an explicit "treat as data" guard (output is regex-filtered and rendered as text).
+- The planner falls back to Gemini if OpenAI fails (`openAI.js:90-94`): a run can make two model calls.
+- `blueprint-new` 17 unknown backgrounds: judged safe to sign off in `frontend/scripts/visual-audit/unknown-signoff.json` (text over the panel gradient: primary 14.5-15.6, secondary 9.3-10, tertiary 5.3-5.8, accent 4.9-5.3); only error text in coral at the gradient's darkest top edge is 4.40 (marginally under 4.5).
+
+**Verified by the review (with evidence):** a free account can create a Blueprint but cannot publish, schedule, connect, use the inbox or competitors; the only outbound calls are `safeFetch` (visitor website, Instagram page, competitor robots.txt and home pages), the planner model call, and the Cloudinary logo upload; the charge price comes only from `QUARK_COSTS.blueprint` (7); refund-once holds on every traced path except Important 2; SSRF controls held under every trick tried (Instagram lookalikes, userinfo, IP forms incl. IPv4-mapped/6to4/NAT64/CGNAT, mixed DNS answers, redirects to private/http/port/credentials, redirect loops, same-site tricks, IDN homograph, streamed 400 KB cap, 8 s timeout, no gzip bomb because no Accept-Encoding); the model cannot produce `verified`; contact details come only from the `NEBULAA` constant; managed/legacy accounts are unaffected; locked prompt cannot be listed or edited; other customers' Blueprints return 404 and internals are never returned; no `dangerouslySetInnerHTML`; wording clean.
+
+**Still unverified:** unique indexes and concurrency on a real MongoDB; the real pinned fetch path and DNS; real model output against the locked prompt; production proxy topology; the existing `regenerateCalendar` endpoint's own gating and charging; Cloudinary and model calls; print preview in a real browser.
