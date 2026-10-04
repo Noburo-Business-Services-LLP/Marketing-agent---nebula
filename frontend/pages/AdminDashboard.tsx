@@ -264,15 +264,15 @@ const AdminDashboard: React.FC = () => {
           </div>
           <div>
             <p className="text-white font-semibold text-sm leading-none">Nebulaa Admin</p>
-            <p className="text-white/30 text-xs mt-0.5">demo.nebulaa.ai</p>
+            <p className="text-white/60 text-xs mt-0.5">demo.nebulaa.ai</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={loadData} className="p-2 rounded-lg text-white/40 hover:text-white hover:bg-white/5 transition-all">
+          <button onClick={loadData} className="p-2 rounded-lg text-white/70 hover:text-white hover:bg-white/5 transition-all">
             <RefreshCw className="w-4 h-4" />
           </button>
           <button onClick={() => { localStorage.removeItem('adminToken'); navigate('/admin/login'); }}
-            className="flex items-center gap-2 text-white/40 hover:text-white text-xs px-3 py-2 rounded-lg hover:bg-white/5 transition-all">
+            className="flex items-center gap-2 text-white/70 hover:text-white text-xs px-3 py-2 rounded-lg hover:bg-white/5 transition-all">
             <LogOut className="w-3.5 h-3.5" /> Logout
           </button>
         </div>
@@ -290,14 +290,14 @@ const AdminDashboard: React.FC = () => {
               <div className="mb-6 bg-white/[0.03] border border-white/[0.06] rounded-2xl p-5">
                 <div className="flex items-start justify-between mb-4 gap-4 flex-wrap">
                   <div>
-                    <p className="text-white/50 text-xs uppercase tracking-wider mb-1">Suspension Risk — 429 errors today</p>
+                    <p className="text-white/70 text-xs uppercase tracking-wider mb-1">Suspension Risk — 429 errors today</p>
                     <div className="flex items-baseline gap-3">
                       <p className={`text-4xl font-black ${ayrshareUsage.percentToSuspension >= 80 ? 'text-red-300' : ayrshareUsage.percentToSuspension >= 50 ? 'text-yellow-300' : 'text-emerald-300'}`}>
                         {(ayrshareUsage.rateLimit429sToday ?? 0).toLocaleString()}
                       </p>
-                      <p className="text-white/40 text-sm">/ {(ayrshareUsage.suspensionLimit ?? 1000).toLocaleString()} → auto-suspension ({ayrshareUsage.percentToSuspension ?? 0}%)</p>
+                      <p className="text-white/70 text-sm">/ {(ayrshareUsage.suspensionLimit ?? 1000).toLocaleString()} → auto-suspension ({ayrshareUsage.percentToSuspension ?? 0}%)</p>
                     </div>
-                    <p className="text-white/30 text-xs mt-2">
+                    <p className="text-white/60 text-xs mt-2">
                       Total calls today: <span className="text-white/60 font-mono">{ayrshareUsage.today.toLocaleString()}</span>
                     </p>
                   </div>
@@ -319,7 +319,7 @@ const AdminDashboard: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Status buckets */}
                   <div>
-                    <p className="text-white/40 text-xs uppercase tracking-wider mb-2">By Result</p>
+                    <p className="text-white/70 text-xs uppercase tracking-wider mb-2">By Result</p>
                     <div className="flex flex-wrap gap-2">
                       {Object.entries(ayrshareUsage.byBucketToday).map(([bucket, count]: any) => count > 0 && (
                         <span key={bucket} className={`px-2 py-1 rounded-lg text-xs font-medium ${
@@ -327,7 +327,7 @@ const AdminDashboard: React.FC = () => {
                           bucket === '4xx' ? 'bg-yellow-500/10 text-yellow-300 border border-yellow-500/20' :
                           bucket === '5xx' ? 'bg-red-500/10 text-red-300 border border-red-500/20' :
                           bucket === 'blocked' ? 'bg-orange-500/10 text-orange-300 border border-orange-500/20' :
-                          'bg-white/[0.03] text-white/50 border border-white/[0.06]'
+                          'bg-white/[0.03] text-white/70 border border-white/[0.06]'
                         }`}>
                           {bucket}: {count}
                         </span>
@@ -337,7 +337,7 @@ const AdminDashboard: React.FC = () => {
 
                   {/* 7-day trend */}
                   <div>
-                    <p className="text-white/40 text-xs uppercase tracking-wider mb-2">Last 7 days</p>
+                    <p className="text-white/70 text-xs uppercase tracking-wider mb-2">Last 7 days</p>
                     <div className="flex items-end gap-1 h-12">
                       {ayrshareUsage.trend.map((d: any) => {
                         const maxCount = Math.max(1, ...ayrshareUsage.trend.map((x: any) => x.count));
@@ -345,7 +345,7 @@ const AdminDashboard: React.FC = () => {
                         return (
                           <div key={d.date} className="flex-1 flex flex-col items-center gap-1">
                             <div className="w-full bg-[#ffcc29]/40 rounded-t" style={{ height: `${heightPct}%`, minHeight: d.count > 0 ? '2px' : '0' }} />
-                            <span className="text-[9px] text-white/30">{d.date.slice(-2)}</span>
+                            <span className="text-[9px] text-white/60">{d.date.slice(-2)}</span>
                           </div>
                         );
                       })}
@@ -356,7 +356,7 @@ const AdminDashboard: React.FC = () => {
                 {/* Endpoint breakdown */}
                 {Object.keys(ayrshareUsage.byEndpointToday).length > 0 && (
                   <div className="mt-4 pt-4 border-t border-white/[0.06]">
-                    <p className="text-white/40 text-xs uppercase tracking-wider mb-2">Top Endpoints Today</p>
+                    <p className="text-white/70 text-xs uppercase tracking-wider mb-2">Top Endpoints Today</p>
                     <div className="space-y-1">
                       {Object.entries(ayrshareUsage.byEndpointToday)
                         .sort((a: any, b: any) => b[1] - a[1])
@@ -379,14 +379,14 @@ const AdminDashboard: React.FC = () => {
                       ? 'bg-red-500/10 border-red-500/30'
                       : 'bg-emerald-500/5 border-emerald-500/20'
                   }`}>
-                    <p className="text-white/40 text-[10px] uppercase tracking-wider mb-1">Circuit Breaker</p>
+                    <p className="text-white/70 text-[10px] uppercase tracking-wider mb-1">Circuit Breaker</p>
                     <p className={`text-lg font-bold ${
                       ayrshareUsage.circuitBreaker?.tripped ? 'text-red-300' : 'text-emerald-300'
                     }`}>
                       {ayrshareUsage.circuitBreaker?.tripped ? 'TRIPPED' : 'CLOSED'}
                     </p>
                     {ayrshareUsage.circuitBreaker?.tripped && (
-                      <p className="text-white/50 text-[10px] mt-1">
+                      <p className="text-white/70 text-[10px] mt-1">
                         Unlocks in {Math.round(ayrshareUsage.circuitBreaker.remainingSeconds / 60)} min
                       </p>
                     )}
@@ -398,13 +398,13 @@ const AdminDashboard: React.FC = () => {
                       ? 'bg-yellow-500/10 border-yellow-500/30'
                       : 'bg-white/[0.03] border-white/[0.06]'
                   }`}>
-                    <p className="text-white/40 text-[10px] uppercase tracking-wider mb-1">Auto-Cancelled Today</p>
+                    <p className="text-white/70 text-[10px] uppercase tracking-wider mb-1">Auto-Cancelled Today</p>
                     <p className={`text-lg font-bold ${
                       (ayrshareUsage.campaignFailures?.autoCancelledToday ?? 0) > 0 ? 'text-yellow-300' : 'text-white/80'
                     }`}>
                       {ayrshareUsage.campaignFailures?.autoCancelledToday ?? 0}
                     </p>
-                    <p className="text-white/50 text-[10px] mt-1">
+                    <p className="text-white/70 text-[10px] mt-1">
                       {ayrshareUsage.campaignFailures?.autoCancelledTotal ?? 0} total ever
                     </p>
                   </div>
@@ -415,26 +415,26 @@ const AdminDashboard: React.FC = () => {
                       ? 'bg-orange-500/10 border-orange-500/30'
                       : 'bg-white/[0.03] border-white/[0.06]'
                   }`}>
-                    <p className="text-white/40 text-[10px] uppercase tracking-wider mb-1">At Risk</p>
+                    <p className="text-white/70 text-[10px] uppercase tracking-wider mb-1">At Risk</p>
                     <p className={`text-lg font-bold ${
                       (ayrshareUsage.campaignFailures?.atRiskCampaigns ?? 0) > 0 ? 'text-orange-300' : 'text-white/80'
                     }`}>
                       {ayrshareUsage.campaignFailures?.atRiskCampaigns ?? 0}
                     </p>
-                    <p className="text-white/50 text-[10px] mt-1">1-2 fails, retrying</p>
+                    <p className="text-white/70 text-[10px] mt-1">1-2 fails, retrying</p>
                   </div>
                 </div>
 
                 {/* Recent auto-cancels */}
                 {(ayrshareUsage.campaignFailures?.recentAutoCancels?.length ?? 0) > 0 && (
                   <div className="mt-4 pt-4 border-t border-white/[0.06]">
-                    <p className="text-white/40 text-xs uppercase tracking-wider mb-2">Recent Auto-Cancelled Campaigns</p>
+                    <p className="text-white/70 text-xs uppercase tracking-wider mb-2">Recent Auto-Cancelled Campaigns</p>
                     <div className="space-y-2">
                       {ayrshareUsage.campaignFailures.recentAutoCancels.map((c: any) => (
                         <div key={c._id} className="flex items-start justify-between gap-3 text-xs">
                           <div className="min-w-0 flex-1">
                             <p className="text-white/80 font-medium truncate">{c.name || '(no name)'}</p>
-                            <p className="text-white/40 text-[10px] font-mono truncate mt-0.5">
+                            <p className="text-white/70 text-[10px] font-mono truncate mt-0.5">
                               {(c.platforms || []).join(', ')} • {c.publishFailureCount} fails
                             </p>
                             {c.lastPublishError && (
@@ -443,7 +443,7 @@ const AdminDashboard: React.FC = () => {
                               </p>
                             )}
                           </div>
-                          <span className="text-white/40 text-[10px] shrink-0">
+                          <span className="text-white/70 text-[10px] shrink-0">
                             {new Date(c.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </span>
                         </div>
@@ -459,44 +459,44 @@ const AdminDashboard: React.FC = () => {
               <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
                 {/* Primary metrics */}
                 <div className="col-span-2 sm:col-span-4 lg:col-span-2 bg-gradient-to-br from-[#ffcc29]/10 to-transparent border border-[#ffcc29]/20 rounded-2xl p-5">
-                  <p className="text-white/50 text-xs uppercase tracking-wider mb-1">Total Users</p>
+                  <p className="text-white/70 text-xs uppercase tracking-wider mb-1">Total Users</p>
                   <p className="text-5xl font-black text-white">{overview.totalUsers}</p>
                   <div className="flex gap-4 mt-3">
-                    <span className="text-xs text-white/40">+{overview.newToday} today</span>
-                    <span className="text-xs text-white/40">+{overview.newThisWeek} this week</span>
+                    <span className="text-xs text-white/70">+{overview.newToday} today</span>
+                    <span className="text-xs text-white/70">+{overview.newThisWeek} this week</span>
                   </div>
                 </div>
 
                 <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 hover:border-emerald-500/30 transition-colors">
                   <div className="flex items-center justify-between mb-2">
-                    <p className="text-white/40 text-xs uppercase tracking-wider">DAU</p>
+                    <p className="text-white/70 text-xs uppercase tracking-wider">DAU</p>
                     <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
                   </div>
                   <p className="text-2xl font-bold text-white">{overview.dau}</p>
-                  <p className="text-white/30 text-xs mt-1">Active today</p>
+                  <p className="text-white/60 text-xs mt-1">Active today</p>
                 </div>
 
                 <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 hover:border-blue-500/30 transition-colors">
                   <div className="flex items-center justify-between mb-2">
-                    <p className="text-white/40 text-xs uppercase tracking-wider">WAU</p>
+                    <p className="text-white/70 text-xs uppercase tracking-wider">WAU</p>
                     <TrendingUp className="w-3.5 h-3.5 text-blue-400" />
                   </div>
                   <p className="text-2xl font-bold text-white">{overview.wau}</p>
-                  <p className="text-white/30 text-xs mt-1">Last 7 days</p>
+                  <p className="text-white/60 text-xs mt-1">Last 7 days</p>
                 </div>
 
                 <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 hover:border-violet-500/30 transition-colors">
                   <div className="flex items-center justify-between mb-2">
-                    <p className="text-white/40 text-xs uppercase tracking-wider">MAU</p>
+                    <p className="text-white/70 text-xs uppercase tracking-wider">MAU</p>
                     <Activity className="w-3.5 h-3.5 text-violet-400" />
                   </div>
                   <p className="text-2xl font-bold text-white">{overview.mau}</p>
-                  <p className="text-white/30 text-xs mt-1">Last 30 days</p>
+                  <p className="text-white/60 text-xs mt-1">Last 30 days</p>
                 </div>
 
                 <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 hover:border-emerald-500/30 transition-colors">
                   <div className="flex items-center justify-between mb-2">
-                    <p className="text-white/40 text-xs uppercase tracking-wider">Active Trials</p>
+                    <p className="text-white/70 text-xs uppercase tracking-wider">Active Trials</p>
                     <Shield className="w-3.5 h-3.5 text-emerald-400" />
                   </div>
                   <p className="text-2xl font-bold text-white">{overview.activeTrials}</p>
@@ -505,7 +505,7 @@ const AdminDashboard: React.FC = () => {
 
                 <div className="bg-red-500/5 border border-red-500/20 rounded-2xl p-4">
                   <div className="flex items-center justify-between mb-2">
-                    <p className="text-red-400/70 text-xs uppercase tracking-wider">Expired</p>
+                    <p className="text-red-300 text-xs uppercase tracking-wider">Expired</p>
                     <UserX className="w-3.5 h-3.5 text-red-400" />
                   </div>
                   <p className="text-2xl font-bold text-red-300">{overview.expiredTrials}</p>
@@ -513,26 +513,26 @@ const AdminDashboard: React.FC = () => {
 
                 <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4">
                   <div className="flex items-center justify-between mb-2">
-                    <p className="text-white/40 text-xs uppercase tracking-wider">Credits Used</p>
+                    <p className="text-white/70 text-xs uppercase tracking-wider">Credits Used</p>
                     <Zap className="w-3.5 h-3.5 text-[#ffcc29]" />
                   </div>
                   <p className="text-2xl font-bold text-white">{overview.totalCreditsUsed.toLocaleString()}</p>
-                  <p className="text-white/30 text-xs mt-1">All users</p>
+                  <p className="text-white/60 text-xs mt-1">All users</p>
                 </div>
 
                 {contentStats && (
                   <>
                     <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4">
                       <div className="flex items-center justify-between mb-2">
-                        <p className="text-white/40 text-xs uppercase tracking-wider">Generated</p>
+                        <p className="text-white/70 text-xs uppercase tracking-wider">Generated</p>
                         <BarChart2 className="w-3.5 h-3.5 text-blue-400" />
                       </div>
                       <p className="text-2xl font-bold text-white">{contentStats.generated}</p>
-                      <p className="text-white/30 text-xs mt-1">Posts created</p>
+                      <p className="text-white/60 text-xs mt-1">Posts created</p>
                     </div>
                     <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4">
                       <div className="flex items-center justify-between mb-2">
-                        <p className="text-white/40 text-xs uppercase tracking-wider">Publish Rate</p>
+                        <p className="text-white/70 text-xs uppercase tracking-wider">Publish Rate</p>
                         <Send className="w-3.5 h-3.5 text-emerald-400" />
                       </div>
                       <p className="text-2xl font-bold text-white">{contentStats.publishRate}%</p>
@@ -552,7 +552,7 @@ const AdminDashboard: React.FC = () => {
                   className={`px-5 py-2 rounded-xl text-sm font-medium transition-all ${
                     activeTab === tab
                       ? 'bg-[#ffcc29] text-black shadow-lg shadow-[#ffcc29]/20'
-                      : 'text-white/40 hover:text-white hover:bg-white/5'
+                      : 'text-white/70 hover:text-white hover:bg-white/5'
                   }`}>
                   {tab === 'funnel' ? 'Trial Funnel' : tab === 'content' ? 'Content Stats' : tab === 'coupons' ? 'Coupons' : 'Users'}
                 </button>
@@ -569,10 +569,10 @@ const AdminDashboard: React.FC = () => {
                     <div className="px-5 py-4 border-b border-white/[0.06]">
                       <div className="flex items-center gap-3">
                         <div className="relative flex-1">
-                          <Search className="w-4 h-4 text-white/20 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                          <Search className="w-4 h-4 text-white/60 absolute left-3.5 top-1/2 -translate-y-1/2" />
                           <input type="text" placeholder="Search by email or company..."
                             value={search} onChange={e => setSearch(e.target.value)}
-                            className="w-full bg-white/[0.04] border border-white/[0.06] rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-white/20 outline-none focus:border-[#ffcc29]/40 transition-colors"
+                            className="w-full bg-white/[0.04] border border-white/[0.06] rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-white/55 outline-none focus:border-[#ffcc29]/40 transition-colors"
                           />
                         </div>
                         <button
@@ -580,7 +580,7 @@ const AdminDashboard: React.FC = () => {
                           className={`flex-shrink-0 px-3 py-2.5 rounded-xl text-xs font-medium border transition-colors ${
                             showHidden
                               ? 'bg-[#ffcc29]/10 text-[#ffcc29] border-[#ffcc29]/20'
-                              : 'bg-white/[0.04] text-white/40 border-white/[0.06] hover:text-white/60'
+                              : 'bg-white/[0.04] text-white/70 border-white/[0.06] hover:text-white/60'
                           }`}
                         >
                           {showHidden ? 'Hide hidden' : `Show hidden (${users.filter(u => u.isHidden).length})`}
@@ -593,7 +593,7 @@ const AdminDashboard: React.FC = () => {
                         <thead>
                           <tr className="border-b border-white/[0.04]">
                             {['User', 'Credits', 'Activity', 'Trial', 'Last Login', 'Status', ''].map(h => (
-                              <th key={h} className="text-left text-white/30 text-xs font-medium px-5 py-3 uppercase tracking-wider">{h}</th>
+                              <th key={h} className="text-left text-white/60 text-xs font-medium px-5 py-3 uppercase tracking-wider">{h}</th>
                             ))}
                           </tr>
                         </thead>
@@ -611,22 +611,22 @@ const AdminDashboard: React.FC = () => {
                                     </div>
                                     <div>
                                       <p className="text-white text-sm font-medium">{u.email}</p>
-                                      <p className="text-white/30 text-xs">{u.companyName || '—'}</p>
+                                      <p className="text-white/60 text-xs">{u.companyName || '—'}</p>
                                     </div>
                                   </div>
                                 </td>
                                 <td className="px-5 py-3.5">
                                   <p className="text-[#ffcc29] text-sm font-semibold">{u.credits?.balance ?? '—'}</p>
-                                  <p className="text-white/25 text-xs">{u.credits?.totalUsed ?? 0} used</p>
+                                  <p className="text-white/60 text-xs">{u.credits?.totalUsed ?? 0} used</p>
                                 </td>
                                 <td className="px-5 py-3.5">
-                                  <p className={`text-sm font-medium ${u.eventTotal > 0 ? 'text-white' : 'text-white/20'}`}>{u.eventTotal}</p>
-                                  <p className="text-white/25 text-xs">events</p>
+                                  <p className={`text-sm font-medium ${u.eventTotal > 0 ? 'text-white' : 'text-white/60'}`}>{u.eventTotal}</p>
+                                  <p className="text-white/60 text-xs">events</p>
                                 </td>
                                 <td className="px-5 py-3.5">
                                   <span className={`px-2.5 py-1 rounded-lg text-xs font-medium ${trial.cls}`}>{trial.label}</span>
                                 </td>
-                                <td className="px-5 py-3.5 text-white/40 text-xs">
+                                <td className="px-5 py-3.5 text-white/70 text-xs">
                                   {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '—'}
                                 </td>
                                 <td className="px-5 py-3.5">
@@ -643,19 +643,19 @@ const AdminDashboard: React.FC = () => {
                                       className={`opacity-0 group-hover:opacity-100 transition-opacity px-2 py-1 rounded-lg text-xs font-medium border ${
                                         u.isHidden
                                           ? 'text-[#ffcc29] bg-[#ffcc29]/10 border-[#ffcc29]/20'
-                                          : 'text-white/40 bg-white/[0.04] border-white/[0.06] hover:text-white/70'
+                                          : 'text-white/70 bg-white/[0.04] border-white/[0.06] hover:text-white/70'
                                       }`}
                                     >
                                       {hidingUser === u._id ? '...' : u.isHidden ? 'Unhide' : 'Hide'}
                                     </button>
-                                    <ChevronRight className="w-4 h-4 text-white/20 group-hover:text-white/50 transition-colors" />
+                                    <ChevronRight className="w-4 h-4 text-white/60 group-hover:text-white/80 transition-colors" />
                                   </div>
                                 </td>
                               </tr>
                             );
                           })}
                           {filtered.length === 0 && (
-                            <tr><td colSpan={7} className="text-center text-white/20 py-12 text-sm">No users found</td></tr>
+                            <tr><td colSpan={7} className="text-center text-white/60 py-12 text-sm">No users found</td></tr>
                           )}
                         </tbody>
                       </table>
@@ -683,7 +683,7 @@ const AdminDashboard: React.FC = () => {
                           </div>
                           <div className="space-y-2 max-h-52 overflow-auto">
                             {list.length === 0 ? (
-                              <p className="text-white/20 text-xs text-center py-4">None</p>
+                              <p className="text-white/60 text-xs text-center py-4">None</p>
                             ) : list.map(u => (
                               <div key={u._id}
                                 onClick={() => { setActiveTab('users'); openUser(u._id); }}
@@ -694,10 +694,10 @@ const AdminDashboard: React.FC = () => {
                                   </div>
                                   <div className="min-w-0">
                                     <p className="text-white text-xs font-medium truncate">{u.email}</p>
-                                    <p className="text-white/30 text-xs truncate">{u.companyName || '—'}</p>
+                                    <p className="text-white/60 text-xs truncate">{u.companyName || '—'}</p>
                                   </div>
                                 </div>
-                                <span className="text-white/40 text-xs flex-shrink-0 ml-2">{u.credits?.balance ?? '—'} cr</span>
+                                <span className="text-white/70 text-xs flex-shrink-0 ml-2">{u.credits?.balance ?? '—'} cr</span>
                               </div>
                             ))}
                           </div>
@@ -717,9 +717,9 @@ const AdminDashboard: React.FC = () => {
                         { label: 'Publish Rate', value: `${contentStats.publishRate}%`, sub: 'Generated → Published', color: 'text-[#ffcc29]', bg: 'from-yellow-500/10' },
                       ].map(({ label, value, sub, color, bg }) => (
                         <div key={label} className={`bg-gradient-to-b ${bg} to-transparent border border-white/[0.06] rounded-2xl p-6`}>
-                          <p className="text-white/40 text-xs uppercase tracking-wider mb-3">{label}</p>
+                          <p className="text-white/70 text-xs uppercase tracking-wider mb-3">{label}</p>
                           <p className={`text-4xl font-black ${color}`}>{value}</p>
-                          <p className="text-white/30 text-xs mt-2">{sub}</p>
+                          <p className="text-white/60 text-xs mt-2">{sub}</p>
                           {label === 'Publish Rate' && (
                             <div className="w-full bg-white/10 rounded-full h-1.5 mt-3">
                               <div className="bg-[#ffcc29] h-1.5 rounded-full" style={{ width: `${contentStats.publishRate}%` }} />
@@ -730,20 +730,20 @@ const AdminDashboard: React.FC = () => {
                     </div>
 
                     <div className="bg-white/[0.02] border border-white/[0.06] rounded-2xl p-5">
-                      <p className="text-white/40 text-xs uppercase tracking-wider mb-4">Top Generators</p>
+                      <p className="text-white/70 text-xs uppercase tracking-wider mb-4">Top Generators</p>
                       {contentStats.topGenerators.length === 0 ? (
-                        <p className="text-white/20 text-sm text-center py-6">No data yet — will populate as users generate posts</p>
+                        <p className="text-white/60 text-sm text-center py-6">No data yet — will populate as users generate posts</p>
                       ) : (
                         <div className="space-y-2">
                           {contentStats.topGenerators.map((u, i) => (
                             <div key={i} className="flex items-center gap-4 bg-white/[0.03] rounded-xl px-4 py-3">
-                              <span className="text-white/20 text-sm font-bold w-5">#{i + 1}</span>
+                              <span className="text-white/60 text-sm font-bold w-5">#{i + 1}</span>
                               <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold ${avatarColor(u.email)}`}>
                                 {getInitials(u.email)}
                               </div>
                               <div className="flex-1 min-w-0">
                                 <p className="text-white text-sm font-medium truncate">{u.email}</p>
-                                <p className="text-white/30 text-xs">{u.companyName || '—'}</p>
+                                <p className="text-white/60 text-xs">{u.companyName || '—'}</p>
                               </div>
                               <span className="text-[#ffcc29] font-bold text-sm">{u.count} posts</span>
                             </div>
@@ -760,7 +760,7 @@ const AdminDashboard: React.FC = () => {
                 <div className="w-[300px] flex-shrink-0 bg-white/[0.02] border border-white/[0.06] rounded-2xl overflow-hidden">
                   <div className="px-5 py-4 border-b border-white/[0.06] flex items-center justify-between">
                     <p className="text-white font-semibold text-sm">User Details</p>
-                    <button onClick={() => setSelected(null)} className="text-white/30 hover:text-white transition-colors">
+                    <button onClick={() => setSelected(null)} className="text-white/60 hover:text-white transition-colors">
                       <X className="w-4 h-4" />
                     </button>
                   </div>
@@ -779,15 +779,15 @@ const AdminDashboard: React.FC = () => {
                           </div>
                           <div className="min-w-0">
                             <p className="text-white text-sm font-medium truncate">{selected.user.email}</p>
-                            <p className="text-white/40 text-xs">{selected.user.companyName || 'No company'}</p>
+                            <p className="text-white/70 text-xs">{selected.user.companyName || 'No company'}</p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-1.5 text-xs text-white/30">
+                        <div className="flex items-center gap-1.5 text-xs text-white/60">
                           <Calendar className="w-3 h-3" />
                           <span>Joined {new Date(selected.user.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                         </div>
                         {selected.user.lastLoginAt && (
-                          <p className="text-white/20 text-xs mt-1">Last login: {new Date(selected.user.lastLoginAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
+                          <p className="text-white/60 text-xs mt-1">Last login: {new Date(selected.user.lastLoginAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
                         )}
                       </div>
 
@@ -802,7 +802,7 @@ const AdminDashboard: React.FC = () => {
                           ].map(({ label, value, color }) => (
                             <div key={label} className="bg-white/[0.03] rounded-xl p-3 text-center">
                               <p className={`text-xl font-bold ${color}`}>{value}</p>
-                              <p className="text-white/30 text-xs mt-0.5">{label}</p>
+                              <p className="text-white/60 text-xs mt-0.5">{label}</p>
                             </div>
                           ))}
                         </div>
@@ -811,7 +811,7 @@ const AdminDashboard: React.FC = () => {
                       {/* Mobile Number */}
                       {selected.user.mobileNumber && (
                         <div className="px-5 py-3 border-b border-white/[0.04]">
-                          <p className="text-white/30 text-xs uppercase tracking-wider mb-1">Mobile</p>
+                          <p className="text-white/60 text-xs uppercase tracking-wider mb-1">Mobile</p>
                           <p className="text-white text-sm font-medium">{selected.user.mobileNumber}</p>
                         </div>
                       )}
@@ -819,16 +819,16 @@ const AdminDashboard: React.FC = () => {
                       {/* Customer-filled business profile snapshot */}
                       {(selected.user.businessProfile?.yearsInBusiness !== undefined || selected.user.businessProfile?.brandMaturity) && (
                         <div className="px-5 py-3 border-b border-white/[0.04] space-y-2">
-                          <p className="text-white/30 text-xs uppercase tracking-wider">Business Profile</p>
+                          <p className="text-white/60 text-xs uppercase tracking-wider">Business Profile</p>
                           {selected.user.businessProfile?.yearsInBusiness !== undefined && selected.user.businessProfile?.yearsInBusiness !== null && (
                             <div className="flex justify-between text-sm">
-                              <span className="text-white/45">Years in business</span>
+                              <span className="text-white/70">Years in business</span>
                               <span className="text-white font-medium">{selected.user.businessProfile.yearsInBusiness}</span>
                             </div>
                           )}
                           {selected.user.businessProfile?.brandMaturity && (
                             <div className="flex justify-between text-sm">
-                              <span className="text-white/45">Brand maturity</span>
+                              <span className="text-white/70">Brand maturity</span>
                               <span className="text-white font-medium capitalize">{selected.user.businessProfile.brandMaturity}</span>
                             </div>
                           )}
@@ -837,7 +837,7 @@ const AdminDashboard: React.FC = () => {
 
                       {/* Admin Actions */}
                       <div className="px-5 py-4 border-b border-white/[0.04] space-y-3">
-                        <p className="text-white/30 text-xs uppercase tracking-wider">Admin Actions</p>
+                        <p className="text-white/60 text-xs uppercase tracking-wider">Admin Actions</p>
                         {adminActionMsg && (
                           <p className="text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2">{adminActionMsg}</p>
                         )}
@@ -882,9 +882,9 @@ const AdminDashboard: React.FC = () => {
 
                       {/* Feature Usage */}
                       <div className="px-5 py-4">
-                        <p className="text-white/30 text-xs uppercase tracking-wider mb-3">Feature Usage</p>
+                        <p className="text-white/60 text-xs uppercase tracking-wider mb-3">Feature Usage</p>
                         {selected.usage.length === 0 ? (
-                          <p className="text-white/20 text-sm text-center py-6">No activity yet</p>
+                          <p className="text-white/60 text-sm text-center py-6">No activity yet</p>
                         ) : (
                           <div className="space-y-2">
                             {selected.usage.map(u => (
@@ -894,8 +894,8 @@ const AdminDashboard: React.FC = () => {
                                   <span className="text-[#ffcc29] font-bold text-sm">{u.count}×</span>
                                 </div>
                                 <div className="flex items-center justify-between mt-1">
-                                  <p className="text-white/25 text-xs">{new Date(u.lastUsed).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</p>
-                                  {u.creditsUsed > 0 && <p className="text-white/25 text-xs">{u.creditsUsed} cr</p>}
+                                  <p className="text-white/60 text-xs">{new Date(u.lastUsed).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</p>
+                                  {u.creditsUsed > 0 && <p className="text-white/60 text-xs">{u.creditsUsed} cr</p>}
                                 </div>
                               </div>
                             ))}
@@ -913,31 +913,31 @@ const AdminDashboard: React.FC = () => {
               <div className="max-w-2xl space-y-5">
                 {/* Create form */}
                 <div className="bg-white/[0.02] border border-white/[0.06] rounded-2xl p-5">
-                  <p className="text-white/50 text-xs uppercase tracking-wider mb-4 flex items-center gap-2"><Tag className="w-3.5 h-3.5" /> Create Coupon</p>
+                  <p className="text-white/70 text-xs uppercase tracking-wider mb-4 flex items-center gap-2"><Tag className="w-3.5 h-3.5" /> Create Coupon</p>
                   <div className="grid grid-cols-2 gap-3 mb-3">
                     <div>
-                      <label className="text-white/30 text-xs mb-1 block">Code</label>
+                      <label className="text-white/60 text-xs mb-1 block">Code</label>
                       <input type="text" placeholder="e.g. BOBBY50" value={couponForm.code}
                         onChange={e => setCouponForm(p => ({ ...p, code: e.target.value.toUpperCase() }))}
-                        className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-white placeholder-white/20 outline-none focus:border-[#ffcc29]/40 transition-colors font-mono" />
+                        className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-white placeholder-white/55 outline-none focus:border-[#ffcc29]/40 transition-colors font-mono" />
                     </div>
                     <div>
-                      <label className="text-white/30 text-xs mb-1 block">Discounted Price (₹)</label>
+                      <label className="text-white/60 text-xs mb-1 block">Discounted Price (₹)</label>
                       <input type="number" value={couponForm.discountedAmount}
                         onChange={e => setCouponForm(p => ({ ...p, discountedAmount: e.target.value }))}
                         className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-[#ffcc29]/40 transition-colors" />
                     </div>
                     <div>
-                      <label className="text-white/30 text-xs mb-1 block">Max Uses</label>
+                      <label className="text-white/60 text-xs mb-1 block">Max Uses</label>
                       <input type="number" value={couponForm.maxUses}
                         onChange={e => setCouponForm(p => ({ ...p, maxUses: e.target.value }))}
                         className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-[#ffcc29]/40 transition-colors" />
                     </div>
                     <div>
-                      <label className="text-white/30 text-xs mb-1 block">Note (optional)</label>
+                      <label className="text-white/60 text-xs mb-1 block">Note (optional)</label>
                       <input type="text" placeholder="e.g. For Bobby" value={couponForm.note}
                         onChange={e => setCouponForm(p => ({ ...p, note: e.target.value }))}
-                        className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-white placeholder-white/20 outline-none focus:border-[#ffcc29]/40 transition-colors" />
+                        className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-white placeholder-white/55 outline-none focus:border-[#ffcc29]/40 transition-colors" />
                     </div>
                   </div>
                   <button onClick={createCoupon} disabled={couponCreating || !couponForm.code.trim()}
@@ -949,37 +949,37 @@ const AdminDashboard: React.FC = () => {
                 {/* Coupons list */}
                 <div className="bg-white/[0.02] border border-white/[0.06] rounded-2xl overflow-hidden">
                   <div className="px-5 py-3 border-b border-white/[0.06]">
-                    <p className="text-white/50 text-xs uppercase tracking-wider">All Coupons ({coupons.length})</p>
+                    <p className="text-white/70 text-xs uppercase tracking-wider">All Coupons ({coupons.length})</p>
                   </div>
                   {coupons.length === 0 ? (
-                    <p className="text-white/20 text-sm text-center py-10">No coupons yet</p>
+                    <p className="text-white/60 text-sm text-center py-10">No coupons yet</p>
                   ) : (
                     <div className="divide-y divide-white/[0.04]">
                       {coupons.map(c => (
                         <div key={c.code} className="px-5 py-3.5 flex items-center justify-between gap-4">
                           <div className="flex items-center gap-3">
-                            <span className={`font-mono font-bold text-sm px-2.5 py-1 rounded-lg ${c.isActive ? 'text-[#ffcc29] bg-[#ffcc29]/10' : 'text-white/20 bg-white/5 line-through'}`}>{c.code}</span>
+                            <span className={`font-mono font-bold text-sm px-2.5 py-1 rounded-lg ${c.isActive ? 'text-[#ffcc29] bg-[#ffcc29]/10' : 'text-white/60 bg-white/5 line-through'}`}>{c.code}</span>
                             <div>
                               <div className="flex items-center gap-2">
                                 <span className="text-white text-sm font-semibold">₹{c.discountedAmount.toLocaleString('en-IN')}</span>
-                                <span className="text-white/30 text-xs line-through">₹{c.originalAmount.toLocaleString('en-IN')}</span>
+                                <span className="text-white/60 text-xs line-through">₹{c.originalAmount.toLocaleString('en-IN')}</span>
                                 <span className="text-emerald-400 text-xs">-₹{(c.originalAmount - c.discountedAmount).toLocaleString('en-IN')}</span>
                               </div>
                               <div className="flex items-center gap-3 mt-0.5">
-                                <span className="text-white/30 text-xs">{c.usedCount}/{c.maxUses} uses</span>
-                                {c.note && <span className="text-white/25 text-xs italic">{c.note}</span>}
+                                <span className="text-white/60 text-xs">{c.usedCount}/{c.maxUses} uses</span>
+                                {c.note && <span className="text-white/60 text-xs italic">{c.note}</span>}
                               </div>
                             </div>
                           </div>
                           <div className="flex items-center gap-2 flex-shrink-0">
                             {c.isActive && (
                               <button onClick={() => deactivateCoupon(c.code)} title="Deactivate"
-                                className="p-1.5 rounded-lg text-white/30 hover:text-orange-400 hover:bg-orange-400/10 transition-all">
+                                className="p-1.5 rounded-lg text-white/60 hover:text-orange-400 hover:bg-orange-400/10 transition-all">
                                 <ToggleLeft className="w-4 h-4" />
                               </button>
                             )}
                             <button onClick={() => deleteCoupon(c.code)} title="Delete"
-                              className="p-1.5 rounded-lg text-white/30 hover:text-red-400 hover:bg-red-400/10 transition-all">
+                              className="p-1.5 rounded-lg text-white/60 hover:text-red-400 hover:bg-red-400/10 transition-all">
                               <Trash2 className="w-4 h-4" />
                             </button>
                           </div>

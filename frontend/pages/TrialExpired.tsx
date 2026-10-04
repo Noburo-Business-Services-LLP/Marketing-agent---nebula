@@ -125,8 +125,8 @@ const GlassCard: React.FC<{ children: React.ReactNode; highlighted?: boolean; cl
     <div className={`
       rounded-3xl h-full
       ${highlighted
-        ? 'bg-gradient-to-b from-[#0f1520]/90 via-[#0a0e18]/95 to-[#060910]/95'
-        : 'bg-gradient-to-b from-[#0d1219]/85 via-[#080c14]/90 to-[#060910]/90'
+        ? 'bg-gradient-to-b from-[#0f1520] via-[#0a0e18] to-[#060910]'
+        : 'bg-gradient-to-b from-[#0d1219] via-[#080c14] to-[#060910]'
       }
       backdrop-blur-xl
     `}>
@@ -229,15 +229,15 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, onLogout }) => {
                 <CheckCircle className="w-10 h-10 text-[#ffcc29]" />
               </div>
               <h1 className="text-2xl md:text-3xl font-bold text-[#ededed] mb-3">Account Activated!</h1>
-              <p className="text-[#ededed]/55 text-base mb-8">
+              <p className="text-[#ededed]/75 text-base mb-8">
                 Your data has been migrated to production. Log in on the production app with the same credentials.
               </p>
               <a href="https://gravity.nebulaa.ai" target="_blank" rel="noopener noreferrer"
                 className="w-full py-4 bg-[#ffcc29] hover:bg-[#e6b825] text-[#070A12] font-bold text-lg rounded-2xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#ffcc29]/20">
                 Open the production app <ExternalLink className="w-5 h-5" />
               </a>
-              <p className="text-[#ededed]/30 text-xs mt-4">gravity.nebulaa.ai</p>
-              <button onClick={onLogout} className="text-[#ededed]/25 hover:text-[#ededed]/50 text-sm transition-colors underline mt-6">
+              <p className="text-[#ededed]/75 text-xs mt-4">gravity.nebulaa.ai</p>
+              <button onClick={onLogout} className="text-[#ededed]/75 hover:text-[#ededed] text-sm transition-colors underline mt-6">
                 Log out
               </button>
             </div>
@@ -258,14 +258,14 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, onLogout }) => {
                 <CheckCircle className="w-10 h-10 text-green-400" />
               </div>
               <h1 className="text-2xl md:text-3xl font-bold text-[#ededed] mb-3">You're All Set!</h1>
-              <p className="text-[#ededed]/55 text-base mb-8">
+              <p className="text-[#ededed]/75 text-base mb-8">
                 Payment received & data migrated to production. Log in with the same email & password.
               </p>
               <a href="https://gravity.nebulaa.ai" target="_blank" rel="noopener noreferrer"
                 className="w-full py-4 bg-[#ffcc29] hover:bg-[#e6b825] text-[#070A12] font-bold text-lg rounded-2xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#ffcc29]/20">
                 Open the production app <ExternalLink className="w-5 h-5" />
               </a>
-              <p className="text-[#ededed]/30 text-xs mt-4">gravity.nebulaa.ai</p>
+              <p className="text-[#ededed]/75 text-xs mt-4">gravity.nebulaa.ai</p>
             </div>
           </GlassCard>
         </div>
@@ -282,7 +282,7 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, onLogout }) => {
             <div className="p-8 md:p-10 text-center">
               <Loader2 className="w-12 h-12 text-[#ffcc29] animate-spin mx-auto mb-6" />
               <h2 className="text-xl font-bold text-[#ededed] mb-2">Migrating Your Data...</h2>
-              <p className="text-[#ededed]/45 text-sm">
+              <p className="text-[#ededed]/75 text-sm">
                 Transferring campaigns, analytics, brand assets and everything else. This takes a few seconds.
               </p>
             </div>
@@ -306,7 +306,7 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, onLogout }) => {
       <SpaceBg>
         <div className="max-w-md w-full">
           <GlassCard>
-            <div className="p-8 text-center text-red-400">{plansError || 'Failed to load plans'}</div>
+            <div className="p-8 text-center text-red-300">{plansError || 'Failed to load plans'}</div>
           </GlassCard>
         </div>
       </SpaceBg>
@@ -323,12 +323,12 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, onLogout }) => {
     <SpaceBg>
       <div className="max-w-6xl w-full">
         {/* ── Header ── */}
-        <div className="text-center mb-10">
+        <div className="text-center mb-10 rounded-3xl bg-[#070a12] px-6 py-6">
           <img src="/assets/nebulaa-gold.png" alt="Nebulaa" className="w-20 h-20 mx-auto mb-5 drop-shadow-[0_0_25px_rgba(255,204,41,0.3)]" onError={(e) => (e.currentTarget.style.display = 'none')} />
           <h1 className="text-3xl md:text-5xl font-extrabold text-white mb-3 tracking-tight">
             {reason === 'time' ? 'Your Free Trial Has Ended' : 'Pick the plan that fits your brand'}
           </h1>
-          <p className="text-[#ededed]/45 text-base md:text-lg max-w-2xl mx-auto">
+          <p className="text-[#ededed]/75 text-base md:text-lg max-w-2xl mx-auto">
             All plans include AI campaign generation, multi-platform posting and analytics. Cancel anytime.
           </p>
         </div>
@@ -337,7 +337,7 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, onLogout }) => {
         {error && (
           <div className="mb-6 max-w-md mx-auto">
             <GlassCard>
-              <div className="px-5 py-3 text-red-400 text-sm text-center">{error}</div>
+              <div className="px-5 py-3 text-red-300 text-sm text-center">{error}</div>
             </GlassCard>
           </div>
         )}
@@ -347,9 +347,9 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, onLogout }) => {
           <div className="inline-flex rounded-2xl p-1.5" style={{ background: 'linear-gradient(180deg, #0a0d14 0%, #0e1219 100%)', boxShadow: 'inset 0 2px 6px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.04)' }}>
             {(Object.keys(cycleLabel) as Cycle[]).map((c) => (
               <button key={c} onClick={() => setCycle(c)}
-                className={`px-5 md:px-7 py-2.5 rounded-xl text-sm font-semibold transition-all ${cycle === c ? 'bg-[#ffcc29] text-[#070A12] shadow-lg shadow-[#ffcc29]/20' : 'text-[#ededed]/55 hover:text-white'}`}>
+                className={`px-5 md:px-7 py-2.5 rounded-xl text-sm font-semibold transition-all ${cycle === c ? 'bg-[#ffcc29] text-[#070A12] shadow-lg shadow-[#ffcc29]/20' : 'text-[#ededed]/75 hover:text-white'}`}>
                 {cycleLabel[c]}
-                {c === 'annual' && <span className="ml-2 text-[10px] font-bold text-emerald-400">SAVE</span>}
+                {c === 'annual' && <span className="ml-2 text-[10px] font-bold text-emerald-300">SAVE</span>}
               </button>
             ))}
           </div>
@@ -375,7 +375,7 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, onLogout }) => {
 
                   <div className="mb-5">
                     <h3 className="text-2xl font-bold text-white mb-2">{plan.name}</h3>
-                    <p className="text-[#ededed]/45 text-sm leading-relaxed">{plan.description}</p>
+                    <p className="text-[#ededed]/75 text-sm leading-relaxed">{plan.description}</p>
                   </div>
 
                   <div className="mb-6">
@@ -388,14 +388,14 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, onLogout }) => {
                       }}>
                       ₹{info.amount.toLocaleString('en-IN')}
                     </div>
-                    <p className="text-[#ededed]/35 text-xs mt-2 tracking-wide">{info.per} · Auto-renews · Cancel anytime</p>
+                    <p className="text-[#ededed]/75 text-xs mt-2 tracking-wide">{info.per} · Auto-renews · Cancel anytime</p>
                   </div>
 
                   <ul className="space-y-2.5 mb-7 flex-1">
                     {plan.features.map((f, i) => (
                       <li key={i} className="flex items-start gap-2.5 text-[13px]">
                         <Check className="w-4 h-4 text-[#ffcc29]/80 flex-shrink-0 mt-0.5" />
-                        <span className="text-[#ededed]/70">{f}</span>
+                        <span className="text-[#ededed]/85">{f}</span>
                       </li>
                     ))}
                   </ul>
@@ -424,12 +424,12 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, onLogout }) => {
         </div>
 
         {/* ── Footer ── */}
-        <div className="text-center mt-10 space-y-3">
-          <div className="flex items-center justify-center gap-2 text-[#ededed]/25 text-xs">
+        <div className="text-center mt-10 space-y-3 rounded-3xl bg-[#070a12] px-6 py-5">
+          <div className="flex items-center justify-center gap-2 text-[#ededed]/75 text-xs">
             <Shield className="w-3.5 h-3.5" />
             <span>Secured by Razorpay · UPI, Cards, Net Banking accepted</span>
           </div>
-          <button onClick={onLogout} className="text-[#ededed]/25 hover:text-[#ededed]/50 text-sm transition-colors underline">
+          <button onClick={onLogout} className="text-[#ededed]/75 hover:text-[#ededed] text-sm transition-colors underline">
             Log out
           </button>
         </div>

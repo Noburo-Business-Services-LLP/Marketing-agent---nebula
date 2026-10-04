@@ -32,7 +32,7 @@ const TermsAndConditions: React.FC = () => {
           {/* Title */}
           <div className="mb-10">
             <h1 className={`text-4xl font-bold mb-1 ${text}`}>NEBULAA</h1>
-            <h2 className="text-2xl font-bold text-[#ffcc29] mb-2">Terms & Conditions of Service</h2>
+            <h2 className="text-2xl font-bold text-[var(--gv-accent-text)] mb-2">Terms & Conditions of Service</h2>
             <p className={`text-sm italic ${textSec}`}>Effective Date: 10 March 2025 | Version 1.0</p>
             <p className={`text-sm italic ${textSec}`}>Governing Entity: Noburo Business Services LLP, India</p>
           </div>
@@ -77,7 +77,7 @@ const TermsAndConditions: React.FC = () => {
             <section>
               <h2 className={`text-xl font-bold mb-4 ${text}`}>3. Account Registration & Security</h2>
               <p className="mb-3">3.1 You must provide accurate, complete, and current information during registration and keep this information updated at all times.</p>
-              <p className="mb-3">3.2 You are solely responsible for maintaining the confidentiality of your login credentials. You must notify us immediately at <a href="mailto:support@nebulaa.ai" className="text-[#ffcc29] hover:underline">support@nebulaa.ai</a> upon becoming aware of any unauthorised use of your account.</p>
+              <p className="mb-3">3.2 You are solely responsible for maintaining the confidentiality of your login credentials. You must notify us immediately at <a href="mailto:support@nebulaa.ai" className="text-[var(--gv-accent-text)] hover:underline">support@nebulaa.ai</a> upon becoming aware of any unauthorised use of your account.</p>
               <p className="mb-3">3.3 We are not liable for any loss or damage arising from your failure to safeguard your account credentials.</p>
               <p className="mb-3">3.4 One account per individual or entity is permitted unless expressly authorised by us in writing. You may not share account access with third parties.</p>
               <p>3.5 We reserve the right to suspend or terminate accounts that we reasonably believe are being used in violation of these Terms, applicable laws, or our community standards.</p>
@@ -117,7 +117,7 @@ const TermsAndConditions: React.FC = () => {
                 <li>You were charged incorrectly due to a billing error on our part;</li>
                 <li>The Platform experienced material service downtime (greater than 72 consecutive hours) within the first 7 days of a new paid Subscription, directly attributable to our failure, and you notify us within that period.</li>
               </ul>
-              <p className="mb-3">6.3 All refund requests must be submitted to <a href="mailto:support@nebulaa.ai" className="text-[#ffcc29] hover:underline">support@nebulaa.ai</a> within 7 days of the charge in question, accompanied by supporting details. We will process approved refunds within 10 business days.</p>
+              <p className="mb-3">6.3 All refund requests must be submitted to <a href="mailto:support@nebulaa.ai" className="text-[var(--gv-accent-text)] hover:underline">support@nebulaa.ai</a> within 7 days of the charge in question, accompanied by supporting details. We will process approved refunds within 10 business days.</p>
               <p>6.4 We do not offer refunds for partial periods, unused features, or dissatisfaction with AI Outputs or results.</p>
             </section>
 
@@ -168,7 +168,7 @@ const TermsAndConditions: React.FC = () => {
             {/* 10 */}
             <section>
               <h2 className={`text-xl font-bold mb-4 ${text}`}>10. Data & Privacy</h2>
-              <p className="mb-3">10.1 Your use of the Platform is also governed by our <a href="/#/privacy-policy" className="text-[#ffcc29] hover:underline">Privacy Policy</a>, which is incorporated into these Terms by reference.</p>
+              <p className="mb-3">10.1 Your use of the Platform is also governed by our <a href="/#/privacy-policy" className="text-[var(--gv-accent-text)] hover:underline">Privacy Policy</a>, which is incorporated into these Terms by reference.</p>
               <p className="mb-3">10.2 By using the Platform, you consent to the collection, storage, processing, and use of your data as described in the Privacy Policy.</p>
               <p className="mb-3">10.3 You warrant that any personal data of third parties that you submit to the Platform has been collected and may be shared lawfully under applicable data protection laws.</p>
               <p>10.4 We implement industry-standard technical and organisational measures to protect your data. However, no digital system can guarantee absolute security, and we shall not be liable for breaches beyond our reasonable control.</p>
@@ -239,7 +239,7 @@ const TermsAndConditions: React.FC = () => {
             <section>
               <h2 className={`text-xl font-bold mb-4 ${text}`}>17. Term & Termination</h2>
               <p className="mb-3">17.1 These Terms commence on the date you first access the Platform and continue until your Subscription is terminated or expires.</p>
-              <p className="mb-3">17.2 You may terminate your Subscription at any time through your account settings or by contacting <a href="mailto:support@nebulaa.ai" className="text-[#ffcc29] hover:underline">support@nebulaa.ai</a>. Termination is effective at the end of the current billing cycle, and you will retain access until then. No pro-rated refunds are provided except as set out in Section 6.</p>
+              <p className="mb-3">17.2 You may terminate your Subscription at any time through your account settings or by contacting <a href="mailto:support@nebulaa.ai" className="text-[var(--gv-accent-text)] hover:underline">support@nebulaa.ai</a>. Termination is effective at the end of the current billing cycle, and you will retain access until then. No pro-rated refunds are provided except as set out in Section 6.</p>
               <p className="mb-3">17.3 We may suspend or terminate your access immediately, without notice, if:</p>
               <ul className="list-disc pl-6 space-y-2 mb-4">
                 <li>You materially breach these Terms and fail to remedy the breach within 7 days of notice;</li>
@@ -290,7 +290,7 @@ const TermsAndConditions: React.FC = () => {
               <h3 className={`text-lg font-semibold mb-3 ${text}`}>20.5 No Partnership</h3>
               <p className="mb-4">Nothing in these Terms creates any partnership, joint venture, agency, franchise, or employment relationship between you and us.</p>
               <h3 className={`text-lg font-semibold mb-3 ${text}`}>20.6 Notices</h3>
-              <p className="mb-4">Notices to us shall be sent to <a href="mailto:legal@nebulaa.ai" className="text-[#ffcc29] hover:underline">legal@nebulaa.ai</a> or by post to the registered address of Noburo Business Services LLP. Notices to you shall be sent to the email address associated with your account.</p>
+              <p className="mb-4">Notices to us shall be sent to <a href="mailto:legal@nebulaa.ai" className="text-[var(--gv-accent-text)] hover:underline">legal@nebulaa.ai</a> or by post to the registered address of Noburo Business Services LLP. Notices to you shall be sent to the email address associated with your account.</p>
               <h3 className={`text-lg font-semibold mb-3 ${text}`}>20.7 Language</h3>
               <p>These Terms are written in English. In the event of any inconsistency between an English version and a translated version, the English version shall prevail.</p>
             </section>
@@ -302,8 +302,8 @@ const TermsAndConditions: React.FC = () => {
               <div className={`rounded-lg p-5 space-y-1 ${infoBox}`}>
                 <p><strong className={text}>Noburo Business Services LLP</strong></p>
                 <p>Operating Platform: Nebulaa (nebulaa.ai)</p>
-                <p>Support Email: <a href="mailto:support@nebulaa.ai" className="text-[#ffcc29] hover:underline">support@nebulaa.ai</a></p>
-                <p>Website: <a href="https://www.nebulaa.ai" target="_blank" rel="noopener noreferrer" className="text-[#ffcc29] hover:underline">https://www.nebulaa.ai</a></p>
+                <p>Support Email: <a href="mailto:support@nebulaa.ai" className="text-[var(--gv-accent-text)] hover:underline">support@nebulaa.ai</a></p>
+                <p>Website: <a href="https://www.nebulaa.ai" target="_blank" rel="noopener noreferrer" className="text-[var(--gv-accent-text)] hover:underline">https://www.nebulaa.ai</a></p>
               </div>
               <div className={`mt-6 border-l-4 border-[#ffcc29] pl-4 italic ${textSec}`}>
                 By using Nebulaa, you acknowledge that you have read, understood, and agreed to these Terms & Conditions.
@@ -315,13 +315,13 @@ const TermsAndConditions: React.FC = () => {
 
         {/* Footer */}
         <div className="text-center mt-10 pb-10">
-          <p className={`text-sm ${isDark ? 'text-[#ededed]/50' : 'text-gray-400'}`}>
+          <p className={`text-sm ${isDark ? 'text-[#ededed]/50' : 'text-[var(--gv-text-tertiary)]'}`}>
             &copy; 2024 Noburo Business Services LLP. All rights reserved.
           </p>
-          <div className={`mt-3 flex items-center justify-center gap-4 text-sm ${isDark ? 'text-[#ededed]/50' : 'text-gray-400'}`}>
-            <a href="/#/privacy-policy" className="hover:text-[#ffcc29] transition-colors">Privacy Policy</a>
+          <div className={`mt-3 flex items-center justify-center gap-4 text-sm ${isDark ? 'text-[#ededed]/50' : 'text-[var(--gv-text-tertiary)]'}`}>
+            <a href="/#/privacy-policy" className="hover:text-[var(--gv-accent-text)] transition-colors">Privacy Policy</a>
             <span>|</span>
-            <a href="https://nebulaa.ai" target="_blank" rel="noopener noreferrer" className="hover:text-[#ffcc29] transition-colors">nebulaa.ai</a>
+            <a href="https://nebulaa.ai" target="_blank" rel="noopener noreferrer" className="hover:text-[var(--gv-accent-text)] transition-colors">nebulaa.ai</a>
           </div>
         </div>
       </div>
