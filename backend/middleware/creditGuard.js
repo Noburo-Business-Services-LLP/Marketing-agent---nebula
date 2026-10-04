@@ -1,7 +1,7 @@
 /**
- * Credit Guard Middleware (Demo)
- * 7-day trial with 100 credits — no auto-reset, no daily bonus.
- * Whichever runs out first (credits or 7 days) ends the trial.
+ * Credit Guard Middleware
+ * New accounts get 100 Quarks once (stored as credits.balance). There is no time
+ * limit, no auto-reset and no daily bonus: the balance simply runs down to zero.
  * 
  * Credit Costs:
  *   Image generated  → 5

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
 const { protect } = require('../middleware/auth');
+const { requireFeature } = require('../middleware/requireFeature');
 const AdCampaign = require('../models/AdCampaign');
 const Campaign = require('../models/Campaign');
 const User = require('../models/User');
@@ -1711,7 +1712,7 @@ function getStatusMessage(status) {
  * @desc    List ad campaigns linked to marketing campaigns
  * @access  Private
  */
-router.get('/', protect, async (req, res) => {
+router.get('/', protect, requireFeature('publish'), async (req, res) => {
   try {
     const userId = getUserId(req);
     const items = await AdCampaign.find({ userId })
@@ -1733,7 +1734,7 @@ router.get('/', protect, async (req, res) => {
  * @desc    Summary metrics for dashboard cards
  * @access  Private
  */
-router.get('/summary', protect, async (req, res) => {
+router.get('/summary', protect, requireFeature('publish'), async (req, res) => {
   try {
     const userId = getUserId(req);
     const items = await AdCampaign.find({ userId }).select('status performance');
@@ -1772,7 +1773,7 @@ router.get('/summary', protect, async (req, res) => {
  * @desc    Resolve CTA destination link for Meta Ads (Learn More)
  * @access  Private
  */
-router.get('/cta-preview', protect, async (req, res) => {
+router.get('/cta-preview', protect, requireFeature('publish'), async (req, res) => {
   try {
     const userId = getUserId(req);
     const userDoc = await User.findById(userId).select(
@@ -1844,7 +1845,7 @@ router.get('/cta-preview', protect, async (req, res) => {
  * @desc    Validate Meta account and campaign eligibility before ad creation
  * @access  Private
  */
-router.get('/meta-readiness', protect, async (req, res) => {
+router.get('/meta-readiness', protect, requireFeature('publish'), async (req, res) => {
   try {
     const userId = getUserId(req);
     const rawCampaignId = String(req.query?.campaignId || '').trim();
@@ -1956,7 +1957,7 @@ router.get('/meta-readiness', protect, async (req, res) => {
  * @desc    Create ad campaign from existing campaign context (no standalone creation)
  * @access  Private
  */
-router.post('/', protect, async (req, res) => {
+router.post('/', protect, requireFeature('publish'), async (req, res) => {
   try {
     const userId = getUserId(req);
     const campaignId = toObjectId(req.body?.campaignId);
@@ -2241,7 +2242,7 @@ router.post('/', protect, async (req, res) => {
  * @desc    Retry failed platforms for an existing ad campaign
  * @access  Private
  */
-router.post('/:id/retry', protect, async (req, res) => {
+router.post('/:id/retry', protect, requireFeature('publish'), async (req, res) => {
   try {
     const userId = getUserId(req);
     const requestedMetaCountries = getRequestedTargetCountries(req.body);
@@ -2439,7 +2440,7 @@ router.post('/:id/retry', protect, async (req, res) => {
  * @desc    Delete ad campaign
  * @access  Private
  */
-router.delete('/:id', protect, async (req, res) => {
+router.delete('/:id', protect, requireFeature('publish'), async (req, res) => {
   try {
     const userId = getUserId(req);
     const deleted = await AdCampaign.findOneAndDelete({ _id: req.params.id, userId });
@@ -2463,7 +2464,7 @@ router.delete('/:id', protect, async (req, res) => {
  * @desc    Pause/resume ad campaign and sync Meta status when possible
  * @access  Private
  */
-router.put('/:id/status', protect, async (req, res) => {
+router.put('/:id/status', protect, requireFeature('publish'), async (req, res) => {
   try {
     const userId = getUserId(req);
     const targetStatus = String(req.body?.status || '').trim().toLowerCase();

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { formatPaise, formatInr, upgradeMessage, upgradeInfoOf, tierLabel } from '../utils/plans.ts';
+import { formatPaise, formatInr, upgradeMessage, upgradeInfoOf, tierLabel, apiErrorFrom } from '../utils/plans.ts';
 
 test('paise are shown as exact rupees and paise', () => {
   assert.equal(formatPaise(117882), '₹1,178.82');
@@ -40,4 +40,15 @@ test('tier names', () => {
   assert.equal(tierLabel('starter'), 'Starter');
   assert.equal(tierLabel('professional'), 'Professional');
   assert.equal(tierLabel(undefined), 'Free');
+});
+
+test('apiErrorFrom keeps the server answer so the inbox pages can show the upgrade prompt', () => {
+  const err = apiErrorFrom({ success: false, upgradeRequired: true, reason: 'addon', feature: 'inbox', message: 'This needs an add-on.' }, 403, 'Inbox request failed');
+  assert.equal(err.message, 'This needs an add-on.');
+  assert.equal(err.status, 403);
+  const info = upgradeInfoOf(err);
+  assert.equal(info.reason, 'addon');
+  assert.equal(info.feature, 'inbox');
+  assert.equal(apiErrorFrom(null, 500, 'Inbox request failed').message, 'Inbox request failed');
+  assert.equal(upgradeInfoOf(apiErrorFrom({ message: 'x' }, 500, 'f')), null);
 });

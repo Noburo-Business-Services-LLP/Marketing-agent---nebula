@@ -24,7 +24,7 @@ Allowance = committed deliverables x Quark price x retry factor, plus 15 percent
 | **Starter** | ₹999 | 30 image posts, 1 Hero video | 1,814 | **2,100 Quarks** |
 | **Professional** | ₹1,999 | 30 image posts, 2 Hero videos, about 150 extra captions | 3,057 | **3,500 Quarks** |
 
-- The allowance ends with the billing month (no rollover). Top-up Quarks do not expire.
+- Unused Quarks carry over: plan allowance Quarks and top-up Quarks go into one balance that does not expire. (Owner ruling after the final review.)
 - Net revenue per month after the gateway fee (about 2 percent of the GST-inclusive charge): Starter about ₹975, Professional about ₹1,950. Vendor cost: Starter about ₹1,165 at expected use and ₹1,350 at the full allowance; Professional about ₹1,860 and ₹2,130. So Starter loses about ₹190 to ₹375 a month (accepted); Professional is about +₹90 to −₹175. The Hero video is the cost driver (about ₹400 per clip plus re-rolls).
 - The free 100 Quarks costs at most about ₹60 per sign-up.
 - **Top-up packs** at **₹2.00 per Quark** (ex-GST; machine cost is about ₹0.55 to ₹0.70 per Quark, about 65 percent margin): ₹999 = 500, ₹1,999 = 1,000, ₹4,999 = 2,500 (with GST: ₹1,178.82, ₹2,358.82, ₹5,898.82). Replaces the current "any amount, fixed 1,000 credits" purchase.

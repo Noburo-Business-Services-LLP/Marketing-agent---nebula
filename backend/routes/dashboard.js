@@ -7,6 +7,7 @@ const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
 const { requireFeature } = require('../middleware/requireFeature');
+const { canUse } = require('../config/entitlements');
 const { deductCredits, CREDIT_COSTS } = require('../middleware/trialGuard');
 const { ensureCreditCycle } = require('../middleware/creditGuard');
 const User = require('../models/User');
@@ -307,6 +308,9 @@ router.get('/overview', protect, async (req, res) => {
     const totalEngagement = allCampaigns.reduce((sum, c) => sum + (c.performance?.engagement || 0), 0);
     const avgCTR = totalImpressions > 0 ? ((totalClicks / totalImpressions) * 100).toFixed(2) : 0;
     
+    // Competitor discovery and scraping call outside services: only for plans that include them.
+    const competitorsAllowed = canUse(user, 'competitors').allowed;
+
     // Get competitor data - already fetched in parallel above
     let competitorList = [...competitors]; // Use from parallel query
     let competitorPosts = [];
@@ -315,7 +319,7 @@ router.get('/overview', protect, async (req, res) => {
     const onboardingCompetitors = user.businessProfile?.competitors || [];
     
     // If no Competitor documents exist but we have names from onboarding, create them (background task)
-    if (competitorList.length === 0 && onboardingCompetitors.length > 0) {
+    if (competitorsAllowed && competitorList.length === 0 && onboardingCompetitors.length > 0) {
       console.log('Syncing competitors from onboarding:', onboardingCompetitors);
       
       // Create Competitor documents from onboarding data (don't await - do in background)
@@ -346,7 +350,7 @@ router.get('/overview', protect, async (req, res) => {
     }
     
     // If still no competitors, skip auto-discovery for speed (do in background later)
-    if (competitorList.length === 0) {
+    if (competitorsAllowed && competitorList.length === 0) {
       console.log('⚠️ No competitors found - will auto-discover in background');
       
       // Start background auto-discovery (don't wait)
@@ -381,7 +385,7 @@ router.get('/overview', protect, async (req, res) => {
     
     if (competitorNames.length > 0) {
       // PRIORITY 1: Try to fetch REAL posts using Apify
-      if (!hasRecentPostsInDB && socialMediaAPI?.fetchRealCompetitorPosts) {
+      if (competitorsAllowed && !hasRecentPostsInDB && socialMediaAPI?.fetchRealCompetitorPosts) {
         try {
           console.log('Fetching REAL competitor posts using Apify...');
           

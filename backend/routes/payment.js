@@ -76,6 +76,16 @@ function createPaymentRouter(deps = {}) {
     return true;
   }
 
+  // When a plan ends, its add-ons must stop billing too (best effort per subscription).
+  async function cancelAddonSubscriptions(user) {
+    const addons = storedSubscriptions(user).filter((s) => s.kind === 'addon' && s.active);
+    for (const a of addons) {
+      try { await rz().subscriptions.cancel(a.subscriptionId, 0); }
+      catch (e) { console.warn(`Could not cancel add-on subscription ${a.subscriptionId}:`, e.message); }
+    }
+    await User.updateOne({ _id: user._id }, { $set: { 'plan.subscriptions.$[addon].active': false } }, { arrayFilters: [{ 'addon.kind': 'addon' }] });
+  }
+
   // One payment, applied once. Returns { applied:false } on a replay.
   async function applyCharge(user, record, { paymentId, paidPaise, subscription }) {
     const built = bp.buildChargeUpdate(record, { paymentId, paidPaise, subscription });
@@ -161,6 +171,10 @@ function createPaymentRouter(deps = {}) {
 
       if (hasActivePlanSubscription(user)) {
         return res.status(400).json({ success: false, message: 'You already have an active subscription' });
+      }
+      // Accounts managed by Nebulaa (no plan.tier) do not buy plans: buying one would remove their access.
+      if (resolveTier(user) === 'managed') {
+        return res.status(400).json({ success: false, message: 'Your plan is managed by Nebulaa, so you do not need to choose a plan. You can still buy Quarks at any time.' });
       }
 
       const { planId, couponCode } = req.body || {};
@@ -334,6 +348,7 @@ function createPaymentRouter(deps = {}) {
       } else if (ENDING_EVENTS.includes(eventName)) {
         const built = bp.buildEndUpdate(user, record, eventName);
         await User.findOneAndUpdate({ _id: user._id }, built.update, { new: true, arrayFilters: built.arrayFilters });
+        if (built.endsPlan) await cancelAddonSubscriptions(user);
       }
 
       res.json({ success: true });

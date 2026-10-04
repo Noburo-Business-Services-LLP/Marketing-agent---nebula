@@ -6,7 +6,7 @@
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
-const { requireFeature } = require('../middleware/requireFeature');
+const { requireFeature, requireFeatureWhen, wantsScheduling } = require('../middleware/requireFeature');
 const { checkTrial, deductCredits, requireCredits } = require('../middleware/trialGuard');
 const Campaign = require('../models/Campaign');
 const Influencer = require('../models/Influencer');
@@ -2604,7 +2604,7 @@ router.post('/upload-audio', protect, async (req, res) => {
  * POST /api/campaigns
  * Create a new campaign
  */
-router.post('/', protect, async (req, res) => {
+router.post('/', protect, requireFeatureWhen('schedule', wantsScheduling), async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
 
@@ -2816,7 +2816,7 @@ router.patch('/:id/post-ids', protect, async (req, res) => {
  * PUT /api/campaigns/:id
  * Update an existing campaign
  */
-router.put('/:id', protect, async (req, res) => {
+router.put('/:id', protect, requireFeatureWhen('schedule', wantsScheduling), async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
 

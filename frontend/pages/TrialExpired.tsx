@@ -170,6 +170,7 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, onLogout }) => {
 
   const ownsAddon = (id: string) => held.includes(id) || held.includes('bundle');
   const onPaidPlan = tier === 'starter' || tier === 'professional';
+  const isManaged = tier === 'managed';
 
   // One checkout runner for the three purchases. `afterPay` verifies the payment on the server.
   const checkout = async (key: string, create: () => Promise<any>, build: (d: any) => any, verify: (r: any) => Promise<any>) => {
@@ -258,8 +259,15 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, onLogout }) => {
         {notice && <div className="mb-6 max-w-xl mx-auto rounded-2xl bg-green-500/10 border border-green-500/30 px-5 py-3 text-green-300 text-sm text-center flex items-center justify-center gap-2"><CheckCircle className="w-4 h-4" />{notice}</div>}
         {error && <div className="mb-6 max-w-xl mx-auto rounded-2xl bg-red-500/10 border border-red-500/30 px-5 py-3 text-red-300 text-sm text-center">{error}</div>}
 
-        <h2 className={h2}>Monthly plans</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
+        {isManaged && (
+          <div className="mb-12 rounded-3xl bg-[#070a12] px-6 py-6 text-center">
+            <h2 className="text-xl font-bold text-white mb-2">Your plan is managed by Nebulaa</h2>
+            <p className={`${muted} text-sm max-w-xl mx-auto`}>Your account is set up and looked after by Nebulaa, so you do not need to choose a plan or add-ons. You can buy extra Quarks below at any time.</p>
+          </div>
+        )}
+
+        {!isManaged && <h2 className={h2}>Monthly plans</h2>}
+        {!isManaged && <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
           {catalogue.plans.map((plan) => {
             const current = tier === plan.id;
             return (
@@ -284,8 +292,9 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, onLogout }) => {
               </GlassCard>
             );
           })}
-        </div>
+        </div>}
 
+        {!isManaged && <>
         <h2 className={h2}>Add-ons</h2>
         <p className={`${muted} text-sm -mt-2 mb-4`}>Add-ons are available with the Starter and Professional plans and renew monthly. Prices are before GST.</p>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-12">
@@ -308,9 +317,10 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, onLogout }) => {
             );
           })}
         </div>
+        </>}
 
         <h2 className={h2}>Extra Quarks</h2>
-        <p className={`${muted} text-sm -mt-2 mb-4`}>Extra Quarks do not expire. Prices are before GST.</p>
+        <p className={`${muted} text-sm -mt-2 mb-4`}>Unused Quarks carry over and do not expire. Prices are before GST.</p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-12">
           {catalogue.topups.map((t) => (
             <GlassCard key={t.inr}>

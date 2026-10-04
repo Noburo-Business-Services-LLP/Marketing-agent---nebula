@@ -90,14 +90,15 @@ function mkUser(over = {}) {
   };
 }
 function fakeRazorpay() {
-  const calls = { plans: [], subs: [], orders: [] };
+  const calls = { plans: [], subs: [], orders: [], cancels: [] };
   const subs = {}; const orders = {};
   return {
     calls,
     plans: { create: async (b) => { calls.plans.push(b); return { id: `plan_fake${calls.plans.length}` }; } },
     subscriptions: {
       create: async (b) => { calls.subs.push(b); const s = { id: `sub_fake${calls.subs.length}`, plan_id: b.plan_id, notes: b.notes }; subs[s.id] = s; return s; },
-      fetch: async (id) => subs[id]
+      fetch: async (id) => subs[id],
+      cancel: async (id, atEnd) => { calls.cancels.push([id, atEnd]); return { id, status: 'cancelled' }; }
     },
     orders: {
       create: async (b) => { calls.orders.push(b); const o = { id: `order_fake${calls.orders.length}`, amount: b.amount, currency: b.currency, notes: b.notes }; orders[o.id] = o; return o; },
@@ -527,4 +528,51 @@ test('old plan code is gone from the payment routes and plan config', () => {
   }
   const cfg = fs.readFileSync(path.join(__dirname, '../config/plans.js'), 'utf8');
   assert.ok(!/plan_Sra|Growth|Scale|quarterly|annual/i.test(cfg));
+});
+
+// ---------------------------------------------------------------- review fixes
+test('I1: a managed account (no plan.tier) cannot buy a plan; free accounts still can', async () => {
+  const managed = setup({ user: mkUser({ plan: undefined }) });
+  const res = await call(managed.r, 'post', '/create-subscription', { body: { planId: 'starter' } });
+  assert.strictEqual(res.code, 400);
+  assert.match(res.body.message, /managed by Nebulaa/);
+  assert.strictEqual(managed.razorpay.calls.subs.length, 0);
+  const explicit = setup({ user: mkUser({ plan: { tier: 'managed' } }) });
+  assert.strictEqual((await call(explicit.r, 'post', '/create-subscription', { body: { planId: 'professional' } })).code, 400);
+  const free = setup({ user: mkUser({ plan: { tier: 'free', addons: [], subscriptions: [] } }) });
+  assert.strictEqual((await call(free.r, 'post', '/create-subscription', { body: { planId: 'starter' } })).code, 200);
+  // top-ups stay available to managed accounts
+  const top = setup({ user: mkUser({ plan: undefined }) });
+  assert.strictEqual((await call(top.r, 'post', '/create-order', { body: { packInr: 999 } })).code, 200);
+});
+
+test('I2: ending a plan cancels the add-on subscriptions at Razorpay and clears add-ons', async () => {
+  const ctx = setup({ user: mkUser({ plan: { tier: 'free', addons: [], subscriptions: [] } }) });
+  const s = await startPlan(ctx, 'starter');
+  await sendHook(ctx.r, hook('subscription.charged', s.id, s.planId, 'pay_1', { amount: 117882 }));
+  const pub = await call(ctx.r, 'post', '/create-addon-subscription', { body: { addon: 'publish' } });
+  await sendHook(ctx.r, hook('subscription.charged', pub.body.subscription_id, ctx.razorpay.calls.subs[1].plan_id, 'pay_pub', { amount: 118000 }));
+  assert.deepStrictEqual([...ctx.user.plan.addons], ['publish']);
+  await sendHook(ctx.r, hook('subscription.cancelled', s.id, s.planId, null));
+  assert.deepStrictEqual(ctx.razorpay.calls.cancels.map((c) => c[0]), [pub.body.subscription_id]);
+  assert.strictEqual(ctx.razorpay.calls.cancels.some((c) => c[0] === s.id), false);
+  assert.deepStrictEqual([...ctx.user.plan.addons], []);
+  assert.strictEqual(ctx.user.plan.tier, 'free');
+  assert.ok(ctx.user.plan.subscriptions.every((x) => x.active === false));
+});
+
+test('I2: a cancel failure at Razorpay does not break the webhook; a stale plan ending cancels nothing', async () => {
+  const ctx = setup({ user: mkUser({ plan: { tier: 'free', addons: [], subscriptions: [] } }) });
+  const s = await startPlan(ctx, 'starter');
+  await sendHook(ctx.r, hook('subscription.charged', s.id, s.planId, 'pay_1', { amount: 117882 }));
+  const pub = await call(ctx.r, 'post', '/create-addon-subscription', { body: { addon: 'publish' } });
+  await sendHook(ctx.r, hook('subscription.charged', pub.body.subscription_id, ctx.razorpay.calls.subs[1].plan_id, 'pay_pub', { amount: 118000 }));
+  ctx.user.plan.subscriptions.push({ subscriptionId: 'sub_old', kind: 'plan', key: 'starter', razorpayPlanId: s.planId, active: false });
+  await sendHook(ctx.r, hook('subscription.cancelled', 'sub_old', s.planId, null));
+  assert.strictEqual(ctx.razorpay.calls.cancels.length, 0);
+  ctx.razorpay.subscriptions.cancel = async () => { throw new Error('rzp down'); };
+  const out = await sendHook(ctx.r, hook('subscription.halted', s.id, s.planId, null));
+  assert.strictEqual(out.code, 200);
+  assert.strictEqual(ctx.user.plan.tier, 'free');
+  assert.deepStrictEqual([...ctx.user.plan.addons], []);
 });

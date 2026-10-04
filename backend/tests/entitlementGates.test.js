@@ -199,7 +199,21 @@ const GATED = [
   ['routes/seoRoutes.js', 'post', '/competitor-analysis', 'competitors'],
   ['routes/drafts.js', 'post', '/:id/schedule', 'schedule'],
   ['routes/drafts.js', 'post', '/:id/publish', 'publish'],
-  ['routes/campaigns.js', 'post', '/:id/publish', 'publish']
+  ['routes/campaigns.js', 'post', '/:id/publish', 'publish'],
+  ['routes/ads.js', 'get', '/accounts', 'publish'],
+  ['routes/ads.js', 'post', '/boost', 'publish'],
+  ['routes/ads.js', 'get', '/boosted', 'publish'],
+  ['routes/ads.js', 'put', '/:adId', 'publish'],
+  ['routes/ads.js', 'get', '/history', 'publish'],
+  ['routes/ads.js', 'get', '/interests', 'publish'],
+  ['routes/adCampaigns.js', 'get', '/', 'publish'],
+  ['routes/adCampaigns.js', 'get', '/summary', 'publish'],
+  ['routes/adCampaigns.js', 'get', '/cta-preview', 'publish'],
+  ['routes/adCampaigns.js', 'get', '/meta-readiness', 'publish'],
+  ['routes/adCampaigns.js', 'post', '/', 'publish'],
+  ['routes/adCampaigns.js', 'post', '/:id/retry', 'publish'],
+  ['routes/adCampaigns.js', 'delete', '/:id', 'publish'],
+  ['routes/adCampaigns.js', 'put', '/:id/status', 'publish']
 ];
 
 function routeLine(src, method, p) {
@@ -224,7 +238,7 @@ test('the video schedulePost route (Kling file stays untouched) is gated at the 
 });
 
 test('callbacks, webhooks, Hero, billing, auth and admin routes carry no requireFeature', () => {
-  for (const f of ['routes/heroVideo.js', 'routes/payment.js', 'routes/auth.js', 'routes/admin.js', 'routes/credits.js', 'routes/brandAssets.js', 'routes/aiMemory.js', 'routes/contentCalendar.js']) {
+  for (const f of ['routes/heroVideo.js', 'routes/payment.js', 'routes/auth.js', 'routes/admin.js', 'routes/credits.js', 'routes/brandAssets.js', 'routes/aiMemory.js']) {
     const src = fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
     assert.ok(!src.includes('requireFeature'), f);
   }
@@ -249,4 +263,85 @@ test('getHeroQuota takes its limit from heroLimitForUser (tier-aware, managed 2,
   try { assert.equal((await hero.getHeroQuota('u1', now, fake, users({ tier: 'free' }))).limit, 5); } finally { delete process.env.HERO_VIDEO_MONTHLY_LIMIT; }
   const broken = { findById: () => { throw new Error('x'); } };
   assert.equal((await hero.getHeroQuota('u1', now, fake, broken)).limit, 2);
+});
+
+// ---- scheduling through campaigns and the calendar (C1) ----
+const { requireFeatureWhen, wantsScheduling, wantsPublish } = require('../middleware/requireFeature');
+
+async function runWhen(pred, user, body) {
+  const mw = requireFeatureWhen('schedule', pred, { loadUser: async () => user });
+  const res = fakeRes();
+  let nexted = false;
+  await mw({ user: { id: 'u1' }, body }, res, () => { nexted = true; });
+  return { res, nexted };
+}
+
+test('free account may save a draft campaign but not set it to scheduled', async () => {
+  assert.equal((await runWhen(wantsScheduling, { plan: { tier: 'free' } }, { name: 'x', status: 'draft' })).nexted, true);
+  assert.equal((await runWhen(wantsScheduling, { plan: { tier: 'free' } }, { name: 'x' })).nexted, true);
+  const blocked = await runWhen(wantsScheduling, { plan: { tier: 'free' } }, { name: 'x', status: 'scheduled' });
+  assert.equal(blocked.nexted, false);
+  assert.equal(blocked.res.statusCode, 403);
+  assert.equal(blocked.res.body.upgradeRequired, true);
+});
+
+test('managed and entitled accounts may schedule; calendar create-draft gates only publish:true', async () => {
+  assert.equal((await runWhen(wantsScheduling, {}, { status: 'scheduled' })).nexted, true);
+  assert.equal((await runWhen(wantsScheduling, { plan: { tier: 'starter', addons: ['publish'] } }, { status: 'scheduled' })).nexted, true);
+  assert.equal((await runWhen(wantsScheduling, { plan: { tier: 'starter', addons: [] } }, { status: 'scheduled' })).res.statusCode, 403);
+  assert.equal((await runWhen(wantsPublish, { plan: { tier: 'free' } }, {})).nexted, true);
+  assert.equal((await runWhen(wantsPublish, { plan: { tier: 'free' } }, { publish: false })).nexted, true);
+  assert.equal((await runWhen(wantsPublish, { plan: { tier: 'free' } }, { publish: true })).res.statusCode, 403);
+  assert.equal((await runWhen(wantsPublish, {}, { publish: true })).nexted, true);
+});
+
+test('campaign create/update and calendar create-draft carry the conditional gate', () => {
+  const camp = fs.readFileSync(path.join(__dirname, '../routes/campaigns.js'), 'utf8');
+  assert.ok(routeLine(camp, 'post', '/').includes("requireFeatureWhen('schedule', wantsScheduling)"));
+  assert.ok(routeLine(camp, 'put', '/:id').includes("requireFeatureWhen('schedule', wantsScheduling)"));
+  const cal = fs.readFileSync(path.join(__dirname, '../routes/contentCalendar.js'), 'utf8');
+  assert.ok(routeLine(cal, 'post', '/items/:itemId/create-draft').includes("requireFeatureWhen('publish', wantsPublish)"));
+});
+
+test('the scheduler publisher refuses to post for a free account and for a non-managed account with no profile key', async () => {
+  const { checkPublishAllowed } = require('../services/ayrshareGuard');
+  assert.equal(checkPublishAllowed({ plan: { tier: 'free' }, ayrshare: { profileKey: 'k' } }).allowed, false);
+  assert.equal(checkPublishAllowed({ plan: { tier: 'starter', addons: [] }, ayrshare: { profileKey: 'k' } }).allowed, false);
+  assert.equal(checkPublishAllowed({ plan: { tier: 'starter', addons: ['publish'] } }).allowed, false);
+  assert.equal(checkPublishAllowed({ plan: { tier: 'starter', addons: ['publish'] }, ayrshare: { profileKey: 'k' } }).allowed, true);
+  assert.equal(checkPublishAllowed({ email: 'old@x.com' }).allowed, true);
+  assert.equal(checkPublishAllowed(null).allowed, true);
+  const pub = fs.readFileSync(path.join(__dirname, '../services/campaignPublisher.js'), 'utf8');
+  assert.match(pub, /checkPublishAllowed\(user\)/);
+});
+
+// ---- master Ayrshare profile guard (C2) ----
+test('requireOwnProfileKey throws for a non-managed user without a key, passes managed and keyed users', () => {
+  const { requireOwnProfileKey } = require('../services/ayrshareGuard');
+  assert.throws(() => requireOwnProfileKey({ plan: { tier: 'free' } }), /own social profile/);
+  assert.throws(() => requireOwnProfileKey({ plan: { tier: 'starter', addons: ['publish'], }, ayrshare: { profileKey: '  ' } }), /own social profile/);
+  assert.equal(requireOwnProfileKey({ plan: { tier: 'starter' }, ayrshare: { profileKey: 'abc' } }), 'abc');
+  assert.equal(requireOwnProfileKey({ email: 'old@x.com' }), null);
+  assert.equal(requireOwnProfileKey({ plan: { tier: 'managed' }, ayrshare: { profileKey: 'k' } }), 'k');
+});
+
+test('ads route resolves its profile key through requireOwnProfileKey', () => {
+  const src = fs.readFileSync(path.join(__dirname, '../routes/ads.js'), 'utf8');
+  assert.match(src, /requireOwnProfileKey\(user\)/);
+});
+
+// ---- dashboard overview must not scrape for accounts without competitors (C3) ----
+test('dashboard overview skips competitor discovery and Apify for accounts without the competitors feature', () => {
+  const src = fs.readFileSync(path.join(__dirname, '../routes/dashboard.js'), 'utf8');
+  assert.match(src, /const competitorsAllowed = canUse\(user, 'competitors'\)\.allowed/);
+  assert.match(src, /if \(competitorsAllowed && competitorList\.length === 0\) \{\s*console\.log\('⚠️ No competitors found/);
+  assert.match(src, /if \(competitorsAllowed && !hasRecentPostsInDB && socialMediaAPI\?\.fetchRealCompetitorPosts\)/);
+  assert.match(src, /competitorsAllowed && competitorList\.length === 0 && onboardingCompetitors\.length > 0/);
+});
+
+// ---- I5 / spec wording ----
+test('spec and landing no longer say plan Quarks expire or do not roll over', () => {
+  const spec = fs.readFileSync(path.join(__dirname, '../../docs/superpowers/specs/2026-10-04-plans-and-quarks-design.md'), 'utf8');
+  assert.doesNotMatch(spec, /no rollover/i);
+  assert.match(spec, /carry over/i);
 });

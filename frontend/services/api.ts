@@ -1,4 +1,5 @@
 import { AuthResponse, BusinessProfile, Campaign, ContentCalendar, ContentCalendarItem, DashboardData, SocialConnection, User, Draft } from '../types';
+import { apiErrorFrom } from '../utils/plans';
 
 type CampaignInput = Partial<Campaign> & { tone?: string | null };
 
@@ -4246,7 +4247,7 @@ async function inboxCall<T>(endpoint: string, options: RequestInit = {}): Promis
   });
   const data = await safeReadJson(response);
   if (!response.ok) {
-    throw new Error(data.message || data.error || 'Inbox request failed');
+    throw apiErrorFrom(data, response.status, 'Inbox request failed');
   }
   return data as T;
 }

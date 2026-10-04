@@ -10,8 +10,9 @@ function defaultLoadUser(userId) {
   return require('../models/User').findById(userId);
 }
 
-function requireFeature(feature, { loadUser = defaultLoadUser } = {}) {
+function requireFeature(feature, { loadUser = defaultLoadUser, when = null } = {}) {
   return async (req, res, next) => {
+    if (when && !when(req)) return next();
     const userId = req.user?.userId || req.user?.id || req.user?._id;
     if (!userId) return res.status(401).json({ success: false, message: 'Authentication required' });
     let user;
@@ -37,4 +38,12 @@ function requireFeature(feature, { loadUser = defaultLoadUser } = {}) {
   };
 }
 
-module.exports = { requireFeature };
+// Gate only the scheduling/publishing action of a route that also does harmless work (saving drafts).
+function requireFeatureWhen(feature, when, opts = {}) {
+  return requireFeature(feature, { ...opts, when });
+}
+
+const wantsScheduling = (req) => String(req.body?.status || '').toLowerCase() === 'scheduled';
+const wantsPublish = (req) => req.body?.publish === true;
+
+module.exports = { requireFeature, requireFeatureWhen, wantsScheduling, wantsPublish };

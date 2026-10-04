@@ -67,3 +67,13 @@ export function tierLabel(tier?: string): string {
     default: return 'Free';
   }
 }
+
+/** An Error that keeps the server's answer, so `upgradeInfoOf` can read it (same shape `apiCall` throws). */
+export function apiErrorFrom(data: any, status: number, fallback: string): Error {
+  const d = data && typeof data === 'object' ? data : {};
+  const err: any = new Error(d.message || d.error || fallback);
+  err.status = status;
+  err.reason = d.reason || '';
+  err.data = d;
+  return err;
+}

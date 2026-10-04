@@ -6,7 +6,9 @@
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
+const { requireFeature } = require('../middleware/requireFeature');
 const User = require('../models/User');
+const { requireOwnProfileKey } = require('../services/ayrshareGuard');
 const {
   getAdAccounts,
   boostPost,
@@ -21,7 +23,9 @@ const {
  */
 async function getProfileKey(userId) {
   const user = await User.findById(userId);
-  return user?.ayrshare?.profileKey || null;
+  // Throws for a non-managed account with no profile of its own, so no call can
+  // fall back to the master Ayrshare profile.
+  return requireOwnProfileKey(user);
 }
 
 // ============================================
@@ -32,7 +36,7 @@ async function getProfileKey(userId) {
  * GET /api/ads/accounts
  * Get Facebook/Instagram ad accounts
  */
-router.get('/accounts', protect, async (req, res) => {
+router.get('/accounts', protect, requireFeature('publish'), async (req, res) => {
   try {
     const profileKey = await getProfileKey(req.user.userId || req.user.id);
     const result = await getAdAccounts(profileKey);
@@ -44,7 +48,7 @@ router.get('/accounts', protect, async (req, res) => {
     res.json({ success: true, accounts: result.data });
   } catch (error) {
     console.error('Get ad accounts error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(error.status || 500).json({ success: false, error: error.message });
   }
 });
 
@@ -59,7 +63,7 @@ router.get('/accounts', protect, async (req, res) => {
  *         locations, excludedLocations, minAge, maxAge, gender, interests,
  *         specialAdCategories, tracking, urlTags, dsaBeneficiary, dsaPayor }
  */
-router.post('/boost', protect, async (req, res) => {
+router.post('/boost', protect, requireFeature('publish'), async (req, res) => {
   try {
     const profileKey = await getProfileKey(req.user.userId || req.user.id);
     const {
@@ -112,7 +116,7 @@ router.post('/boost', protect, async (req, res) => {
     res.json({ success: true, data: result.data });
   } catch (error) {
     console.error('Boost post error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(error.status || 500).json({ success: false, error: error.message });
   }
 });
 
@@ -125,7 +129,7 @@ router.post('/boost', protect, async (req, res) => {
  * Get all boosted ads
  * Query: ?status=ACTIVE&limit=20
  */
-router.get('/boosted', protect, async (req, res) => {
+router.get('/boosted', protect, requireFeature('publish'), async (req, res) => {
   try {
     const profileKey = await getProfileKey(req.user.userId || req.user.id);
     const { status, limit, accountId } = req.query;
@@ -160,7 +164,7 @@ router.get('/boosted', protect, async (req, res) => {
     res.json({ success: true, ads });
   } catch (error) {
     console.error('Get boosted ads error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(error.status || 500).json({ success: false, error: error.message });
   }
 });
 
@@ -169,7 +173,7 @@ router.get('/boosted', protect, async (req, res) => {
  * Update an ad (pause/resume/update budget)
  * Body: { status, dailyBudget, endDate }
  */
-router.put('/:adId', protect, async (req, res) => {
+router.put('/:adId', protect, requireFeature('publish'), async (req, res) => {
   try {
     const profileKey = await getProfileKey(req.user.userId || req.user.id);
     const { adId } = req.params;
@@ -184,7 +188,7 @@ router.put('/:adId', protect, async (req, res) => {
     res.json({ success: true, data: result.data });
   } catch (error) {
     console.error('Update ad error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(error.status || 500).json({ success: false, error: error.message });
   }
 });
 
@@ -197,7 +201,7 @@ router.put('/:adId', protect, async (req, res) => {
  * Get ad spend history
  * Query: ?startDate=2024-01-01&endDate=2024-12-31
  */
-router.get('/history', protect, async (req, res) => {
+router.get('/history', protect, requireFeature('publish'), async (req, res) => {
   try {
     const profileKey = await getProfileKey(req.user.userId || req.user.id);
     const { startDate, endDate } = req.query;
@@ -211,7 +215,7 @@ router.get('/history', protect, async (req, res) => {
     res.json({ success: true, history: result.data });
   } catch (error) {
     console.error('Get ad history error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(error.status || 500).json({ success: false, error: error.message });
   }
 });
 
@@ -224,7 +228,7 @@ router.get('/history', protect, async (req, res) => {
  * Search interests for ad targeting
  * Query: ?query=fitness
  */
-router.get('/interests', protect, async (req, res) => {
+router.get('/interests', protect, requireFeature('publish'), async (req, res) => {
   try {
     const profileKey = await getProfileKey(req.user.userId || req.user.id);
     const { query } = req.query;
@@ -242,7 +246,7 @@ router.get('/interests', protect, async (req, res) => {
     res.json({ success: true, interests: result.data });
   } catch (error) {
     console.error('Get ad interests error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(error.status || 500).json({ success: false, error: error.message });
   }
 });
 

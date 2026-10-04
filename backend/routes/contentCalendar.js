@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
+const { requireFeatureWhen, wantsPublish } = require('../middleware/requireFeature');
 const User = require('../models/User');
 const ContentCalendar = require('../models/ContentCalendar');
 const { deductCredits, refundCredits } = require('../middleware/trialGuard');
@@ -307,7 +308,7 @@ router.post('/items/:itemId/auto-generate', protect, async (req, res) => {
   }
 });
 
-router.post('/items/:itemId/create-draft', protect, async (req, res) => {
+router.post('/items/:itemId/create-draft', protect, requireFeatureWhen('publish', wantsPublish), async (req, res) => {
   try {
     const calendar = await getCurrentCalendar(req.user._id);
     if (!calendar) return res.status(404).json({ success: false, message: 'Content calendar not found' });

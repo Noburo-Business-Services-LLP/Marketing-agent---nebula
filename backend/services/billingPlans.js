@@ -171,7 +171,7 @@ function buildEndUpdate(user, record, eventName) {
       return { update: { $set }, arrayFilters }; // a stale subscription: leave the current plan alone
     }
     $set['plan.tier'] = 'free'; $set['plan.addons'] = []; $set['subscription.status'] = status;
-    return { update: { $set }, arrayFilters };
+    return { update: { $set }, arrayFilters, endsPlan: true };
   }
   const stillProvided = new Set();
   for (const s of (user.plan && user.plan.subscriptions) || []) {
