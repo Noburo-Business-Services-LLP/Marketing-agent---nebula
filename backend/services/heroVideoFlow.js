@@ -49,7 +49,7 @@ function defaultDeps() {
   const { deductCredits, refundCredits } = require('../middleware/trialGuard');
   return {
     JobModel: HeroVideoJob,
-    quotaFn: (userId, now) => hero.getHeroQuota(userId, now, HeroVideoJob),
+    quotaFn: (userId, now) => hero.getHeroQuota(userId, now, HeroVideoJob, require('../models/User')),
     deduct: deductCredits,
     refund: refundCredits,
     submit: hero.submitHeroClip,

@@ -25,6 +25,7 @@ const DEFAULT_LIMIT = 2;
 
 const net = require('net');
 const { HERO_CLIP_SECONDS } = require('../config/apiCosts');
+const { heroLimitForUser } = require('../config/entitlements');
 
 // True for IPv4 ranges that must never be fetched: this-network, private, loopback, link-local, CGNAT,
 // IETF/documentation/benchmark blocks, multicast and reserved.
@@ -145,7 +146,7 @@ function nextMonthStartUTC(now = new Date()) {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
 }
 
-async function getHeroQuota(userId, now = new Date(), JobModel) {
+async function getHeroQuota(userId, now = new Date(), JobModel, UserModel) {
   const Model = JobModel || require('../models/HeroVideoJob');
   const used = await Model.countDocuments({
     userId,
@@ -153,7 +154,12 @@ async function getHeroQuota(userId, now = new Date(), JobModel) {
     status: { $in: ['queued', 'processing', 'completed'] },
     createdAt: { $gte: monthStartUTC(now) }
   });
-  return { used, limit: heroMonthlyLimit(), resetsOn: nextMonthStartUTC(now).toISOString() };
+  let user = null;
+  if (UserModel) {
+    try { user = await UserModel.findById(userId).select('plan').lean(); } catch (e) { user = null; }
+  }
+  const limit = heroLimitForUser(user, process.env.HERO_VIDEO_MONTHLY_LIMIT);
+  return { used, limit, resetsOn: nextMonthStartUTC(now).toISOString() };
 }
 
 // ---- fal queue (client bootstrap copied from videoService.getFalClient; that file is untouched) ----

@@ -240,6 +240,12 @@ const userSchema = new mongoose.Schema({
     invoiceUrl: { type: String, default: '' },
     paidAt: { type: Date, default: Date.now }
   }],
+  // Plan (optional: accounts without plan.tier are treated as managed)
+  plan: {
+    tier: { type: String },
+    addons: [{ type: String }],
+    subscriptionId: { type: String }
+  },
   // Trial tracking
   trial: {
     startDate: { type: Date },

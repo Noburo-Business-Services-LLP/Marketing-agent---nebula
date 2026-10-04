@@ -6,6 +6,7 @@
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
+const { requireFeature } = require('../middleware/requireFeature');
 const { checkTrial, deductCredits, requireCredits } = require('../middleware/trialGuard');
 const Campaign = require('../models/Campaign');
 const Influencer = require('../models/Influencer');
@@ -2987,7 +2988,7 @@ router.delete('/:id', protect, async (req, res) => {
  * Actually publish a campaign to social media using Ayrshare
  * Accepts optional platforms array in request body to override campaign platforms
  */
-router.post('/:id/publish', protect, async (req, res) => {
+router.post('/:id/publish', protect, requireFeature('publish'), async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
     const campaign = await Campaign.findOne({ _id: req.params.id, userId });

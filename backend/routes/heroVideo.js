@@ -298,7 +298,7 @@ function createHeroVideoRouter(planDepsIn, impl = {}) {
   router.get('/quota', protect, heroReadLimiter, async (req, res) => {
     try {
       const userId = toUserId(req.user);
-      const quota = await require('../services/heroVideoService').getHeroQuota(userId);
+      const quota = await require('../services/heroVideoService').getHeroQuota(userId, undefined, undefined, require('../models/User'));
       return res.json({ success: true, ...quota });
     } catch (err) {
       return fail(res, err, 'Failed to load quota');

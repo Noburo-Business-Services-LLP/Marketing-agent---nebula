@@ -6,6 +6,7 @@
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
+const { requireFeature } = require('../middleware/requireFeature');
 const { deductCredits, CREDIT_COSTS } = require('../middleware/trialGuard');
 const { ensureCreditCycle } = require('../middleware/creditGuard');
 const User = require('../models/User');
@@ -1097,7 +1098,7 @@ router.get('/campaign-suggestions-stream', protect, async (req, res) => {
  * POST /api/dashboard/refresh-competitor-posts
  * Manually trigger real competitor post scraping using Apify
  */
-router.post('/refresh-competitor-posts', protect, async (req, res) => {
+router.post('/refresh-competitor-posts', protect, requireFeature('competitors'), async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
     const user = await User.findById(userId);

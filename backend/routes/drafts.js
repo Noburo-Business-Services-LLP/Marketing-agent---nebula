@@ -2,6 +2,7 @@ const express = require('express');
 const path = require('path');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
+const { requireFeature } = require('../middleware/requireFeature');
 const { checkTrial, deductCredits, refundCredits, CREDIT_COSTS } = require('../middleware/trialGuard');
 const Draft = require('../models/Draft');
 const Campaign = require('../models/Campaign');
@@ -181,7 +182,7 @@ async function upsertCampaignFromDraft(draft, userId, targetStatus) {
 }
 
 // 5. POST /:id/schedule - Set scheduledDate and change status to scheduled
-router.post('/:id/schedule', protect, async (req, res) => {
+router.post('/:id/schedule', protect, requireFeature('schedule'), async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
     const { scheduledDate } = req.body;
@@ -213,7 +214,7 @@ router.post('/:id/schedule', protect, async (req, res) => {
 });
 
 // 6. POST /:id/publish - Publish draft now
-router.post('/:id/publish', protect, async (req, res) => {
+router.post('/:id/publish', protect, requireFeature('publish'), async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
     const draft = await Draft.findOne({ _id: req.params.id, userId });

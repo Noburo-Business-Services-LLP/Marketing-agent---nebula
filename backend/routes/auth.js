@@ -8,6 +8,7 @@ const { lookupInstagramHandle } = require('../services/serperLookup');
 const { callClaude, parseClaudeJSON } = require('../services/claudeAI');
 const axios = require('axios');
 const otpService = require('../services/otpService');
+const { newAccountPlan } = require('../config/entitlements');
 const { determineBrandColors } = require('../services/brandIntelligenceService');
 const { scrapeWebsite } = require('../services/scraper');
 
@@ -585,7 +586,8 @@ router.post('/signup', [
           brandColors: []
         }
       },
-      isVerified: false
+      isVerified: false,
+      plan: newAccountPlan()
     });
 
     // Generate and send OTP

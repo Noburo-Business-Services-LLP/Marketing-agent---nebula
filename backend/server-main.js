@@ -86,6 +86,8 @@ const paymentRoutes = require('./routes/payment');
 
 // Trial guard middleware
 const { checkTrial } = require('./middleware/trialGuard');
+const { protect } = require('./middleware/auth');
+const { requireFeature } = require('./middleware/requireFeature');
 
 // Content routes
 const contentRoutes = require('./routes/content');
@@ -445,6 +447,8 @@ app.use('/api/products', productRoutes);
 app.use('/api/prompts', promptRoutes);
 app.use('/api/carousels', carouselRoutes);
 // Video generation has its own per-route limiters (job polling must not trip AI limiter).
+// Scheduling a video post calls an outside service; gated here so the Kling route file stays untouched.
+app.post('/api/video-generation/schedulePost', protect, requireFeature('schedule'));
 app.use('/api/video-generation', videoGenerationRoutes);
 app.use('/api/hero-video', heroVideoRoutes);
 app.use('/api/ai-memory', aiMemoryRoutes);

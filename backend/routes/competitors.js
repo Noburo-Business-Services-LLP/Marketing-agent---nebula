@@ -6,6 +6,7 @@
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
+const { requireFeature } = require('../middleware/requireFeature');
 const Competitor = require('../models/Competitor');
 const User = require('../models/User');
 const OnboardingContext = require('../models/OnboardingContext');
@@ -22,7 +23,7 @@ const {
  * POST /api/competitors/auto-discover
  * Discover 12-15 competitors using AI - SIMPLE AND RELIABLE
  */
-router.post('/auto-discover', protect, async (req, res) => {
+router.post('/auto-discover', protect, requireFeature('competitors'), async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
     const user = await User.findById(userId);
@@ -569,7 +570,7 @@ function analyzeSentiment(text) {
  * POST /api/competitors/add-manual
  * Add a competitor by name - Serper finds handle, Apify scrapes posts
  */
-router.post('/add-manual', protect, async (req, res) => {
+router.post('/add-manual', protect, requireFeature('competitors'), async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
     const { name } = req.body;
@@ -702,7 +703,7 @@ router.get('/ignored', protect, async (req, res) => {
  * POST /api/competitors/scrape-by-type
  * Scrape posts for competitors of a specific type (local, national, global, etc.)
  */
-router.post('/scrape-by-type', protect, async (req, res) => {
+router.post('/scrape-by-type', protect, requireFeature('competitors'), async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
     const competitorType = String(req.body?.competitorType || '').trim().toLowerCase();

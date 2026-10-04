@@ -61,4 +61,9 @@ function heroLimitForUser(user, envOverride) {
   return HERO_LIMITS[resolveTier(user)];
 }
 
-module.exports = { TIERS, FEATURES, resolveTier, addonsOf, canUse, heroLimitForUser };
+// The plan written onto a NEW account at registration. Existing accounts are never touched.
+function newAccountPlan() {
+  return { tier: 'free' };
+}
+
+module.exports = { TIERS, FEATURES, resolveTier, addonsOf, canUse, heroLimitForUser, newAccountPlan };
