@@ -1318,7 +1318,7 @@ router.put('/complete-onboarding', protect, async (req, res) => {
           : 'leads',
         // Handle brandVoice as array or string
         brandTone: Array.isArray(businessProfile?.brandVoice) 
-          ? businessProfile.brandVoice 
+          ? (businessProfile.brandVoice.length ? businessProfile.brandVoice : ['professional'])
           : businessProfile?.brandVoice 
             ? [businessProfile.brandVoice] 
             : ['professional'],
