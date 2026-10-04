@@ -204,9 +204,9 @@ const getFailedEntries = (item: AdCampaign) => {
 const getPrimaryFailure = (item: AdCampaign) => getFailedEntries(item)[0] || null;
 
 const getSummaryBanner = (uiState: CampaignUiState) => {
-  if (uiState === 'failed') return '🔴 Ad Campaign Failed to Launch';
-  if (uiState === 'partial') return '🟡 Ad Created with Issues';
-  return '🟢 Ad Campaign Created and Running';
+  if (uiState === 'failed') return 'The ad campaign could not be launched';
+  if (uiState === 'partial') return 'The ad was created with issues';
+  return 'The ad campaign was created and is running';
 };
 
 const getSummaryBannerClass = (uiState: CampaignUiState, isDarkMode: boolean) => {
@@ -967,7 +967,7 @@ const AdCampaigns: React.FC = () => {
                 <p className={`mt-1 text-xs ${theme.textSecondary}`}>Duration: <span className={theme.text}>{formatDateRange(createdSummary.schedule.startDate, createdSummary.schedule.endDate)}</span></p>
                 <div className="mt-2">
                   <span className={`text-[11px] font-bold uppercase px-2 py-1 rounded-full ${statusPillClass(summaryState, isDarkMode)}`}>
-                    {summaryState === 'success' ? '🟢 Active' : summaryState === 'failed' ? '🔴 Failed' : '🟡 Partial'}
+                    {summaryState === 'success' ? 'Active' : summaryState === 'failed' ? 'Failed' : 'Partial'}
                   </span>
                 </div>
               </div>
@@ -975,7 +975,7 @@ const AdCampaigns: React.FC = () => {
 
             {summaryFailure && (
               <div className={`mt-3 rounded-xl border p-3 ${isDarkMode ? 'border-red-500/30 bg-red-500/10 text-red-200' : 'border-red-200 bg-red-50 text-red-700'}`}>
-                <p className="text-sm font-semibold">❌ {platformLabel(summaryFailure.platform)} Failed</p>
+                <p className="text-sm font-semibold">{platformLabel(summaryFailure.platform)} failed</p>
                 <p className="text-xs mt-1">Reason: {summaryFailure.message || 'Ad creation failed.'}</p>
                 <div className="text-xs mt-2">
                   <p className="font-semibold">Fix:</p>
@@ -1089,7 +1089,7 @@ const AdCampaigns: React.FC = () => {
                     <div className={`mt-3 rounded-lg border px-2.5 py-2 text-xs flex items-start gap-2 ${isDarkMode ? 'border-red-500/30 bg-red-500/10 text-red-200' : 'border-red-200 bg-red-50 text-red-700'}`}>
                       <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                       <div className="min-w-0">
-                        <p className="font-semibold">❌ {platformLabel(primaryFailure.platform)} Failed</p>
+                        <p className="font-semibold">{platformLabel(primaryFailure.platform)} failed</p>
                         <p className="truncate">"{primaryFailure.message || 'Unable to launch ad'}"</p>
                       </div>
                       <span

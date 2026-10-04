@@ -383,7 +383,7 @@ export const Drafts: React.FC = () => {
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                       />
                     ) : (
-                      <div className="text-3xl text-slate-700">🖼️</div>
+                      <div className="text-xs text-slate-500">No image available</div>
                     )}
                     
                     {/* Status Overlay */}

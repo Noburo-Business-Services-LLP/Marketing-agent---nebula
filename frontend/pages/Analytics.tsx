@@ -591,7 +591,7 @@ const HistoricalTrendsChart: React.FC<{
         <div className="flex flex-col items-center justify-center py-8 gap-3">
           <BarChart3 className={`w-10 h-10 ${tc.textSecondary}`} />
           <p className={`text-sm ${tc.textSecondary} text-center max-w-md`}>
-            Start tracking your growth across followers, reach, engagement and more. Take your first snapshot to unlock performance insights.
+            Start tracking your growth across followers, reach, engagement and more. Take your first snapshot to see performance insights.
           </p>
           <button
             onClick={takeSnapshot}
@@ -706,7 +706,7 @@ const HistoricalTrendsChart: React.FC<{
     // Declining platform
     const decliner = platformCards.filter(p => p.changePct < 0).sort((a, b) => a.changePct - b.changePct)[0];
     if (decliner) {
-      insights.push(`${decliner.platform.charAt(0).toUpperCase() + decliner.platform.slice(1)} dropped ${Math.abs(decliner.changePct).toFixed(1)}% — consider refreshing your strategy`);
+      insights.push(`${decliner.platform.charAt(0).toUpperCase() + decliner.platform.slice(1)} dropped ${Math.abs(decliner.changePct).toFixed(1)}%. Consider refreshing your strategy.`);
     }
   } else {
     // Single snapshot — just describe current state
@@ -714,7 +714,7 @@ const HistoricalTrendsChart: React.FC<{
     if (best && best.value > 0) {
       insights.push(`${best.platform.charAt(0).toUpperCase() + best.platform.slice(1)} is your strongest for ${mc.label.toLowerCase()} at ${mc.suffix === '%' ? best.value.toFixed(1) + '%' : formatNumber(best.value)}`);
     }
-    insights.push('More snapshots will unlock trend comparisons — data auto-collects every 12 hours');
+    insights.push('More snapshots are needed to compare trends. Data is collected automatically every 12 hours.');
   }
 
   return (
@@ -1229,7 +1229,7 @@ const PostAnalyticsTab: React.FC<{
             ))}
           </div>
         ) : (
-          <p className={`text-xs ${tc.textMuted}`}>Metrics not available yet — check back in a few hours</p>
+          <p className={`text-xs ${tc.textMuted}`}>Metrics are not available yet. Please check again in a few hours.</p>
         )}
 
         {/* Expandable details */}
@@ -1390,7 +1390,7 @@ const PostAnalyticsTab: React.FC<{
                     })()}
                   </div>
                 ) : (
-                  <p className={`text-sm ${tc.textSecondary}`}>{analytics?.error || 'No analytics yet — metrics appear a few hours after posting'}</p>
+                  <p className={`text-sm ${tc.textSecondary}`}>{analytics?.error || 'There are no analytics yet. Metrics appear a few hours after posting.'}</p>
                 )}
               </div>
             )}
@@ -1429,7 +1429,7 @@ const AdsTab: React.FC<{
         <Megaphone className={`w-12 h-12 mx-auto mb-3 ${tc.textMuted}`} />
         <p className={`font-medium ${tc.text}`}>No boosted ads yet</p>
         <p className={`text-sm mt-1 ${tc.textSecondary}`}>
-          Boost a published post from the Campaigns page to see your ads here
+          Promote a published post from the Campaigns page and your ads will appear here.
         </p>
       </div>
     );
