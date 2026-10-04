@@ -788,9 +788,9 @@ const ConnectSocials: React.FC = () => {
               </div>
               <div className={`rounded-xl border p-4 ${isDarkMode ? 'border-slate-700/50 bg-[#0f1419]' : 'border-slate-200 bg-white'}`}>
                 <div className="flex items-center gap-2 text-sm font-semibold">
-                  <Bell className="w-4 h-4 text-[#F5A623]" /> Unread alerts
+                  <Bell className="w-4 h-4 text-[#F5A623]" /> Unread count
                 </div>
-                <p className={`mt-1 text-xs ${theme.textSecondary}`}>Receive an alert when engagement needs a response.</p>
+                <p className={`mt-1 text-xs ${theme.textSecondary}`}>This page shows how many messages in your connected accounts are still unread.</p>
               </div>
             </div>
           </div>
