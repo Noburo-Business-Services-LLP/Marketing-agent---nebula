@@ -45,9 +45,12 @@ const NEBULAA = {
 
 const STOP_MESSAGES = {
   unreachable: 'We could not read your website or Instagram page, so there was not enough to build a reliable Blueprint. Check the address, or add one of your real offers, then try again.',
-  thin: 'We could not find enough about your business to build a reliable Blueprint. Add your website address, your Instagram page or one of your real offers, then try again.',
-  identity_mismatch: 'The website you entered does not appear to belong to this business name. Check the name and the address, then try again.'
+  thin: 'We could not find enough about your business to build a reliable Blueprint. Add your website address, your Instagram page or one of your real offers, then try again.'
+};
+// Owner ruling 2026-10-04: a name mismatch is a visible warning carried in the result, never a stop.
+const WARNING_MESSAGES = {
+  identity_mismatch: 'The website you entered does not appear to mention this business name. Check that the name and the address belong together.'
 };
 const LIMITED_NOTE = 'Based on limited information';
 
-module.exports = { TAGS, TAG_LABEL, GOALS, FORMATS, CHANNELS, MODES, STATUS, PAGES, PHASES, LIMITS, NEBULAA, STOP_MESSAGES, LIMITED_NOTE };
+module.exports = { TAGS, TAG_LABEL, GOALS, FORMATS, CHANNELS, MODES, STATUS, PAGES, PHASES, LIMITS, NEBULAA, STOP_MESSAGES, WARNING_MESSAGES, LIMITED_NOTE };

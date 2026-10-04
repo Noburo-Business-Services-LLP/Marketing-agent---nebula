@@ -28,7 +28,9 @@ test('config/blueprint invariants', () => {
   assert.deepEqual(cfg.PAGES.map((p) => p.id), ['where-today', 'audience-positioning', 'competitor-read', 'content-pillars', 'calendar-preview', 'offers-hooks', 'channel-plan', 'roadmap-90', 'first-steps']);
   assert.equal(cfg.PAGES.length, 9);
   assert.equal(cfg.PHASES.length, 3);
-  for (const m of Object.values(cfg.STOP_MESSAGES)) {
+  assert.deepEqual(Object.keys(cfg.STOP_MESSAGES).sort(), ['thin', 'unreachable']);
+  assert.ok(cfg.WARNING_MESSAGES.identity_mismatch);
+  for (const m of [...Object.values(cfg.STOP_MESSAGES), ...Object.values(cfg.WARNING_MESSAGES)]) {
     assert.ok(m.endsWith('.'));
     assert.ok(!/!|credit|trial/i.test(m));
   }
