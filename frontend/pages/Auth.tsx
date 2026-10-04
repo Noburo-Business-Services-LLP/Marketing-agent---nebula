@@ -405,7 +405,7 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
               {forgotPasswordStep === 'email' && 'Reset Password'}
               {forgotPasswordStep === 'otp' && 'Enter Verification Code'}
               {forgotPasswordStep === 'newpw' && 'Set New Password'}
-              {forgotPasswordStep === 'done' && 'Password Updated!'}
+              {forgotPasswordStep === 'done' && 'Password updated'}
             </h1>
             <p className="text-[#070A12]/80 text-sm mt-2">
               {forgotPasswordStep === 'email' && 'Enter your email to receive a reset code'}
@@ -539,7 +539,7 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
             {forgotPasswordStep === 'done' && (
               <div className="text-center py-4">
                 <div className="bg-green-500/20 text-green-700 p-3 rounded-lg text-sm border border-green-500/30 flex items-center justify-center gap-2">
-                  <Check className="w-4 h-4" /> Password updated! Redirecting to sign in...
+                  <Check className="w-4 h-4" /> Password updated. Redirecting to sign in...
                 </div>
               </div>
             )}
@@ -589,7 +589,7 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
             {otpSuccess && (
               <div className="bg-green-500/20 text-green-700 p-3 rounded-lg text-sm mb-6 border border-green-500/30 flex items-center gap-2">
                 <Check className="w-4 h-4 flex-shrink-0" />
-                <span>Email verified! Redirecting...</span>
+                <span>Email verified. Redirecting...</span>
               </div>
             )}
 
@@ -633,7 +633,7 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
               {otpLoading ? (
                 <><Loader2 className="w-4 h-4 animate-spin" /> Verifying...</>
               ) : otpSuccess ? (
-                <><Check className="w-4 h-4" /> Verified!</>
+                <><Check className="w-4 h-4" /> Verified</>
               ) : (
                 <><ShieldCheck className="w-4 h-4" /> Verify Email</>
               )}

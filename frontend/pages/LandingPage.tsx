@@ -134,7 +134,7 @@ const FAQS = [
 const CtaButton: React.FC<{ onClick: () => void; children: React.ReactNode; className?: string }> = ({ onClick, children, className = '' }) => (
   <button
     onClick={onClick}
-    className={`group inline-flex items-center justify-center gap-2 rounded-full font-bold transition-transform hover:scale-[1.03] active:scale-[0.98] ${className}`}
+    className={`group inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full font-bold transition-transform hover:scale-[1.03] active:scale-[0.98] ${className}`}
     style={{ background: GOLD, color: INK, boxShadow: '0 8px 22px rgba(245,166,35,0.38)' }}
   >
     {children}
@@ -243,7 +243,7 @@ const LandingPage: React.FC = () => {
               Tell Nebulaa about your business once. It writes the captions, makes the images and videos, and plans every post. You check them and post.
             </p>
             <div className="flex flex-wrap items-center gap-3 mb-4">
-              <CtaButton onClick={signUp} className="px-8 py-4 text-[15.5px]">Start with 100 free Quarks</CtaButton>
+              <CtaButton onClick={signUp} className="px-6 sm:px-8 py-4 text-[15.5px]">Start with 100 free Quarks</CtaButton>
               <a
                 href="#how-it-works"
                 className="inline-flex items-center px-7 py-[14px] rounded-full text-[15px] font-bold transition-transform hover:scale-[1.03]"
@@ -340,7 +340,7 @@ const LandingPage: React.FC = () => {
               </div>
             ))}
           </div>
-          <div className="mt-10"><CtaButton onClick={signUp} className="px-8 py-4 text-[15.5px]">Get started</CtaButton></div>
+          <div className="mt-10"><CtaButton onClick={signUp} className="px-6 sm:px-8 py-4 text-[15.5px]">Get started</CtaButton></div>
         </div>
       </section>
 
@@ -366,7 +366,7 @@ const LandingPage: React.FC = () => {
               </div>
             ))}
           </div>
-          <div className="mt-10"><CtaButton onClick={signUp} className="px-8 py-4 text-[15.5px]">Start with 100 free Quarks</CtaButton></div>
+          <div className="mt-10"><CtaButton onClick={signUp} className="px-6 sm:px-8 py-4 text-[15.5px]">Start with 100 free Quarks</CtaButton></div>
         </div>
       </section>
 
@@ -457,7 +457,7 @@ const LandingPage: React.FC = () => {
           <p className="text-[17px] md:text-[18px] leading-[1.6] max-w-[500px] mb-8" style={{ color: INK2 }}>
             Sign up, answer a few questions and see your posts. Start with 100 free Quarks to explore.
           </p>
-          <CtaButton onClick={signUp} className="px-9 py-4 text-[16px]">Start with 100 free Quarks</CtaButton>
+          <CtaButton onClick={signUp} className="px-6 sm:px-9 py-4 text-[15.5px] sm:text-[16px]">Start with 100 free Quarks</CtaButton>
           <p className="mt-5 text-[14px]" style={{ color: INK2 }}>
             Already have an account?{' '}
             <button onClick={signIn} className="font-bold underline underline-offset-2">Sign in</button>

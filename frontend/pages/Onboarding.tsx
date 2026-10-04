@@ -170,7 +170,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                 const displayName = platform.charAt(0).toUpperCase() + platform.slice(1);
                 setNotification({
                     type: 'success',
-                    message: `${displayName}${account ? ` (${decodeURIComponent(account)})` : ''} connected successfully!`
+                    message: `${displayName}${account ? ` (${decodeURIComponent(account)})` : ''} connected successfully.`
                 });
                 // Update social connections state
                 setSocialConnections(prev => prev.map(s => 
@@ -245,9 +245,9 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                     setFormData(prev => ({ ...prev, name: result.tradeName || result.legalName }));
                 }
                 if (result.fallback) {
-                    setNotification({ type: 'success', message: 'GST format valid. Live verification unavailable — will retry later.' });
+                    setNotification({ type: 'success', message: 'GST format valid. Live verification is unavailable, so it will be checked again later.' });
                 } else {
-                    setNotification({ type: 'success', message: `GST verified! Registered: ${result.tradeName || result.legalName}` });
+                    setNotification({ type: 'success', message: `GST verified. Registered: ${result.tradeName || result.legalName}` });
                 }
             } else {
                 setGstStatus('invalid');
@@ -312,7 +312,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                 }
                 
                 setWebsiteStatus('analyzed');
-                setNotification({ type: 'success', message: 'Website analyzed! Fields have been auto-filled.' });
+                setNotification({ type: 'success', message: 'Website analyzed. Fields have been filled in.' });
             } else if (result.validUrl === false) {
                 setWebsiteStatus('invalid');
                 setWebsiteError(result.error || 'Invalid URL');
@@ -467,6 +467,8 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
             // We ask fewer questions now, so fill the fields the rest of the app reads from the answers we have.
             const profile = {
                 ...formData,
+                // Tone is optional in sign-up now; fall back to the same default the backend uses.
+                brandVoice: Array.isArray(formData.brandVoice) && formData.brandVoice.length ? formData.brandVoice : (formData.brandVoice || ['Professional']),
                 niche: formData.niche || formData.heroProduct || '',
                 targetAudience: formData.targetAudience || formData.targetCustomerProfile || '',
                 description: formData.description || [formData.heroProduct, formData.targetCustomerProfile && `for ${formData.targetCustomerProfile}`].filter(Boolean).join(' '),
@@ -697,7 +699,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                     {/* Status message */}
                                     {websiteStatus === 'analyzed' && (
                                         <p className="text-xs text-emerald-600 mt-1 flex items-center gap-1">
-                                            <CheckCircle className="w-3 h-3" /> Website analyzed! Form auto-filled with detected info.
+                                            <CheckCircle className="w-3 h-3" /> Website analyzed. The form is filled in with what we found.
                                         </p>
                                     )}
                                     {websiteError && websiteStatus !== 'analyzed' && (
@@ -722,7 +724,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                         value={formData.industry || ''}
                                         onChange={e => handleChange('industry', e.target.value)}
                                     >
-                                        <option value="">— Choose one —</option>
+                                        <option value="">Choose one</option>
                                         <option value="Technology / SaaS">Technology / SaaS</option>
                                         <option value="E-commerce / Retail">E-commerce / Retail</option>
                                         <option value="Food & Beverage">Food &amp; Beverage</option>
@@ -919,7 +921,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                         Your Competitors <span className={`text-xs font-normal ${theme === 'dark' ? 'text-[#ededed]/50' : 'text-gray-400'}`}>(optional)</span>
                                     </label>
                                     <p className={`text-xs mb-3 ${theme === 'dark' ? 'text-[#ededed]/50' : 'text-gray-500'}`}>
-                                        Add specific competitors you'd like to track, or skip this — Nebulaa will automatically discover competitors based on your business and location.
+                                        Add specific competitors you'd like to track, or skip this. Nebulaa will automatically discover competitors based on your business and location.
                                     </p>
                                     <div className={`mb-3 p-3 rounded-lg flex items-start gap-2 ${theme === 'dark' ? 'bg-[#F5A623]/10 border border-slate-700/50' : 'bg-yellow-50 border border-yellow-200'}`}>
                                         <span className="text-[#F5A623] text-lg">✨</span>
