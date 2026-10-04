@@ -44,7 +44,8 @@ function shortPayload(overrides = {}) {
 
 test('sign-up asks exactly 8 required questions', () => {
   const block = onboarding.slice(onboarding.indexOf('const validateStep'), onboarding.indexOf('const handleNext'));
-  const required = block.match(/return "Please [^"]+";/g) || [];
+  // Messages live in frontend/components/onboarding/onboardingStrings.ts (English, Tamil, Hindi); each required answer returns one.
+  const required = block.match(/return t\.err\w+;/g) || [];
   assert.strictEqual(required.length, 8);
 });
 

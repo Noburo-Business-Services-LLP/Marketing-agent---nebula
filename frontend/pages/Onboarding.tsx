@@ -1,9 +1,11 @@
 import { ShowcasePanel, ShowcaseBanner } from '../components/onboarding/ShowcasePanel';
 import StepGuide from '../components/onboarding/StepGuide';
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { apiService } from '../services/api';
-import { CONTENT_LANGUAGES } from '../constants/languages';
+import { useOnboardingLang } from '../components/onboarding/useOnboardingLang';
+import { fillTemplate, splitTemplate, getChoices } from '../components/onboarding/onboardingStrings';
+import { INDIC_FONT_STACK } from '../components/onboarding/indicFonts';
 import { User, BusinessProfile, SocialConnection } from '../types';
 import { ChevronRight, Check, Users, Megaphone, Sparkles, Loader2, Building, AlertCircle, Share2, Instagram, Facebook, Linkedin, Youtube, Pin, MessageCircle, SkipForward, Sun, Moon, Globe, CheckCircle, XCircle, ExternalLink, ArrowLeft } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
@@ -22,20 +24,16 @@ interface OnboardingProps {
 // Storage key for persisting onboarding state
 const ONBOARDING_STATE_KEY = 'nebulaa_onboarding_state';
 
-// What is shown to the owner. The saved value stays the same, so the rest of the app reads it as before.
-const GOAL_LABELS: Record<string, string> = {
-    'Brand Awareness': 'More people know about my business',
-    'Lead Generation': 'More enquiries and calls',
-    'Direct Sales': 'More sales',
-    'Community Engagement': 'More followers, likes and comments',
-    'Website Traffic': 'More visits to my website',
-};
-
 const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
     // Sign-up always uses the light, warm look of the Nebulaa website.
     const { toggleTheme } = useTheme();
     const theme = 'light' as 'light' | 'dark';
     const location = useLocation();
+    // One language for the whole page. Only the words on screen change; the values saved stay in English.
+    const { lang, t } = useOnboardingLang();
+    const choices = useMemo(() => getChoices(lang), [lang]);
+    const bold = (template: string, vars: Record<string, string | number>) =>
+        splitTemplate(template, vars).map((p, n) => p.filled ? <strong key={n}>{p.text}</strong> : <React.Fragment key={n}>{p.text}</React.Fragment>);
     
     // Load saved state from sessionStorage
     const getSavedState = () => {
@@ -170,7 +168,9 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                 const displayName = platform.charAt(0).toUpperCase() + platform.slice(1);
                 setNotification({
                     type: 'success',
-                    message: `${displayName}${account ? ` (${decodeURIComponent(account)})` : ''} connected successfully.`
+                    message: account
+                        ? fillTemplate(t.connectedToastAccount, { platform: displayName, account: decodeURIComponent(account) })
+                        : fillTemplate(t.connectedToast, { platform: displayName })
                 });
                 // Update social connections state
                 setSocialConnections(prev => prev.map(s => 
@@ -186,19 +186,19 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
         }
         
         if (errorParam) {
-            let errorMessage = 'Failed to connect account.';
+            let errorMessage = t.oauthFailed;
             switch (errorParam) {
                 case 'access_denied':
-                    errorMessage = 'You denied access to your account.';
+                    errorMessage = t.oauthDenied;
                     break;
                 case 'no_channel':
-                    errorMessage = 'No channel found for this account.';
+                    errorMessage = t.oauthNoChannel;
                     break;
                 case 'token_exchange_failed':
-                    errorMessage = 'Failed to authenticate. Please try again.';
+                    errorMessage = t.oauthTokenFailed;
                     break;
                 case 'invalid_state':
-                    errorMessage = 'Authentication session expired. Please try again.';
+                    errorMessage = t.oauthSessionExpired;
                     break;
             }
             setNotification({ type: 'error', message: errorMessage });
@@ -312,21 +312,21 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                 }
                 
                 setWebsiteStatus('analyzed');
-                setNotification({ type: 'success', message: 'Website analyzed. Fields have been filled in.' });
+                setNotification({ type: 'success', message: t.websiteAnalyzedToast });
             } else if (result.validUrl === false) {
                 setWebsiteStatus('invalid');
-                setWebsiteError(result.error || 'Invalid URL');
+                setWebsiteError(result.error || t.websiteInvalid);
             } else {
                 setWebsiteStatus('valid');
-                setWebsiteError(result.error || 'Could not analyze website');
+                setWebsiteError(result.error || t.websiteCouldNotAnalyze);
             }
         } catch (err) {
             setWebsiteStatus('valid');
-            setWebsiteError('Could not connect to server');
+            setWebsiteError(t.websiteNoServer);
         } finally {
             setAnalyzingWebsite(false);
         }
-    }, [formData]);
+    }, [formData, t]);
 
     const toggleGoal = (goal: string) => {
         const current = formData.marketingGoals;
@@ -340,18 +340,18 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
     // Only what we truly need to start. Everything else has a sensible default or is optional.
     const validateStep = (currentStep: number) => {
         if (currentStep === 1) {
-            if (!formData.name || !formData.name.trim()) return "Please enter your business name.";
-            if (!mobileNumber || mobileNumber.replace(/\D/g, '').length < 10) return "Please enter your mobile number.";
-            if (!formData.industry) return "Please choose your type of business.";
-            if (!formData.businessLocation || !formData.businessLocation.trim()) return "Please enter your city or town.";
+            if (!formData.name || !formData.name.trim()) return t.errName;
+            if (!mobileNumber || mobileNumber.replace(/\D/g, '').length < 10) return t.errMobile;
+            if (!formData.industry) return t.errIndustry;
+            if (!formData.businessLocation || !formData.businessLocation.trim()) return t.errCity;
         }
         if (currentStep === 2) {
-            if (!formData.heroProduct || !formData.heroProduct.trim()) return "Please tell us what you sell most.";
-            if (!formData.targetCustomerProfile || !formData.targetCustomerProfile.trim()) return "Please tell us who buys from you.";
+            if (!formData.heroProduct || !formData.heroProduct.trim()) return t.errHero;
+            if (!formData.targetCustomerProfile || !formData.targetCustomerProfile.trim()) return t.errWhoBuys;
         }
         if (currentStep === 3) {
-            if (formData.marketingGoals.length === 0) return "Please pick at least one thing you want most.";
-            if (!formData.contentLanguage) return "Please choose the language for your posts.";
+            if (formData.marketingGoals.length === 0) return t.errGoal;
+            if (!formData.contentLanguage) return t.errPostLanguage;
             // Competitors are optional: they are found automatically.
         }
         // Step 4 (social accounts) is optional.
@@ -383,7 +383,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                 // Some error occurred
                 setNotification({ 
                     type: 'error', 
-                    message: response.message || `Failed to initiate ${platform} connection.` 
+                    message: response.message || fillTemplate(t.connectStartFailed, { platform }) 
                 });
                 setLoadingPlatform(null);
                 setConnectingPlatform(null);
@@ -392,7 +392,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
             console.error('OAuth connect error:', error);
             setNotification({ 
                 type: 'error', 
-                message: error.message || `Failed to connect to ${platform}.` 
+                message: error.message || fillTemplate(t.connectFailedPlatform, { platform }) 
             });
             setLoadingPlatform(null);
             setConnectingPlatform(null);
@@ -406,10 +406,10 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                 setSocialConnections(socialConnections.map(s => 
                     s.platform === platform ? { ...s, connected: false, username: undefined } : s
                 ));
-                setNotification({ type: 'success', message: `${platform} disconnected successfully.` });
+                setNotification({ type: 'success', message: fillTemplate(t.disconnectedToast, { platform }) });
             }
         } catch (error) {
-            setNotification({ type: 'error', message: `Failed to disconnect ${platform}.` });
+            setNotification({ type: 'error', message: fillTemplate(t.disconnectFailed, { platform }) });
         }
     };
 
@@ -457,7 +457,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
             await finishOnboarding(connectedSocials);
         } catch (error) {
             console.error("Duplicate check failed", error);
-            setError("Could not verify business details. Please try again.");
+            setError(t.errVerify);
             setSubmitting(false);
         }
     };
@@ -480,7 +480,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
             }
         } catch (error) {
             console.error("Onboarding failed", error);
-            setError("Failed to save data. Please try again.");
+            setError(t.errSave);
         } finally {
             setSubmitting(false);
         }
@@ -506,11 +506,15 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
     };
 
     const steps = [
-        { num: 1, title: "Identity", icon: Building },
-        { num: 2, title: "Audience", icon: Users },
-        { num: 3, title: "Strategy", icon: Megaphone },
-        { num: 4, title: "Connect", icon: Share2 }
+        { num: 1, title: t.stepNames[0], icon: Building },
+        { num: 2, title: t.stepNames[1], icon: Users },
+        { num: 3, title: t.stepNames[2], icon: Megaphone },
+        { num: 4, title: t.stepNames[3], icon: Share2 }
     ];
+    // A wrong message from the other language must not stay on screen after a switch.
+    useEffect(() => { setError(null); }, [lang]);
+    const latin = lang === 'en';
+    const indicStyle: React.CSSProperties = latin ? {} : { fontFamily: INDIC_FONT_STACK };
 
     const handleBackToLanding = () => {
         // Clear auth so App routes us to the public landing page
@@ -522,7 +526,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
     };
 
     return (
-        <div className="min-h-screen flex" style={{ background: 'linear-gradient(180deg, #FBF5EA 0%, #FFEBD6 100%)' }}>
+        <div lang={lang} className="min-h-screen flex" style={{ ...indicStyle, background: 'linear-gradient(180deg, #FBF5EA 0%, #FFEBD6 100%)' }}>
             <ShowcasePanel />
             <div className="flex-1 min-w-0 flex items-start lg:items-center justify-center p-4 sm:p-6 lg:p-10">
             {/* Back to landing */}
@@ -535,7 +539,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                 }`}
             >
                 <ArrowLeft className="w-4 h-4" />
-                Back
+                {t.back}
             </button>
 
             {/* Duplicate Account Modal */}
@@ -549,14 +553,15 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                 <AlertCircle className="w-8 h-8 text-amber-500" />
                             </div>
                             <h3 className={`text-xl font-bold mb-2 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
-                                Account Already Exists
+                                {t.dupTitle}
                             </h3>
                             <p className={`text-sm ${theme === 'dark' ? 'text-[#ededed]/60' : 'text-gray-600'}`}>
-                                A business with the same <strong>{duplicateCheck.matchedFields.join(', ')}</strong> is already registered
-                                {duplicateCheck.existingEmail && <> under <strong>{duplicateCheck.existingEmail}</strong></>}.
+                                {duplicateCheck.existingEmail
+                                    ? bold(t.dupBody, { fields: duplicateCheck.matchedFields.join(', '), email: duplicateCheck.existingEmail })
+                                    : bold(t.dupBodyNoEmail, { fields: duplicateCheck.matchedFields.join(', ') })}
                             </p>
                             <p className={`text-sm mt-2 ${theme === 'dark' ? 'text-[#ededed]/60' : 'text-gray-600'}`}>
-                                Would you like to switch to that account?
+                                {t.dupQuestion}
                             </p>
                         </div>
                         <div className="flex gap-3">
@@ -568,13 +573,13 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                         : 'bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-200'
                                 }`}
                             >
-                                Cancel
+                                {t.cancel}
                             </button>
                             <button
                                 onClick={handleSwitchAccount}
                                 className="flex-1 py-3 rounded-xl font-semibold text-sm bg-[#F5A623] hover:bg-[#ffb833] text-[#070A12] transition-colors"
                             >
-                                Switch Account
+                                {t.dupSwitch}
                             </button>
                         </div>
                     </div>
@@ -587,13 +592,15 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                 <div className="flex items-center gap-3 mb-5">
                     <img src="/assets/logo-nebulaa.png" alt="Nebulaa" className="h-[42px] w-auto" />
                 </div>
-                <h1 className="mb-1" style={{ fontFamily: "'Archivo', 'Arial Narrow', Arial, sans-serif", fontWeight: 800, textTransform: 'uppercase', lineHeight: 1.05, color: '#14203A', fontSize: 'clamp(28px, 4vw, 38px)' }}>
-                    Let's set up your business
+                <h1 className="mb-1" style={latin
+                    ? { fontFamily: "'Archivo', 'Arial Narrow', Arial, sans-serif", fontWeight: 800, textTransform: 'uppercase', lineHeight: 1.05, color: '#14203A', fontSize: 'clamp(28px, 4vw, 38px)' }
+                    : { fontFamily: INDIC_FONT_STACK, fontWeight: 800, lineHeight: 1.35, color: '#14203A', fontSize: 'clamp(24px, 3.4vw, 32px)' }}>
+                    {t.title}
                 </h1>
-                <p className="text-[14.5px] text-[#33405C] mb-5">A few simple questions. It takes about 2 minutes.</p>
+                <p className="text-[14.5px] text-[#33405C] mb-5">{t.subtitle}</p>
 
                 {/* Progress */}
-                <div className="flex items-center gap-2 mb-5" aria-label={`Step ${step} of ${steps.length}`}>
+                <div className="flex items-center gap-2 mb-5" aria-label={fillTemplate(t.progressLabel, { step, total: steps.length })}>
                     {steps.map((s) => {
                         const done = step > s.num;
                         const current = step === s.num;
@@ -623,9 +630,9 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
 
                         {step === 1 && (
                             <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-500">
-                                <h3 className={`text-xl font-bold ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>About your business</h3>
+                                <h3 className={`text-xl font-bold ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>{t.step1Heading}</h3>
                                 <div>
-                                    <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Business name <span className="text-red-500">*</span></label>
+                                    <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>{t.businessName} <span className="text-red-500">*</span></label>
                                     <input 
                                         type="text" 
                                         className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#F5A623] ${
@@ -633,13 +640,13 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                                 ? 'bg-[#070A12] border-[#F5A623]/30 text-[#ededed] placeholder-[#ededed]/40' 
                                                 : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
                                         }`}
-                                        placeholder="e.g. Nebulaa Corp"
+                                        placeholder={t.businessNamePlaceholder}
                                         value={formData.name}
                                         onChange={e => handleChange('name', e.target.value)}
                                     />
                                 </div>
                                 <div>
-                                    <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Mobile Number <span className="text-red-500">*</span></label>
+                                    <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>{t.mobile} <span className="text-red-500">*</span></label>
                                     <input
                                         type="tel"
                                         className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#F5A623] ${
@@ -647,13 +654,13 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                                 ? 'bg-[#070A12] border-[#F5A623]/30 text-[#ededed] placeholder-[#ededed]/40'
                                                 : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
                                         }`}
-                                        placeholder="e.g. +91 98765 43210"
+                                        placeholder={t.mobilePlaceholder}
                                         value={mobileNumber}
                                         onChange={e => setMobileNumber(e.target.value)}
                                     />
                                 </div>
                                 <div>
-                                    <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Website <span className="text-xs font-normal text-gray-400">(optional)</span></label>
+                                    <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>{t.website} <span className="text-xs font-normal text-gray-400">{t.optional}</span></label>
                                     <div className="flex gap-2">
                                         <div className="flex-1 relative">
                                             <input 
@@ -663,7 +670,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                                         ? 'bg-[#070A12] border-[#F5A623]/30 text-[#ededed] placeholder-[#ededed]/40' 
                                                         : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
                                                 } ${websiteStatus === 'invalid' ? 'border-red-500' : websiteStatus === 'analyzed' ? 'border-emerald-500' : ''}`}
-                                                placeholder="e.g. nike.com or https://nike.com"
+                                                placeholder={t.websitePlaceholder}
                                                 value={formData.website}
                                                 onChange={e => handleChange('website', e.target.value)}
                                                 onBlur={() => {
@@ -692,14 +699,14 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                             {analyzingWebsite ? (
                                                 <><Loader2 className="w-4 h-4 animate-spin" /></>
                                             ) : (
-                                                <><Globe className="w-4 h-4" /> Analyze</>
+                                                <><Globe className="w-4 h-4" /> {t.analyze}</>
                                             )}
                                         </button>
                                     </div>
                                     {/* Status message */}
                                     {websiteStatus === 'analyzed' && (
                                         <p className="text-xs text-emerald-600 mt-1 flex items-center gap-1">
-                                            <CheckCircle className="w-3 h-3" /> Website analyzed. The form is filled in with what we found.
+                                            <CheckCircle className="w-3 h-3" /> {t.websiteAnalyzedInline}
                                         </p>
                                     )}
                                     {websiteError && websiteStatus !== 'analyzed' && (
@@ -709,12 +716,12 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                     )}
                                     {websiteStatus === 'idle' && formData.website && (
                                         <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-[#ededed]/50' : 'text-gray-500'}`}>
-                                            Enter your website URL and click Analyze to auto-fill your business details
+                                            {t.websiteHint}
                                         </p>
                                     )}
                                 </div>
                                 <div>
-                                    <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Type of business <span className="text-red-500">*</span></label>
+                                    <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>{t.industry} <span className="text-red-500">*</span></label>
                                     <select
                                         className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#F5A623] ${
                                             theme === 'dark'
@@ -724,37 +731,15 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                         value={formData.industry || ''}
                                         onChange={e => handleChange('industry', e.target.value)}
                                     >
-                                        <option value="">Choose one</option>
-                                        <option value="Technology / SaaS">Technology / SaaS</option>
-                                        <option value="E-commerce / Retail">E-commerce / Retail</option>
-                                        <option value="Food & Beverage">Food &amp; Beverage</option>
-                                        <option value="Restaurants / Cafes / Bars">Restaurants, Cafés &amp; Bars</option>
-                                        <option value="Salon & Spa">Salon &amp; Spa</option>
-                                        <option value="Gym & Fitness">Gym &amp; Fitness</option>
-                                        <option value="Grocery & Supermarket">Grocery &amp; Supermarket</option>
-                                        <option value="Electronics & Mobile">Electronics &amp; Mobile</option>
-                                        <option value="Fashion & Apparel">Fashion &amp; Apparel</option>
-                                        <option value="Beauty & Wellness">Beauty &amp; Wellness</option>
-                                        <option value="Healthcare">Healthcare</option>
-                                        <option value="Education">Education</option>
-                                        <option value="Finance / Fintech">Finance / Fintech</option>
-                                        <option value="Real Estate">Real Estate</option>
-                                        <option value="Travel & Hospitality">Travel &amp; Hospitality</option>
-                                        <option value="Media & Entertainment">Media &amp; Entertainment</option>
-                                        <option value="Professional Services">Professional Services</option>
-                                        <option value="Manufacturing">Manufacturing</option>
-                                        <option value="Automotive">Automotive</option>
-                                        <option value="Jewellery">Jewellery</option>
-                                        <option value="Home & Furniture">Home &amp; Furniture</option>
-                                        <option value="Non-profit">Non-profit</option>
-                                        <option value="Other">Other</option>
+                                        <option value="">{t.chooseOne}</option>
+                                        {choices.industries.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                                     </select>
                                     <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-[#ededed]/50' : 'text-gray-500'}`}>
-                                        The broader industry your business operates in.
+                                        {t.industryHint}
                                     </p>
                                 </div>
                                 <div>
-                                    <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>City or town <span className="text-red-500">*</span></label>
+                                    <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>{t.city} <span className="text-red-500">*</span></label>
                                     <input 
                                         type="text" 
                                         className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#F5A623] ${
@@ -762,12 +747,12 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                                 ? 'bg-[#070A12] border-[#F5A623]/30 text-[#ededed] placeholder-[#ededed]/40' 
                                                 : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
                                         }`}
-                                        placeholder="e.g. Cuddalore, Tamil Nadu"
+                                        placeholder={t.cityPlaceholder}
                                         value={formData.businessLocation}
                                         onChange={e => handleChange('businessLocation', e.target.value)}
                                     />
                                     <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-[#ededed]/50' : 'text-gray-500'}`}>
-                                        Enter the city/region where your business primarily operates
+                                        {t.cityHint}
                                     </p>
                                 </div>
                             </div>
@@ -775,12 +760,12 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
 
                         {step === 2 && (
                             <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-500">
-                                <h3 className={`text-xl font-bold ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>Your customers</h3>
+                                <h3 className={`text-xl font-bold ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>{t.step2Heading}</h3>
 
                                 <div>
-                                    <label className={`block text-sm font-bold mb-2 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>How should your posts sound? <span className="text-xs font-normal opacity-60">(pick any)</span></label>
+                                    <label className={`block text-sm font-bold mb-2 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>{t.voiceLabel} <span className="text-xs font-normal opacity-60">{t.pickAny}</span></label>
                                     <div className="grid grid-cols-2 gap-3">
-                                        {['Professional', 'Friendly', 'Witty', 'Empathetic', 'Bold', 'Educational'].map(voice => {
+                                        {choices.voices.map(({ value: voice, label: voiceLabel }) => {
                                             const isSelected = Array.isArray(formData.brandVoice)
                                                 ? formData.brandVoice.includes(voice)
                                                 : formData.brandVoice === voice;
@@ -796,7 +781,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                                             : [...currentVoices, voice];
                                                         handleChange('brandVoice', newVoices);
                                                     }}
-                                                    className={`p-3 rounded-lg border text-sm font-medium transition-all ${
+                                                    className={`p-3 rounded-lg border text-sm font-medium break-words transition-all ${
                                                         isSelected
                                                         ? 'border-[#F5A623] bg-[#F5A623]/10 text-[#F5A623]'
                                                         : theme === 'dark'
@@ -804,7 +789,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                                             : 'border-gray-200 hover:border-[#F5A623]/50 text-gray-600'
                                                     }`}
                                                 >
-                                                    {isSelected && <span className="mr-1">✓</span>}{voice}
+                                                    {isSelected && <span className="mr-1">✓</span>}{voiceLabel}
                                                 </button>
                                             );
                                         })}
@@ -813,7 +798,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
 
                                 <div>
                                     <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>
-                                        What do you sell most? <span className="text-red-500">*</span>
+                                        {t.heroProduct} <span className="text-red-500">*</span>
                                         <span className={`text-xs font-normal ml-2 ${theme === 'dark' ? 'text-[#ededed]/40' : 'text-gray-400'}`}>({(formData.heroProduct || '').length}/100)</span>
                                     </label>
                                     <input
@@ -824,17 +809,17 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                                 ? 'bg-[#070A12] border-[#F5A623]/30 text-[#ededed] placeholder-[#ededed]/40'
                                                 : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
                                         }`}
-                                        placeholder="e.g. Masala powders, bridal gold sets, family meals"
+                                        placeholder={t.heroProductPlaceholder}
                                         value={formData.heroProduct || ''}
                                         onChange={e => handleChange('heroProduct', e.target.value as any)}
                                     />
                                     <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-[#ededed]/50' : 'text-gray-500'}`}>
-                                        Your best-known product or service. Keep it short.
+                                        {t.heroProductHint}
                                     </p>
                                 </div>
 
                                 <div>
-                                    <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Who buys from you? <span className="text-red-500">*</span></label>
+                                    <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>{t.whoBuys} <span className="text-red-500">*</span></label>
                                     <textarea
                                         rows={3}
                                         className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#F5A623] resize-none ${
@@ -842,21 +827,16 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                                 ? 'bg-[#070A12] border-[#F5A623]/30 text-[#ededed] placeholder-[#ededed]/40'
                                                 : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
                                         }`}
-                                        placeholder="e.g. Families in Cuddalore, women 25 to 45, small shop owners"
+                                        placeholder={t.whoBuysPlaceholder}
                                         value={formData.targetCustomerProfile || ''}
                                         onChange={e => handleChange('targetCustomerProfile', e.target.value as any)}
                                     />
                                 </div>
 
                                 <div>
-                                    <label className={`block text-sm font-bold mb-2 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Who buys more? <span className="text-xs font-normal text-gray-400">(optional)</span></label>
+                                    <label className={`block text-sm font-bold mb-2 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>{t.whoBuysMore} <span className="text-xs font-normal text-gray-400">{t.optional}</span></label>
                                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                        {[
-                                            { value: 'mostly_men', label: 'Mostly men' },
-                                            { value: 'mostly_women', label: 'Mostly women' },
-                                            { value: 'both_equally', label: 'Everyone' },
-                                            { value: 'families', label: 'Families' },
-                                        ].map(option => (
+                                        {choices.genders.map(option => (
                                             <button
                                                 key={option.value}
                                                 type="button"
@@ -881,17 +861,11 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
 
                         {step === 3 && (
                             <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-500">
-                                <h3 className={`text-xl font-bold ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>What do you want most?</h3>
-                                <p className={`text-sm ${theme === 'dark' ? 'text-[#ededed]/60' : 'text-gray-500'}`}>Pick one or more. <span className="text-red-500">*</span></p>
+                                <h3 className={`text-xl font-bold ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>{t.step3Heading}</h3>
+                                <p className={`text-sm ${theme === 'dark' ? 'text-[#ededed]/60' : 'text-gray-500'}`}>{t.pickOneOrMore} <span className="text-red-500">*</span></p>
                                 
                                 <div className="space-y-3">
-                                    {[
-                                        'Brand Awareness', 
-                                        'Lead Generation', 
-                                        'Direct Sales', 
-                                        'Community Engagement', 
-                                        'Website Traffic'
-                                    ].map(goal => (
+                                    {choices.goals.map(({ value: goal, label: goalLabel }) => (
                                         <div 
                                             key={goal}
                                             onClick={() => toggleGoal(goal)}
@@ -909,7 +883,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                                 }`}>
                                                     {formData.marketingGoals.includes(goal) && <Check className="w-3 h-3 text-[#070A12]" />}
                                                 </div>
-                                                <span className={`font-medium ${formData.marketingGoals.includes(goal) ? 'text-[#F5A623]' : theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>{GOAL_LABELS[goal] || goal}</span>
+                                                <span className={`font-medium ${formData.marketingGoals.includes(goal) ? 'text-[#F5A623]' : theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>{goalLabel}</span>
                                             </div>
                                         </div>
                                     ))}
@@ -918,15 +892,15 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                 {/* Competitors Section */}
                                 <div className="mt-6 pt-6 border-t border-slate-700/50">
                                     <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>
-                                        Your Competitors <span className={`text-xs font-normal ${theme === 'dark' ? 'text-[#ededed]/50' : 'text-gray-400'}`}>(optional)</span>
+                                        {t.competitors} <span className={`text-xs font-normal ${theme === 'dark' ? 'text-[#ededed]/50' : 'text-gray-400'}`}>{t.optional}</span>
                                     </label>
                                     <p className={`text-xs mb-3 ${theme === 'dark' ? 'text-[#ededed]/50' : 'text-gray-500'}`}>
-                                        Add specific competitors you'd like to track, or skip this. Nebulaa will automatically discover competitors based on your business and location.
+                                        {t.competitorsHint}
                                     </p>
                                     <div className={`mb-3 p-3 rounded-lg flex items-start gap-2 ${theme === 'dark' ? 'bg-[#F5A623]/10 border border-slate-700/50' : 'bg-yellow-50 border border-yellow-200'}`}>
                                         <span className="text-[#F5A623] text-lg">✨</span>
                                         <p className={`text-xs ${theme === 'dark' ? 'text-[#ededed]/70' : 'text-gray-600'}`}>
-                                            <strong>AI-Powered Discovery:</strong> We'll automatically find and track your top competitors in {formData.businessLocation || 'your location'} based on your industry and target audience.
+                                            <strong>{t.discoveryTitle}</strong> {fillTemplate(t.discoveryBody, { location: formData.businessLocation || t.discoveryLocationFallback })}
                                         </p>
                                     </div>
                                     <div className="flex gap-2">
@@ -937,7 +911,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                                     ? 'bg-[#070A12] border-[#F5A623]/30 text-[#ededed] placeholder-[#ededed]/40' 
                                                     : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
                                             }`}
-                                            placeholder="e.g. Nike, Adidas, Puma"
+                                            placeholder={t.competitorsPlaceholder}
                                             value={competitorInput}
                                             onChange={e => setCompetitorInput(e.target.value)}
                                             onKeyDown={e => {
@@ -964,7 +938,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                             }}
                                             className="px-4 py-2 bg-[#F5A623] text-[#070A12] rounded-lg font-bold hover:bg-[#ffb833] transition-colors"
                                         >
-                                            Add
+                                            {t.add}
                                         </button>
                                     </div>
                                     
@@ -993,7 +967,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
 
                                 <div>
                                     <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>
-                                        What makes you different? <span className="text-xs font-normal text-gray-400">(optional)</span>
+                                        {t.differentiator} <span className="text-xs font-normal text-gray-400">{t.optional}</span>
                                         <span className={`text-xs font-normal ml-2 ${theme === 'dark' ? 'text-[#ededed]/40' : 'text-gray-400'}`}>({(formData.keyDifferentiator || '').length}/150)</span>
                                     </label>
                                     <input
@@ -1004,20 +978,20 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                                 ? 'bg-[#070A12] border-[#F5A623]/30 text-[#ededed] placeholder-[#ededed]/40'
                                                 : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
                                         }`}
-                                        placeholder="e.g. 25 years of family craftsmanship"
+                                        placeholder={t.differentiatorPlaceholder}
                                         value={formData.keyDifferentiator || ''}
                                         onChange={e => handleChange('keyDifferentiator', e.target.value as any)}
                                     />
                                     <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-[#ededed]/50' : 'text-gray-500'}`}>
-                                        One line. Why should someone choose you?
+                                        {t.differentiatorHint}
                                     </p>
                                 </div>
 
 
                                 <div>
-                                    <label className={`block text-sm font-bold mb-2 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Language for your posts <span className="text-red-500">*</span></label>
+                                    <label className={`block text-sm font-bold mb-2 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>{t.postLanguage} <span className="text-red-500">*</span></label>
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                        {CONTENT_LANGUAGES.map(option => (
+                                        {choices.contentLanguages.map(option => (
                                             <button
                                                 key={option.value}
                                                 type="button"
@@ -1038,7 +1012,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
 
                                 <div>
                                     <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>
-                                        Anything we should not post? <span className={`text-xs font-normal ${theme === 'dark' ? 'text-[#ededed]/40' : 'text-gray-400'}`}>(optional)</span>
+                                        {t.restrictions} <span className={`text-xs font-normal ${theme === 'dark' ? 'text-[#ededed]/40' : 'text-gray-400'}`}>{t.optional}</span>
                                     </label>
                                     <textarea
                                         rows={3}
@@ -1047,14 +1021,14 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                                 ? 'bg-[#070A12] border-[#F5A623]/30 text-[#ededed] placeholder-[#ededed]/40'
                                                 : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
                                         }`}
-                                        placeholder="e.g. No political posts. No photos of staff."
+                                        placeholder={t.restrictionsPlaceholder}
                                         value={formData.contentRestrictions || ''}
                                         onChange={e => handleChange('contentRestrictions', e.target.value as any)}
                                     />
                                 </div>
 
                                 <div>
-                                    <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Anything coming up in the next 30 days? <span className="text-xs font-normal text-gray-400">(optional)</span></label>
+                                    <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>{t.upcoming} <span className="text-xs font-normal text-gray-400">{t.optional}</span></label>
                                     <textarea
                                         rows={3}
                                         className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#F5A623] resize-none ${
@@ -1062,12 +1036,12 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                                 ? 'bg-[#070A12] border-[#F5A623]/30 text-[#ededed] placeholder-[#ededed]/40'
                                                 : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
                                         }`}
-                                        placeholder="e.g. Diwali sale, new collection, grand opening"
+                                        placeholder={t.upcomingPlaceholder}
                                         value={formData.firstMonthContentAngles || ''}
                                         onChange={e => handleChange('firstMonthContentAngles', e.target.value as any)}
                                     />
                                     <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-[#ededed]/50' : 'text-gray-500'}`}>
-                                        A festival, an offer or a new product. We will plan posts around it.
+                                        {t.upcomingHint}
                                     </p>
                                 </div>
                             </div>
@@ -1075,16 +1049,16 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
 
                         {step === 4 && (
                             <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-500">
-                                <h3 className={`text-xl font-bold ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>Connect Your Accounts</h3>
+                                <h3 className={`text-xl font-bold ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>{t.step4Heading}</h3>
                                 {planTier === 'free' ? (
                                     <p className={`text-sm ${theme === 'dark' ? 'text-[#ededed]/60' : 'text-gray-500'}`}>
-                                        Connecting your social media accounts comes with the Publish and schedule add-on, which you can add to a Starter or Professional plan at any time. You can continue without connecting an account.
+                                        {t.freeConnectNote}
                                     </p>
                                 ) : (
                                 <>
                                 <p className={`text-sm ${theme === 'dark' ? 'text-[#ededed]/60' : 'text-gray-500'}`}>
-                                    Link your social media accounts to enable seamless publishing and analytics. 
-                                    <span className="text-[#F5A623] font-medium"> This step is optional.</span>
+                                    {t.connectIntro}{' '}
+                                    <span className="text-[#F5A623] font-medium">{t.connectOptional}</span>
                                 </p>
 
                                 {/* Notification */}
@@ -1127,7 +1101,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                                     onClick={() => disconnectPlatform(social.platform)}
                                                     className="px-3 py-1.5 text-sm font-medium text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
                                                 >
-                                                    Disconnect
+                                                    {t.disconnect}
                                                 </button>
                                             ) : (
                                                 <button
@@ -1138,10 +1112,10 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                                     {loadingPlatform === social.platform ? (
                                                         <>
                                                             <Loader2 className="w-4 h-4 animate-spin" />
-                                                            Connecting...
+                                                            {t.connecting}
                                                         </>
                                                     ) : (
-                                                        'Connect'
+                                                        t.connect
                                                     )}
                                                 </button>
                                             )}
@@ -1152,7 +1126,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                 {socialConnections.some(s => s.connected) && (
                                     <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3 flex items-center gap-2 text-green-500 text-sm">
                                         <Check className="w-4 h-4" />
-                                        {socialConnections.filter(s => s.connected).length} account(s) connected
+                                        {fillTemplate(t.connectedCount, { n: socialConnections.filter(s => s.connected).length })}
                                     </div>
                                 )}
                                 </>
@@ -1161,7 +1135,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                         )}
                     </div>
 
-                    <div className={`pt-6 mt-4 border-t flex justify-between items-center ${theme === 'dark' ? 'border-slate-700/50' : 'border-gray-200'}`}>
+                    <div className={`pt-6 mt-4 border-t flex flex-wrap gap-3 justify-between items-center ${theme === 'dark' ? 'border-slate-700/50' : 'border-gray-200'}`}>
                         {step === 4 ? (
                             <>
                                 <button 
@@ -1171,20 +1145,20 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                         theme === 'dark' ? 'text-[#ededed]/60 hover:text-[#ededed]' : 'text-gray-500 hover:text-gray-700'
                                     }`}
                                 >
-                                    <SkipForward className="w-4 h-4" /> Skip for now
+                                    <SkipForward className="w-4 h-4" /> {t.skipForNow}
                                 </button>
                                 <button 
                                     onClick={handleSubmit}
                                     disabled={submitting}
-                                    className="bg-[#F5A623] hover:bg-[#ffb833] text-[#070A12] px-8 py-3 rounded-xl font-bold flex items-center gap-2 transition-all shadow-lg shadow-[#F5A623]/20 disabled:opacity-70"
+                                    className="bg-[#F5A623] hover:bg-[#ffb833] text-[#070A12] px-5 sm:px-8 py-3 rounded-xl font-bold flex items-center gap-2 transition-all shadow-lg shadow-[#F5A623]/20 disabled:opacity-70"
                                 >
                                     {submitting ? (
                                         <>
-                                            <Loader2 className="w-5 h-5 animate-spin" /> Finalizing...
+                                            <Loader2 className="w-5 h-5 animate-spin" /> {t.finalizing}
                                         </>
                                     ) : (
                                         <>
-                                            Finish Setup <ChevronRight className="w-5 h-5" />
+                                            {t.finishSetup} <ChevronRight className="w-5 h-5" />
                                         </>
                                     )}
                                 </button>
@@ -1195,9 +1169,9 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                 <button 
                                     onClick={handleNext}
                                     disabled={submitting}
-                                    className="bg-[#F5A623] hover:bg-[#ffb833] text-[#070A12] px-8 py-3 rounded-xl font-bold flex items-center gap-2 transition-all shadow-lg shadow-[#F5A623]/20 disabled:opacity-70"
+                                    className="bg-[#F5A623] hover:bg-[#ffb833] text-[#070A12] px-5 sm:px-8 py-3 rounded-xl font-bold flex items-center gap-2 transition-all shadow-lg shadow-[#F5A623]/20 disabled:opacity-70"
                                 >
-                                    Continue <ChevronRight className="w-5 h-5" />
+                                    {t.continue} <ChevronRight className="w-5 h-5" />
                                 </button>
                             </>
                         )}
