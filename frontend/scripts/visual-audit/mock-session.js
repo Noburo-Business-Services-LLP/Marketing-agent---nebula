@@ -132,6 +132,42 @@
     strategy: { summary: 'Lean into festive pre-orders and morning freshness.', pillars: ['Product', 'Community', 'Behind the scenes'] },
   };
 
+  // Fake 31-day October 2026 AI plan for the Plan tab (weeks run Monday to Sunday; reels were
+  // appended after regular posts, as the real service does, so the page must order them by day).
+  var planFormats = ['Post', 'Carousel', 'Story', 'Post', 'Carousel'];
+  var planPosts = [];
+  var planReels = [];
+  var planReelDays = [1, 2, 3, 9, 16, 23, 30];
+  for (var pd = 1; pd <= 31; pd++) {
+    if (planReelDays.indexOf(pd) !== -1) continue;
+    planPosts.push({
+      _id: 'audit-plan-' + pd, day: pd, format: planFormats[pd % planFormats.length],
+      status: pd % 5 === 0 ? 'approved' : pd % 7 === 0 ? 'rejected' : 'draft',
+      headline: 'Festive morning story number ' + pd,
+      creativeConcept: 'Show the bakery team shaping the day\'s first batch while the shutters open. Keep the shot close and warm, and end on the tray reaching the counter. Add one line about this week\'s pre-order slots.',
+      contentPillar: 'Behind the scenes', objective: 'Awareness', shootType: 'Phone, natural light', cta: 'Order for the weekend', productNeeded: 'Sourdough loaf',
+    });
+  }
+  planReelDays.forEach(function (rd) {
+    planReels.push({
+      _id: 'audit-plan-reel-' + rd, day: rd, format: 'Reel', status: rd === 2 ? 'approved' : 'draft',
+      headline: 'Kneading sourdough, start to finish on day ' + rd,
+      creativeConcept: 'A fifteen second reel that follows one loaf from dough to oven. Use quick cuts and the sound of the bakery. Close with the finished loaf on a wooden board.',
+      contentPillar: 'Product', objective: 'Engagement', shootType: 'Tripod, kitchen', cta: 'Visit us this weekend', productNeeded: 'Sourdough loaf',
+    });
+  });
+  var planAll = planPosts.concat(planReels);
+  var planWeeks = [];
+  var planWeekMap = {};
+  planAll.forEach(function (it) {
+    var wk = Math.floor((it.day + 2) / 7) + 1; // 1 Oct 2026 is a Thursday: days 1 to 4 are week 1
+    if (!planWeekMap[wk]) { planWeekMap[wk] = { _id: 'audit-plan-week-' + wk, weekNumber: wk, items: [] }; planWeeks.push(planWeekMap[wk]); }
+    planWeekMap[wk].items.push(it);
+  });
+  var planCalendar = Object.assign({}, calendar, {
+    _id: 'audit-plan-calendar', month: '2026-10', businessName: 'Audit Bakery', approved: false, autoGenerate: false, weeks: planWeeks,
+  });
+
   var ideas = [
     { _id: 'audit-idea-1', text: 'Show the 5am bake in a reel', status: 'new', createdAt: iso(-1), dueDate: ymd(3) },
     { _id: 'audit-idea-2', text: 'Customer birthday cake gallery', status: 'expanded', createdAt: iso(-2) },
@@ -172,12 +208,12 @@
     ['GET', /^\/campaigns\/reel\/options/, ok({ tones: [], styles: [], voices: [], music: [] })],
     ['GET', /^\/campaigns\/icp-strategy/, ok({ strategy: null })],
     ['GET', /^\/campaigns\/[^/]+$/, ok({ campaign: campaigns[0] })],
-    ['GET', /^\/content-calendar\/history/, ok({ calendars: [calendar] })],
+    ['GET', /^\/content-calendar\/history/, ok({ calendars: [planCalendar] })],
     ['GET', /^\/content-calendar\/today/, ok({ items: calendarItems.slice(0, 1), drafts: [] })],
     ['GET', /^\/content-calendar\/settings/, ok({ settings: { autoGenerate: false, limit: 1 } })],
-    ['GET', /^\/content-calendar\/?$/, ok({ calendar: calendar, calendars: [calendar] })],
+    ['GET', /^\/content-calendar\/?$/, ok({ calendar: planCalendar, calendars: [planCalendar] })],
     ['GET', /^\/content-calendar\/[^/]+\/drafts/, ok({ drafts: drafts.slice(0, 2) })],
-    ['GET', /^\/content-calendar\/[^/]+$/, ok({ calendar: calendar })],
+    ['GET', /^\/content-calendar\/[^/]+$/, ok({ calendar: planCalendar })],
     ['GET', /^\/ideas/, ok({ ideas: ideas })],
     ['GET', /^\/products\/?$/, ok({ products: products, data: products, total: 2, categories: ['Pastry', 'Bread'] })],
     ['GET', /^\/products\/[^/]+$/, ok({ product: products[0] })],

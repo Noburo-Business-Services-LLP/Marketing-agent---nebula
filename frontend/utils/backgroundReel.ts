@@ -11,6 +11,8 @@ export type BackgroundReel = {
   jobId: string;
   itemId: string;
   day: number;
+  /** "YYYY-MM" of the plan the reel belongs to; used to print the real date. */
+  month?: string;
   headline: string;
   startedAt: number;
   progress: number;

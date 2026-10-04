@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Loader2, Film, X, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { videoGenerationAPI } from '../services/api';
+import { formatPlanDay } from '../utils/calendarPlan';
 import {
   BackgroundReel,
   readBackgroundReel,
@@ -73,7 +74,7 @@ const BackgroundReelIndicator: React.FC = () => {
             {done ? 'Reel ready' : failed ? 'Reel generation failed' : 'Generating reel in the background'}
           </p>
           <p className="text-[11px] text-slate-400 truncate mt-0.5" title={reel.headline}>
-            Day {reel.day} · {reel.headline || 'Smart Calendar reel'}
+            {formatPlanDay(reel.month, reel.day)} · {reel.headline || 'Smart Calendar reel'}
           </p>
           {!done && !failed && (
             <p className="text-[10px] uppercase tracking-wide text-slate-500 mt-1">

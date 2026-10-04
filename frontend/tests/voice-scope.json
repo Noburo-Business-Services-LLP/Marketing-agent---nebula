@@ -34,5 +34,7 @@
   "pages/SEOAssistant.tsx",
   "pages/AutoReplySettingsPage.tsx",
   "pages/AIHistory.tsx",
-  "pages/AIPerformance.tsx"
+  "pages/AIPerformance.tsx",
+  "components/calendar/PlanMonthGrid.tsx",
+  "components/calendar/PlanDayList.tsx"
 ]

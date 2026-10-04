@@ -34,6 +34,8 @@ import { GravityHero, GravityEmphasis } from '../components/gravity';
 import StrategyDocumentView from '../components/StrategyDocumentView';
 import { startBackgroundReel } from '../utils/backgroundReel';
 import { useConfirm } from '../context/ConfirmContext';
+import PlanMonthGrid from '../components/calendar/PlanMonthGrid';
+import PlanDayList from '../components/calendar/PlanDayList';
 
 // Reel days are the ones Approve auto-builds; everything else just gets a status.
 const isReelItem = (item: ContentCalendarItem) => /reel|video/i.test(String(item?.format || ''));
@@ -275,6 +277,7 @@ const ContentCalendar: React.FC = () => {
         jobId: response.jobId,
         itemId: item._id,
         day: Number(item.day) || 0,
+        month: calendar?.month,
         headline: item.headline || ''
       });
 
@@ -763,112 +766,23 @@ const ContentCalendar: React.FC = () => {
         </div>
       )}
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-        {calendar.weeks.map((week) => (
-          <section key={week._id || week.weekNumber} className="space-y-3">
-            <h3 className={`text-sm font-bold uppercase tracking-wide ${theme.textMuted}`}>Week {week.weekNumber}</h3>
-            <div className="space-y-3">
-              {week.items.map((item) => {
-                const isEditing = editingId === item._id;
-                const busy = saving.endsWith(item._id);
-                return (
-                  <article
-                    key={item._id}
-                    className={`rounded-lg border p-4 ${theme.bgCard} ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2 mb-2">
-                          <span className="text-xs font-bold px-2 py-1 rounded bg-[#F5A623] text-black">Day {item.day}</span>
-                          <span className={`text-xs px-2 py-1 rounded ${isDarkMode ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-700'}`}>{item.format}</span>
-                          <span className={`text-xs px-2 py-1 rounded capitalize ${item.status === 'approved' ? 'bg-emerald-500/15 text-emerald-400' : item.status === 'rejected' ? 'bg-red-500/15 text-red-400' : isDarkMode ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-700'}`}>{item.status}</span>
-                        </div>
-                        {!isEditing ? (
-                          <>
-                            <h4 className={`font-semibold ${theme.text}`}>{item.headline}</h4>
-                            <p className={`mt-1 text-sm ${theme.textSecondary}`}>{item.creativeConcept}</p>
-                            <p className={`mt-2 text-xs ${theme.textMuted}`}>
-                              {item.contentPillar} · {item.objective} · {item.shootType} · {item.cta}
-                            </p>
-                          </>
-                        ) : (
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            {editableFields.map((field) => (
-                              <label key={field} className={field === 'headline' || field === 'creativeConcept' ? 'md:col-span-2' : ''}>
-                                <span className={`text-xs font-semibold capitalize ${theme.textMuted}`}>{String(field)}</span>
-                                <textarea
-                                  value={String(draftItem[field] || '')}
-                                  onChange={(event) => setDraftItem((prev) => ({ ...prev, [field]: event.target.value }))}
-                                  rows={field === 'headline' || field === 'creativeConcept' ? 2 : 1}
-                                  className={`mt-1 w-full rounded-lg border px-3 py-2 text-sm outline-none ${isDarkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'}`}
-                                />
-                              </label>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="flex flex-col gap-1">
-                        <button type="button" title="Move up" onClick={() => moveItem(item._id, -1)} className={`p-2 rounded-lg ${isDarkMode ? 'hover:bg-slate-800' : 'hover:bg-slate-100'}`}>
-                          <ChevronUp className="w-4 h-4" />
-                        </button>
-                        <button type="button" title="Move down" onClick={() => moveItem(item._id, 1)} className={`p-2 rounded-lg ${isDarkMode ? 'hover:bg-slate-800' : 'hover:bg-slate-100'}`}>
-                          <ChevronDown className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="mt-4 flex flex-wrap items-center gap-2">
-                      {!isEditing ? (
-                        <button type="button" onClick={() => beginEdit(item)} className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold border ${isDarkMode ? 'border-slate-700 text-slate-200' : 'border-slate-300 text-slate-800'}`}>
-                          <Edit3 className="w-3.5 h-3.5" />
-                          Edit
-                        </button>
-                      ) : (
-                        <button type="button" onClick={() => saveItem(item._id)} disabled={busy} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-[#F5A623] text-black">
-                          {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                          Save
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => approveItem(item)}
-                        disabled={busy || Boolean(item.reelQueueJobId)}
-                        title={isReelItem(item) ? 'Approve and build this reel in the background' : 'Mark this day approved'}
-                        className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold ${
-                          isReelItem(item) ? 'bg-[#F5A623] text-black' : 'bg-emerald-500/15 text-emerald-400'
-                        } disabled:opacity-50`}
-                      >
-                        {saving === `approved-${item._id}`
-                          ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          : isReelItem(item) ? <Sparkles className="w-3.5 h-3.5" /> : <Check className="w-3.5 h-3.5" />}
-                        {item.reelQueueJobId
-                          ? 'Generating…'
-                          : isReelItem(item) ? 'Approve & Generate Reel' : 'Approve'}
-                      </button>
-                      <button type="button" onClick={() => updateItemStatus(item, 'rejected')} disabled={busy} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-red-500/15 text-red-400">
-                        <X className="w-3.5 h-3.5" />
-                        Reject
-                      </button>
-                      {item.generatedDraftId ? (
-                        <a href={`/drafts?draftId=${item.generatedDraftId}`} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-blue-500/15 text-blue-400 hover:bg-blue-500/25">
-                          <Sparkles className="w-3.5 h-3.5" />
-                          View Draft
-                        </a>
-                      ) : (
-                        <button type="button" onClick={() => createDraft(item)} disabled={busy || Boolean(item.generatedCampaignId)} className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold ${item.generatedCampaignId ? 'bg-slate-500/15 text-slate-400' : 'bg-[#F5A623] text-black'}`}>
-                          {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                          {item.generatedCampaignId ? 'Draft Saved' : 'Save Draft'}
-                        </button>
-                      )}
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-          </section>
-        ))}
-      </div>
+      <PlanMonthGrid month={calendar.month} items={allItems} />
+      <PlanDayList
+        month={calendar.month}
+        weeks={calendar.weeks}
+        editingId={editingId}
+        saving={saving}
+        draftItem={draftItem}
+        setDraftItem={setDraftItem}
+        editableFields={editableFields}
+        isReelItem={isReelItem}
+        beginEdit={beginEdit}
+        saveItem={saveItem}
+        approveItem={approveItem}
+        updateItemStatus={updateItemStatus}
+        createDraft={createDraft}
+        moveItem={moveItem}
+      />
       </>
       )}
     </div>
