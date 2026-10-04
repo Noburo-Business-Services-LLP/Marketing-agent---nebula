@@ -88,3 +88,13 @@ Result: **no Critical issues; three Important issues to fix before any deploy.**
 ## Update 7, 2026-10-04 night: everything is pushed
 
 The owner ran the push: `origin/nebulaa-redesign` is at `5ae96b3` (equal to local) and `origin/dev-dk` at `11e0954`. Both branches are on GitHub. This final note is committed locally and is the only thing not on the remote until the next push. Nothing is deployed.
+
+## Update 8, 2026-10-04 night: can we deploy without the webhook secret? (finding: legacy subscribers)
+
+Compared production's current `backend/routes/payment.js` (`origin/prod`) with the new one:
+
+- **Production today** has a working webhook handler for monthly renewals. It reads `RAZORPAY_WEBHOOK_SECRET` but treats it as optional: with no secret it only logs "skipping signature check" and still processes events. On `subscription.charged` it finds the user by `user.subscription.razorpaySubscriptionId` and adds the monthly credits; `halted` and `cancelled` update `user.subscription.status`.
+- **The new code** refuses the webhook with 503 when `RAZORPAY_WEBHOOK_SECRET` is missing, and it looks users up only by `plan.subscriptions.subscriptionId` (the new schema). It has **no fallback for old-style subscribers** (`user.subscription.razorpaySubscriptionId`; only `routes/payment.js:67` reads that field, for plan resolution). A renewal event for an old-style subscriber finds no user and the handler answers `{ success: true }`: **their renewals would silently stop adding monthly Quarks, with or without the secret.**
+- Checkout itself does not use the webhook secret: new purchases are verified at checkout with `RAZORPAY_KEY_SECRET` (`/verify-subscription`, `/verify`), so new plan sales and top-ups work without it. Only renewals, halts, cancellations and completions depend on the webhook.
+- **Before deploying, check in the Razorpay Dashboard in LIVE mode:** (1) Subscriptions: are there active old-style subscriptions? (2) Webhooks: is a production webhook already registered? If the production environment already has `RAZORPAY_WEBHOOK_SECRET` (the old code supported it), the new code uses the same variable and no new webhook is needed.
+- If active old-style subscribers exist, add a legacy fallback to the new webhook (find by `subscription.razorpaySubscriptionId`, apply the old behaviour mapped to Quarks: the owner must decide the monthly amount) before deploying. If there are none, deploying without the secret is acceptable for a short time: new purchases work, nothing renews for a month, and the secret can be added afterwards (a missing secret shows as 503 "Webhook is not configured" in the logs).
