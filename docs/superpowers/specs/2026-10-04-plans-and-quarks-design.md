@@ -33,7 +33,7 @@ Allowance = committed deliverables x Quark price x retry factor, plus 15 percent
 
 ## Entitlements (what each account may use)
 
-A new, single place defines what each account tier can use: tiers `trial`, `starter`, `professional`, `managed`.
+A new, single place defines what each account tier can use: tiers `none` (signed up, not yet paid: locked), `starter`, `professional`, `managed`.
 
 | Feature | none | starter | professional | managed |
 |---|---|---|---|---|
