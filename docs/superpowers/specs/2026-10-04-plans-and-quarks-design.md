@@ -12,6 +12,8 @@ Status: draft for the owner's approval (decisions below are the owner's, 2026-10
 6. No customers exist on the old plans (the ₹7,500 pack, Pro, Growth, Scale); all current customers are managed.
 7. Add-ons and top-ups: people can pay for extra Quarks and for individual features; everything must work inside the Quark economics.
 8. Starter may lose money at first; it must let a new customer make one post a day for 30 days and one Hero video.
+9. **SEO is out of scope** (not fully built). Add-ons are: **publish and schedule to their social pages** (Ayrshare), **competitor insights** (Apify) and **unified inbox with automatic replies**. The idea is a cheap first purchase (the content), then add-on packs, like items in a game.
+10. Invoice item names stay simple. GST is 18 percent (the standard rate for software and for marketing services).
 
 ## Sizing (the same method as `apiCosts.js` `PLANS`)
 
@@ -36,10 +38,10 @@ A new, single place defines what each account tier can use: tiers `trial`, `star
 |---|---|---|---|---|
 | Image posts, captions, monthly calendar plan, Hero video, reels | yes | yes | yes | yes |
 | Hero videos per month | 1 | 1 | 2 | 2 |
-| Posting to social accounts, scheduling | yes | add-on | add-on | yes |
-| Replies, inbox, auto-reply | yes | add-on | add-on | yes |
-| Competitor insights | yes | add-on | add-on | yes |
-| SEO, LinkedIn long-form | yes | add-on | add-on | yes |
+| Posting to social accounts, scheduling (add-on: Publish and schedule) | yes | add-on | add-on | yes |
+| Inbox and automatic replies (add-on; needs Publish and schedule) | yes | add-on | add-on | yes |
+| Competitor insights (add-on) | yes | add-on | add-on | yes |
+| LinkedIn long-form writing (1 Quark each) | yes | yes | yes | yes |
 | Team members | per current app behaviour | 1 | 5 | per current |
 
 - Server routes for the costly features check the entitlement; locked features return a plain message ("This is an add-on. Ask us to turn it on.") and the page shows a locked state instead of failing.
@@ -48,11 +50,20 @@ A new, single place defines what each account tier can use: tiers `trial`, `star
 
 ## Add-ons and top-ups (all priced inside the Quark economics)
 
-- **Quark top-up packs** at **₹2.00 per Quark** (ex-GST; the same rate as the managed plan, against a machine cost of roughly ₹0.55 to ₹0.70 per Quark, about 65 percent gross margin): ₹999 = 500 Quarks, ₹1,999 = 1,000, ₹4,999 = 2,500 (charged with 18 percent GST on top: ₹1,178.82, ₹2,358.82, ₹5,898.82). Replaces today's "any amount, fixed 1,000 credits" purchase. Top-up Quarks do not expire with the billing month.
-- **Feature add-ons** use one of two models, set per feature in one config, with no invented prices:
-  - `monthly` for features with a fixed per-account cost (social posting and scheduling, replies and inbox): a flat monthly price.
-  - `quarks_per_use` for features with a per-use cost (competitor scans, SEO reports, LinkedIn posts): a Quark price per use, derived from the vendor rate like every other price in `apiCosts.js`.
-- Until the owner supplies the vendor costs, add-on prices stay `null` and the add-ons show as "Ask us"; the mechanism, gates and admin switch work now.
+**Vendor costs checked (2026-10-04):** Ayrshare Business plan is $599 a month and includes 30 customer profiles; profiles 31-100 cost $8.99 each a month (about ₹790), 101-500 cost $3.49 (about ₹307), 500+ cost $2.49 (about ₹219); comment and DM moderation (what the inbox needs) is included in the plan (source: ayrshare.com/pricing). The repo's cost map puts Apify at about $0.03 per Instagram profile scrape. Rate used: ₹88 per US dollar.
+
+| Add-on | Price / month (ex-GST) | What it includes | Why this price |
+|---|---|---|---|
+| **Publish and schedule** | **₹1,000** | Post and schedule to their connected Instagram, Facebook, LinkedIn and other pages; basic post analytics | Each customer needs one Ayrshare profile. Beyond the 30 included profiles it costs about ₹790, so ₹1,000 leaves about ₹185 after the gateway fee (about ₹670 once profiles pass 100). ₹500 would lose about ₹315 per profile past 30. |
+| **Competitor insights** | **₹500** | Up to 5 competitors, refreshed weekly (about 20 refreshes a month), with a plain summary of what they post | Apify plus the AI summary cost roughly ₹110 a month at that use, so about ₹365 margin. |
+| **Inbox and automatic replies** | **₹500** | One inbox for comments and messages, with AI reply drafts (each draft uses 1 Quark from the plan) | Requires Publish and schedule (it uses the same connected accounts and profile); no extra Ayrshare fee. |
+| **All three** (bundle) | **₹1,800** | The three above | 10 percent off the ₹2,000 total. |
+
+All prices are editable in one config. GST of 18 percent is added at checkout. The owner decides the final prices; these are my starting numbers.
+
+- **Quark top-up packs** at **₹2.00 per Quark** (ex-GST; the same rate as the managed plan, against a machine cost of roughly ₹0.55 to ₹0.70 per Quark, about 65 percent gross margin): ₹999 = 500 Quarks, ₹1,999 = 1,000, ₹4,999 = 2,500 (with GST: ₹1,178.82, ₹2,358.82, ₹5,898.82). Replaces today's "any amount, fixed 1,000 credits" purchase. Top-up Quarks do not expire with the billing month.
+- Add-ons are per-account flags set when purchased (monthly subscription through Razorpay, same mechanism as the plan) or switched on by the Nebulaa team from the admin panel.
+- **Risk to watch:** a trial account that connects social accounts uses an Ayrshare profile slot. Create the profile only when the account is entitled to publishing, and only at the moment of connecting (never at sign-up).
 
 ## Where this changes
 
@@ -63,9 +74,9 @@ A new, single place defines what each account tier can use: tiers `trial`, `star
 5. Frontend: the in-app plans page and paywall show only Starter and Professional (price plus GST, Quarks, what is included); locked features show "Add-on" states; top-up packs on the Quarks screen; the landing page plan cards and FAQ say Quarks with the real amounts and promise only what the plans include (the landing feature grid mentions replies and competitor views: re-label those as add-ons or remove them, owner to choose).
 6. Rename "credits" to "Quarks" in every customer-facing string (frontend, backend messages, emails, invoice text). Not renamed: API fields, database fields, route names, code identifiers.
 
-## Invoices and the accounting tool (Zoho Books)
+## Invoices (Zoho Books)
 
-When a customer pays, the app creates an invoice in Zoho Books with a line-item name and the tax. The current text says "Nebulaa - N Credits"; it would become "Nebulaa - Starter Pack" for a plan and "Nebulaa - N Quarks" for a top-up, with GST as a separate 18 percent line. The only question for the accountant is whether they rely on the exact item names or tax codes (HSN/SAC) in Zoho; if not, nothing to decide.
+Simple names: a plan is "Nebulaa subscription", an add-on is "Nebulaa add-on", a top-up is "Nebulaa Quarks", with GST as its own 18 percent line. Customer-facing text says Quarks, never credits.
 
 ## Razorpay
 
@@ -73,9 +84,9 @@ The app creates its own Razorpay plans on first use with the live keys on the se
 
 ## Open items
 
-1. Add-on prices and vendor costs (social-posting service, hosting share, competitor data, SEO data) so each add-on can be priced inside the Quark economics.
-2. Landing feature grid wording (re-label replies and competitor views as add-ons, or remove).
-3. Accountant check on invoice item names and GST tax codes.
+1. The owner confirms the add-on prices (starting numbers: ₹1,000, ₹500, ₹500, bundle ₹1,800).
+2. Landing feature grid wording (replies, competitor views): re-label as add-ons, or remove.
+3. How many Ayrshare profile slots are already used by managed customers (decides whether the first 30 are free for self-serve customers).
 
 ## Testing
 
