@@ -41,7 +41,7 @@
 | Website cannot be accessed | `unreachable`: a website or Instagram page was given, nothing could be read, and no offers were typed. The job ends `stopped`, Quarks refunded, plain page with the form to fix it. If at least one typed offer exists the run continues in limited mode instead. |
 | Customer identity ambiguous | `identity_mismatch`: the website was read but no meaningful word of the business name appears in its title, site name, headings or address, and the Instagram page does not corroborate. Stops with a plain message. |
 | Critical product information conflicts | Never stated: prices come only from the visitor's typed offers, so a conflict cannot enter. Page text that disagrees is simply not turned into a fact. |
-| Contact details missing | Not applicable: the closing page carries Nebulaa's own contact (`NEBULAA` in `config/blueprint.js`: only `support@nebulaa.ai`, the one address already on the website), never an invented customer contact. |
+| Contact details missing | Not applicable: the closing page carries Nebulaa's own contact (`NEBULAA` in `config/blueprint.js`: `support@nebulaa.ai`, website `https://www.nebulaa.ai`, phone `+91 9384801049`, Instagram and Facebook as given by the owner), never an invented customer contact. |
 | Logo cannot be verified | Not a stop in this build: the cover shows the business name as plain typography with the note "Logo not provided" (a logo is used unchanged when the visitor uploads one, or when the page itself declares one). Flagged in the open questions. |
 | Generated visual assets fail brand accuracy | No generated visuals in this build; the QA gate checks name, logo URL, contact and every claim instead. |
 | Thin input (the spec's own rule) | `thin`: evidence score below 3 (page and Instagram facts count 1 each, a typed offer counts 3). Stops and refunds. Below 8, or when no page was read, the Blueprint is generated with the cover note. |
@@ -162,7 +162,13 @@ const LIMITS = {
 
 // Nebulaa's own details for the closing page. Only the address already published on the website.
 // Phone and social handles are left out until the owner confirms them (open question).
-const NEBULAA = { email: 'support@nebulaa.ai', website: 'https://nebulaa.ai' };
+const NEBULAA = {
+  email: 'support@nebulaa.ai',
+  website: 'https://www.nebulaa.ai',
+  phone: '+91 9384801049',
+  instagram: 'https://www.instagram.com/nebulaa.os/',
+  facebook: 'https://www.facebook.com/profile.php?id=61588215321901',
+}; // confirmed by the owner 2026-10-04; render only what is present, never invent others
 
 const STOP_MESSAGES = {
   unreachable: 'We could not read your website or Instagram page, so there was not enough to build a reliable Blueprint. Check the address, or add one of your real offers, then try again.',
@@ -674,3 +680,9 @@ module.exports = { enqueue, _state: () => ({ active, queued: queue.length }) };
 6. **Production index build.** Task 1 adds two partial unique indexes on a new empty `blueprints` collection. Given the earlier Atlas disk-limit incident, please confirm `autoIndex` is acceptable on production or tell me to create them manually after deploy.
 7. **Existing unsafe fetch.** `routes/auth.js` calls `scrapeWebsite` on the signup website (`services/scraper.js`), which has no protection against private addresses. It is outside this build, but it is the same risk the Blueprint avoids; worth a separate fix.
 8. **Copy choice.** Option A is the default in the build; the owner picks the final ad and landing wording from the copy document.
+
+
+## Owner rulings (2026-10-04)
+
+- Contact details confirmed: website https://www.nebulaa.ai, phone +91 9384801049, Instagram https://www.instagram.com/nebulaa.os/, Facebook https://www.facebook.com/profile.php?id=61588215321901 (use the `NEBULAA` constant above; open question 3 is closed).
+- Open question 1: cinematic concept and identity pages are not in version 1. Question 2: missing logo does not stop the run. Question 5 (identity mismatch): show a visible warning, do not stop. Question 6 (indexes): accepted; check collection size before the first production deploy. Question 7: separate follow-up (private-address guard on signup `scrapeWebsite`), not in this build.
