@@ -123,6 +123,16 @@ const FILL = [
   // (static markup keeps the hex as written, so both forms are listed).
   ...['background-color: rgb(', 'background: rgb(', 'background-color: #', 'background-color:#', 'background: #', 'background:#'].map((v) => `[style*="${v}"]`),
 ];
+// Inline-style fills that are too light for white (white < 3:1): every quoted hex literal in the
+// source (e.g. Analytics metric colours '#ffcc29') is classified; React writes it as rgb(r, g, b).
+const INLINE_INK = [];
+for (const m of SRC.matchAll(/["'`]\s*(#[0-9a-fA-F]{6}|#[0-9a-fA-F]{3})\b["'`]/g)) {
+  const h = m[1].toLowerCase();
+  if (whiteRatio(h) >= 3) continue;
+  let x = h.slice(1); if (x.length === 3) x = [...x].map((c) => c + c).join('');
+  const rgb = `rgb(${parseInt(x.slice(0, 2), 16)}, ${parseInt(x.slice(2, 4), 16)}, ${parseInt(x.slice(4, 6), 16)})`;
+  for (const sel of [`[style*="background-color: ${rgb}"]`, `[style*="background: ${rgb}"]`, `[style*="background-color: ${h}" i]`, `[style*="background: ${h}" i]`]) if (!INLINE_INK.includes(sel)) INLINE_INK.push(sel);
+}
 // Multi-stop saturated gradients (e.g. Instagram: from-yellow-400 via-red-500 to-purple-600):
 // listed after GOLD so a yellow first stop does not turn the white icon dark.
 const FILL_MULTI = list(HUES.filter((h) => h !== 'yellow' && h !== 'amber').flatMap((h) => [500, 600, 700].flatMap((n) => [`via-${h}-${n}`, `to-${h}-${n}`])));
@@ -160,7 +170,7 @@ const goldCtx = ctx('var(--gv-accent-ink)', 'rgb(26 18 8 / 0.88)', 'rgb(26 18 8 
 rule(S, lightCtx);
 rule(`${S} ${where([...FILL, ...DARK])}`, darkCtx);
 rule(`${S} ${where(LIGHT)}`, lightCtx);
-rule(`${S} ${where(GOLD)}`, goldCtx);
+rule(`${S} ${where([...GOLD, ...INLINE_INK])}`, goldCtx);
 rule(`${S} ${where(FILL_MULTI)}`, darkCtx);
 rule(`${S} ${where(TINT)}`, lightCtx);
 // a dark surface nested in a light panel inside a dark area still wins over the reset
