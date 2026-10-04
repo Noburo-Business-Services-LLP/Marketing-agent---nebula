@@ -276,6 +276,14 @@ function startOfMondayWeek(d) {
  * items in this month's list (the rest belong to the adjacent month's own
  * plan) — that's correct, not a bug, the way a real calendar works.
  */
+
+// By day ascending; on the same day regular posts come before reels. Array.sort is stable.
+function sortByDayThenReel(items) {
+  return items
+    .slice()
+    .sort((a, b) => (Number(a.day) - Number(b.day)) || (Number(isReelFormat(a.format)) - Number(isReelFormat(b.format))));
+}
+
 function groupIntoRealWeeks(items, monthStr) {
   const [y, m] = String(monthStr || '').split('-').map(Number);
   if (!y || !m) {
@@ -283,7 +291,8 @@ function groupIntoRealWeeks(items, monthStr) {
     // the old 8/8/8/6 scheme, so this degrades gracefully instead of
     // reintroducing the bug being fixed.
     const rows = [];
-    for (let i = 0; i < items.length; i += 7) rows.push(items.slice(i, i + 7));
+    const sorted = sortByDayThenReel(items);
+    for (let i = 0; i < sorted.length; i += 7) rows.push(sorted.slice(i, i + 7));
     return rows.map((weekItems, i) => ({ weekNumber: i + 1, items: weekItems }));
   }
 
@@ -296,7 +305,7 @@ function groupIntoRealWeeks(items, monthStr) {
   }
 
   const orderedStarts = Array.from(buckets.keys()).sort();
-  return orderedStarts.map((start, i) => ({ weekNumber: i + 1, items: buckets.get(start) }));
+  return orderedStarts.map((start, i) => ({ weekNumber: i + 1, items: sortByDayThenReel(buckets.get(start)) }));
 }
 
 async function llmRouter(prompt) {
@@ -874,5 +883,6 @@ module.exports = {
   normalizeCalendarItems,
   getContentCadence,
   computeReelPlan,
+  groupIntoRealWeeks,
   CONTENT_CALENDAR_PROMPT
 };
