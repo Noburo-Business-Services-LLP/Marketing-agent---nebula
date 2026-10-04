@@ -56,11 +56,6 @@
    "ink": 2.86,
    "choice": "white"
   },
-  "from-slate-400 to-slate-600": {
-   "white": 2.56,
-   "ink": 2.44,
-   "choice": "white"
-  },
   "from-yellow-400 via-pink-500 to-purple-600": {
    "white": 1.53,
    "ink": 3.44,
