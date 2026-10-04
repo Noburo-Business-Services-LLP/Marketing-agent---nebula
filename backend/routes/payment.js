@@ -1,767 +1,600 @@
 /**
- * Payment Routes — Razorpay integration for demo → prod subscription
- * 
- * Flow:
- * 1. POST /api/payment/create-order  → Create Razorpay order (₹10,000/month)
- * 2. POST /api/payment/verify        → Verify payment + trigger migration + send email
- * 3. GET  /api/payment/status        → Check payment/migration status
+ * Payment Routes: Razorpay billing for Starter and Professional plans, add-on
+ * subscriptions and Quark top-up packs.
+ *
+ * Every price is GST-exclusive in config/apiCosts.js; 18 percent GST is added at
+ * checkout (integer paise). Quarks are granted from that config only: never from
+ * a request body, a webhook payload or an order note. Every grant is gated by an
+ * atomic update that skips a Razorpay payment id already stored on the user.
+ *
+ *   GET  /plans                      plans, top-up packs and add-ons with GST
+ *   POST /create-subscription        { planId: 'starter' | 'professional' }
+ *   POST /create-addon-subscription  { addon: 'publish' | 'competitors' | 'inbox' | 'bundle' }
+ *   POST /verify-subscription        checkout signature, then grant (plan or add-on)
+ *   POST /create-order               { packInr } one of the top-up pack prices
+ *   POST /verify                     checkout signature, then grant the pack's Quarks
+ *   POST /webhook                    subscription.charged / halted / cancelled / completed
+ *   GET  /status, /billing, POST /retry-invoices, /validate-coupon
  */
 const express = require('express');
-const router = express.Router();
 const crypto = require('crypto');
-const Razorpay = require('razorpay');
-const { protect } = require('../middleware/auth');
-const User = require('../models/User');
-const Coupon = require('../models/Coupon');
-const { migrateUserData } = require('../services/migrationService');
-const { createInvoice } = require('../services/zohoBooks');
-const { PLANS, findPlan } = require('../config/plans');
-
-// Initialize Razorpay
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID,
-  key_secret: process.env.RAZORPAY_KEY_SECRET
-});
+const bp = require('../services/billingPlans');
+const { resolveTier, addonsOf } = require('../config/entitlements');
+const { chargePaise } = require('../config/apiCosts');
 
 const PLAN_CURRENCY = 'INR';
-const MIN_AMOUNT = 1000;
-const MAX_AMOUNT = 20000;
-const MONTHLY_AMOUNT = 7500;   // ₹7,500/month
-const MONTHLY_CREDITS = 1000;  // credits per billing cycle
+const ENDING_EVENTS = ['subscription.cancelled', 'subscription.halted', 'subscription.completed'];
 
-// Cache plan IDs so we don't create duplicates
-let cachedPlanId = process.env.RAZORPAY_PLAN_ID || null;
-let cachedDiscountedPlanId = process.env.RAZORPAY_DISCOUNTED_PLAN_ID || null;
-
-async function getOrCreatePlan(amount = MONTHLY_AMOUNT) {
-  if (amount === MONTHLY_AMOUNT && cachedPlanId) return cachedPlanId;
-  if (amount !== MONTHLY_AMOUNT && cachedDiscountedPlanId) return cachedDiscountedPlanId;
-
-  const plan = await razorpay.plans.create({
-    period: 'monthly',
-    interval: 1,
-    item: {
-      name: amount === MONTHLY_AMOUNT ? 'Nebulaa — Starter Pack' : 'Nebulaa — Discounted Pack',
-      amount: amount * 100,
-      currency: PLAN_CURRENCY,
-      description: '1,000 credits per month'
-    },
-    notes: { product: 'nebulaa_gravity' }
+function createPaymentRouter(deps = {}) {
+  const router = express.Router();
+  const protect = deps.protect || require('../middleware/auth').protect;
+  const User = deps.User || require('../models/User');
+  const Coupon = deps.Coupon || require('../models/Coupon');
+  const createInvoice = deps.createInvoice || require('../services/zohoBooks').createInvoice;
+  const env = () => deps.env || process.env;
+  let defaultRazorpay = null;
+  const rz = () => {
+    if (deps.razorpay) return deps.razorpay;
+    if (!defaultRazorpay) {
+      const Razorpay = require('razorpay');
+      defaultRazorpay = new Razorpay({ key_id: process.env.RAZORPAY_KEY_ID, key_secret: process.env.RAZORPAY_KEY_SECRET });
+    }
+    return defaultRazorpay;
+  };
+  const userIdOf = (req) => req.user?.userId || req.user?.id || req.user?._id;
+  const prefillOf = (user) => ({
+    name: `${user.firstName} ${user.lastName || ''}`.trim(),
+    email: user.email,
+    contact: user.mobileNumber || ''
   });
 
-  if (amount === MONTHLY_AMOUNT) cachedPlanId = plan.id;
-  else cachedDiscountedPlanId = plan.id;
-
-  console.log(`✅ Razorpay Plan created/cached (₹${amount}): ${plan.id}`);
-  return plan.id;
-}
-
-/**
- * POST /api/payment/validate-coupon
- * Validate a coupon code without redeeming it
- */
-router.post('/validate-coupon', protect, async (req, res) => {
-  try {
-    const { code } = req.body;
-    if (!code) return res.status(400).json({ success: false, message: 'Coupon code required' });
-
-    const coupon = await Coupon.findOne({ code: code.toUpperCase().trim() });
-
-    if (!coupon || !coupon.isActive) {
-      return res.status(404).json({ success: false, message: 'Invalid or expired coupon code' });
+  // Razorpay plan ids are created on first use and cached (or taken from env).
+  const planIdCache = {};
+  function getOrCreateRazorpayPlan(kind, key) {
+    const fromEnv = env()[bp.envVarFor(kind, key)];
+    if (fromEnv) return Promise.resolve(fromEnv);
+    const cacheKey = `${kind}:${key}`;
+    if (!planIdCache[cacheKey]) {
+      planIdCache[cacheKey] = rz().plans.create(bp.razorpayPlanBody(kind, key)).then((p) => p.id).catch((e) => { delete planIdCache[cacheKey]; throw e; });
     }
-    if (coupon.usedCount >= coupon.maxUses) {
-      return res.status(400).json({ success: false, message: 'This coupon has already been used' });
-    }
-
-    // Check if this user already used it
-    const userId = req.user?.userId || req.user?.id || req.user?._id;
-    const alreadyUsed = coupon.usedBy.some(u => u.userId?.toString() === userId?.toString());
-    if (alreadyUsed) {
-      return res.status(400).json({ success: false, message: 'You have already used this coupon' });
-    }
-
-    res.json({
-      success: true,
-      discountedAmount: coupon.discountedAmount,
-      originalAmount: coupon.originalAmount,
-      savings: coupon.originalAmount - coupon.discountedAmount
-    });
-  } catch (error) {
-    console.error('Validate coupon error:', error);
-    res.status(500).json({ success: false, message: 'Failed to validate coupon' });
+    return planIdCache[cacheKey];
   }
-});
 
-/**
- * GET /api/payment/plans
- * Public — returns the 9-tier plan catalogue (Pro/Growth/Scale × Monthly/Quarterly/Annual)
- */
-router.get('/plans', (_req, res) => {
-  res.json({ success: true, plans: PLANS });
-});
+  const storedSubscriptions = (user) => user.plan?.subscriptions || [];
+  const findRecord = (user, subscriptionId) => storedSubscriptions(user).find((s) => s.subscriptionId === subscriptionId) || null;
+  const hasActivePlanSubscription = (user) =>
+    (user.subscription?.razorpaySubscriptionId && user.subscription?.status === 'active') ||
+    storedSubscriptions(user).some((s) => s.kind === 'plan' && s.active);
 
-/**
- * POST /api/payment/create-subscription
- * Creates a Razorpay subscription for the chosen plan (tier + cycle)
- */
-router.post('/create-subscription', protect, async (req, res) => {
-  try {
-    const userId = req.user?.userId || req.user?.id || req.user?._id;
-    const user = await User.findById(userId);
-    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+  // Our stored record decides what a Razorpay subscription is for. The Razorpay
+  // entity must agree with it (same Razorpay plan, same owner) or nothing is granted.
+  function recordMatches(user, record, entity) {
+    if (!record || !entity) return false;
+    if (record.kind === 'plan' ? !bp.isPlanId(record.key) : record.kind === 'addon' ? !bp.isAddonId(record.key) : true) return false;
+    if (!record.razorpayPlanId || entity.plan_id !== record.razorpayPlanId) return false;
+    if (String(entity.notes?.userId || '') !== String(user._id)) return false;
+    return true;
+  }
 
-    if (user.subscription?.razorpaySubscriptionId && user.subscription?.status === 'active') {
-      return res.status(400).json({ success: false, message: 'You already have an active subscription' });
-    }
-
-    const { planId, couponCode } = req.body;
-    if (!planId) {
-      return res.status(400).json({ success: false, message: 'planId is required' });
-    }
-
-    const plan = findPlan(planId);
-    if (!plan) {
-      return res.status(400).json({ success: false, message: 'Invalid plan selected' });
-    }
-
-    // Validate coupon if provided — coupons just record discount metadata, plan price is unchanged
-    let appliedCoupon = null;
-    if (couponCode) {
-      const coupon = await Coupon.findOne({ code: couponCode.toUpperCase().trim() });
-      if (!coupon || !coupon.isActive || coupon.usedCount >= coupon.maxUses) {
-        return res.status(400).json({ success: false, message: 'Invalid or expired coupon code' });
+  // One payment, applied once. Returns { applied:false } on a replay.
+  async function applyCharge(user, record, { paymentId, paidPaise, subscription }) {
+    const built = bp.buildChargeUpdate(record, { paymentId, paidPaise, subscription });
+    if (!built) return { applied: false, reason: 'unknown_item' };
+    const opts = { new: true, ...(built.arrayFilters ? { arrayFilters: built.arrayFilters } : {}) };
+    const doc = await User.findOneAndUpdate(
+      { _id: user._id, 'payments.razorpayPaymentId': { $ne: paymentId } },
+      built.update, opts
+    );
+    if (!doc) return { applied: false, reason: 'already_processed' };
+    try {
+      const out = await createInvoice({
+        email: user.email, firstName: user.firstName, lastName: user.lastName || '',
+        companyName: user.companyName || user.businessProfile?.name || '',
+        razorpayPaymentId: paymentId, credits: built.quarks,
+        itemName: built.spec.itemName, description: built.spec.description,
+        amount: built.spec.amountInr, gstPercent: built.spec.gstPercent, totalAmount: built.spec.totalPaise / 100
+      });
+      if (out && out.invoiceUrl) {
+        await User.updateOne({ _id: user._id }, { $set: { 'payments.$[p].invoiceUrl': out.invoiceUrl } }, { arrayFilters: [{ 'p.razorpayPaymentId': paymentId }] });
       }
+    } catch (e) {
+      console.warn('Invoice creation failed (non-blocking):', e.message);
+    }
+    return { applied: true, quarks: built.quarks, balance: doc.credits?.balance, doc };
+  }
+
+  /**
+   * POST /api/payment/validate-coupon
+   * Validate a coupon code without redeeming it
+   */
+  router.post('/validate-coupon', protect, async (req, res) => {
+    try {
+      const { code } = req.body;
+      if (!code) return res.status(400).json({ success: false, message: 'Coupon code required' });
+
+      const coupon = await Coupon.findOne({ code: code.toUpperCase().trim() });
+
+      if (!coupon || !coupon.isActive) {
+        return res.status(404).json({ success: false, message: 'Invalid or expired coupon code' });
+      }
+      if (coupon.usedCount >= coupon.maxUses) {
+        return res.status(400).json({ success: false, message: 'This coupon has already been used' });
+      }
+
+      // Check if this user already used it
+      const userId = req.user?.userId || req.user?.id || req.user?._id;
       const alreadyUsed = coupon.usedBy.some(u => u.userId?.toString() === userId?.toString());
       if (alreadyUsed) {
         return res.status(400).json({ success: false, message: 'You have already used this coupon' });
       }
-      appliedCoupon = coupon;
-    }
 
-    const totalCount = plan.cycle === 'monthly' ? 120 : plan.cycle === 'quarterly' ? 40 : 10;
-
-    const subscription = await razorpay.subscriptions.create({
-      plan_id: planId,
-      customer_notify: 1,
-      total_count: totalCount,
-      notes: {
-        userId: userId.toString(),
-        email: user.email,
-        tier: plan.tier,
-        cycle: plan.cycle,
-        couponCode: appliedCoupon?.code || ''
-      }
-    });
-
-    res.json({
-      success: true,
-      subscription_id: subscription.id,
-      key: process.env.RAZORPAY_KEY_ID,
-      amount: plan.amount,
-      plan: { tier: plan.tier, cycle: plan.cycle, tierName: plan.tierName, per: plan.per },
-      prefill: {
-        name: `${user.firstName} ${user.lastName || ''}`.trim(),
-        email: user.email,
-        contact: user.mobileNumber || ''
-      }
-    });
-  } catch (error) {
-    console.error('Create subscription error:', error);
-    res.status(500).json({ success: false, message: 'Failed to create subscription' });
-  }
-});
-
-/**
- * POST /api/payment/verify-subscription
- * Verifies first payment of a subscription, then triggers demo→prod migration
- */
-router.post('/verify-subscription', protect, async (req, res) => {
-  try {
-    const { razorpay_payment_id, razorpay_subscription_id, razorpay_signature } = req.body;
-
-    if (!razorpay_payment_id || !razorpay_subscription_id || !razorpay_signature) {
-      return res.status(400).json({ success: false, message: 'Missing payment details' });
-    }
-
-    // Verify signature (subscription variant)
-    const expectedSignature = crypto
-      .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
-      .update(`${razorpay_payment_id}|${razorpay_subscription_id}`)
-      .digest('hex');
-
-    if (expectedSignature !== razorpay_signature) {
-      return res.status(400).json({ success: false, message: 'Payment verification failed — invalid signature' });
-    }
-
-    console.log(`✅ Subscription payment verified: ${razorpay_payment_id}`);
-
-    const userId = req.user?.userId || req.user?.id || req.user?._id;
-    const user = await User.findById(userId);
-    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-
-    // Fetch subscription details from Razorpay
-    const rzpSub = await razorpay.subscriptions.fetch(razorpay_subscription_id);
-    const planInfo = findPlan(rzpSub.plan_id);
-    const tier = planInfo?.tier || rzpSub.notes?.tier || 'pro';
-    const cycle = planInfo?.cycle || rzpSub.notes?.cycle || 'monthly';
-    const paidAmount = planInfo?.amount || MONTHLY_AMOUNT;
-
-    // Mark coupon as used if one was applied
-    const couponCode = rzpSub.notes?.couponCode;
-    if (couponCode) {
-      await Coupon.findOneAndUpdate(
-        { code: couponCode },
-        { $inc: { usedCount: 1 }, $push: { usedBy: { userId, email: user.email, usedAt: new Date() } } }
-      );
-    }
-
-    // Update subscription on user
-    user.subscription = {
-      plan: tier,
-      cycle,
-      status: 'active',
-      razorpaySubscriptionId: razorpay_subscription_id,
-      razorpayPlanId: rzpSub.plan_id,
-      currentPeriodEnd: rzpSub.current_end ? new Date(rzpSub.current_end * 1000) : null,
-      nextBillingAt: rzpSub.charge_at ? new Date(rzpSub.charge_at * 1000) : null
-    };
-
-    // Record payment
-    user.payments.push({
-      razorpayOrderId: razorpay_subscription_id,
-      razorpayPaymentId: razorpay_payment_id,
-      amount: paidAmount,
-      currency: PLAN_CURRENCY,
-      credits: MONTHLY_CREDITS,
-      status: 'paid',
-      paidAt: new Date()
-    });
-    await user.save();
-
-    // Create Zoho invoice (non-blocking)
-    try {
-      const invoiceResult = await createInvoice({
-        email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName || '',
-        companyName: user.companyName || user.businessProfile?.name || '',
-        amount: paidAmount,
-        credits: MONTHLY_CREDITS,
-        razorpayPaymentId: razorpay_payment_id
+      res.json({
+        success: true,
+        discountedAmount: coupon.discountedAmount,
+        originalAmount: coupon.originalAmount,
+        savings: coupon.originalAmount - coupon.discountedAmount
       });
-      const lastPayment = user.payments[user.payments.length - 1];
-      if (lastPayment && invoiceResult.invoiceUrl) {
-        lastPayment.invoiceUrl = invoiceResult.invoiceUrl;
-        await user.save();
-      }
-      console.log(`📄 Zoho invoice created: ${invoiceResult.invoiceNumber}`);
-    } catch (zohoErr) {
-      console.warn('Zoho invoice creation failed (non-blocking):', zohoErr.message);
+    } catch (error) {
+      console.error('Validate coupon error:', error);
+      res.status(500).json({ success: false, message: 'Failed to validate coupon' });
     }
-
-    // Migrate demo → prod
-    console.log(`🚀 Starting migration for user: ${userId}`);
-    const migrationResult = await migrateUserData(userId.toString(), MONTHLY_CREDITS);
-    if (!migrationResult.success) {
-      return res.status(500).json({
-        success: false,
-        message: `Payment successful but migration failed: ${migrationResult.error}. Contact support.`,
-        paymentId: razorpay_payment_id
-      });
-    }
-
-    // Send welcome email (non-blocking)
-    try { await sendWelcomeEmail(user.email, user.firstName); } catch (_) {}
-
-    // Mark as migrated
-    user.trial = { ...user.trial?.toObject?.() || {}, isExpired: true, migratedToProd: true };
-    await user.save();
-
-    res.json({
-      success: true,
-      message: 'Subscription activated and account migrated to production!',
-      migration: migrationResult.summary,
-      prodUrl: 'https://gravity.nebulaa.ai',
-      email: user.email
-    });
-  } catch (error) {
-    console.error('Verify subscription error:', error);
-    res.status(500).json({ success: false, message: 'Subscription verification failed' });
-  }
-});
-
-/**
- * POST /api/payment/webhook
- * Razorpay webhook — handles recurring monthly charges & subscription state changes
- * NOTE: Requires raw body (express.raw middleware registered in server.js BEFORE express.json)
- */
-router.post('/webhook', async (req, res) => {
-  try {
-    const signature = req.headers['x-razorpay-signature'];
-    const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
-
-    if (webhookSecret) {
-      const expectedSignature = crypto
-        .createHmac('sha256', webhookSecret)
-        .update(req.body)
-        .digest('hex');
-      if (expectedSignature !== signature) {
-        console.warn('⚠️ Razorpay webhook signature mismatch');
-        return res.status(400).json({ success: false, message: 'Invalid webhook signature' });
-      }
-    } else {
-      console.warn('⚠️ RAZORPAY_WEBHOOK_SECRET not set — skipping signature check');
-    }
-
-    const event = JSON.parse(req.body.toString());
-    const { event: eventName, payload } = event;
-    console.log(`🔔 Razorpay webhook: ${eventName}`);
-
-    const subscription = payload?.subscription?.entity;
-    const payment = payload?.payment?.entity;
-
-    if (!subscription?.id) return res.json({ success: true });
-
-    // Look up by subscription ID — works after migration when userId in notes is stale
-    const user = await User.findOne({ 'subscription.razorpaySubscriptionId': subscription.id });
-    if (!user) return res.json({ success: true });
-
-    if (eventName === 'subscription.charged') {
-      // Monthly renewal — add credits
-      user.credits = user.credits || {};
-      user.credits.balance = (user.credits.balance || 0) + MONTHLY_CREDITS;
-
-      user.subscription.status = 'active';
-      if (subscription.current_end) user.subscription.currentPeriodEnd = new Date(subscription.current_end * 1000);
-      if (subscription.charge_at) user.subscription.nextBillingAt = new Date(subscription.charge_at * 1000);
-
-      if (payment) {
-        user.payments.push({
-          razorpayOrderId: subscription.id,
-          razorpayPaymentId: payment.id,
-          amount: payment.amount / 100,
-          currency: PLAN_CURRENCY,
-          credits: MONTHLY_CREDITS,
-          status: 'paid',
-          paidAt: new Date()
-        });
-      }
-      await user.save();
-      console.log(`✅ Monthly credits added for user: ${userId} (${MONTHLY_CREDITS} credits)`);
-    }
-
-    if (eventName === 'subscription.halted') {
-      await User.findOneAndUpdate(
-        { 'subscription.razorpaySubscriptionId': subscription.id },
-        { 'subscription.status': 'halted' }
-      );
-      console.log(`⚠️ Subscription halted: ${subscription.id}`);
-    }
-
-    if (eventName === 'subscription.cancelled') {
-      await User.findOneAndUpdate(
-        { 'subscription.razorpaySubscriptionId': subscription.id },
-        { 'subscription.status': 'cancelled' }
-      );
-      console.log(`❌ Subscription cancelled: ${subscription.id}`);
-    }
-
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Webhook error:', error);
-    res.status(500).json({ success: false });
-  }
-});
-
-/**
- * POST /api/payment/create-order
- * Creates a Razorpay order for chosen credit amount
- */
-router.post('/create-order', protect, async (req, res) => {
-  try {
-    const { amount } = req.body;
-    const numAmount = Number(amount);
-    if (!numAmount || numAmount < MIN_AMOUNT || numAmount > MAX_AMOUNT) {
-      return res.status(400).json({ success: false, message: `Choose an amount between ₹${MIN_AMOUNT.toLocaleString()} and ₹${MAX_AMOUNT.toLocaleString()}.` });
-    }
-    const credits = 1000; // Fixed 1000 credits for ₹7,500 starter pack
-
-    const userId = req.user?.userId || req.user?.id || req.user?._id;
-    const user = await User.findById(userId);
-
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
-
-    // Check if already migrated
-    if (user.subscription?.plan === 'pro' && user.subscription?.status === 'active') {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'You already have an active subscription' 
-      });
-    }
-
-    const options = {
-      amount: numAmount * 100,
-      currency: PLAN_CURRENCY,
-      receipt: `neb_${userId.toString().slice(-8)}_${Date.now().toString(36)}`,
-      notes: {
-        userId: userId.toString(),
-        email: user.email,
-        credits: credits.toString()
-      }
-    };
-
-    const order = await razorpay.orders.create(options);
-
-    res.json({
-      success: true,
-      order: {
-        id: order.id,
-        amount: order.amount,
-        currency: order.currency
-      },
-      key: process.env.RAZORPAY_KEY_ID,
-      description: `Nebulaa — ${credits} credits`,
-      prefill: {
-        name: `${user.firstName} ${user.lastName || ''}`.trim(),
-        email: user.email,
-        contact: ''
-      }
-    });
-
-  } catch (error) {
-    console.error('Create order error:', error);
-    res.status(500).json({ success: false, message: 'Failed to create payment order' });
-  }
-});
-
-/**
- * POST /api/payment/verify
- * Verify Razorpay payment signature, then migrate user data demo → prod
- */
-router.post('/verify', protect, async (req, res) => {
-  try {
-    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
-
-    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
-      return res.status(400).json({ success: false, message: 'Missing payment details' });
-    }
-
-    // Verify signature
-    const body = razorpay_order_id + '|' + razorpay_payment_id;
-    const expectedSignature = crypto
-      .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
-      .update(body)
-      .digest('hex');
-
-    if (expectedSignature !== razorpay_signature) {
-      return res.status(400).json({ success: false, message: 'Payment verification failed — invalid signature' });
-    }
-
-    console.log(`✅ Payment verified: ${razorpay_payment_id}`);
-
-    const userId = req.user?.userId || req.user?.id || req.user?._id;
-    const user = await User.findById(userId);
-
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
-
-    // Store payment in history array
-    const paidAmount = (await razorpay.orders.fetch(razorpay_order_id))?.amount;
-    const paidCredits = 1000; // Fixed 1000 credits per payment
-    user.payments.push({
-      razorpayOrderId: razorpay_order_id,
-      razorpayPaymentId: razorpay_payment_id,
-      amount: paidAmount ? paidAmount / 100 : 0,
-      currency: PLAN_CURRENCY,
-      credits: paidCredits,
-      status: 'paid',
-      paidAt: new Date()
-    });
-    await user.save();
-
-    // Create invoice in Zoho Books (non-blocking)
-    try {
-      const invoiceResult = await createInvoice({
-        email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName || '',
-        companyName: user.companyName || user.businessProfile?.name || '',
-        amount: paidAmount ? paidAmount / 100 : 0,
-        credits: paidCredits,
-        razorpayPaymentId: razorpay_payment_id
-      });
-
-      // Store Zoho invoice URL on the payment record
-      const lastPayment = user.payments[user.payments.length - 1];
-      if (lastPayment && invoiceResult.invoiceUrl) {
-        lastPayment.invoiceUrl = invoiceResult.invoiceUrl;
-        await user.save();
-      }
-
-      console.log(`📄 Zoho Books invoice created: ${invoiceResult.invoiceNumber}`);
-    } catch (zohoErr) {
-      console.warn('Zoho Books invoice creation failed (non-blocking):', zohoErr.message);
-    }
-
-    // Run migration: demo → prod
-    console.log(`🚀 Starting migration for user: ${userId} with ${paidCredits} credits`);
-    const migrationResult = await migrateUserData(userId.toString(), paidCredits);
-
-    if (!migrationResult.success) {
-      return res.status(500).json({ 
-        success: false, 
-        message: `Payment successful but migration failed: ${migrationResult.error}. Contact support.`,
-        paymentId: razorpay_payment_id
-      });
-    }
-
-    // Send welcome email with prod login details
-    try {
-      await sendWelcomeEmail(user.email, user.firstName);
-    } catch (emailErr) {
-      console.warn('Welcome email failed (non-blocking):', emailErr.message);
-    }
-
-    // Mark demo user as migrated
-    user.trial = { ...user.trial?.toObject?.() || {}, isExpired: true, migratedToProd: true };
-    await user.save();
-
-    res.json({
-      success: true,
-      message: 'Payment verified and account migrated to production!',
-      migration: migrationResult.summary,
-      prodUrl: 'https://gravity.nebulaa.ai',
-      email: user.email
-    });
-
-  } catch (error) {
-    console.error('Payment verify error:', error);
-    res.status(500).json({ success: false, message: 'Payment verification failed' });
-  }
-});
-
-/**
- * GET /api/payment/status
- * Check if user has paid and migration status
- */
-router.get('/status', protect, async (req, res) => {
-  try {
-    const userId = req.user?.userId || req.user?.id || req.user?._id;
-    const user = await User.findById(userId);
-
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
-
-    const lastPayment = user.payments?.length ? user.payments[user.payments.length - 1] : null;
-    res.json({
-      success: true,
-      payment: {
-        paid: lastPayment?.status === 'paid',
-        paymentId: lastPayment?.razorpayPaymentId || null,
-        paidAt: lastPayment?.paidAt || null,
-        amount: lastPayment?.amount || null
-      },
-      migrated: user.trial?.migratedToProd || false,
-      prodUrl: user.trial?.migratedToProd ? 'https://gravity.nebulaa.ai' : null
-    });
-
-  } catch (error) {
-    console.error('Payment status error:', error);
-    res.status(500).json({ success: false, message: 'Failed to get payment status' });
-  }
-});
-
-/**
- * GET /api/payment/billing
- * Returns payment history, subscription status, and credits for the Billing tab
- */
-router.get('/billing', protect, async (req, res) => {
-  try {
-    const userId = req.user?.userId || req.user?.id || req.user?._id;
-    const user = await User.findById(userId);
-
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
-
-    const payments = user.payments || [];
-    let needsSave = false;
-
-    // Lazily enrich payments with Razorpay invoice URLs (fetched once, then cached)
-    for (const payment of payments) {
-      if (!payment.invoiceUrl && payment.razorpayPaymentId) {
-        try {
-          const rpPayment = await razorpay.payments.fetch(payment.razorpayPaymentId);
-          if (rpPayment.invoice_id) {
-            const invoice = await razorpay.invoices.fetch(rpPayment.invoice_id);
-            payment.invoiceUrl = invoice.short_url || '';
-            needsSave = true;
-          }
-        } catch (e) {
-          console.warn(`Could not fetch invoice for ${payment.razorpayPaymentId}:`, e.message);
-        }
-      }
-    }
-
-    if (needsSave) await user.save();
-
-    res.json({
-      success: true,
-      subscription: user.subscription || { plan: 'free', status: 'active' },
-      credits: {
-        balance: user.credits?.balance ?? 0,
-        totalUsed: user.credits?.totalUsed ?? 0
-      },
-      payments: payments.map(p => ({
-        orderId: p.razorpayOrderId,
-        paymentId: p.razorpayPaymentId,
-        amount: p.amount,
-        currency: p.currency,
-        credits: p.credits,
-        status: p.status,
-        invoiceUrl: p.invoiceUrl || null,
-        paidAt: p.paidAt
-      }))
-    });
-  } catch (error) {
-    console.error('Billing fetch error:', error);
-    res.status(500).json({ success: false, message: 'Failed to load billing data' });
-  }
-});
-
-/**
- * POST /api/payment/retry-invoices
- * Retry Zoho Books invoice creation for past payments that don't have an invoice
- */
-router.post('/retry-invoices', protect, async (req, res) => {
-  try {
-    const userId = req.user?.userId || req.user?.id || req.user?._id;
-    console.log(`📄 [RETRY-INVOICES] Starting for user: ${userId}`);
-
-    const user = await User.findById(userId);
-
-    if (!user) {
-      console.log(`📄 [RETRY-INVOICES] User not found: ${userId}`);
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
-
-    console.log(`📄 [RETRY-INVOICES] User: ${user.email}, Payments count: ${(user.payments || []).length}`);
-
-    const payments = user.payments || [];
-    const results = [];
-
-    for (const payment of payments) {
-      console.log(`📄 [RETRY-INVOICES] Processing payment: ${payment.razorpayPaymentId}, amount: ₹${payment.amount}, hasInvoice: ${!!payment.invoiceUrl}`);
-
-      if (payment.invoiceUrl) {
-        console.log(`📄 [RETRY-INVOICES] Skipping ${payment.razorpayPaymentId} — invoice already exists`);
-        results.push({ paymentId: payment.razorpayPaymentId, status: 'already_exists' });
-        continue;
-      }
-
-      try {
-        console.log(`📄 [RETRY-INVOICES] Creating Zoho invoice for ${payment.razorpayPaymentId}...`);
-        console.log(`📄 [RETRY-INVOICES] Zoho config — CLIENT_ID: ${process.env.ZOHO_BOOKS_CLIENT_ID ? process.env.ZOHO_BOOKS_CLIENT_ID.slice(0, 10) + '...' : 'NOT SET'}, ORG_ID: ${process.env.ZOHO_BOOKS_ORG_ID || 'NOT SET'}, REFRESH_TOKEN: ${process.env.ZOHO_BOOKS_REFRESH_TOKEN ? 'SET' : 'NOT SET'}`);
-
-        const invoiceResult = await createInvoice({
-          email: user.email,
-          firstName: user.firstName,
-          lastName: user.lastName || '',
-          companyName: user.companyName || user.businessProfile?.name || '',
-          amount: payment.amount,
-          credits: payment.credits,
-          razorpayPaymentId: payment.razorpayPaymentId
-        });
-
-        console.log(`📄 [RETRY-INVOICES] ✅ Invoice created! Number: ${invoiceResult.invoiceNumber}, URL: ${invoiceResult.invoiceUrl}`);
-
-        payment.invoiceUrl = invoiceResult.invoiceUrl || '';
-        results.push({
-          paymentId: payment.razorpayPaymentId,
-          status: 'created',
-          invoiceNumber: invoiceResult.invoiceNumber
-        });
-      } catch (err) {
-        console.error(`📄 [RETRY-INVOICES] ❌ Failed for ${payment.razorpayPaymentId}:`, err.message);
-        console.error(`📄 [RETRY-INVOICES] Full error:`, err.stack || err);
-        results.push({
-          paymentId: payment.razorpayPaymentId,
-          status: 'failed',
-          error: err.message
-        });
-      }
-    }
-
-    await user.save();
-    console.log(`📄 [RETRY-INVOICES] Done. Results:`, JSON.stringify(results));
-
-    res.json({ success: true, results });
-  } catch (error) {
-    console.error('📄 [RETRY-INVOICES] Fatal error:', error);
-    res.status(500).json({ success: false, message: 'Failed to retry invoice creation' });
-  }
-});
-
-/**
- * Send welcome email to user after successful migration
- */
-async function sendWelcomeEmail(email, firstName) {
-  const { Resend } = require('resend');
-  const resend = new Resend(process.env.RESEND_API_KEY);
-
-  await resend.emails.send({
-    from: process.env.RESEND_FROM_EMAIL || 'noreply@nebulaa.ai',
-    to: email,
-    subject: '🚀 Welcome to Nebulaa — Your Production Account is Ready!',
-    html: `
-      <div style="font-family: 'Inter', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #070A12; color: #ededed; padding: 40px; border-radius: 16px;">
-        <div style="text-align: center; margin-bottom: 32px;">
-          <h1 style="color: #ffcc29; font-size: 28px; margin: 0;">Nebulaa</h1>
-          <p style="color: #ededed99; font-size: 14px; margin-top: 8px;">Your AI Marketing Command Center</p>
-        </div>
-        
-        <h2 style="color: #ededed; font-size: 22px;">Hey ${firstName || 'there'} 👋</h2>
-        
-        <p style="color: #edededd0; line-height: 1.7; font-size: 15px;">
-          Your payment has been received and your <strong style="color: #ffcc29;">production account</strong> is now live! 
-          All your data from the demo — campaigns, competitors, brand assets, analytics — has been migrated.
-        </p>
-        
-        <div style="background: #0d1117; border: 1px solid #ffcc2930; border-radius: 12px; padding: 24px; margin: 24px 0;">
-          <p style="color: #ffcc29; font-weight: 600; margin: 0 0 12px 0; font-size: 14px;">YOUR PRODUCTION LOGIN</p>
-          <p style="color: #ededed; margin: 4px 0;"><strong>URL:</strong> <a href="https://gravity.nebulaa.ai" style="color: #ffcc29;">gravity.nebulaa.ai</a></p>
-          <p style="color: #ededed; margin: 4px 0;"><strong>Email:</strong> ${email}</p>
-          <p style="color: #ededed99; margin: 8px 0 0 0; font-size: 13px;">Use the same password you set during signup.</p>
-        </div>
-        
-        <div style="background: #0d1117; border-radius: 12px; padding: 24px; margin: 24px 0;">
-          <p style="color: #ffcc29; font-weight: 600; margin: 0 0 12px 0; font-size: 14px;">WHAT'S INCLUDED</p>
-          <ul style="color: #ededed; padding-left: 20px; line-height: 2;">
-            <li>1,000 monthly credits (auto-resets)</li>
-            <li>+10 daily login bonus credits</li>
-            <li>All AI features: campaigns, competitor analysis, content generation</li>
-            <li>Multi-platform social media posting</li>
-            <li>Priority support</li>
-          </ul>
-        </div>
-        
-        <a href="https://gravity.nebulaa.ai" style="display: block; background: #ffcc29; color: #070A12; text-align: center; padding: 16px; border-radius: 10px; text-decoration: none; font-weight: 700; font-size: 16px; margin: 32px 0;">
-          Go to Nebulaa →
-        </a>
-        
-        <p style="color: #ededed60; font-size: 12px; text-align: center; margin-top: 32px;">
-          Questions? Reply to this email or reach out at support@nebulaa.ai
-        </p>
-      </div>
-    `
   });
 
-  console.log(`📧 Welcome email sent to ${email}`);
+
+  /**
+   * GET /api/payment/plans
+   * Public: the two plans, the top-up packs and the add-ons, with GST.
+   */
+  router.get('/plans', (_req, res) => {
+    res.json({ success: true, ...bp.planCatalogue() });
+  });
+
+  /**
+   * POST /api/payment/create-subscription  { planId: 'starter' | 'professional' }
+   * Creates a Razorpay subscription at price plus GST.
+   */
+  router.post('/create-subscription', protect, async (req, res) => {
+    try {
+      const userId = userIdOf(req);
+      const user = await User.findById(userId);
+      if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+      if (hasActivePlanSubscription(user)) {
+        return res.status(400).json({ success: false, message: 'You already have an active subscription' });
+      }
+
+      const { planId, couponCode } = req.body || {};
+      const quote = bp.planQuote(planId);
+      if (!quote) {
+        return res.status(400).json({ success: false, message: 'Please choose the Starter or Professional plan.' });
+      }
+
+      // Coupons only record discount metadata; the plan price is unchanged.
+      let appliedCoupon = null;
+      if (couponCode) {
+        const coupon = await Coupon.findOne({ code: String(couponCode).toUpperCase().trim() });
+        if (!coupon || !coupon.isActive || coupon.usedCount >= coupon.maxUses) {
+          return res.status(400).json({ success: false, message: 'Invalid or expired coupon code' });
+        }
+        if (coupon.usedBy.some(u => u.userId?.toString() === userId?.toString())) {
+          return res.status(400).json({ success: false, message: 'You have already used this coupon' });
+        }
+        appliedCoupon = coupon;
+      }
+
+      const razorpayPlanId = await getOrCreateRazorpayPlan('plan', planId);
+      const subscription = await rz().subscriptions.create({
+        plan_id: razorpayPlanId,
+        customer_notify: 1,
+        total_count: 120,
+        notes: { userId: userId.toString(), email: user.email, tier: planId, couponCode: appliedCoupon?.code || '' }
+      });
+      await User.updateOne({ _id: user._id }, {
+        $push: { 'plan.subscriptions': { subscriptionId: subscription.id, kind: 'plan', key: planId, razorpayPlanId, active: false, createdAt: new Date() } }
+      });
+
+      res.json({
+        success: true,
+        subscription_id: subscription.id,
+        key: env().RAZORPAY_KEY_ID,
+        amount: quote.chargePaise,
+        gstPaise: quote.gstPaise,
+        plan: { id: planId, tier: planId, quarks: quote.quarks },
+        prefill: prefillOf(user)
+      });
+    } catch (error) {
+      console.error('Create subscription error:', error);
+      res.status(500).json({ success: false, message: 'Failed to create subscription' });
+    }
+  });
+
+  /**
+   * POST /api/payment/create-addon-subscription  { addon }
+   * Add-ons need a Starter or Professional plan; Inbox needs Publish and schedule.
+   */
+  router.post('/create-addon-subscription', protect, async (req, res) => {
+    try {
+      const userId = userIdOf(req);
+      const user = await User.findById(userId);
+      if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+      const { addon } = req.body || {};
+      const check = bp.canBuyAddon(user, addon);
+      if (!check.ok) return res.status(400).json({ success: false, message: check.message });
+      const quote = bp.addonQuote(addon);
+
+      const razorpayPlanId = await getOrCreateRazorpayPlan('addon', addon);
+      const subscription = await rz().subscriptions.create({
+        plan_id: razorpayPlanId,
+        customer_notify: 1,
+        total_count: 120,
+        notes: { userId: userId.toString(), email: user.email, addon }
+      });
+      await User.updateOne({ _id: user._id }, {
+        $push: { 'plan.subscriptions': { subscriptionId: subscription.id, kind: 'addon', key: addon, razorpayPlanId, active: false, createdAt: new Date() } }
+      });
+
+      res.json({
+        success: true,
+        subscription_id: subscription.id,
+        key: env().RAZORPAY_KEY_ID,
+        amount: quote.chargePaise,
+        gstPaise: quote.gstPaise,
+        addon: { id: addon },
+        prefill: prefillOf(user)
+      });
+    } catch (error) {
+      console.error('Create add-on subscription error:', error);
+      res.status(500).json({ success: false, message: 'Failed to create the add-on subscription' });
+    }
+  });
+
+  /**
+   * POST /api/payment/verify-subscription
+   * Verifies the first payment of a plan or add-on subscription, then grants it.
+   */
+  router.post('/verify-subscription', protect, async (req, res) => {
+    try {
+      const { razorpay_payment_id, razorpay_subscription_id, razorpay_signature } = req.body || {};
+      if (!razorpay_payment_id || !razorpay_subscription_id || !razorpay_signature) {
+        return res.status(400).json({ success: false, message: 'Missing payment details' });
+      }
+      if (!bp.verifyCheckoutSignature(`${razorpay_payment_id}|${razorpay_subscription_id}`, razorpay_signature, env().RAZORPAY_KEY_SECRET)) {
+        return res.status(400).json({ success: false, message: 'Payment verification failed: invalid signature' });
+      }
+
+      const user = await User.findById(userIdOf(req));
+      if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+      const record = findRecord(user, razorpay_subscription_id);
+      if (!record) return res.status(404).json({ success: false, message: 'We could not find this subscription on your account.' });
+      const rzpSub = await rz().subscriptions.fetch(razorpay_subscription_id);
+      if (!recordMatches(user, record, rzpSub)) {
+        return res.status(400).json({ success: false, message: 'This subscription does not match your account.' });
+      }
+
+      const spec = bp.invoiceSpec(record.kind, record.key);
+      const result = await applyCharge(user, record, { paymentId: razorpay_payment_id, paidPaise: spec.totalPaise, subscription: rzpSub });
+      if (result.applied && record.kind === 'plan' && rzpSub.notes?.couponCode) {
+        await Coupon.findOneAndUpdate(
+          { code: rzpSub.notes.couponCode },
+          { $inc: { usedCount: 1 }, $push: { usedBy: { userId: user._id, email: user.email, usedAt: new Date() } } }
+        );
+      }
+      res.json({
+        success: true,
+        alreadyProcessed: !result.applied,
+        message: record.kind === 'plan' ? 'Your plan is active.' : 'Your add-on is active.',
+        kind: record.kind, key: record.key,
+        quarksGranted: result.applied ? result.quarks : 0,
+        balance: result.applied ? result.balance : user.credits?.balance
+      });
+    } catch (error) {
+      console.error('Verify subscription error:', error);
+      res.status(500).json({ success: false, message: 'Subscription verification failed' });
+    }
+  });
+
+  /**
+   * POST /api/payment/webhook
+   * Razorpay webhook: monthly charges and subscription endings.
+   * Needs the raw body (express.raw is registered in server-main.js before express.json).
+   * Fails closed: without RAZORPAY_WEBHOOK_SECRET nothing is granted.
+   */
+  router.post('/webhook', async (req, res) => {
+    try {
+      const secret = env().RAZORPAY_WEBHOOK_SECRET;
+      if (!secret) {
+        console.error('RAZORPAY_WEBHOOK_SECRET is not set: webhook refused');
+        return res.status(503).json({ success: false, message: 'Webhook is not configured' });
+      }
+      if (!bp.verifyWebhookSignature(req.body, req.headers['x-razorpay-signature'], secret)) {
+        console.warn('Razorpay webhook signature mismatch');
+        return res.status(400).json({ success: false, message: 'Invalid webhook signature' });
+      }
+
+      const { event: eventName, payload } = JSON.parse(req.body.toString());
+      const subscription = payload?.subscription?.entity;
+      const payment = payload?.payment?.entity;
+      if (!subscription?.id) return res.json({ success: true });
+
+      const user = await User.findOne({ 'plan.subscriptions.subscriptionId': subscription.id });
+      if (!user) return res.json({ success: true });
+      const record = findRecord(user, subscription.id);
+      if (!recordMatches(user, record, subscription)) {
+        console.warn(`Webhook for ${subscription.id} does not match the stored subscription: ignored`);
+        return res.json({ success: true });
+      }
+
+      if (eventName === 'subscription.charged') {
+        if (!payment?.id) return res.json({ success: true });
+        const spec = bp.invoiceSpec(record.kind, record.key);
+        const paidPaise = Number.isFinite(payment.amount) ? payment.amount : spec.totalPaise;
+        await applyCharge(user, record, { paymentId: payment.id, paidPaise, subscription });
+      } else if (ENDING_EVENTS.includes(eventName)) {
+        const built = bp.buildEndUpdate(user, record, eventName);
+        await User.findOneAndUpdate({ _id: user._id }, built.update, { new: true, arrayFilters: built.arrayFilters });
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Webhook error:', error);
+      res.status(500).json({ success: false });
+    }
+  });
+
+  /**
+   * POST /api/payment/create-order  { packInr }
+   * Quark top-up. Only the three pack prices are accepted; the Quarks are recorded
+   * from config in the order notes.
+   */
+  router.post('/create-order', protect, async (req, res) => {
+    try {
+      const pack = bp.findTopupPack(req.body?.packInr);
+      if (!pack) {
+        return res.status(400).json({ success: false, message: 'Please choose one of the Quark packs.' });
+      }
+      const userId = userIdOf(req);
+      const user = await User.findById(userId);
+      if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+      const quote = bp.invoiceSpec('topup', pack.inr);
+      const order = await rz().orders.create({
+        amount: quote.totalPaise,
+        currency: PLAN_CURRENCY,
+        receipt: `neb_${userId.toString().slice(-8)}_${Date.now().toString(36)}`,
+        notes: { userId: userId.toString(), email: user.email, kind: 'topup', packInr: String(pack.inr), quarks: String(pack.quarks) }
+      });
+
+      res.json({
+        success: true,
+        order: { id: order.id, amount: order.amount, currency: order.currency },
+        pack: { inr: pack.inr, quarks: pack.quarks, gstPaise: quote.gstPaise, chargePaise: quote.totalPaise },
+        key: env().RAZORPAY_KEY_ID,
+        description: `Nebulaa: ${pack.quarks} Quarks`,
+        prefill: prefillOf(user)
+      });
+    } catch (error) {
+      console.error('Create order error:', error);
+      res.status(500).json({ success: false, message: 'Failed to create payment order' });
+    }
+  });
+
+  /**
+   * POST /api/payment/verify
+   * Verifies a top-up payment, then grants the pack's Quarks (from config).
+   */
+  router.post('/verify', protect, async (req, res) => {
+    try {
+      const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body || {};
+      if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+        return res.status(400).json({ success: false, message: 'Missing payment details' });
+      }
+      if (!bp.verifyCheckoutSignature(`${razorpay_order_id}|${razorpay_payment_id}`, razorpay_signature, env().RAZORPAY_KEY_SECRET)) {
+        return res.status(400).json({ success: false, message: 'Payment verification failed: invalid signature' });
+      }
+
+      const user = await User.findById(userIdOf(req));
+      if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+      const order = await rz().orders.fetch(razorpay_order_id);
+      const pack = bp.findTopupPack(Number(order?.notes?.packInr));
+      if (!order || order.notes?.kind !== 'topup' || String(order.notes?.userId) !== String(user._id)) {
+        return res.status(403).json({ success: false, message: 'This order does not belong to your account.' });
+      }
+      if (!pack || order.amount !== chargePaise(pack.inr)) {
+        return res.status(400).json({ success: false, message: 'This order does not match a Quark pack.' });
+      }
+
+      const result = await applyCharge(user, { kind: 'topup', key: pack.inr, orderId: razorpay_order_id }, {
+        paymentId: razorpay_payment_id, paidPaise: order.amount
+      });
+      res.json({
+        success: true,
+        alreadyProcessed: !result.applied,
+        message: result.applied ? `${pack.quarks} Quarks added to your account.` : 'This payment was already added to your account.',
+        quarksGranted: result.applied ? result.quarks : 0,
+        balance: result.applied ? result.balance : user.credits?.balance
+      });
+    } catch (error) {
+      console.error('Payment verify error:', error);
+      res.status(500).json({ success: false, message: 'Payment verification failed' });
+    }
+  });
+
+  /**
+   * GET /api/payment/status
+   * Check if user has paid and migration status
+   */
+  router.get('/status', protect, async (req, res) => {
+    try {
+      const userId = req.user?.userId || req.user?.id || req.user?._id;
+      const user = await User.findById(userId);
+
+      if (!user) {
+        return res.status(404).json({ success: false, message: 'User not found' });
+      }
+
+      const lastPayment = user.payments?.length ? user.payments[user.payments.length - 1] : null;
+      res.json({
+        success: true,
+        payment: {
+          paid: lastPayment?.status === 'paid',
+          paymentId: lastPayment?.razorpayPaymentId || null,
+          paidAt: lastPayment?.paidAt || null,
+          amount: lastPayment?.amount || null
+        },
+        migrated: user.trial?.migratedToProd || false,
+        prodUrl: user.trial?.migratedToProd ? 'https://gravity.nebulaa.ai' : null
+      });
+
+    } catch (error) {
+      console.error('Payment status error:', error);
+      res.status(500).json({ success: false, message: 'Failed to get payment status' });
+    }
+  });
+
+  /**
+   * GET /api/payment/billing
+   * Returns payment history, subscription status, and credits for the Billing tab
+   */
+  router.get('/billing', protect, async (req, res) => {
+    try {
+      const userId = req.user?.userId || req.user?.id || req.user?._id;
+      const user = await User.findById(userId);
+
+      if (!user) {
+        return res.status(404).json({ success: false, message: 'User not found' });
+      }
+
+      const payments = user.payments || [];
+      let needsSave = false;
+
+      // Lazily enrich payments with Razorpay invoice URLs (fetched once, then cached)
+      for (const payment of payments) {
+        if (!payment.invoiceUrl && payment.razorpayPaymentId) {
+          try {
+            const rpPayment = await rz().payments.fetch(payment.razorpayPaymentId);
+            if (rpPayment.invoice_id) {
+              const invoice = await rz().invoices.fetch(rpPayment.invoice_id);
+              payment.invoiceUrl = invoice.short_url || '';
+              needsSave = true;
+            }
+          } catch (e) {
+            console.warn(`Could not fetch invoice for ${payment.razorpayPaymentId}:`, e.message);
+          }
+        }
+      }
+
+      if (needsSave) await user.save();
+
+      res.json({
+        success: true,
+        subscription: user.subscription || { plan: 'free', status: 'active' },
+        plan: { tier: resolveTier(user), addons: addonsOf(user) },
+        credits: {
+          balance: user.credits?.balance ?? 0,
+          totalUsed: user.credits?.totalUsed ?? 0
+        },
+        payments: payments.map(p => ({
+          orderId: p.razorpayOrderId,
+          paymentId: p.razorpayPaymentId,
+          amount: p.amount,
+          currency: p.currency,
+          credits: p.credits,
+          status: p.status,
+          invoiceUrl: p.invoiceUrl || null,
+          paidAt: p.paidAt
+        }))
+      });
+    } catch (error) {
+      console.error('Billing fetch error:', error);
+      res.status(500).json({ success: false, message: 'Failed to load billing data' });
+    }
+  });
+
+  /**
+   * POST /api/payment/retry-invoices
+   * Retry Zoho Books invoice creation for past payments that don't have an invoice
+   */
+  router.post('/retry-invoices', protect, async (req, res) => {
+    try {
+      const userId = req.user?.userId || req.user?.id || req.user?._id;
+      console.log(`📄 [RETRY-INVOICES] Starting for user: ${userId}`);
+
+      const user = await User.findById(userId);
+
+      if (!user) {
+        console.log(`📄 [RETRY-INVOICES] User not found: ${userId}`);
+        return res.status(404).json({ success: false, message: 'User not found' });
+      }
+
+      console.log(`📄 [RETRY-INVOICES] User: ${user.email}, Payments count: ${(user.payments || []).length}`);
+
+      const payments = user.payments || [];
+      const results = [];
+
+      for (const payment of payments) {
+        console.log(`📄 [RETRY-INVOICES] Processing payment: ${payment.razorpayPaymentId}, amount: ₹${payment.amount}, hasInvoice: ${!!payment.invoiceUrl}`);
+
+        if (payment.invoiceUrl) {
+          console.log(`📄 [RETRY-INVOICES] Skipping ${payment.razorpayPaymentId} — invoice already exists`);
+          results.push({ paymentId: payment.razorpayPaymentId, status: 'already_exists' });
+          continue;
+        }
+
+        try {
+          console.log(`📄 [RETRY-INVOICES] Creating Zoho invoice for ${payment.razorpayPaymentId}...`);
+          console.log(`📄 [RETRY-INVOICES] Zoho config — CLIENT_ID: ${process.env.ZOHO_BOOKS_CLIENT_ID ? process.env.ZOHO_BOOKS_CLIENT_ID.slice(0, 10) + '...' : 'NOT SET'}, ORG_ID: ${process.env.ZOHO_BOOKS_ORG_ID || 'NOT SET'}, REFRESH_TOKEN: ${process.env.ZOHO_BOOKS_REFRESH_TOKEN ? 'SET' : 'NOT SET'}`);
+
+          // Newer payments remember their item name and ex-GST amount; older ones use the original invoice.
+          const gstFields = payment.item && payment.exGstAmount
+            ? { itemName: payment.item, description: payment.item, gstPercent: 18, amount: payment.exGstAmount, totalAmount: payment.amount }
+            : { amount: payment.amount };
+          const invoiceResult = await createInvoice({
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName || '',
+            companyName: user.companyName || user.businessProfile?.name || '',
+            credits: payment.credits,
+            razorpayPaymentId: payment.razorpayPaymentId,
+            ...gstFields
+          });
+
+          console.log(`📄 [RETRY-INVOICES] ✅ Invoice created! Number: ${invoiceResult.invoiceNumber}, URL: ${invoiceResult.invoiceUrl}`);
+
+          payment.invoiceUrl = invoiceResult.invoiceUrl || '';
+          results.push({
+            paymentId: payment.razorpayPaymentId,
+            status: 'created',
+            invoiceNumber: invoiceResult.invoiceNumber
+          });
+        } catch (err) {
+          console.error(`📄 [RETRY-INVOICES] ❌ Failed for ${payment.razorpayPaymentId}:`, err.message);
+          console.error(`📄 [RETRY-INVOICES] Full error:`, err.stack || err);
+          results.push({
+            paymentId: payment.razorpayPaymentId,
+            status: 'failed',
+            error: err.message
+          });
+        }
+      }
+
+      await user.save();
+      console.log(`📄 [RETRY-INVOICES] Done. Results:`, JSON.stringify(results));
+
+      res.json({ success: true, results });
+    } catch (error) {
+      console.error('📄 [RETRY-INVOICES] Fatal error:', error);
+      res.status(500).json({ success: false, message: 'Failed to retry invoice creation' });
+    }
+  });
+
+
+  return router;
 }
+
+const router = createPaymentRouter();
+router.createPaymentRouter = createPaymentRouter;
 
 module.exports = router;

@@ -238,13 +238,27 @@ const userSchema = new mongoose.Schema({
     status: { type: String, enum: ['paid', 'failed', 'refunded'], default: 'paid' },
     credits: { type: Number },
     invoiceUrl: { type: String, default: '' },
+    item: { type: String },
+    exGstAmount: { type: Number },
     paidAt: { type: Date, default: Date.now }
   }],
   // Plan (optional: accounts without plan.tier are treated as managed)
   plan: {
     tier: { type: String },
     addons: [{ type: String }],
-    subscriptionId: { type: String }
+    subscriptionId: { type: String },
+    // Razorpay subscriptions this account started (the plan, and each add-on).
+    // The billing webhook trusts this record, never the request, to decide what a charge is for.
+    subscriptions: [{
+      _id: false,
+      subscriptionId: { type: String },
+      kind: { type: String },
+      key: { type: String },
+      razorpayPlanId: { type: String },
+      couponCode: { type: String },
+      active: { type: Boolean, default: false },
+      createdAt: { type: Date, default: Date.now }
+    }]
   },
   // Trial tracking
   trial: {
