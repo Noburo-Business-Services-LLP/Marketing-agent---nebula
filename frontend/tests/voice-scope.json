@@ -20,5 +20,19 @@
   "pages/BlueprintRoutes.tsx",
   "components/blueprint/BlueprintDocument.tsx",
   "components/blueprint/TagChip.tsx",
-  "constants/blueprintCopy.ts"
+  "constants/blueprintCopy.ts",
+  "pages/ReelGenerator.tsx",
+  "pages/EnvironmentAssets.tsx",
+  "pages/Analytics.tsx",
+  "pages/Inventory.tsx",
+  "pages/Drafts.tsx",
+  "pages/ContentCalendar.tsx",
+  "pages/AdCampaigns.tsx",
+  "pages/Influencers.tsx",
+  "pages/TrialExpired.tsx",
+  "pages/UnifiedInbox.tsx",
+  "pages/SEOAssistant.tsx",
+  "pages/AutoReplySettingsPage.tsx",
+  "pages/AIHistory.tsx",
+  "pages/AIPerformance.tsx"
 ]
