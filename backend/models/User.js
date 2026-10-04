@@ -247,6 +247,7 @@ const userSchema = new mongoose.Schema({
     tier: { type: String },
     addons: [{ type: String }],
     subscriptionId: { type: String },
+    welcomeEmailSentAt: { type: Date },
     // Razorpay subscriptions this account started (the plan, and each add-on).
     // The billing webhook trusts this record, never the request, to decide what a charge is for.
     subscriptions: [{

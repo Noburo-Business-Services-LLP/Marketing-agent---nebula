@@ -32,6 +32,7 @@ function createPaymentRouter(deps = {}) {
   const Coupon = deps.Coupon || require('../models/Coupon');
   const createInvoice = deps.createInvoice || require('../services/zohoBooks').createInvoice;
   const env = () => deps.env || process.env;
+  const sendWelcome = deps.sendWelcome || require('../services/welcomeEmail').sendSubscriberWelcome;
   let defaultRazorpay = null;
   const rz = () => {
     if (deps.razorpay) return deps.razorpay;
@@ -110,7 +111,25 @@ function createPaymentRouter(deps = {}) {
     } catch (e) {
       console.warn('Invoice creation failed (non-blocking):', e.message);
     }
+    await maybeSendWelcome(user, record, built.quarks);
     return { applied: true, quarks: built.quarks, balance: doc.credits?.balance, doc };
+  }
+
+  // Once per account, on the first applied payment of a Starter or Professional plan.
+  // Claimed atomically, so a replay or a renewal never sends it again. Never throws.
+  async function maybeSendWelcome(user, record, quarks) {
+    try {
+      if (record.kind !== 'plan' || !['starter', 'professional'].includes(record.key)) return;
+      const claimed = await User.findOneAndUpdate(
+        { _id: user._id, 'plan.welcomeEmailSentAt': null },
+        { $set: { 'plan.welcomeEmailSentAt': new Date() } },
+        { new: true }
+      );
+      if (!claimed) return;
+      await sendWelcome(user, { tier: record.key, quarks });
+    } catch (e) {
+      console.warn('Welcome email step failed (non-blocking):', e.message);
+    }
   }
 
   /**

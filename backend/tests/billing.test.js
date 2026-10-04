@@ -24,6 +24,7 @@ function matchFilter(doc, filter) {
     // collect candidate leaf values through arrays
     let vals = [doc];
     for (const p of parts) vals = vals.flatMap((x) => (x == null ? [] : Array.isArray(x[p]) ? x[p] : [x[p]]));
+    if (v === null) return vals.every((x) => x == null);
     if (v && typeof v === 'object' && '$ne' in v) return !vals.some((x) => x === v.$ne);
     return vals.some((x) => x === v);
   });
@@ -108,7 +109,8 @@ function fakeRazorpay() {
     _orders: orders
   };
 }
-function setup({ user = mkUser(), env = ENV } = {}) {
+function setup({ user = mkUser(), env = ENV, welcomeFails = false } = {}) {
+  const welcomes = [];
   const User = fakeUserModel([user]);
   const razorpay = fakeRazorpay();
   const invoices = [];
@@ -116,9 +118,10 @@ function setup({ user = mkUser(), env = ENV } = {}) {
     razorpay, User, env,
     protect: (req, res, next) => next(),
     Coupon: { findOne: async () => null, findOneAndUpdate: async () => null },
-    createInvoice: async (p) => { invoices.push(p); return { invoiceNumber: 'INV-1', invoiceUrl: 'https://invoice.example/1' }; }
+    createInvoice: async (p) => { invoices.push(p); return { invoiceNumber: 'INV-1', invoiceUrl: 'https://invoice.example/1' }; },
+    sendWelcome: async (u, info) => { if (welcomeFails) throw new Error('mail down'); welcomes.push({ email: u.email, ...info }); return { sent: true }; }
   });
-  return { r, User, razorpay, invoices, user };
+  return { r, User, razorpay, invoices, user, welcomes };
 }
 function handlerOf(r, method, p) {
   const layer = r.stack.find((l) => l.route && l.route.path === p && l.route.methods[method]);
@@ -575,4 +578,76 @@ test('I2: a cancel failure at Razorpay does not break the webhook; a stale plan 
   assert.strictEqual(out.code, 200);
   assert.strictEqual(ctx.user.plan.tier, 'free');
   assert.deepStrictEqual([...ctx.user.plan.addons], []);
+});
+
+// ---------------------------------------------------------------- welcome email
+const we = require('../services/welcomeEmail');
+
+test('welcome email is sent once on the first verified activation, never on a replay or a renewal', async () => {
+  const ctx = setup({ user: mkUser({ plan: { tier: 'free', addons: [], subscriptions: [] } }) });
+  const s = await startPlan(ctx, 'professional');
+  const sig = hmac(ENV.RAZORPAY_KEY_SECRET, `pay_w1|${s.id}`);
+  const body = { razorpay_payment_id: 'pay_w1', razorpay_subscription_id: s.id, razorpay_signature: sig };
+  assert.strictEqual((await call(ctx.r, 'post', '/verify-subscription', { body })).code, 200);
+  assert.deepStrictEqual(ctx.welcomes, [{ email: 'a@example.com', tier: 'professional', quarks: 3500 }]);
+  await call(ctx.r, 'post', '/verify-subscription', { body });
+  await sendHook(ctx.r, hook('subscription.charged', s.id, s.planId, 'pay_w1', { amount: chargePaise(1999) }));
+  await sendHook(ctx.r, hook('subscription.charged', s.id, s.planId, 'pay_w2', { amount: chargePaise(1999) }));
+  assert.strictEqual(ctx.welcomes.length, 1);
+  assert.strictEqual(ctx.user.credits.balance, 100 + 2 * 3500);
+});
+
+test('welcome email is sent from the webhook for a Starter first charge', async () => {
+  const ctx = setup({ user: mkUser({ plan: { tier: 'free', addons: [], subscriptions: [] } }) });
+  const s = await startPlan(ctx, 'starter');
+  await sendHook(ctx.r, hook('subscription.charged', s.id, s.planId, 'pay_s1', { amount: chargePaise(999) }));
+  assert.deepStrictEqual(ctx.welcomes.map((w) => [w.tier, w.quarks]), [['starter', 2100]]);
+});
+
+test('an email failure never fails the webhook or the verify, and Quarks are still granted', async () => {
+  const ctx = setup({ user: mkUser({ plan: { tier: 'free', addons: [], subscriptions: [] } }), welcomeFails: true });
+  const s = await startPlan(ctx, 'starter');
+  const res = await sendHook(ctx.r, hook('subscription.charged', s.id, s.planId, 'pay_f1', { amount: chargePaise(999) }));
+  assert.strictEqual(res.code, 200);
+  assert.strictEqual(ctx.user.credits.balance, 2200);
+  assert.strictEqual(ctx.user.plan.tier, 'starter');
+});
+
+test('no welcome email for add-ons or top-ups', async () => {
+  const ctx = setup({ user: mkUser({ plan: { tier: 'starter', addons: [], subscriptions: [] } }) });
+  const res = await call(ctx.r, 'post', '/create-addon-subscription', { body: { addon: 'publish' } });
+  assert.strictEqual(res.code, 200, JSON.stringify(res.body));
+  const created = ctx.razorpay.calls.subs[ctx.razorpay.calls.subs.length - 1];
+  await sendHook(ctx.r, hook('subscription.charged', res.body.subscription_id, created.plan_id, 'pay_a1', { amount: chargePaise(1000) }));
+  assert.deepStrictEqual(ctx.user.plan.addons, ['publish']);
+  const top = await paidTopup(ctx, { pack: 999, payId: 'pay_t1' });
+  assert.strictEqual(ctx.welcomes.length, 0);
+});
+
+test('welcome email content: plan, Quarks, Hero count, add-ons, plain voice', () => {
+  for (const [tier, quarks, plan, heroWord, other] of [['starter', 2100, 'Starter', 'one Hero video', 'two'], ['professional', 3500, 'Professional', 'two Hero videos', 'one Hero']]) {
+    const m = we.buildWelcomeEmail({ firstName: 'Asha', tier, quarks });
+    const all = `${m.subject}\n${m.text}\n${m.html}`;
+    assert.match(m.subject, new RegExp(plan));
+    assert.match(m.text, new RegExp(`${quarks.toLocaleString('en-US')} Quarks`));
+    assert.ok(m.text.includes(heroWord));
+    assert.ok(!m.text.includes(other + ' Hero'));
+    for (const a of ['Publish and schedule', 'Inbox and replies', 'Competitor insights', 'plans page', 'Create content']) assert.ok(m.text.includes(a), a);
+    assert.ok(!/[!\u2014\u2013]/.test(all), 'no exclamation marks or dashes');
+    assert.ok(!/credit|production|migrat|trial/i.test(all), 'forbidden words');
+    assert.match(m.text, /^Hello Asha,/);
+  }
+  assert.strictEqual(we.buildWelcomeEmail({ firstName: 'A', tier: 'free', quarks: 100 }), null);
+});
+
+test('sendWelcomeEmail uses the injected transport, skips without a key, and never throws', async () => {
+  const sent = [];
+  const ok = await we.sendSubscriberWelcome({ email: 'a@example.com', firstName: 'Asha' }, { tier: 'starter', quarks: 2100 }, { transport: async (m) => { sent.push(m); return {}; }, env: { RESEND_FROM_EMAIL: 'hi@example.com' } });
+  assert.strictEqual(ok.sent, true);
+  assert.strictEqual(sent[0].to, 'a@example.com');
+  assert.match(sent[0].from, /hi@example\.com/);
+  const bad = await we.sendSubscriberWelcome({ email: 'a@example.com' }, { tier: 'starter', quarks: 2100 }, { transport: async () => { throw new Error('boom'); } });
+  assert.strictEqual(bad.sent, false);
+  const none = await we.sendSubscriberWelcome({ email: 'a@example.com' }, { tier: 'starter', quarks: 2100 }, { env: {} });
+  assert.strictEqual(none.skipped, true);
 });

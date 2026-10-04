@@ -20,6 +20,7 @@ const {
 } = require('../services/socialMediaAPI');
 const { publishSocialPostWithSafetyWrapper } = require('../services/instagram-fix');
 const SocialInboxConversation = require('../models/SocialInboxConversation');
+const { requireOwnProfileKey } = require('../services/ayrshareGuard');
 const {
   normalizePlatform,
   analyzeEngagement,
@@ -1534,6 +1535,12 @@ router.get('/status', protect, async (req, res) => {
 router.post('/post', protect, requireFeature('publish'), async (req, res) => {
   try {
     const { platforms, content, mediaUrls, scheduledDate } = req.body;
+
+    try {
+      requireOwnProfileKey(req.user);
+    } catch (guardErr) {
+      return res.status(403).json({ success: false, message: guardErr.message });
+    }
 
     if (!platforms || !content) {
       return res.status(400).json({

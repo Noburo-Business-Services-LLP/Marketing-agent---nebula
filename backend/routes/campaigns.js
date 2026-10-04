@@ -23,6 +23,7 @@ const { buildBrandMemoryBlock } = require('../services/brandMemory');
 const { normalizeLanguage } = require('../services/contentCalendarService');
 const { planCampaignVisuals, renderCampaignSlotImage, assetsToImageOptions } = require('../services/creativeDirector');
 // Import Ayrshare for social media posting
+const { requireOwnProfileKey } = require('../services/ayrshareGuard');
 const { getPostStatus, retryPost: retryAyrsharePost, deletePost: deleteAyrsharePost } = require('../services/socialMediaAPI');
 const {
   classifyInstagramPublishFailure,
@@ -934,9 +935,11 @@ router.get('/', protect, async (req, res) => {
       
       // Get the user's Ayrshare profile key for API calls
       const user = await User.findById(userId);
-      const profileKey = user?.ayrshare?.profileKey;
+      let profileKey;
+      try { profileKey = requireOwnProfileKey(user) || undefined; } catch (_) { profileKey = null; }
       
-      for (const campaign of scheduledPastDue) {
+      // An account with no profile of its own must never query the master profile.
+      for (const campaign of (profileKey === null ? [] : scheduledPastDue)) {
         try {
           const statusResult = await getPostStatus(campaign.socialPostId, { profileKey });
           
@@ -2951,9 +2954,12 @@ router.delete('/:id', protect, async (req, res) => {
 
     if (attemptedPostIds.length > 0) {
       const user = await User.findById(userId);
-      const profileKey = user?.ayrshare?.profileKey;
+      let profileKey;
+      let ownKeyMissing = false;
+      try { profileKey = requireOwnProfileKey(user) || undefined; } catch (_) { ownKeyMissing = true; }
 
-      for (const postId of attemptedPostIds) {
+      // No profile of its own: nothing of this account's can exist on Ayrshare, so never touch the master profile.
+      for (const postId of (ownKeyMissing ? [] : attemptedPostIds)) {
         console.log(` Deleting post ${postId} from Ayrshare (campaign: ${campaign.name})`);
         const deleteResult = await deleteAyrsharePost(postId, { profileKey });
 
