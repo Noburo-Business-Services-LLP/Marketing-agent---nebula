@@ -753,3 +753,23 @@ Landing, sign-in/sign-up and onboarding were redesigned in a separate session (b
 | onboarding | `/onboarding` | 1280 | 41 / 62 | 0 | "Business Essentials" 1.06 (#111827 on #111111); "Business to Business" 1.82 (#3a414a on #111111); "Business to Consumer" 1.82 (#3a414a on #111111) |
 | onboarding | `/onboarding` | 375 | 41 / 62 | 0 | "Business Essentials" 1.06 (#111827 on #111111); "Business to Business" 1.82 (#3a414a on #111111); "Business to Consumer" 1.82 (#3a414a on #111111) |
 
+
+## Task 8 (2026-10-04): page-level residuals
+
+Result: **GATE: PASS** at both widths (52 routes each; 0 failures, 0 icon failures; 6 unknown at 1280 and 3 at 375, all signed off in `unknown-signoff.json`; 3 gradient-text items per width, signed off).
+
+| Route | 1280 before -> after | 375 before -> after | Fix |
+|---|---|---|---|
+| `/admin` | 29 -> 0 | 29 -> 0 | `text-white/20..50` -> `/60`-`/70`, placeholders `/55`, `text-red-400/70` -> `red-300` (search icon passes too) |
+| `/terms` | 12 -> 0 | 12 -> 0 | `text-[#ffcc29]` -> `--gv-accent-text`; `text-gray-400` -> `--gv-text-tertiary` |
+| `/privacy-policy` | 10 -> 0 | 10 -> 0 | same |
+| `/trial-expired` | 9 (+1 unknown) -> 0 | 9 -> 0 | text alpha `/25..55` -> `/75`, opaque card fills and opaque panels behind header and footer (no more canvas under the text) |
+| `/dashboard` | tag text failing -> 0 (3 unknown) | -> 0 | tags are white on a `bg-black/75` pill |
+| `/content-calendar` Schedule, `/content-calendar-grid` | day numbers failing -> 0 | -> 0 | `opacity-40` removed; out-of-month number uses `--gv-text-tertiary` |
+| `/dashboard-classic` | 3 -> 0 | 3 -> 0 | event chips `orange-700`, `pink-600`, `blue-600`, `purple-600` (white text); emoji span `text-white` |
+| `/campaigns` | 3 unknown | 3 unknown | signed off |
+| Known gaps | Analytics metric chip Reach `#8B5CF6` -> `#7C3AED` (white 5.7); Dashboard "All" chip -> `bg-slate-600` | | |
+
+Signed off by eye (reasons in `unknown-signoff.json`): trial-expired price gradient text (worst stop about 7.5:1 on an opaque card), dashboard photo-stack tags covered by front cards at 1280 (pill is at least 10:1), campaigns composer label and placeholders over a 9% amber glow (about 5.4:1; the auditor measures 4.76+ on the colour beneath).
+
+Left, by design (not on any page, no text): Facebook `#1877F2` and the Instagram gradient tile (`ConnectSocials.tsx`) hold only an icon, which passes the 3:1 icon check; the remaining entries in `layer-needs-fix.json` are fixture-only combinations. The generated layer block in `index.html` was regenerated (not hand edited) because the page class changes alter the lists. Out-of-scope pages (landing, login, signup, onboarding) were not touched or re-run.
