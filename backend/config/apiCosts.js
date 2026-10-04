@@ -423,7 +423,10 @@ function videoWallClockSeconds(scenes = 5, clipConcurrency = PIPELINE_SECONDS.sc
 // in the database to measure, so this is judgement: scene re-rolls are more
 // common than image retries because a clip can be technically fine and still
 // not cut together. It is the largest remaining invented number in this file.
-const RETRY_FACTOR = { image: 1.2, carousel: 1.2, video_scene: 1.5 };
+//
+// hero: 1.5 — ALSO A GUESS. No measured re-roll rate for hero clips yet; this
+// assumes one re-roll in two. Used only for sizing plan allowances.
+const RETRY_FACTOR = { image: 1.2, carousel: 1.2, video_scene: 1.5, hero: 1.5 };
 
 // Separately from retries: 20% of campaign_full generations were REFUNDED in
 // the same dataset (30 of 151), against 0% for image_generated. That is a
@@ -482,8 +485,33 @@ const PLANS = {
     // `quarks` is DERIVED below, never written here. It used to be a literal,
     // and when USD_PER_QUARK moved from $0.08 to $0.02 the literal stayed put
     // and silently became a quarter of the allowance it was meant to be.
+  },
+
+  // Customer plans (prices are GST-exclusive; GST is added at checkout).
+  // `quarks` for these is a chosen literal, guarded against the expected burn.
+  starter: {
+    inr: 999,
+    label: 'Starter',
+    commits: { image_generated: 30, hero: 1 },
+    grant: 2100
+  },
+  professional: {
+    inr: 1999,
+    label: 'Professional',
+    commits: { image_generated: 30, hero: 2, captions: 150 },
+    grant: 3500
   }
 };
+
+// Throws if a plan grants fewer Quarks than its expected burn.
+function assertPlanAllowance(plan, name = '') {
+  if (plan.quarks < plan.expectedQuarks) {
+    throw new Error(
+      `Plan "${name}" grants ${plan.quarks} Quarks against an expected burn of ` +
+      `${plan.expectedQuarks}. Raise the grant or cut the commitments.`
+    );
+  }
+}
 
 for (const [name, plan] of Object.entries(PLANS)) {
   const c = plan.commits;
@@ -504,26 +532,53 @@ for (const [name, plan] of Object.entries(PLANS)) {
     (c.reels || 0) * (
       QUARK_COSTS.video_base +
       (c.scenesPerReel || 0) * QUARK_COSTS.video_generated * RETRY_FACTOR.video_scene
-    )
+    ) +
+    (c.hero || 0) * QUARK_COSTS.hero_video_clip * RETRY_FACTOR.hero +
+    (c.captions || 0) * QUARK_COSTS.campaign_text
   );
 
   // A round number, chosen rather than derived — 5,000 is what a paid account
   // gets. The derived figure (expectedQuarks x safety) is kept alongside it so
   // the check below still bites if costs ever rise past what 5,000 covers.
   plan.derivedQuarks = Math.round((plan.expectedQuarks * ALLOWANCE_SAFETY) / 100) * 100;
-  plan.quarks = 5000;
+  plan.quarks = plan.grant !== undefined ? plan.grant : 5000;
+  delete plan.grant;
 
-  if (plan.quarks < plan.expectedQuarks) {
-    throw new Error(
-      `Plan "${name}" grants ${plan.quarks} Quarks against an expected burn of ` +
-      `${plan.expectedQuarks}. Raise the grant or cut the commitments.`
-    );
-  }
+  assertPlanAllowance(plan, name);
 }
+
+// ---------------------------------------------------------------------------
+// 4b. Top-ups, GST and add-ons (all editable here)
+// ---------------------------------------------------------------------------
+// Top-up Quarks are sold at INR 2.00 each, GST-exclusive.
+const TOPUP_PACKS = [999, 1999, 4999].map((inr) => ({ inr, quarks: inr / 2 }))
+  .map((p) => ({ inr: p.inr, quarks: Math.round(p.quarks) }));
+
+const GST_RATE = 0.18;
+const GST_PERCENT = 18;
+
+// Integer paise throughout, so there is no float drift. GST is rounded to the
+// nearest paisa, halves up: floor((x * 2 + 100) / 200) == round-half-up(x / 100)
+// where x = paise * percent.
+const toPaise = (inrAmount) => Math.round(inrAmount * 100);
+function gstPaise(inrAmount) {
+  return Math.floor((toPaise(inrAmount) * GST_PERCENT * 2 + 100) / 200);
+}
+function chargePaise(inrAmount) {
+  return toPaise(inrAmount) + gstPaise(inrAmount);
+}
+
+const ADDONS = {
+  publish: { label: 'Publish and schedule', inr: 1000, requires: [] },
+  competitors: { label: 'Competitor insights', inr: 500, requires: [] },
+  inbox: { label: 'Inbox and automatic replies', inr: 500, requires: ['publish'] },
+  bundle: { label: 'Publish, competitors and inbox bundle', inr: 1800, includes: ['publish', 'competitors', 'inbox'] }
+};
 
 module.exports = {
   PROVIDER_RATES, HERO_CLIP_SECONDS, INFRA, ACTION_USD, QUARK_COSTS, ACTION_UNITS,
   MARGIN, marginFor, USD_PER_QUARK, INR_PER_USD, PLANS,
+  assertPlanAllowance, TOPUP_PACKS, GST_RATE, gstPaise, chargePaise, ADDONS,
   LABOUR, RETRY_FACTOR, OBSERVED_CAMPAIGN_FAILURE_RATE, DELIVERED, SERVICE_MARKUP,
   PIPELINE_SECONDS, videoWallClockSeconds
 };
