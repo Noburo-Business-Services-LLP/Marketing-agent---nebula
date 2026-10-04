@@ -9,6 +9,7 @@ import {
   BlueprintView as BlueprintViewData, STEP_LABELS, pollDelayMs, progressText, shouldPoll, statusHeading, stepIndex,
 } from '../utils/blueprint';
 import { BLUEPRINT_COPY } from '../constants/blueprintCopy';
+import type { User } from '../types';
 
 const C = BLUEPRINT_COPY.view;
 
@@ -125,7 +126,7 @@ const Directions: React.FC<{ view: BlueprintViewData; onChoose: (id: number) => 
   );
 };
 
-const BlueprintView: React.FC = () => {
+const BlueprintView: React.FC<{ user?: User | null }> = ({ user }) => {
   const { id = '' } = useParams();
   const [view, setView] = useState<BlueprintViewData | null>(null);
   const [loadError, setLoadError] = useState(false);
@@ -185,8 +186,8 @@ const BlueprintView: React.FC = () => {
 
   const ended = view.status === 'stopped' || view.status === 'failed';
   return (
-    <div className="max-w-[720px] w-full mx-auto px-4 sm:px-6 py-8 space-y-6">
-      <div>
+    <div className={`${view.status === 'completed' ? 'max-w-[858px]' : 'max-w-[720px]'} w-full mx-auto px-4 sm:px-6 py-8 space-y-6`}>
+      <div className="bp-noprint">
         <GravityLabel gold className="mb-2">{view.businessName || 'Brand Growth Blueprint'}</GravityLabel>
         <h1 className="text-[24px] sm:text-[30px] font-semibold leading-tight text-[var(--gv-text-primary)]">{statusHeading(view)}</h1>
         <p role="status" className="mt-2 text-[14.5px] leading-relaxed text-[var(--gv-text-secondary)]">{progressText(view)}</p>
@@ -206,7 +207,7 @@ const BlueprintView: React.FC = () => {
       {ended && (
         <Link to="/blueprint/new" className="inline-flex items-center justify-center px-5 py-2.5 rounded-lg text-[13px] font-semibold bg-[var(--gv-accent)] text-[var(--gv-accent-ink)] hover:bg-[var(--gv-accent-hover)]">{C.changeAnswers}</Link>
       )}
-      {view.status === 'completed' && <BlueprintDocument view={view} />}
+      {view.status === 'completed' && <BlueprintDocument view={view} user={user} />}
     </div>
   );
 };

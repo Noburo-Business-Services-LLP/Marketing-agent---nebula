@@ -196,9 +196,11 @@
     ['GET', /^\/notifications/, ok({ notifications: [{ _id: 'audit-n1', title: 'Your plan is ready', message: 'Your monthly plan is ready.', read: false, createdAt: iso(-1), type: 'info' }], unreadCount: 1 })],
     ['GET', /^\/reminders/, ok({ reminders: [], count: 0 })],
     // Brand Growth Blueprint: the view depends on the id so each state can be audited.
-    ['GET', /^\/blueprint\/?$/, ok({ blueprints: [{ id: 'audit-processing', businessName: 'Sunrise Bakery', status: 'processing', createdAt: iso(-1) }] })],
+    ['GET', /^\/blueprint\/?$/, ok({ blueprints: [{ id: 'audit-done', businessName: 'Sweet Co', status: 'completed', createdAt: iso(-2) }, { id: 'audit-processing', businessName: 'Sunrise Bakery', status: 'processing', createdAt: iso(-1) }] })],
     ['GET', /^\/blueprint\/[^/]+$/, function (c) {
       var id = decodeURIComponent(c.path.split('/')[2]);
+      // The completed Blueprint is the fixture copied from the backend (blueprint-fixture.json), injected by vite.audit.config.mjs.
+      if (id === 'audit-done' && window.__AUDIT_BLUEPRINT_FIXTURE) return ok(window.__AUDIT_BLUEPRINT_FIXTURE);
       var base = { id: id, mode: 'guided', businessName: 'Sunrise Bakery', createdAt: iso(-1), refunded: false, stop: null, error: null, checkpoint: null, progress: 35, step: 'checking', status: 'processing' };
       var o = {
         'audit-checkpoint0': { status: 'awaiting_approval', step: 'approval', checkpoint: 0, progress: 40, discovery: { basis: 'limited', warnings: [{ reason: 'name_mismatch', message: 'The name on the website does not match the business name you entered.' }],

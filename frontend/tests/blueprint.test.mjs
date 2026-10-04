@@ -4,7 +4,9 @@ import {
   validateForm, emptyForm, isTerminal, shouldPoll, progressText, statusHeading, pollDelayMs, quarksNote,
   intentFromSearch, postAuthTarget, buildStartBody, canChooseMode, logoFileProblem, startFailureOf,
   stepIndex, GOALS, BLUEPRINT_SIGNUP_PATH,
+  claimLabel, calendarTiles, calendarFocusFrom, coverStyle, documentFileName, documentOutline, factTextMap,
 } from '../utils/blueprint.ts';
+import { readFileSync } from 'node:fs';
 import { BLUEPRINT_COPY } from '../constants/blueprintCopy.ts';
 
 const valid = () => ({
@@ -188,4 +190,96 @@ test('landing copy is Option A and the legend carries the four exact tags', () =
   assert.equal(l.button, 'Get my free Blueprint');
   assert.equal(l.receive.length, 3);
   assert.deepEqual(l.legend.map((x) => x.label), ['[Verified]', '[Inference]', '[Proposed]', '[Unverified]']);
+});
+
+// ---------- Task 6: the document ----------
+
+const fixture = JSON.parse(readFileSync(new URL('../scripts/visual-audit/blueprint-fixture.json', import.meta.url), 'utf8'));
+const result = fixture.result;
+
+test('claimLabel spells out each tag', () => {
+  assert.equal(claimLabel('verified'), '[Verified]');
+  assert.equal(claimLabel('inference'), '[Inference]');
+  assert.equal(claimLabel('proposed'), '[Proposed]');
+  assert.equal(claimLabel('unverified'), '[Unverified]');
+});
+
+test('calendarTiles always returns 30 days in order, with null for an open day', () => {
+  const items = result.pages[4].sections[0].items.filter((i) => i.day !== 3 && i.day !== 30);
+  const tiles = calendarTiles(items);
+  assert.equal(tiles.length, 30);
+  assert.deepEqual(tiles.map((t) => t.day), Array.from({ length: 30 }, (_, i) => i + 1));
+  assert.equal(tiles[2].item, null);
+  assert.equal(tiles[29].item, null);
+  assert.equal(tiles[0].item.day, 1);
+  assert.equal(calendarTiles([]).every((t) => t.item === null), true);
+  assert.equal(calendarTiles(undefined).length, 30);
+});
+
+test('calendarFocusFrom builds the focus text from names and goal only', () => {
+  const f = calendarFocusFrom(result);
+  assert.ok(f.startsWith('Plan this month around these content pillars:'));
+  const pillars = result.pages[3].sections[0].items;
+  for (const p of pillars) assert.ok(f.includes(p.name), p.name);
+  assert.ok(f.length <= 600);
+  assert.match(f, /Territory: Baked for your table\./);
+  assert.match(f, /Main goal: /);
+  const names = [...pillars.map((p) => p.name), 'Baked for your table'].join(' ');
+  const digits = (t) => (t.match(/\d/g) || []).join('');
+  assert.equal(digits(f), digits(names));
+  assert.equal(calendarFocusFrom({ pages: [{ sections: [] }] }), '');
+  assert.equal(calendarFocusFrom(null), '');
+  const long = { pages: [{ sections: [] }, { sections: [] }, { sections: [] }, { sections: [{ kind: 'pillars', items: Array.from({ length: 5 }, (_, i) => ({ name: 'P'.repeat(200) + i })) }] }] };
+  assert.ok(calendarFocusFrom(long).length <= 600);
+});
+
+test('coverStyle uses the first two colours when given, else the tokens', () => {
+  const s = coverStyle({ colours: [{ hex: '#c2185b' }, { hex: '#fbe3ec' }, { hex: '#000000' }] });
+  assert.ok(s.background.includes('#c2185b') && s.background.includes('#fbe3ec') && !s.background.includes('#000000'));
+  assert.ok(typeof s.color === 'string' && s.color.length > 0);
+  const one = coverStyle({ colours: [{ hex: '#ffffff' }] });
+  assert.ok(one.background.includes('#ffffff'));
+  assert.notEqual(coverStyle({ colours: [{ hex: '#ffffff' }] }).color, coverStyle({ colours: [{ hex: '#000000' }] }).color);
+  for (const none of [{ colours: [] }, {}, null, undefined]) {
+    const t = coverStyle(none);
+    assert.match(t.background, /var\(--gv-/);
+    assert.match(t.color, /var\(--gv-/);
+  }
+  assert.match(coverStyle({ colours: [{ hex: 'red;background:url(x)' }] }).background, /var\(--gv-/);
+});
+
+test('documentFileName is ASCII safe and ends in .pdf', () => {
+  const n = documentFileName('Sweet & Co/Cakes');
+  assert.ok(!/[\/&:]/.test(n), n);
+  assert.ok(n.endsWith('.pdf'));
+  assert.ok(n.startsWith('Brand Growth Blueprint - '));
+  assert.equal(documentFileName('Sweet Co'), 'Brand Growth Blueprint - Sweet Co.pdf');
+  assert.match(documentFileName('Caf\u00e9 \u2615 \u0b87\u0ba9\u0bbf\u0baf\u0bb5\u0bb3\u0bcd'), /^[\x20-\x7e]+$/);
+  assert.equal(documentFileName(''), 'Brand Growth Blueprint.pdf');
+});
+
+test('the page outline is cover, nine pages in order, then closing', () => {
+  assert.deepEqual(documentOutline(result), [
+    'cover', 'where-today', 'audience-positioning', 'competitor-read', 'content-pillars', 'calendar-preview',
+    'offers-hooks', 'channel-plan', 'roadmap-90', 'first-steps', 'closing',
+  ]);
+  assert.equal(documentOutline(null).length, 2);
+});
+
+test('factTextMap lets an inference show the facts it rests on', () => {
+  const map = factTextMap(result);
+  const inference = result.pages[0].sections[1].items[0];
+  assert.equal(inference.tag, 'inference');
+  assert.ok(inference.factIds.every((id) => typeof map[id] === 'string' && map[id].length > 0));
+});
+
+test('the document source carries the print rules and no remapped classes', () => {
+  const src = readFileSync(new URL('../components/blueprint/BlueprintDocument.tsx', import.meta.url), 'utf8');
+  for (const needle of ['@page', 'break-after: page', 'print-color-adjust', '.bp-noprint', 'claimLabel', 'documentFileName', 'calendarFocusFrom']) {
+    assert.ok(src.includes(needle), needle);
+  }
+  assert.ok(!src.includes('bg-white/') && !src.includes('text-white/'));
+  assert.ok(!/#[0-9a-fA-F]{3,8}\b/.test(src.replace(/`@media print[\s\S]*?`/, '').replace(/html, body \{ background: #fff !important; \}/, '')), 'no hard-coded hex');
+  assert.ok(!/filter\s*:/.test(src.replace(/-webkit-print-color-adjust/g, '')), 'no filter on the logo');
+  assert.match(src, /objectFit: 'contain'/);
 });

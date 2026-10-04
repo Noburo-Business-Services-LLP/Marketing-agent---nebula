@@ -436,6 +436,10 @@ export const apiService = {
   blueprintList: async (): Promise<{ success: boolean; blueprints: Array<{ id: string; businessName: string; status: string; createdAt: string }> }> => {
     return apiCall('/blueprint', { method: 'GET' }, true);
   },
+  /** Used by the Blueprint page: builds this month's calendar from the plan's pillars (the existing endpoint and its `focus` argument). */
+  regenerateCalendar: async (data: { focus: string; month?: string; language?: string }): Promise<{ success: boolean; calendar: any }> => {
+    return apiCall('/content-calendar/regenerate', { method: 'POST', body: JSON.stringify(data) }, true);
+  },
   blueprintContinue: async (id: string, body: { directionId?: number } = {}): Promise<{ success: boolean; id: string; status: string }> => {
     return apiCall(`/blueprint/${encodeURIComponent(id)}/continue`, { method: 'POST', body: JSON.stringify(body) }, true);
   },

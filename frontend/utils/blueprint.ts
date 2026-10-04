@@ -291,3 +291,124 @@ export function quarksNote(cost?: number | null): string {
     ? `This uses ${cost} of your Quarks.`
     : 'This uses a small number of your Quarks.';
 }
+
+// ---------- the document (pure helpers; the page is components/blueprint/BlueprintDocument.tsx) ----------
+
+export interface CalendarItem { day: number; pillar?: string; format?: string; hook?: BlueprintClaim | null }
+
+const TAG_LABELS: Record<BlueprintTag, string> = {
+  verified: '[Verified]',
+  inference: '[Inference]',
+  proposed: '[Proposed]',
+  unverified: '[Unverified]',
+};
+
+/** The spelled-out tag, so meaning never depends on colour. */
+/** True for a free-tier account (accounts without a plan record are older paid ones). */
+export function isFreeTier(user: { plan?: { tier?: string } | null } | null | undefined): boolean {
+  return user?.plan?.tier === 'free';
+}
+
+export function claimLabel(tag: BlueprintTag | string): string {
+  return TAG_LABELS[tag as BlueprintTag] || TAG_LABELS.unverified;
+}
+
+/** Always 30 entries, day 1 to 30; `item` is null for a day the plan leaves open. */
+export function calendarTiles(items: CalendarItem[] | null | undefined): Array<{ day: number; item: CalendarItem | null }> {
+  const byDay = new Map<number, CalendarItem>();
+  (Array.isArray(items) ? items : []).forEach((i) => {
+    if (i && Number.isInteger(i.day) && i.day >= 1 && i.day <= 30 && !byDay.has(i.day)) byDay.set(i.day, i);
+  });
+  return Array.from({ length: 30 }, (_, k) => ({ day: k + 1, item: byDay.get(k + 1) || null }));
+}
+
+const sectionsOf = (result: any, pageIndex: number): any[] => {
+  const p = result && Array.isArray(result.pages) ? result.pages[pageIndex] : null;
+  return p && Array.isArray(p.sections) ? p.sections : [];
+};
+
+/** Text for the existing calendar generator's `focus`: pillar names, territory name and goal label only. */
+export function calendarFocusFrom(result: any): string {
+  const pillars: string[] = [];
+  sectionsOf(result, 3).forEach((s) => (Array.isArray(s.items) ? s.items : []).forEach((p: any) => {
+    if (p && typeof p.name === 'string' && p.name.trim()) pillars.push(p.name.trim());
+  }));
+  if (!pillars.length) return '';
+  let territory = '';
+  sectionsOf(result, 1).forEach((s) => (Array.isArray(s.items) ? s.items : []).forEach((c: any) => {
+    if (!territory && c && c.label === 'Territory' && typeof c.text === 'string') territory = c.text.trim();
+  }));
+  let goal = '';
+  sectionsOf(result, 0).forEach((s) => (Array.isArray(s.items) ? s.items : []).forEach((c: any) => {
+    const m = c && c.tag === 'verified' && typeof c.text === 'string' ? c.text.match(/^Main goal: (.+)$/) : null;
+    if (m && !goal) goal = (GOALS.find((g) => g.value === m[1].trim().toLowerCase()) || { label: m[1].trim() }).label;
+  }));
+  const tail = `${territory ? ` Territory: ${territory}.` : ''}${goal ? ` Main goal: ${goal}.` : ''}`;
+  const head = 'Plan this month around these content pillars: ';
+  let names = pillars.join(', ');
+  const room = 600 - head.length - 1 - tail.length;
+  if (names.length > room) {
+    // Keep whole names only, as many as fit.
+    const kept: string[] = [];
+    for (const n of pillars) {
+      const next = [...kept, n].join(', ');
+      if (next.length > room) break;
+      kept.push(n);
+    }
+    names = kept.length ? kept.join(', ') : pillars[0].slice(0, Math.max(room, 1));
+  }
+  return `${head}${names}.${tail}`.slice(0, 600);
+}
+
+const HEX6 = /^#(?:[0-9a-f]{6}|[0-9a-f]{3})$/i;
+
+function channelLuminance(hex: string): number {
+  const h = hex.length === 4 ? `#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}` : hex;
+  const lin = (v: number) => { const c = v / 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+  return 0.2126 * lin(parseInt(h.slice(1, 3), 16)) + 0.7152 * lin(parseInt(h.slice(3, 5), 16)) + 0.0722 * lin(parseInt(h.slice(5, 7), 16));
+}
+
+/** Cover band: the visitor's first colour with the second as a stripe along the bottom edge (the name sits on the first colour only), else the tokens. Text is black or white, whichever reads better on the first colour. */
+export const COVER_STRIPE_PX = 28;
+export function coverStyle(cover: { colours?: Array<{ hex?: string }> } | null | undefined): { background: string; color: string } {
+  const hexes = (cover && Array.isArray(cover.colours) ? cover.colours : [])
+    .map((c) => (c && typeof c.hex === 'string' ? c.hex.trim() : ''))
+    .filter((h) => HEX6.test(h))
+    .slice(0, 2);
+  if (!hexes.length) return { background: 'var(--gv-peach)', color: 'var(--gv-text-primary)' };
+  const second = hexes[1] || hexes[0];
+  const contrast = (l: number, other: number) => (Math.max(l, other) + 0.05) / (Math.min(l, other) + 0.05);
+  const lum = channelLuminance(hexes[0]);
+  const color = contrast(lum, 0) >= contrast(lum, 1) ? 'black' : 'white';
+  const edge = `calc(100% - ${COVER_STRIPE_PX}px)`;
+  return { background: `linear-gradient(180deg, ${hexes[0]} ${edge}, ${second} ${edge})`, color };
+}
+
+/** The name the print dialog proposes: ASCII only, no characters a file system rejects. */
+export function documentFileName(businessName: string | null | undefined): string {
+  const clean = String(businessName || '')
+    .normalize('NFKD')
+    .replace(/[^\x20-\x7e]/g, '')
+    .replace(/[\\/:*?"<>|&#%]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 60)
+    .trim();
+  return clean ? `Brand Growth Blueprint - ${clean}.pdf` : 'Brand Growth Blueprint.pdf';
+}
+
+/** Cover, the nine pages in the order the server gave them, then the closing page. */
+export function documentOutline(result: any): string[] {
+  const ids = result && Array.isArray(result.pages) ? result.pages.map((p: any) => String(p.id)) : [];
+  return ['cover', ...ids, 'closing'];
+}
+
+/** factId -> the verified sentence, for the "rests on" note under an inference. */
+export function factTextMap(result: any): Record<string, string> {
+  const map: Record<string, string> = {};
+  const pages = result && Array.isArray(result.pages) ? result.pages : [];
+  pages.forEach((p: any) => (Array.isArray(p.sections) ? p.sections : []).forEach((s: any) => (Array.isArray(s.items) ? s.items : []).forEach((c: any) => {
+    if (c && c.tag === 'verified' && c.factId != null && typeof c.text === 'string') map[String(c.factId)] = c.text;
+  })));
+  return map;
+}

@@ -55,6 +55,8 @@
     { "label": "privacy-policy", "path": "/privacy-policy", "mode": "normal", "group": "public" },
     { "label": "admin-login", "path": "/admin/login", "mode": "normal", "group": "admin" },
     { "label": "admin", "path": "/admin", "mode": "admin", "group": "admin" },
+    { "label": "blueprint-view", "path": "/blueprint/audit-done", "mode": "normal", "group": "shell", "note": "completed Blueprint document from blueprint-fixture.json" },
+    { "label": "blueprint-list", "path": "/blueprint", "mode": "normal", "group": "shell" },
     { "label": "blueprint-new", "path": "/blueprint/new", "mode": "normal", "group": "shell" },
     { "label": "blueprint-progress", "path": "/blueprint/audit-processing", "mode": "normal", "group": "shell" },
     { "label": "blueprint-checkpoint-0", "path": "/blueprint/audit-checkpoint0", "mode": "normal", "group": "shell" },

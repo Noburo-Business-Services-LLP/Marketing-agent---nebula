@@ -1,0 +1,795 @@
+{
+  "success": true,
+  "id": "audit-done",
+  "mode": "auto",
+  "status": "completed",
+  "step": "done",
+  "progress": 100,
+  "checkpoint": null,
+  "businessName": "Sweet Co",
+  "createdAt": "2026-10-04T10:00:00.000Z",
+  "refunded": false,
+  "stop": null,
+  "error": null,
+  "result": {
+    "version": 1,
+    "mode": "auto",
+    "basis": "full",
+    "generatedAt": "2026-10-04T10:00:00.000Z",
+    "cover": {
+      "businessName": "Sweet Co",
+      "logo": {
+        "url": "data:image/svg+xml;utf8,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20width%3D'160'%20height%3D'160'%20viewBox%3D'0%200%20160%20160'%3E%3Crect%20width%3D'160'%20height%3D'160'%20rx%3D'24'%20fill%3D'%23c2185b'%2F%3E%3Ctext%20x%3D'80'%20y%3D'102'%20font-size%3D'72'%20text-anchor%3D'middle'%20fill%3D'%23ffffff'%20font-family%3D'Georgia%2Cserif'%3ES%3C%2Ftext%3E%3C%2Fsvg%3E",
+        "source": "typed"
+      },
+      "logoNote": null,
+      "colours": [
+        {
+          "hex": "#c2185b",
+          "source": "page"
+        },
+        {
+          "hex": "#fbe3ec",
+          "source": "typed"
+        }
+      ],
+      "promise": {
+        "text": "A steady month of cake content that shows how each order is made.",
+        "tag": "proposed"
+      },
+      "limitedNote": null,
+      "warnings": []
+    },
+    "pages": [
+      {
+        "n": 1,
+        "id": "where-today",
+        "title": "Where you are today",
+        "purpose": "What can be confirmed about your business today.",
+        "sections": [
+          {
+            "heading": "What we confirmed",
+            "kind": "claims",
+            "items": [
+              {
+                "text": "Business name: Sweet Co",
+                "tag": "verified",
+                "factId": "F1"
+              },
+              {
+                "text": "What you sell: Custom cakes baked to order.",
+                "tag": "verified",
+                "factId": "F2"
+              },
+              {
+                "text": "Who it is for: Families in Chennai",
+                "tag": "verified",
+                "factId": "F3"
+              },
+              {
+                "text": "Main goal: enquiries",
+                "tag": "verified",
+                "factId": "F4"
+              },
+              {
+                "text": "Offer: Birthday cake, ₹499",
+                "tag": "verified",
+                "factId": "F5"
+              },
+              {
+                "text": "Page title: Sweet Co | Custom cakes",
+                "tag": "verified",
+                "factId": "F6"
+              },
+              {
+                "text": "Page description: Custom cakes baked to order in Chennai.",
+                "tag": "verified",
+                "factId": "F7"
+              },
+              {
+                "text": "Heading: Cakes for every day",
+                "tag": "verified",
+                "factId": "F8"
+              }
+            ]
+          },
+          {
+            "heading": "What we read from this",
+            "kind": "claims",
+            "items": [
+              {
+                "text": "The business presents itself as a maker of custom cakes in Chennai.",
+                "tag": "inference",
+                "factIds": [
+                  "F2",
+                  "F7"
+                ]
+              },
+              {
+                "text": "The main goal is to receive more enquiries, so each post needs a clear way to ask.",
+                "tag": "inference",
+                "factIds": [
+                  "F4"
+                ]
+              }
+            ]
+          },
+          {
+            "heading": "What we could not confirm",
+            "kind": "claims",
+            "items": [
+              {
+                "text": "Instagram page",
+                "tag": "unverified",
+                "reason": "The Instagram page could not be read."
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "n": 2,
+        "id": "audience-positioning",
+        "title": "Audience and positioning",
+        "purpose": "Who you speak to and the territory you can own.",
+        "sections": [
+          {
+            "heading": "Who you speak to",
+            "kind": "claims",
+            "items": [
+              {
+                "text": "Families in Chennai are the people this content speaks to first.",
+                "tag": "inference",
+                "factIds": [
+                  "F3"
+                ]
+              }
+            ]
+          },
+          {
+            "heading": "The territory",
+            "kind": "claims",
+            "items": [
+              {
+                "text": "Baked for your table",
+                "tag": "proposed",
+                "label": "Territory"
+              },
+              {
+                "text": "It fits cakes made to order and works for every product and every month.",
+                "tag": "proposed",
+                "label": "Why it fits"
+              },
+              {
+                "text": "It may sound general unless each post shows a real cake.",
+                "tag": "proposed",
+                "label": "The risk"
+              }
+            ]
+          },
+          {
+            "heading": "Your line",
+            "kind": "claims",
+            "items": [
+              {
+                "text": "Cakes made to order for the moments at your table.",
+                "tag": "proposed",
+                "label": "Line"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "n": 3,
+        "id": "competitor-read",
+        "title": "Competitor read",
+        "purpose": "What the competitors you named say about themselves.",
+        "sections": [
+          {
+            "heading": "What their own pages say",
+            "kind": "competitors",
+            "items": [
+              {
+                "name": "Rival Cakes",
+                "url": "https://rivalcakes.in/",
+                "observations": [
+                  {
+                    "text": "Rival Cakes, Page title: Rival Cakes | Fresh bakes",
+                    "tag": "verified",
+                    "factId": "F9"
+                  },
+                  {
+                    "text": "The competitor presents itself with a focus on fresh bakes.",
+                    "tag": "inference",
+                    "factIds": [
+                      "F9"
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "heading": "Not researched",
+            "kind": "claims",
+            "items": [
+              {
+                "text": "Competitor Other Bakery",
+                "tag": "unverified",
+                "reason": "Named by you; not researched"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "n": 4,
+        "id": "content-pillars",
+        "title": "Content pillars",
+        "purpose": "The themes your content returns to.",
+        "sections": [
+          {
+            "heading": "Your pillars",
+            "kind": "pillars",
+            "items": [
+              {
+                "name": "Everyday cakes",
+                "why": {
+                  "text": "It keeps the plan close to what the business sells.",
+                  "tag": "inference",
+                  "factIds": [
+                    "F2"
+                  ]
+                },
+                "example": {
+                  "text": "Show one cake from the day with a short description.",
+                  "tag": "proposed"
+                }
+              },
+              {
+                "name": "Made to order",
+                "why": {
+                  "text": "It shows the custom side of the work.",
+                  "tag": "inference",
+                  "factIds": [
+                    "F2",
+                    "F7"
+                  ]
+                },
+                "example": {
+                  "text": "Show the steps from request to finished cake.",
+                  "tag": "proposed"
+                }
+              },
+              {
+                "name": "Celebrations at home",
+                "why": {
+                  "text": "It connects cakes to the moments families plan for.",
+                  "tag": "inference",
+                  "factIds": [
+                    "F3"
+                  ]
+                },
+                "example": {
+                  "text": "Show a cake on a family table.",
+                  "tag": "proposed"
+                }
+              },
+              {
+                "name": "Behind the oven",
+                "why": {
+                  "text": "It lets people see how the work is done.",
+                  "tag": "inference",
+                  "factIds": [
+                    "F8"
+                  ]
+                },
+                "example": {
+                  "text": "Show the oven and the tools in use.",
+                  "tag": "proposed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "n": 5,
+        "id": "calendar-preview",
+        "title": "Your first 30 days",
+        "purpose": "A month of posts, one tile for each day.",
+        "sections": [
+          {
+            "heading": "Thirty days of posts",
+            "kind": "calendar",
+            "items": [
+              {
+                "day": 1,
+                "pillar": "Everyday cakes",
+                "format": "image post",
+                "hook": {
+                  "text": "Show a fresh bake today.",
+                  "tag": "proposed"
+                }
+              },
+              {
+                "day": 2,
+                "pillar": "Made to order",
+                "format": "carousel",
+                "hook": {
+                  "text": "Explain a finished cake in a short clip.",
+                  "tag": "proposed"
+                }
+              },
+              {
+                "day": 3,
+                "pillar": "Celebrations at home",
+                "format": "reel",
+                "hook": {
+                  "text": "Introduce the baking table with a clear caption.",
+                  "tag": "proposed"
+                }
+              },
+              {
+                "day": 4,
+                "pillar": "Behind the oven",
+                "format": "story",
+                "hook": {
+                  "text": "Compare a customer order for a first time buyer.",
+                  "tag": "proposed"
+                }
+              },
+              {
+                "day": 5,
+                "pillar": "Everyday cakes",
+                "format": "image post",
+                "hook": {
+                  "text": "Walk through a tasting plate from the kitchen.",
+                  "tag": "proposed"
+                }
+              },
+              {
+                "day": 6,
+                "pillar": "Made to order",
+                "format": "carousel",
+                "hook": {
+                  "text": "Share a fresh bake today.",
+                  "tag": "proposed"
+                }
+              },
+              {
+                "day": 7,
+                "pillar": "Celebrations at home",
+                "format": "reel",
+                "hook": {
+                  "text": "Show a finished cake in a short clip.",
+                  "tag": "proposed"
+                }
+              },
+              {
+                "day": 8,
+                "pillar": "Behind the oven",
+                "format": "story",
+                "hook": {
+                  "text": "Explain the baking table with a clear caption.",
+                  "tag": "proposed"
+                }
+              },
+              {
+                "day": 9,
+                "pillar": "Everyday cakes",
+                "format": "image post",
+                "hook": {
+                  "text": "Introduce a customer order for a first time buyer.",
+                  "tag": "proposed"
+                }
+              },
+              {
+                "day": 10,
+                "pillar": "Made to order",
+                "format": "carousel",
+                "hook": {
+                  "text": "Compare a tasting plate from the kitchen.",
+                  "tag": "proposed"
+                }
+              },
+              {
+                "day": 11,
+                "pillar": "Celebrations at home",
+                "format": "reel",
+                "hook": {
+                  "text": "Walk through a fresh bake today.",
+                  "tag": "proposed"
+                }
+              },
+              {
+                "day": 12,
+                "pillar": "Behind the oven",
+                "format": "story",
+                "hook": {
+                  "text": "Share a finished cake in a short clip.",
+                  "tag": "proposed"
+                }
+              },
+              {
+                "day": 13,
+                "pillar": "Everyday cakes",
+                "format": "image post",
+                "hook": {
+                  "text": "Show the baking table with a clear caption.",
+                  "tag": "proposed"
+                }
+              },
+              {
+                "day": 14,
+                "pillar": "Made to order",
+                "format": "carousel",
+                "hook": {
+                  "text": "Explain a customer order for a first time buyer.",
+                  "tag": "proposed"
+                }
+              },
+              {
+                "day": 15,
+                "pillar": "Celebrations at home",
+                "format": "reel",
+                "hook": {
+                  "text": "Introduce a tasting plate from the kitchen.",
+                  "tag": "proposed"
+                }
+              },
+              {
+                "day": 16,
+                "pillar": "Behind the oven",
+                "format": "story",
+                "hook": {
+                  "text": "Compare a fresh bake today.",
+                  "tag": "proposed"
+                }
+              },
+              {
+                "day": 17,
+                "pillar": "Everyday cakes",
+                "format": "image post",
+                "hook": {
+                  "text": "Walk through a finished cake in a short clip.",
+                  "tag": "proposed"
+                }
+              },
+              {
+                "day": 18,
+                "pillar": "Made to order",
+                "format": "carousel",
+                "hook": {
+                  "text": "Share the baking table with a clear caption.",
+                  "tag": "proposed"
+                }
+              },
+              {
+                "day": 19,
+                "pillar": "Celebrations at home",
+                "format": "reel",
+                "hook": {
+                  "text": "Show a customer order for a first time buyer.",
+                  "tag": "proposed"
+                }
+              },
+              {
+                "day": 20,
+                "pillar": "Behind the oven",
+                "format": "story",
+                "hook": {
+                  "text": "Explain a tasting plate from the kitchen.",
+                  "tag": "proposed"
+                }
+              },
+              {
+                "day": 21,
+                "pillar": "Everyday cakes",
+                "format": "image post",
+                "hook": {
+                  "text": "Introduce a fresh bake today.",
+                  "tag": "proposed"
+                }
+              },
+              {
+                "day": 22,
+                "pillar": "Made to order",
+                "format": "carousel",
+                "hook": {
+                  "text": "Compare a finished cake in a short clip.",
+                  "tag": "proposed"
+                }
+              },
+              {
+                "day": 23,
+                "pillar": "Celebrations at home",
+                "format": "reel",
+                "hook": {
+                  "text": "Walk through the baking table with a clear caption.",
+                  "tag": "proposed"
+                }
+              },
+              {
+                "day": 24,
+                "pillar": "Behind the oven",
+                "format": "story",
+                "hook": {
+                  "text": "Share a customer order for a first time buyer.",
+                  "tag": "proposed"
+                }
+              },
+              {
+                "day": 25,
+                "pillar": "Everyday cakes",
+                "format": "image post",
+                "hook": {
+                  "text": "Show a tasting plate from the kitchen.",
+                  "tag": "proposed"
+                }
+              },
+              {
+                "day": 26,
+                "pillar": "Made to order",
+                "format": "carousel",
+                "hook": {
+                  "text": "Explain a fresh bake today.",
+                  "tag": "proposed"
+                }
+              },
+              {
+                "day": 27,
+                "pillar": "Celebrations at home",
+                "format": "reel",
+                "hook": {
+                  "text": "Introduce a finished cake in a short clip.",
+                  "tag": "proposed"
+                }
+              },
+              {
+                "day": 28,
+                "pillar": "Behind the oven",
+                "format": "story",
+                "hook": {
+                  "text": "Compare the baking table with a clear caption.",
+                  "tag": "proposed"
+                }
+              },
+              {
+                "day": 29,
+                "pillar": "Everyday cakes",
+                "format": "image post",
+                "hook": {
+                  "text": "Walk through a customer order for a first time buyer.",
+                  "tag": "proposed"
+                }
+              },
+              {
+                "day": 30,
+                "pillar": "Made to order",
+                "format": "carousel",
+                "hook": {
+                  "text": "Share a tasting plate from the kitchen.",
+                  "tag": "proposed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "n": 6,
+        "id": "offers-hooks",
+        "title": "Offers and hooks",
+        "purpose": "How your own offers become reasons to act.",
+        "sections": [
+          {
+            "heading": "Your offers",
+            "kind": "offers",
+            "items": [
+              {
+                "name": "Birthday cake",
+                "price": "₹499",
+                "fact": {
+                  "text": "Offer: Birthday cake, ₹499",
+                  "tag": "verified",
+                  "factId": "F5"
+                },
+                "hook": {
+                  "text": "Introduce the birthday cake as a simple way to plan a celebration.",
+                  "tag": "proposed"
+                },
+                "cta": {
+                  "text": "Send a message to order.",
+                  "tag": "proposed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "n": 7,
+        "id": "channel-plan",
+        "title": "Channel plan",
+        "purpose": "Where to be present and what each channel is for.",
+        "sections": [
+          {
+            "heading": "Where to be present",
+            "kind": "channels",
+            "items": [
+              {
+                "channel": "Instagram",
+                "priority": 1,
+                "role": {
+                  "text": "Show finished cakes and the work behind them.",
+                  "tag": "proposed"
+                }
+              },
+              {
+                "channel": "WhatsApp",
+                "priority": 2,
+                "role": {
+                  "text": "Receive and confirm orders in a direct conversation.",
+                  "tag": "proposed"
+                }
+              },
+              {
+                "channel": "Google Business Profile",
+                "priority": 3,
+                "role": {
+                  "text": "Help local families find the business and ask a question.",
+                  "tag": "proposed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "n": 8,
+        "id": "roadmap-90",
+        "title": "The next 90 days",
+        "purpose": "Three phases, each with actions and what to measure.",
+        "sections": [
+          {
+            "heading": "Three phases",
+            "kind": "phases",
+            "items": [
+              {
+                "id": "foundation",
+                "label": "Days 1 to 30",
+                "title": "Foundation",
+                "focus": {
+                  "text": "Set up a steady rhythm of posts around the four pillars.",
+                  "tag": "proposed"
+                },
+                "actions": [
+                  {
+                    "text": "Publish on the days set in the calendar.",
+                    "tag": "proposed"
+                  },
+                  {
+                    "text": "Reply to every enquiry on the same day.",
+                    "tag": "proposed"
+                  }
+                ],
+                "measure": [
+                  {
+                    "text": "Count the enquiries that follow each pillar.",
+                    "tag": "proposed"
+                  }
+                ]
+              },
+              {
+                "id": "storytelling",
+                "label": "Days 31 to 60",
+                "title": "Storytelling and engagement",
+                "focus": {
+                  "text": "Tell the story behind the work in more depth.",
+                  "tag": "proposed"
+                },
+                "actions": [
+                  {
+                    "text": "Add a short video of one order from start to finish.",
+                    "tag": "proposed"
+                  }
+                ],
+                "measure": [
+                  {
+                    "text": "Note which stories bring replies.",
+                    "tag": "proposed"
+                  }
+                ]
+              },
+              {
+                "id": "growth",
+                "label": "Days 61 to 90",
+                "title": "Growth",
+                "focus": {
+                  "text": "Repeat what worked and test one new idea.",
+                  "tag": "proposed"
+                },
+                "actions": [
+                  {
+                    "text": "Run the strongest pillar twice as often.",
+                    "tag": "proposed"
+                  }
+                ],
+                "measure": [
+                  {
+                    "text": "Compare enquiries with the earlier phases.",
+                    "tag": "proposed"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "n": 9,
+        "id": "first-steps",
+        "title": "What to do first",
+        "purpose": "The first steps to take this week.",
+        "sections": [
+          {
+            "heading": "This week",
+            "kind": "claims",
+            "items": [
+              {
+                "text": "Confirm the four pillars.",
+                "tag": "proposed"
+              },
+              {
+                "text": "Photograph three cakes for the first posts.",
+                "tag": "proposed"
+              },
+              {
+                "text": "Choose the days to publish.",
+                "tag": "proposed"
+              },
+              {
+                "text": "Prepare a standard reply for new enquiries.",
+                "tag": "proposed"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "sources": [
+      {
+        "url": "https://sweetco.in/",
+        "kind": "home",
+        "ok": true
+      },
+      {
+        "url": "https://sweetco.in/about",
+        "kind": "about",
+        "ok": true
+      },
+      {
+        "url": "https://rivalcakes.in/",
+        "kind": "competitor",
+        "ok": true
+      }
+    ],
+    "closing": {
+      "heading": "Turn this plan into posts in Nebulaa",
+      "body": "Nebulaa turns each tile of this plan into a finished post for you to review and approve.",
+      "cta": {
+        "label": "Open Nebulaa",
+        "href": "#/dashboard"
+      },
+      "contact": {
+        "email": "support@nebulaa.ai",
+        "website": "https://www.nebulaa.ai",
+        "phone": "+91 9384801049",
+        "instagram": "https://www.instagram.com/nebulaa.os/",
+        "facebook": "https://www.facebook.com/profile.php?id=61588215321901"
+      }
+    }
+  }
+}

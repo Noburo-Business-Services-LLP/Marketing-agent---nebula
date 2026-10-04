@@ -109,7 +109,11 @@ export default async (env) => {
           handler() {
             // Read on every request so edits to the mock apply on reload.
             const code = readFileSync(resolve(here, 'mock-session.js'), 'utf8');
-            return [{ tag: 'script', children: code, injectTo: 'head-prepend' }];
+            const fixture = readFileSync(resolve(here, 'blueprint-fixture.json'), 'utf8');
+            return [
+              { tag: 'script', children: `window.__AUDIT_BLUEPRINT_FIXTURE = ${fixture.replace(/</g, '\\u003c')};`, injectTo: 'head-prepend' },
+              { tag: 'script', children: code, injectTo: 'head-prepend' },
+            ];
           },
         },
       },

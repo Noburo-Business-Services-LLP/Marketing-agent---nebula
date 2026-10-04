@@ -11,6 +11,7 @@ plan). The baseline report is `docs/superpowers/specs/assets/nebulaa-contrast-ba
 | `unknown-signoff.json` | Items the audit cannot measure that a person has checked by eye (see the gate). Starts empty. |
 | `mock-session.js` | Fake session + stub for `fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource`, `sendBeacon`, and the in-page runner (`__auditRoute`, `__auditRun`, `__auditStart`, `__auditShot`). |
 | `vite.audit.config.mjs` | Vite config that injects `mock-session.js` before the app boots, binds 127.0.0.1:3100, removes the backend proxy and writes results to disk. |
+| `blueprint-fixture.json` | A completed Blueprint (the backend test fixtures run through `assembleBlueprint`, with a fake inline-SVG logo). The audit server injects it as `window.__AUDIT_BLUEPRINT_FIXTURE`; the stub returns it for `GET /api/blueprint/audit-done`. |
 | `routes.json` | Every route in `frontend/App.tsx`, with the session mode it needs and the tab to click. |
 | `summarize.mjs` | Turns the saved results into the Markdown report and a compact JSON summary; `--compare` gives a before/after table. |
 | `gen-layer-lists.mjs` | Generates the LIGHT SEMANTICS block of the override layer in `index.html` (`--check` verifies it; `frontend/tests/layer-lists.test.mjs` fails while it is out of date). Edit its lists, never the block. |

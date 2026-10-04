@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, Navigate, Route, Routes } from 'react-router-dom';
 import Layout from '../components/Layout';
-import { GravityPanel, GravityLabel } from '../components/gravity';
+import { GravityLabel } from '../components/gravity';
 import BlueprintStart from './BlueprintStart';
 import BlueprintView from './BlueprintView';
 import { apiService } from '../services/api';
@@ -9,6 +9,21 @@ import { BLUEPRINT_COPY } from '../constants/blueprintCopy';
 import type { User } from '../types';
 
 const L = BLUEPRINT_COPY.view;
+
+const STATUS_FILL: Record<string, string> = {
+  completed: 'var(--gv-mint)', processing: 'var(--gv-sky)', queued: 'var(--gv-sky)',
+  awaiting_approval: 'var(--gv-lav)', stopped: 'var(--gv-peach)', failed: 'var(--gv-peach)',
+};
+
+/** Status shown as words, never colour alone. */
+const TagStatus: React.FC<{ status: string }> = ({ status }) => (
+  <span
+    className="shrink-0 inline-flex items-center whitespace-nowrap rounded-full px-2.5 py-0.5 text-[11.5px] font-semibold leading-5"
+    style={{ background: STATUS_FILL[status] || 'var(--gv-panel-2)', color: 'var(--gv-text-primary)', border: '1px solid var(--gv-border-subtle)' }}
+  >
+    {(L.statusLabels as Record<string, string>)[status] || status}
+  </span>
+);
 
 const BlueprintList: React.FC = () => {
   const [items, setItems] = useState<Array<{ id: string; businessName: string; status: string; createdAt: string }> | null>(null);
@@ -27,10 +42,11 @@ const BlueprintList: React.FC = () => {
       <ul className="space-y-2">
         {(items || []).map((b) => (
           <li key={b.id}>
-            <GravityPanel padding="p-4" contentClassName="flex items-center justify-between gap-3">
-              <span className="min-w-0 truncate text-[14px] font-semibold text-[var(--gv-text-primary)]">{b.businessName || 'Blueprint'}</span>
+            <div className="flex items-center justify-between gap-3 rounded-2xl p-4" style={{ background: 'var(--gv-panel)', border: '1px solid var(--gv-border-subtle)' }}>
+              <span className="min-w-0 flex-1 truncate text-[14px] font-semibold text-[var(--gv-text-primary)]">{b.businessName || 'Blueprint'}</span>
+              <TagStatus status={b.status} />
               <Link to={`/blueprint/${b.id}`} className="shrink-0 text-[13px] font-semibold text-[var(--gv-accent-text)] underline underline-offset-2">{L.listOpen}</Link>
-            </GravityPanel>
+            </div>
           </li>
         ))}
       </ul>
@@ -49,7 +65,7 @@ const BlueprintRoutes: React.FC<{ user: User; onLogout: () => void }> = ({ user,
     <Routes>
       <Route index element={<BlueprintList />} />
       <Route path="new" element={<BlueprintStart user={user} />} />
-      <Route path=":id" element={<BlueprintView />} />
+      <Route path=":id" element={<BlueprintView user={user} />} />
       <Route path="*" element={<Navigate to="/blueprint" replace />} />
     </Routes>
   );

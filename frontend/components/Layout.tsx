@@ -25,7 +25,8 @@ import {
   Search,
   HelpCircle,
   Plus,
-  Lightbulb
+  Lightbulb,
+  FileText
 } from 'lucide-react';
 import { User } from '../types';
 import NotificationBell from './NotificationBell';
@@ -129,6 +130,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
   // navigation. Their routes and pages are left intact so nothing breaks and
   // they can be restored by adding entries here.
   const secondaryNav = [
+    { path: '/blueprint',        label: 'Growth Blueprint',  icon: FileText },
     { path: '/brand-assets',      label: 'Brand assets',      icon: Palette },
     { path: '/connect-socials',   label: 'Connected accounts', icon: Link2 },
     { path: '/ai-memory',         label: 'Brand memory',      icon: Brain },
@@ -150,7 +152,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
     if (pathname.startsWith('/idea-inbox')) return { title: 'Content ideas', crumb: '' };
     if (pathname.startsWith('/upload')) return { title: 'Upload and schedule', crumb: '' };
     if (pathname.startsWith('/settings')) return { title: 'Settings', crumb: '' };
-    if (pathname.startsWith('/blueprint')) return { title: 'Brand Growth Blueprint', crumb: '' };
+    if (pathname.startsWith('/blueprint')) return { title: 'Growth Blueprint', crumb: '' };
     return { title: 'Dashboard', crumb: '' };
   };
 
