@@ -226,10 +226,10 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
           <div className="flex flex-col h-full min-h-0">
             {/* Brand mark */}
             <div className="px-6 pt-6 pb-5">
-              <div className="flex items-center gap-2.5">
-                <img src="/assets/brand/logo-nebulaa.png" alt="Nebulaa" width={784} height={360} className="h-10 w-auto" />
+              <div className="relative flex items-center justify-center">
+                <img src="/assets/brand/logo-nebulaa.png" alt="Nebulaa" width={784} height={360} className="h-16 w-auto" />
                 <button
-                  className="ml-auto md:hidden text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)]"
+                  className="absolute right-0 top-0 md:hidden text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)]"
                   onClick={() => setSidebarOpen(false)}
                   aria-label="Close menu"
                 >
