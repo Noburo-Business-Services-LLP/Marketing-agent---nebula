@@ -202,7 +202,7 @@ const GravityHome: React.FC = () => {
             <div className="text-[12px] text-[var(--gv-text-tertiary)] leading-snug">Connect your social media accounts and confirm your brand voice. This takes about two minutes.</div>
           </div>
           <Link to="/connect-socials" className="flex items-center gap-2 text-[12px] font-semibold text-[var(--gv-accent-text)] hover:text-[var(--gv-accent-hover)]">
-            <span>0 of 2 steps done</span>
+            <span>Go to setup</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </Link>
         </div>
