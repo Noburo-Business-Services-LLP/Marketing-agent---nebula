@@ -74,6 +74,21 @@ export default async (env) => {
               res.end(JSON.stringify({ ok: true }));
             });
           });
+          // /__layer-fixtures: a static page with the real index.html <head> (Tailwind CDN, fonts, the
+          // override layer, the mock session) and a fixture body inside body.gravity-shell. Audit
+          // server only: it is not part of the app bundle and never in a production build.
+          server.middlewares.use(async (req, res, next) => {
+            const url = req.url || '';
+            if (!/^\/__layer-fixtures(\?|$)/.test(url)) return next();
+            try {
+              const index = readFileSync(resolve(frontendDir, 'index.html'), 'utf8');
+              const body = readFileSync(resolve(here, 'layer-fixtures.html'), 'utf8');
+              const page = index.replace(/<body>[\s\S]*<\/body>/, `<body class="gravity-shell">\n<div id="root">\n${body}\n</div>\n</body>`);
+              const html = await server.transformIndexHtml(url, page);
+              res.setHeader('Content-Type', 'text/html');
+              res.end(html);
+            } catch (e) { next(e); }
+          });
           server.middlewares.use((req, res, next) => {
             if (/^\/(api|audio|generated-media)(\/|$|\?)/.test(req.url || '')) {
               console.warn('[audit backstop] refused', req.method, req.url);

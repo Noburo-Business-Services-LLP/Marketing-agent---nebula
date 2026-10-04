@@ -5157,6 +5157,7 @@ setCharacterAge(nextDraft?.characterAge || '');
         >
           <div
             className="relative w-full max-w-[1080px] max-h-[92vh] bg-[#0A0A0A] rounded-2xl border border-white/10 shadow-2xl overflow-hidden flex flex-col md:flex-row"
+            data-nb-surface="dark"
             onClick={(e) => e.stopPropagation()}
           >
             <button

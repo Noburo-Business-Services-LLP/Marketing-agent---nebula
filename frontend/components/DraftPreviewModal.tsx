@@ -309,6 +309,7 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
       <div
         onClick={(e) => e.stopPropagation()}
         className="relative w-full max-w-6xl my-6 rounded-[22px] overflow-hidden flex flex-col max-h-[92vh]"
+        data-nb-surface="dark"
         style={{
           background: 'linear-gradient(180deg, #131316 0%, #0b0b0e 42%)',
           boxShadow: '0 40px 120px rgba(0,0,0,0.75), inset 0 1px 0 0 rgba(255,255,255,0.07)',

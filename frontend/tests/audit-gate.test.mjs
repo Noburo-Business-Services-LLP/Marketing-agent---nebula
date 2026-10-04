@@ -47,3 +47,10 @@ test('other-session routes do not affect the gate', () => {
   const rows = [{ scope: 'in', status: 'ok', pass: true }, { scope: 'other', status: 'MISSING', pass: false }];
   assert.equal(gateVerdict(rows, [1280, 375]).gate, 'PASS');
 });
+
+test('a static audit page (spec.url) is matched by its URL path, not the hash', () => {
+  const fx = { label: 'layer-fixtures', url: '/__layer-fixtures' };
+  assert.equal(rowStatus(fx, { url: 'http://127.0.0.1:3100/__layer-fixtures?audit=fixture', checked: 40 }), 'ok');
+  assert.equal(rowStatus(fx, { url: 'http://127.0.0.1:3100/?audit=normal#/dashboard', checked: 40 }), 'REDIRECT');
+  assert.equal(rowStatus(fx, { url: 'http://127.0.0.1:3100/__layer-fixtures', checked: 0 }), 'EMPTY');
+});

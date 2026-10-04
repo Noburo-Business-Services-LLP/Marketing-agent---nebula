@@ -20,6 +20,13 @@ export function rowStatus(spec, d, opts = {}) {
   }
   if (d.error) return 'ERROR';
   if (d.blank) return 'BLANK';
+  // Static pages served by the audit server (e.g. /__layer-fixtures) are matched by their URL path.
+  if (spec.url) {
+    let path = '';
+    try { path = new URL(d.url || '', 'http://x').pathname; } catch { /* ignore */ }
+    if (path !== spec.url) return 'REDIRECT';
+    return Number(d.checked) > 0 ? 'ok' : 'EMPTY';
+  }
   const want = '#' + (spec.expectHash || spec.path);
   const got = d.finalHash || '';
   if (got !== want && !(want === '#/' && (got === '' || got === '#'))) return 'REDIRECT';

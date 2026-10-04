@@ -60,6 +60,9 @@ for (const spec of routes) {
       row.kinds = {};
       for (const f of d.failures) row.kinds[f.failureKind || 'contrast'] = (row.kinds[f.failureKind || 'contrast'] || 0) + 1;
       row.svgFailures = d.failures.filter((f) => f.kind === 'svg-text').length;
+      row.iconFailures = d.failures.filter((f) => f.kind === 'svg-icon').length;
+      row.iconsChecked = d.iconsChecked || 0;
+      row.iconUnknown = (d.iconUnknown || []).length;
       row.positionedFailures = d.failures.filter((f) => f.positioned).length;
       row.worst = d.failures[0] ? d.failures[0].ratio : null;
     }
@@ -80,7 +83,7 @@ const totalsFor = (w) => {
     checked: sum(rs, 'checked'), failures: sum(rs, 'failures'), routesWithFailures: okRows(rs).filter((r) => r.failures > 0).length,
     unknown: sum(rs, 'unknown'), unknownUnsigned: sum(rs, 'unknownUnsigned'), unparsed: sum(rs, 'unparsed'), unparsedUnsigned: sum(rs, 'unparsedUnsigned'),
     gradientText: sum(rs, 'gradientText'), gradientTextUnsigned: sum(rs, 'gradientTextUnsigned'),
-    svgFailures: sum(rs, 'svgFailures'), positionedFailures: sum(rs, 'positionedFailures'),
+    svgFailures: sum(rs, 'svgFailures'), iconFailures: sum(rs, 'iconFailures'), iconsChecked: sum(rs, 'iconsChecked'), iconUnknown: sum(rs, 'iconUnknown'), positionedFailures: sum(rs, 'positionedFailures'),
     imageFailures: okRows(rs).reduce((s, r) => s + (r.kinds['image-underlying'] || 0) + (r.kinds['image-any'] || 0), 0),
   };
 };
@@ -90,10 +93,10 @@ const verdict = gateVerdict(rows, widths);
 const summary = { generatedAt: new Date().toISOString(), widths, since: since ? new Date(since).toISOString() : null, gate: verdict.gate, totals, routes: {}, otherSession: {} };
 for (const r of rows) {
   const tgt = r.scope === 'other' ? summary.otherSession : summary.routes;
-  tgt[r.label] ??= { path: r.spec.path, group: r.spec.group, scope: r.scope, widths: {} };
+  tgt[r.label] ??= { path: r.spec.path || r.spec.url, group: r.spec.group, scope: r.scope, widths: {} };
   tgt[r.label].widths[r.width] = r.status !== 'ok' ? { status: r.status, error: r.d && r.d.error, finalHash: r.d && r.d.finalHash, at: r.d && r.d.at } : {
     status: 'ok', checked: r.checked, failures: r.failures, unknown: r.unknown, unknownUnsigned: r.unknownUnsigned,
-    unparsed: r.unparsed, gradientText: r.gradientText, kinds: r.kinds, svgFailures: r.svgFailures, worst: r.worst,
+    unparsed: r.unparsed, gradientText: r.gradientText, kinds: r.kinds, svgFailures: r.svgFailures, iconFailures: r.iconFailures, iconsChecked: r.iconsChecked, iconUnknown: r.iconUnknown, worst: r.worst,
     top: r.d.failures.slice(0, 10).map((f) => [f.text.slice(0, 40), f.ratio, f.effectiveColor, f.background, f.textClass, f.failureKind || 'contrast', f.kind]),
   };
 }
@@ -126,8 +129,8 @@ if (args.compare && args.compare !== true) {
   L.push('');
 }
 
-L.push('## Totals (in scope)', '', '| Width | Expected | Rendered ok | Missing / stale | Blank / empty | Error | Redirect | Checked | Failures | Routes with failures | Unknown (unsigned) | Unparsed colours | Gradient text | of which SVG text | over positioned layers | image layers |', '|---:|' + '---:|'.repeat(15));
-for (const w of widths) { const t = totals[w]; L.push(`| ${w} | ${t.expected} | ${t.ok} | ${t.missing + t.stale} | ${t.blank + t.empty} | ${t.error} | ${t.redirect + t.tabNotFound} | ${t.checked} | ${t.failures} | ${t.routesWithFailures} | ${t.unknown} (${t.unknownUnsigned}) | ${t.unparsed} | ${t.gradientText} | ${t.svgFailures} | ${t.positionedFailures} | ${t.imageFailures} |`); }
+L.push('## Totals (in scope)', '', '| Width | Expected | Rendered ok | Missing / stale | Blank / empty | Error | Redirect | Checked | Failures | Routes with failures | Unknown (unsigned) | Unparsed colours | Gradient text | of which SVG text | of which SVG icons (icons checked; icon unknown) | over positioned layers | image layers |', '|---:|' + '---:|'.repeat(16));
+for (const w of widths) { const t = totals[w]; L.push(`| ${w} | ${t.expected} | ${t.ok} | ${t.missing + t.stale} | ${t.blank + t.empty} | ${t.error} | ${t.redirect + t.tabNotFound} | ${t.checked} | ${t.failures} | ${t.routesWithFailures} | ${t.unknown} (${t.unknownUnsigned}) | ${t.unparsed} | ${t.gradientText} | ${t.svgFailures} | ${t.iconFailures} (${t.iconsChecked}; ${t.iconUnknown}) | ${t.positionedFailures} | ${t.imageFailures} |`); }
 L.push('', 'Missing/Blank/Error/Redirect counts include the redirect route kept out of the failure totals. "of which ..." columns break the failures down: SVG `<text>` labels, text measured against a positioned (non-ancestor) layer, and failures involving an image layer (`image-underlying`: fails on the colour beneath the image; `image-any`: no opaque image could make it pass).', '');
 
 const bad = gated.filter((r) => r.status !== 'ok');
@@ -142,7 +145,7 @@ L.push('## Per route', '', `| Route | Path | ${widths.map((w) => `${w}: fail / c
 for (const spec of routes.filter((s) => !s.otherSession)) {
   const rs = widths.map((w) => rows.find((r) => r.label === spec.label && r.width === w));
   const worst = Math.min(...rs.map((r) => (r && r.status === 'ok' && r.worst != null ? r.worst : 99)));
-  L.push(`| ${spec.label}${spec.duplicateOf ? ' (redirect, not in totals)' : ''} | ${code(spec.path)} | ${rs.map(cell).join(' | ')} | ${worst === 99 ? '-' : worst.toFixed(2)} | ${rs.map((r) => (r && r.status === 'ok' ? r.unknown : '-')).join(' / ')} | ${rs.map((r) => (r && r.status === 'ok' ? `${r.unparsed}/${r.gradientText}` : '-')).join(' ; ')} |`);
+  L.push(`| ${spec.label}${spec.duplicateOf ? ' (redirect, not in totals)' : ''} | ${code(spec.path || spec.url)} | ${rs.map(cell).join(' | ')} | ${worst === 99 ? '-' : worst.toFixed(2)} | ${rs.map((r) => (r && r.status === 'ok' ? r.unknown : '-')).join(' / ')} | ${rs.map((r) => (r && r.status === 'ok' ? `${r.unparsed}/${r.gradientText}` : '-')).join(' ; ')} |`);
 }
 L.push('');
 
@@ -171,7 +174,7 @@ for (const spec of routes.filter((s) => !s.otherSession && !s.duplicateOf)) {
   const r = rows.find((x) => x.label === spec.label && x.width === widths[0]);
   if (!r) continue;
   if (r.status !== 'ok') { L.push(`### ${spec.label} - ${r.status}`, ''); continue; }
-  L.push(`### ${spec.label} (${code(spec.path)}${spec.click ? `, tab "${spec.click}"` : ''}) - ${r.failures} failing of ${r.checked}`, '');
+  L.push(`### ${spec.label} (${code(spec.path || spec.url)}${spec.click ? `, tab "${spec.click}"` : ''}) - ${r.failures} failing of ${r.checked}`, '');
   if (!r.d.failures.length) { L.push('No failures.', ''); continue; }
   L.push('| Ratio | req | Text | Colour on background | Kind | Selector | Text class |', '|---:|---:|---|---|---|---|---|');
   for (const f of r.d.failures.slice(0, 10)) L.push(`| ${f.ratio.toFixed(2)} | ${f.required} | ${esc(f.text.slice(0, 40))} | ${f.effectiveColor} on ${f.background} | ${[f.kind !== 'text' ? f.kind : '', f.failureKind && f.failureKind !== 'contrast' ? f.failureKind : '', f.positioned ? 'positioned' : ''].filter(Boolean).join(', ')} | ${code(esc(f.selector.slice(-80)))} | ${code(esc(baseClasses(f.textClass)))} |`);
@@ -195,6 +198,11 @@ if ((signoff.needsByEyeCheck || []).length) {
   for (const n of signoff.needsByEyeCheck) L.push(`- ${n.route}: ${n.reason}`);
   L.push('');
 }
+
+const iu = okRows(gated).flatMap((r) => (r.d.iconUnknown || []).map((u) => ({ r, u })));
+L.push('## SVG icons over images of unknown colour (reported, not gated)', '');
+if (!iu.length) L.push('None.', '');
+else { L.push('| Route | Width | Icon | Detail |', '|---|---:|---|---|'); for (const { r, u } of iu) L.push(`| ${r.label} | ${r.width} | ${esc(u.text)} | ${esc(u.reason || '')}${u.black != null ? ` (black ${u.black}, white ${u.white})` : ''} |`); L.push(''); }
 
 const dis = okRows(gated).filter((r) => r.d.disabled.length);
 L.push('## Disabled controls below AA (reported, exempt)', '');
@@ -223,7 +231,7 @@ if (args.md) writeFileSync(resolve(args.md), L.join('\n') + '\n');
 if (args.json) writeFileSync(resolve(args.json), JSON.stringify(summary, null, 1) + '\n');
 for (const w of widths) {
   const t = totals[w];
-  console.log(`${w}px: expected ${t.expected}, ok ${t.ok}, MISSING ${t.missing}, STALE ${t.stale}, BLANK ${t.blank}, EMPTY ${t.empty}, ERROR ${t.error}, REDIRECT ${t.redirect + t.tabNotFound}; failures ${t.failures} on ${t.routesWithFailures} routes; unknown ${t.unknown} (${t.unknownUnsigned} not signed off); unparsed ${t.unparsed}; gradient text ${t.gradientText}`);
+  console.log(`${w}px: icons checked ${t.iconsChecked}, icon failures ${t.iconFailures}; expected ${t.expected}, ok ${t.ok}, MISSING ${t.missing}, STALE ${t.stale}, BLANK ${t.blank}, EMPTY ${t.empty}, ERROR ${t.error}, REDIRECT ${t.redirect + t.tabNotFound}; failures ${t.failures} on ${t.routesWithFailures} routes; unknown ${t.unknown} (${t.unknownUnsigned} not signed off); unparsed ${t.unparsed}; gradient text ${t.gradientText}`);
 }
 console.log(`GATE: ${summary.gate}`);
 if (verdict.exitCode) process.exitCode = verdict.exitCode;

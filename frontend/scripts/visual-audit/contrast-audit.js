@@ -7,7 +7,7 @@
 // Returns { route, url, viewport, checked, failureCount, failures[], unknown[], gradientText[],
 //           disabled[], placeholders[], unparsedColors[], canvasResolvedColors, limits[] }.
 // failures (worst first): { selector, text, color, effectiveColor, background, ratio, required,
-//           fontSize, fontWeight, kind: text|value|placeholder|svg-text,
+//           fontSize, fontWeight, kind: text|value|placeholder|svg-text|svg-icon (3:1),
 //           failureKind: contrast | image-underlying | image-any, positioned, textClass, bgClass }
 //
 // How the background is measured (see contrast-math.mjs for the pure parts, all unit tested):
@@ -253,7 +253,8 @@ const res = {
     'Text of `display: contents` elements is attributed to the element but sampled through its text range; SVG strokes and text-shadow are ignored.',
     'Linear gradients are sampled at each point; radial/conic gradients at each colour stop (worst kept).',
     'Images of unknown colour are tested as absent, black and white (see failureKind/unknown).',
-    'Only the current state of the page is audited (no modals, hover or focus states).',
+    'Only the current state of the page is audited (no modals, hover or focus states); click-only states are covered by the /__layer-fixtures page.',
+    'SVG icons: only stand-alone, single-colour, 10-64px <svg> icons are checked (3:1); multi-colour/gradient logos, illustrations, charts, <img>/CSS/font icons are not. Icons over images of unknown colour go to iconUnknown (not gated).',
   ],
 };
 
@@ -324,6 +325,54 @@ try {
     };
     if (isDisabled(el)) { if (m.verdict === 'fail') res.disabled.push(row); continue; }
     if (kind === 'placeholder') res.placeholders.push(row);
+    if (m.verdict === 'fail') { res.failureCount++; if (res.failures.length < MAX) res.failures.push(row); }
+  }
+  // ---- SVG icons: graphics, WCAG 1.4.11 (3:1 against what is behind them) ----------------------
+  // Checked: outermost <svg> elements of icon size (10-64px) that stand alone (their parent has no
+  // text of its own - an icon next to a text label is supplementary and skipped), painted in ONE
+  // colour (stroke and/or fill, currentColor resolved by the browser). aria-hidden is NOT a reason
+  // to skip: decorative-looking platform/brand icons still carry meaning. Not checked (limits):
+  // multi-colour and gradient-filled logos, larger illustrations and charts, icons drawn as
+  // <img>/CSS backgrounds or icon fonts. Icons over an image of unknown colour go to iconUnknown
+  // (reported, not gated) instead of unknown.
+  for (const svgEl of document.body.querySelectorAll('svg')) {
+    if (svgEl.parentElement && svgEl.parentElement.closest('svg')) continue;
+    const r = svgEl.getBoundingClientRect();
+    if (r.width < 10 || r.height < 10 || r.width > 64 || r.height > 64) continue;
+    if (r.right <= 0 || r.left >= vw) continue;
+    if (typeof svgEl.checkVisibility === 'function' && !svgEl.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })) continue;
+    if (cs(svgEl).visibility !== 'visible') continue;
+    const host = svgEl.parentElement;
+    if (host && [...host.childNodes].some((n) => (n.nodeType === 3 && n.nodeValue.trim()) || (n.nodeType === 1 && n !== svgEl && (n.innerText || '').trim()))) continue;
+    const shapes = [...svgEl.querySelectorAll('path, circle, rect, ellipse, line, polyline, polygon')];
+    let col = null; const seen = new Set(); let skip = false;
+    for (const sh of shapes) {
+      const st = cs(sh);
+      if (st.display === 'none' || st.visibility !== 'visible') continue;
+      for (const [prop, op] of [['stroke', 'strokeOpacity'], ['fill', 'fillOpacity']]) {
+        const v = st[prop];
+        if (!v || v === 'none') continue;
+        if (/url\(/.test(v)) { skip = true; continue; }
+        const c = resolveColor(v);
+        if (!c) { skip = true; continue; }
+        const o = parseFloat(st[op]);
+        const cc = { ...c, a: c.a * (Number.isFinite(o) ? o : 1) };
+        if (cc.a === 0) continue;
+        seen.add(fmt(cc)); col = col || cc;
+      }
+    }
+    if (skip || !col || seen.size !== 1) continue;
+    res.checked++;
+    res.iconsChecked = (res.iconsChecked || 0) + 1;
+    const sel = selectorOf(svgEl);
+    const label = svgEl.getAttribute('aria-label') || (classList(svgEl).find((c) => /^lucide-/.test(c)) || 'svg icon');
+    const chain = [];
+    for (let n = svgEl; n && n.nodeType === 1; n = n.parentElement) chain.unshift(n);
+    const m = measure(svgEl, svgEl, chain, col, 3, false);
+    const base = { selector: sel, text: '[icon] ' + label, color: fmt(col), kind: 'svg-icon', fontSize: r.height, fontWeight: '', textClass: nearestClass(svgEl, isTextColorClass) };
+    if (m.status === 'unknown') { (res.iconUnknown = res.iconUnknown || []).push({ ...base, reason: m.reason, black: m.black, white: m.white, ratioUnder: m.ratioUnder }); continue; }
+    const row = { ...base, effectiveColor: fmt(m.fg), background: fmt(m.bg), ratio: Math.round(m.ratio * 100) / 100, required: 3, failureKind: m.failureKind, positioned: m.positioned, bgClass: nearestClass(svgEl, isBgClass) };
+    if (isDisabled(svgEl)) { if (m.verdict === 'fail') res.disabled.push(row); continue; }
     if (m.verdict === 'fail') { res.failureCount++; if (res.failures.length < MAX) res.failures.push(row); }
   }
 } finally {
