@@ -1,4 +1,4 @@
-# Nebulaa contrast after the light-palette layer (legibility pass, Task 7 and fix round 1)
+# Nebulaa contrast after the light-palette layer (legibility pass, Task 7, fix rounds 1-2)
 
 Date: 2026-10-04 (updated by fix round 1 the same day). Branch `nebulaa-redesign`. Change measured: the GRAVITY OVERRIDE LAYER in `frontend/index.html` now follows the cream palette (no `--gv-*` token value changed, no page file touched). Baseline: `nebulaa-contrast-baseline.md` (same tool, same stub data, same routes).
 
@@ -10,8 +10,8 @@ Same tool and safety model as the baseline (`frontend/scripts/visual-audit/READM
 
 | Width | Failures before -> after (in scope) | Routes with failures | Unknown | Gradient text |
 |---:|---:|---:|---:|---:|
-| 1280 | 553 -> **80** text failures (+4 SVG icon failures, a new check since fix round 1) | 50 -> 10 | 5 -> 7 | 3 -> 3 |
-| 375 | 462 -> **72** text failures (+4 SVG icon failures) | 47 -> 9 | 2 -> 4 | 3 -> 3 |
+| 1280 | 553 -> **75** (74 text + 1 SVG icon; after fix round 2) | 50 -> 8 | 5 -> 7 | 3 -> 3 |
+| 375 | 462 -> **70** (69 text + 1 SVG icon) | 47 -> 7 | 2 -> 4 | 3 -> 3 |
 
 60 of the 80 remaining failures at 1280 (and 60 of 72 at 375) are on `/admin`, `/terms`, `/privacy-policy` and `/trial-expired`, which do not render inside the shell, so the `body.gravity-shell` layer never applies to them. Pages built in the other session (landing, login, signup, onboarding) are unchanged: 6 / 5 / 12 / 41 failures at both widths, before and after.
 
@@ -80,6 +80,60 @@ Reviewer findings fixed:
 
 Screenshots of the fixture: ![](nebulaa-contrast-after-layer/1280-fixture-lightbox.jpg) ![](nebulaa-contrast-after-layer/1280-fixture-fills-tiles.jpg) ![](nebulaa-contrast-after-layer/375-fixture-lightbox.jpg) ![](nebulaa-contrast-after-layer/375-fixture-tiles.jpg)
 
+## Fix round 2 (2026-10-04): every fill gets the higher-contrast text colour
+
+**What changed.** The generator now classifies every coloured background the source uses and gives it the text colour with the HIGHER contrast: white or dark ink (`#1A1208`). That covers:
+- named Tailwind classes, from a palette table in the generator;
+- arbitrary hex and brand colours;
+- gradients, judged by their worst stop;
+- quoted inline hex.
+
+White is used only when it beats ink AND reaches 4.5:1, because the generator cannot know the text size. Fills where neither colour reaches 4.5:1 are written to `frontend/scripts/visual-audit/layer-needs-fix.json`. Hover fills (`hover:bg-*`) follow the same rule.
+
+**Safeguards and other fixes.**
+- The generator's `--check`, which a unit test runs, fails on an unknown background class and on a stale needs-fix file.
+- zinc/neutral/stone 800-950 now get the same light remap as slate/gray 800-950 (`bg-zinc-900 text-white` is no longer white on near-black).
+- Translucent near-black stops (`from-black/70` photo-stack scrims) stay dark.
+- The layer header documents the limit of the inline-style guard and lists the inline backgrounds that are computed at runtime.
+
+**Real Analytics metric chips** (`pages/Analytics.tsx:770-778`, `text-xs`, colour set inline). These are in the gated fixture with their real markup:
+
+| Chip | Fill | White | Dark ink | Layer uses |
+|---|---|---:|---:|---|
+| Followers | #ffcc29 | 1.51 | 12.28 | ink |
+| Impressions | #10b981 | 2.54 | 7.30 | ink |
+| Engagement % | #f43f5e | 3.67 | 5.04 | ink |
+| Posts | #f59e0b | 2.15 | 8.62 | ink |
+| Likes | #ec4899 | 3.53 | 5.25 | ink |
+| Reach | #8b5cf6 | 4.23 | 4.37 | ink. **Known gap**: neither colour reaches 4.5:1 |
+
+**Danger button hover.** The danger button is `bg-red-500/90` and its hover state is `hover:bg-red-500`. On hover the text is dark ink (4.92:1 on `#ef4444`), so no darkening was needed. The darken-one-shade rule only kicks in for hover fills where both colours fail.
+
+**Known gaps.** These are reported, not gated. Their real markup is on `/__layer-fixtures-gaps` and every case is listed in `layer-needs-fix.json`:
+
+| Case | Ratio | Where |
+|---|---|---|
+| Analytics "Reach" chip | 4.37 | `Analytics.tsx:529` |
+| Dashboard "All" chip, `from-slate-400 to-slate-600`, 10px | white 3.43 at the light corner | `Dashboard.tsx:3735` |
+| Facebook `#1877F2` at text-xs | 4.37 | brand; icons pass 3:1 |
+| Instagram gradient tile | ink 3.44 at the purple end | `ConnectSocials.tsx:493`; the icon passes the 3:1 icon check |
+
+**Totals.** In both rows, "Fixture" counts failures/unknown on `/__layer-fixtures`.
+
+| Run | 1280 failures (icons) | 375 failures (icons) | Unknown | Fixture |
+|---|---:|---:|---:|---:|
+| Fix round 1 | 84 (4) | 76 (4) | 7 / 4 | 0 / 0 |
+| **Fix round 2** | **75 (1)** | **70 (1)** | **7 / 4** | **0 / 0 at both widths** |
+
+What fixed what:
+- **campaigns-classic** went from 2 to 0 per width. The icons now get ink on the light green and blue gradients.
+- **connect-socials** went from 1 to 0. The Instagram icon now gets ink.
+- **dashboard-classic** went from 7 to 1 at 1280 and from 4 to 1 at 375. The orange, pink and blue-500 calendar chips now get ink. The one failure left is the emoji chip, which uses an explicit token class on blue.
+
+The 1 icon failure left per width is the search icon on `/admin`.
+
+Fixture screenshot after round 2: ![](nebulaa-contrast-after-layer/1280-fixture-fills-tiles.jpg)
+
 ## Remaining failures (input for Task 8)
 
 | Route | 1280 / 375 | Cause | Where |
@@ -88,9 +142,9 @@ Screenshots of the fixture: ![](nebulaa-contrast-after-layer/1280-fixture-lightb
 | `/terms` | 12 / 12 | not in the shell; `text-[#ffcc29]` links on white/gray-50 (1.44-1.51), `text-gray-400` footer and `hover:text-[#ffcc29]` links at rest (gray-400, 2.43) | `pages/TermsAndConditions.tsx` |
 | `/privacy-policy` | 10 / 10 | same as Terms | `pages/PrivacyPolicy.tsx` |
 | `/trial-expired` | 9 / 9 | not in the shell; `text-[#ededed]/25..45` on the dark starfield page (1.93-4.03) | `pages/TrialExpired.tsx` |
-| `/dashboard-classic` | 7 / 4 | white 10-12px text on `bg-orange-500` (2.80), `bg-pink-500` (3.53), `bg-blue-500` (3.68) calendar chips (keep white: darken the fill or enlarge the text); one emoji chip with `text-[var(--gv-text-primary)]` on blue-500 (4.40) | `pages/Dashboard.tsx` (calendar event chips) |
-| `/campaigns-classic` | 2 / 2 | white SVG icons on light saturated gradients `from-green-500 to-emerald-600` (2.61) and `from-blue-500 to-cyan-500` (2.76); keep white, darken the stops | `pages/Campaigns.tsx` ~l.2304 (campaign type cards) |
-| `/connect-socials` (shell) | 1 / 1 | Instagram tile icon on `from-yellow-400 via-red-500 to-purple-600` (2.03); darker stops needed | `pages/ConnectSocials.tsx` ~l.493 |
+| `/dashboard-classic` | 1 / 1 (round 2; was 7 / 4) | white 10-12px text on `bg-orange-500` (2.80), `bg-pink-500` (3.53), `bg-blue-500` (3.68) calendar chips (keep white: darken the fill or enlarge the text); one emoji chip with `text-[var(--gv-text-primary)]` on blue-500 (4.40) | `pages/Dashboard.tsx` (calendar event chips) |
+| `/campaigns-classic` | 0 / 0 after round 2 (was 2 / 2) | white SVG icons on light saturated gradients `from-green-500 to-emerald-600` (2.61) and `from-blue-500 to-cyan-500` (2.76); keep white, darken the stops | `pages/Campaigns.tsx` ~l.2304 (campaign type cards) |
+| `/connect-socials` (shell) | 0 / 0 after round 2 (was 1 / 1) | Instagram tile icon on `from-yellow-400 via-red-500 to-purple-600` (2.03); darker stops needed | `pages/ConnectSocials.tsx` ~l.493 |
 | `/dashboard` (shell) | 5 / 0 | Home photo-stack tags: 9px `text-white/80`, `text-white/60` on a `from-black/70 to-transparent` scrim over light images (1.60-2.78, image-underlying) | `pages/GravityHome.tsx` ~l.271-275 |
 | `/content-calendar` Schedule (shell) and `/content-calendar-grid` | 4 / 4 each | out-of-month day numbers: the whole cell has `opacity-40` (tertiary text at 40% = 1.73:1) | `pages/GravityCalendar.tsx` ~l.220-225 |
 
@@ -126,8 +180,7 @@ Taken in the page with html2canvas, as in the baseline. `/admin` is not shown ag
 
 The rest of this file is the generated report (`summarize.mjs`).
 
-
-Generated 2026-10-04 by `frontend/scripts/visual-audit/summarize.mjs`. Expected: 57 routes.json entries x 1280 and 375 px. Standard: WCAG AA, 4.5:1 normal text, 3:1 large text (>= 24px, or >= 18.66px at 700+).
+Generated 2026-10-04 by `frontend/scripts/visual-audit/summarize.mjs`. Expected: 58 routes.json entries x 1280 and 375 px. Standard: WCAG AA, 4.5:1 normal text, 3:1 large text (>= 24px, or >= 18.66px at 700+).
 
 **GATE: FAIL**
 
@@ -137,16 +190,17 @@ Gate rule (Tasks 7-8): every route in scope (all of routes.json except the pages
 
 | Route | 1280 before | 1280 after | 375 before | 375 after |
 |---|---:|---:|---:|---:|
-| layer-fixtures | MISSING | 0 (+0 unk) | MISSING | 0 (+0 unk) |
+| layer-fixtures-gaps | MISSING | 3 (+0 unk) | MISSING | 3 (+0 unk) |
+| layer-fixtures | 0 (+0 unk) | 0 (+0 unk) | 0 (+0 unk) | 0 (+0 unk) |
 | dashboard | 5 (+3 unk) | 5 (+3 unk) | 0 (+0 unk) | 0 (+0 unk) |
-| dashboard-classic | 7 (+0 unk) | 7 (+0 unk) | 4 (+0 unk) | 4 (+0 unk) |
+| dashboard-classic | 7 (+0 unk) | 1 (+0 unk) | 4 (+0 unk) | 1 (+0 unk) |
 | content-calendar-plan | 0 (+0 unk) | 0 (+0 unk) | 0 (+0 unk) | 0 (+0 unk) |
 | content-calendar-schedule | 4 (+0 unk) | 4 (+0 unk) | 4 (+0 unk) | 4 (+0 unk) |
 | content-calendar-grid | 4 (+0 unk) | 4 (+0 unk) | 4 (+0 unk) | 4 (+0 unk) |
 | content-calendar-classic | 0 (+0 unk) | 0 (+0 unk) | 0 (+0 unk) | 0 (+0 unk) |
 | idea-inbox | 0 (+0 unk) | 0 (+0 unk) | 0 (+0 unk) | 0 (+0 unk) |
 | campaigns | 0 (+3 unk) | 0 (+3 unk) | 0 (+3 unk) | 0 (+3 unk) |
-| campaigns-classic | 0 (+0 unk) | 2 (+0 unk) | 0 (+0 unk) | 2 (+0 unk) |
+| campaigns-classic | 2 (+0 unk) | 0 (+0 unk) | 2 (+0 unk) | 0 (+0 unk) |
 | drafts-review | 0 (+0 unk) | 0 (+0 unk) | 0 (+0 unk) | 0 (+0 unk) |
 | drafts-all | 0 (+0 unk) | 0 (+0 unk) | 0 (+0 unk) | 0 (+0 unk) |
 | reels | 0 (+0 unk) | 0 (+0 unk) | 0 (+0 unk) | 0 (+0 unk) |
@@ -154,7 +208,7 @@ Gate rule (Tasks 7-8): every route in scope (all of routes.json except the pages
 | upload | 0 (+0 unk) | 0 (+0 unk) | 0 (+0 unk) | 0 (+0 unk) |
 | ad-campaigns | 0 (+0 unk) | 0 (+0 unk) | 0 (+0 unk) | 0 (+0 unk) |
 | competitors | 0 (+0 unk) | 0 (+0 unk) | 0 (+0 unk) | 0 (+0 unk) |
-| connect-socials | 0 (+0 unk) | 1 (+0 unk) | 0 (+0 unk) | 1 (+0 unk) |
+| connect-socials | 1 (+0 unk) | 0 (+0 unk) | 1 (+0 unk) | 0 (+0 unk) |
 | connect-socials-permissions | 0 (+0 unk) | 0 (+0 unk) | 0 (+0 unk) | 0 (+0 unk) |
 | connect-socials-sync | 0 (+0 unk) | 0 (+0 unk) | 0 (+0 unk) | 0 (+0 unk) |
 | connect-socials-auto-reply | 0 (+0 unk) | 0 (+0 unk) | 0 (+0 unk) | 0 (+0 unk) |
@@ -189,19 +243,19 @@ Gate rule (Tasks 7-8): every route in scope (all of routes.json except the pages
 | terms | 12 (+0 unk) | 12 (+0 unk) | 12 (+0 unk) | 12 (+0 unk) |
 | privacy-policy | 10 (+0 unk) | 10 (+0 unk) | 10 (+0 unk) | 10 (+0 unk) |
 | admin-login | 0 (+0 unk) | 0 (+0 unk) | 0 (+0 unk) | 0 (+0 unk) |
-| admin | 29 (+0 unk) | 30 (+0 unk) | 29 (+0 unk) | 30 (+0 unk) |
+| admin | 30 (+0 unk) | 30 (+0 unk) | 30 (+0 unk) | 30 (+0 unk) |
 
 Totals over routes that rendered in BOTH runs (a route missing or broken in either run is not counted, so it cannot make the total drop):
 
-- 1280px: 52 routes compared, failures 80 -> 84, unknown 7 -> 7; not comparable: 1.
-- 375px: 52 routes compared, failures 72 -> 76, unknown 4 -> 4; not comparable: 1.
+- 1280px: 53 routes compared, failures 84 -> 75, unknown 7 -> 7; not comparable: 1.
+- 375px: 53 routes compared, failures 76 -> 70, unknown 4 -> 4; not comparable: 1.
 
 ## Totals (in scope)
 
 | Width | Expected | Rendered ok | Missing / stale | Blank / empty | Error | Redirect | Checked | Failures | Routes with failures | Unknown (unsigned) | Unparsed colours | Gradient text | of which SVG text | of which SVG icons (icons checked; icon unknown) | over positioned layers | image layers |
 |---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| 1280 | 52 | 52 | 0 | 0 | 0 | 0 | 2923 | 84 | 10 | 7 (7) | 0 | 3 | 0 | 4 (130; 0) | 15 | 14 |
-| 375 | 52 | 52 | 0 | 0 | 0 | 0 | 1777 | 76 | 9 | 4 (4) | 0 | 3 | 0 | 4 (130; 0) | 10 | 9 |
+| 1280 | 52 | 52 | 0 | 0 | 0 | 0 | 2931 | 75 | 8 | 7 (7) | 0 | 3 | 0 | 1 (132; 0) | 15 | 14 |
+| 375 | 52 | 52 | 0 | 0 | 0 | 0 | 1785 | 70 | 7 | 4 (4) | 0 | 3 | 0 | 1 (132; 0) | 10 | 9 |
 
 Missing/Blank/Error/Redirect counts include the redirect route kept out of the failure totals. "of which ..." columns break the failures down: SVG `<text>` labels, text measured against a positioned (non-ancestor) layer, and failures involving an image layer (`image-underlying`: fails on the colour beneath the image; `image-any`: no opaque image could make it pass).
 
@@ -209,16 +263,16 @@ Missing/Blank/Error/Redirect counts include the redirect route kept out of the f
 
 | Route | Path | 1280: fail / checked | 375: fail / checked | Worst ratio | Unknown | Unparsed / gradient text |
 |---|---|---:|---:|---:|---:|---:|
-| layer-fixtures | `/__layer-fixtures` | 0 / 72 | 0 / 72 | - | 0 / 0 | 0/0 ; 0/0 |
+| layer-fixtures | `/__layer-fixtures` | 0 / 80 | 0 / 80 | - | 0 / 0 | 0/0 ; 0/0 |
 | dashboard | `/dashboard` | 5 / 57 | 0 / 26 | 1.60 | 3 / 0 | 0/0 ; 0/0 |
-| dashboard-classic | `/dashboard-classic` | 7 / 127 | 4 / 68 | 2.80 | 0 / 0 | 0/0 ; 0/0 |
+| dashboard-classic | `/dashboard-classic` | 1 / 127 | 1 / 68 | 4.40 | 0 / 0 | 0/0 ; 0/0 |
 | content-calendar-plan | `/content-calendar` | 0 / 42 | 0 / 19 | - | 0 / 0 | 0/0 ; 0/0 |
 | content-calendar-schedule | `/content-calendar` | 4 / 92 | 4 / 63 | 1.73 | 0 / 0 | 0/0 ; 0/0 |
 | content-calendar-grid | `/content-calendar-grid` | 4 / 90 | 4 / 61 | 1.73 | 0 / 0 | 0/0 ; 0/0 |
 | content-calendar-classic | `/content-calendar-classic` | 0 / 40 | 0 / 17 | - | 0 / 0 | 0/0 ; 0/0 |
 | idea-inbox | `/idea-inbox` | 0 / 50 | 0 / 27 | - | 0 / 0 | 0/0 ; 0/0 |
 | campaigns | `/campaigns` | 0 / 79 | 0 / 54 | - | 3 / 3 | 0/0 ; 0/0 |
-| campaigns-classic | `/campaigns-classic` | 2 / 56 | 2 / 29 | 2.61 | 0 / 0 | 0/0 ; 0/0 |
+| campaigns-classic | `/campaigns-classic` | 0 / 56 | 0 / 29 | - | 0 / 0 | 0/0 ; 0/0 |
 | drafts-review | `/drafts` | 0 / 62 | 0 / 39 | - | 0 / 0 | 0/0 ; 0/0 |
 | drafts-all | `/drafts` | 0 / 60 | 0 / 37 | - | 0 / 0 | 0/0 ; 0/0 |
 | reels | `/reels` | 0 / 39 | 0 / 16 | - | 0 / 0 | 0/0 ; 0/0 |
@@ -226,7 +280,7 @@ Missing/Blank/Error/Redirect counts include the redirect route kept out of the f
 | upload | `/upload` | 0 / 32 | 0 / 9 | - | 0 / 0 | 0/0 ; 0/0 |
 | ad-campaigns | `/ad-campaigns` | 0 / 29 | 0 / 6 | - | 0 / 0 | 0/0 ; 0/0 |
 | competitors | `/competitors` | 0 / 41 | 0 / 18 | - | 0 / 0 | 0/0 ; 0/0 |
-| connect-socials | `/connect-socials` | 1 / 79 | 1 / 56 | 2.03 | 0 / 0 | 0/0 ; 0/0 |
+| connect-socials | `/connect-socials` | 0 / 79 | 0 / 56 | - | 0 / 0 | 0/0 ; 0/0 |
 | connect-socials-permissions | `/connect-socials?tab=permissions` | 0 / 47 | 0 / 24 | - | 0 / 0 | 0/0 ; 0/0 |
 | connect-socials-sync | `/connect-socials?tab=sync` | 0 / 49 | 0 / 26 | - | 0 / 0 | 0/0 ; 0/0 |
 | connect-socials-auto-reply | `/connect-socials?tab=auto-reply` | 0 / 67 | 0 / 44 | - | 0 / 0 | 0/0 ; 0/0 |
@@ -273,14 +327,13 @@ Nearest text-colour class on the element or an ancestor (state variants dropped)
 | `text-white/40` | 28 | 1 | 3.75 | Logout: #6a6b70 on #060810 |
 | `text-white/30` | 24 | 1 | 2.57 | demo.nebulaa.ai: #515258 on #060810 |
 | `text-[var(--gv-text-muted)]` | 16 | 2 | 1.73 | 28: #c2baac on #f8f2e8 |
-| `text-white/80` | 9 | 2 | 1.60 | IN · TUE: #ffffff on #ceccc8 |
-| `text-white` | 9 | 3 | 2.03 | Gandhi Jayanti: #ffffff on #f97316 |
 | `text-[#ededed]/45` | 8 | 1 | 3.92 | All plans include AI campaign : #6c6d6f on #030507 |
 | `text-gray-400` | 8 | 2 | 2.43 | © 2024 Noburo Business Service: #9ca3af on #f9fafb |
 | `(no text-colour class)` | 8 | 2 | 2.43 | Privacy Policy: #9ca3af on #f9fafb |
 | `text-[#ededed]/35` | 6 | 1 | 2.88 | per month · Auto-renews · Canc: #595b60 on #090d14 |
 | `text-[#ededed]/25` | 4 | 1 | 1.93 | Secured by Razorpay · UPI, Car: #3e3f41 on #030507 |
 | `text-white/20` | 4 | 1 | 1.80 | No users found: #3c3d44 on #0b0d15 |
+| `text-white/80` | 3 | 1 | 1.60 | IN · TUE: #ffffff on #ceccc8 |
 | `text-white/60` | 2 | 1 | 2.15 | 3 / 4: #f5f5f4 on #aaa9a6 |
 | `text-[var(--gv-text-primary)]` | 2 | 1 | 4.40 | ❤️: #14203a on #3b82f6 |
 | `text-white placeholder-white/20` | 2 | 1 | 1.88 | Search by email or company...: #44454b on #15171e |
@@ -296,15 +349,10 @@ Nearest text-colour class on the element or an ancestor (state variants dropped)
 | `(no bg class)` | 14 | 2 | 1.93 |
 | `from-[#0d1219]/85 via-[#080c14]/90 to-[#060910]/90` | 8 | 1 | 2.88 |
 | `from-black/70 to-transparent` | 5 | 1 | 1.60 |
-| `bg-blue-500` | 5 | 1 | 3.68 |
 | `from-[#0f1520]/90 via-[#0a0e18]/95 to-[#060910]/95` | 4 | 1 | 2.90 |
 | `bg-white/[0.04]` | 4 | 1 | 1.88 |
 | `from-[#ffcc29]/10 to-transparent` | 4 | 1 | 3.82 |
-| `bg-orange-500` | 3 | 1 | 2.80 |
-| `bg-pink-500` | 3 | 1 | 3.53 |
-| `from-green-500 to-emerald-600` | 2 | 1 | 2.61 |
-| `from-blue-500 to-cyan-500` | 2 | 1 | 2.76 |
-| `from-yellow-400 via-red-500 to-purple-600` | 2 | 1 | 2.03 |
+| `bg-blue-500` | 2 | 1 | 4.40 |
 | `bg-[#060810]/80` | 2 | 1 | 2.57 |
 | `bg-red-500/5` | 2 | 1 | 3.94 |
 
@@ -321,21 +369,29 @@ Nearest text-colour class on the element or an ancestor (state variants dropped)
 | #3e3f41 on #030507 | 4 | 1 | 1.93 |
 | #595b60 on #090d14 | 4 | 1 | 2.88 |
 | #44454b on #15171e | 4 | 1 | 1.88 |
-| #ffffff on #f97316 | 3 | 1 | 2.80 |
-| #ffffff on #ec4899 | 3 | 1 | 3.53 |
-| #ffffff on #3b82f6 | 3 | 1 | 3.68 |
 | #14203a on #3b82f6 | 2 | 1 | 4.40 |
-| #ffffff on #1ab861 | 2 | 1 | 2.61 |
-| #ffffff on #15a7de | 2 | 1 | 2.76 |
-| #ffffff on #f7a522 | 2 | 1 | 2.03 |
 | #5b5d63 on #0c1018 | 2 | 1 | 2.90 |
 | #76787b on #14181e | 2 | 1 | 4.01 |
+| #72757a on #0e131c | 2 | 1 | 4.03 |
+| #3c3d44 on #0b0d15 | 2 | 1 | 1.80 |
+| #515258 on #060810 | 2 | 1 | 2.57 |
+| #727478 on #15171e | 2 | 1 | 3.82 |
+| #b35255 on #120b13 | 2 | 1 | 3.94 |
+| #ffffff on #ceccc8 | 1 | 1 | 1.60 |
 
 ## Worst 10 per route
 
 From the 1280px run. "req" is the AA minimum for that size; kind/failureKind as defined in the README.
 
-### layer-fixtures (`/__layer-fixtures`) - 0 failing of 72
+### layer-fixtures-gaps (`/__layer-fixtures-gaps`) - 3 failing of 10
+
+| Ratio | req | Text | Colour on background | Kind | Selector | Text class |
+|---:|---:|---|---|---|---|---|
+| 3.43 | 4.5 | All | #ffffff on #7d8ca0 |  | `reen > section > span.inline-flex.items-center.gap-2 > span.w-5.h-5.rounded-full` | `text-white` |
+| 4.37 | 4.5 | Reach | #1a1208 on #8b5cf6 |  | ` div.relative.z-\[1\].min-h-screen > section > button.flex.items-center.gap-1\.5` | `text-white` |
+| 4.37 | 4.5 | Facebook | #1a1208 on #1877f2 |  | `div#root > div.relative.z-\[1\].min-h-screen > section > span.px-2.py-1.rounded` | `text-white` |
+
+### layer-fixtures (`/__layer-fixtures`) - 0 failing of 80
 
 No failures.
 
@@ -349,16 +405,10 @@ No failures.
 | 2.61 | 4.5 | IN · THU | #ffffff on #a1a09d | image-underlying, positioned | `iv.absolute.inset-x-0.bottom-0 > span.text-\[9px\].font-semibold.tracking-widest` | `text-white/80` |
 | 2.78 | 4.5 | 4 / 4 | #f2f2f2 on #93928f | image-underlying, positioned | ` div.absolute.inset-x-0.bottom-0 > span.text-\[9px\].text-white\/60.tabular-nums` | `text-white/60` |
 
-### dashboard-classic (`/dashboard-classic`) - 7 failing of 127
+### dashboard-classic (`/dashboard-classic`) - 1 failing of 127
 
 | Ratio | req | Text | Colour on background | Kind | Selector | Text class |
 |---:|---:|---|---|---|---|---|
-| 2.80 | 4.5 | Gandhi Jayanti | #ffffff on #f97316 |  | `.left-1.right-1 > div.flex.items-center.gap-1 > p.text-xs.font-semibold.truncate` | `text-white` |
-| 2.80 | 4.5 | National | #ffffff on #f97316 |  | `ededed\] > div.absolute.left-1.right-1 > p.text-\[10px\].truncate.text-white\/80` | `text-white/80` |
-| 3.53 | 4.5 | Navratri Begins | #ffffff on #ec4899 |  | `.left-1.right-1 > div.flex.items-center.gap-1 > p.text-xs.font-semibold.truncate` | `text-white` |
-| 3.53 | 4.5 | Festival | #ffffff on #ec4899 |  | `ededed\] > div.absolute.left-1.right-1 > p.text-\[10px\].truncate.text-white\/80` | `text-white/80` |
-| 3.68 | 4.5 | World Heart Day | #ffffff on #3b82f6 |  | `.left-1.right-1 > div.flex.items-center.gap-1 > p.text-xs.font-semibold.truncate` | `text-white` |
-| 3.68 | 4.5 | International | #ffffff on #3b82f6 |  | `ededed\] > div.absolute.left-1.right-1 > p.text-\[10px\].truncate.text-white\/80` | `text-white/80` |
 | 4.40 | 4.5 | ❤️ | #14203a on #3b82f6 |  | `ded\] > div.absolute.left-1.right-1 > div.flex.items-center.gap-1 > span.text-xs` | `text-[var(--gv-text-primary)]` |
 
 ### content-calendar-plan (`/content-calendar`) - 0 failing of 42
@@ -395,12 +445,9 @@ No failures.
 
 No failures.
 
-### campaigns-classic (`/campaigns-classic`) - 2 failing of 56
+### campaigns-classic (`/campaigns-classic`) - 0 failing of 56
 
-| Ratio | req | Text | Colour on background | Kind | Selector | Text class |
-|---:|---:|---|---|---|---|---|
-| 2.61 | 3 | [icon] lucide-send | #ffffff on #1ab861 | svg-icon | `> div > div.p-3\.5.bg-gradient-to-br.from-green-500 > svg.lucide.lucide-send.w-7` | `text-white` |
-| 2.76 | 3 | [icon] lucide-pen-line | #ffffff on #15a7de | svg-icon | `iv > div.p-3\.5.bg-gradient-to-br.from-blue-500 > svg.lucide.lucide-pen-line.w-7` | `text-white` |
+No failures.
 
 ### drafts-review (`/drafts`) - 0 failing of 62
 
@@ -430,11 +477,9 @@ No failures.
 
 No failures.
 
-### connect-socials (`/connect-socials`) - 1 failing of 79
+### connect-socials (`/connect-socials`) - 0 failing of 79
 
-| Ratio | req | Text | Colour on background | Kind | Selector | Text class |
-|---:|---:|---|---|---|---|---|
-| 2.03 | 3 | [icon] lucide-instagram | #ffffff on #f7a522 | svg-icon | `ex.items-center.gap-2 > div.w-7.h-7.rounded-lg > svg.lucide.lucide-instagram.w-6` | `text-white` |
+No failures.
 
 ### connect-socials-permissions (`/connect-socials?tab=permissions`) - 0 failing of 47
 
@@ -632,7 +677,7 @@ No failures.
 | trial-expired | 1280 | gradientText | ₹ 1,000 | linear-gradient(rgb(255, 255, 255) 0%, rgb(212, 212, 212) 50%, rgb(160, 160, 160) 100%) | **no** |
 | trial-expired | 1280 | gradientText | ₹ 2,000 | linear-gradient(rgb(255, 255, 255) 0%, rgb(212, 212, 212) 50%, rgb(160, 160, 160) 100%) | **no** |
 | trial-expired | 1280 | gradientText | ₹ 3,000 | linear-gradient(rgb(255, 255, 255) 0%, rgb(212, 212, 212) 50%, rgb(160, 160, 160) 100%) | **no** |
-| trial-expired | 375 | unknown | Your Free Trial Has Ended | over canvas (black 20.43, white 1.1, beneath 17.64) | **no** |
+| trial-expired | 375 | unknown | Your Free Trial Has Ended | over canvas (black 20.43, white 1.1, beneath 17.05) | **no** |
 | trial-expired | 375 | gradientText | ₹ 1,000 | linear-gradient(rgb(255, 255, 255) 0%, rgb(212, 212, 212) 50%, rgb(160, 160, 160) 100%) | **no** |
 | trial-expired | 375 | gradientText | ₹ 2,000 | linear-gradient(rgb(255, 255, 255) 0%, rgb(212, 212, 212) 50%, rgb(160, 160, 160) 100%) | **no** |
 | trial-expired | 375 | gradientText | ₹ 3,000 | linear-gradient(rgb(255, 255, 255) 0%, rgb(212, 212, 212) 50%, rgb(160, 160, 160) 100%) | **no** |
@@ -662,6 +707,36 @@ None.
 |---|---:|---:|---|
 | admin | 1280 | 1 | "Search by email or compa" 1.88 |
 | admin | 375 | 1 | "Search by email or compa" 1.88 |
+
+## Known gaps (reported, not gated)
+
+Fills on which neither white nor dark ink reaches 4.5:1 (`frontend/scripts/visual-audit/layer-needs-fix.json`, generated by `gen-layer-lists.mjs`; the layer uses the higher one). Their real markup is on `/__layer-fixtures-gaps`. They need a colour change on the page (Task 8).
+
+| Fill | White | Dark ink | Layer uses |
+|---|---:|---:|---|
+| `bg-[#1877F2]` | 4.23 | 4.37 | ink |
+| `bg-[#E1306C]` | 4.34 | 4.27 | white |
+| `bg-indigo-500` | 4.47 | 4.15 | white |
+| `bg-violet-500` | 4.23 | 4.37 | ink |
+| `from-black to-pink-500` | 3.53 | 1.13 | white |
+| `from-blue-400 to-blue-600` | 2.54 | 3.58 | ink |
+| `from-blue-500 to-blue-700` | 3.68 | 2.76 | white |
+| `from-blue-500 to-indigo-600` | 3.68 | 2.95 | white |
+| `from-pink-500 to-purple-600` | 3.53 | 3.44 | white |
+| `from-red-500 to-red-600` | 3.76 | 3.83 | ink |
+| `from-red-500 to-red-700` | 3.76 | 2.86 | white |
+| `from-slate-400 to-slate-600` | 2.56 | 2.44 | white |
+| `from-yellow-400 via-pink-500 to-purple-600` | 1.53 | 3.44 | ink |
+| `from-yellow-400 via-red-500 to-purple-600` | 1.53 | 3.44 | ink |
+| `inline #1877f2` | 4.23 | 4.37 | ink |
+| `inline #6366f1` | 4.47 | 4.15 | white |
+| `inline #8b5cf6` | 4.23 | 4.37 | ink |
+| `inline #e1306c` | 4.34 | 4.27 | white |
+
+| Gap fixture | Width | Failures / checked | Worst |
+|---|---:|---:|---|
+| layer-fixtures-gaps | 1280 | 3 / 10 | "All" 3.43; "Reach" 4.37; "Facebook" 4.37 |
+| layer-fixtures-gaps | 375 | 3 / 10 | "All" 3.43; "Reach" 4.37; "Facebook" 4.37 |
 
 ## Built in the other session (read-only, will be replaced by that branch's version)
 

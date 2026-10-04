@@ -1,10 +1,10 @@
 {
- "generatedAt": "2026-10-04T05:52:09.645Z",
+ "generatedAt": "2026-10-04T06:28:43.969Z",
  "widths": [
   1280,
   375
  ],
- "since": "2026-10-04T05:45:59.000Z",
+ "since": "2026-10-04T06:22:02.000Z",
  "gate": "FAIL",
  "totals": {
   "375": {
@@ -17,9 +17,9 @@
    "tabNotFound": 0,
    "empty": 0,
    "stale": 0,
-   "checked": 1777,
-   "failures": 76,
-   "routesWithFailures": 9,
+   "checked": 1785,
+   "failures": 70,
+   "routesWithFailures": 7,
    "unknown": 4,
    "unknownUnsigned": 4,
    "unparsed": 0,
@@ -27,8 +27,8 @@
    "gradientText": 3,
    "gradientTextUnsigned": 3,
    "svgFailures": 0,
-   "iconFailures": 4,
-   "iconsChecked": 130,
+   "iconFailures": 1,
+   "iconsChecked": 132,
    "iconUnknown": 0,
    "positionedFailures": 10,
    "imageFailures": 9
@@ -43,9 +43,9 @@
    "tabNotFound": 0,
    "empty": 0,
    "stale": 0,
-   "checked": 2923,
-   "failures": 84,
-   "routesWithFailures": 10,
+   "checked": 2931,
+   "failures": 75,
+   "routesWithFailures": 8,
    "unknown": 7,
    "unknownUnsigned": 7,
    "unparsed": 0,
@@ -53,14 +53,113 @@
    "gradientText": 3,
    "gradientTextUnsigned": 3,
    "svgFailures": 0,
-   "iconFailures": 4,
-   "iconsChecked": 130,
+   "iconFailures": 1,
+   "iconsChecked": 132,
    "iconUnknown": 0,
    "positionedFailures": 15,
    "imageFailures": 14
   }
  },
  "routes": {
+  "layer-fixtures-gaps": {
+   "path": "/__layer-fixtures-gaps",
+   "group": "fixture",
+   "scope": "gaps",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 10,
+     "failures": 3,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 3
+     },
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
+     "worst": 3.43,
+     "top": [
+      [
+       "All",
+       3.43,
+       "#ffffff",
+       "#7d8ca0",
+       "text-white",
+       "contrast",
+       "text"
+      ],
+      [
+       "Reach",
+       4.37,
+       "#1a1208",
+       "#8b5cf6",
+       "text-white",
+       "contrast",
+       "text"
+      ],
+      [
+       "Facebook",
+       4.37,
+       "#1a1208",
+       "#1877f2",
+       "text-white",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 10,
+     "failures": 3,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 3
+     },
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
+     "worst": 3.43,
+     "top": [
+      [
+       "All",
+       3.43,
+       "#ffffff",
+       "#7d8ca0",
+       "text-white",
+       "contrast",
+       "text"
+      ],
+      [
+       "Reach",
+       4.37,
+       "#1a1208",
+       "#8b5cf6",
+       "text-white",
+       "contrast",
+       "text"
+      ],
+      [
+       "Facebook",
+       4.37,
+       "#1a1208",
+       "#1877f2",
+       "text-white",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
   "layer-fixtures": {
    "path": "/__layer-fixtures",
    "group": "fixture",
@@ -68,7 +167,7 @@
    "widths": {
     "375": {
      "status": "ok",
-     "checked": 72,
+     "checked": 80,
      "failures": 0,
      "unknown": 0,
      "unknownUnsigned": 0,
@@ -77,14 +176,14 @@
      "kinds": {},
      "svgFailures": 0,
      "iconFailures": 0,
-     "iconsChecked": 12,
+     "iconsChecked": 14,
      "iconUnknown": 0,
      "worst": null,
      "top": []
     },
     "1280": {
      "status": "ok",
-     "checked": 72,
+     "checked": 80,
      "failures": 0,
      "unknown": 0,
      "unknownUnsigned": 0,
@@ -93,7 +192,7 @@
      "kinds": {},
      "svgFailures": 0,
      "iconFailures": 0,
-     "iconsChecked": 12,
+     "iconsChecked": 14,
      "iconUnknown": 0,
      "worst": null,
      "top": []
@@ -195,47 +294,20 @@
     "375": {
      "status": "ok",
      "checked": 68,
-     "failures": 4,
+     "failures": 1,
      "unknown": 0,
      "unknownUnsigned": 0,
      "unparsed": 0,
      "gradientText": 0,
      "kinds": {
-      "contrast": 4
+      "contrast": 1
      },
      "svgFailures": 0,
      "iconFailures": 0,
      "iconsChecked": 6,
      "iconUnknown": 0,
-     "worst": 2.8,
+     "worst": 4.4,
      "top": [
-      [
-       "National",
-       2.8,
-       "#ffffff",
-       "#f97316",
-       "text-white/80",
-       "contrast",
-       "text"
-      ],
-      [
-       "Festival",
-       3.53,
-       "#ffffff",
-       "#ec4899",
-       "text-white/80",
-       "contrast",
-       "text"
-      ],
-      [
-       "International",
-       3.68,
-       "#ffffff",
-       "#3b82f6",
-       "text-white/80",
-       "contrast",
-       "text"
-      ],
       [
        "❤️",
        4.4,
@@ -250,74 +322,20 @@
     "1280": {
      "status": "ok",
      "checked": 127,
-     "failures": 7,
+     "failures": 1,
      "unknown": 0,
      "unknownUnsigned": 0,
      "unparsed": 0,
      "gradientText": 0,
      "kinds": {
-      "contrast": 7
+      "contrast": 1
      },
      "svgFailures": 0,
      "iconFailures": 0,
      "iconsChecked": 6,
      "iconUnknown": 0,
-     "worst": 2.8,
+     "worst": 4.4,
      "top": [
-      [
-       "Gandhi Jayanti",
-       2.8,
-       "#ffffff",
-       "#f97316",
-       "text-white",
-       "contrast",
-       "text"
-      ],
-      [
-       "National",
-       2.8,
-       "#ffffff",
-       "#f97316",
-       "text-white/80",
-       "contrast",
-       "text"
-      ],
-      [
-       "Navratri Begins",
-       3.53,
-       "#ffffff",
-       "#ec4899",
-       "text-white",
-       "contrast",
-       "text"
-      ],
-      [
-       "Festival",
-       3.53,
-       "#ffffff",
-       "#ec4899",
-       "text-white/80",
-       "contrast",
-       "text"
-      ],
-      [
-       "World Heart Day",
-       3.68,
-       "#ffffff",
-       "#3b82f6",
-       "text-white",
-       "contrast",
-       "text"
-      ],
-      [
-       "International",
-       3.68,
-       "#ffffff",
-       "#3b82f6",
-       "text-white/80",
-       "contrast",
-       "text"
-      ],
       [
        "❤️",
        4.4,
@@ -729,76 +747,34 @@
     "375": {
      "status": "ok",
      "checked": 29,
-     "failures": 2,
+     "failures": 0,
      "unknown": 0,
      "unknownUnsigned": 0,
      "unparsed": 0,
      "gradientText": 0,
-     "kinds": {
-      "contrast": 2
-     },
+     "kinds": {},
      "svgFailures": 0,
-     "iconFailures": 2,
+     "iconFailures": 0,
      "iconsChecked": 7,
      "iconUnknown": 0,
-     "worst": 2.61,
-     "top": [
-      [
-       "[icon] lucide-send",
-       2.61,
-       "#ffffff",
-       "#1ab861",
-       "text-white",
-       "contrast",
-       "svg-icon"
-      ],
-      [
-       "[icon] lucide-pen-line",
-       2.76,
-       "#ffffff",
-       "#15a7de",
-       "text-white",
-       "contrast",
-       "svg-icon"
-      ]
-     ]
+     "worst": null,
+     "top": []
     },
     "1280": {
      "status": "ok",
      "checked": 56,
-     "failures": 2,
+     "failures": 0,
      "unknown": 0,
      "unknownUnsigned": 0,
      "unparsed": 0,
      "gradientText": 0,
-     "kinds": {
-      "contrast": 2
-     },
+     "kinds": {},
      "svgFailures": 0,
-     "iconFailures": 2,
+     "iconFailures": 0,
      "iconsChecked": 7,
      "iconUnknown": 0,
-     "worst": 2.61,
-     "top": [
-      [
-       "[icon] lucide-send",
-       2.61,
-       "#ffffff",
-       "#1ab861",
-       "text-white",
-       "contrast",
-       "svg-icon"
-      ],
-      [
-       "[icon] lucide-pen-line",
-       2.76,
-       "#ffffff",
-       "#15a7de",
-       "text-white",
-       "contrast",
-       "svg-icon"
-      ]
-     ]
+     "worst": null,
+     "top": []
     }
    }
   },
@@ -1083,58 +1059,34 @@
     "375": {
      "status": "ok",
      "checked": 56,
-     "failures": 1,
+     "failures": 0,
      "unknown": 0,
      "unknownUnsigned": 0,
      "unparsed": 0,
      "gradientText": 0,
-     "kinds": {
-      "contrast": 1
-     },
+     "kinds": {},
      "svgFailures": 0,
-     "iconFailures": 1,
+     "iconFailures": 0,
      "iconsChecked": 9,
      "iconUnknown": 0,
-     "worst": 2.03,
-     "top": [
-      [
-       "[icon] lucide-instagram",
-       2.03,
-       "#ffffff",
-       "#f7a522",
-       "text-white",
-       "contrast",
-       "svg-icon"
-      ]
-     ]
+     "worst": null,
+     "top": []
     },
     "1280": {
      "status": "ok",
      "checked": 79,
-     "failures": 1,
+     "failures": 0,
      "unknown": 0,
      "unknownUnsigned": 0,
      "unparsed": 0,
      "gradientText": 0,
-     "kinds": {
-      "contrast": 1
-     },
+     "kinds": {},
      "svgFailures": 0,
-     "iconFailures": 1,
+     "iconFailures": 0,
      "iconsChecked": 9,
      "iconUnknown": 0,
-     "worst": 2.03,
-     "top": [
-      [
-       "[icon] lucide-instagram",
-       2.03,
-       "#ffffff",
-       "#f7a522",
-       "text-white",
-       "contrast",
-       "svg-icon"
-      ]
-     ]
+     "worst": null,
+     "top": []
     }
    }
   },
