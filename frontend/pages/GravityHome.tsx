@@ -213,7 +213,7 @@ const GravityHome: React.FC = () => {
         <div>
           <GravityHero
             align="left"
-            eyebrow={`${dateLabel} · Bengaluru`}
+            eyebrow={dateLabel}
             headline={
               <>
                 {heroReadyCount === 0 ? <span>No</span> : <span className="tabular-nums">{heroReadyCount}</span>} {heroReadyCount === 1 ? 'post' : 'posts'}<br />

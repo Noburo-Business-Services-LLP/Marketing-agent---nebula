@@ -184,8 +184,8 @@ const GravityInsights: React.FC = () => {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
         <StatCard label="Reach (7 days)" value={hasAnyReach ? compactK(stats.reach7d) : '—'} delta={hasAnyReach ? `${stats.reachChangePct >= 0 ? '+' : ''}${stats.reachChangePct}%` : null} />
         <StatCard label="Engagement" value={stats.engagement > 0 ? compactK(stats.engagement) : '—'} delta={stats.engagement > 0 ? `${stats.engChangePct >= 0 ? '+' : ''}${stats.engChangePct}%` : null} />
-        <StatCard label="New followers" value={stats.newFollowers > 0 ? `${stats.newFollowers}` : '—'} delta={stats.newFollowers > 0 ? '+12%' : null} />
-        <StatCard label="Approval rate" value={`${stats.approvalRate}%`} delta={stats.approvalRate > 0 ? '+3%' : null} />
+        <StatCard label="New followers" value={stats.newFollowers > 0 ? `${stats.newFollowers}` : '—'} delta={null} />
+        <StatCard label="Approval rate" value={`${stats.approvalRate}%`} delta={null} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1.6fr_1fr] gap-6">
