@@ -100,6 +100,7 @@ const promptRoutes = require('./routes/prompts');
 const carouselRoutes = require('./routes/carousels');
 const videoGenerationRoutes = require('./routes/videoGeneration');
 const heroVideoRoutes = require('./routes/heroVideo');
+const blueprintRoutes = require('./routes/blueprint');
 const aiMemoryRoutes = require('./routes/aiMemory');
 const influencerRoutes = require('./routes/influencerRoutes');
 const collaborationRoutes = require('./routes/collaborationRoutes');
@@ -378,6 +379,7 @@ const FEATURE_ROUTE_MAP = [
   { method: 'POST', pattern: /^\/api\/chat/,                       feature: 'chat_used',               module: 'chat' },
   { method: 'PUT',  pattern: /^\/api\/brand/,                      feature: 'brand_profile_updated',   module: 'brand' },
   { method: 'GET',  pattern: /^\/api\/campaigns/,                  feature: 'campaigns_viewed',        module: 'campaigns' },
+  { method: 'POST', pattern: /^\/api\/blueprint$/,                 feature: 'blueprint_started',       module: 'blueprint' },
 ];
 
 app.use((req, res, next) => {
@@ -451,6 +453,7 @@ app.use('/api/carousels', carouselRoutes);
 app.post('/api/video-generation/schedulePost', protect, requireFeature('schedule'));
 app.use('/api/video-generation', videoGenerationRoutes);
 app.use('/api/hero-video', heroVideoRoutes);
+app.use('/api/blueprint', blueprintRoutes);
 app.use('/api/ai-memory', aiMemoryRoutes);
 app.use('/api/influencers', influencerRoutes);
 app.use('/api/collaborations', collaborationRoutes);
