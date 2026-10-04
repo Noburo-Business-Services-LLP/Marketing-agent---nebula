@@ -1,15 +1,15 @@
 {
- "generatedAt": "2026-10-03T21:00:13.587Z",
+ "generatedAt": "2026-10-04T05:52:09.645Z",
  "widths": [
   1280,
   375
  ],
- "since": "2026-10-03T20:55:18.000Z",
+ "since": "2026-10-04T05:45:59.000Z",
  "gate": "FAIL",
  "totals": {
   "375": {
-   "expected": 51,
-   "ok": 51,
+   "expected": 52,
+   "ok": 52,
    "missing": 0,
    "blank": 0,
    "error": 0,
@@ -17,9 +17,9 @@
    "tabNotFound": 0,
    "empty": 0,
    "stale": 0,
-   "checked": 1587,
-   "failures": 72,
-   "routesWithFailures": 7,
+   "checked": 1777,
+   "failures": 76,
+   "routesWithFailures": 9,
    "unknown": 4,
    "unknownUnsigned": 4,
    "unparsed": 0,
@@ -27,12 +27,15 @@
    "gradientText": 3,
    "gradientTextUnsigned": 3,
    "svgFailures": 0,
-   "positionedFailures": 9,
+   "iconFailures": 4,
+   "iconsChecked": 130,
+   "iconUnknown": 0,
+   "positionedFailures": 10,
    "imageFailures": 9
   },
   "1280": {
-   "expected": 51,
-   "ok": 51,
+   "expected": 52,
+   "ok": 52,
    "missing": 0,
    "blank": 0,
    "error": 0,
@@ -40,9 +43,9 @@
    "tabNotFound": 0,
    "empty": 0,
    "stale": 0,
-   "checked": 2733,
-   "failures": 80,
-   "routesWithFailures": 8,
+   "checked": 2923,
+   "failures": 84,
+   "routesWithFailures": 10,
    "unknown": 7,
    "unknownUnsigned": 7,
    "unparsed": 0,
@@ -50,19 +53,22 @@
    "gradientText": 3,
    "gradientTextUnsigned": 3,
    "svgFailures": 0,
-   "positionedFailures": 14,
+   "iconFailures": 4,
+   "iconsChecked": 130,
+   "iconUnknown": 0,
+   "positionedFailures": 15,
    "imageFailures": 14
   }
  },
  "routes": {
-  "dashboard": {
-   "path": "/dashboard",
-   "group": "shell",
+  "layer-fixtures": {
+   "path": "/__layer-fixtures",
+   "group": "fixture",
    "scope": "in",
    "widths": {
     "375": {
      "status": "ok",
-     "checked": 25,
+     "checked": 72,
      "failures": 0,
      "unknown": 0,
      "unknownUnsigned": 0,
@@ -70,12 +76,54 @@
      "gradientText": 0,
      "kinds": {},
      "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 12,
+     "iconUnknown": 0,
      "worst": null,
      "top": []
     },
     "1280": {
      "status": "ok",
-     "checked": 56,
+     "checked": 72,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 12,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "dashboard": {
+   "path": "/dashboard",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 26,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 57,
      "failures": 5,
      "unknown": 3,
      "unknownUnsigned": 3,
@@ -85,6 +133,9 @@
       "image-underlying": 5
      },
      "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
      "worst": 1.6,
      "top": [
       [
@@ -143,7 +194,7 @@
    "widths": {
     "375": {
      "status": "ok",
-     "checked": 62,
+     "checked": 68,
      "failures": 4,
      "unknown": 0,
      "unknownUnsigned": 0,
@@ -153,6 +204,9 @@
       "contrast": 4
      },
      "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 6,
+     "iconUnknown": 0,
      "worst": 2.8,
      "top": [
       [
@@ -195,7 +249,7 @@
     },
     "1280": {
      "status": "ok",
-     "checked": 121,
+     "checked": 127,
      "failures": 7,
      "unknown": 0,
      "unknownUnsigned": 0,
@@ -205,6 +259,9 @@
       "contrast": 7
      },
      "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 6,
+     "iconUnknown": 0,
      "worst": 2.8,
      "top": [
       [
@@ -281,7 +338,7 @@
    "widths": {
     "375": {
      "status": "ok",
-     "checked": 17,
+     "checked": 19,
      "failures": 0,
      "unknown": 0,
      "unknownUnsigned": 0,
@@ -289,12 +346,15 @@
      "gradientText": 0,
      "kinds": {},
      "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 2,
+     "iconUnknown": 0,
      "worst": null,
      "top": []
     },
     "1280": {
      "status": "ok",
-     "checked": 40,
+     "checked": 42,
      "failures": 0,
      "unknown": 0,
      "unknownUnsigned": 0,
@@ -302,6 +362,9 @@
      "gradientText": 0,
      "kinds": {},
      "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 2,
+     "iconUnknown": 0,
      "worst": null,
      "top": []
     }
@@ -314,7 +377,7 @@
    "widths": {
     "375": {
      "status": "ok",
-     "checked": 60,
+     "checked": 63,
      "failures": 4,
      "unknown": 0,
      "unknownUnsigned": 0,
@@ -324,6 +387,9 @@
       "contrast": 4
      },
      "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 3,
+     "iconUnknown": 0,
      "worst": 1.73,
      "top": [
       [
@@ -366,7 +432,7 @@
     },
     "1280": {
      "status": "ok",
-     "checked": 89,
+     "checked": 92,
      "failures": 4,
      "unknown": 0,
      "unknownUnsigned": 0,
@@ -376,6 +442,9 @@
       "contrast": 4
      },
      "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 3,
+     "iconUnknown": 0,
      "worst": 1.73,
      "top": [
       [
@@ -425,7 +494,7 @@
    "widths": {
     "375": {
      "status": "ok",
-     "checked": 58,
+     "checked": 61,
      "failures": 4,
      "unknown": 0,
      "unknownUnsigned": 0,
@@ -435,6 +504,9 @@
       "contrast": 4
      },
      "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 3,
+     "iconUnknown": 0,
      "worst": 1.73,
      "top": [
       [
@@ -477,7 +549,7 @@
     },
     "1280": {
      "status": "ok",
-     "checked": 87,
+     "checked": 90,
      "failures": 4,
      "unknown": 0,
      "unknownUnsigned": 0,
@@ -487,6 +559,9 @@
       "contrast": 4
      },
      "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 3,
+     "iconUnknown": 0,
      "worst": 1.73,
      "top": [
       [
@@ -536,7 +611,7 @@
    "widths": {
     "375": {
      "status": "ok",
-     "checked": 15,
+     "checked": 17,
      "failures": 0,
      "unknown": 0,
      "unknownUnsigned": 0,
@@ -544,12 +619,15 @@
      "gradientText": 0,
      "kinds": {},
      "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 2,
+     "iconUnknown": 0,
      "worst": null,
      "top": []
     },
     "1280": {
      "status": "ok",
-     "checked": 38,
+     "checked": 40,
      "failures": 0,
      "unknown": 0,
      "unknownUnsigned": 0,
@@ -557,6 +635,9 @@
      "gradientText": 0,
      "kinds": {},
      "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 2,
+     "iconUnknown": 0,
      "worst": null,
      "top": []
     }
@@ -564,468 +645,6 @@
   },
   "idea-inbox": {
    "path": "/idea-inbox",
-   "group": "shell",
-   "scope": "in",
-   "widths": {
-    "375": {
-     "status": "ok",
-     "checked": 23,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    },
-    "1280": {
-     "status": "ok",
-     "checked": 46,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    }
-   }
-  },
-  "campaigns": {
-   "path": "/campaigns",
-   "group": "shell",
-   "scope": "in",
-   "widths": {
-    "375": {
-     "status": "ok",
-     "checked": 44,
-     "failures": 0,
-     "unknown": 3,
-     "unknownUnsigned": 3,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    },
-    "1280": {
-     "status": "ok",
-     "checked": 69,
-     "failures": 0,
-     "unknown": 3,
-     "unknownUnsigned": 3,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    }
-   }
-  },
-  "campaigns-classic": {
-   "path": "/campaigns-classic",
-   "group": "shell",
-   "scope": "in",
-   "widths": {
-    "375": {
-     "status": "ok",
-     "checked": 22,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    },
-    "1280": {
-     "status": "ok",
-     "checked": 49,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    }
-   }
-  },
-  "drafts-review": {
-   "path": "/drafts",
-   "group": "shell",
-   "scope": "in",
-   "widths": {
-    "375": {
-     "status": "ok",
-     "checked": 34,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    },
-    "1280": {
-     "status": "ok",
-     "checked": 57,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    }
-   }
-  },
-  "drafts-all": {
-   "path": "/drafts",
-   "group": "shell",
-   "scope": "in",
-   "widths": {
-    "375": {
-     "status": "ok",
-     "checked": 28,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    },
-    "1280": {
-     "status": "ok",
-     "checked": 51,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    }
-   }
-  },
-  "reels": {
-   "path": "/reels",
-   "group": "shell",
-   "scope": "in",
-   "widths": {
-    "375": {
-     "status": "ok",
-     "checked": 15,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    },
-    "1280": {
-     "status": "ok",
-     "checked": 38,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    }
-   }
-  },
-  "reels-hero": {
-   "path": "/reels/hero",
-   "group": "shell",
-   "scope": "in",
-   "widths": {
-    "375": {
-     "status": "ok",
-     "checked": 7,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    },
-    "1280": {
-     "status": "ok",
-     "checked": 30,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    }
-   }
-  },
-  "upload": {
-   "path": "/upload",
-   "group": "shell",
-   "scope": "in",
-   "widths": {
-    "375": {
-     "status": "ok",
-     "checked": 8,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    },
-    "1280": {
-     "status": "ok",
-     "checked": 31,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    }
-   }
-  },
-  "ad-campaigns": {
-   "path": "/ad-campaigns",
-   "group": "shell",
-   "scope": "in",
-   "widths": {
-    "375": {
-     "status": "ok",
-     "checked": 5,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    },
-    "1280": {
-     "status": "ok",
-     "checked": 28,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    }
-   }
-  },
-  "competitors": {
-   "path": "/competitors",
-   "group": "shell",
-   "scope": "in",
-   "widths": {
-    "375": {
-     "status": "ok",
-     "checked": 14,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    },
-    "1280": {
-     "status": "ok",
-     "checked": 37,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    }
-   }
-  },
-  "connect-socials": {
-   "path": "/connect-socials",
-   "group": "shell",
-   "scope": "in",
-   "widths": {
-    "375": {
-     "status": "ok",
-     "checked": 47,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    },
-    "1280": {
-     "status": "ok",
-     "checked": 70,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    }
-   }
-  },
-  "connect-socials-permissions": {
-   "path": "/connect-socials?tab=permissions",
-   "group": "shell",
-   "scope": "in",
-   "widths": {
-    "375": {
-     "status": "ok",
-     "checked": 23,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    },
-    "1280": {
-     "status": "ok",
-     "checked": 46,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    }
-   }
-  },
-  "connect-socials-sync": {
-   "path": "/connect-socials?tab=sync",
-   "group": "shell",
-   "scope": "in",
-   "widths": {
-    "375": {
-     "status": "ok",
-     "checked": 25,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    },
-    "1280": {
-     "status": "ok",
-     "checked": 48,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    }
-   }
-  },
-  "connect-socials-auto-reply": {
-   "path": "/connect-socials?tab=auto-reply",
-   "group": "shell",
-   "scope": "in",
-   "widths": {
-    "375": {
-     "status": "ok",
-     "checked": 42,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    },
-    "1280": {
-     "status": "ok",
-     "checked": 65,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    }
-   }
-  },
-  "connect-socials-inbox": {
-   "path": "/connect-socials/inbox",
    "group": "shell",
    "scope": "in",
    "widths": {
@@ -1039,12 +658,15 @@
      "gradientText": 0,
      "kinds": {},
      "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 4,
+     "iconUnknown": 0,
      "worst": null,
      "top": []
     },
     "1280": {
      "status": "ok",
-     "checked": 52,
+     "checked": 50,
      "failures": 0,
      "unknown": 0,
      "unknownUnsigned": 0,
@@ -1052,217 +674,142 @@
      "gradientText": 0,
      "kinds": {},
      "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 4,
+     "iconUnknown": 0,
      "worst": null,
      "top": []
     }
    }
   },
-  "brand-assets": {
-   "path": "/brand-assets",
+  "campaigns": {
+   "path": "/campaigns",
    "group": "shell",
    "scope": "in",
    "widths": {
     "375": {
      "status": "ok",
-     "checked": 46,
+     "checked": 54,
      "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
+     "unknown": 3,
+     "unknownUnsigned": 3,
      "unparsed": 0,
      "gradientText": 0,
      "kinds": {},
      "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 10,
+     "iconUnknown": 0,
      "worst": null,
      "top": []
     },
     "1280": {
      "status": "ok",
-     "checked": 69,
+     "checked": 79,
      "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
+     "unknown": 3,
+     "unknownUnsigned": 3,
      "unparsed": 0,
      "gradientText": 0,
      "kinds": {},
      "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 10,
+     "iconUnknown": 0,
      "worst": null,
      "top": []
     }
    }
   },
-  "brand-assets-products": {
-   "path": "/brand-assets?tab=products",
-   "group": "shell",
-   "scope": "in",
-   "widths": {
-    "375": {
-     "status": "ok",
-     "checked": 41,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    },
-    "1280": {
-     "status": "ok",
-     "checked": 64,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    }
-   }
-  },
-  "brand-assets-environment": {
-   "path": "/brand-assets?tab=environment",
-   "group": "shell",
-   "scope": "in",
-   "widths": {
-    "375": {
-     "status": "ok",
-     "checked": 17,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    },
-    "1280": {
-     "status": "ok",
-     "checked": 40,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    }
-   }
-  },
-  "brand-assets-voice": {
-   "path": "/brand-assets?tab=voice",
+  "campaigns-classic": {
+   "path": "/campaigns-classic",
    "group": "shell",
    "scope": "in",
    "widths": {
     "375": {
      "status": "ok",
      "checked": 29,
-     "failures": 0,
+     "failures": 2,
      "unknown": 0,
      "unknownUnsigned": 0,
      "unparsed": 0,
      "gradientText": 0,
-     "kinds": {},
+     "kinds": {
+      "contrast": 2
+     },
      "svgFailures": 0,
-     "worst": null,
-     "top": []
+     "iconFailures": 2,
+     "iconsChecked": 7,
+     "iconUnknown": 0,
+     "worst": 2.61,
+     "top": [
+      [
+       "[icon] lucide-send",
+       2.61,
+       "#ffffff",
+       "#1ab861",
+       "text-white",
+       "contrast",
+       "svg-icon"
+      ],
+      [
+       "[icon] lucide-pen-line",
+       2.76,
+       "#ffffff",
+       "#15a7de",
+       "text-white",
+       "contrast",
+       "svg-icon"
+      ]
+     ]
     },
     "1280": {
      "status": "ok",
-     "checked": 52,
-     "failures": 0,
+     "checked": 56,
+     "failures": 2,
      "unknown": 0,
      "unknownUnsigned": 0,
      "unparsed": 0,
      "gradientText": 0,
-     "kinds": {},
+     "kinds": {
+      "contrast": 2
+     },
      "svgFailures": 0,
-     "worst": null,
-     "top": []
+     "iconFailures": 2,
+     "iconsChecked": 7,
+     "iconUnknown": 0,
+     "worst": 2.61,
+     "top": [
+      [
+       "[icon] lucide-send",
+       2.61,
+       "#ffffff",
+       "#1ab861",
+       "text-white",
+       "contrast",
+       "svg-icon"
+      ],
+      [
+       "[icon] lucide-pen-line",
+       2.76,
+       "#ffffff",
+       "#15a7de",
+       "text-white",
+       "contrast",
+       "svg-icon"
+      ]
+     ]
     }
    }
   },
-  "inventory-redirect": {
-   "path": "/inventory",
-   "group": "shell",
-   "scope": "duplicate",
-   "widths": {
-    "375": {
-     "status": "ok",
-     "checked": 41,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    },
-    "1280": {
-     "status": "ok",
-     "checked": 64,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    }
-   }
-  },
-  "analytics": {
-   "path": "/analytics",
-   "group": "shell",
-   "scope": "in",
-   "widths": {
-    "375": {
-     "status": "ok",
-     "checked": 22,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    },
-    "1280": {
-     "status": "ok",
-     "checked": 45,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    }
-   }
-  },
-  "analytics-classic": {
-   "path": "/analytics-classic",
+  "drafts-review": {
+   "path": "/drafts",
    "group": "shell",
    "scope": "in",
    "widths": {
     "375": {
      "status": "ok",
-     "checked": 43,
+     "checked": 39,
      "failures": 0,
      "unknown": 0,
      "unknownUnsigned": 0,
@@ -1270,12 +817,15 @@
      "gradientText": 0,
      "kinds": {},
      "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 5,
+     "iconUnknown": 0,
      "worst": null,
      "top": []
     },
     "1280": {
      "status": "ok",
-     "checked": 70,
+     "checked": 62,
      "failures": 0,
      "unknown": 0,
      "unknownUnsigned": 0,
@@ -1283,19 +833,22 @@
      "gradientText": 0,
      "kinds": {},
      "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 5,
+     "iconUnknown": 0,
      "worst": null,
      "top": []
     }
    }
   },
-  "seo": {
-   "path": "/seo",
+  "drafts-all": {
+   "path": "/drafts",
    "group": "shell",
    "scope": "in",
    "widths": {
     "375": {
      "status": "ok",
-     "checked": 26,
+     "checked": 37,
      "failures": 0,
      "unknown": 0,
      "unknownUnsigned": 0,
@@ -1303,12 +856,15 @@
      "gradientText": 0,
      "kinds": {},
      "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 9,
+     "iconUnknown": 0,
      "worst": null,
      "top": []
     },
     "1280": {
      "status": "ok",
-     "checked": 49,
+     "checked": 60,
      "failures": 0,
      "unknown": 0,
      "unknownUnsigned": 0,
@@ -1316,19 +872,22 @@
      "gradientText": 0,
      "kinds": {},
      "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 9,
+     "iconUnknown": 0,
      "worst": null,
      "top": []
     }
    }
   },
-  "seo-keywords": {
-   "path": "/seo/keywords",
+  "reels": {
+   "path": "/reels",
    "group": "shell",
    "scope": "in",
    "widths": {
     "375": {
      "status": "ok",
-     "checked": 13,
+     "checked": 16,
      "failures": 0,
      "unknown": 0,
      "unknownUnsigned": 0,
@@ -1336,12 +895,15 @@
      "gradientText": 0,
      "kinds": {},
      "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
      "worst": null,
      "top": []
     },
     "1280": {
      "status": "ok",
-     "checked": 38,
+     "checked": 39,
      "failures": 0,
      "unknown": 0,
      "unknownUnsigned": 0,
@@ -1349,343 +911,16 @@
      "gradientText": 0,
      "kinds": {},
      "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
      "worst": null,
      "top": []
     }
    }
   },
-  "seo-metadata": {
-   "path": "/seo/metadata",
-   "group": "shell",
-   "scope": "in",
-   "widths": {
-    "375": {
-     "status": "ok",
-     "checked": 15,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    },
-    "1280": {
-     "status": "ok",
-     "checked": 40,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    }
-   }
-  },
-  "seo-hashtags": {
-   "path": "/seo/hashtags",
-   "group": "shell",
-   "scope": "in",
-   "widths": {
-    "375": {
-     "status": "ok",
-     "checked": 18,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    },
-    "1280": {
-     "status": "ok",
-     "checked": 43,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    }
-   }
-  },
-  "seo-competitor": {
-   "path": "/seo/competitor",
-   "group": "shell",
-   "scope": "in",
-   "widths": {
-    "375": {
-     "status": "ok",
-     "checked": 13,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    },
-    "1280": {
-     "status": "ok",
-     "checked": 38,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    }
-   }
-  },
-  "influencer-portal": {
-   "path": "/influencer-portal",
-   "group": "shell",
-   "scope": "in",
-   "widths": {
-    "375": {
-     "status": "ok",
-     "checked": 17,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    },
-    "1280": {
-     "status": "ok",
-     "checked": 42,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    }
-   }
-  },
-  "influencer-list": {
-   "path": "/influencer-portal/list",
-   "group": "shell",
-   "scope": "in",
-   "widths": {
-    "375": {
-     "status": "ok",
-     "checked": 15,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    },
-    "1280": {
-     "status": "ok",
-     "checked": 40,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    }
-   }
-  },
-  "influencer-collaborations": {
-   "path": "/influencer-portal/collaborations",
-   "group": "shell",
-   "scope": "in",
-   "widths": {
-    "375": {
-     "status": "ok",
-     "checked": 22,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    },
-    "1280": {
-     "status": "ok",
-     "checked": 47,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    }
-   }
-  },
-  "influencer-submissions": {
-   "path": "/influencer-portal/submissions",
-   "group": "shell",
-   "scope": "in",
-   "widths": {
-    "375": {
-     "status": "ok",
-     "checked": 6,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    },
-    "1280": {
-     "status": "ok",
-     "checked": 31,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    }
-   }
-  },
-  "influencer-analytics": {
-   "path": "/influencer-portal/analytics",
-   "group": "shell",
-   "scope": "in",
-   "widths": {
-    "375": {
-     "status": "ok",
-     "checked": 11,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    },
-    "1280": {
-     "status": "ok",
-     "checked": 36,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    }
-   }
-  },
-  "influencer-profile": {
-   "path": "/influencer-portal/profile",
-   "group": "shell",
-   "scope": "in",
-   "widths": {
-    "375": {
-     "status": "ok",
-     "checked": 7,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    },
-    "1280": {
-     "status": "ok",
-     "checked": 32,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    }
-   }
-  },
-  "ai-memory": {
-   "path": "/ai-memory",
-   "group": "shell",
-   "scope": "in",
-   "widths": {
-    "375": {
-     "status": "ok",
-     "checked": 13,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    },
-    "1280": {
-     "status": "ok",
-     "checked": 36,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    }
-   }
-  },
-  "ai-history": {
-   "path": "/ai-history",
+  "reels-hero": {
+   "path": "/reels/hero",
    "group": "shell",
    "scope": "in",
    "widths": {
@@ -1699,6 +934,9 @@
      "gradientText": 0,
      "kinds": {},
      "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
      "worst": null,
      "top": []
     },
@@ -1712,13 +950,55 @@
      "gradientText": 0,
      "kinds": {},
      "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
      "worst": null,
      "top": []
     }
    }
   },
-  "ai-performance": {
-   "path": "/ai-performance",
+  "upload": {
+   "path": "/upload",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 9,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 32,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "ad-campaigns": {
+   "path": "/ad-campaigns",
    "group": "shell",
    "scope": "in",
    "widths": {
@@ -1732,6 +1012,9 @@
      "gradientText": 0,
      "kinds": {},
      "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
      "worst": null,
      "top": []
     },
@@ -1745,12 +1028,1248 @@
      "gradientText": 0,
      "kinds": {},
      "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "competitors": {
+   "path": "/competitors",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 18,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 4,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 41,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 4,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "connect-socials": {
+   "path": "/connect-socials",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 56,
+     "failures": 1,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 1
+     },
+     "svgFailures": 0,
+     "iconFailures": 1,
+     "iconsChecked": 9,
+     "iconUnknown": 0,
+     "worst": 2.03,
+     "top": [
+      [
+       "[icon] lucide-instagram",
+       2.03,
+       "#ffffff",
+       "#f7a522",
+       "text-white",
+       "contrast",
+       "svg-icon"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 79,
+     "failures": 1,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 1
+     },
+     "svgFailures": 0,
+     "iconFailures": 1,
+     "iconsChecked": 9,
+     "iconUnknown": 0,
+     "worst": 2.03,
+     "top": [
+      [
+       "[icon] lucide-instagram",
+       2.03,
+       "#ffffff",
+       "#f7a522",
+       "text-white",
+       "contrast",
+       "svg-icon"
+      ]
+     ]
+    }
+   }
+  },
+  "connect-socials-permissions": {
+   "path": "/connect-socials?tab=permissions",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 24,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 47,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "connect-socials-sync": {
+   "path": "/connect-socials?tab=sync",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 26,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 49,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "connect-socials-auto-reply": {
+   "path": "/connect-socials?tab=auto-reply",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 44,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 2,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 67,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 2,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "connect-socials-inbox": {
+   "path": "/connect-socials/inbox",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 29,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 2,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 54,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 2,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "brand-assets": {
+   "path": "/brand-assets",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 49,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 3,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 72,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 3,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "brand-assets-products": {
+   "path": "/brand-assets?tab=products",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 50,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 9,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 73,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 9,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "brand-assets-environment": {
+   "path": "/brand-assets?tab=environment",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 18,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 41,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "brand-assets-voice": {
+   "path": "/brand-assets?tab=voice",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 30,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 53,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "inventory-redirect": {
+   "path": "/inventory",
+   "group": "shell",
+   "scope": "duplicate",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 50,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 9,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 73,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 9,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "analytics": {
+   "path": "/analytics",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 23,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 46,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "analytics-classic": {
+   "path": "/analytics-classic",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 45,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 2,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 72,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 2,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "seo": {
+   "path": "/seo",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 27,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 50,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "seo-keywords": {
+   "path": "/seo/keywords",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 14,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 39,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "seo-metadata": {
+   "path": "/seo/metadata",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 16,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 41,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "seo-hashtags": {
+   "path": "/seo/hashtags",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 19,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 44,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "seo-competitor": {
+   "path": "/seo/competitor",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 14,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 39,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "influencer-portal": {
+   "path": "/influencer-portal",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 18,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 43,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "influencer-list": {
+   "path": "/influencer-portal/list",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 16,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 41,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "influencer-collaborations": {
+   "path": "/influencer-portal/collaborations",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 23,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 48,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "influencer-submissions": {
+   "path": "/influencer-portal/submissions",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 7,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 32,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "influencer-analytics": {
+   "path": "/influencer-portal/analytics",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 12,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 37,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "influencer-profile": {
+   "path": "/influencer-portal/profile",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 8,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 33,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "ai-memory": {
+   "path": "/ai-memory",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 14,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 37,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "ai-history": {
+   "path": "/ai-history",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 9,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 32,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "ai-performance": {
+   "path": "/ai-performance",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 7,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 30,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
      "worst": null,
      "top": []
     }
    }
   },
   "settings-profile": {
+   "path": "/settings",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 27,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 50,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "settings-business": {
+   "path": "/settings?tab=business",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 64,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 87,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "settings-notifications": {
+   "path": "/settings",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 13,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 36,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "settings-security": {
+   "path": "/settings",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 21,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 4,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 44,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 4,
+     "iconUnknown": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "settings-billing": {
    "path": "/settings",
    "group": "shell",
    "scope": "in",
@@ -1765,6 +2284,9 @@
      "gradientText": 0,
      "kinds": {},
      "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
      "worst": null,
      "top": []
     },
@@ -1778,138 +2300,9 @@
      "gradientText": 0,
      "kinds": {},
      "svgFailures": 0,
-     "worst": null,
-     "top": []
-    }
-   }
-  },
-  "settings-business": {
-   "path": "/settings?tab=business",
-   "group": "shell",
-   "scope": "in",
-   "widths": {
-    "375": {
-     "status": "ok",
-     "checked": 63,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    },
-    "1280": {
-     "status": "ok",
-     "checked": 86,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    }
-   }
-  },
-  "settings-notifications": {
-   "path": "/settings",
-   "group": "shell",
-   "scope": "in",
-   "widths": {
-    "375": {
-     "status": "ok",
-     "checked": 12,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    },
-    "1280": {
-     "status": "ok",
-     "checked": 35,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    }
-   }
-  },
-  "settings-security": {
-   "path": "/settings",
-   "group": "shell",
-   "scope": "in",
-   "widths": {
-    "375": {
-     "status": "ok",
-     "checked": 17,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    },
-    "1280": {
-     "status": "ok",
-     "checked": 40,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    }
-   }
-  },
-  "settings-billing": {
-   "path": "/settings",
-   "group": "shell",
-   "scope": "in",
-   "widths": {
-    "375": {
-     "status": "ok",
-     "checked": 25,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
-     "worst": null,
-     "top": []
-    },
-    "1280": {
-     "status": "ok",
-     "checked": 48,
-     "failures": 0,
-     "unknown": 0,
-     "unknownUnsigned": 0,
-     "unparsed": 0,
-     "gradientText": 0,
-     "kinds": {},
-     "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
      "worst": null,
      "top": []
     }
@@ -1932,6 +2325,9 @@
       "image-underlying": 9
      },
      "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 0,
+     "iconUnknown": 0,
      "worst": 1.93,
      "top": [
       [
@@ -2029,6 +2425,9 @@
       "image-underlying": 9
      },
      "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 0,
+     "iconUnknown": 0,
      "worst": 1.93,
      "top": [
       [
@@ -2123,7 +2522,7 @@
    "widths": {
     "375": {
      "status": "ok",
-     "checked": 188,
+     "checked": 189,
      "failures": 12,
      "unknown": 0,
      "unknownUnsigned": 0,
@@ -2133,6 +2532,9 @@
       "contrast": 12
      },
      "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
      "worst": 1.44,
      "top": [
       [
@@ -2229,7 +2631,7 @@
     },
     "1280": {
      "status": "ok",
-     "checked": 188,
+     "checked": 189,
      "failures": 12,
      "unknown": 0,
      "unknownUnsigned": 0,
@@ -2239,6 +2641,9 @@
       "contrast": 12
      },
      "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
      "worst": 1.44,
      "top": [
       [
@@ -2342,7 +2747,7 @@
    "widths": {
     "375": {
      "status": "ok",
-     "checked": 187,
+     "checked": 188,
      "failures": 10,
      "unknown": 0,
      "unknownUnsigned": 0,
@@ -2352,6 +2757,9 @@
       "contrast": 10
      },
      "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
      "worst": 1.44,
      "top": [
       [
@@ -2448,7 +2856,7 @@
     },
     "1280": {
      "status": "ok",
-     "checked": 187,
+     "checked": 188,
      "failures": 10,
      "unknown": 0,
      "unknownUnsigned": 0,
@@ -2458,6 +2866,9 @@
       "contrast": 10
      },
      "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
      "worst": 1.44,
      "top": [
       [
@@ -2569,6 +2980,9 @@
      "gradientText": 0,
      "kinds": {},
      "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 0,
+     "iconUnknown": 0,
      "worst": null,
      "top": []
     },
@@ -2582,6 +2996,9 @@
      "gradientText": 0,
      "kinds": {},
      "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 0,
+     "iconUnknown": 0,
      "worst": null,
      "top": []
     }
@@ -2594,16 +3011,19 @@
    "widths": {
     "375": {
      "status": "ok",
-     "checked": 42,
-     "failures": 29,
+     "checked": 44,
+     "failures": 30,
      "unknown": 0,
      "unknownUnsigned": 0,
      "unparsed": 0,
      "gradientText": 0,
      "kinds": {
-      "contrast": 29
+      "contrast": 30
      },
      "svgFailures": 0,
+     "iconFailures": 1,
+     "iconsChecked": 2,
+     "iconUnknown": 0,
      "worst": 1.8,
      "top": [
       [
@@ -2623,6 +3043,15 @@
        "text-white placeholder-white/20",
        "contrast",
        "placeholder"
+      ],
+      [
+       "[icon] lucide-search",
+       1.88,
+       "#44454b",
+       "#15171e",
+       "text-white/20",
+       "contrast",
+       "svg-icon"
       ],
       [
        "demo.nebulaa.ai",
@@ -2683,15 +3112,6 @@
        2.63,
        "#54565b",
        "#0b0d15",
-       "text-white/30",
-       "contrast",
-       "text"
-      ],
-      [
-       "Active today",
-       2.66,
-       "#56575d",
-       "#0d0f17",
        "text-white/30",
        "contrast",
        "text"
@@ -2700,16 +3120,19 @@
     },
     "1280": {
      "status": "ok",
-     "checked": 42,
-     "failures": 29,
+     "checked": 44,
+     "failures": 30,
      "unknown": 0,
      "unknownUnsigned": 0,
      "unparsed": 0,
      "gradientText": 0,
      "kinds": {
-      "contrast": 29
+      "contrast": 30
      },
      "svgFailures": 0,
+     "iconFailures": 1,
+     "iconsChecked": 2,
+     "iconUnknown": 0,
      "worst": 1.8,
      "top": [
       [
@@ -2729,6 +3152,15 @@
        "text-white placeholder-white/20",
        "contrast",
        "placeholder"
+      ],
+      [
+       "[icon] lucide-search",
+       1.88,
+       "#44454b",
+       "#15171e",
+       "text-white/20",
+       "contrast",
+       "svg-icon"
       ],
       [
        "demo.nebulaa.ai",
@@ -2789,15 +3221,6 @@
        2.63,
        "#54565b",
        "#0b0d15",
-       "text-white/30",
-       "contrast",
-       "text"
-      ],
-      [
-       "Active today",
-       2.66,
-       "#56575d",
-       "#0d0f17",
        "text-white/30",
        "contrast",
        "text"
@@ -2815,16 +3238,19 @@
    "widths": {
     "375": {
      "status": "ok",
-     "checked": 57,
-     "failures": 6,
+     "checked": 63,
+     "failures": 8,
      "unknown": 0,
      "unknownUnsigned": 0,
      "unparsed": 0,
      "gradientText": 1,
      "kinds": {
-      "contrast": 6
+      "contrast": 8
      },
      "svgFailures": 0,
+     "iconFailures": 2,
+     "iconsChecked": 6,
+     "iconUnknown": 0,
      "worst": 1.24,
      "top": [
       [
@@ -2864,6 +3290,15 @@
        "text"
       ],
       [
+       "[icon] lucide-target",
+       1.38,
+       "#ffcc29",
+       "#f5f3ff",
+       "text-[#ffcc29]",
+       "contrast",
+       "svg-icon"
+      ],
+      [
        "18.2%",
        1.44,
        "#ffd243",
@@ -2880,21 +3315,33 @@
        "text-[#ffcc29]",
        "contrast",
        "text"
+      ],
+      [
+       "[icon] lucide-chart-column",
+       1.44,
+       "#ffcc29",
+       "#fffaea",
+       "text-[#ffcc29]",
+       "contrast",
+       "svg-icon"
       ]
      ]
     },
     "1280": {
      "status": "ok",
-     "checked": 60,
-     "failures": 6,
+     "checked": 66,
+     "failures": 8,
      "unknown": 0,
      "unknownUnsigned": 0,
      "unparsed": 0,
      "gradientText": 1,
      "kinds": {
-      "contrast": 6
+      "contrast": 8
      },
      "svgFailures": 0,
+     "iconFailures": 2,
+     "iconsChecked": 6,
+     "iconUnknown": 0,
      "worst": 1.24,
      "top": [
       [
@@ -2923,6 +3370,24 @@
        "text-gray-200",
        "contrast",
        "text"
+      ],
+      [
+       "[icon] lucide-target",
+       1.38,
+       "#ffcc29",
+       "#f5f3ff",
+       "text-[#ffcc29]",
+       "contrast",
+       "svg-icon"
+      ],
+      [
+       "[icon] lucide-chart-column",
+       1.44,
+       "#ffcc29",
+       "#fffaea",
+       "text-[#ffcc29]",
+       "contrast",
+       "svg-icon"
       ],
       [
        "2.4M",
@@ -2962,16 +3427,19 @@
    "widths": {
     "375": {
      "status": "ok",
-     "checked": 11,
-     "failures": 5,
+     "checked": 12,
+     "failures": 6,
      "unknown": 0,
      "unknownUnsigned": 0,
      "unparsed": 0,
      "gradientText": 0,
      "kinds": {
-      "contrast": 5
+      "contrast": 6
      },
      "svgFailures": 0,
+     "iconFailures": 1,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
      "worst": 2.43,
      "top": [
       [
@@ -2991,6 +3459,15 @@
        "text-gray-900 placeholder-gray-400",
        "contrast",
        "placeholder"
+      ],
+      [
+       "[icon] lucide-eye",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "text-gray-400 hover:text-gray-600",
+       "contrast",
+       "svg-icon"
       ],
       [
        "Email Address",
@@ -3023,16 +3500,19 @@
     },
     "1280": {
      "status": "ok",
-     "checked": 11,
-     "failures": 5,
+     "checked": 12,
+     "failures": 6,
      "unknown": 0,
      "unknownUnsigned": 0,
      "unparsed": 0,
      "gradientText": 0,
      "kinds": {
-      "contrast": 5
+      "contrast": 6
      },
      "svgFailures": 0,
+     "iconFailures": 1,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
      "worst": 2.43,
      "top": [
       [
@@ -3052,6 +3532,15 @@
        "text-gray-900 placeholder-gray-400",
        "contrast",
        "placeholder"
+      ],
+      [
+       "[icon] lucide-eye",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "text-gray-400 hover:text-gray-600",
+       "contrast",
+       "svg-icon"
       ],
       [
        "Email Address",
@@ -3091,16 +3580,19 @@
    "widths": {
     "375": {
      "status": "ok",
-     "checked": 22,
-     "failures": 12,
+     "checked": 23,
+     "failures": 13,
      "unknown": 0,
      "unknownUnsigned": 0,
      "unparsed": 0,
      "gradientText": 0,
      "kinds": {
-      "contrast": 12
+      "contrast": 13
      },
      "svgFailures": 0,
+     "iconFailures": 1,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
      "worst": 1.94,
      "top": [
       [
@@ -3158,6 +3650,15 @@
        "placeholder"
       ],
       [
+       "[icon] lucide-eye",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "text-gray-400 hover:text-gray-600",
+       "contrast",
+       "svg-icon"
+      ],
+      [
        "First Name",
        2.5,
        "#4b5563",
@@ -3177,15 +3678,6 @@
       ],
       [
        "Company Website",
-       2.5,
-       "#4b5563",
-       "#111111",
-       "text-gray-600",
-       "contrast",
-       "text"
-      ],
-      [
-       "Email Address",
        2.5,
        "#4b5563",
        "#111111",
@@ -3197,16 +3689,19 @@
     },
     "1280": {
      "status": "ok",
-     "checked": 22,
-     "failures": 12,
+     "checked": 23,
+     "failures": 13,
      "unknown": 0,
      "unknownUnsigned": 0,
      "unparsed": 0,
      "gradientText": 0,
      "kinds": {
-      "contrast": 12
+      "contrast": 13
      },
      "svgFailures": 0,
+     "iconFailures": 1,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
      "worst": 1.94,
      "top": [
       [
@@ -3264,6 +3759,15 @@
        "placeholder"
       ],
       [
+       "[icon] lucide-eye",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "text-gray-400 hover:text-gray-600",
+       "contrast",
+       "svg-icon"
+      ],
+      [
        "First Name",
        2.5,
        "#4b5563",
@@ -3283,15 +3787,6 @@
       ],
       [
        "Company Website",
-       2.5,
-       "#4b5563",
-       "#111111",
-       "text-gray-600",
-       "contrast",
-       "text"
-      ],
-      [
-       "Email Address",
        2.5,
        "#4b5563",
        "#111111",
@@ -3310,7 +3805,7 @@
    "widths": {
     "375": {
      "status": "ok",
-     "checked": 61,
+     "checked": 62,
      "failures": 41,
      "unknown": 0,
      "unknownUnsigned": 0,
@@ -3320,6 +3815,9 @@
       "contrast": 41
      },
      "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
      "worst": 1.06,
      "top": [
       [
@@ -3416,7 +3914,7 @@
     },
     "1280": {
      "status": "ok",
-     "checked": 61,
+     "checked": 62,
      "failures": 41,
      "unknown": 0,
      "unknownUnsigned": 0,
@@ -3426,6 +3924,9 @@
       "contrast": 41
      },
      "svgFailures": 0,
+     "iconFailures": 0,
+     "iconsChecked": 1,
+     "iconUnknown": 0,
      "worst": 1.06,
      "top": [
       [
