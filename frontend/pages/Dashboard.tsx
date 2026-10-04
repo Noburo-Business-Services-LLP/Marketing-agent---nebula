@@ -3732,7 +3732,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                 : `${isDarkMode ? 'text-slate-300 hover:bg-[#0d1117]' : 'text-slate-600 hover:bg-slate-50'}`
                             }`}
                           >
-                            <span className="w-5 h-5 rounded-full bg-gradient-to-br from-slate-400 to-slate-600 flex items-center justify-center text-white text-[10px]">All</span>
+                            <span className="w-5 h-5 rounded-full bg-slate-600 flex items-center justify-center text-white text-[10px]">All</span>
                             All Platforms
                             {!platformFilter && <Check className="w-3.5 h-3.5 ml-auto text-[#ffcc29]" />}
                           </button>
@@ -3834,11 +3834,11 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
             <div className={`flex flex-wrap items-center gap-3 px-5 py-2 border-b ${isDarkMode ? 'border-[#ffcc29]/10 bg-[#0d1117]/50' : 'border-[#ededed] bg-[#f5f5f5]/50'}`}>
               <span className={`text-xs font-medium ${theme.textSecondary}`}>Legend:</span>
               <div className="flex items-center gap-1.5">
-                <div className="w-3 h-3 rounded bg-orange-500"></div>
+                <div className="w-3 h-3 rounded bg-orange-700"></div>
                 <span className={`text-xs ${theme.textMuted}`}>National</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <div className="w-3 h-3 rounded bg-pink-500"></div>
+                <div className="w-3 h-3 rounded bg-pink-600"></div>
                 <span className={`text-xs ${theme.textMuted}`}>Festival</span>
               </div>
               <div className="flex items-center gap-1.5">
@@ -3846,7 +3846,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                 <span className={`text-xs ${theme.textMuted}`}>Marketing</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <div className="w-3 h-3 rounded bg-blue-500"></div>
+                <div className="w-3 h-3 rounded bg-blue-600"></div>
                 <span className={`text-xs ${theme.textMuted}`}>International</span>
               </div>
               <div className="flex items-center gap-1.5">
@@ -3854,7 +3854,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                 <span className={`text-xs ${theme.textMuted}`}>Campaign</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <div className="w-3 h-3 rounded bg-purple-500"></div>
+                <div className="w-3 h-3 rounded bg-purple-600"></div>
                 <span className={`text-xs ${theme.textMuted}`}>Reminder</span>
               </div>
             </div>
@@ -3927,12 +3927,12 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                 title={event.eventType === 'holiday' ? `${event.description}${event.marketingTip ? `\n💡 ${event.marketingTip}` : ''}` : undefined}
                                 className={`text-[10px] px-1.5 py-0.5 rounded truncate font-medium shadow-sm hover:opacity-80 ${event.eventType !== 'holiday' ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${draggedEvent && (draggedEvent._id || draggedEvent.id) === (event._id || event.id) ? 'opacity-50 ring-1 ring-[#ffcc29]' : ''} ${
                                   event.eventType === 'holiday' 
-                                    ? event.type === 'national' ? 'bg-orange-500 text-white' :
-                                      event.type === 'festival' ? 'bg-pink-500 text-white' :
+                                    ? event.type === 'national' ? 'bg-orange-700 text-white' :
+                                      event.type === 'festival' ? 'bg-pink-600 text-white' :
                                       event.type === 'marketing' ? 'bg-green-500 text-white' :
-                                      'bg-blue-500 text-white'
+                                      'bg-blue-600 text-white'
                                     : event.eventType === 'reminder' || event.type === 'reminder' 
-                                      ? `${isDarkMode ? 'bg-purple-500/80 text-white' : 'bg-purple-500 text-white'}` 
+                                      ? `${isDarkMode ? 'bg-purple-600 text-white' : 'bg-purple-600 text-white'}` 
                                       : `${isDarkMode ? 'bg-[#ffcc29]/90 text-[#0a0f1a]' : 'bg-[#ffcc29] text-[#0a0f1a]'}`
                                 }`}
                               >
@@ -4003,12 +4003,12 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                             title={event.eventType === 'holiday' ? `${event.description}${event.marketingTip ? `\n💡 ${event.marketingTip}` : ''}` : undefined}
                             className={`flex-1 py-2 px-3 rounded-lg shadow-md hover:opacity-90 ${event.eventType !== 'holiday' ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${draggedEvent && (draggedEvent._id || draggedEvent.id) === (event._id || event.id) ? 'opacity-50 ring-2 ring-[#ffcc29]' : ''} ${
                               event.eventType === 'holiday' 
-                                ? event.type === 'national' ? 'bg-orange-500 text-white' :
-                                  event.type === 'festival' ? 'bg-pink-500 text-white' :
+                                ? event.type === 'national' ? 'bg-orange-700 text-white' :
+                                  event.type === 'festival' ? 'bg-pink-600 text-white' :
                                   event.type === 'marketing' ? 'bg-green-500 text-white' :
-                                  'bg-blue-500 text-white'
+                                  'bg-blue-600 text-white'
                                 : event.eventType === 'reminder' || event.type === 'reminder' 
-                                  ? 'bg-purple-500 text-white' 
+                                  ? 'bg-purple-600 text-white' 
                                   : 'bg-[#ffcc29] text-[#0a0f1a]'
                             }`}
                           >

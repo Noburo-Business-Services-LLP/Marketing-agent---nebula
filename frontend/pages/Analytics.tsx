@@ -526,7 +526,7 @@ type MetricKey = 'followers' | 'reach' | 'impressions' | 'engagementRate' | 'pos
 
 const METRIC_CONFIG: Record<MetricKey, { label: string; icon: React.ReactNode; color: string; suffix?: string; totalKey?: string }> = {
   followers: { label: 'Followers', icon: <Users className="w-4 h-4" />, color: '#ffcc29', totalKey: 'followers' },
-  reach:     { label: 'Reach', icon: <Eye className="w-4 h-4" />, color: '#8B5CF6', totalKey: 'reach' },
+  reach:     { label: 'Reach', icon: <Eye className="w-4 h-4" />, color: '#7C3AED', totalKey: 'reach' },
   impressions: { label: 'Impressions', icon: <TrendingUp className="w-4 h-4" />, color: '#10B981', totalKey: 'impressions' },
   engagementRate: { label: 'Engagement %', icon: <Heart className="w-4 h-4" />, color: '#F43F5E', suffix: '%' },
   posts:     { label: 'Posts', icon: <MessageSquare className="w-4 h-4" />, color: '#F59E0B', totalKey: 'posts' },

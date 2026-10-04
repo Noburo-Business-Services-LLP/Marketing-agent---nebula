@@ -269,9 +269,9 @@ const GravityHome: React.FC = () => {
                 )}
                 {tag && (
                   <div className="absolute inset-x-0 bottom-0 flex items-center justify-between px-2 py-1.5 bg-gradient-to-t from-black/70 to-transparent">
-                    <span className={`text-[9px] font-semibold tracking-widest ${sample ? 'text-white/55' : 'text-white/80'}`}>{tag}</span>
+                    <span className="text-[9px] font-semibold tracking-widest text-white bg-black/75 rounded px-1.5 py-0.5">{tag}</span>
                     {!sample && (
-                      <span className="text-[9px] text-white/60 tabular-nums">{i + 1}/{stackCards.length}</span>
+                      <span className="text-[9px] text-white bg-black/75 rounded px-1.5 py-0.5 tabular-nums">{i + 1}/{stackCards.length}</span>
                     )}
                   </div>
                 )}

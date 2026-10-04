@@ -218,11 +218,11 @@ const GravityCalendar: React.FC = () => {
                         ? 'border-[rgb(var(--gv-accent-rgb)/0.40)] bg-[var(--gv-accent-fill)]'
                         : inMonth
                           ? 'border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)] hover:bg-[var(--gv-surface-2)]'
-                          : 'border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)] opacity-40'
+                          : 'border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)]'
                     }`}
                   >
                     <div className="flex items-baseline justify-end mb-2">
-                      <span className={`text-[14px] font-serif-display tabular-nums ${isToday ? 'text-[var(--gv-accent-text)]' : inMonth ? 'text-[var(--gv-text-primary)]' : 'text-[var(--gv-text-muted)]'}`}>
+                      <span className={`text-[14px] font-serif-display tabular-nums ${isToday ? 'text-[var(--gv-accent-text)]' : inMonth ? 'text-[var(--gv-text-primary)]' : 'text-[var(--gv-text-tertiary)]'}`}>
                         {d.getDate()}
                       </span>
                     </div>
