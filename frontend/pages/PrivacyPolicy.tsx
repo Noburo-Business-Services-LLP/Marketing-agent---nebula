@@ -94,7 +94,7 @@ const PrivacyPolicy: React.FC = () => {
               <ul className="list-disc pl-6 space-y-2 mb-4">
                 <li><strong className={text}>Account Creation & Authentication:</strong> To register, verify, and maintain your account on the Platform.</li>
                 <li><strong className={text}>Service Delivery:</strong> To provide you with the features, tools, and AI-powered functionalities of the Platform, including decision tracking, action planning, and outcome analysis.</li>
-                <li><strong className={text}>Trial Management:</strong> To manage your free trial period, track eligibility, and communicate about trial expiry and upgrade options.</li>
+                <li><strong className={text}>Account and plan management:</strong> To manage your Quarks balance and plan, and to communicate about upgrade options, add-ons and billing.</li>
                 <li><strong className={text}>Billing & Payments:</strong> To process your Subscription payments, generate invoices, manage renewals, and comply with GST and financial record-keeping obligations.</li>
                 <li><strong className={text}>Customer Support:</strong> To respond to your queries, troubleshoot issues, and provide assistance.</li>
                 <li><strong className={text}>Platform Improvement:</strong> To analyse usage patterns, identify bugs, improve AI model performance, and develop new features.</li>
@@ -160,7 +160,7 @@ const PrivacyPolicy: React.FC = () => {
               <p className="mb-4">We retain your personal data for as long as your account is active, as necessary to provide you with the Services, or as required by applicable laws and regulations.</p>
               <ul className="list-disc pl-6 space-y-2 mb-4">
                 <li><strong className={text}>Active account data:</strong> Retained for the duration of your Subscription plus 2 years post-termination for legal and audit purposes;</li>
-                <li><strong className={text}>Trial data:</strong> Retained for 90 days post-trial expiry if you do not convert to a paid plan, after which it is deleted or anonymised;</li>
+                <li><strong className={text}>Free Account data:</strong> Retained while your account is active. If you ask us to close your account, or the account is inactive for 12 months, it is deleted or anonymised;</li>
                 <li><strong className={text}>Financial and billing records:</strong> Retained for 7 years as required under Indian tax and accounting laws;</li>
                 <li><strong className={text}>Usage logs and analytics:</strong> Retained for up to 24 months, after which they are anonymised;</li>
                 <li><strong className={text}>Support communications:</strong> Retained for 3 years from the date of last communication.</li>
