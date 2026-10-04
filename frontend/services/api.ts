@@ -3141,7 +3141,7 @@ export const brandAssetsAPI = {
   }): Promise<{
     primary_color: string;
     secondary_color: string;
-    source: 'website' | 'manual';
+    source: 'website' | 'manual' | 'logo' | 'none';
     confidence: number;
     reason: string;
   }> => {
@@ -3157,6 +3157,17 @@ export const brandAssetsAPI = {
       },
       true
     );
+  },
+
+  // Read colours from the signed-in user's own stored logo. Nothing is saved until the page saves.
+  brandColorsFromLogo: async (): Promise<{
+    success: boolean;
+    primary_color: string;
+    secondary_color: string;
+    source: 'logo';
+    reason: string;
+  }> => {
+    return await apiCall<any>('/brand-assets/colors-from-logo', { method: 'POST', body: JSON.stringify({}) }, true);
   },
 
   // Add one past-post sample (caption/image) to improve mimic quality

@@ -18,6 +18,7 @@ import {
   X
 } from 'lucide-react';
 import { brandAssetsAPI } from '../services/api';
+import { isPlaceholderColorPair } from '../utils/brandColors';
 import { useConfirm } from '../context/ConfirmContext';
 import { LOGO_GRID, LOGO_GRID_LABELS, LogoGridPosition } from '../constants/logoPositions';
 // Rendered as a tab panel rather than merged in: Inventory is ~1,150 lines and
@@ -164,8 +165,10 @@ const BrandAssets: React.FC = () => {
 
   const [brandName, setBrandName] = useState('');
   const [brandDescription, setBrandDescription] = useState('');
-  const [primaryColor, setPrimaryColor] = useState('#111111');
-  const [secondaryColor, setSecondaryColor] = useState('#FFCC29');
+  const [primaryColor, setPrimaryColor] = useState('');
+  const [secondaryColor, setSecondaryColor] = useState('');
+  const [colorsNote, setColorsNote] = useState<string | null>(null);
+  const [readingLogoColors, setReadingLogoColors] = useState(false);
   const [fontType, setFontType] = useState('');
   const [enforcementMode, setEnforcementMode] = useState<'strict' | 'adaptive' | 'off'>('strict');
   const [customTone, setCustomTone] = useState('');
@@ -192,8 +195,8 @@ const BrandAssets: React.FC = () => {
     if (!p) return;
     setBrandName(p.brandName || '');
     setBrandDescription(p.brandDescription || '');
-    setPrimaryColor(p.assets?.primaryColor || '#111111');
-    setSecondaryColor(p.assets?.secondaryColor || '#FFCC29');
+    setPrimaryColor(p.assets?.primaryColor || '');
+    setSecondaryColor(p.assets?.secondaryColor || '');
     setFontType(p.assets?.fontType || '');
     setEnforcementMode((p.enforcementMode as 'strict' | 'adaptive' | 'off') || 'strict');
     setCustomTone(p.customProfile?.tone || p.effectiveProfile?.tone || p.detectedProfile?.tone || '');
@@ -307,7 +310,11 @@ const BrandAssets: React.FC = () => {
         return;
       }
 
-      setSuccess('Logo uploaded');
+      setSuccess(
+        response.colorsFromLogo?.primary
+          ? 'Logo uploaded. Colours were taken from your logo. You can change them in the colour section.'
+          : 'Logo uploaded'
+      );
       setLogoPreview(null);
       setLogoName('');
       setIsPrimaryLogo(false);
@@ -372,6 +379,30 @@ const BrandAssets: React.FC = () => {
       setSavingPositionId(null);
     }
   };
+
+  const useColorsFromLogo = async () => {
+    try {
+      setReadingLogoColors(true);
+      setColorsNote(null);
+      const response = await brandAssetsAPI.brandColorsFromLogo();
+      if (response?.primary_color) {
+        setPrimaryColor(response.primary_color);
+        setSecondaryColor(response.secondary_color || '');
+        setColorsNote('Colours were taken from your logo. You can change them before you save.');
+      } else {
+        setColorsNote('Nebulaa could not read colours from this logo. Choose your colours yourself.');
+      }
+    } catch (err: any) {
+      setColorsNote(err?.message || 'Nebulaa could not read colours from this logo. Choose your colours yourself.');
+    } finally {
+      setReadingLogoColors(false);
+    }
+  };
+
+  const savedColorsArePlaceholder = isPlaceholderColorPair(
+    profile?.assets?.primaryColor,
+    profile?.assets?.secondaryColor
+  );
 
   const saveProfile = async () => {
     try {
@@ -800,29 +831,60 @@ const BrandAssets: React.FC = () => {
               <div className="space-y-3">
                 <label className={`text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Primary Color</label>
                 <div className="flex items-center gap-2">
-                  <input type="color" value={primaryColor || '#111111'} onChange={(e) => setPrimaryColor(e.target.value)} className="h-10 w-12 p-1 rounded border bg-transparent" />
+                  <input type="color" value={primaryColor || '#ffffff'} onChange={(e) => setPrimaryColor(e.target.value)} className="h-10 w-12 p-1 rounded border bg-transparent" />
                   <input
                     value={primaryColor}
                     onChange={(e) => setPrimaryColor(e.target.value)}
-                    placeholder="#111111"
+                    placeholder="#RRGGBB"
                     className={`flex-1 px-3 py-2 rounded-lg border ${isDarkMode ? 'bg-slate-800 border-slate-600 text-white' : 'bg-white border-gray-300 text-gray-900'
                       }`}
                   />
                 </div>
+                {!primaryColor && (
+                  <p className="text-xs" style={{ color: 'var(--gv-text-tertiary)' }}>Not set yet</p>
+                )}
               </div>
               <div className="space-y-3">
                 <label className={`text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Secondary Color</label>
                 <div className="flex items-center gap-2">
-                  <input type="color" value={secondaryColor || '#FFCC29'} onChange={(e) => setSecondaryColor(e.target.value)} className="h-10 w-12 p-1 rounded border bg-transparent" />
+                  <input type="color" value={secondaryColor || '#ffffff'} onChange={(e) => setSecondaryColor(e.target.value)} className="h-10 w-12 p-1 rounded border bg-transparent" />
                   <input
                     value={secondaryColor}
                     onChange={(e) => setSecondaryColor(e.target.value)}
-                    placeholder="#F5A623"
+                    placeholder="#RRGGBB"
                     className={`flex-1 px-3 py-2 rounded-lg border ${isDarkMode ? 'bg-slate-800 border-slate-600 text-white' : 'bg-white border-gray-300 text-gray-900'
                       }`}
                   />
                 </div>
+                {!secondaryColor && (
+                  <p className="text-xs" style={{ color: 'var(--gv-text-tertiary)' }}>Not set yet</p>
+                )}
               </div>
+            </div>
+
+            <div className="mt-4 space-y-2">
+              {savedColorsArePlaceholder && (
+                <p
+                  className="text-sm rounded-lg px-3 py-2"
+                  style={{ background: 'var(--gv-panel)', border: '1px solid var(--gv-border-subtle)', color: 'var(--gv-text-secondary)' }}
+                >
+                  These look like placeholder colours, not your own. Choose your colours, or use the colours from your logo.
+                </p>
+              )}
+              {primaryLogo && (
+                <button
+                  type="button"
+                  onClick={useColorsFromLogo}
+                  disabled={readingLogoColors}
+                  className="text-sm font-medium rounded-lg px-3 py-2 disabled:opacity-60"
+                  style={{ background: 'var(--gv-panel)', border: '1px solid var(--gv-border-subtle)', color: 'var(--gv-text-primary)' }}
+                >
+                  {readingLogoColors ? 'Reading your logo' : 'Use colours from my logo'}
+                </button>
+              )}
+              {colorsNote && (
+                <p className="text-sm" role="status" style={{ color: 'var(--gv-text-secondary)' }}>{colorsNote}</p>
+              )}
             </div>
 
             <div className="mt-4">
