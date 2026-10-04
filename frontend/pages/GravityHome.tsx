@@ -199,10 +199,10 @@ const GravityHome: React.FC = () => {
           <span className="w-2 h-2 rounded-full bg-[var(--gv-accent)]" />
           <div className="flex-1 min-w-0">
             <div className="text-[13.5px] font-semibold text-[var(--gv-text-primary)]">Finish setting up Nebulaa</div>
-            <div className="text-[12px] text-[var(--gv-text-tertiary)] truncate">Connect your social accounts and confirm brand voice — 2 minutes.</div>
+            <div className="text-[12px] text-[var(--gv-text-tertiary)] leading-snug">Connect your social media accounts and confirm your brand voice. This takes about two minutes.</div>
           </div>
           <Link to="/connect-socials" className="flex items-center gap-2 text-[12px] font-semibold text-[var(--gv-accent-text)] hover:text-[var(--gv-accent-hover)]">
-            <span>0 of 2 done</span>
+            <span>0 of 2 steps done</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </Link>
         </div>
@@ -216,13 +216,13 @@ const GravityHome: React.FC = () => {
             eyebrow={`${dateLabel} · Bengaluru`}
             headline={
               <>
-                <span className="tabular-nums">{heroReadyCount}</span> {heroReadyCount === 1 ? 'post' : 'posts'}<br />
-                <span>{heroReadyCount === 1 ? 'is' : 'are'} ready for </span>
-                <GravityEmphasis>your eye</GravityEmphasis>
+                {heroReadyCount === 0 ? <span>No</span> : <span className="tabular-nums">{heroReadyCount}</span>} {heroReadyCount === 1 ? 'post' : 'posts'}<br />
+                <span>{heroReadyCount === 1 ? 'is' : 'are'} waiting for </span>
+                <GravityEmphasis>your review</GravityEmphasis>
                 <span>.</span>
               </>
             }
-            subcopy="Nebulaa drafted the week ahead while you slept. Take a minute, tap through, and we'll handle the rest — scheduled, posted, measured."
+            subcopy="Nebulaa prepares your content for the week ahead. Review each post, approve the ones you want, and Nebulaa schedules and publishes them for you."
             className="!mb-8"
           />
 
@@ -239,7 +239,7 @@ const GravityHome: React.FC = () => {
               className="flex items-center gap-2 h-11 px-5 rounded-lg border border-[var(--gv-border-default)] hover:border-[var(--gv-border-strong)] hover:bg-[var(--gv-surface-1)] text-[var(--gv-text-primary)] text-[14px] font-medium transition-colors"
             >
               <Sparkles className="w-4 h-4" />
-              Start fresh
+              Create content
             </Link>
           </div>
         </div>
@@ -286,16 +286,16 @@ const GravityHome: React.FC = () => {
         {/* Today's Plan */}
         <section>
           <div className="flex items-center justify-between mb-5">
-            <div className="gravity-label">Today's Plan</div>
+            <div className="gravity-label">Today's plan</div>
             <div className="text-[11px] text-[var(--gv-text-muted)]">
               {todaysPlan.length} post{todaysPlan.length !== 1 ? 's' : ''} · {weeklyStats.platforms.length} platform{weeklyStats.platforms.length !== 1 ? 's' : ''}
             </div>
           </div>
           {todaysPlan.length === 0 ? (
             <div className="rounded-xl border border-[var(--gv-border-subtle)] p-8 text-center">
-              <div className="text-[var(--gv-text-muted)] text-[14px]">Nothing on the schedule for today. Enjoy a slower day.</div>
+              <div className="text-[var(--gv-text-muted)] text-[14px]">No posts are scheduled for today. Open the calendar to schedule one.</div>
               <Link to="/content-calendar" className="mt-3 inline-block text-[12px] text-[var(--gv-accent-text)] hover:text-[var(--gv-accent-hover)] font-semibold">
-                Open Calendar →
+                Open calendar →
               </Link>
             </div>
           ) : (
@@ -326,8 +326,8 @@ const GravityHome: React.FC = () => {
         {/* This Week */}
         <section className="space-y-4">
           <div className="flex items-center justify-between">
-            <div className="gravity-label">This Week</div>
-            <div className="text-[11px] text-[var(--gv-text-muted)]">vs. last 7d</div>
+            <div className="gravity-label">This week</div>
+            <div className="text-[11px] text-[var(--gv-text-muted)]">Compared with the last 7 days</div>
           </div>
 
           <div className="rounded-2xl border border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)] p-6 relative overflow-hidden">
@@ -347,8 +347,8 @@ const GravityHome: React.FC = () => {
               </div>
               <div className="text-[12px] text-[var(--gv-text-tertiary)] mt-3">
                 {weeklyStats.platforms.length > 0
-                  ? `across ${weeklyStats.platforms.join(', ')}`
-                  : 'No platforms connected yet'}
+                  ? `Published across ${weeklyStats.platforms.join(', ')}`
+                  : 'No platforms are connected yet.'}
               </div>
             </div>
           </div>
@@ -364,7 +364,7 @@ const GravityHome: React.FC = () => {
                   {/* Real fields only. This line used to read "24.8K reach ·
                       3,184 likes" for every campaign — both hardcoded. */}
                   <div className="text-[11px] text-[var(--gv-text-tertiary)] capitalize">
-                    {[c.status, (c.platforms || []).join(', ')].filter(Boolean).join(' · ') || 'No platforms set'}
+                    {[c.status, (c.platforms || []).join(', ')].filter(Boolean).join(' · ') || 'No platforms are set'}
                   </div>
                 </div>
               </div>

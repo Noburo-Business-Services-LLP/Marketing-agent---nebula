@@ -329,7 +329,7 @@ const GravityCreate: React.FC = () => {
       await draftsAPI.publishDraft(d._id, selectedPlatforms);
       setActioned((prev) => ({ ...prev, [d._id]: 'approved' }));
     } catch (e: any) {
-      setError(e?.message || 'Could not publish this post');
+      setError(e?.message || 'This post could not be published.');
     } finally {
       setActionBusy('');
     }
@@ -345,11 +345,11 @@ const GravityCreate: React.FC = () => {
     try {
       const res: any = await apiService.generateCaptionFromImage(img, selectedPlatforms[0] || 'instagram');
       const next = res?.caption || res?.data?.caption || '';
-      if (!next) throw new Error('No caption came back');
+      if (!next) throw new Error('No caption was returned. Please try again.');
       await draftsAPI.updateDraft(d._id, { caption: next });
       setResults((prev) => prev.map((x: any) => x._id === d._id ? { ...x, caption: next } : x));
     } catch (e: any) {
-      setError(e?.message || 'Could not write a caption');
+      setError(e?.message || 'A caption could not be written.');
     } finally {
       setCaptionBusy('');
     }
@@ -362,7 +362,7 @@ const GravityCreate: React.FC = () => {
       setResults((prev) => prev.map((x: any) => x._id === d._id ? { ...x, caption: captionDraft } : x));
       setEditingCaption('');
     } catch (e: any) {
-      setError(e?.message || 'Could not save the caption');
+      setError(e?.message || 'The caption could not be saved.');
     } finally {
       setCaptionBusy('');
     }
@@ -420,7 +420,7 @@ const GravityCreate: React.FC = () => {
         x._id === d._id ? { ...x, status: 'processing', imageUrl: '', imagePromptResolved: promptDraft } : x));
       setPromptOpenFor('');
     } catch (e: any) {
-      setError(e?.message || 'Could not regenerate');
+      setError(e?.message || 'The image could not be regenerated.');
     } finally {
       setActionBusy('');
     }
@@ -434,7 +434,7 @@ const GravityCreate: React.FC = () => {
       await draftsAPI.retryImageGeneration(d._id);
       setResults((prev) => prev.map((x: any) => x._id === d._id ? { ...x, status: 'processing', imageUrl: '' } : x));
     } catch (e: any) {
-      setError(e?.message || 'Could not regenerate');
+      setError(e?.message || 'The image could not be regenerated.');
     } finally {
       setActionBusy('');
     }
@@ -461,7 +461,7 @@ const GravityCreate: React.FC = () => {
       setEditImageFor('');
       setEditImageInstruction('');
     } catch (e: any) {
-      setError(e?.message || 'Could not apply that edit');
+      setError(e?.message || 'That edit could not be applied.');
     } finally {
       setEditImageBusy('');
     }
@@ -491,12 +491,12 @@ const GravityCreate: React.FC = () => {
     }
     setActioned((prev) => ({ ...prev, ...done }));
     const failed = pending.length - Object.keys(done).length;
-    if (failed > 0) setError(`${failed} of ${pending.length} could not be sent.`);
+    if (failed > 0) setError(`${failed} of ${pending.length} posts could not be published.`);
     setActionBusy('');
   };
 
   const scheduleNow = async (d: Draft) => {
-    if (!scheduleFor) { setError('Pick a date and time first'); return; }
+    if (!scheduleFor) { setError('Choose a date and time first.'); return; }
     setActionBusy(d._id);
     setError(null);
     try {
@@ -507,7 +507,7 @@ const GravityCreate: React.FC = () => {
       setSchedulingId('');
       setScheduleFor('');
     } catch (e: any) {
-      setError(e?.message || 'Could not schedule this post');
+      setError(e?.message || 'This post could not be scheduled.');
     } finally {
       setActionBusy('');
     }
@@ -564,7 +564,7 @@ const GravityCreate: React.FC = () => {
   // The result is then polled and shown on THIS page — keeping, approving
   // and scheduling all happen here rather than over in /drafts.
   const handleDraftSinglePost = async () => {
-    setProgressMsg('Queuing the poster…');
+    setProgressMsg('Starting image generation…');
     const res: any = await draftsAPI.generateImageBg({
       type: 'post',
       title: name.trim() || 'Untitled post',
@@ -608,7 +608,7 @@ const GravityCreate: React.FC = () => {
       language: languageValueFromLabel(language)
     });
     if (!res.success) {
-      throw new Error(res.message || 'Failed to generate LinkedIn post.');
+      throw new Error(res.message || 'The LinkedIn post could not be generated.');
     }
     // The post is already generated and already charged for by this point —
     // if saving it fails, the text must not just vanish. Surface it in the
@@ -628,7 +628,7 @@ const GravityCreate: React.FC = () => {
       setPostsGenerated(1);
     } catch (saveErr: any) {
       throw new Error(
-        `Post generated but couldn't be saved — copy it before retrying: ${res.caption}`
+        `The post was generated but could not be saved. Copy it before you try again: ${res.caption}`
       );
     }
   };
@@ -645,7 +645,7 @@ const GravityCreate: React.FC = () => {
     runStartRef.current = Date.now();
     setRunStartedAt(Date.now());
     setPostDurations([]);
-    setProgressMsg('Planning the story…');
+    setProgressMsg('Planning the carousel…');
 
     const response = await fetch(`${API_BASE}/carousels/generate-stream`, {
       method: 'POST',
@@ -666,8 +666,8 @@ const GravityCreate: React.FC = () => {
         objective: ideaContext.objective,
       }),
     });
-    if (!response.ok) throw new Error(`Server responded ${response.status}`);
-    if (!response.body) throw new Error('No response body from server.');
+    if (!response.ok) throw new Error(`The server returned an error (${response.status}).`);
+    if (!response.body) throw new Error('The server did not send a response.');
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
@@ -695,7 +695,7 @@ const GravityCreate: React.FC = () => {
           try {
             const data = JSON.parse(line.slice(6));
             if (currentEvent === 'status' || currentEvent === 'generating') {
-              setProgressMsg(data.message || 'Rendering…');
+              setProgressMsg(data.message || 'Generating the images…');
             } else if (currentEvent === 'slide') {
               landed += 1;
               setPostDurations((prev) => {
@@ -723,7 +723,7 @@ const GravityCreate: React.FC = () => {
             } else if (currentEvent === 'complete') {
               complete = true;
             } else if (currentEvent === 'error') {
-              serverError = data?.message || 'Generation failed';
+              serverError = data?.message || 'Generation failed. Please try again.';
             }
           } catch (parseErr) {
             // Ignore malformed lines
@@ -733,7 +733,7 @@ const GravityCreate: React.FC = () => {
     }
 
     if (serverError) throw new Error(serverError);
-    if (!complete && landed === 0) throw new Error('Generation ended without any slides.');
+    if (!complete && landed === 0) throw new Error('Generation finished without creating any slides.');
     setProgressMsg('');
   };
 
@@ -781,7 +781,7 @@ const GravityCreate: React.FC = () => {
     runStartRef.current = Date.now();
     setRunStartedAt(Date.now());
     setPostDurations([]);
-    setProgressMsg('Warming up the studio…');
+    setProgressMsg('Starting campaign generation…');
     const response = await fetch(`${API_BASE}/campaigns/generate-campaign-stream`, {
       method: 'POST',
       headers: {
@@ -790,8 +790,8 @@ const GravityCreate: React.FC = () => {
       },
       body: JSON.stringify(body),
     });
-    if (!response.ok) throw new Error(`Server responded ${response.status}`);
-    if (!response.body) throw new Error('No response body from server.');
+    if (!response.ok) throw new Error(`The server returned an error (${response.status}).`);
+    if (!response.body) throw new Error('The server did not send a response.');
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
@@ -816,7 +816,7 @@ const GravityCreate: React.FC = () => {
           try {
             const data = JSON.parse(line.slice(6));
             if (currentEvent === 'status' || currentEvent === 'generating') {
-              setProgressMsg(data.message || 'Drafting…');
+              setProgressMsg(data.message || 'Generating the posts…');
             } else if (currentEvent === 'post') {
               postCount += 1;
               // How long this one took, for estimating the next.
@@ -827,7 +827,7 @@ const GravityCreate: React.FC = () => {
                 return [...prev, thisOne];
               });
               setPostsGenerated(postCount);
-              setProgressMsg(`Drafted ${postCount} post${postCount > 1 ? 's' : ''}…`);
+              setProgressMsg(`${postCount} post${postCount > 1 ? 's' : ''} created so far…`);
               // Render each post the moment it lands. The payload already
               // carries the finished image; this used to be counted and
               // thrown away, so nothing appeared until the whole run ended.
@@ -853,7 +853,7 @@ const GravityCreate: React.FC = () => {
             } else if (currentEvent === 'complete') {
               complete = true;
             } else if (currentEvent === 'error') {
-              serverError = data?.message || 'Generation failed';
+              serverError = data?.message || 'Generation failed. Please try again.';
             }
           } catch (parseErr) {
             // Ignore malformed lines
@@ -863,13 +863,13 @@ const GravityCreate: React.FC = () => {
     }
     if (serverError) throw new Error(serverError);
     if (!complete && postCount === 0) {
-      throw new Error('Generation ended without any posts.');
+      throw new Error('Generation finished without creating any posts.');
     }
 
     // Same as single-post mode: show what was produced here rather than
     // sending the user off to /drafts. Pull the freshly-created drafts so
     // each one can be kept, approved or scheduled inline.
-    setProgressMsg('Loading what was drafted…');
+    setProgressMsg('Loading your new posts…');
     try {
       const res = await draftsAPI.getDrafts();
       const fresh = (res?.drafts || [])
@@ -886,11 +886,11 @@ const GravityCreate: React.FC = () => {
   };
 
   const handleDraft = async () => {
-    if (!name.trim()) { setError('Give it a name first.'); return; }
+    if (!name.trim()) { setError('Enter a name first.'); return; }
     // LinkedIn mode hides the platform picker entirely — platform is
     // implicit — so this check would otherwise leave the user stuck with no
     // way to fix it on this tab if selectedPlatforms happened to be empty.
-    if (mode !== 'linkedin' && selectedPlatforms.length === 0) { setError('Pick at least one platform.'); return; }
+    if (mode !== 'linkedin' && selectedPlatforms.length === 0) { setError('Choose at least one platform.'); return; }
     setError(null);
     setSubmitting(true);
     setPostsGenerated(0);
@@ -910,7 +910,7 @@ const GravityCreate: React.FC = () => {
         await handleDraftCampaign();
       }
     } catch (e: any) {
-      setError(e?.message || 'Failed to draft. Try again.');
+      setError(e?.message || 'The content could not be created. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -1021,23 +1021,23 @@ const GravityCreate: React.FC = () => {
             ? 'Plan a campaign · ' + duration
             : mode === 'carousel'
               ? `Build a carousel · ${slideCount} slides`
-              : 'Draft a post · one shot'
+              : 'Create a single post'
         }
         headline={
           mode === 'campaign' ? (
-            <>What are we <GravityEmphasis>working on</GravityEmphasis>?</>
+            <>Describe your <GravityEmphasis>campaign</GravityEmphasis></>
           ) : mode === 'carousel' ? (
-            <>What's the <GravityEmphasis>story</GravityEmphasis>?</>
+            <>Describe your <GravityEmphasis>carousel</GravityEmphasis></>
           ) : (
-            <>What's on your <GravityEmphasis>mind</GravityEmphasis>?</>
+            <>Describe your <GravityEmphasis>post</GravityEmphasis></>
           )
         }
         subcopy={
           mode === 'campaign'
-            ? 'Describe the campaign once. Nebulaa drafts the full run — across platforms, spaced out, in your voice.'
+            ? 'Describe the campaign once. Nebulaa creates the full set of posts for the platforms you choose, spaced out over the duration you set, in your brand voice.'
             : mode === 'carousel'
-              ? 'One idea, told across slides. Nebulaa plans the arc, then renders every slide in the same look.'
-              : 'One sentence is enough. Nebulaa turns it into a scroll-stopping post.'
+              ? 'Describe one idea. Nebulaa plans how it unfolds across the slides, then generates every slide with the same look.'
+              : 'One sentence is enough. Nebulaa turns it into a finished post.'
         }
       />
 
@@ -1050,7 +1050,7 @@ const GravityCreate: React.FC = () => {
           className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-[13px] font-semibold border border-[var(--gv-border-default)] text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-2)] hover:border-[rgb(var(--gv-accent-rgb)/0.40)] transition-all"
         >
           <CalendarIcon className="w-4 h-4 text-[var(--gv-accent)]" />
-          Pull an idea from your calendar
+          Choose an idea from your calendar
         </button>
         <button
           onClick={() => setPromptStudioOpen(true)}
@@ -1147,10 +1147,10 @@ const GravityCreate: React.FC = () => {
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder={mode === 'campaign'
-              ? 'e.g. Launch our monsoon menu over two weeks — tease, reveal, drive footfall to the Saturday launch event.'
+              ? 'For example: Launch our monsoon menu over two weeks. Introduce the dishes first, then reveal the menu, then invite customers to the Saturday launch event.'
               : mode === 'linkedin'
-                ? 'We just crossed 500 customers — what that actually took'
-                : 'e.g. Slow Sunday. Filter coffee, one hand pouring, room quiet — invite people to spend the morning with us.'}
+                ? 'For example: We have reached 500 customers. Here is what it took to get there.'
+                : 'For example: A quiet Sunday morning with filter coffee. Invite people to spend the morning with us.'}
             rows={mode === 'linkedin' ? 8 : 4}
             className="gravity-bare w-full bg-transparent border-none outline-none text-[14.5px] text-[var(--gv-text-tertiary)] leading-relaxed resize-none placeholder:text-[var(--gv-text-muted)]"
           />
@@ -1196,7 +1196,7 @@ const GravityCreate: React.FC = () => {
             <OptionPopover open={openPopover === 'tone'} options={TONES} onPick={setTone} onClose={() => setOpenPopover(null)} />
           </div>
           <div className="relative">
-            <MetaBox label="Visual Style" value={visualStyle} Icon={ImageIcon} onClick={() => setOpenPopover(openPopover === 'style' ? null : 'style')} />
+            <MetaBox label="Visual style" value={visualStyle} Icon={ImageIcon} onClick={() => setOpenPopover(openPopover === 'style' ? null : 'style')} />
             <OptionPopover open={openPopover === 'style'} options={VISUAL_STYLES} onPick={setVisualStyle} onClose={() => setOpenPopover(null)} />
           </div>
         </div>
@@ -1275,7 +1275,7 @@ const GravityCreate: React.FC = () => {
 
         <div>
           <div className="gravity-label mb-2">
-            Logo {logos.length === 0 && <span className="text-[var(--gv-text-muted)] normal-case">· none in Brand Assets</span>}
+            Logo {logos.length === 0 && <span className="text-[var(--gv-text-muted)] normal-case">· none in Brand assets</span>}
           </div>
           <div className="flex items-center gap-1.5 flex-wrap">
             <button
@@ -1354,12 +1354,12 @@ const GravityCreate: React.FC = () => {
             {submitting ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                Drafting…
+                Creating…
               </>
             ) : (
               <>
                 <Zap className="w-4 h-4" strokeWidth={2.5} />
-                {mode === 'campaign' ? 'Draft my campaign' : mode === 'carousel' ? 'Build my carousel' : 'Draft this post'}
+                {mode === 'campaign' ? 'Create campaign' : mode === 'carousel' ? 'Create carousel' : 'Create post'}
                 {currentActionCost > 0 && (
                   <span className="ml-0.5 px-1.5 py-0.5 rounded-md bg-black/15 text-[11.5px] font-semibold tabular-nums">
                     {currentActionTotal}
@@ -1386,10 +1386,10 @@ const GravityCreate: React.FC = () => {
         <div className="max-w-5xl mx-auto mt-14">
           <div className="text-center mb-10">
             <div className="gravity-label text-[var(--gv-accent-text)] mb-3">
-              {mode === 'campaign' ? 'Building your campaign' : mode === 'carousel' ? 'Building your carousel' : 'Drafting your post'}
+              {mode === 'campaign' ? 'Building your campaign' : mode === 'carousel' ? 'Building your carousel' : 'Creating your post'}
             </div>
             <h2 className="text-[42px] leading-[1.1] font-semibold text-[var(--gv-text-primary)] tracking-[-0.02em]">
-              Making something <em className="italic font-normal text-[var(--gv-accent-display)]">good</em>.
+              Your content is being <em className="italic font-normal text-[var(--gv-accent-display)]">created</em>.
             </h2>
             {progressMsg && <p className="text-[13.5px] text-[var(--gv-text-tertiary)] mt-3">{progressMsg}</p>}
           </div>
@@ -1425,16 +1425,16 @@ const GravityCreate: React.FC = () => {
                 the same idea — there is nothing to pick between. */}
             <div className="gravity-label text-[var(--gv-accent-text)] mb-3">
               {submitting
-                ? `${results.length} of ${expectedCount} ready…`
+                ? `${results.length} of ${expectedCount} created`
                 : mode === 'campaign'
-                  ? `${results.length} post${results.length !== 1 ? 's' : ''} · your campaign`
+                  ? `${results.length} post${results.length !== 1 ? 's' : ''} in your campaign`
                   : mode === 'carousel'
-                    ? `${results.length} slide${results.length !== 1 ? 's' : ''} · swipe in order`
+                    ? `${results.length} slide${results.length !== 1 ? 's' : ''}, in swipe order`
                     : 'Your post'}
             </div>
             <h2 className="text-[42px] leading-[1.1] font-semibold text-[var(--gv-text-primary)] tracking-[-0.02em]">
               {submitting ? (
-                <>Making something <em className="italic font-normal text-[var(--gv-accent-display)]">good</em>.</>
+                <>Your content is being <em className="italic font-normal text-[var(--gv-accent-display)]">created</em>.</>
               ) : mode === 'campaign' ? (
                 <>Your campaign is <em className="italic font-normal text-[var(--gv-accent-display)]">ready</em>.</>
               ) : mode === 'carousel' ? (
@@ -1445,7 +1445,7 @@ const GravityCreate: React.FC = () => {
             </h2>
             {stillRendering && (
               <p className="text-[13.5px] text-[var(--gv-text-tertiary)] mt-3">
-                Still rendering — this updates on its own.
+                Some images are still being generated. This page updates automatically.
               </p>
             )}
           </div>
@@ -1466,7 +1466,7 @@ const GravityCreate: React.FC = () => {
                     ) : failed ? (
                       <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
                         <AlertCircle className="w-6 h-6 text-red-400" />
-                        <span className="text-[11px] text-red-300">Image failed</span>
+                        <span className="text-[11px] text-red-300">Image generation failed</span>
                       </div>
                     ) : (d.platforms || []).includes('linkedin') && !processing ? (
                       // LinkedIn posts generate text-only — no image was
@@ -1535,7 +1535,7 @@ const GravityCreate: React.FC = () => {
                                 <IconAction label="Edit caption" onClick={() => { setEditingCaption(d._id); setCaptionDraft(d.caption || ''); }}>
                                   <Pencil className="w-3.5 h-3.5" />
                                 </IconAction>
-                                <IconAction label="See the prompt" onClick={() => openPrompt(d)}>
+                                <IconAction label="View the prompt" onClick={() => openPrompt(d)}>
                                   <Code2 className="w-3.5 h-3.5" />
                                 </IconAction>
                                 <IconAction label="Regenerate" onClick={() => regenerateImage(d)} disabled={busy || processing}>
@@ -1602,7 +1602,7 @@ const GravityCreate: React.FC = () => {
                                   >
                                     Reset
                                   </button>
-                                  <span className="text-[11px] text-[var(--gv-text-muted)] ml-auto">Regenerating costs credits.</span>
+                                  <span className="text-[11px] text-[var(--gv-text-muted)] ml-auto">Regenerating costs Quarks.</span>
                                 </div>
                               </>
                             )}
@@ -1628,12 +1628,12 @@ const GravityCreate: React.FC = () => {
                             <textarea
                               value={editImageInstruction}
                               onChange={(e) => setEditImageInstruction(e.target.value)}
-                              placeholder="e.g. fix the spelling in the headline, make the sky darker, remove the coffee cup"
+                              placeholder="For example: fix the spelling in the headline, make the sky darker, or remove the coffee cup."
                               rows={2}
                               className="gravity-bare w-full bg-[var(--gv-surface-2)] border border-[var(--gv-border-default)] rounded-lg p-3 text-[12px] leading-relaxed text-[var(--gv-text-secondary)] resize-y"
                             />
                             <div className="flex items-center justify-between mt-3">
-                              <span className="text-[11px] text-[var(--gv-text-muted)]">Keeps the rest of the image as-is.</span>
+                              <span className="text-[11px] text-[var(--gv-text-muted)]">The rest of the image stays the same.</span>
                               <button
                                 onClick={() => applyImageEdit(d)}
                                 disabled={editImageBusy === d._id || !editImageInstruction.trim()}
@@ -1684,12 +1684,12 @@ const GravityCreate: React.FC = () => {
                           disabled={busy}
                           className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-[var(--gv-border-default)] text-[11.5px] text-[var(--gv-text-secondary)] hover:bg-[var(--gv-surface-2)] disabled:opacity-50"
                         >
-                          <Save className="w-3 h-3" /> Draft
+                          <Save className="w-3 h-3" /> Save as draft
                         </button>
                         <button
                           onClick={() => approveNow(d)}
                           disabled={busy || processing || (!img && mode !== 'linkedin')}
-                          title={processing ? 'Wait for the artwork' : 'Publish now'}
+                          title={processing ? 'Wait until the image is ready' : 'Publish now'}
                           className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-500/15 text-emerald-400 text-[11.5px] font-semibold disabled:opacity-40"
                         >
                           {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} Approve

@@ -145,7 +145,7 @@ const GravityApprove: React.FC = () => {
       if (res?.draft) setSelected((prev: any) => ({ ...prev, ...res.draft }));
       setSheetMsg(note);
     } catch (e: any) {
-      setSheetMsg(e?.message || 'That did not work');
+      setSheetMsg(e?.message || 'Something went wrong. Please try again.');
     } finally {
       setSheetBusy('');
     }
@@ -177,7 +177,7 @@ const GravityApprove: React.FC = () => {
       // Preserve index if possible so we don't jump around while polling
       setIndex((prev) => Math.min(prev, Math.max(0, filtered.length - 1)));
     } catch (e: any) {
-      setError(e?.message || 'Failed to load drafts');
+      setError(e?.message || 'The drafts could not be loaded.');
     } finally {
       setLoading(false);
     }
@@ -280,7 +280,7 @@ const GravityApprove: React.FC = () => {
         return next;
       });
     } catch (e: any) {
-      setError(e?.message || 'Failed to approve');
+      setError(e?.message || 'The post could not be approved.');
       throw e;
     }
   };
@@ -299,7 +299,7 @@ const GravityApprove: React.FC = () => {
       await draftsAPI.retryImageGeneration(String(draft._id), promptOverride);
       await loadDrafts();
     } catch (e: any) {
-      setError(e?.message || 'Failed to regenerate.');
+      setError(e?.message || 'The image could not be regenerated.');
       throw e;
     }
   };
@@ -346,7 +346,7 @@ const GravityApprove: React.FC = () => {
       setEditInstruction('');
       await loadDrafts();
     } catch (e: any) {
-      setError(e?.message || 'Could not apply that edit.');
+      setError(e?.message || 'That edit could not be applied.');
     } finally {
       setIsEditingImage(false);
     }
@@ -380,9 +380,9 @@ const GravityApprove: React.FC = () => {
   const Header = () => (
     <GravityHero
       align="left"
-      eyebrow="Approve"
-      headline={<>Give everything the <GravityEmphasis>once-over</GravityEmphasis></>}
-      subcopy="Review what Nebulaa drafted, approve what's ready, and send back what needs work."
+      eyebrow="Review and approve"
+      headline={<>Review your <GravityEmphasis>posts</GravityEmphasis> before they are published</>}
+      subcopy="Review the posts Nebulaa prepared, approve the ones that are ready, and regenerate the ones that need changes."
     />
   );
 
@@ -433,9 +433,9 @@ const GravityApprove: React.FC = () => {
           </div>
         ) : libraryItems.length === 0 ? (
           <div className="text-center py-24">
-            <div className="gravity-label mb-3">Nothing here</div>
+            <div className="gravity-label mb-3">No posts to show</div>
             <p className="text-[14px] text-[var(--gv-text-tertiary)]">
-              No {activeTab.label.toLowerCase()} posts yet.
+              No posts are listed under "{activeTab.label}" yet.
             </p>
           </div>
         ) : (
@@ -517,7 +517,7 @@ const GravityApprove: React.FC = () => {
     return (
       <div className="flex items-center justify-center py-20 text-[var(--gv-text-tertiary)]">
         <Loader2 className="w-5 h-5 animate-spin mr-2" />
-        Loading queue…
+        Loading posts for review…
       </div>
     );
   }
@@ -531,19 +531,19 @@ const GravityApprove: React.FC = () => {
       <div className="max-w-[1100px] mx-auto pb-24">
         <TabBar />
         <div className="max-w-[720px] mx-auto text-center py-16">
-        <div className="gravity-label mb-4">Nothing to approve</div>
+        <div className="gravity-label mb-4">No posts to review</div>
         <h1 className="font-serif-display text-[42px] leading-[1.05] tracking-[-0.02em] text-[var(--gv-text-primary)] mb-4">
-          You're all <span className="italic text-[var(--gv-accent-display)]">caught up</span>.
+          No posts are waiting for <span className="italic text-[var(--gv-accent-display)]">your review</span>.
         </h1>
         <p className="text-[14px] text-[var(--gv-text-tertiary)] max-w-[520px] mx-auto mb-6">
-          When Nebulaa drafts new posts, they'll wait here for your approval.
+          New posts that Nebulaa prepares will appear here for your approval.
         </p>
         <button
           onClick={() => navigate('/campaigns')}
           className="inline-flex items-center gap-2 h-11 px-5 rounded-lg bg-[var(--gv-accent)] hover:bg-[var(--gv-accent-hover)] text-[#1A1208] text-[14px] font-semibold"
         >
           <Sparkles className="w-4 h-4" />
-          Draft something new
+          Create content
         </button>
         </div>
       </div>
@@ -660,7 +660,7 @@ const GravityApprove: React.FC = () => {
                     <button
                       onClick={(e) => handleGridApprove(d, e)}
                       disabled={isBusy || processing || failed}
-                      title="Approve & schedule"
+                      title="Approve and schedule"
                       className="flex-1 inline-flex items-center justify-center gap-1 h-8 rounded-md bg-[var(--gv-accent)] hover:bg-[var(--gv-accent-hover)] text-black text-[11px] font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       {isBusy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" strokeWidth={3} />}
@@ -693,7 +693,7 @@ const GravityApprove: React.FC = () => {
                 <AlertCircle className="w-8 h-8 text-red-400/70" />
                 <div className="text-[13px] font-semibold text-[var(--gv-text-primary)]">Image generation failed</div>
                 <div className="text-[11.5px] text-[var(--gv-text-tertiary)] max-w-[260px] leading-relaxed">
-                  {current?.errorMessage || 'Something went wrong. Click Regenerate to try again.'}
+                  {current?.errorMessage || 'Something went wrong. Select Regenerate to try again.'}
                 </div>
                 <button
                   onClick={handleRedo}
@@ -712,7 +712,7 @@ const GravityApprove: React.FC = () => {
               <div className="w-full h-full bg-gradient-to-br from-[var(--gv-surface-2)] to-[var(--gv-surface-1)] flex flex-col items-center justify-center gap-3 px-6 text-center">
                 <div className="text-[13px] font-semibold text-[var(--gv-text-primary)]">No image yet</div>
                 <div className="text-[11.5px] text-[var(--gv-text-tertiary)] max-w-[260px] leading-relaxed">
-                  This post doesn't have an image. Click Add image to generate one.
+                  This post does not have an image. Select Add image to generate one.
                 </div>
                 <button
                   onClick={handleRedo}
@@ -727,12 +727,12 @@ const GravityApprove: React.FC = () => {
                   <div className="absolute inset-0 rounded-full border-2 border-[rgb(var(--gv-accent-rgb)/0.25)]" />
                   <Loader2 className="w-10 h-10 text-[var(--gv-accent)] animate-spin absolute inset-0" strokeWidth={1.5} />
                 </div>
-                <div className="text-[11px] uppercase tracking-widest text-[var(--gv-text-tertiary)]">generating…</div>
+                <div className="text-[11px] uppercase tracking-widest text-[var(--gv-text-tertiary)]">Generating…</div>
                 <div className="text-[13.5px] font-semibold text-[var(--gv-text-primary)] max-w-[260px]">
                   {current?.title || 'Untitled draft'}
                 </div>
                 <div className="text-[11px] text-[var(--gv-text-muted)] max-w-[260px]">
-                  The image is being drafted. This usually takes 20–40 seconds.
+                  The image is being generated. This usually takes 20 to 40 seconds.
                 </div>
               </div>
             )}
@@ -804,16 +804,16 @@ const GravityApprove: React.FC = () => {
             <textarea
               value={promptDraft}
               onChange={(e) => setPromptDraft(e.target.value)}
-              placeholder={current?.imagePromptResolved ? '' : 'No resolved prompt was recorded for this image. Leave blank to let the Creative Director choose a fresh concept, or write one to use exactly.'}
+              placeholder={current?.imagePromptResolved ? '' : 'No prompt was recorded for this image. Leave this blank and Nebulaa will choose a new concept, or write your own prompt to use it exactly.'}
               rows={5}
               className="w-full p-3 rounded-lg bg-[var(--gv-surface-1)] border border-[var(--gv-border-default)] text-[12px] leading-relaxed text-[var(--gv-text-secondary)] font-mono outline-none focus:border-[rgb(var(--gv-accent-rgb)/0.40)] resize-y placeholder:text-[var(--gv-text-muted)] placeholder:font-sans"
             />
             <p className="text-[10.5px] text-[var(--gv-text-muted)] mt-1.5">
               {promptDraft.trim() && promptDraft.trim() !== (current?.imagePromptResolved || '').trim()
-                ? 'Edited — Regenerate will use this exact text.'
+                ? 'You edited the prompt. Regenerate will use this exact text.'
                 : promptDraft.trim()
                   ? 'Regenerate will use this exact text again.'
-                  : 'Empty — Regenerate will ask the Creative Director for a new concept.'}
+                  : 'The prompt is empty. Regenerate will ask Nebulaa for a new concept.'}
             </p>
           </div>
 
@@ -826,12 +826,12 @@ const GravityApprove: React.FC = () => {
               <textarea
                 value={editInstruction}
                 onChange={(e) => setEditInstruction(e.target.value)}
-                placeholder="e.g. fix the spelling in the headline, make the sky darker, remove the coffee cup"
+                placeholder="For example: fix the spelling in the headline, make the sky darker, or remove the coffee cup."
                 rows={2}
                 className="w-full p-2.5 rounded-lg bg-[var(--gv-surface-2)] border border-[var(--gv-border-default)] text-[12.5px] leading-relaxed text-[var(--gv-text-secondary)] outline-none focus:border-[rgb(var(--gv-accent-rgb)/0.40)] resize-y placeholder:text-[var(--gv-text-muted)]"
               />
               <div className="flex items-center justify-between mt-2">
-                <span className="text-[10.5px] text-[var(--gv-text-muted)]">Keeps the rest of the image as-is.</span>
+                <span className="text-[10.5px] text-[var(--gv-text-muted)]">The rest of the image stays the same.</span>
                 <button
                   onClick={handleEditImage}
                   disabled={isEditingImage || !editInstruction.trim()}
@@ -871,7 +871,7 @@ const GravityApprove: React.FC = () => {
               className="flex items-center gap-2 h-11 px-5 rounded-lg bg-[var(--gv-accent)] hover:bg-[var(--gv-accent-hover)] text-[#1A1208] text-[13.5px] font-semibold shadow-[0_8px_28px_rgba(245,166,35,0.28)] disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" strokeWidth={3} />}
-              Approve & schedule
+              Approve and schedule
             </button>
           </div>
         </div>

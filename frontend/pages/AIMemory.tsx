@@ -120,7 +120,7 @@ const AIMemory: React.FC = () => {
       await aiMemoryAPI.updateNote(id, { text });
       await load();
     } catch (err: any) {
-      setStatusMsg(err?.message || 'Could not save the note. Please try again.');
+      setStatusMsg(err?.message || 'The note could not be saved. Please try again.');
       window.setTimeout(() => setStatusMsg(''), 4000);
       throw err;
     }
@@ -131,7 +131,7 @@ const AIMemory: React.FC = () => {
       await aiMemoryAPI.deleteNote(id);
       await load();
     } catch (err: any) {
-      setStatusMsg(err?.message || 'Could not delete the note. Please try again.');
+      setStatusMsg(err?.message || 'The note could not be deleted. Please try again.');
       window.setTimeout(() => setStatusMsg(''), 4000);
     }
   };
@@ -144,7 +144,7 @@ const AIMemory: React.FC = () => {
       setStatusMsg(res.skipped ? 'No new performance data since the last update.' : 'Updated with the latest performance data.');
       await load();
     } catch (err: any) {
-      setStatusMsg(err?.message || 'Could not refresh.');
+      setStatusMsg(err?.message || 'The notes could not be refreshed. Please try again.');
     } finally {
       setDistilling(false);
       window.setTimeout(() => setStatusMsg(''), 4000);
@@ -164,9 +164,9 @@ const AIMemory: React.FC = () => {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <GravityHero
           align="left"
-          eyebrow="AI Memory"
+          eyebrow="Brand memory"
           headline={<>What Nebulaa has <GravityEmphasis>learned</GravityEmphasis></>}
-          subcopy="A small, curated set of patterns learned from your real published-post performance — not a raw log."
+          subcopy="Nebulaa keeps a short list of patterns it has learned from how your published posts performed."
           className="!mb-0"
         />
         <GravityButton variant="ghost" onClick={refreshNow} disabled={distilling} className="flex-shrink-0">
@@ -200,8 +200,8 @@ const AIMemory: React.FC = () => {
           </div>
         ) : (
           <p className="mt-3 text-[13px] text-[var(--gv-text-tertiary)]">
-            Nothing learned yet — this fills in once enough published posts have been tracked
-            for at least a few days. Try "Refresh now" after some posts have been live for a while.
+            Nothing has been learned yet. Patterns appear here after your published posts have been tracked
+            for at least a few days. After some posts have been live for a while, select "Refresh now" to update this list.
           </p>
         )}
       </Panel>

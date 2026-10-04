@@ -134,7 +134,7 @@ const GravityInsights: React.FC = () => {
     return (
       <div className="flex items-center justify-center py-20 text-[var(--gv-text-tertiary)]">
         <Loader2 className="w-5 h-5 animate-spin mr-2" />
-        Loading insights…
+        Loading performance data…
       </div>
     );
   }
@@ -161,13 +161,12 @@ const GravityInsights: React.FC = () => {
             <span className="gravity-label">Last 7 days</span>
           </div>
           <h1 className="font-serif-display text-[52px] leading-[1.05] tracking-[-0.02em] text-[var(--gv-text-primary)] mb-4">
-            You reached <span className="italic text-[var(--gv-accent-display)] tabular-nums">{wordsForNumber(stats.reach7d)}</span> people<br />
-            without lifting a finger.
+            Your posts reached <span className="italic text-[var(--gv-accent-display)] tabular-nums">{wordsForNumber(stats.reach7d)}</span> people.
           </h1>
           <p className="text-[14px] text-[var(--gv-text-secondary)] max-w-[540px]">
             {hasAnyReach
-              ? `${stats.reachChangePct >= 0 ? 'Up' : 'Down'} ${Math.abs(stats.reachChangePct)}% week-over-week. Keep the cadence Nebulaa set for you.`
-              : `Once your posts go live, this is where you'll see how many people saw them — no dashboards to build, no spreadsheets to open.`}
+              ? `Reach is ${stats.reachChangePct >= 0 ? 'up' : 'down'} ${Math.abs(stats.reachChangePct)}% compared with the previous 7 days. Keep publishing on the schedule Nebulaa set for you.`
+              : `After your posts are published, this page shows how many people saw them. You do not need to build a dashboard or open a spreadsheet.`}
           </p>
         </div>
 
@@ -176,26 +175,26 @@ const GravityInsights: React.FC = () => {
             <div className="font-serif-display text-[68px] leading-none tabular-nums text-[var(--gv-text-primary)]">
               {stats.reachChangePct >= 0 ? '+' : ''}{stats.reachChangePct}%
             </div>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#4ADE80] mt-2">vs. last 7 days</div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#4ADE80] mt-2">Compared with the previous 7 days</div>
           </div>
         )}
       </div>
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
-        <StatCard label="Reach (7d)" value={hasAnyReach ? compactK(stats.reach7d) : '—'} delta={hasAnyReach ? `${stats.reachChangePct >= 0 ? '+' : ''}${stats.reachChangePct}%` : null} />
+        <StatCard label="Reach (7 days)" value={hasAnyReach ? compactK(stats.reach7d) : '—'} delta={hasAnyReach ? `${stats.reachChangePct >= 0 ? '+' : ''}${stats.reachChangePct}%` : null} />
         <StatCard label="Engagement" value={stats.engagement > 0 ? compactK(stats.engagement) : '—'} delta={stats.engagement > 0 ? `${stats.engChangePct >= 0 ? '+' : ''}${stats.engChangePct}%` : null} />
-        <StatCard label="New Followers" value={stats.newFollowers > 0 ? `${stats.newFollowers}` : '—'} delta={stats.newFollowers > 0 ? '+12%' : null} />
-        <StatCard label="Approval Rate" value={`${stats.approvalRate}%`} delta={stats.approvalRate > 0 ? '+3%' : null} />
+        <StatCard label="New followers" value={stats.newFollowers > 0 ? `${stats.newFollowers}` : '—'} delta={stats.newFollowers > 0 ? '+12%' : null} />
+        <StatCard label="Approval rate" value={`${stats.approvalRate}%`} delta={stats.approvalRate > 0 ? '+3%' : null} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1.6fr_1fr] gap-6">
         {/* CHART */}
         <div className="rounded-2xl border border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)] p-6">
           <div className="flex items-center justify-between mb-6">
-            <div className="gravity-label">Reach · Last 14 Days</div>
+            <div className="gravity-label">Reach in the last 14 days</div>
             <div className="text-[11px] text-[var(--gv-text-muted)]">
-              {hasAnyReach ? '↑ trending' : 'awaiting data'}
+              {hasAnyReach ? 'Trending up' : 'Waiting for data'}
             </div>
           </div>
           {hasAnyReach ? (
@@ -224,10 +223,10 @@ const GravityInsights: React.FC = () => {
 
         {/* TOP POSTS */}
         <div className="rounded-2xl border border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)] p-6">
-          <div className="gravity-label mb-4">Top Posts</div>
+          <div className="gravity-label mb-4">Top posts</div>
           {stats.topPosts.length === 0 ? (
             <div className="text-[var(--gv-text-muted)] text-[13px] py-6 text-center">
-              No posts yet. Once you publish, your best-performing posts will show up here.
+              No posts have been published yet. Your best-performing posts will appear here after you publish.
             </div>
           ) : (
             <div className="divide-y divide-[var(--gv-border-subtle)]">
