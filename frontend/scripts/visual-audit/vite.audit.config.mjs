@@ -79,10 +79,11 @@ export default async (env) => {
           // server only: it is not part of the app bundle and never in a production build.
           server.middlewares.use(async (req, res, next) => {
             const url = req.url || '';
-            if (!/^\/__layer-fixtures(\?|$)/.test(url)) return next();
+            const fx = url.match(/^\/__layer-fixtures(-gaps)?(\?|$)/);
+            if (!fx) return next();
             try {
               const index = readFileSync(resolve(frontendDir, 'index.html'), 'utf8');
-              const body = readFileSync(resolve(here, 'layer-fixtures.html'), 'utf8');
+              const body = readFileSync(resolve(here, fx[1] ? 'layer-fixtures-gaps.html' : 'layer-fixtures.html'), 'utf8');
               const page = index.replace(/<body>[\s\S]*<\/body>/, `<body class="gravity-shell">\n<div id="root">\n${body}\n</div>\n</body>`);
               const html = await server.transformIndexHtml(url, page);
               res.setHeader('Content-Type', 'text/html');

@@ -69,16 +69,69 @@ const note = (...l) => out.push(`      /* ${l.join('\n         ')} */`);
 // ---- colour maths (for arbitrary hex fills) ------------------------------------------------------
 const lin = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
 const lum = (hex) => { let h = hex.replace('#', ''); if (h.length === 3) h = [...h].map((c) => c + c).join(''); const n = (i) => parseInt(h.slice(i, i + 2), 16); return 0.2126 * lin(n(0)) + 0.7152 * lin(n(2)) + 0.0722 * lin(n(4)); };
-const whiteRatio = (hex) => 1.05 / (lum(hex) + 0.05);
-const inkRatio = (hex) => (lum(hex) + 0.05) / (lum('#1A1208') + 0.05);
+const cr = (a, b) => (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+const whiteRatio = (hex) => cr(1, lum(hex));
+const INK = '#1A1208'; // --gv-accent-ink, the dark text the layer puts on light/mid fills
+const inkRatio = (hex) => cr(lum(hex), lum(INK));
+// Text colour for a fill: whichever of white and dark ink has the HIGHER contrast. White only when
+// it beats ink AND reaches 4.5:1 (the generator cannot know the text size, so it is strict). When
+// neither reaches 4.5:1 the higher one is used and the fill goes on the "needs a fix" list.
+// For gradients the worst stop of each candidate counts.
+const NEEDS_FIX = new Map(); // selector label -> { white, ink, choice }
+function decide(label, stops) {
+  const w = Math.min(...stops.map(whiteRatio)), k = Math.min(...stops.map(inkRatio));
+  let choice;
+  if (w >= 4.5 && w >= k) choice = 'white';
+  else if (k >= 4.5) choice = 'ink';
+  else choice = w > k ? 'white' : 'ink';
+  if (Math.max(w, k) < 4.5) NEEDS_FIX.set(label, { white: +w.toFixed(2), ink: +k.toFixed(2), choice });
+  return choice;
+}
+// Tailwind v3 default palette (fixed values) plus the app's own `nebula` / `gravity` colours from
+// the tailwind.config in index.html. Every named background colour the source uses must be here;
+// --check fails on an unknown one so new colour classes cannot slip in unclassified.
+const SHADES = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950];
+const PAL = Object.fromEntries(Object.entries({
+  slate: 'f8fafc f1f5f9 e2e8f0 cbd5e1 94a3b8 64748b 475569 334155 1e293b 0f172a 020617',
+  gray: 'f9fafb f3f4f6 e5e7eb d1d5db 9ca3af 6b7280 4b5563 374151 1f2937 111827 030712',
+  zinc: 'fafafa f4f4f5 e4e4e7 d4d4d8 a1a1aa 71717a 52525b 3f3f46 27272a 18181b 09090b',
+  neutral: 'fafafa f5f5f5 e5e5e5 d4d4d4 a3a3a3 737373 525252 404040 262626 171717 0a0a0a',
+  stone: 'fafaf9 f5f5f4 e7e5e4 d6d3d1 a8a29e 78716c 57534e 44403c 292524 1c1917 0c0a09',
+  red: 'fef2f2 fee2e2 fecaca fca5a5 f87171 ef4444 dc2626 b91c1c 991b1b 7f1d1d 450a0a',
+  orange: 'fff7ed ffedd5 fed7aa fdba74 fb923c f97316 ea580c c2410c 9a3412 7c2d12 431407',
+  amber: 'fffbeb fef3c7 fde68a fcd34d fbbf24 f59e0b d97706 b45309 92400e 78350f 451a03',
+  yellow: 'fefce8 fef9c3 fef08a fde047 facc15 eab308 ca8a04 a16207 854d0e 713f12 422006',
+  lime: 'f7fee7 ecfccb d9f99d bef264 a3e635 84cc16 65a30d 4d7c0f 3f6212 365314 1a2e05',
+  green: 'f0fdf4 dcfce7 bbf7d0 86efac 4ade80 22c55e 16a34a 15803d 166534 14532d 052e16',
+  emerald: 'ecfdf5 d1fae5 a7f3d0 6ee7b7 34d399 10b981 059669 047857 065f46 064e3b 022c22',
+  teal: 'f0fdfa ccfbf1 99f6e4 5eead4 2dd4bf 14b8a6 0d9488 0f766e 115e59 134e4a 042f2e',
+  cyan: 'ecfeff cffafe a5f3fc 67e8f9 22d3ee 06b6d4 0891b2 0e7490 155e75 164e63 083344',
+  sky: 'f0f9ff e0f2fe bae6fd 7dd3fc 38bdf8 0ea5e9 0284c7 0369a1 075985 0c4a6e 082f49',
+  blue: 'eff6ff dbeafe bfdbfe 93c5fd 60a5fa 3b82f6 2563eb 1d4ed8 1e40af 1e3a8a 172554',
+  indigo: 'eef2ff e0e7ff c7d2fe a5b4fc 818cf8 6366f1 4f46e5 4338ca 3730a3 312e81 1e1b4b',
+  violet: 'f5f3ff ede9fe ddd6fe c4b5fd a78bfa 8b5cf6 7c3aed 6d28d9 5b21b6 4c1d95 2e1065',
+  purple: 'faf5ff f3e8ff e9d5ff d8b4fe c084fc a855f7 9333ea 7e22ce 6b21a8 581c87 3b0764',
+  fuchsia: 'fdf4ff fae8ff f5d0fe f0abfc e879f9 d946ef c026d3 a21caf 86198f 701a75 4a044e',
+  pink: 'fdf2f8 fce7f3 fbcfe8 f9a8d4 f472b6 ec4899 db2777 be185d 9d174d 831843 500724',
+  rose: 'fff1f2 ffe4e6 fecdd3 fda4af fb7185 f43f5e e11d48 be123c 9f1239 881337 4c0519',
+}).flatMap(([h, v]) => v.split(' ').map((x, i) => [`${h}-${SHADES[i]}`, '#' + x])));
+Object.assign(PAL, {
+  white: '#ffffff', black: '#000000',
+  'nebula-dark': '#070A12', 'nebula-gold': '#ffcc29', 'nebula-silver': '#ededed',
+  'gravity-bg': '#0A0A0A', 'gravity-sidebar': '#111111', 'gravity-surface': '#151515', 'gravity-surface2': '#1A1A1A',
+  'gravity-gold': '#F5A623', 'gravity-success': '#4ADE80', 'gravity-info': '#60A5FA',
+});
+// Classes that look like colours but generate no CSS (Tailwind has no such shade): known, no rule.
+const NO_CSS = new Set(['bg-slate-850']);
+const CREAM = '#FBF5EA'; // what a transparent gradient stop shows (the page)
 
 // ---- the lists (defined once) ---------------------------------------------------------------------
 const HUES = ['red', 'orange', 'amber', 'yellow', 'lime', 'green', 'emerald', 'teal', 'cyan', 'sky', 'blue', 'indigo', 'violet', 'purple', 'fuchsia', 'pink', 'rose'];
 const NEUTRALS = ['slate', 'gray', 'zinc', 'neutral', 'stone'];
 // Legacy dark backgrounds the layer paints light (page / panel / panel-2).
-const LEGACY_PAGE = ['bg-[#070A12]', 'bg-[#0A0A0A]', 'bg-slate-950', 'bg-gray-950', 'bg-[#060810]'];
-const LEGACY_PANEL = ['bg-[#0d1117]', 'bg-[#0D1117]', 'bg-[#0f1419]', 'bg-[#151515]', 'bg-[#161b22]', 'bg-[#111111]', 'bg-[#111827]', 'bg-slate-900', 'bg-gray-900', 'bg-slate-800', 'bg-gray-800', 'bg-[#1f2937]', 'bg-[#131920]'];
-const LEGACY_PANEL2 = ['bg-[#21262d]', 'bg-[#1A1A1A]', 'bg-slate-700', 'bg-gray-700'];
+const LEGACY_PAGE = ['bg-[#070A12]', 'bg-[#0A0A0A]', 'bg-slate-950', 'bg-gray-950', 'bg-zinc-950', 'bg-neutral-950', 'bg-stone-950', 'bg-[#060810]', 'bg-nebula-dark', 'bg-gravity-bg'];
+const LEGACY_PANEL = ['bg-[#0d1117]', 'bg-[#0D1117]', 'bg-[#0f1419]', 'bg-[#151515]', 'bg-[#161b22]', 'bg-[#111111]', 'bg-[#111827]', 'bg-slate-900', 'bg-gray-900', 'bg-slate-800', 'bg-gray-800', 'bg-zinc-900', 'bg-zinc-800', 'bg-neutral-900', 'bg-neutral-800', 'bg-stone-900', 'bg-stone-800', 'bg-[#1f2937]', 'bg-[#131920]', 'bg-gravity-sidebar', 'bg-gravity-surface'];
+const LEGACY_PANEL2 = ['bg-[#21262d]', 'bg-[#1A1A1A]', 'bg-slate-700', 'bg-gray-700', 'bg-gravity-surface2'];
 const LEGACY = [...LEGACY_PAGE, ...LEGACY_PANEL, ...LEGACY_PANEL2];
 const LEGACY_HEX = new Set(LEGACY.filter((c) => c.startsWith('bg-[#')).map((c) => c.slice(4, -1).toLowerCase()));
 // Black scrims: /50 and more on an element that carries white text (media buttons over images).
@@ -97,60 +150,96 @@ const DARK_SEL = DARK.join(',');
 // Excludes descendants of a dark surface and an element explicitly marked dark. (Elements that are
 // themselves a dark class - bg-black, scrims - are never targeted by the light remaps.)
 const NOT_IN_DARK = `:not(:is(${DARK_SEL}) *):not([data-nb-surface="dark"])`;
-// Arbitrary-hex fills used in the source, classified by luminance.
-const hexes = new Set();
-for (const m of SRC.matchAll(/(?:^|[\s"'`{])((?:bg|from)-\[#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})\])(?!\/)/g)) hexes.add(m[1]);
-// Brand fills are always listed (whether or not a page uses them yet) and classified like the rest:
-// #1DA1F2 is too light for white (2.84:1), so it gets dark ink.
-const BRAND = ['bg-[#1877F2]', 'bg-[#0A66C2]', 'bg-[#BD081C]', 'bg-[#FF0000]', 'bg-[#FF4500]', 'bg-[#1DA1F2]', 'bg-[#E60023]', 'bg-[#25D366]'];
-const GOLD_HEX = ['bg-[#ffcc29]', 'bg-[#F5A623]', 'bg-[#f5a623]', 'bg-[#e6b825]', 'bg-[#ffb833]', 'bg-[#ffd84f]', 'bg-[#ebd038]', 'bg-[#e6b800]', 'bg-[#f5c200]', 'from-[#ffcc29]', 'from-[#F5A623]'];
-const hexOf = (c) => c.slice(c.indexOf('#'), -1);
-for (const b of BRAND) hexes.add(b);
-const HEX_FILL = [], HEX_MID = [], HEX_LIGHT = [];
-for (const c of [...hexes].sort()) {
-  const h = hexOf(c);
-  if (GOLD_HEX.includes(c) || (c.startsWith('bg-') && LEGACY_HEX.has(h.toLowerCase()))) continue;
-  if (whiteRatio(h) >= 3) HEX_FILL.push(c); // white text on it reaches 3:1: a saturated/dark fill
-  else if (lum(h) > 0.6) HEX_LIGHT.push(c);
-  else if (inkRatio(h) >= 4.5) HEX_MID.push(c); // mid-light fill: dark ink reads, white does not
+// Every coloured background the source uses is classified with decide(): solid named classes,
+// arbitrary hex classes, brand hexes, gradients (by their stops) and quoted hex literals that end up
+// in inline styles. Legacy dark classes (painted light) and gold fills are handled separately.
+const BRAND = ['bg-[#1877F2]', 'bg-[#0A66C2]', 'bg-[#BD081C]', 'bg-[#FF0000]', 'bg-[#FF4500]', 'bg-[#1DA1F2]', 'bg-[#E60023]', 'bg-[#25D366]', 'bg-[#E1306C]'];
+const GOLD_HEX = ['bg-[#ffcc29]', 'bg-[#F5A623]', 'bg-[#f5a623]', 'bg-[#e6b825]', 'bg-[#ffb833]', 'bg-[#ffd84f]', 'bg-[#ebd038]', 'bg-[#e6b800]', 'bg-[#f5c200]'];
+const LEGACY_SET = new Set(LEGACY);
+// colour of a background-ish token (bg-/from-/via-/to- + name or [#hex]); null if not a colour
+const colourOf = (tok) => {
+  const m = tok.match(/^(?:bg|from|via|to)-(.+)$/);
+  if (!m) return null;
+  const v = m[1];
+  if (v === 'transparent') return CREAM;
+  if (/^\[#[0-9a-fA-F]{3,6}\]$/.test(v)) return v.slice(1, -1);
+  return PAL[v] || null;
+};
+// solid named and hex backgrounds used in the source (no variant prefix, no alpha)
+const solids = new Set();
+const UNCLASSIFIED = new Set();
+for (const m of SRC.matchAll(/(?:^|[\s"'`{])(bg-(?:[a-z]+-\d{2,3}|\[#[0-9a-fA-F]{3,6}\]|(?:nebula|gravity)-[a-z0-9]+))(?![\w/\-\[])/g)) {
+  const c = m[1];
+  if (colourOf(c)) solids.add(c);
+  else if (!NO_CSS.has(c)) UNCLASSIFIED.add(c);
 }
-const FILL = [
-  ...list(HUES.filter((h) => h !== 'yellow' && h !== 'amber').flatMap((h) => [400, 500, 600, 700, 800, 900].flatMap((n) => [`bg-${h}-${n}`, `from-${h}-${n}`]))),
-  ...list(['amber', 'yellow'].flatMap((h) => [600, 700, 800, 900].flatMap((n) => [`bg-${h}-${n}`, `from-${h}-${n}`]))),
-  ...list(NEUTRALS.flatMap((h) => [400, 500, 600].flatMap((n) => [`bg-${h}-${n}`, `from-${h}-${n}`]))),
-  ...HEX_FILL.map(A).flatMap((x) => x.split(',')), ...list(['bg-[var(--gv-coral)]']),
-  // Inline-style fills (React writes them as rgb()): the element's own fill keeps light text.
-  // (static markup keeps the hex as written, so both forms are listed).
-  ...['background-color: rgb(', 'background: rgb(', 'background-color: #', 'background-color:#', 'background: #', 'background:#'].map((v) => `[style*="${v}"]`),
-];
-// Inline-style fills that are too light for white (white < 3:1): every quoted hex literal in the
-// source (e.g. Analytics metric colours '#ffcc29') is classified; React writes it as rgb(r, g, b).
-const INLINE_INK = [];
+for (const b of BRAND) solids.add(b);
+const WHITE = [], INKF = [], LIGHTF = [];
+for (const c of [...solids].sort()) {
+  if (LEGACY_SET.has(c) || GOLD_HEX.includes(c) || c === 'bg-white') continue;
+  const hex = colourOf(c);
+  if (lum(hex) > 0.6) { LIGHTF.push(c); continue; } // pale fills: light context (ink tiers)
+  (decide(c, [hex]) === 'white' ? WHITE : INKF).push(c);
+}
+// gradients: every from/via/to combination written in the source, classified by its stops
+const GRAD = { white: [], ink: [] };
+const gradSeen = new Set();
+for (const lit of SRC.matchAll(/["'`]([^"'`]*\bfrom-[^"'`]*)["'`]/g)) {
+  const toks = lit[1].split(/\s+/).filter((t) => /^(from|via|to)-/.test(t));
+  if (!toks.length || toks.some((t) => t.includes('/'))) continue; // translucent stops: a light tint
+  // transparent stops (fades over media) are left out: the text sits on the opaque end
+  const stops = toks.filter((t) => !/-transparent$/.test(t)).map(colourOf);
+  if (!stops.length) continue;
+  if (stops.some((x) => !x) || toks.some((t) => !/-transparent$/.test(t) && !colourOf(t))) continue;
+  const key = toks.join(' ');
+  if (gradSeen.has(key)) continue;
+  gradSeen.add(key);
+  if (stops.every((x) => lum(x) > 0.6)) continue; // pale gradient: stays in the light context
+  GRAD[decide(key, stops)].push(toks.map((t) => is(A(t).split(','))).join(''));
+}
+// inline styles: quoted hex literals in the source (React writes them as rgb(r, g, b)). Unknown
+// (runtime) inline colours keep light text through the generic rule in FILL below.
+const INLINE = { white: [], ink: [] };
 for (const m of SRC.matchAll(/["'`]\s*(#[0-9a-fA-F]{6}|#[0-9a-fA-F]{3})\b["'`]/g)) {
   const h = m[1].toLowerCase();
-  if (whiteRatio(h) >= 3) continue;
   let x = h.slice(1); if (x.length === 3) x = [...x].map((c) => c + c).join('');
   const rgb = `rgb(${parseInt(x.slice(0, 2), 16)}, ${parseInt(x.slice(2, 4), 16)}, ${parseInt(x.slice(4, 6), 16)})`;
-  for (const sel of [`[style*="background-color: ${rgb}"]`, `[style*="background: ${rgb}"]`, `[style*="background-color: ${h}" i]`, `[style*="background: ${h}" i]`]) if (!INLINE_INK.includes(sel)) INLINE_INK.push(sel);
+  const sels = [`[style*="background-color: ${rgb}"]`, `[style*="background: ${rgb}"]`, `[style*="background-color: ${h}" i]`, `[style*="background: ${h}" i]`];
+  const tgt = INLINE[lum(h) > 0.6 ? 'ink' : decide(`inline ${h}`, [h])];
+  for (const sel of sels) if (!tgt.includes(sel)) tgt.push(sel);
 }
-// Multi-stop saturated gradients (e.g. Instagram: from-yellow-400 via-red-500 to-purple-600):
-// listed after GOLD so a yellow first stop does not turn the white icon dark.
-const FILL_MULTI = list(HUES.filter((h) => h !== 'yellow' && h !== 'amber').flatMap((h) => [500, 600, 700].flatMap((n) => [`via-${h}-${n}`, `to-${h}-${n}`])));
+const FILL = [
+  ...WHITE.map(A).flatMap((x) => x.split(',')), ...list(['bg-[var(--gv-coral)]']),
+  // Inline-style fills not listed above (runtime colours): the element's own fill keeps light text.
+  ...['background-color: rgb(', 'background: rgb(', 'background-color: #', 'background-color:#', 'background: #', 'background:#'].map((v) => `[style*="${v}"]`),
+];
 const LIGHT = [
-  ...['bg-white', 'bg-slate-50', 'bg-gray-50', 'bg-slate-100', 'bg-gray-100', 'bg-[#f5f5f5]'].filter(used).map(X),
-  ...list(['bg-[var(--gv-panel)]', 'bg-[var(--gv-panel-2)]', 'bg-[var(--gv-bg)]', ...HEX_LIGHT]),
+  ...['bg-white', 'bg-[#f5f5f5]'].filter(used).map(X), ...LIGHTF.map(X),
+  ...list(['bg-[var(--gv-panel)]', 'bg-[var(--gv-panel-2)]', 'bg-[var(--gv-bg)]']),
   '[style*="var(--gv-panel)"]', '[style*="background-color: rgb(255, 255, 255)"]', '[style*="background: rgb(255, 255, 255)"]',
   '[style*="background-color: rgba("]', '[style*="background: rgba("]',
   ...['#fff;', '#fff"', '#ffffff', '#FFF;', '#FFFFFF', 'white'].flatMap((v) => [`[style*="background-color: ${v}"]`, `[style*="background: ${v}"]`]),
   // legacy dark panels that the layer paints light (when they are not inside a dark surface)
   `${is(list(LEGACY))}${NOT_IN_DARK}`,
 ];
-const GOLD = [...HEX_MID.map(A).flatMap((x) => x.split(',')), ...list([...GOLD_HEX, 'bg-[var(--gv-accent)]', ...['amber', 'yellow'].flatMap((h) => [300, 400, 500].flatMap((n) => [`bg-${h}-${n}`, `from-${h}-${n}`]))])];
-const TINT = list([
-  ...HUES.flatMap((h) => [400, 500, 600, 700, 800, 900].flatMap((n) => [`bg-${h}-${n}/`, `from-${h}-${n}/`])),
-  ...NEUTRALS.flatMap((h) => [400, 500, 600].flatMap((n) => [`bg-${h}-${n}/`, `from-${h}-${n}/`])),
-  ...[...HEX_FILL, ...GOLD_HEX, ...HEX_MID].map((c) => c + '/'),
-]);
+const GOLD = [...INKF.map(A).flatMap((x) => x.split(',')), ...list([...GOLD_HEX, 'bg-[var(--gv-accent)]'])];
+const TINT = [...new Set([...solids].filter((c) => !LEGACY_SET.has(c)).map((c) => c + '/').concat(
+  [...gradSeen].flatMap((k) => k.split(' ')).map((t) => t + '/')))].filter(used).map(A).flatMap((x) => x.split(','));
+// hover:bg-<colour> (solid): the text follows the hover fill. A hover fill that fails both ways is
+// darkened one shade when that makes white pass (e.g. the danger button hover:bg-red-500 -> red-600).
+const HOVER = [];
+for (const m of SRC.matchAll(/(?:^|[\s"'`{])hover:(bg-(?:[a-z]+-\d{2,3}|\[#[0-9a-fA-F]{3,6}\]))(?![\w/\-\[])/g)) {
+  const c = m[1]; const hex = colourOf(c);
+  if (!hex || LEGACY_SET.has(c) || GOLD_HEX.includes(c) || lum(hex) > 0.6 || HOVER.some((h) => h.c === c)) continue;
+  let choice = decide(`hover:${c}`, [hex]); let darker = null;
+  const nm = c.match(/^bg-([a-z]+)-(\d+)$/);
+  if (NEEDS_FIX.has(`hover:${c}`) && nm) {
+    const next = SHADES[SHADES.indexOf(+nm[2]) + 1];
+    const nh = PAL[`${nm[1]}-${next}`];
+    if (nh && whiteRatio(nh) >= 4.5) { darker = nh; choice = 'white'; NEEDS_FIX.delete(`hover:${c}`); }
+  }
+  HOVER.push({ c, choice, darker });
+}
 const PALE = { green: ['#166534', '#86EFAC'], emerald: ['#065F46', '#6EE7B7'], teal: ['#115E59', '#5EEAD4'], cyan: ['#155E75', '#67E8F9'], sky: ['#075985', '#7DD3FC'], blue: ['#1D4ED8', '#93C5FD'], indigo: ['#4338CA', '#A5B4FC'], violet: ['#6D28D9', '#C4B5FD'], purple: ['#7E22CE', '#D8B4FE'], fuchsia: ['#A21CAF', '#F0ABFC'], pink: ['#BE185D', '#F9A8D4'], rose: ['#BE123C', '#FDA4AF'], red: ['#B91C1C', '#FCA5A5'], orange: ['#9A3412', '#FDBA74'], lime: ['#3F6212', '#BEF264'] };
 const WEAK600 = new Set(['green', 'emerald', 'teal', 'cyan', 'sky', 'orange', 'lime']);
 const FIELDS = ['input[type="text"]', 'input[type="email"]', 'input[type="password"]', 'input[type="url"]', 'input[type="search"]', 'input[type="number"]', 'input[type="date"]', 'input[type="time"]', 'input[type="tel"]', 'input:not([type])', 'textarea', 'select'];
@@ -170,9 +259,14 @@ const goldCtx = ctx('var(--gv-accent-ink)', 'rgb(26 18 8 / 0.88)', 'rgb(26 18 8 
 rule(S, lightCtx);
 rule(`${S} ${where([...FILL, ...DARK])}`, darkCtx);
 rule(`${S} ${where(LIGHT)}`, lightCtx);
-rule(`${S} ${where([...GOLD, ...INLINE_INK])}`, goldCtx);
-rule(`${S} ${where(FILL_MULTI)}`, darkCtx);
+rule(`${S} ${where([...GOLD, ...INLINE.ink])}`, goldCtx);
+rule(`${S} ${where([...INLINE.white, ...GRAD.white])}`, darkCtx);
+rule(`${S} ${where(GRAD.ink)}`, goldCtx);
 rule(`${S} ${where(TINT)}`, lightCtx);
+for (const h of HOVER) {
+  const sel = `${S} :is([class^="hover:${h.c}"],[class*=" hover:${h.c}"]):hover`;
+  rule(sel, [...(h.darker ? [`background-color: ${h.darker} !important;`] : []), ...(h.choice === 'white' ? darkCtx : goldCtx)]);
+}
 // a dark surface nested in a light panel inside a dark area still wins over the reset
 rule(`${S} ${where(['[data-nb-surface="dark"]'])}`, darkCtx);
 
@@ -265,6 +359,17 @@ rule(`${S} ::-webkit-scrollbar-track`, ['background: transparent;']);
 rule(`${S} ::-webkit-scrollbar-thumb`, ['background: rgb(var(--gv-ink-rgb) / 0.18);', 'border-radius: 4px;']);
 rule(`${S} ::-webkit-scrollbar-thumb:hover`, ['background: rgb(var(--gv-ink-rgb) / 0.30);']);
 
+// ---- needs-fix list (committed next to the generator; the report and the gate document it) -------
+const NEEDS_FIX_FILE = join(here, 'layer-needs-fix.json');
+const needsFix = JSON.stringify({
+  _comment: 'Generated by gen-layer-lists.mjs. Fills on which neither white nor dark ink reaches 4.5:1 (ratios are the worst stop). The layer uses the higher one; normal-size text on these still fails AA: change the colour on the page (Task 8). Entries starting with "inline" are quoted hex literals that are only a problem if used as an inline background.',
+  fills: Object.fromEntries([...NEEDS_FIX.entries()].sort()),
+}, null, 1) + '\n';
+if (UNCLASSIFIED.size) {
+  console.error('Unclassified background classes in the source (add their colour to PAL in gen-layer-lists.mjs): ' + [...UNCLASSIFIED].sort().join(' '));
+  process.exit(1);
+}
+
 // ---- write --------------------------------------------------------------------------------------------
 const css = out.join('\n') + '\n';
 const html = readFileSync(INDEX, 'utf8');
@@ -272,9 +377,12 @@ const i = html.indexOf(BEGIN), j = html.indexOf(END);
 if (i < 0 || j < i) { console.error('LIGHT SEMANTICS markers not found in index.html'); process.exit(2); }
 const next = html.slice(0, i + BEGIN.length) + css + html.slice(j);
 if (process.argv.includes('--check')) {
-  if (next !== html) { console.error('index.html LIGHT SEMANTICS block is out of date: run node scripts/visual-audit/gen-layer-lists.mjs'); process.exit(1); }
+  let stale = next !== html;
+  try { stale = stale || readFileSync(NEEDS_FIX_FILE, 'utf8') !== needsFix; } catch { stale = true; }
+  if (stale) { console.error('index.html LIGHT SEMANTICS block or layer-needs-fix.json is out of date: run node scripts/visual-audit/gen-layer-lists.mjs'); process.exit(1); }
   console.log('index.html LIGHT SEMANTICS block is up to date');
 } else {
   writeFileSync(INDEX, next);
-  console.log(`wrote ${css.length} bytes; hex fills: ${HEX_FILL.join(' ') || '-'}; mid (ink): ${HEX_MID.join(' ') || '-'}; light: ${HEX_LIGHT.join(' ') || '-'}`);
+  writeFileSync(NEEDS_FIX_FILE, needsFix);
+  console.log(`wrote ${css.length} bytes; white fills: ${WHITE.length}, ink fills: ${INKF.length}, light fills: ${LIGHTF.length}, gradients white/ink: ${GRAD.white.length}/${GRAD.ink.length}, hover rules: ${HOVER.length}; needs a fix: ${[...NEEDS_FIX.keys()].join(' | ') || '-'}`);
 }

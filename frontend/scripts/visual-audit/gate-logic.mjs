@@ -43,7 +43,7 @@ export function missingWidths(widths, required = REQUIRED_WIDTHS) {
 
 // rows: [{ scope: 'in'|'duplicate'|'other', status, pass }]
 export function gateVerdict(rows, widths, required = REQUIRED_WIDTHS) {
-  const gated = rows.filter((r) => r.scope !== 'other');
+  const gated = rows.filter((r) => r.scope !== 'other' && r.scope !== 'gaps');
   const inScope = rows.filter((r) => r.scope === 'in');
   const allPass = gated.every((r) => r.status === 'ok') && inScope.every((r) => r.pass);
   if (!allPass) return { gate: 'FAIL', exitCode: 1 };

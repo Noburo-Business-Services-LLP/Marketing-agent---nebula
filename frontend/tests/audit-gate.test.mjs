@@ -54,3 +54,8 @@ test('a static audit page (spec.url) is matched by its URL path, not the hash', 
   assert.equal(rowStatus(fx, { url: 'http://127.0.0.1:3100/?audit=normal#/dashboard', checked: 40 }), 'REDIRECT');
   assert.equal(rowStatus(fx, { url: 'http://127.0.0.1:3100/__layer-fixtures', checked: 0 }), 'EMPTY');
 });
+
+test('known-gap fixture rows are reported but never gate', () => {
+  const rows = [{ scope: 'in', status: 'ok', pass: true }, { scope: 'gaps', status: 'ok', pass: false }];
+  assert.equal(gateVerdict(rows, [1280, 375]).gate, 'PASS');
+});

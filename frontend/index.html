@@ -106,6 +106,22 @@
          Known trade-off: high-alpha saturated fills (bg-red-500/90,
          /80) count as light tints, so their text is ink (4.8:1 on
          red-500/90) rather than white (3.7:1).
+         Fills: the text colour on every coloured background the source
+         uses (named Tailwind hues, arbitrary hex, brand colours,
+         gradients by their worst stop, quoted inline hex) is the one with
+         the HIGHER contrast, white or dark ink; white only when it also
+         reaches 4.5:1. Fills where neither reaches 4.5:1 are listed in
+         scripts/visual-audit/layer-needs-fix.json (page fix, Task 8).
+         A hover:bg-* fill that fails both ways is darkened one shade
+         when that makes white pass (danger buttons: red-500 -> red-600).
+         Limit of the inline-style guard: an inline background colour
+         that is NOT a quoted literal in the source (computed at runtime)
+         forces light text via [style*="background-color: rgb("]. Known
+         runtime inline backgrounds: Layout status dots (dotColor),
+         GravityCalendar platform dots (PLATFORM_DOT), HeroVideo colour
+         swatches, Analytics legend lines and `${color}20` tints (rgba,
+         treated as light), Dashboard platform tiles (platform.bgColor)
+         - all text-free leaves or tints except the Dashboard tiles.
          ============================================================ */
       body.gravity-shell {
         --grav-gold: #F5A623;
@@ -213,48 +229,24 @@
         --nb-orange: #9A3412;
         --nb-lime: #3F6212;
       }
-      body.gravity-shell :where([class^="bg-red-400"],[class*=" bg-red-400"],[class^="bg-red-500"],
-        [class*=" bg-red-500"],[class^="from-red-500"],[class*=" from-red-500"],[class^="bg-red-600"],
-        [class*=" bg-red-600"],[class^="bg-red-700"],[class*=" bg-red-700"],[class^="bg-red-900"],
-        [class*=" bg-red-900"],[class^="bg-orange-400"],[class*=" bg-orange-400"],[class^="bg-orange-500"],
-        [class*=" bg-orange-500"],[class^="bg-orange-900"],[class*=" bg-orange-900"],[class^="bg-green-400"],
-        [class*=" bg-green-400"],[class^="bg-green-500"],[class*=" bg-green-500"],[class^="from-green-500"],
-        [class*=" from-green-500"],[class^="bg-green-600"],[class*=" bg-green-600"],[class^="bg-green-700"],
-        [class*=" bg-green-700"],[class^="bg-green-900"],[class*=" bg-green-900"],[class^="bg-emerald-400"],
-        [class*=" bg-emerald-400"],[class^="bg-emerald-500"],[class*=" bg-emerald-500"],[class^="from-emerald-500"],
-        [class*=" from-emerald-500"],[class^="bg-emerald-600"],[class*=" bg-emerald-600"],[class^="bg-teal-500"],
-        [class*=" bg-teal-500"],[class^="bg-cyan-500"],[class*=" bg-cyan-500"],[class^="bg-cyan-900"],
-        [class*=" bg-cyan-900"],[class^="bg-sky-400"],[class*=" bg-sky-400"],[class^="from-sky-400"],
-        [class*=" from-sky-400"],[class^="bg-sky-500"],[class*=" bg-sky-500"],[class^="bg-blue-400"],
-        [class*=" bg-blue-400"],[class^="from-blue-400"],[class*=" from-blue-400"],[class^="bg-blue-500"],
-        [class*=" bg-blue-500"],[class^="from-blue-500"],[class*=" from-blue-500"],[class^="bg-blue-600"],
-        [class*=" bg-blue-600"],[class^="from-blue-600"],[class*=" from-blue-600"],[class^="bg-blue-700"],
-        [class*=" bg-blue-700"],[class^="bg-blue-900"],[class*=" bg-blue-900"],[class^="bg-indigo-500"],
-        [class*=" bg-indigo-500"],[class^="from-indigo-500"],[class*=" from-indigo-500"],[class^="bg-indigo-600"],
-        [class*=" bg-indigo-600"],[class^="bg-violet-500"],[class*=" bg-violet-500"],[class^="bg-purple-500"],
-        [class*=" bg-purple-500"],[class^="from-purple-500"],[class*=" from-purple-500"],[class^="from-purple-600"],
-        [class*=" from-purple-600"],[class^="bg-purple-900"],[class*=" bg-purple-900"],[class^="bg-pink-500"],
-        [class*=" bg-pink-500"],[class^="from-pink-500"],[class*=" from-pink-500"],[class^="bg-amber-900"],
-        [class*=" bg-amber-900"],[class^="bg-yellow-900"],[class*=" bg-yellow-900"],[class^="bg-slate-400"],
-        [class*=" bg-slate-400"],[class^="from-slate-400"],[class*=" from-slate-400"],[class^="bg-slate-500"],
-        [class*=" bg-slate-500"],[class^="from-slate-500"],[class*=" from-slate-500"],[class^="bg-slate-600"],
-        [class*=" bg-slate-600"],[class^="bg-gray-400"],[class*=" bg-gray-400"],[class^="bg-gray-500"],
-        [class*=" bg-gray-500"],[class^="bg-[#070b12]"],[class*=" bg-[#070b12]"],[class^="bg-[#080b12]"],
+      body.gravity-shell :where([class^="bg-[#070b12]"],[class*=" bg-[#070b12]"],[class^="bg-[#080b12]"],
         [class*=" bg-[#080b12]"],[class^="bg-[#0A66C2]"],[class*=" bg-[#0A66C2]"],[class^="bg-[#0B0F1A]"],
-        [class*=" bg-[#0B0F1A]"],[class^="bg-[#0E0D0B]"],[class*=" bg-[#0E0D0B]"],[class^="bg-[#0b0f17]"],
-        [class*=" bg-[#0b0f17]"],[class^="bg-[#0b0f18]"],[class*=" bg-[#0b0f18]"],[class^="bg-[#141414]"],
-        [class*=" bg-[#141414]"],[class^="bg-[#1877F2]"],[class*=" bg-[#1877F2]"],[class^="bg-[#1a1f2e]"],
-        [class*=" bg-[#1a1f2e]"],[class^="bg-[#BD081C]"],[class*=" bg-[#BD081C]"],[class^="bg-[#E60023]"],
-        [class*=" bg-[#E60023]"],[class^="bg-[#FF0000]"],[class*=" bg-[#FF0000]"],[class^="bg-[#FF4500]"],
-        [class*=" bg-[#FF4500]"],[class^="from-[#070A12]"],[class*=" from-[#070A12]"],[class^="from-[#0d1117]"],
-        [class*=" from-[#0d1117]"],[style*="background-color: rgb("],[style*="background: rgb("],
-        [style*="background-color: #"],[style*="background-color:#"],[style*="background: #"],[style*="background:#"],
-        [data-nb-surface="dark"],[class~="bg-black"],.absolute:is([class^="bg-black/"],[class*=" bg-black/"]),
-        .fixed:is([class^="bg-black/85"],[class*=" bg-black/85"],[class^="bg-black/9"],[class*=" bg-black/9"]),
-        :is([class^="bg-black/5"],[class*=" bg-black/5"],[class^="bg-black/6"],[class*=" bg-black/6"],
-        [class^="bg-black/7"],[class*=" bg-black/7"],[class^="bg-black/8"],[class*=" bg-black/8"],
-        [class^="bg-black/9"],[class*=" bg-black/9"]):is([class^="text-white"],[class*=" text-white"]),
-        [class^="from-black"],[class*=" from-black"],[class^="bg-[#141414]"],[class*=" bg-[#141414]"],.igCanvas) {
+        [class*=" bg-[#0B0F1A]"],[class^="bg-[#0E0D0B]"],[class*=" bg-[#0E0D0B]"],[class^="bg-[#0a0a0a]"],
+        [class*=" bg-[#0a0a0a]"],[class^="bg-[#0b0f17]"],[class*=" bg-[#0b0f17]"],[class^="bg-[#0b0f18]"],
+        [class*=" bg-[#0b0f18]"],[class^="bg-[#141414]"],[class*=" bg-[#141414]"],[class^="bg-[#1a1f2e]"],
+        [class*=" bg-[#1a1f2e]"],[class^="bg-[#BD081C]"],[class*=" bg-[#BD081C]"],[class^="bg-[#E1306C]"],
+        [class*=" bg-[#E1306C]"],[class^="bg-[#E60023]"],[class*=" bg-[#E60023]"],[class^="bg-blue-600"],
+        [class*=" bg-blue-600"],[class^="bg-gray-500"],[class*=" bg-gray-500"],[class^="bg-indigo-500"],
+        [class*=" bg-indigo-500"],[class^="bg-red-600"],[class*=" bg-red-600"],[class^="bg-slate-500"],
+        [class*=" bg-slate-500"],[class^="bg-slate-600"],[class*=" bg-slate-600"],[style*="background-color: rgb("],
+        [style*="background: rgb("],[style*="background-color: #"],[style*="background-color:#"],
+        [style*="background: #"],[style*="background:#"],[data-nb-surface="dark"],[class~="bg-black"],
+        .absolute:is([class^="bg-black/"],[class*=" bg-black/"]),.fixed:is([class^="bg-black/85"],
+        [class*=" bg-black/85"],[class^="bg-black/9"],[class*=" bg-black/9"]),:is([class^="bg-black/5"],
+        [class*=" bg-black/5"],[class^="bg-black/6"],[class*=" bg-black/6"],[class^="bg-black/7"],
+        [class*=" bg-black/7"],[class^="bg-black/8"],[class*=" bg-black/8"],[class^="bg-black/9"],
+        [class*=" bg-black/9"]):is([class^="text-white"],[class*=" text-white"]),[class^="from-black"],
+        [class*=" from-black"],[class^="bg-[#141414]"],[class*=" bg-[#141414]"],.igCanvas) {
         --nb-t1: #FFFFFF;
         --nb-t2: rgb(255 255 255 / 0.88);
         --nb-t3: rgb(255 255 255 / 0.78);
@@ -275,11 +267,17 @@
         --nb-orange: #FDBA74;
         --nb-lime: #BEF264;
       }
-      body.gravity-shell :where([class~="bg-white"],[class~="bg-slate-50"],[class~="bg-gray-50"],
-        [class~="bg-slate-100"],[class~="bg-gray-100"],[class~="bg-[#f5f5f5]"],[class^="bg-[var(--gv-panel)]"],
+      body.gravity-shell :where([class~="bg-white"],[class~="bg-[#f5f5f5]"],[class~="bg-[#ededed]"],
+        [class~="bg-[#f5f5f5]"],[class~="bg-[#fffbeb]"],[class~="bg-amber-100"],[class~="bg-amber-50"],
+        [class~="bg-blue-100"],[class~="bg-blue-50"],[class~="bg-cyan-100"],[class~="bg-cyan-50"],
+        [class~="bg-emerald-100"],[class~="bg-emerald-50"],[class~="bg-gray-100"],[class~="bg-gray-200"],
+        [class~="bg-gray-300"],[class~="bg-gray-50"],[class~="bg-green-100"],[class~="bg-green-50"],
+        [class~="bg-indigo-50"],[class~="bg-orange-100"],[class~="bg-pink-100"],[class~="bg-pink-50"],
+        [class~="bg-purple-100"],[class~="bg-purple-50"],[class~="bg-red-100"],[class~="bg-red-50"],
+        [class~="bg-sky-100"],[class~="bg-sky-50"],[class~="bg-slate-100"],[class~="bg-slate-200"],
+        [class~="bg-slate-300"],[class~="bg-slate-50"],[class~="bg-teal-50"],[class~="bg-violet-100"],
+        [class~="bg-violet-50"],[class~="bg-yellow-400"],[class~="bg-yellow-50"],[class^="bg-[var(--gv-panel)]"],
         [class*=" bg-[var(--gv-panel)]"],[class^="bg-[var(--gv-bg)]"],[class*=" bg-[var(--gv-bg)]"],
-        [class^="bg-[#ededed]"],[class*=" bg-[#ededed]"],[class^="bg-[#f5f5f5]"],[class*=" bg-[#f5f5f5]"],
-        [class^="bg-[#fffbeb]"],[class*=" bg-[#fffbeb]"],[class^="from-[#ededed]"],[class*=" from-[#ededed]"],
         [style*="var(--gv-panel)"],[style*="background-color: rgb(255, 255, 255)"],
         [style*="background: rgb(255, 255, 255)"],[style*="background-color: rgba("],[style*="background: rgba("],
         [style*="background-color: #fff;"],[style*="background: #fff;"],
@@ -323,20 +321,28 @@
         --nb-orange: #9A3412;
         --nb-lime: #3F6212;
       }
-      body.gravity-shell :where([class^="bg-[#1DA1F2]"],[class*=" bg-[#1DA1F2]"],[class^="bg-[#25D366]"],
-        [class*=" bg-[#25D366]"],[class^="bg-[#4ADE80]"],[class*=" bg-[#4ADE80]"],[class^="bg-[#60A5FA]"],
-        [class*=" bg-[#60A5FA]"],[class^="bg-[#ffcc29]"],[class*=" bg-[#ffcc29]"],[class^="bg-[#F5A623]"],
-        [class*=" bg-[#F5A623]"],[class^="bg-[#e6b825]"],[class*=" bg-[#e6b825]"],[class^="bg-[#ffb833]"],
-        [class*=" bg-[#ffb833]"],[class^="bg-[#ffd84f]"],[class*=" bg-[#ffd84f]"],[class^="bg-[#ebd038]"],
-        [class*=" bg-[#ebd038]"],[class^="bg-[#e6b800]"],[class*=" bg-[#e6b800]"],[class^="bg-[#f5c200]"],
-        [class*=" bg-[#f5c200]"],[class^="from-[#ffcc29]"],[class*=" from-[#ffcc29]"],[class^="from-[#F5A623]"],
-        [class*=" from-[#F5A623]"],[class^="bg-[var(--gv-accent)]"],[class*=" bg-[var(--gv-accent)]"],
-        [class^="bg-amber-400"],[class*=" bg-amber-400"],[class^="bg-amber-500"],[class*=" bg-amber-500"],
-        [class^="bg-yellow-300"],[class*=" bg-yellow-300"],[class^="bg-yellow-400"],[class*=" bg-yellow-400"],
-        [class^="from-yellow-400"],[class*=" from-yellow-400"],[class^="bg-yellow-500"],[class*=" bg-yellow-500"],
-        [class^="from-yellow-500"],[class*=" from-yellow-500"],[style*="background-color: rgb(229, 231, 235)"],
+      body.gravity-shell :where([class^="bg-[#1877F2]"],[class*=" bg-[#1877F2]"],[class^="bg-[#1DA1F2]"],
+        [class*=" bg-[#1DA1F2]"],[class^="bg-[#25D366]"],[class*=" bg-[#25D366]"],[class^="bg-[#4ADE80]"],
+        [class*=" bg-[#4ADE80]"],[class^="bg-[#60A5FA]"],[class*=" bg-[#60A5FA]"],[class^="bg-[#FF0000]"],
+        [class*=" bg-[#FF0000]"],[class^="bg-[#FF4500]"],[class*=" bg-[#FF4500]"],[class^="bg-amber-500"],
+        [class*=" bg-amber-500"],[class^="bg-blue-500"],[class*=" bg-blue-500"],[class^="bg-cyan-500"],
+        [class*=" bg-cyan-500"],[class^="bg-emerald-400"],[class*=" bg-emerald-400"],[class^="bg-emerald-500"],
+        [class*=" bg-emerald-500"],[class^="bg-gray-400"],[class*=" bg-gray-400"],[class^="bg-green-400"],
+        [class*=" bg-green-400"],[class^="bg-green-500"],[class*=" bg-green-500"],[class^="bg-green-600"],
+        [class*=" bg-green-600"],[class^="bg-orange-400"],[class*=" bg-orange-400"],[class^="bg-orange-500"],
+        [class*=" bg-orange-500"],[class^="bg-pink-500"],[class*=" bg-pink-500"],[class^="bg-purple-500"],
+        [class*=" bg-purple-500"],[class^="bg-red-400"],[class*=" bg-red-400"],[class^="bg-red-500"],
+        [class*=" bg-red-500"],[class^="bg-slate-400"],[class*=" bg-slate-400"],[class^="bg-violet-500"],
+        [class*=" bg-violet-500"],[class^="bg-yellow-500"],[class*=" bg-yellow-500"],[class^="bg-[#ffcc29]"],
+        [class*=" bg-[#ffcc29]"],[class^="bg-[#F5A623]"],[class*=" bg-[#F5A623]"],[class^="bg-[#e6b825]"],
+        [class*=" bg-[#e6b825]"],[class^="bg-[#ffb833]"],[class*=" bg-[#ffb833]"],[class^="bg-[#ffd84f]"],
+        [class*=" bg-[#ffd84f]"],[class^="bg-[#ebd038]"],[class*=" bg-[#ebd038]"],[class^="bg-[#e6b800]"],
+        [class*=" bg-[#e6b800]"],[class^="bg-[#f5c200]"],[class*=" bg-[#f5c200]"],[class^="bg-[var(--gv-accent)]"],
+        [class*=" bg-[var(--gv-accent)]"],[style*="background-color: rgb(229, 231, 235)"],
         [style*="background: rgb(229, 231, 235)"],[style*="background-color: #e5e7eb" i],
-        [style*="background: #e5e7eb" i],[style*="background-color: rgb(74, 222, 128)"],
+        [style*="background: #e5e7eb" i],[style*="background-color: rgb(239, 68, 68)"],
+        [style*="background: rgb(239, 68, 68)"],[style*="background-color: #ef4444" i],
+        [style*="background: #ef4444" i],[style*="background-color: rgb(74, 222, 128)"],
         [style*="background: rgb(74, 222, 128)"],[style*="background-color: #4ade80" i],
         [style*="background: #4ade80" i],[style*="background-color: rgb(255, 255, 255)"],
         [style*="background: rgb(255, 255, 255)"],[style*="background-color: #ffffff" i],
@@ -346,17 +352,27 @@
         [style*="background: rgb(255, 204, 41)"],[style*="background-color: #ffcc29" i],
         [style*="background: #ffcc29" i],[style*="background-color: rgb(230, 184, 37)"],
         [style*="background: rgb(230, 184, 37)"],[style*="background-color: #e6b825" i],
-        [style*="background: #e6b825" i],[style*="background-color: rgb(29, 161, 242)"],
+        [style*="background: #e6b825" i],[style*="background-color: rgb(24, 119, 242)"],
+        [style*="background: rgb(24, 119, 242)"],[style*="background-color: #1877f2" i],
+        [style*="background: #1877f2" i],[style*="background-color: rgb(29, 161, 242)"],
         [style*="background: rgb(29, 161, 242)"],[style*="background-color: #1da1f2" i],
-        [style*="background: #1da1f2" i],[style*="background-color: rgb(16, 185, 129)"],
+        [style*="background: #1da1f2" i],[style*="background-color: rgb(139, 92, 246)"],
+        [style*="background: rgb(139, 92, 246)"],[style*="background-color: #8b5cf6" i],
+        [style*="background: #8b5cf6" i],[style*="background-color: rgb(16, 185, 129)"],
         [style*="background: rgb(16, 185, 129)"],[style*="background-color: #10b981" i],
-        [style*="background: #10b981" i],[style*="background-color: rgb(245, 158, 11)"],
+        [style*="background: #10b981" i],[style*="background-color: rgb(244, 63, 94)"],
+        [style*="background: rgb(244, 63, 94)"],[style*="background-color: #f43f5e" i],
+        [style*="background: #f43f5e" i],[style*="background-color: rgb(245, 158, 11)"],
         [style*="background: rgb(245, 158, 11)"],[style*="background-color: #f59e0b" i],
-        [style*="background: #f59e0b" i],[style*="background-color: rgb(226, 232, 240)"],
+        [style*="background: #f59e0b" i],[style*="background-color: rgb(236, 72, 153)"],
+        [style*="background: rgb(236, 72, 153)"],[style*="background-color: #ec4899" i],
+        [style*="background: #ec4899" i],[style*="background-color: rgb(226, 232, 240)"],
         [style*="background: rgb(226, 232, 240)"],[style*="background-color: #e2e8f0" i],
         [style*="background: #e2e8f0" i],[style*="background-color: rgb(148, 163, 184)"],
         [style*="background: rgb(148, 163, 184)"],[style*="background-color: #94a3b8" i],
         [style*="background: #94a3b8" i],[style*="background-color: #fff" i],[style*="background: #fff" i],
+        [style*="background-color: rgb(59, 130, 246)"],[style*="background: rgb(59, 130, 246)"],
+        [style*="background-color: #3b82f6" i],[style*="background: #3b82f6" i],
         [style*="background-color: rgb(249, 115, 22)"],[style*="background: rgb(249, 115, 22)"],
         [style*="background-color: #f97316" i],[style*="background: #f97316" i],
         [style*="background-color: rgb(20, 184, 166)"],[style*="background: rgb(20, 184, 166)"],
@@ -367,6 +383,8 @@
         [style*="background-color: #ffb833" i],[style*="background: #ffb833" i],
         [style*="background-color: rgb(245, 244, 241)"],[style*="background: rgb(245, 244, 241)"],
         [style*="background-color: #f5f4f1" i],[style*="background: #f5f4f1" i],
+        [style*="background-color: rgb(255, 0, 0)"],[style*="background: rgb(255, 0, 0)"],
+        [style*="background-color: #ff0000" i],[style*="background: #ff0000" i],
         [style*="background-color: rgb(248, 250, 252)"],[style*="background: rgb(248, 250, 252)"],
         [style*="background-color: #f8fafc" i],[style*="background: #f8fafc" i],
         [style*="background-color: rgb(237, 242, 247)"],[style*="background: rgb(237, 242, 247)"],
@@ -374,7 +392,9 @@
         [style*="background-color: rgb(255, 215, 0)"],[style*="background: rgb(255, 215, 0)"],
         [style*="background-color: #ffd700" i],[style*="background: #ffd700" i],
         [style*="background-color: rgb(160, 174, 192)"],[style*="background: rgb(160, 174, 192)"],
-        [style*="background-color: #a0aec0" i],[style*="background: #a0aec0" i]) {
+        [style*="background-color: #a0aec0" i],[style*="background: #a0aec0" i],
+        [style*="background-color: rgb(205, 127, 50)"],[style*="background: rgb(205, 127, 50)"],
+        [style*="background-color: #cd7f32" i],[style*="background: #cd7f32" i]) {
         --nb-t1: var(--gv-accent-ink);
         --nb-t2: rgb(26 18 8 / 0.88);
         --nb-t3: rgb(26 18 8 / 0.80);
@@ -395,15 +415,43 @@
         --nb-orange: #9A3412;
         --nb-lime: #3F6212;
       }
-      body.gravity-shell :where([class^="via-red-500"],[class*=" via-red-500"],[class^="to-red-600"],
-        [class*=" to-red-600"],[class^="to-red-700"],[class*=" to-red-700"],[class^="to-orange-500"],
-        [class*=" to-orange-500"],[class^="to-emerald-600"],[class*=" to-emerald-600"],[class^="to-cyan-500"],
-        [class*=" to-cyan-500"],[class^="to-sky-600"],[class*=" to-sky-600"],[class^="to-blue-500"],
-        [class*=" to-blue-500"],[class^="to-blue-600"],[class*=" to-blue-600"],[class^="to-blue-700"],
-        [class*=" to-blue-700"],[class^="to-indigo-600"],[class*=" to-indigo-600"],[class^="via-purple-500"],
-        [class*=" via-purple-500"],[class^="to-purple-500"],[class*=" to-purple-500"],[class^="to-purple-600"],
-        [class*=" to-purple-600"],[class^="via-pink-500"],[class*=" via-pink-500"],[class^="to-pink-500"],
-        [class*=" to-pink-500"],[class^="to-pink-600"],[class*=" to-pink-600"]) {
+      body.gravity-shell :where([style*="background-color: rgb(30, 41, 59)"],[style*="background: rgb(30, 41, 59)"],
+        [style*="background-color: #1e293b" i],[style*="background: #1e293b" i],
+        [style*="background-color: rgb(10, 10, 10)"],[style*="background: rgb(10, 10, 10)"],
+        [style*="background-color: #0a0a0a" i],[style*="background: #0a0a0a" i],
+        [style*="background-color: rgb(7, 10, 18)"],[style*="background: rgb(7, 10, 18)"],
+        [style*="background-color: #070a12" i],[style*="background: #070a12" i],
+        [style*="background-color: rgb(225, 48, 108)"],[style*="background: rgb(225, 48, 108)"],
+        [style*="background-color: #e1306c" i],[style*="background: #e1306c" i],
+        [style*="background-color: rgb(10, 102, 194)"],[style*="background: rgb(10, 102, 194)"],
+        [style*="background-color: #0a66c2" i],[style*="background: #0a66c2" i],
+        [style*="background-color: rgb(99, 102, 241)"],[style*="background: rgb(99, 102, 241)"],
+        [style*="background-color: #6366f1" i],[style*="background: #6366f1" i],
+        [style*="background-color: rgb(17, 17, 17)"],[style*="background: rgb(17, 17, 17)"],
+        [style*="background-color: #111111" i],[style*="background: #111111" i],
+        [style*="background-color: rgb(51, 51, 51)"],[style*="background: rgb(51, 51, 51)"],
+        [style*="background-color: #333" i],[style*="background: #333" i],[style*="background-color: rgb(26, 26, 46)"],
+        [style*="background: rgb(26, 26, 46)"],[style*="background-color: #1a1a2e" i],[style*="background: #1a1a2e" i],
+        [style*="background-color: rgb(74, 85, 104)"],[style*="background: rgb(74, 85, 104)"],
+        [style*="background-color: #4a5568" i],[style*="background: #4a5568" i],
+        [style*="background-color: rgb(187, 34, 187)"],[style*="background: rgb(187, 34, 187)"],
+        [style*="background-color: #b2b" i],[style*="background: #b2b" i],:is([class^="from-pink-500"],
+        [class*=" from-pink-500"]):is([class^="to-purple-600"],[class*=" to-purple-600"]),:is([class^="from-blue-500"],
+        [class*=" from-blue-500"]):is([class^="to-blue-700"],[class*=" to-blue-700"]),:is([class^="from-blue-600"],
+        [class*=" from-blue-600"]):is([class^="to-blue-800"],[class*=" to-blue-800"]),:is([class^="from-[#070A12]"],
+        [class*=" from-[#070A12]"]):is([class^="via-[#0d1117]"],[class*=" via-[#0d1117]"]):is([class^="to-[#070A12]"],
+        [class*=" to-[#070A12]"]),:is([class^="from-blue-500"],[class*=" from-blue-500"]):is([class^="to-indigo-600"],
+        [class*=" to-indigo-600"]),:is([class^="from-red-500"],[class*=" from-red-500"]):is([class^="to-red-700"],
+        [class*=" to-red-700"]),:is([class^="from-slate-500"],[class*=" from-slate-500"]):is([class^="to-slate-700"],
+        [class*=" to-slate-700"]),:is([class^="from-[#0d1117]"],[class*=" from-[#0d1117]"]):is([class^="to-[#161b22]"],
+        [class*=" to-[#161b22]"]),:is([class^="from-slate-400"],[class*=" from-slate-400"]):is([class^="to-slate-600"],
+        [class*=" to-slate-600"]),:is([class^="from-blue-600"],[class*=" from-blue-600"]):is([class^="to-blue-700"],
+        [class*=" to-blue-700"]),:is([class^="from-slate-800"],[class*=" from-slate-800"]):is([class^="to-slate-900"],
+        [class*=" to-slate-900"]),:is([class^="from-black"],[class*=" from-black"]):is([class^="to-pink-500"],
+        [class*=" to-pink-500"]),:is([class^="from-[#0d1117]"],[class*=" from-[#0d1117]"]):is([class^="via-[#070A12]"],
+        [class*=" via-[#070A12]"]):is([class^="to-[#070A12]"],[class*=" to-[#070A12]"]),:is([class^="from-[#070A12]"],
+        [class*=" from-[#070A12]"]):is([class^="via-transparent"],
+        [class*=" via-transparent"]):is([class^="to-transparent"],[class*=" to-transparent"])) {
         --nb-t1: #FFFFFF;
         --nb-t2: rgb(255 255 255 / 0.88);
         --nb-t3: rgb(255 255 255 / 0.78);
@@ -424,32 +472,352 @@
         --nb-orange: #FDBA74;
         --nb-lime: #BEF264;
       }
-      body.gravity-shell :where([class^="bg-red-400/"],[class*=" bg-red-400/"],[class^="bg-red-500/"],
-        [class*=" bg-red-500/"],[class^="from-red-500/"],[class*=" from-red-500/"],[class^="bg-red-900/"],
-        [class*=" bg-red-900/"],[class^="bg-orange-400/"],[class*=" bg-orange-400/"],[class^="bg-orange-500/"],
-        [class*=" bg-orange-500/"],[class^="bg-orange-900/"],[class*=" bg-orange-900/"],[class^="bg-amber-400/"],
-        [class*=" bg-amber-400/"],[class^="bg-amber-500/"],[class*=" bg-amber-500/"],[class^="bg-amber-900/"],
-        [class*=" bg-amber-900/"],[class^="bg-yellow-500/"],[class*=" bg-yellow-500/"],[class^="from-yellow-500/"],
-        [class*=" from-yellow-500/"],[class^="bg-yellow-900/"],[class*=" bg-yellow-900/"],[class^="bg-green-500/"],
-        [class*=" bg-green-500/"],[class^="bg-green-600/"],[class*=" bg-green-600/"],[class^="bg-green-900/"],
-        [class*=" bg-green-900/"],[class^="bg-emerald-500/"],[class*=" bg-emerald-500/"],[class^="from-emerald-500/"],
-        [class*=" from-emerald-500/"],[class^="bg-teal-500/"],[class*=" bg-teal-500/"],[class^="bg-cyan-500/"],
-        [class*=" bg-cyan-500/"],[class^="bg-cyan-900/"],[class*=" bg-cyan-900/"],[class^="bg-sky-400/"],
-        [class*=" bg-sky-400/"],[class^="bg-sky-500/"],[class*=" bg-sky-500/"],[class^="bg-blue-400/"],
-        [class*=" bg-blue-400/"],[class^="bg-blue-500/"],[class*=" bg-blue-500/"],[class^="from-blue-500/"],
-        [class*=" from-blue-500/"],[class^="bg-blue-900/"],[class*=" bg-blue-900/"],[class^="bg-indigo-500/"],
-        [class*=" bg-indigo-500/"],[class^="from-indigo-500/"],[class*=" from-indigo-500/"],[class^="bg-violet-500/"],
-        [class*=" bg-violet-500/"],[class^="bg-purple-500/"],[class*=" bg-purple-500/"],[class^="from-purple-500/"],
-        [class*=" from-purple-500/"],[class^="bg-purple-900/"],[class*=" bg-purple-900/"],[class^="bg-pink-500/"],
-        [class*=" bg-pink-500/"],[class^="bg-slate-500/"],[class*=" bg-slate-500/"],[class^="bg-slate-600/"],
-        [class*=" bg-slate-600/"],[class^="bg-[#1877F2]/"],[class*=" bg-[#1877F2]/"],[class^="bg-[#ffcc29]/"],
-        [class*=" bg-[#ffcc29]/"],[class^="bg-[#F5A623]/"],[class*=" bg-[#F5A623]/"],[class^="from-[#ffcc29]/"],
-        [class*=" from-[#ffcc29]/"],[class^="from-[#F5A623]/"],[class*=" from-[#F5A623]/"],[class^="bg-[#4ADE80]/"],
-        [class*=" bg-[#4ADE80]/"]) {
+      body.gravity-shell :where(:is([class^="from-red-500"],[class*=" from-red-500"]):is([class^="to-orange-500"],
+        [class*=" to-orange-500"]),:is([class^="from-[#ffcc29]"],
+        [class*=" from-[#ffcc29]"]):is([class^="to-orange-400"],[class*=" to-orange-400"]),
+        :is([class^="from-emerald-500"],[class*=" from-emerald-500"]):is([class^="to-[#ffcc29]"],
+        [class*=" to-[#ffcc29]"]),:is([class^="from-sky-400"],[class*=" from-sky-400"]):is([class^="to-sky-600"],
+        [class*=" to-sky-600"]),:is([class^="from-yellow-400"],[class*=" from-yellow-400"]):is([class^="via-pink-500"],
+        [class*=" via-pink-500"]):is([class^="to-purple-600"],[class*=" to-purple-600"]),:is([class^="from-blue-400"],
+        [class*=" from-blue-400"]):is([class^="to-blue-600"],[class*=" to-blue-600"]),:is([class^="from-[#ffcc29]"],
+        [class*=" from-[#ffcc29]"]):is([class^="to-[#e6b825]"],[class*=" to-[#e6b825]"]),:is([class^="from-[#F5A623]"],
+        [class*=" from-[#F5A623]"]):is([class^="to-[#ffb833]"],[class*=" to-[#ffb833]"]),:is([class^="from-[#ffcc29]"],
+        [class*=" from-[#ffcc29]"]):is([class^="to-[#ffa500]"],[class*=" to-[#ffa500]"]),
+        :is([class^="from-purple-500"],[class*=" from-purple-500"]):is([class^="to-pink-500"],[class*=" to-pink-500"]),
+        :is([class^="from-blue-500"],[class*=" from-blue-500"]):is([class^="to-cyan-500"],[class*=" to-cyan-500"]),
+        :is([class^="from-green-500"],[class*=" from-green-500"]):is([class^="to-emerald-600"],
+        [class*=" to-emerald-600"]),:is([class^="from-[#F5A623]"],
+        [class*=" from-[#F5A623]"]):is([class^="to-[#ffa500]"],[class*=" to-[#ffa500]"]),
+        :is([class^="from-yellow-400"],[class*=" from-yellow-400"]):is([class^="to-yellow-600"],
+        [class*=" to-yellow-600"]),:is([class^="from-yellow-400"],
+        [class*=" from-yellow-400"]):is([class^="to-yellow-500"],[class*=" to-yellow-500"]),
+        :is([class^="from-yellow-400"],[class*=" from-yellow-400"]):is([class^="via-red-500"],
+        [class*=" via-red-500"]):is([class^="to-purple-600"],[class*=" to-purple-600"]),:is([class^="from-[#ffcc29]"],
+        [class*=" from-[#ffcc29]"]):is([class^="to-orange-500"],[class*=" to-orange-500"]),
+        :is([class^="from-pink-500"],[class*=" from-pink-500"]):is([class^="to-purple-500"],[class*=" to-purple-500"]),
+        :is([class^="from-red-500"],[class*=" from-red-500"]):is([class^="to-red-600"],[class*=" to-red-600"]),
+        :is([class^="from-blue-400"],[class*=" from-blue-400"]):is([class^="to-blue-500"],[class*=" to-blue-500"])) {
+        --nb-t1: var(--gv-accent-ink);
+        --nb-t2: rgb(26 18 8 / 0.88);
+        --nb-t3: rgb(26 18 8 / 0.80);
+        --nb-acc: var(--gv-accent-ink);
+        --nb-green: #166534;
+        --nb-emerald: #065F46;
+        --nb-teal: #115E59;
+        --nb-cyan: #155E75;
+        --nb-sky: #075985;
+        --nb-blue: #1D4ED8;
+        --nb-indigo: #4338CA;
+        --nb-violet: #6D28D9;
+        --nb-purple: #7E22CE;
+        --nb-fuchsia: #A21CAF;
+        --nb-pink: #BE185D;
+        --nb-rose: #BE123C;
+        --nb-red: #B91C1C;
+        --nb-orange: #9A3412;
+        --nb-lime: #3F6212;
+      }
+      body.gravity-shell :where([class^="bg-[#F5A623]/"],[class*=" bg-[#F5A623]/"],[class^="bg-[#ffcc29]/"],
+        [class*=" bg-[#ffcc29]/"],[class^="bg-gray-50/"],[class*=" bg-gray-50/"],[class^="bg-[#f5f5f5]/"],
+        [class*=" bg-[#f5f5f5]/"],[class^="bg-blue-500/"],[class*=" bg-blue-500/"],[class^="bg-red-500/"],
+        [class*=" bg-red-500/"],[class^="bg-red-400/"],[class*=" bg-red-400/"],[class^="bg-green-500/"],
+        [class*=" bg-green-500/"],[class^="bg-slate-50/"],[class*=" bg-slate-50/"],[class^="bg-slate-200/"],
+        [class*=" bg-slate-200/"],[class^="bg-amber-50/"],[class*=" bg-amber-50/"],[class^="bg-green-600/"],
+        [class*=" bg-green-600/"],[class^="bg-[#ededed]/"],[class*=" bg-[#ededed]/"],[class^="bg-slate-100/"],
+        [class*=" bg-slate-100/"],[class^="bg-emerald-50/"],[class*=" bg-emerald-50/"],[class^="bg-violet-500/"],
+        [class*=" bg-violet-500/"],[class^="bg-emerald-500/"],[class*=" bg-emerald-500/"],[class^="bg-orange-500/"],
+        [class*=" bg-orange-500/"],[class^="bg-pink-500/"],[class*=" bg-pink-500/"],[class^="bg-cyan-500/"],
+        [class*=" bg-cyan-500/"],[class^="bg-yellow-500/"],[class*=" bg-yellow-500/"],[class^="bg-yellow-50/"],
+        [class*=" bg-yellow-50/"],[class^="bg-blue-50/"],[class*=" bg-blue-50/"],[class^="bg-[#1877F2]/"],
+        [class*=" bg-[#1877F2]/"],[class^="bg-slate-500/"],[class*=" bg-slate-500/"],[class^="bg-amber-500/"],
+        [class*=" bg-amber-500/"],[class^="bg-purple-500/"],[class*=" bg-purple-500/"],[class^="bg-orange-400/"],
+        [class*=" bg-orange-400/"],[class^="bg-[#4ADE80]/"],[class*=" bg-[#4ADE80]/"],[class^="bg-indigo-500/"],
+        [class*=" bg-indigo-500/"],[class^="bg-slate-600/"],[class*=" bg-slate-600/"],[class^="from-red-500/"],
+        [class*=" from-red-500/"],[class^="to-orange-500/"],[class*=" to-orange-500/"],[class^="from-[#ffcc29]/"],
+        [class*=" from-[#ffcc29]/"],[class^="from-emerald-500/"],[class*=" from-emerald-500/"],
+        [class^="to-[#ffcc29]/"],[class*=" to-[#ffcc29]/"],[class^="from-blue-500/"],[class*=" from-blue-500/"],
+        [class^="from-[#ededed]/"],[class*=" from-[#ededed]/"],[class^="via-white/"],[class*=" via-white/"],
+        [class^="from-[#F5A623]/"],[class*=" from-[#F5A623]/"],[class^="to-[#ffa500]/"],[class*=" to-[#ffa500]/"],
+        [class^="from-purple-500/"],[class*=" from-purple-500/"],[class^="to-pink-500/"],[class*=" to-pink-500/"],
+        [class^="from-white/"],[class*=" from-white/"],[class^="from-black/"],[class*=" from-black/"],
+        [class^="to-white/"],[class*=" to-white/"]) {
         --nb-t1: var(--gv-text-primary);
         --nb-t2: var(--gv-text-secondary);
         --nb-t3: var(--gv-text-tertiary);
         --nb-acc: var(--gv-accent-text);
+        --nb-green: #166534;
+        --nb-emerald: #065F46;
+        --nb-teal: #115E59;
+        --nb-cyan: #155E75;
+        --nb-sky: #075985;
+        --nb-blue: #1D4ED8;
+        --nb-indigo: #4338CA;
+        --nb-violet: #6D28D9;
+        --nb-purple: #7E22CE;
+        --nb-fuchsia: #A21CAF;
+        --nb-pink: #BE185D;
+        --nb-rose: #BE123C;
+        --nb-red: #B91C1C;
+        --nb-orange: #9A3412;
+        --nb-lime: #3F6212;
+      }
+      body.gravity-shell :is([class^="hover:bg-red-500"],[class*=" hover:bg-red-500"]):hover {
+        --nb-t1: var(--gv-accent-ink);
+        --nb-t2: rgb(26 18 8 / 0.88);
+        --nb-t3: rgb(26 18 8 / 0.80);
+        --nb-acc: var(--gv-accent-ink);
+        --nb-green: #166534;
+        --nb-emerald: #065F46;
+        --nb-teal: #115E59;
+        --nb-cyan: #155E75;
+        --nb-sky: #075985;
+        --nb-blue: #1D4ED8;
+        --nb-indigo: #4338CA;
+        --nb-violet: #6D28D9;
+        --nb-purple: #7E22CE;
+        --nb-fuchsia: #A21CAF;
+        --nb-pink: #BE185D;
+        --nb-rose: #BE123C;
+        --nb-red: #B91C1C;
+        --nb-orange: #9A3412;
+        --nb-lime: #3F6212;
+      }
+      body.gravity-shell :is([class^="hover:bg-green-700"],[class*=" hover:bg-green-700"]):hover {
+        --nb-t1: #FFFFFF;
+        --nb-t2: rgb(255 255 255 / 0.88);
+        --nb-t3: rgb(255 255 255 / 0.78);
+        --nb-acc: #F5A623;
+        --nb-green: #86EFAC;
+        --nb-emerald: #6EE7B7;
+        --nb-teal: #5EEAD4;
+        --nb-cyan: #67E8F9;
+        --nb-sky: #7DD3FC;
+        --nb-blue: #93C5FD;
+        --nb-indigo: #A5B4FC;
+        --nb-violet: #C4B5FD;
+        --nb-purple: #D8B4FE;
+        --nb-fuchsia: #F0ABFC;
+        --nb-pink: #F9A8D4;
+        --nb-rose: #FDA4AF;
+        --nb-red: #FCA5A5;
+        --nb-orange: #FDBA74;
+        --nb-lime: #BEF264;
+      }
+      body.gravity-shell :is([class^="hover:bg-blue-700"],[class*=" hover:bg-blue-700"]):hover {
+        --nb-t1: #FFFFFF;
+        --nb-t2: rgb(255 255 255 / 0.88);
+        --nb-t3: rgb(255 255 255 / 0.78);
+        --nb-acc: #F5A623;
+        --nb-green: #86EFAC;
+        --nb-emerald: #6EE7B7;
+        --nb-teal: #5EEAD4;
+        --nb-cyan: #67E8F9;
+        --nb-sky: #7DD3FC;
+        --nb-blue: #93C5FD;
+        --nb-indigo: #A5B4FC;
+        --nb-violet: #C4B5FD;
+        --nb-purple: #D8B4FE;
+        --nb-fuchsia: #F0ABFC;
+        --nb-pink: #F9A8D4;
+        --nb-rose: #FDA4AF;
+        --nb-red: #FCA5A5;
+        --nb-orange: #FDBA74;
+        --nb-lime: #BEF264;
+      }
+      body.gravity-shell :is([class^="hover:bg-gray-500"],[class*=" hover:bg-gray-500"]):hover {
+        --nb-t1: #FFFFFF;
+        --nb-t2: rgb(255 255 255 / 0.88);
+        --nb-t3: rgb(255 255 255 / 0.78);
+        --nb-acc: #F5A623;
+        --nb-green: #86EFAC;
+        --nb-emerald: #6EE7B7;
+        --nb-teal: #5EEAD4;
+        --nb-cyan: #67E8F9;
+        --nb-sky: #7DD3FC;
+        --nb-blue: #93C5FD;
+        --nb-indigo: #A5B4FC;
+        --nb-violet: #C4B5FD;
+        --nb-purple: #D8B4FE;
+        --nb-fuchsia: #F0ABFC;
+        --nb-pink: #F9A8D4;
+        --nb-rose: #FDA4AF;
+        --nb-red: #FCA5A5;
+        --nb-orange: #FDBA74;
+        --nb-lime: #BEF264;
+      }
+      body.gravity-shell :is([class^="hover:bg-slate-600"],[class*=" hover:bg-slate-600"]):hover {
+        --nb-t1: #FFFFFF;
+        --nb-t2: rgb(255 255 255 / 0.88);
+        --nb-t3: rgb(255 255 255 / 0.78);
+        --nb-acc: #F5A623;
+        --nb-green: #86EFAC;
+        --nb-emerald: #6EE7B7;
+        --nb-teal: #5EEAD4;
+        --nb-cyan: #67E8F9;
+        --nb-sky: #7DD3FC;
+        --nb-blue: #93C5FD;
+        --nb-indigo: #A5B4FC;
+        --nb-violet: #C4B5FD;
+        --nb-purple: #D8B4FE;
+        --nb-fuchsia: #F0ABFC;
+        --nb-pink: #F9A8D4;
+        --nb-rose: #FDA4AF;
+        --nb-red: #FCA5A5;
+        --nb-orange: #FDBA74;
+        --nb-lime: #BEF264;
+      }
+      body.gravity-shell :is([class^="hover:bg-red-600"],[class*=" hover:bg-red-600"]):hover {
+        --nb-t1: #FFFFFF;
+        --nb-t2: rgb(255 255 255 / 0.88);
+        --nb-t3: rgb(255 255 255 / 0.78);
+        --nb-acc: #F5A623;
+        --nb-green: #86EFAC;
+        --nb-emerald: #6EE7B7;
+        --nb-teal: #5EEAD4;
+        --nb-cyan: #67E8F9;
+        --nb-sky: #7DD3FC;
+        --nb-blue: #93C5FD;
+        --nb-indigo: #A5B4FC;
+        --nb-violet: #C4B5FD;
+        --nb-purple: #D8B4FE;
+        --nb-fuchsia: #F0ABFC;
+        --nb-pink: #F9A8D4;
+        --nb-rose: #FDA4AF;
+        --nb-red: #FCA5A5;
+        --nb-orange: #FDBA74;
+        --nb-lime: #BEF264;
+      }
+      body.gravity-shell :is([class^="hover:bg-slate-400"],[class*=" hover:bg-slate-400"]):hover {
+        --nb-t1: var(--gv-accent-ink);
+        --nb-t2: rgb(26 18 8 / 0.88);
+        --nb-t3: rgb(26 18 8 / 0.80);
+        --nb-acc: var(--gv-accent-ink);
+        --nb-green: #166534;
+        --nb-emerald: #065F46;
+        --nb-teal: #115E59;
+        --nb-cyan: #155E75;
+        --nb-sky: #075985;
+        --nb-blue: #1D4ED8;
+        --nb-indigo: #4338CA;
+        --nb-violet: #6D28D9;
+        --nb-purple: #7E22CE;
+        --nb-fuchsia: #A21CAF;
+        --nb-pink: #BE185D;
+        --nb-rose: #BE123C;
+        --nb-red: #B91C1C;
+        --nb-orange: #9A3412;
+        --nb-lime: #3F6212;
+      }
+      body.gravity-shell :is([class^="hover:bg-red-700"],[class*=" hover:bg-red-700"]):hover {
+        --nb-t1: #FFFFFF;
+        --nb-t2: rgb(255 255 255 / 0.88);
+        --nb-t3: rgb(255 255 255 / 0.78);
+        --nb-acc: #F5A623;
+        --nb-green: #86EFAC;
+        --nb-emerald: #6EE7B7;
+        --nb-teal: #5EEAD4;
+        --nb-cyan: #67E8F9;
+        --nb-sky: #7DD3FC;
+        --nb-blue: #93C5FD;
+        --nb-indigo: #A5B4FC;
+        --nb-violet: #C4B5FD;
+        --nb-purple: #D8B4FE;
+        --nb-fuchsia: #F0ABFC;
+        --nb-pink: #F9A8D4;
+        --nb-rose: #FDA4AF;
+        --nb-red: #FCA5A5;
+        --nb-orange: #FDBA74;
+        --nb-lime: #BEF264;
+      }
+      body.gravity-shell :is([class^="hover:bg-[#0a0f1a]"],[class*=" hover:bg-[#0a0f1a]"]):hover {
+        --nb-t1: #FFFFFF;
+        --nb-t2: rgb(255 255 255 / 0.88);
+        --nb-t3: rgb(255 255 255 / 0.78);
+        --nb-acc: #F5A623;
+        --nb-green: #86EFAC;
+        --nb-emerald: #6EE7B7;
+        --nb-teal: #5EEAD4;
+        --nb-cyan: #67E8F9;
+        --nb-sky: #7DD3FC;
+        --nb-blue: #93C5FD;
+        --nb-indigo: #A5B4FC;
+        --nb-violet: #C4B5FD;
+        --nb-purple: #D8B4FE;
+        --nb-fuchsia: #F0ABFC;
+        --nb-pink: #F9A8D4;
+        --nb-rose: #FDA4AF;
+        --nb-red: #FCA5A5;
+        --nb-orange: #FDBA74;
+        --nb-lime: #BEF264;
+      }
+      body.gravity-shell :is([class^="hover:bg-[#0f1526]"],[class*=" hover:bg-[#0f1526]"]):hover {
+        --nb-t1: #FFFFFF;
+        --nb-t2: rgb(255 255 255 / 0.88);
+        --nb-t3: rgb(255 255 255 / 0.78);
+        --nb-acc: #F5A623;
+        --nb-green: #86EFAC;
+        --nb-emerald: #6EE7B7;
+        --nb-teal: #5EEAD4;
+        --nb-cyan: #67E8F9;
+        --nb-sky: #7DD3FC;
+        --nb-blue: #93C5FD;
+        --nb-indigo: #A5B4FC;
+        --nb-violet: #C4B5FD;
+        --nb-purple: #D8B4FE;
+        --nb-fuchsia: #F0ABFC;
+        --nb-pink: #F9A8D4;
+        --nb-rose: #FDA4AF;
+        --nb-red: #FCA5A5;
+        --nb-orange: #FDBA74;
+        --nb-lime: #BEF264;
+      }
+      body.gravity-shell :is([class^="hover:bg-[#252b3d]"],[class*=" hover:bg-[#252b3d]"]):hover {
+        --nb-t1: #FFFFFF;
+        --nb-t2: rgb(255 255 255 / 0.88);
+        --nb-t3: rgb(255 255 255 / 0.78);
+        --nb-acc: #F5A623;
+        --nb-green: #86EFAC;
+        --nb-emerald: #6EE7B7;
+        --nb-teal: #5EEAD4;
+        --nb-cyan: #67E8F9;
+        --nb-sky: #7DD3FC;
+        --nb-blue: #93C5FD;
+        --nb-indigo: #A5B4FC;
+        --nb-violet: #C4B5FD;
+        --nb-purple: #D8B4FE;
+        --nb-fuchsia: #F0ABFC;
+        --nb-pink: #F9A8D4;
+        --nb-rose: #FDA4AF;
+        --nb-red: #FCA5A5;
+        --nb-orange: #FDBA74;
+        --nb-lime: #BEF264;
+      }
+      body.gravity-shell :is([class^="hover:bg-indigo-600"],[class*=" hover:bg-indigo-600"]):hover {
+        --nb-t1: #FFFFFF;
+        --nb-t2: rgb(255 255 255 / 0.88);
+        --nb-t3: rgb(255 255 255 / 0.78);
+        --nb-acc: #F5A623;
+        --nb-green: #86EFAC;
+        --nb-emerald: #6EE7B7;
+        --nb-teal: #5EEAD4;
+        --nb-cyan: #67E8F9;
+        --nb-sky: #7DD3FC;
+        --nb-blue: #93C5FD;
+        --nb-indigo: #A5B4FC;
+        --nb-violet: #C4B5FD;
+        --nb-purple: #D8B4FE;
+        --nb-fuchsia: #F0ABFC;
+        --nb-pink: #F9A8D4;
+        --nb-rose: #FDA4AF;
+        --nb-red: #FCA5A5;
+        --nb-orange: #FDBA74;
+        --nb-lime: #BEF264;
+      }
+      body.gravity-shell :is([class^="hover:bg-emerald-600"],[class*=" hover:bg-emerald-600"]):hover {
+        --nb-t1: var(--gv-accent-ink);
+        --nb-t2: rgb(26 18 8 / 0.88);
+        --nb-t3: rgb(26 18 8 / 0.80);
+        --nb-acc: var(--gv-accent-ink);
         --nb-green: #166534;
         --nb-emerald: #065F46;
         --nb-teal: #115E59;

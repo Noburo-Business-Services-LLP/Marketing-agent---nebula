@@ -1,0 +1,23 @@
+<!-- Body of /__layer-fixtures-gaps (audit server only). KNOWN GAPS, reported but NOT gated: real
+     markup on fills where neither white nor dark ink reaches 4.5:1 (see layer-needs-fix.json), so
+     no layer choice can pass them. They need a colour change on the page (Task 8). Kept visible on
+     purpose; do not delete a case until its page is fixed. -->
+<div class="relative z-[1] min-h-screen bg-[var(--gv-bg)] p-4 sm:p-8 space-y-6 max-w-full overflow-x-hidden">
+  <h1 class="font-serif-display text-[28px] text-[var(--gv-text-primary)]">Layer known gaps (Task 8)</h1>
+  <section>
+    <h2 class="text-[13px] font-semibold text-[var(--gv-text-secondary)] mb-2">Analytics "Reach" chip, #8B5CF6 (pages/Analytics.tsx:529, 770-778): white 4.23, ink 4.37</h2>
+    <button class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all text-white shadow-sm" style="background-color: rgb(139, 92, 246);">Reach</button>
+  </section>
+  <section>
+    <h2 class="text-[13px] font-semibold text-[var(--gv-text-secondary)] mb-2">Dashboard "All" chip, from-slate-400 to-slate-600 at 10px (pages/Dashboard.tsx:3735): white 2.56, ink 2.44 (worst stop)</h2>
+    <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-[13px] text-slate-600"><span class="w-5 h-5 rounded-full bg-gradient-to-br from-slate-400 to-slate-600 flex items-center justify-center text-white text-[10px]">All</span>All platforms</span>
+  </section>
+  <section>
+    <h2 class="text-[13px] font-semibold text-[var(--gv-text-secondary)] mb-2">Instagram tile, from-yellow-400 via-red-500 to-purple-600 (pages/ConnectSocials.tsx:493): white 1.53, ink 3.44 (worst stop)</h2>
+    <div class="w-14 h-14 rounded-2xl flex items-center justify-center bg-gradient-to-tr from-yellow-400 via-red-500 to-purple-600"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="lucide lucide-instagram w-6 h-6 text-white" aria-hidden="true"><rect width="20" height="20" x="2" y="2" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/></svg></div>
+  </section>
+  <section>
+    <h2 class="text-[13px] font-semibold text-[var(--gv-text-secondary)] mb-2">Facebook blue #1877F2 at text-xs: white 4.23, ink 4.37 (icons pass 3:1)</h2>
+    <span class="px-2 py-1 rounded bg-[#1877F2] text-white text-xs">Facebook</span>
+  </section>
+</div>

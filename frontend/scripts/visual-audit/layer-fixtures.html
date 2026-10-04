@@ -96,12 +96,9 @@
       <span class="px-3 py-1.5 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 text-white text-[19px] font-bold">Boost</span>
       <span class="px-3 py-1.5 rounded-lg bg-[#16a34a] text-white text-[19px] font-bold">Live</span>
       <span class="px-3 py-1.5 rounded-lg text-white text-[12px] font-medium" style="background-color: #e11d48">Rose pill (inline style)</span>
-      <span class="px-3 py-1.5 rounded-lg text-white text-[19px] font-bold" style="background-color: #8B5CF6">Reach</span>
       <button class="px-4 py-2 rounded-lg bg-[#ffcc29] text-white text-[13px] font-semibold">Gold button</button>
       <button class="px-3 py-1.5 rounded-lg text-xs font-medium text-white" style="background-color: #ffcc29">Followers (inline gold, ink)</button>
       <span class="px-3 py-1.5 rounded-lg bg-red-500/90 text-white text-[13px]">High-alpha red (ink)</span>
-      <!-- Dashboard.tsx:3735 uses from-slate-400 (white 3.43:1 at the light corner, a Task 8 page fix); slate-500 checks that white stays white. -->
-      <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-[13px] text-slate-600"><span class="w-5 h-5 rounded-full bg-gradient-to-br from-slate-500 to-slate-600 flex items-center justify-center text-white text-[10px]">All</span>All platforms</span>
       <span class="px-3 py-1.5 rounded-lg bg-[#1DA1F2] text-white text-[13px] font-medium">Twitter blue (ink)</span>
     </div>
   </section>
@@ -116,11 +113,28 @@
       <div class="w-14 h-14 rounded-2xl flex items-center justify-center bg-[#FF0000]"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="lucide lucide-youtube w-6 h-6 text-white" aria-hidden="true"><path d="M2.5 17a24.12 24.12 0 0 1 0-10 2 2 0 0 1 1.4-1.4 49.56 49.56 0 0 1 16.2 0A2 2 0 0 1 21.5 7a24.12 24.12 0 0 1 0 10 2 2 0 0 1-1.4 1.4 49.55 49.55 0 0 1-16.2 0A2 2 0 0 1 2.5 17"/><path d="m10 15 5-3-5-3z"/></svg></div>
       <div class="w-14 h-14 rounded-2xl flex items-center justify-center bg-[#FF4500]"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="lucide lucide-message-circle w-6 h-6 text-white" aria-hidden="true"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg></div>
       <div class="w-14 h-14 rounded-2xl flex items-center justify-center bg-black"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5 text-white" aria-hidden="true"><path d="M18.9 2H22l-7.6 8.7L23 22h-6.8l-5.3-6.9L4.8 22H1.7l8.1-9.3L1 2h7l4.8 6.3L18.9 2z"/></svg></div>
-      <!-- The real Instagram tile (from-yellow-400 via-red-500 to-purple-600) is left out: white keeps the rule but
-           reaches only 2.85:1 on the orange part of the gradient, and ink fails on the purple end. A page fix
-           (darker stops) belongs to Task 8. -->
       <div class="w-14 h-14 rounded-2xl flex items-center justify-center bg-slate-500"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="lucide lucide-video w-6 h-6 text-white" aria-hidden="true"><path d="m16 13 5.2 3.5a.5.5 0 0 0 .8-.4V7.9a.5.5 0 0 0-.8-.4L16 11"/><rect x="2" y="6" width="14" height="12" rx="2"/></svg></div>
       <div class="w-14 h-14 rounded-2xl flex items-center justify-center bg-[var(--gv-panel)] border border-[var(--gv-border-subtle)]"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="lucide lucide-bell w-6 h-6 text-white/70" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/></svg></div>
+    </div>
+  </section>
+
+  <!-- 4b. Real markup: Analytics metric chips (pages/Analytics.tsx:770-778, text-xs, inline
+       backgroundColor written by React as rgb()) and the campaign-type icon tile
+       (pages/Campaigns.tsx:2304). Reach (#8B5CF6) is in layer-fixtures-gaps.html: no text colour
+       reaches 4.5:1 on it. -->
+  <section>
+    <h2 class="text-[13px] font-semibold text-[var(--gv-text-secondary)] mb-2">4b. Real chips and icon tiles</h2>
+    <div class="flex flex-wrap gap-3 items-center">
+      <button class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all text-white shadow-sm" style="background-color: rgb(244, 63, 94);">Engagement %</button>
+      <button class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all text-white shadow-sm" style="background-color: rgb(236, 72, 153);">Likes</button>
+      <button class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all text-white shadow-sm" style="background-color: rgb(16, 185, 129);">Impressions</button>
+      <button class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all text-white shadow-sm" style="background-color: rgb(245, 158, 11);">Posts</button>
+      <button class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all text-white shadow-sm" style="background-color: rgb(255, 204, 41);">Followers</button>
+      <span class="px-2 py-1 rounded bg-green-500 text-white text-xs">Published</span>
+      <span class="px-2 py-1 rounded bg-sky-500 text-white text-xs">Queued</span>
+      <div class="p-3.5 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl w-fit shadow-lg shadow-green-500/20"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="lucide lucide-send w-7 h-7 text-white" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg></div>
+      <div class="p-3.5 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-xl w-fit"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="lucide lucide-pen-line w-7 h-7 text-white" aria-hidden="true"><path d="M12 20h9"/><path d="M16.4 3.6a2 2 0 0 1 2.8 2.8L7 18.6 3 20l1.4-4z"/></svg></div>
+      <button class="px-3 py-2 rounded-lg bg-red-500/90 hover:bg-red-500 text-white text-[13px]">Delete (danger, hover darkens)</button>
     </div>
   </section>
 
