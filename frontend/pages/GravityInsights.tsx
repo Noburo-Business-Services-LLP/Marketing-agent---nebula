@@ -79,12 +79,13 @@ const GravityInsights: React.FC = () => {
     const total = approved + drafts;
     const approvalRate = total > 0 ? Math.round((approved / total) * 100) : 0;
 
-    const reachChangePct = reachPrev > 0
+    // null means the previous 7 days had no data, so no percentage can be stated.
+    const reachChangePct: number | null = reachPrev > 0
       ? Math.round(((reach7d - reachPrev) / reachPrev) * 100)
-      : (reach7d > 0 ? 100 : 0);
-    const engChangePct = engagementPrev > 0
+      : null;
+    const engChangePct: number | null = engagementPrev > 0
       ? Math.round(((engagement - engagementPrev) / engagementPrev) * 100)
-      : (engagement > 0 ? 100 : 0);
+      : null;
 
     // Build a 14-day reach series (day-by-day)
     const series: { date: Date; reach: number }[] = [];
@@ -112,6 +113,23 @@ const GravityInsights: React.FC = () => {
   }, [campaigns]);
 
   const hasAnyReach = stats.reach7d > 0;
+  const changePct = stats.reachChangePct;
+  const reachSentence = changePct === null
+    ? 'This is the first week with reach data, so there is no earlier week to compare it with.'
+    : changePct > 0
+      ? `Reach is up ${changePct}% compared with the previous 7 days.`
+      : changePct < 0
+        ? `Reach is down ${Math.abs(changePct)}% compared with the previous 7 days.`
+        : 'Reach is unchanged compared with the previous 7 days.';
+  const trendLabel = !hasAnyReach
+    ? 'Waiting for data'
+    : changePct === null
+      ? 'First week with data'
+      : changePct > 0
+        ? 'Reach is rising'
+        : changePct < 0
+          ? 'Reach is falling'
+          : 'Reach is steady';
 
   // Sparkline path
   const chartPath = useMemo(() => {
@@ -161,16 +179,20 @@ const GravityInsights: React.FC = () => {
             <span className="gravity-label">Last 7 days</span>
           </div>
           <h1 className="font-serif-display text-[52px] leading-[1.05] tracking-[-0.02em] text-[var(--gv-text-primary)] mb-4">
-            Your posts reached <span className="italic text-[var(--gv-accent-display)] tabular-nums">{wordsForNumber(stats.reach7d)}</span> people.
+            {hasAnyReach ? (
+              <>In the last 7 days your posts reached <span className="italic text-[var(--gv-accent-display)] tabular-nums">{wordsForNumber(stats.reach7d)}</span> people.</>
+            ) : (
+              <>No reach has been recorded yet.</>
+            )}
           </h1>
           <p className="text-[14px] text-[var(--gv-text-secondary)] max-w-[540px]">
             {hasAnyReach
-              ? `Reach is ${stats.reachChangePct >= 0 ? 'up' : 'down'} ${Math.abs(stats.reachChangePct)}% compared with the previous 7 days. Keep publishing on the schedule Nebulaa set for you.`
+              ? `${reachSentence} Keep publishing on the schedule Nebulaa set for you.`
               : `After your posts are published, this page shows how many people saw them. You do not need to build a dashboard or open a spreadsheet.`}
           </p>
         </div>
 
-        {hasAnyReach && (
+        {hasAnyReach && stats.reachChangePct !== null && (
           <div className="text-right">
             <div className="font-serif-display text-[68px] leading-none tabular-nums text-[var(--gv-text-primary)]">
               {stats.reachChangePct >= 0 ? '+' : ''}{stats.reachChangePct}%
@@ -182,8 +204,8 @@ const GravityInsights: React.FC = () => {
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
-        <StatCard label="Reach (7 days)" value={hasAnyReach ? compactK(stats.reach7d) : '—'} delta={hasAnyReach ? `${stats.reachChangePct >= 0 ? '+' : ''}${stats.reachChangePct}%` : null} />
-        <StatCard label="Engagement" value={stats.engagement > 0 ? compactK(stats.engagement) : '—'} delta={stats.engagement > 0 ? `${stats.engChangePct >= 0 ? '+' : ''}${stats.engChangePct}%` : null} />
+        <StatCard label="Reach (7 days)" value={hasAnyReach ? compactK(stats.reach7d) : '—'} delta={hasAnyReach && stats.reachChangePct !== null ? `${stats.reachChangePct >= 0 ? '+' : ''}${stats.reachChangePct}%` : null} />
+        <StatCard label="Engagement" value={stats.engagement > 0 ? compactK(stats.engagement) : '—'} delta={stats.engagement > 0 && stats.engChangePct !== null ? `${stats.engChangePct >= 0 ? '+' : ''}${stats.engChangePct}%` : null} />
         <StatCard label="New followers" value={stats.newFollowers > 0 ? `${stats.newFollowers}` : '—'} delta={null} />
         <StatCard label="Approval rate" value={`${stats.approvalRate}%`} delta={null} />
       </div>
@@ -194,7 +216,7 @@ const GravityInsights: React.FC = () => {
           <div className="flex items-center justify-between mb-6">
             <div className="gravity-label">Reach in the last 14 days</div>
             <div className="text-[11px] text-[var(--gv-text-muted)]">
-              {hasAnyReach ? 'Trending up' : 'Waiting for data'}
+              {trendLabel}
             </div>
           </div>
           {hasAnyReach ? (
