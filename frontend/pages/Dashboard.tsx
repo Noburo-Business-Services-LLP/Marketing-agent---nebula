@@ -4149,10 +4149,10 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                                 setSelectedHoliday(event);
                                               }}
                                               className={`absolute left-1 right-1 rounded-md px-2 py-1 cursor-pointer hover:opacity-90 transition-opacity shadow-md border-l-4 ${
-                                                event.type === 'national' ? 'bg-orange-500 border-orange-600' :
-                                                event.type === 'festival' ? 'bg-pink-500 border-pink-600' :
+                                                event.type === 'national' ? 'bg-orange-700 border-orange-800' :
+                                                event.type === 'festival' ? 'bg-pink-600 border-pink-700' :
                                                 event.type === 'marketing' ? 'bg-green-500 border-green-600' :
-                                                'bg-blue-500 border-blue-600'
+                                                'bg-blue-600 border-blue-700'
                                               }`}
                                               style={{ 
                                                 top: `${idx * 48}px`,
@@ -4161,7 +4161,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                               title={`${event.description}${event.marketingTip ? `\n💡 ${event.marketingTip}` : ''}`}
                                             >
                                               <div className="flex items-center gap-1">
-                                                <span className="text-xs">{event.emoji}</span>
+                                                <span className="text-xs text-white">{event.emoji}</span>
                                                 <p className="text-xs font-semibold truncate text-white">{event.name}</p>
                                               </div>
                                               <p className="text-[10px] truncate text-white/80">
@@ -4186,8 +4186,8 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                             'scheduled': 'bg-[#ffcc29] border-[#e6b825]',
                                             'draft': 'bg-amber-500 border-amber-600',
                                             'paused': 'bg-slate-400 border-slate-500',
-                                            'pending': 'bg-blue-500 border-blue-600',
-                                            'reminder': 'bg-purple-500 border-purple-600'
+                                            'pending': 'bg-blue-600 border-blue-700',
+                                            'reminder': 'bg-purple-600 border-purple-700'
                                         };
                                         
                                         const eventStatus = event.status || 'scheduled';

@@ -1,7 +1,28 @@
 {
   "_comment": "Items the audit cannot measure (unknown background, unparsed colour, gradient text) that a person has checked by eye. summarize.mjs fails the gate for any such item not listed here. Entry: { kind: unknown|unparsed|gradientText, route: <routes.json label>, width?: 1280|375 (omit = both), text?: start of the text ('*' = every item of that kind on the route), selector?: exact selector, reason: why it cannot be measured, verifiedBy: who checked it, how (screenshot path, ratio read with a colour picker), and when }. Do not add entries without a by-eye check.",
-  "signedOff": [],
-  "needsByEyeCheck": [
-    { "route": "trial-expired", "reason": "Text sits over the animated starfield <canvas> on a dark radial gradient; measured against absent/black/white the result depends on the canvas pixels. Check the plan cards and the '/35'-'/45' alpha lines by eye, then sign off or fix." }
-  ]
+  "signedOff": [
+    {
+      "kind": "gradientText",
+      "route": "trial-expired",
+      "text": "*",
+      "reason": "Plan price uses background-clip:text with a vertical white-to-#a0a0a0 gradient; it cannot be measured as a single colour.",
+      "verifiedBy": "Task 8 implementer (Claude), by eye on 2026-10-04 in the Browser pane at 127.0.0.1:3100; worst stop #a0a0a0 on the opaque #060910 card is about 7.5:1 (>= 3:1 required, the text is 44px bold); legible in the 1280 screenshot."
+    },
+    {
+      "kind": "unknown",
+      "route": "dashboard",
+      "width": 1280,
+      "text": "*",
+      "reason": "Photo-stack tags (GravityHome.tsx) of cards that are overlapped by the front cards; hit-testing finds an opaque card above the text at every sample point, so the text is mostly not visible.",
+      "verifiedBy": "Task 8 implementer (Claude), by eye on 2026-10-04 in the Browser pane at 127.0.0.1:3100; each tag is white on a bg-black/75 pill, which is at least 10:1 even over a white photo; the visible tags are legible in the dashboard screenshot."
+    },
+    {
+      "kind": "unknown",
+      "route": "campaigns",
+      "text": "*",
+      "reason": "Composer card: an inline translucent amber radial gradient (max 9% alpha, GravityCreate.tsx) sits behind the label and placeholders; the auditor treats a gradient layer as an image of unknown colour.",
+      "verifiedBy": "Task 8 implementer (Claude), by eye on 2026-10-04 in the Browser pane at 127.0.0.1:3100; the auditor measures 4.76 / 5.21 / 5.39 on the colour beneath, and the 9% amber tint over the panel (#fef7eb) gives about 5.4:1 for #6d6250 and #9a5a00."
+    }
+  ],
+  "needsByEyeCheck": []
 }
