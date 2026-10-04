@@ -463,7 +463,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                     return (
                       <div className="animate-in fade-in duration-300">
                         <h2 className="font-serif-display text-[22px] text-[#F5F4F1] mb-2">Business profile</h2>
-                        <p className={`text-sm mb-6 ${theme.textSecondary}`}>These are the answers you gave during onboarding. Edit any field, then select Save business profile.</p>
+                        <p className={`text-sm mb-6 ${theme.textSecondary}`}>This page shows the answers you gave during onboarding. Some fields are optional details that onboarding no longer asks for, so you can add them here. Edit any field, then select Save business profile.</p>
 
                         <div className="space-y-5 mb-6">
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
