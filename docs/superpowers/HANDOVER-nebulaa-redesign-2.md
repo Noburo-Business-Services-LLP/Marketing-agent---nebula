@@ -19,3 +19,14 @@ Branch `nebulaa-redesign` (worktree `nebula-worktrees/nebulaa-redesign`). Nothin
 ## Hard rules (unchanged)
 
 No real video generation or fal call without the owner's OK for that run. No app run against a database other environments use. Do not use localhost:5000 or :3000 (the owner's servers); use `frontend/scripts/visual-audit` on 127.0.0.1:3100 with its stub. No .env, keys, `backend/public` build output or `node_modules` symlinks in commits. Do not touch the Kling files. Nothing is pushed or deployed without the owner's explicit OK. Use nvm for Node.
+
+## Update, 2026-10-04 evening (supersedes "Do next" items 1 and 2 above)
+
+- Blueprint **Task 6** (document page, A4 print stylesheet, in-app nav entry, calendar hand-off) is done: `e3b5616`. Blueprint **Task 7** (copy options, wording scan) is done: `d697fbc`. Backend tests 416, frontend 98, tsc exactly 3 pre-existing errors.
+- **The one final review of the Blueprint was NOT completed.** It was dispatched on the most capable model and failed immediately with "out of usage credits" (HTTP 429), so it produced no findings. Tasks 1 to 5 were built in an earlier session without per-task reviews, and Tasks 6 and 7 had none either, so the Blueprint has had **no independent review at all**. Run it before any deploy. Range: base `32445d5` to HEAD. Focus (owner's list): a free account cannot reach outside services; Blueprint charges once and refunds once (including the two partial unique indexes, only tested with fakes); no invented facts in Blueprint output (try hostile model output against `services/blueprint/qa.js`); SSRF safety of `services/blueprint/safeFetch.js` (hostile hosts, Instagram lookalikes, redirects, DNS rebinding, gzip bombs); managed accounts never blocked; wording scan.
+- Open points the implementers left for the reviewer:
+  - `blueprint-new` shows 17 "unknown background" items in the visual audit (text over the `GravityPanel` gradient). Compute contrast against the gradient stops, then sign them off in `frontend/scripts/visual-audit/unknown-signoff.json` or fix.
+  - The print preview was only emulated (703 px, print rules on; every page fits one A4 sheet, tallest page 5 at 931 of 1032 px). Black-and-white output and the print dialog filename are unverified. `documentFileName` ends in `.pdf`; Chrome may append `.pdf` again.
+  - "Change your answers" does not restore earlier answers (the API returns no input).
+  - `coverStyle` uses the visitor's first colour as the band and the second as a stripe (two side-by-side halves failed contrast).
+- Everything above, and the deploy checklist in item 5 of the list above, still applies. Nothing is pushed or deployed.
