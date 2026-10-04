@@ -96,7 +96,7 @@ const NotificationBell: React.FC = () => {
       if (latestUnread) {
         new Notification('Campaign Reminder', {
           body: latestUnread.message,
-          icon: '/assets/logo.png',
+          icon: '/favicon.png',
           tag: 'campaign-reminder'
         });
       }
