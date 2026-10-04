@@ -25,7 +25,7 @@ function walk(dir, out) {
  * Single quotes are NOT treated as delimiters: apostrophes in JSX text and comments are ambiguous,
  * and over-reporting is acceptable here while missing a violation is not.
  */
-function blankStrings(line) {
+export function blankStrings(line) {
   const chars = line.split('');
   let i = 0;
   while (i < line.length) {
@@ -59,7 +59,7 @@ function findOpener(blank, from) {
 }
 
 /** Remove comment text from one line; returns '' when the whole line is a comment. */
-function stripComments(line, state) {
+export function stripComments(line, state) {
   if (!state.inBlock && line.trim().startsWith('//')) return '';
   const blank = blankStrings(line);
   const chars = line.split('');

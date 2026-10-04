@@ -1,0 +1,17 @@
+[
+  "components/Layout.tsx",
+  "components/gravity/index.tsx",
+  "pages/GravityHome.tsx",
+  "pages/GravityCreate.tsx",
+  "pages/GravityApprove.tsx",
+  "pages/GravityCalendar.tsx",
+  "pages/CalendarHome.tsx",
+  "pages/GravityInsights.tsx",
+  "pages/IdeaInbox.tsx",
+  "pages/UploadAndSchedule.tsx",
+  "pages/AIMemory.tsx",
+  "pages/BrandAssets.tsx",
+  "pages/ConnectSocials.tsx",
+  "pages/Settings.tsx",
+  "pages/HeroVideo.tsx"
+]
