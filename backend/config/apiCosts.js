@@ -115,7 +115,8 @@ const TOKENS = {
   caption_only:      { in: 1500, out: 700 },
   chat_turn:         { in: 1200, out: 400 },
   scene_script:      { in: 2000, out: 800 },  // per scene, video pipeline
-  story_skeleton:    { in: 3000, out: 1600 }  // once per video: story + shot list
+  story_skeleton:    { in: 3000, out: 1600 }, // once per video: story + shot list
+  blueprint_plan:    { in: 5000, out: 4500 }  // one planner call per Brand Growth Blueprint
 };
 
 const gpt4o = (shape) =>
@@ -220,6 +221,10 @@ const ACTION_USD = {
 
   competitor_scrape: PROVIDER_RATES.serper_per_search,
 
+  // Brand Growth Blueprint: one planner call. The guided-mode directions call (about $0.02) is absorbed.
+  // Page fetches are not metered and no image model is used.
+  blueprint: gpt4o(TOKENS.blueprint_plan),
+
   // --- hero video ----------------------------------------------------------
   // One Seedance clip of HERO_CLIP_SECONDS, plus storing and serving it once
   // as a scene-sized clip. No image, narration or merge step: the model returns
@@ -314,7 +319,8 @@ const ACTION_UNITS = {
   strategic_post: 'per post',
   event_post: 'per post',
   hero_video_clip: 'per clip',
-  competitor_scrape: 'free'
+  competitor_scrape: 'free',
+  blueprint: 'per blueprint'
 };
 
 // ---------------------------------------------------------------------------

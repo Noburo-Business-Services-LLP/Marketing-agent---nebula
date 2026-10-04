@@ -22,7 +22,7 @@ async function run(feature, user, opts) {
   return { res, nexted };
 }
 
-const OUTSIDE = FEATURES.filter((f) => f !== 'create' && f !== 'video');
+const OUTSIDE = FEATURES.filter((f) => f !== 'create' && f !== 'video' && f !== 'blueprint');
 
 test('free user is blocked from every outside-service feature with the plain upgrade body', async () => {
   for (const f of OUTSIDE) {
@@ -38,7 +38,7 @@ test('free user is blocked from every outside-service feature with the plain upg
 });
 
 test('free user may still use create and video', async () => {
-  for (const f of ['create', 'video']) {
+  for (const f of ['create', 'video', 'blueprint']) {
     assert.equal((await run(f, { plan: { tier: 'free' } })).nexted, true);
   }
 });

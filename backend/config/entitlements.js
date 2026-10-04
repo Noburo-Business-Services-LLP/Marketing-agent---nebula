@@ -5,7 +5,7 @@
  */
 
 const TIERS = ['free', 'starter', 'professional', 'managed'];
-const FEATURES = ['create', 'video', 'social_connect', 'publish', 'schedule', 'inbox', 'auto_reply', 'competitors'];
+const FEATURES = ['create', 'video', 'social_connect', 'publish', 'schedule', 'inbox', 'auto_reply', 'competitors', 'blueprint'];
 
 // Feature -> the add-on that unlocks it on a paid plan.
 const FEATURE_ADDON = {
@@ -42,7 +42,7 @@ function holds(addons, name) {
 function canUse(user, feature) {
   const tier = resolveTier(user);
   if (tier === 'managed') return { allowed: true, reason: 'ok', message: '' };
-  if (feature === 'create' || feature === 'video') return { allowed: true, reason: 'ok', message: '' };
+  if (feature === 'create' || feature === 'video' || feature === 'blueprint') return { allowed: true, reason: 'ok', message: '' };
 
   if (tier === 'free') return { allowed: false, reason: 'upgrade', message: MESSAGES.upgrade };
 
