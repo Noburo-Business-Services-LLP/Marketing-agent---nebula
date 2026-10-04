@@ -13,7 +13,8 @@ Status: draft for the owner's approval (decisions below are the owner's, 2026-10
 7. Add-ons and top-ups: people can pay for extra Quarks and for individual features; everything must work inside the Quark economics.
 8. Starter may lose money at first; it must let a new customer make one post a day for 30 days and one Hero video.
 9. **SEO is out of scope** (not fully built). Add-ons are: **publish and schedule to their social pages** (Ayrshare), **competitor insights** (Apify) and **unified inbox with automatic replies**. The idea is a cheap first purchase (the content), then add-on packs, like items in a game.
-10. Invoice item names stay simple. GST is 18 percent (the standard rate for software and for marketing services).
+10. **No free trial and no free Quarks for anyone** (for now). A new customer must pay to enter the app, with a card or UPI autopay mandate collected at sign-up and monthly auto-renewal. Discounts are allowed instead of free access: a first-month discount (50 or 80 percent, the owner will try) to get people to commit. If this does not convert, a trial can be added later.
+11. Invoice item names stay simple. GST is 18 percent (the standard rate for software and for marketing services).
 
 ## Sizing (the same method as `apiCosts.js` `PLANS`)
 
@@ -28,21 +29,21 @@ Allowance = committed deliverables x Quark price x retry factor, plus 15 percent
 - Net revenue per month = price minus the payment gateway fee (about 2 percent of the GST-inclusive charge): Starter about ₹975, Professional about ₹1,950.
 - Vendor cost: Starter about ₹1,165 at expected burn and about ₹1,350 if the whole allowance is used; Professional about ₹1,860 expected and about ₹2,130 at the full allowance. So Starter loses about ₹190 (expected) to ₹375 (worst case) a month (accepted); Professional is about +₹90 at expected burn and −₹175 at the full allowance.
 - The Hero video is the cost driver: about ₹400 of vendor cost per clip, plus re-rolls.
-- Trial: unchanged (100 Quarks, 7 days, everything available, so a new customer sees the whole product).
+- **No trial.** New accounts start with 0 Quarks and tier `none` (locked) until the first payment succeeds.
 
 ## Entitlements (what each account may use)
 
 A new, single place defines what each account tier can use: tiers `trial`, `starter`, `professional`, `managed`.
 
-| Feature | trial | starter | professional | managed |
+| Feature | none | starter | professional | managed |
 |---|---|---|---|---|
-| Image posts, captions, monthly calendar plan, Hero video, reels | yes | yes | yes | yes |
-| Hero videos per month | 1 | 1 | 2 | 2 |
-| Posting to social accounts, scheduling (add-on: Publish and schedule) | yes | add-on | add-on | yes |
-| Inbox and automatic replies (add-on; needs Publish and schedule) | yes | add-on | add-on | yes |
-| Competitor insights (add-on) | yes | add-on | add-on | yes |
-| LinkedIn long-form writing (1 Quark each) | yes | yes | yes | yes |
-| Team members | per current app behaviour | 1 | 5 | per current |
+| Image posts, captions, monthly calendar plan, Hero video, reels | locked | yes | yes | yes |
+| Hero videos per month | 0 | 1 | 2 | 2 |
+| Posting to social accounts, scheduling (add-on: Publish and schedule) | locked | add-on | add-on | yes |
+| Inbox and automatic replies (add-on; needs Publish and schedule) | locked | add-on | add-on | yes |
+| Competitor insights (add-on) | locked | add-on | add-on | yes |
+| LinkedIn long-form writing (1 Quark each) | locked | yes | yes | yes |
+| Team members | 0 | 1 | 5 | per current |
 
 - Server routes for the costly features check the entitlement; locked features return a plain message ("This is an add-on. Ask us to turn it on.") and the page shows a locked state instead of failing.
 - `managed` accounts are exempt from every gate (the Nebulaa team operates them). Accounts that exist today are treated as `managed` unless they have a paid Starter or Professional subscription (so nothing breaks for current customers).
@@ -63,14 +64,22 @@ All prices are editable in one config. GST of 18 percent is added at checkout. T
 
 - **Quark top-up packs** at **₹2.00 per Quark** (ex-GST; the same rate as the managed plan, against a machine cost of roughly ₹0.55 to ₹0.70 per Quark, about 65 percent gross margin): ₹999 = 500 Quarks, ₹1,999 = 1,000, ₹4,999 = 2,500 (with GST: ₹1,178.82, ₹2,358.82, ₹5,898.82). Replaces today's "any amount, fixed 1,000 credits" purchase. Top-up Quarks do not expire with the billing month.
 - Add-ons are per-account flags set when purchased (monthly subscription through Razorpay, same mechanism as the plan) or switched on by the Nebulaa team from the admin panel.
-- **Risk to watch:** a trial account that connects social accounts uses an Ayrshare profile slot. Create the profile only when the account is entitled to publishing, and only at the moment of connecting (never at sign-up).
+- Create an Ayrshare profile only when an account is entitled to publishing and connects its accounts (never at sign-up). With no trial, no unpaid account can use a profile slot.
+
+## Pay-to-enter flow and first-month discount
+
+1. **Flow**: sign up (email and OTP, as today) -> choose Starter or Professional -> pay with card or UPI (a Razorpay subscription with a card or UPI autopay mandate, monthly auto-renewal) -> onboarding -> the app. Until the first payment succeeds the account is tier `none`: the app shows only the plan page, account and billing. Existing accounts (managed customers) are unchanged.
+2. **No free Quarks**: the 100-Quark trial grant and the 7-day trial timer are removed; every "free trial", "7 days free" and "no card needed" message is removed from the landing page, sign-in and app (the landing call to action changes from "Start free" to a neutral "Get started"; the FAQ "What happens after the 7 days?" is replaced). The separate marketing website project has its own copy to update (outside this repo).
+3. **First-month discount**: a configurable discount on the first month only (`FIRST_MONTH_DISCOUNT_PERCENT`, default off; 50 or 80 when the owner runs the offer), shown at checkout as "Introductory price". The renewal then bills the full price. Mechanism (chosen in the plan after reading Razorpay's subscription docs): collect the discounted first payment as the subscription's upfront charge and start the recurring charge one month later, or a Razorpay subscription offer. The existing coupon model can carry a code for targeted offers. GST is charged on the discounted amount.
+4. **Discount economics (ex-GST, first month, Starter / Professional)**: at 50 percent off the first month brings in about ₹475 / ₹975 net against vendor cost of about ₹1,165 / ₹1,860 at expected use (loss about ₹690 / ₹885); at 80 percent off about ₹175 / ₹375 net (loss about ₹990 / ₹1,485). The owner accepted early losses; to cap them, the discounted month could grant a smaller allowance (not in this build unless the owner asks).
+5. **UPI autopay**: Razorpay's subscription checkout offers card and UPI autopay; later debits can need the customer's approval depending on the UPI app. A failed renewal marks the account `none` after a short grace (3 days) and locks it again.
 
 ## Where this changes
 
 1. `backend/config/apiCosts.js`: add `starter` and `professional` (commitments, derived allowance, a guard that fails if the allowance is below the expected burn); keep `managed_10k` as the internal cost model. Add the top-up pack table and the add-on config (prices `null` for now).
-2. New `backend/config/entitlements.js` (tiers, features, Hero limits) and a small middleware `requireFeature(feature)` used on the costly routes (posting/publish, scheduling, social inbox and auto-reply, competitor routes, SEO, LinkedIn). Existing users resolve to `managed` by default.
+2. Remove the trial: `creditGuard.js` stops granting `TRIAL_CREDITS`; new signups get tier `none`; the `checkTrial` guard becomes `requireActivePlan` (managed and paid tiers pass); the trial-expired paywall becomes the plan page. New `backend/config/entitlements.js` (tiers, features, Hero limits) and a small middleware `requireFeature(feature)` used on the costly routes (posting/publish, scheduling, social inbox and auto-reply, competitor routes, SEO, LinkedIn). Existing users resolve to `managed` by default.
 3. Billing (`backend/routes/payment.js`, `config/plans.js`): replace the old subscription and one-off flows with the two monthly plans; the amount charged is the price plus 18 percent GST in paise; Razorpay plans are created on first use by amount (the existing `getOrCreatePlan` pattern; ids cached in env per plan); `subscription.charged` grants the plan's Quarks and records the tier; one-off purchases use the top-up pack table; GST is shown on the checkout and invoices. Old plan code paths are removed (no customers on them).
-4. Hero quota is entitlement-aware (Starter 1, Professional 2, trial 1, managed 2; the env override stays).
+4. Hero quota is entitlement-aware (Starter 1, Professional 2, none 0, managed 2; the env override stays).
 5. Frontend: the in-app plans page and paywall show only Starter and Professional (price plus GST, Quarks, what is included); locked features show "Add-on" states; top-up packs on the Quarks screen; the landing page plan cards and FAQ say Quarks with the real amounts and promise only what the plans include (the landing feature grid mentions replies and competitor views: re-label those as add-ons or remove them, owner to choose).
 6. Rename "credits" to "Quarks" in every customer-facing string (frontend, backend messages, emails, invoice text). Not renamed: API fields, database fields, route names, code identifiers.
 
