@@ -84,3 +84,7 @@ Result: **no Critical issues; three Important issues to fix before any deploy.**
 
 - `dev-dk` (Hero Studio) **is pushed**: `c2b42b9..11e0954` on `origin/dev-dk`.
 - `nebulaa-redesign` is **still local only** (about 87 commits on top of `dev-dk`). The owner approved the push, but the Claude Code permission classifier blocked creating the new remote branch from the session. Run this once in a terminal to publish it: `cd "<repo>/nebula-worktrees/nebulaa-redesign" && git push -u origin nebulaa-redesign` (or add a Bash permission rule for it). Until it runs, this Mac is the only copy of the redesign, plans/Quarks, Blueprint and voice work.
+
+## Update 7, 2026-10-04 night: everything is pushed
+
+The owner ran the push: `origin/nebulaa-redesign` is at `5ae96b3` (equal to local) and `origin/dev-dk` at `11e0954`. Both branches are on GitHub. This final note is committed locally and is the only thing not on the remote until the next push. Nothing is deployed.
