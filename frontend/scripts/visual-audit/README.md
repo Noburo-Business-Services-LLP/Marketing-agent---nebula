@@ -13,6 +13,8 @@ plan). The baseline report is `docs/superpowers/specs/assets/nebulaa-contrast-ba
 | `vite.audit.config.mjs` | Vite config that injects `mock-session.js` before the app boots, binds 127.0.0.1:3100, removes the backend proxy and writes results to disk. |
 | `routes.json` | Every route in `frontend/App.tsx`, with the session mode it needs and the tab to click. |
 | `summarize.mjs` | Turns the saved results into the Markdown report and a compact JSON summary; `--compare` gives a before/after table. |
+| `gen-layer-lists.mjs` | Generates the LIGHT SEMANTICS block of the override layer in `index.html` (`--check` verifies it; `frontend/tests/layer-lists.test.mjs` fails while it is out of date). Edit its lists, never the block. |
+| `layer-fixtures.html` | Body of `/__layer-fixtures`, a static page served only by the audit server (real `index.html` head, `body.gravity-shell`): lightbox, DraftPreviewModal, dark panels, saturated fills, brand tiles with SVG icons, inline-style fills, toggles, fields, scrims. Gated route `layer-fixtures` (mode `fixture`): open `http://127.0.0.1:3100/__layer-fixtures?audit=fixture` and run `__auditRun(null)`. |
 | `gate-logic.mjs` | The gate's pure rules (route status, PASS/PARTIAL/FAIL), unit tested in `frontend/tests/audit-gate.test.mjs`. |
 
 ## Safety model
@@ -120,6 +122,7 @@ plan). The baseline report is `docs/superpowers/specs/assets/nebulaa-contrast-ba
 - `textClass` / `bgClass` are the nearest Tailwind colour classes, to find the source quickly.
   The colours are the computed ones (after the `index.html` override layer), so `text-slate-900`
   can show as `#f5f4f1`.
+- `kind: svg-icon`: stand-alone, single-colour SVG icons (10-64px, parent without own text) are checked at 3:1 against what is behind them (WCAG 1.4.11); multi-colour/gradient logos, illustrations, charts and img/CSS/font icons are not. Icons over images go to `iconUnknown` (reported, not gated).
 - `disabled`: inactive controls below AA (exempt, listed). `placeholders`: via
   `getComputedStyle(el, '::placeholder')`; failing ones are also in `failures`.
 - Limits (also in each result's `limits`): no mix-blend-mode, filters, backdrop-filter,
