@@ -177,3 +177,16 @@ test('claimsOf covers every section kind', () => {
   assert.equal(claimsOf({ kind: 'pillars', items: [{ name: 'x', why: { text: 'a', tag: 'proposed' }, example: null }] }).length, 1);
   assert.equal(claimsOf({ kind: 'phases', items: [{ focus: { text: 'f', tag: 'proposed' }, actions: [{ text: 'a', tag: 'proposed' }], measure: [] }] }).length, 2);
 });
+
+test('tag laundering: an inference whose figures or names are not in the cited fact is removed; a supported one stays', () => {
+  const g = clone(good);
+  g.whereToday = [
+    { text: 'Twenty five years of craft behind every cake.', tag: 'inference', factIds: ['F2'] },
+    { text: 'Founded by Meera Rao, the bakery serves families.', tag: 'inference', factIds: ['F2'] },
+    { text: 'Custom cakes baked to order suit families in Chennai.', tag: 'inference', factIds: ['F2', 'F3'] }
+  ];
+  const r = planner.normalisePlan(g, sheet);
+  const texts = r.plan.whereToday.map((c) => c.text);
+  assert.ok(!texts.some((t) => t.includes('Twenty five') || t.includes('Meera')));
+  assert.ok(texts.includes('Custom cakes baked to order suit families in Chennai.'));
+});

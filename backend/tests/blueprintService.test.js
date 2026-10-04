@@ -483,3 +483,52 @@ test('LIMITS used are the configured ones', () => {
   assert.strictEqual(LIMITS.PAID_PER_IP_PER_DAY, 10);
   assert.strictEqual(LIMITS.PAID_PER_ACCOUNT_PER_DAY, 5);
 });
+
+// Makes the first `n` writes that set charge.state to 'charged' throw.
+function failChargeWrite(deps, n) {
+  const orig = deps.Blueprint.findOneAndUpdate.bind(deps.Blueprint);
+  let left = n;
+  deps.Blueprint.findOneAndUpdate = async (f, u) => {
+    if (u && u.$set && u.$set['charge.state'] === 'charged' && left > 0) { left -= 1; throw new Error('db down'); }
+    return orig(f, u);
+  };
+}
+
+test('charge write fails once: retried, one charge, no refund, job enqueued', async () => {
+  const { deps, begin, doc } = setup();
+  failChargeWrite(deps, 1);
+  const r = await quiet(() => begin(user(), form()));
+  assert.strictEqual(r.status, 202);
+  assert.strictEqual(doc('bp-1').charge.state, 'charged');
+  assert.strictEqual(deps.calls.deduct.length, 1);
+  assert.strictEqual(deps.calls.refund.length, 0);
+  assert.strictEqual(deps.queued.length, 1);
+});
+
+test('charge write fails twice: exactly one refund, slot released, failed; a stale poll does not refund again', async () => {
+  const { deps, svc, begin, doc } = setup();
+  failChargeWrite(deps, 2);
+  const r = await quiet(() => begin(user(), form()));
+  assert.strictEqual(r.status, 500);
+  assert.strictEqual(r.json.message, 'We could not start your Blueprint. Your Quarks were returned.');
+  const d = doc('bp-1');
+  assert.strictEqual(d.status, 'failed');
+  assert.strictEqual(d.freeSlot, false);
+  assert.strictEqual(d.charge.state, 'refunded');
+  assert.strictEqual(deps.calls.refund.length, 1);
+  assert.strictEqual(deps.queued.length, 0);
+  deps.clock.t += LIMITS.STALE_MS + HOUR;
+  await svc.get({ userId: 'u1', id: 'bp-1' });
+  assert.strictEqual(deps.calls.refund.length, 1);
+});
+
+test('already used by another account: 409 with no id; the owner still gets the id', async () => {
+  const { begin } = setup();
+  await begin(user('u1', 'a@x.com'), form());
+  const other = await begin(user('u2', 'b@x.com'), form());
+  assert.strictEqual(other.status, 409);
+  assert.strictEqual(other.json.alreadyUsed, true);
+  assert.ok(!('id' in other.json));
+  assert.strictEqual(other.json.message, 'This business has already used its free Blueprint.');
+  assert.strictEqual((await begin(user('u1', 'a@x.com'), form())).json.id, 'bp-1');
+});

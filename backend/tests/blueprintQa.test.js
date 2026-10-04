@@ -121,3 +121,23 @@ test('QA blocks a missing territory and a roadmap phase without a focus', () => 
 test('closing contact is exactly the Nebulaa constant', () => {
   assert.deepEqual(build().closing.contact, NEBULAA);
 });
+
+const HOSTILE = [
+  'A twenty percent lift in a month', 'Twenty five years of craft', 'Established in nineteen ninety eight', 'One hundred happy bakes', 'Thirty cakes a week',
+  'We were the first in Chennai', 'Ranked first in town', 'Ranked second in the city', 'Rated third by locals', 'No. one for cakes', 'The number one bakery', 'A top ten bakery',
+  'Since 1998', 'Founded in ١٩٩٨', 'Since ௨௦௦௦', 'Over ２０ years', 'Visit example.com', 'See mybrand.in/shop', 'Mail hello @ example . com',
+  'Mail hello [at] example dot com', 'Mail name at example dot com', 'The best in Chennai', 'Best in town', 'A top-rated bakery', 'A top rated bakery',
+  'Voted favourite by locals', 'The leading bakery', 'The most trusted name', 'An award-winning team', 'The market leader', 'A world-class finish',
+  'Our cakes cure stress', 'Guaranteed results for you', 'We guarantee joy', 'She said ‘the best cake I ever had in my life’', 'He said “the best cake I ever had”',
+  'He said «the best cake I ever had»', "He said 'the best cake I ever had in life'", 'He said „the best cake I ever had“'
+];
+for (const text of HOSTILE) {
+  test(`scanClaimText flags hostile claim: ${text}`, () => {
+    assert.ok(scanClaimText(text, {}).length > 0);
+  });
+}
+for (const text of ['One clear message for each post.', 'The first step is a steady plan.', "Sweet Co’s cakes and Rival’s bakes differ in style.", 'Three posts a week, then review at the end of the month.', 'Share a short story about the bake.']) {
+  test(`scanClaimText leaves ordinary wording alone: ${text}`, () => {
+    assert.deepEqual(scanClaimText(text, { allowedNumbers: [] }), []);
+  });
+}

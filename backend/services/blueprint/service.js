@@ -13,6 +13,7 @@ const ACTIVE = ['queued', 'processing'];
 const MSG = {
   verify: 'Please verify your email address before you create your Blueprint.',
   fields: 'Please correct the highlighted fields.',
+  usedOther: 'This business has already used its free Blueprint.',
   used: 'You have already created your free Brand Growth Blueprint for this business. Open it, or upgrade to create more.',
   limit: 'You have reached the daily limit for Blueprints. Please try again tomorrow.',
   logo: 'The logo could not be uploaded. Try again, or continue without it.',
@@ -22,6 +23,7 @@ const MSG = {
   choose: 'Choose one of the directions to continue.',
   qa: 'We could not check this Blueprint well enough to share it. Please try again.',
   failed: 'We could not finish your Blueprint. Please try again.',
+  notStarted: 'We could not start your Blueprint. Your Quarks were returned.',
   stale: 'This Blueprint took too long, so we stopped it. Please try again.'
 };
 
@@ -106,7 +108,10 @@ function createBlueprintService(depsIn) {
     return (await Blueprint.findOne({ freeSlot: true, emailKey: key }))
       || (keys.length ? await Blueprint.findOne({ freeSlot: true, businessKeys: { $in: keys } }) : null);
   }
-  const alreadyUsed = (ex) => reply(409, { success: false, alreadyUsed: true, ...(ex ? { id: ex.blueprintId } : {}), message: MSG.used });
+  // The id is returned only to the account that owns that Blueprint; anyone else gets the same 409 with no id.
+  const alreadyUsed = (ex, userId) => (ex && String(ex.userId) === String(userId)
+    ? reply(409, { success: false, alreadyUsed: true, id: ex.blueprintId, message: MSG.used })
+    : reply(409, { success: false, alreadyUsed: true, message: MSG.usedOther }));
 
   // Refund at most once: the flag is claimed atomically BEFORE refunding; a failed refund releases the claim.
   async function refundOnce(doc) {
@@ -150,7 +155,7 @@ function createBlueprintService(depsIn) {
 
     if (tier === 'free') {
       const ex = await findExisting(key, keys);
-      if (ex) return alreadyUsed(ex);
+      if (ex) return alreadyUsed(ex, userId);
     }
 
     const ipHash = deps.hashIp(ip);
@@ -176,7 +181,7 @@ function createBlueprintService(depsIn) {
         charge: { state: 'pending', quarks: QUARK_COSTS.blueprint }, createdAt: now
       });
     } catch (err) {
-      if (err && err.code === 11000) return alreadyUsed(await findExisting(key, keys));
+      if (err && err.code === 11000) return alreadyUsed(await findExisting(key, keys), userId);
       throw err;
     }
 
@@ -189,7 +194,24 @@ function createBlueprintService(depsIn) {
       await Blueprint.updateOne({ blueprintId }, { $set: { status: 'failed', step: 'failed', freeSlot: false, 'charge.state': 'none', error: { message: 'no_quarks' }, heartbeatAt: at() } });
       return reply(403, { success: false, creditsExhausted: true, upgradeRequired: true, reason: 'quarks', message: MSG.quarks });
     }
-    await Blueprint.findOneAndUpdate({ blueprintId }, { $set: { 'charge.state': 'charged', heartbeatAt: at() } });
+    // The customer has paid. If recording that fails twice, refund directly: the document is still 'pending', which
+    // refundOnce and the stale poll never touch, so no other path can refund it.
+    const markCharged = () => Blueprint.findOneAndUpdate({ blueprintId }, { $set: { 'charge.state': 'charged', heartbeatAt: at() } });
+    try { await markCharged(); } catch (first) {
+      console.error('[blueprint] charge write failed, retrying:', first && first.message);
+      try { await markCharged(); } catch (second) {
+        console.error('[blueprint] charge write failed again, refunding:', second && second.message);
+        let refunded = false;
+        try {
+          const res = await deps.refund(String(userId), ACTION, 1, 'Refund: Brand Growth Blueprint');
+          refunded = !(res && res.success === false);
+        } catch (err) { console.error('[blueprint] direct refund failed:', err && err.message); }
+        try {
+          await Blueprint.updateOne({ blueprintId }, { $set: { status: 'failed', step: 'failed', freeSlot: false, 'charge.state': refunded ? 'refunded' : 'charged', error: { message: MSG.notStarted }, heartbeatAt: at() } });
+        } catch (_) { /* best effort: the doc may stay pending */ }
+        return reply(500, { success: false, message: MSG.notStarted });
+      }
+    }
     deps.enqueue(() => run(blueprintId));
     return reply(202, { success: true, id: blueprintId, status: 'queued' });
   }

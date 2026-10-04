@@ -12,10 +12,44 @@ const FORBIDDEN = [
   ['follower_claim', /\bfollowers?\b.*\b(have|has|with|of)\b\s*\d|\d[\d,.]*\s*(k|m)?\s+followers?\b/i],
   ['number_word', /\b(hundreds?|thousands?|lakhs?|crores?|millions?|dozens?)\b/i]
 ];
-const DIGITS = /\d[\d,.]*/g;
-const CONTACT = /[\w.+-]+@[\w-]+\.[\w.-]+|https?:\/\/\S+|\bwww\.\S+|(?:\+?\d[\d\s-]{8,}\d)/i;
+const DIGITS = /\p{Nd}[\p{Nd},.]*/gu; // any script's decimal digits, not just 0-9
+// Number words are flagged only where they make a factual claim, so "one clear message" and "first step" stay legal:
+//  - tens, teens above ten, and "hundred" anywhere (twenty, thirty, nineteen, one hundred);
+//  - any number word directly followed by a unit (percent, years, customers, followers, times, days ...);
+//  - "since / established / founded / est." followed by a number word;
+//  - rank phrasing: "top ten", "No. one", "ranked first", "the first in/to", "first/second/third place".
+const NUM_ONES = '(?:one|two|three|four|five|six|seven|eight|nine|ten)';
+const NUM_BIG = '(?:eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred)';
+const NUM_ANY = `(?:${NUM_ONES}|${NUM_BIG})`;
+const NUM_UNIT = '(?:%|per\\s?cent|percent|years?|months?|weeks?|days?|customers?|clients?|followers?|times|x)';
+const NUMBER_WORD_CLAIM = [
+  new RegExp(`\\b${NUM_BIG}\\b`, 'i'),
+  new RegExp(`\\b${NUM_ANY}(?:[\\s-]+${NUM_ANY})*[\\s-]*${NUM_UNIT}(?![\\p{L}])`, 'iu'),
+  new RegExp(`\\b(?:since|established|est\\.?|founded)\\s+(?:in\\s+)?${NUM_ANY}\\b`, 'i'),
+  new RegExp(`\\btop[\\s-]+(?:${NUM_ANY}|\\d+)\\b`, 'i'),
+  /\bno\.?\s*(?:one|1)\b/i,
+  /\b(?:ranked|rated|placed|voted|came|comes|is|are|was|were)\s+(?:the\s+)?(?:first|second|third)\b/i,
+  /\bthe\s+(?:first|second|third)\s+(?:in|to|ever|brand|bakery|choice)\b/i,
+  /\b(?:first|second|third)[\s-]+(?:place|rank|in\s+(?:town|the|chennai|india))\b/i
+];
+// Superlatives and place rankings: one short list.
+const SUPERLATIVES = [
+  /\bbest[\s-]+in\b/i, /\bbest\s+(?:of|around)\s+(?:town|the city)\b/i, /\btop[\s-]rated\b/i, /\bleading\b(?!\s+(?:to|up|with|into)\b)/i,
+  /\bvoted\b/i, /\bfavou?rite\s+(?:by|of|among)\b/i, /\bworld[\s-]class\b/i, /\bmost\s+(?:trusted|loved|popular|recommended)\b/i,
+  /\bnumber[\s-]?one\b/i, /\bmarket\s+leader\b/i, /\baward[\s-]winning\b/i, /\bin\s+town\b/i
+];
+const HEALTH = /\bcures?[sd]?\b|\bguaranteed?\s+results?\b/i;
+// A bare domain (example.com, mybrand.in/shop) and an obfuscated or spaced email.
+const BARE_DOMAIN = /(?<![\w@.-])(?:[a-z0-9-]+\.)+(?:com|in|org|net|co|io|shop|store|app|biz|info|me|us|uk|ai|online|site|xyz|dev|ly)\b(?![\w-])/i;
+const OBFUSCATED_EMAIL = [
+  /[\w.+-]+\s*@\s*[\w-]+(?:\s*(?:\.|\[dot\]|\(dot\)|\bdot\b)\s*[\w-]+)+/i,
+  /\S+\s+(?:\[at\]|\(at\)|at)\s+[\w-]+\s+(?:\[dot\]|\(dot\)|dot)\s+[a-z]{2,}/i
+];
+const CONTACT = /[\w.+-]+@[\w-]+\.[\w.-]+|https?:\/\/\S+|\bwww\.\S+|(?:\+?\p{Nd}[\p{Nd}\s-]{8,}\p{Nd})/iu;
 const EMOJI = /[\p{Extended_Pictographic}\u{FE0F}]/u;
-const QUOTE = /["“”][^"“”]{12,}["“”]/;
+// Any quotation mark pair counts as a quotation. An apostrophe inside a word (Co's) is not an opener or closer.
+const Q = `"'‘’‚‛‹›«»“”„`;
+const QUOTE = new RegExp(`(?<![\\p{L}\\p{Nd}])[${Q}][^${Q}]{12,}[${Q}](?![\\p{L}\\p{Nd}])`, 'u');
 
 const numbersIn = (text) => (String(text).match(DIGITS) || []).map((n) => n.replace(/[,.]+$/, '').replace(/,/g, ''));
 
@@ -25,7 +59,10 @@ function scanClaimText(text, ctx = {}) {
   const v = [];
   for (const [rule, re] of FORBIDDEN) if (re.test(t)) v.push({ rule });
   for (const n of numbersIn(t)) if (!allowed.has(n)) v.push({ rule: 'invented_number', match: n });
-  if (CONTACT.test(t)) v.push({ rule: 'invented_contact' });
+  if (NUMBER_WORD_CLAIM.some((re) => re.test(t))) v.push({ rule: 'number_word' });
+  if (SUPERLATIVES.some((re) => re.test(t))) v.push({ rule: 'ranking' });
+  if (HEALTH.test(t)) v.push({ rule: 'health_claim' });
+  if (CONTACT.test(t) || BARE_DOMAIN.test(t) || OBFUSCATED_EMAIL.some((re) => re.test(t))) v.push({ rule: 'invented_contact' });
   if (/!/.test(t)) v.push({ rule: 'exclamation' });
   if (EMOJI.test(t)) v.push({ rule: 'emoji' });
   if (/—/.test(t)) v.push({ rule: 'em_dash' });

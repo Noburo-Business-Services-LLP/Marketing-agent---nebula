@@ -12,6 +12,14 @@ const arr = (v, n) => (Array.isArray(v) ? v.slice(0, n) : []);
 const isObj = (v) => v && typeof v === 'object' && !Array.isArray(v);
 const RAW_CAP = 20; // read at most this many raw items from any list, so every one can be scanned
 
+// Tag laundering guard: every digit-bearing token and every capitalised proper noun (not the first word of a
+// sentence) in an inference must also appear in the text of the facts it cites (or be the business's own name). Plain token containment.
+function supported(text, ids, ctx) {
+  const basis = [ctx.brand || '', ...ids.map((id) => (ctx.factText && ctx.factText.get(id)) || '')].join(' ').toLowerCase();
+  const tokens = text.split(/\s+/).map((w, i, all) => ({ w: w.replace(/^[^\p{L}\p{Nd}]+|[^\p{L}\p{Nd}]+$/gu, ''), start: i === 0 || /[.!?]$/.test(all[i - 1]) })).filter((t) => t.w);
+  return tokens.every((t) => !(/\p{Nd}/u.test(t.w) || (!t.start && /^\p{Lu}/u.test(t.w))) || basis.includes(t.w.toLowerCase()));
+}
+
 // The model can never produce Verified. An inference with no real fact behind it becomes a proposal.
 function toClaim(raw, ctx, forceProposed = false) {
   const o = isObj(raw) ? raw : { text: raw };
@@ -21,6 +29,7 @@ function toClaim(raw, ctx, forceProposed = false) {
   let tag = o.tag === 'proposed' || forceProposed ? 'proposed' : 'inference';
   if (tag === 'inference' && !ids.length) tag = 'proposed';
   const bad = scanClaimText(text, { allowedNumbers: ctx.allowedNumbers });
+  if (!bad.length && tag === 'inference' && !supported(text, ids, ctx)) bad.push({ rule: 'unsupported_by_facts' });
   if (bad.length) { ctx.dropped.push({ text, rules: bad.map((b) => b.rule) }); return null; }
   return tag === 'inference' ? { text, tag, factIds: ids } : { text, tag };
 }
@@ -60,7 +69,7 @@ function buildPlanVars(sheet, input, direction) {
   };
 }
 
-const ctxOf = (sheet) => ({ factIds: new Set(((sheet && sheet.facts) || []).map((f) => f.id)), allowedNumbers: allowedNumbersOf(sheet), dropped: [] });
+const ctxOf = (sheet) => ({ brand: String((sheet && sheet.client && sheet.client.name) || ''), factText: new Map(((sheet && sheet.facts) || []).map((f) => [f.id, String(f.text || '')])), factIds: new Set(((sheet && sheet.facts) || []).map((f) => f.id)), allowedNumbers: allowedNumbersOf(sheet), dropped: [] });
 
 function normalisePlan(parsed, sheet) {
   if (!isObj(parsed)) return null;
