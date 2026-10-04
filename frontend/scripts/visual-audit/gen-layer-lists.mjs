@@ -223,8 +223,11 @@ const LIGHT = [
   `${is(list(LEGACY))}${NOT_IN_DARK}`,
 ];
 const GOLD = [...INKF.map(A).flatMap((x) => x.split(',')), ...list([...GOLD_HEX, 'bg-[var(--gv-accent)]'])];
-const TINT = [...new Set([...solids].filter((c) => !LEGACY_SET.has(c)).map((c) => c + '/').concat(
-  [...gradSeen].flatMap((k) => k.split(' ')).map((t) => t + '/')))].filter(used).map(A).flatMap((x) => x.split(','));
+// Translucent versions of those colours are light tints on cream - except near-black ones
+// (from-black/70, bg-[#0d1219]/85 ...), which are scrims and keep the dark context.
+const TINT = [...new Set([...solids].filter((c) => !LEGACY_SET.has(c)).concat(
+  [...gradSeen].flatMap((k) => k.split(' '))))].filter((t) => { const c = colourOf(t); return c && lum(c) >= 0.03; })
+  .map((t) => t + '/').filter(used).map(A).flatMap((x) => x.split(','));
 // hover:bg-<colour> (solid): the text follows the hover fill. A hover fill that fails both ways is
 // darkened one shade when that makes white pass (e.g. the danger button hover:bg-red-500 -> red-600).
 const HOVER = [];
