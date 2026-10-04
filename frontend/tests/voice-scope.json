@@ -13,5 +13,6 @@
   "pages/BrandAssets.tsx",
   "pages/ConnectSocials.tsx",
   "pages/Settings.tsx",
-  "pages/HeroVideo.tsx"
+  "pages/HeroVideo.tsx",
+  "components/AssetPicker.tsx"
 ]
