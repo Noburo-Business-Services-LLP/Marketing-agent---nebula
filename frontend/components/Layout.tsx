@@ -117,13 +117,13 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
   // headline feature under a junk drawer.
   const primaryNav = [
     { path: '/dashboard',        label: 'Dashboard',         icon: LayoutDashboard },
-    { path: '/campaigns',        label: 'Create',            icon: Sparkles },
+    { path: '/campaigns',        label: 'Create content',    icon: Sparkles },
     { path: '/reels',            label: 'Videos',            icon: PlayCircle },
-    { path: '/drafts',           label: 'Approve',           icon: PenTool, badge: 'drafts' as const },
+    { path: '/drafts',           label: 'Review and approve', icon: PenTool, badge: 'drafts' as const },
     { path: '/content-calendar', label: 'Calendar',          icon: CalendarDays },
-    { path: '/idea-inbox',       label: 'Idea Inbox',        icon: Lightbulb },
-    { path: '/upload',           label: 'Upload & Schedule', icon: UploadCloud },
-    { path: '/analytics',        label: 'Insights',          icon: BarChart3 },
+    { path: '/idea-inbox',       label: 'Content ideas',     icon: Lightbulb },
+    { path: '/upload',           label: 'Upload and schedule', icon: UploadCloud },
+    { path: '/analytics',        label: 'Performance',       icon: BarChart3 },
   ];
   // What is left is genuinely set-once configuration, which is a real
   // grouping rather than "everything else".
@@ -132,26 +132,26 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
   // navigation. Their routes and pages are left intact so nothing breaks and
   // they can be restored by adding entries here.
   const secondaryNav = [
-    { path: '/brand-assets',      label: 'Brand Assets',      icon: Palette },
-    { path: '/connect-socials',   label: 'Connect Socials',   icon: Link2 },
-    { path: '/ai-memory',         label: 'AI Memory',         icon: Brain },
+    { path: '/brand-assets',      label: 'Brand assets',      icon: Palette },
+    { path: '/connect-socials',   label: 'Connected accounts', icon: Link2 },
+    { path: '/ai-memory',         label: 'Brand memory',      icon: Brain },
   ];
 
   const resolveTopBarMeta = (pathname: string) => {
-    if (pathname.startsWith('/campaigns')) return { title: 'Create', crumb: 'New campaign' };
+    if (pathname.startsWith('/campaigns')) return { title: 'Create content', crumb: 'New campaign' };
     if (pathname.startsWith('/content-calendar')) return { title: 'Calendar', crumb: '' };
     if (pathname.startsWith('/reels')) return { title: 'Videos', crumb: '' };
     if (pathname.startsWith('/influencer-portal')) return { title: 'Influencer Portal', crumb: '' };
     if (pathname.startsWith('/ad-campaigns')) return { title: 'Ad Campaigns', crumb: '' };
-    if (pathname.startsWith('/connect-socials')) return { title: 'Connect Socials', crumb: '' };
-    if (pathname.startsWith('/brand-assets')) return { title: 'Brand Assets', crumb: '' };
-    if (pathname.startsWith('/inventory')) return { title: 'Brand Assets', crumb: 'Products & Services' };
-    if (pathname.startsWith('/analytics')) return { title: 'Insights', crumb: '' };
+    if (pathname.startsWith('/connect-socials')) return { title: 'Connected accounts', crumb: '' };
+    if (pathname.startsWith('/brand-assets')) return { title: 'Brand assets', crumb: '' };
+    if (pathname.startsWith('/inventory')) return { title: 'Brand assets', crumb: 'Products and services' };
+    if (pathname.startsWith('/analytics')) return { title: 'Performance', crumb: '' };
     if (pathname.startsWith('/competitors')) return { title: 'Competitors', crumb: '' };
-    if (pathname.startsWith('/ai-memory') || pathname.startsWith('/ai-history') || pathname.startsWith('/ai-performance')) return { title: 'AI Memory', crumb: '' };
-    if (pathname.startsWith('/drafts')) return { title: 'Approve', crumb: '' };
-    if (pathname.startsWith('/idea-inbox')) return { title: 'Idea Inbox', crumb: '' };
-    if (pathname.startsWith('/upload')) return { title: 'Upload & Schedule', crumb: '' };
+    if (pathname.startsWith('/ai-memory') || pathname.startsWith('/ai-history') || pathname.startsWith('/ai-performance')) return { title: 'Brand memory', crumb: '' };
+    if (pathname.startsWith('/drafts')) return { title: 'Review and approve', crumb: '' };
+    if (pathname.startsWith('/idea-inbox')) return { title: 'Content ideas', crumb: '' };
+    if (pathname.startsWith('/upload')) return { title: 'Upload and schedule', crumb: '' };
     if (pathname.startsWith('/settings')) return { title: 'Settings', crumb: '' };
     return { title: 'Dashboard', crumb: '' };
   };
@@ -386,10 +386,10 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
                       >
                         <div className="px-5 pt-5 pb-4 bg-[var(--gv-surface-1)]">
                           <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-[13px] font-semibold text-[var(--gv-text-primary)]">Usage Overview</h3>
+                            <h3 className="text-[13px] font-semibold text-[var(--gv-text-primary)]">Usage overview</h3>
                             <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium tracking-wider uppercase whitespace-nowrap ${
                               trialInfo.daysLeft <= 2 ? 'bg-red-500/10 text-red-400' : 'bg-[var(--gv-accent-fill)] text-[var(--gv-accent-text)]'
-                            }`}>Free Trial</span>
+                            }`}>Free trial</span>
                           </div>
                           <div className="flex items-center gap-4">
                             <div className="flex items-baseline gap-1.5">
@@ -400,7 +400,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
                             <div className="h-8 w-px bg-[var(--gv-surface-3)]" />
                             <div className="text-[11px] text-[var(--gv-text-muted)] leading-tight">
                               <div className="tabular-nums text-[var(--gv-text-tertiary)] font-medium">{trialInfo.totalUsed}</div>
-                              <div>used all-time</div>
+                              <div>used in total</div>
                             </div>
                           </div>
                         </div>
@@ -409,8 +409,8 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
                             onClick={() => { setShowCreditPanel(false); navigate('/settings'); }}
                             className="w-full flex items-center justify-between text-[11.5px] text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] transition-colors"
                           >
-                            <span>What does each action cost?</span>
-                            <span className="text-[var(--gv-accent-text)]">See in Settings →</span>
+                            <span>See what each action costs.</span>
+                            <span className="text-[var(--gv-accent-text)]">View in Settings →</span>
                           </button>
                         </div>
                         <div className="px-5 py-3 border-t border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)]">
