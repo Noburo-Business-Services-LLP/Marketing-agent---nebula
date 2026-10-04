@@ -1,452 +1,510 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  Sparkles, 
-  ArrowRight, 
-  Play,
+import {
+  ArrowRight,
   CheckCircle2,
-  BarChart3,
-  Target,
-  Users,
-  Zap,
-  Globe,
-  TrendingUp,
-  Shield,
-  Clock,
-  Award,
-  MousePointer2,
-  Layers,
-  PieChart,
-  Sun,
-  Moon,
-  Mail
+  Check,
+  PenLine,
+  ImageIcon,
+  Clapperboard,
+  CalendarDays,
+  MessageCircle,
+  Radar,
+  Mail,
+  Menu,
+  X,
+  ChevronDown,
 } from 'lucide-react';
-import { useTheme } from '../context/ThemeContext';
+import { SHOWCASE_SLIDES } from '../components/onboarding/showcaseData';
+
+/**
+ * The public page for the Nebulaa app. Everything here leads to one action:
+ * sign up and start the 7-day trial. It always shows the light, warm look,
+ * whatever theme the signed-in app uses.
+ */
+
+const INK = '#14203A';
+const INK2 = '#33405C';
+const MUTED = '#6D6250';
+const GROUND = '#FBF5EA';
+const SURFACE = '#FFFDF8';
+const SURFACE2 = '#F3E8D4';
+const RULE = '#E5D8BF';
+const CORAL = '#EE6330';
+const CORAL_TEXT = '#C4471A';
+const SUN = '#FFCB2E';
+const GOLD = '#F5A623';
+
+const display: React.CSSProperties = {
+  fontFamily: "'Archivo', 'Arial Narrow', 'Helvetica Neue', Arial, sans-serif",
+  textTransform: 'uppercase',
+  fontWeight: 800,
+  letterSpacing: '-0.01em',
+  lineHeight: 1.02,
+};
+const script: React.CSSProperties = {
+  fontFamily: "'Kaushan Script', 'Brush Script MT', cursive",
+  textTransform: 'none',
+  fontWeight: 400,
+  letterSpacing: 0,
+  color: '#D07A00',
+};
+const body: React.CSSProperties = {
+  fontFamily: "'Plus Jakarta Sans', 'Segoe UI', system-ui, sans-serif",
+};
+
+/** A headline word with the yellow highlighter swash behind it. */
+const Swash: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <span
+    style={{
+      backgroundImage: `linear-gradient(transparent 62%, ${SUN} 62%, ${SUN} 94%, transparent 94%)`,
+      padding: '0 0.08em',
+    }}
+  >
+    {children}
+  </span>
+);
+
+const Label: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <p style={{ ...body, color: CORAL_TEXT, letterSpacing: '0.16em' }} className="text-[12px] font-bold uppercase mb-4">
+    {children}
+  </p>
+);
+
+/** Posts shown in the hero and in the "made with Nebulaa" grid. */
+const pick = (label: string, n = 0) => SHOWCASE_SLIDES.filter(s => s.label === label)[n];
+const HERO_POSTS = [pick('Hotels & stays', 0), pick('Jewellery & retail'), pick('Food & FMCG', 0)].filter(Boolean);
+const GRID_POSTS = [
+  pick('Textiles & apparel', 0),
+  pick('Real estate', 0),
+  pick('Automobiles', 0),
+  pick('Hotels & stays', 2),
+  pick('Financial services', 0),
+  pick('Furniture & appliances', 0),
+  pick('Food & FMCG', 1),
+  pick('Industrial & B2B', 0),
+].filter(Boolean);
+
+const PAINS = [
+  { title: 'You do not know what to write.', text: 'Every post needs an idea, a caption and the right words.' },
+  { title: 'Good photos and videos cost money.', text: 'A designer or an agency for every offer and festival adds up fast.' },
+  { title: 'Customers wait while you work.', text: 'Messages come in when you are busy with the shop or the guests.' },
+];
+
+const TOOLS = [
+  { icon: PenLine, tint: '#FFE3D0', title: 'Captions', text: 'Written in English, Tamil, Hindi, Telugu and more. You choose the language.' },
+  { icon: ImageIcon, tint: '#DCEBFA', title: 'Images and posters', text: 'For offers, festivals and new products. Your name, colours and style on every one.' },
+  { icon: Clapperboard, tint: '#ECE6FB', title: 'Reels and videos', text: 'Short videos for Instagram and Facebook, made from a one-line idea.' },
+  { icon: CalendarDays, tint: '#DDF2E6', title: 'A plan for the whole month', text: 'Every post on a calendar, built around your festivals and offers.' },
+  { icon: MessageCircle, tint: '#DDF2E6', title: 'Replies to customers', text: 'Reply drafts for WhatsApp, email and SMS enquiries, ready in minutes.' },
+  { icon: Radar, tint: '#FFE3D0', title: 'What others are posting', text: 'See what businesses like yours post, and what works for them.' },
+];
+
+const STEPS = [
+  { title: 'Sign up', text: 'It takes one minute. No card needed.' },
+  { title: 'Answer a few simple questions', text: 'Add your website if you have one and Nebulaa fills in most of it. Pick your language.' },
+  { title: 'Approve your month', text: 'Check each post on your phone, change what you like, and post.' },
+];
+
+const PLANS = [
+  {
+    name: 'Starter',
+    price: 999,
+    note: 'For one person getting started',
+    features: ['60 credits a month', 'A full month of posts, planned and ready', 'Replies to customer enquiries', '1 team member'],
+  },
+  {
+    name: 'Professional',
+    price: 1999,
+    note: 'For more posts and more people',
+    popular: true,
+    features: ['200 credits a month', 'Everything in Starter', 'Voice calls to your best leads', 'Up to 5 team members'],
+  },
+];
+
+const FAQS = [
+  { q: 'Do I need design or writing skills?', a: 'No. Nebulaa writes the captions and makes the images and videos. You only check them and press approve.' },
+  { q: 'Which languages does it write in?', a: 'English, Tamil, Hindi, Telugu, Kannada, Malayalam and more. You choose when you sign up and can change it any time.' },
+  { q: 'Do I need a website?', a: 'No. If you have one, add it and Nebulaa fills in most of your details. If you do not, answer a few simple questions.' },
+  { q: 'Where do my posts go?', a: 'You connect your Instagram, Facebook and other pages. A post goes out only after you approve it.' },
+  { q: 'What are credits?', a: 'Credits are what the app uses each time it makes something for you, like an image or a video. Running low? Add more any time from inside the app.' },
+  { q: 'What happens after the 7 days?', a: 'You pick a plan or stop. Nothing is charged automatically.' },
+];
+
+const CtaButton: React.FC<{ onClick: () => void; children: React.ReactNode; className?: string }> = ({ onClick, children, className = '' }) => (
+  <button
+    onClick={onClick}
+    className={`group inline-flex items-center justify-center gap-2 rounded-full font-bold transition-transform hover:scale-[1.03] active:scale-[0.98] ${className}`}
+    style={{ background: GOLD, color: INK, boxShadow: '0 8px 22px rgba(245,166,35,0.38)' }}
+  >
+    {children}
+    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+  </button>
+);
 
 const LandingPage: React.FC = () => {
   const navigate = useNavigate();
-  const [scrollY, setScrollY] = useState(0);
-  const [isVisible, setIsVisible] = useState<{[key: string]: boolean}>({});
+  const [scrolled, setScrolled] = useState(false);
+  const [pastHero, setPastHero] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [showContact, setShowContact] = useState(false);
-  const observerRefs = useRef<{[key: string]: HTMLDivElement | null}>({});
-  const { theme, toggleTheme } = useTheme();
 
   useEffect(() => {
-    const handleScroll = () => setScrollY(window.scrollY);
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+    const onScroll = () => {
+      setScrolled(window.scrollY > 20);
+      setPastHero(window.scrollY > 520);
+    };
+    onScroll();
+    window.addEventListener('scroll', onScroll);
+    return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            setIsVisible((prev) => ({ ...prev, [entry.target.id]: true }));
-          }
-        });
-      },
-      { threshold: 0.1 }
-    );
-
-    const currentRefs = observerRefs.current;
-    Object.keys(currentRefs).forEach((key) => {
-      const ref = currentRefs[key];
-      if (ref) observer.observe(ref);
-    });
-
-    return () => observer.disconnect();
-  }, []);
-
+  const signUp = () => navigate('/login?mode=signup');
+  const signIn = () => navigate('/login');
 
   return (
-    <div className={`min-h-screen overflow-x-hidden antialiased ${theme === 'dark' ? 'bg-[#070A12] text-[#ededed]' : 'bg-white text-gray-900'}`}>
+    <div className="min-h-screen overflow-x-hidden antialiased pb-20 md:pb-0" style={{ ...body, background: GROUND, color: INK }}>
+      <style>{`
+        @keyframes nb-float { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-8px) } }
+        .nb-float { animation: nb-float 5s ease-in-out infinite; }
+        @media (prefers-reduced-motion: reduce) { .nb-float { animation: none; } }
+        details > summary { list-style: none; }
+        details > summary::-webkit-details-marker { display: none; }
+        details[open] .nb-chev { transform: rotate(180deg); }
+      `}</style>
+
       {/* Navigation */}
-      <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
-        scrollY > 50 
-          ? theme === 'dark'
-            ? 'bg-[#070A12]/90 backdrop-blur-xl border-b border-slate-700/50 shadow-sm'
-            : 'bg-white/90 backdrop-blur-xl border-b border-gray-200 shadow-sm'
-          : ''
-      }`}>
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="flex items-center justify-between h-20">
-            <div className="flex items-center gap-3">
-              <div className="relative w-10 h-10 bg-gradient-to-br from-[#ffcc29] to-[#e6b825] rounded-xl flex items-center justify-center shadow-lg shadow-[#ffcc29]/20">
-                <img src="/assets/logo.png" alt="Nebulaa" className="w-6 h-6" />
-              </div>
-              <span className={`text-xl font-semibold tracking-tight ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>Nebulaa</span>
-            </div>
-            
-            <div className="hidden md:flex items-center gap-10">
-              <a href="#features" className={`text-sm font-medium transition-colors ${theme === 'dark' ? 'text-[#ededed]/70 hover:text-[#ffcc29]' : 'text-gray-600 hover:text-[#ffcc29]'}`}>Features</a>
-              <a href="#how-it-works" className={`text-sm font-medium transition-colors ${theme === 'dark' ? 'text-[#ededed]/70 hover:text-[#ffcc29]' : 'text-gray-600 hover:text-[#ffcc29]'}`}>How it Works</a>
-              <a href="#pricing" className={`text-sm font-medium transition-colors ${theme === 'dark' ? 'text-[#ededed]/70 hover:text-[#ffcc29]' : 'text-gray-600 hover:text-[#ffcc29]'}`}>Pricing</a>
+      <nav
+        className="fixed top-0 left-0 right-0 z-50 transition-all duration-300"
+        style={scrolled || menuOpen ? { background: 'rgba(251,245,234,0.94)', backdropFilter: 'blur(12px)', borderBottom: `1px solid ${RULE}` } : undefined}
+      >
+        <div className="max-w-6xl mx-auto px-5 md:px-6">
+          <div className="flex items-center justify-between h-[72px]">
+            <a href="/" className="flex items-center" aria-label="Nebulaa">
+              <img src="/assets/logo-nebulaa.png" alt="Nebulaa" className="h-[46px] w-auto" />
+            </a>
+
+            <div className="hidden md:flex items-center gap-9 text-[14.5px] font-medium" style={{ color: INK2 }}>
+              <a href="#what-it-makes" className="hover:opacity-70">What it makes</a>
+              <a href="#how-it-works" className="hover:opacity-70">How it works</a>
+              <a href="#pricing" className="hover:opacity-70">Pricing</a>
             </div>
 
-            <div className="flex items-center gap-3">
-              <button 
-                onClick={() => navigate('/login')}
-                className={`px-4 py-2.5 text-sm font-medium transition-colors ${theme === 'dark' ? 'text-[#ededed]/80 hover:text-[#ffcc29]' : 'text-gray-600 hover:text-[#ffcc29]'}`}
+            <div className="hidden md:flex items-center gap-3">
+              <button onClick={signIn} className="px-4 py-2.5 text-[14px] font-semibold hover:opacity-70">Sign in</button>
+              <button
+                onClick={signUp}
+                className="px-5 py-2.5 text-[14px] font-bold rounded-full transition-transform hover:scale-[1.03]"
+                style={{ background: GOLD, color: INK, boxShadow: '0 6px 18px rgba(245,166,35,0.35)' }}
               >
-                Sign in
-              </button>
-              <button 
-                onClick={() => navigate('/login?mode=signup')}
-                className="px-5 py-2.5 bg-[#ffcc29] hover:bg-[#e6b825] text-[#070A12] text-sm font-medium rounded-full transition-all duration-300 shadow-lg shadow-[#ffcc29]/20 hover:shadow-[#ffcc29]/30"
-              >
-                Sign Up
+                Start free
               </button>
             </div>
+
+            <button className="md:hidden p-2" onClick={() => setMenuOpen(o => !o)} aria-label="Menu">
+              {menuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            </button>
           </div>
+
+          {menuOpen && (
+            <div className="md:hidden pb-5 flex flex-col gap-1 text-[16px] font-medium">
+              {[['What it makes', '#what-it-makes'], ['How it works', '#how-it-works'], ['Pricing', '#pricing']].map(([label, href]) => (
+                <a key={href} href={href} onClick={() => setMenuOpen(false)} className="py-2.5">{label}</a>
+              ))}
+              <div className="flex gap-3 pt-2">
+                <button onClick={signIn} className="flex-1 py-3 rounded-full border-[1.5px] font-semibold" style={{ borderColor: INK }}>Sign in</button>
+                <button onClick={signUp} className="flex-1 py-3 rounded-full font-bold" style={{ background: GOLD, color: INK }}>Start free</button>
+              </div>
+            </div>
+          )}
         </div>
       </nav>
 
-      {/* Hero Section */}
-      <section className="relative pt-32 pb-20 md:pt-40 md:pb-32">
-        {/* Subtle gradient background */}
-        <div className={`absolute inset-0 ${theme === 'dark' ? 'bg-gradient-to-b from-[#0d1117] via-[#070A12] to-[#070A12]' : 'bg-gradient-to-b from-gray-50 via-white to-white'}`}></div>
-        <div className={`absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] rounded-full blur-3xl ${theme === 'dark' ? 'bg-gradient-to-br from-[#ffcc29]/10 via-[#ffcc29]/5 to-transparent' : 'bg-gradient-to-br from-[#ffcc29]/20 via-[#ffcc29]/10 to-transparent'}`}></div>
-        
-        <div className="relative max-w-6xl mx-auto px-6">
-          <div className="max-w-3xl mx-auto text-center">
-
-            {/* Headline */}
-            <h1 className={`text-4xl md:text-6xl lg:text-7xl font-bold tracking-tight leading-[1.1] mb-6 ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>
-              Marketing that
-              <span className="relative mx-3">
-                <span className="relative z-10 bg-gradient-to-r from-[#ffcc29] to-[#e6b825] bg-clip-text text-transparent">thinks</span>
-                <svg className="absolute -bottom-2 left-0 w-full" viewBox="0 0 200 12" fill="none">
-                  <path d="M2 8.5C50 2 150 2 198 8.5" stroke="url(#gradient)" strokeWidth="4" strokeLinecap="round"/>
-                  <defs>
-                    <linearGradient id="gradient" x1="0" y1="0" x2="200" y2="0">
-                      <stop stopColor="#ffcc29"/>
-                      <stop offset="1" stopColor="#e6b825"/>
-                    </linearGradient>
-                  </defs>
-                </svg>
-              </span>
-              for itself
+      {/* Hero */}
+      <section className="relative isolate pt-[112px] pb-14 md:pt-[140px] md:pb-24 overflow-hidden">
+        <div
+          className="absolute inset-0 -z-10"
+          style={{
+            background:
+              'radial-gradient(60% 80% at 92% 8%, rgba(255,203,46,0.55) 0%, rgba(255,203,46,0) 62%), radial-gradient(55% 70% at 100% 100%, rgba(238,99,48,0.26) 0%, rgba(238,99,48,0) 66%), linear-gradient(180deg, #FBF5EA 0%, #FFEBD6 100%)',
+          }}
+        />
+        <div className="max-w-6xl mx-auto px-5 md:px-6 grid lg:grid-cols-[1.05fr_0.95fr] gap-12 items-center">
+          <div>
+            <p style={{ color: CORAL_TEXT, letterSpacing: '0.16em' }} className="text-[12px] font-bold uppercase mb-5">
+              For shops, hotels, restaurants and small businesses
+            </p>
+            <h1 style={display} className="text-[44px] sm:text-[62px] lg:text-[76px] mb-6">
+              Your month of posts
+              <br />
+              <span style={script} className="text-[1.12em] leading-none">ready in minutes.</span>
             </h1>
-
-            {/* Subheadline */}
-            <p className={`text-lg md:text-xl leading-relaxed mb-10 max-w-2xl mx-auto ${theme === 'dark' ? 'text-[#ededed]/70' : 'text-gray-600'}`}>
-              Nebulaa automates your marketing campaigns, analyzes competitors, and finds the perfect influencers — all from one beautiful dashboard.
+            <p className="text-[17px] sm:text-[19px] leading-[1.6] mb-8 max-w-[520px]" style={{ color: INK2 }}>
+              Tell Nebulaa about your business once. It writes the captions, makes the images and videos, and plans every post. You check them and post.
             </p>
-
-            {/* CTAs */}
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
-              <button 
-                onClick={() => navigate('/login')}
-                className="group w-full sm:w-auto px-8 py-4 bg-[#ffcc29] hover:bg-[#e6b825] text-[#070A12] font-medium rounded-full transition-all duration-300 shadow-xl shadow-[#ffcc29]/20 hover:shadow-[#ffcc29]/30 flex items-center justify-center gap-2"
+            <div className="flex flex-wrap items-center gap-3 mb-4">
+              <CtaButton onClick={signUp} className="px-8 py-4 text-[15.5px]">Start free for 7 days</CtaButton>
+              <a
+                href="#how-it-works"
+                className="inline-flex items-center px-7 py-[14px] rounded-full text-[15px] font-bold transition-transform hover:scale-[1.03]"
+                style={{ border: `1.5px solid ${INK}` }}
               >
-                Start free trial
-                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-              </button>
+                See how it works
+              </a>
             </div>
-
+            <p className="text-[13.5px] mb-6" style={{ color: MUTED }}>No card needed. Set up in 3 minutes.</p>
+            <p className="max-w-[460px] border-l-2 pl-3 text-[13.5px] leading-[1.5]" style={{ borderColor: 'rgba(238,99,48,0.5)', color: INK2 }}>
+              Built on real experience with 2,000+ MSMEs and startups.
+            </p>
           </div>
 
-          {/* Dashboard Preview */}
-          <div 
-            className="mt-20 relative"
-            style={{ transform: `translateY(${scrollY * 0.05}px)` }}
-          >
-            <div className={`absolute inset-0 z-10 pointer-events-none ${theme === 'dark' ? 'bg-gradient-to-t from-[#070A12] via-transparent to-transparent' : 'bg-gradient-to-t from-white via-transparent to-transparent'}`}></div>
-            <div className={`relative rounded-2xl p-2 shadow-2xl border mx-auto max-w-5xl ${theme === 'dark' ? 'bg-[#070A12] shadow-[#070A12]/20 border-[#0a0f1a]' : 'bg-gray-900 shadow-gray-900/20 border-gray-800'}`}>
-              <div className="flex gap-1.5 mb-2 px-2">
-                <div className="w-3 h-3 rounded-full bg-red-500/80"></div>
-                <div className="w-3 h-3 rounded-full bg-yellow-500/80"></div>
-                <div className="w-3 h-3 rounded-full bg-green-500/80"></div>
-              </div>
-              <div className={`rounded-xl overflow-hidden aspect-[16/9] ${theme === 'dark' ? 'bg-gradient-to-br from-[#ededed] to-slate-200' : 'bg-gradient-to-br from-gray-100 to-gray-200'}`}>
-                <div className="w-full h-full bg-gradient-to-br from-violet-50 via-white to-[#ffcc29]/10 p-6">
-                  {/* Mock Dashboard */}
-                  <div className="grid grid-cols-12 gap-4 h-full">
-                    {/* Sidebar */}
-                    <div className="col-span-2 bg-white rounded-xl p-4 shadow-sm border border-gray-200">
-                      <div className="w-8 h-8 bg-[#ffcc29] rounded-lg mb-6"></div>
-                      {[...Array(5)].map((_, i) => (
-                        <div key={i} className={`h-8 rounded-lg mb-2 ${i === 0 ? 'bg-violet-100' : 'bg-gray-100'}`}></div>
-                      ))}
-                    </div>
-                    {/* Main Content */}
-                    <div className="col-span-10 space-y-4">
-                      <div className="grid grid-cols-4 gap-4">
-                        {[
-                          { label: 'Total Reach', value: '2.4M', color: 'text-[#ffcc29]' },
-                          { label: 'Engagement', value: '18.2%', color: 'text-[#ffcc29]' },
-                          { label: 'Campaigns', value: '24', color: 'text-[#ffcc29]' },
-                          { label: 'Revenue', value: '$48K', color: 'text-emerald-600' },
-                        ].map((stat, i) => (
-                          <div key={i} className="bg-white rounded-xl p-4 shadow-sm border border-gray-200">
-                            <div className="text-xs text-gray-500 mb-1">{stat.label}</div>
-                            <div className={`text-2xl font-bold ${stat.color}`}>{stat.value}</div>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="grid grid-cols-3 gap-4 flex-1">
-                        <div className="col-span-2 bg-white rounded-xl p-4 shadow-sm border border-gray-200">
-                          <div className="h-4 w-32 bg-gray-200 rounded mb-4"></div>
-                          <div className="h-32 bg-gradient-to-r from-violet-50 to-[#ffcc29]/10 rounded-lg flex items-end justify-around px-4 pb-4">
-                            {[40, 65, 45, 80, 55, 90, 70].map((h, i) => (
-                              <div key={i} className="w-8 bg-gradient-to-t from-[#ffcc29] to-[#ffcc29] rounded-t" style={{ height: `${h}%` }}></div>
-                            ))}
-                          </div>
-                        </div>
-                        <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200">
-                          <div className="h-4 w-24 bg-gray-200 rounded mb-4"></div>
-                          <div className="space-y-3">
-                            {[...Array(4)].map((_, i) => (
-                              <div key={i} className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-gray-200"></div>
-                                <div className="flex-1">
-                                  <div className="h-3 w-20 bg-gray-200 rounded mb-1"></div>
-                                  <div className="h-2 w-16 bg-gray-100 rounded"></div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+          {/* Posts made by the app */}
+          <div className="relative mx-auto w-full max-w-[470px] h-[300px] sm:h-[400px] lg:h-[470px]" aria-hidden="true">
+            {HERO_POSTS[1] && (
+              <img src={HERO_POSTS[1].src} alt="" className="absolute left-0 top-[8%] w-[48%] rounded-[18px] shadow-[0_18px_40px_rgba(20,32,58,0.22)] border-4 border-white -rotate-6" />
+            )}
+            {HERO_POSTS[2] && (
+              <img src={HERO_POSTS[2].src} alt="" className="absolute right-0 top-0 w-[46%] rounded-[18px] shadow-[0_18px_40px_rgba(20,32,58,0.22)] border-4 border-white rotate-6" />
+            )}
+            {HERO_POSTS[0] && (
+              <img src={HERO_POSTS[0].src} alt="Sample post made with Nebulaa" className="absolute left-1/2 -translate-x-1/2 bottom-0 w-[60%] rounded-[22px] shadow-[0_24px_54px_rgba(20,32,58,0.3)] border-[5px] border-white" />
+            )}
+            <span className="nb-float absolute left-[2%] bottom-[22%] inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-[12px] font-bold shadow-lg" style={{ color: INK }}>
+              <Check className="w-3.5 h-3.5" style={{ color: '#1FA855' }} strokeWidth={3} /> Caption written
+            </span>
+            <span className="nb-float absolute right-[0%] bottom-[34%] inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-[12px] font-bold shadow-lg" style={{ color: INK, animationDelay: '1.2s' }}>
+              <Check className="w-3.5 h-3.5" style={{ color: '#1FA855' }} strokeWidth={3} /> Image made
+            </span>
           </div>
         </div>
       </section>
 
-
-      {/* Features Section */}
-      <section id="features" className="py-24 md:py-32">
-        <div className="max-w-6xl mx-auto px-6">
-          <div 
-            ref={(el) => (observerRefs.current['features'] = el)}
-            id="features-section"
-            className={`text-center mb-16 transition-all duration-700 ${isVisible['features-section'] ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}
-          >
-            <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full mb-6 ${theme === 'dark' ? 'bg-violet-500/10 border border-violet-500/20' : 'bg-violet-50 border border-violet-100'}`}>
-              <Layers className="w-4 h-4 text-[#ffcc29]" />
-              <span className={`text-sm font-medium ${theme === 'dark' ? 'text-violet-400' : 'text-violet-700'}`}>Features</span>
-            </div>
-            <h2 className={`text-3xl md:text-5xl font-bold tracking-tight mb-6 ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>
-              Everything you need to scale
+      {/* Proof: posts made with the app */}
+      <section className="py-[64px] md:py-[88px]">
+        <div className="max-w-6xl mx-auto px-5 md:px-6">
+          <div className="max-w-[640px] mb-9">
+            <Label>Made with Nebulaa</Label>
+            <h2 style={display} className="text-[32px] md:text-[48px]">
+              Posts for <Swash>every kind of business.</Swash>
             </h2>
-            <p className={`text-lg max-w-2xl mx-auto ${theme === 'dark' ? 'text-[#ededed]/70' : 'text-gray-600'}`}>
-              Powerful tools designed to help you create, manage, and optimize your marketing with unprecedented efficiency.
-            </p>
           </div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[
-              {
-                icon: <Target className="w-6 h-6" />,
-                title: "Smart Campaigns",
-                description: "Automated campaign creation that adapts to your audience in real-time.",
-                bgColor: theme === 'dark' ? "bg-violet-500/10" : "bg-violet-50",
-                iconColor: "text-[#ffcc29]"
-              },
-              {
-                icon: <BarChart3 className="w-6 h-6" />,
-                title: "Advanced Analytics",
-                description: "Deep insights into performance with actionable recommendations.",
-                bgColor: theme === 'dark' ? "bg-[#ffcc29]/10" : "bg-[#ffcc29]/10",
-                iconColor: "text-[#ffcc29]"
-              },
-              {
-                icon: <TrendingUp className="w-6 h-6" />,
-                title: "Competitor Intel",
-                description: "Stay ahead with real-time analysis of competitor strategies.",
-                bgColor: theme === 'dark' ? "bg-cyan-500/10" : "bg-cyan-50",
-                iconColor: "text-cyan-600"
-              },
-              {
-                icon: <Globe className="w-6 h-6" />,
-                title: "Multi-Platform",
-                description: "Manage all channels from Instagram to LinkedIn in one place.",
-                bgColor: theme === 'dark' ? "bg-teal-500/10" : "bg-teal-50",
-                iconColor: "text-teal-600"
-              },
-              {
-                icon: <Zap className="w-6 h-6" />,
-                title: "Instant Publishing",
-                description: "Schedule and publish content across all platforms instantly.",
-                bgColor: theme === 'dark' ? "bg-amber-500/10" : "bg-amber-50",
-                iconColor: "text-amber-600"
-              }
-            ].map((feature, index) => (
-              <div 
-                key={index}
-                className={`group p-8 rounded-2xl border transition-all duration-500 ${
-                  theme === 'dark' 
-                    ? 'bg-[#0d1117] border-slate-700/50 hover:border-[#ffcc29]/30 hover:shadow-xl hover:shadow-[#ffcc29]/5' 
-                    : 'bg-white border-gray-200 hover:border-gray-300 hover:shadow-xl hover:shadow-gray-200'
-                }`}
-              >
-                <div className={`w-12 h-12 ${feature.bgColor} rounded-xl flex items-center justify-center mb-5 group-hover:scale-110 transition-transform duration-300`}>
-                  <div className={feature.iconColor}>{feature.icon}</div>
-                </div>
-                <h3 className={`text-xl font-semibold mb-3 ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>{feature.title}</h3>
-                <p className={`leading-relaxed ${theme === 'dark' ? 'text-[#ededed]/70' : 'text-gray-600'}`}>{feature.description}</p>
-              </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-5">
+            {GRID_POSTS.map(s => (
+              <figure key={s.src} className="m-0">
+                <img src={s.src} alt={`A ${s.label.toLowerCase()} post made with Nebulaa`} loading="lazy" className="w-full aspect-square object-cover rounded-[18px]" style={{ border: `1px solid ${RULE}`, boxShadow: '0 12px 28px rgba(20,32,58,0.1)' }} />
+                <figcaption className="mt-2.5 text-[13px] font-semibold" style={{ color: INK2 }}>{s.label}</figcaption>
+              </figure>
             ))}
           </div>
         </div>
       </section>
 
-      {/* How It Works */}
-      <section id="how-it-works" className={`py-24 md:py-32 ${theme === 'dark' ? 'bg-[#0d1117]' : 'bg-gray-50'}`}>
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="text-center mb-16">
-            <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full mb-6 shadow-sm ${theme === 'dark' ? 'bg-[#1a1f2e] border border-slate-700/50' : 'bg-white border border-gray-200'}`}>
-              <MousePointer2 className={`w-4 h-4 ${theme === 'dark' ? 'text-[#ededed]/70' : 'text-gray-600'}`} />
-              <span className={`text-sm font-medium ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>How it works</span>
-            </div>
-            <h2 className={`text-3xl md:text-5xl font-bold tracking-tight mb-6 ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>
-              Simple to start, powerful to scale
+      {/* The problem */}
+      <section className="py-[64px] md:py-[88px]" style={{ background: SURFACE2 }}>
+        <div className="max-w-6xl mx-auto px-5 md:px-6">
+          <div className="max-w-[720px] mb-10">
+            <Label>Sound familiar?</Label>
+            <h2 style={display} className="text-[32px] md:text-[48px]">
+              Posting every day takes <Swash>more time than you have.</Swash>
             </h2>
-            <p className={`text-lg max-w-2xl mx-auto ${theme === 'dark' ? 'text-[#ededed]/70' : 'text-gray-600'}`}>
-              Get up and running in minutes, not days. Our intuitive platform grows with your business.
-            </p>
           </div>
+          <div className="grid md:grid-cols-3 gap-5 mb-8">
+            {PAINS.map(p => (
+              <div key={p.title} className="rounded-[22px] p-6" style={{ background: SURFACE, border: `1px solid ${RULE}` }}>
+                <h3 className="text-[18px] font-bold leading-tight mb-2">{p.title}</h3>
+                <p className="text-[15px] leading-[1.6]" style={{ color: INK2 }}>{p.text}</p>
+              </div>
+            ))}
+          </div>
+          <p className="text-[18px] md:text-[20px] font-semibold max-w-[640px]">Nebulaa makes the first version of all of it. You check it and post.</p>
+        </div>
+      </section>
 
+      {/* What it makes */}
+      <section id="what-it-makes" className="py-[72px] md:py-[96px]">
+        <div className="max-w-6xl mx-auto px-5 md:px-6">
+          <div className="max-w-[720px] mb-11">
+            <Label>What it makes</Label>
+            <h2 style={display} className="text-[32px] md:text-[48px]">
+              Everything for your posts, <Swash>in one app.</Swash>
+            </h2>
+          </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {TOOLS.map(({ icon: Icon, tint, title, text }) => (
+              <div key={title} className="rounded-[24px] p-7" style={{ background: SURFACE, border: `1px solid ${RULE}`, boxShadow: '0 14px 34px rgba(20,32,58,0.07)' }}>
+                <span className="w-12 h-12 rounded-full flex items-center justify-center mb-5" style={{ background: tint }}>
+                  <Icon className="w-5 h-5" style={{ color: INK }} />
+                </span>
+                <h3 className="text-[19px] font-bold leading-tight mb-2">{title}</h3>
+                <p className="text-[15px] leading-[1.6]" style={{ color: INK2 }}>{text}</p>
+              </div>
+            ))}
+          </div>
+          <div className="mt-10"><CtaButton onClick={signUp} className="px-8 py-4 text-[15.5px]">Try it free for 7 days</CtaButton></div>
+        </div>
+      </section>
+
+      {/* How it works */}
+      <section id="how-it-works" className="py-[72px] md:py-[96px]" style={{ background: SURFACE2 }}>
+        <div className="max-w-6xl mx-auto px-5 md:px-6">
+          <div className="max-w-[720px] mb-11">
+            <Label>How it works</Label>
+            <h2 style={display} className="text-[32px] md:text-[48px]">
+              Start in <Swash>three steps.</Swash>
+            </h2>
+          </div>
           <div className="grid md:grid-cols-3 gap-8">
-            {[
-              {
-                step: "01",
-                title: "Connect your accounts",
-                description: "Link your social media profiles and marketing tools in just a few clicks."
-              },
-              {
-                step: "02",
-                title: "Set your goals",
-                description: "Tell us what you want to achieve and Nebulaa will create a personalized strategy."
-              },
-              {
-                step: "03",
-                title: "Watch it grow",
-                description: "Sit back as Nebulaa optimizes your campaigns and delivers results."
-              }
-            ].map((item, index) => (
-              <div key={index} className="relative">
-                {index < 2 && (
-                  <div className={`hidden md:block absolute top-12 left-full w-full h-px -translate-x-1/2 z-0 ${theme === 'dark' ? 'bg-gradient-to-r from-[#ededed]/20 to-transparent' : 'bg-gradient-to-r from-gray-300 to-transparent'}`}></div>
-                )}
-                <div className={`relative rounded-2xl p-8 border shadow-sm ${theme === 'dark' ? 'bg-[#070A12] border-slate-700/50' : 'bg-white border-gray-200'}`}>
-                  <div className={`text-5xl font-bold mb-4 ${theme === 'dark' ? 'text-[#ededed]/10' : 'text-gray-200'}`}>{item.step}</div>
-                  <h3 className={`text-xl font-semibold mb-3 ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>{item.title}</h3>
-                  <p className={theme === 'dark' ? 'text-[#ededed]/70' : 'text-gray-600'}>{item.description}</p>
+            {STEPS.map((s, i) => (
+              <div key={s.title} className="flex gap-4">
+                <span className="flex-shrink-0 w-10 h-10 rounded-full text-[16px] font-extrabold flex items-center justify-center" style={{ background: INK, color: GROUND }}>
+                  {i + 1}
+                </span>
+                <div>
+                  <h3 className="text-[19px] font-bold leading-tight mb-1.5">{s.title}</h3>
+                  <p className="text-[15px] leading-[1.6]" style={{ color: INK2 }}>{s.text}</p>
                 </div>
               </div>
             ))}
           </div>
+          <div className="mt-10"><CtaButton onClick={signUp} className="px-8 py-4 text-[15.5px]">Start free for 7 days</CtaButton></div>
         </div>
       </section>
-
-
 
       {/* Pricing */}
-      <section id="pricing" className={`py-24 md:py-32 ${theme === 'dark' ? 'bg-[#0d1117]' : 'bg-gray-50'}`}>
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="text-center mb-16">
-            <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full mb-6 shadow-sm ${theme === 'dark' ? 'bg-[#1a1f2e] border border-slate-700/50' : 'bg-white border border-gray-200'}`}>
-              <PieChart className={`w-4 h-4 ${theme === 'dark' ? 'text-[#ededed]/70' : 'text-gray-600'}`} />
-              <span className={`text-sm font-medium ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Pricing</span>
-            </div>
-            <h2 className={`text-3xl md:text-5xl font-bold tracking-tight mb-6 ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>
-              Simple, transparent pricing
+      <section id="pricing" className="py-[72px] md:py-[96px]">
+        <div className="max-w-6xl mx-auto px-5 md:px-6">
+          <div className="max-w-[720px] mb-11">
+            <Label>Pricing</Label>
+            <h2 style={display} className="text-[32px] md:text-[48px] mb-5">
+              Two plans. <Swash>Start from ₹999.</Swash>
             </h2>
-            <p className={`text-lg max-w-2xl mx-auto ${theme === 'dark' ? 'text-[#ededed]/70' : 'text-gray-600'}`}>
-              Everything you need to automate your marketing. No hidden fees, no surprises.
+            <p className="text-[16.5px] leading-[1.6]" style={{ color: INK2 }}>
+              Try any plan free for 7 days. No card needed. Both plans do the same things. The bigger plan gives you more each month.
             </p>
           </div>
-
-          <div className="max-w-md mx-auto">
-            <div className="bg-[#070A12] rounded-2xl p-8 text-white relative shadow-xl">
-              <div className="text-center mb-6">
-                <div className="text-4xl font-bold mb-1">₹7,500</div>
-                <div className="text-slate-400 text-sm">1,000 Quarks included</div>
-              </div>
-              <ul className="space-y-3 mb-8">
-                {['Automated campaign generation', 'Multi-platform posting', 'Competitor analysis', 'Advanced analytics', 'Instant publishing', 'Priority support'].map((item, i) => (
-                  <li key={i} className="flex items-center gap-3 text-sm">
-                    <CheckCircle2 className="w-4 h-4 text-[#ffcc29] shrink-0" />
-                    <span className="text-slate-300">{item}</span>
-                  </li>
-                ))}
-              </ul>
-              <button
-                onClick={() => navigate('/login?mode=signup')}
-                className="w-full py-3 bg-[#ffcc29] hover:bg-[#e6b800] text-[#070A12] font-medium rounded-xl transition-colors"
+          <div className="grid md:grid-cols-2 gap-6 max-w-[860px]">
+            {PLANS.map(plan => (
+              <div
+                key={plan.name}
+                className="rounded-[26px] p-8 flex flex-col"
+                style={{ background: SURFACE, border: plan.popular ? `2px solid ${GOLD}` : `1px solid ${RULE}`, boxShadow: '0 14px 34px rgba(20,32,58,0.08)' }}
               >
-                Start free trial
-              </button>
-            </div>
+                <p style={{ color: CORAL_TEXT, letterSpacing: '0.14em' }} className="text-[12px] font-bold uppercase mb-3">
+                  {plan.name}{plan.popular ? ' · Most popular' : ''}
+                </p>
+                <p className="mb-1">
+                  <span style={display} className="text-[48px]">₹{plan.price.toLocaleString('en-IN')}</span>
+                  <span className="text-[14px] ml-1" style={{ color: MUTED }}>/month</span>
+                </p>
+                <p className="text-[14px] mb-6" style={{ color: MUTED }}>{plan.note}</p>
+                <ul className="space-y-3 mb-8 flex-1">
+                  {plan.features.map(f => (
+                    <li key={f} className="flex items-start gap-3 text-[14.5px]" style={{ color: INK2 }}>
+                      <CheckCircle2 className="w-4 h-4 mt-[3px] shrink-0" style={{ color: '#9A5B00' }} />
+                      <span>{f}</span>
+                    </li>
+                  ))}
+                </ul>
+                <button
+                  onClick={signUp}
+                  className="w-full py-3.5 rounded-full text-[15px] font-bold transition-transform hover:scale-[1.02]"
+                  style={plan.popular ? { background: GOLD, color: INK, boxShadow: '0 6px 18px rgba(245,166,35,0.35)' } : { border: `1.5px solid ${INK}`, color: INK }}
+                >
+                  Start free with {plan.name}
+                </button>
+              </div>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* Final CTA */}
-      <section className={`py-24 md:py-32 ${theme === 'dark' ? 'bg-[#070A12]' : 'bg-white'}`}>
-        <div className="max-w-4xl mx-auto px-6 text-center">
-          <h2 className={`text-3xl md:text-5xl font-bold tracking-tight mb-6 ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>
-            Ready to transform your marketing?
+      {/* Questions */}
+      <section className="pb-[72px] md:pb-[96px]">
+        <div className="max-w-3xl mx-auto px-5 md:px-6">
+          <div className="mb-8">
+            <Label>Questions</Label>
+            <h2 style={display} className="text-[32px] md:text-[44px]">Common <Swash>questions.</Swash></h2>
+          </div>
+          <div className="divide-y" style={{ borderTop: `1px solid ${RULE}`, borderBottom: `1px solid ${RULE}`, borderColor: RULE }}>
+            {FAQS.map(f => (
+              <details key={f.q} className="group py-4">
+                <summary className="flex cursor-pointer items-center justify-between gap-4 text-[16.5px] font-bold">
+                  {f.q}
+                  <ChevronDown className="nb-chev w-5 h-5 flex-shrink-0 transition-transform" />
+                </summary>
+                <p className="mt-3 text-[15px] leading-[1.65] max-w-[620px]" style={{ color: INK2 }}>{f.a}</p>
+              </details>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Closing */}
+      <section className="px-5 md:px-6 pb-16 md:pb-24">
+        <div
+          className="max-w-6xl mx-auto rounded-[32px] md:rounded-[40px] px-7 md:px-14 py-14 md:py-20"
+          style={{
+            border: `1px solid ${RULE}`,
+            background:
+              'radial-gradient(60% 90% at 95% 0%, rgba(255,203,46,0.6) 0%, rgba(255,203,46,0) 62%), radial-gradient(60% 80% at 100% 100%, rgba(238,99,48,0.3) 0%, rgba(238,99,48,0) 66%), linear-gradient(160deg, #FFF3E0 0%, #FFE2C4 100%)',
+          }}
+        >
+          <h2 style={display} className="text-[36px] md:text-[60px] mb-5 max-w-[760px]">
+            Your first month of posts is
+            <br />
+            <span style={script} className="text-[1.15em] leading-none">3 minutes away.</span>
           </h2>
-          <p className={`text-lg mb-10 ${theme === 'dark' ? 'text-[#ededed]/70' : 'text-gray-600'}`}>
-            Join thousands of marketers who trust Nebulaa to grow their business.
+          <p className="text-[17px] md:text-[18px] leading-[1.6] max-w-[500px] mb-8" style={{ color: INK2 }}>
+            Sign up, answer a few questions and see your posts. Free for 7 days. No card needed.
           </p>
-          <button 
-            onClick={() => navigate('/login')}
-            className={`group px-8 py-4 font-medium rounded-full transition-all duration-300 shadow-xl inline-flex items-center gap-2 ${
-              theme === 'dark'
-                ? 'bg-[#ffcc29] hover:bg-[#e6b825] text-[#070A12] shadow-[#ffcc29]/10 hover:shadow-[#ffcc29]/20'
-                : 'bg-[#070A12] hover:bg-[#0a0f1a] text-white shadow-[#070A12]/10 hover:shadow-[#070A12]/20'
-            }`}
-          >
-            Start Your 7-Day Free Trial
-            <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-          </button>
-          <p className={`text-sm mt-4 ${theme === 'dark' ? 'text-[#ededed]/50' : 'text-gray-500'}`}>No credit card required · 100 Quarks included</p>
+          <CtaButton onClick={signUp} className="px-9 py-4 text-[16px]">Start free for 7 days</CtaButton>
+          <p className="mt-5 text-[14px]" style={{ color: INK2 }}>
+            Already have an account?{' '}
+            <button onClick={signIn} className="font-bold underline underline-offset-2">Sign in</button>
+          </p>
         </div>
       </section>
 
       {/* Footer */}
-      <footer className={`py-12 border-t ${theme === 'dark' ? 'border-slate-700/50 bg-[#0d1117]' : 'border-gray-200 bg-gray-50'}`}>
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-gradient-to-br from-[#ffcc29] to-[#ffcc29] rounded-lg flex items-center justify-center">
-                <Sparkles className="w-4 h-4 text-[#070A12]" />
-              </div>
-              <span className={`text-lg font-semibold ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>Nebulaa</span>
-            </div>
-            <div className={`flex items-center gap-8 text-sm ${theme === 'dark' ? 'text-[#ededed]/70' : 'text-gray-600'}`}>
-              <a href="/#/privacy-policy" className={`transition-colors ${theme === 'dark' ? 'hover:text-[#ffcc29]' : 'hover:text-[#070A12]'}`}>Privacy</a>
-              <a href="/#/terms" className={`transition-colors ${theme === 'dark' ? 'hover:text-[#ffcc29]' : 'hover:text-[#070A12]'}`}>Terms</a>
-              <button onClick={() => setShowContact(true)} className={`transition-colors ${theme === 'dark' ? 'hover:text-[#ffcc29]' : 'hover:text-[#070A12]'}`}>Contact</button>
-            </div>
-            <div className={`text-sm ${theme === 'dark' ? 'text-[#ededed]/50' : 'text-gray-500'}`}>
-              © 2025 Nebulaa. All rights reserved.
-            </div>
+      <footer className="py-10" style={{ borderTop: `1px solid ${RULE}` }}>
+        <div className="max-w-6xl mx-auto px-5 md:px-6 flex flex-col md:flex-row items-center justify-between gap-5">
+          <img src="/assets/logo-nebulaa.png" alt="Nebulaa" className="h-[40px] w-auto" />
+          <div className="flex items-center gap-8 text-[14px]" style={{ color: INK2 }}>
+            <a href="/#/privacy-policy" className="hover:opacity-70">Privacy</a>
+            <a href="/#/terms" className="hover:opacity-70">Terms</a>
+            <button onClick={() => setShowContact(true)} className="hover:opacity-70">Contact</button>
           </div>
+          <p className="text-[13px]" style={{ color: MUTED }}>© {new Date().getFullYear()} Nebulaa. All rights reserved.</p>
         </div>
       </footer>
 
-      {/* Contact Modal */}
+      {/* Sign-up bar for phones */}
+      <div
+        className={`md:hidden fixed bottom-0 inset-x-0 z-40 px-4 pt-3 transition-transform duration-300 ${pastHero ? 'translate-y-0' : 'translate-y-full'}`}
+        style={{ background: 'linear-gradient(to top, #FBF5EA 60%, rgba(251,245,234,0))', paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}
+      >
+        <button
+          onClick={signUp}
+          className="w-full flex items-center justify-center gap-2 rounded-full py-3.5 text-[15.5px] font-bold"
+          style={{ background: GOLD, color: INK, boxShadow: '0 8px 22px rgba(245,166,35,0.45)' }}
+        >
+          Start free for 7 days <ArrowRight className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Contact */}
       {showContact && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowContact(false)}>
-          <div className="bg-white rounded-2xl p-8 shadow-2xl max-w-sm mx-4 text-center" onClick={e => e.stopPropagation()}>
-            <div className="w-12 h-12 bg-[#070A12] rounded-full flex items-center justify-center mx-auto mb-4">
-              <Mail className="w-6 h-6 text-[#ffcc29]" />
+        <div className="fixed inset-0 z-[60] flex items-center justify-center" style={{ background: 'rgba(20,32,58,0.5)', backdropFilter: 'blur(4px)' }} onClick={() => setShowContact(false)}>
+          <div className="rounded-2xl p-8 shadow-2xl max-w-sm mx-4 text-center" style={{ background: SURFACE }} onClick={e => e.stopPropagation()}>
+            <div className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4" style={{ background: '#FFE3D0' }}>
+              <Mail className="w-6 h-6" style={{ color: CORAL }} />
             </div>
-            <h3 className="text-xl font-bold text-gray-900 mb-2">Contact Us</h3>
-            <p className="text-gray-500 text-sm mb-4">Reach out to us anytime</p>
-            <a href="mailto:support@nebulaa.ai" className="text-[#070A12] font-semibold text-lg hover:text-[#ffcc29] transition-colors">
+            <h3 className="text-xl font-bold mb-2">Contact us</h3>
+            <p className="text-sm mb-4" style={{ color: MUTED }}>Write to us any time.</p>
+            <a href="mailto:support@nebulaa.ai" className="font-bold text-lg hover:opacity-70" style={{ color: INK }}>
               support@nebulaa.ai
             </a>
-            <button onClick={() => setShowContact(false)} className="mt-6 block w-full py-2.5 bg-[#070A12] text-white rounded-lg font-medium hover:bg-[#0f1526] transition-colors">
+            <button onClick={() => setShowContact(false)} className="mt-6 block w-full py-2.5 rounded-full font-semibold" style={{ background: INK, color: GROUND }}>
               Close
             </button>
           </div>

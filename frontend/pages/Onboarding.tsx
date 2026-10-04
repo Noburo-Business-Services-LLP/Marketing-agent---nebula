@@ -1,3 +1,5 @@
+import { ShowcasePanel, ShowcaseBanner } from '../components/onboarding/ShowcasePanel';
+import StepGuide from '../components/onboarding/StepGuide';
 import React, { useState, useCallback, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { apiService } from '../services/api';
@@ -20,8 +22,19 @@ interface OnboardingProps {
 // Storage key for persisting onboarding state
 const ONBOARDING_STATE_KEY = 'nebulaa_onboarding_state';
 
+// What is shown to the owner. The saved value stays the same, so the rest of the app reads it as before.
+const GOAL_LABELS: Record<string, string> = {
+    'Brand Awareness': 'More people know about my business',
+    'Lead Generation': 'More enquiries and calls',
+    'Direct Sales': 'More sales',
+    'Community Engagement': 'More followers, likes and comments',
+    'Website Traffic': 'More visits to my website',
+};
+
 const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
-    const { theme, toggleTheme } = useTheme();
+    // Sign-up always uses the light, warm look of the Nebulaa website.
+    const { toggleTheme } = useTheme();
+    const theme = 'light' as 'light' | 'dark';
     const location = useLocation();
     
     // Load saved state from sessionStorage
@@ -66,7 +79,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
         industry: '',
         problemSolved: '',
         niche: '',
-        businessType: '',
+        businessType: 'Both',
         businessLocation: '',
         targetAudience: '',
         brandVoice: [] as string[],
@@ -78,13 +91,13 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
         // Moved from CSM Brand DNA — customer fills these during onboarding now
         heroProduct: '',
         targetCustomerProfile: '',
-        targetGender: '',
-        geographicReach: '',
-        customerType: '',
+        targetGender: 'both_equally',
+        geographicReach: 'local_city',
+        customerType: 'mix_new_repeat',
         pricePositioning: '',
         keyDifferentiator: '',
         brandStory: '',
-        contentLanguage: '',
+        contentLanguage: 'english',
         contentRestrictions: '',
         firstMonthContentAngles: '',
     });
@@ -318,39 +331,24 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
         }
     };
 
+    // Only what we truly need to start. Everything else has a sensible default or is optional.
     const validateStep = (currentStep: number) => {
         if (currentStep === 1) {
-            if (!formData.name || !formData.niche) return "Company Name and Niche are required.";
-            if (!formData.industry) return "Please select your business vertical.";
-            if (!formData.problemSolved || !formData.problemSolved.trim()) return "Please describe the problem your business solves.";
-            if (!formData.businessType) return "Please select your business type (B2B, B2C, or Both).";
-            if (!formData.businessLocation) return "Please enter your business location.";
-            if (formData.yearsInBusiness === undefined || formData.yearsInBusiness === null || Number.isNaN(Number(formData.yearsInBusiness)) || Number(formData.yearsInBusiness) < 0) {
-                return "Please enter your years in business (0 or more).";
-            }
-            if (!formData.brandMaturity) return "Please select your brand maturity.";
-            if (formData.gstNumber && formData.gstNumber.trim().length > 0) {
-                if (formData.gstNumber.trim().length !== 15) return "GST number must be exactly 15 characters.";
-                if (gstStatus === 'invalid') return "GST number is invalid. Please enter a valid GST number.";
-            }
+            if (!formData.name || !formData.name.trim()) return "Please enter your business name.";
+            if (!mobileNumber || mobileNumber.replace(/\D/g, '').length < 10) return "Please enter your mobile number.";
+            if (!formData.industry) return "Please choose your type of business.";
+            if (!formData.businessLocation || !formData.businessLocation.trim()) return "Please enter your city or town.";
         }
         if (currentStep === 2) {
-            if (!formData.heroProduct || !formData.heroProduct.trim()) return "Please describe your hero product or service.";
-            if (!formData.targetCustomerProfile || !formData.targetCustomerProfile.trim()) return "Please describe your typical customer.";
-            if (!formData.targetGender) return "Please select your typical customer gender.";
-            if (!formData.geographicReach) return "Please select your geographic reach.";
-            if (!formData.customerType) return "Please select your customer type.";
+            if (!formData.heroProduct || !formData.heroProduct.trim()) return "Please tell us what you sell most.";
+            if (!formData.targetCustomerProfile || !formData.targetCustomerProfile.trim()) return "Please tell us who buys from you.";
         }
         if (currentStep === 3) {
-            if (formData.marketingGoals.length === 0) return "Please select at least one marketing goal.";
-            if (!formData.pricePositioning) return "Please select your price positioning.";
-            if (!formData.keyDifferentiator || !formData.keyDifferentiator.trim()) return "Please describe your key differentiator.";
-            if (!formData.contentLanguage) return "Please select your content language preference.";
-            if (!formData.firstMonthContentAngles || !formData.firstMonthContentAngles.trim()) return "Please list content angles for the first month.";
-            // Brand Story + Content Restrictions are optional
-            // Competitors are optional - AI will auto-discover them
+            if (formData.marketingGoals.length === 0) return "Please pick at least one thing you want most.";
+            if (!formData.contentLanguage) return "Please choose the language for your posts.";
+            // Competitors are optional: they are found automatically.
         }
-        // Step 4 (socials) is optional - no validation needed
+        // Step 4 (social accounts) is optional.
         return null;
     };
 
@@ -460,7 +458,14 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
 
     const finishOnboarding = async (connectedSocials?: {platform: string; username?: string}[]) => {
         try {
-            const response = await apiService.completeOnboarding(formData, connectedSocials, mobileNumber);
+            // We ask fewer questions now, so fill the fields the rest of the app reads from the answers we have.
+            const profile = {
+                ...formData,
+                niche: formData.niche || formData.heroProduct || '',
+                targetAudience: formData.targetAudience || formData.targetCustomerProfile || '',
+                description: formData.description || [formData.heroProduct, formData.targetCustomerProfile && `for ${formData.targetCustomerProfile}`].filter(Boolean).join(' '),
+            };
+            const response = await apiService.completeOnboarding(profile, connectedSocials, mobileNumber);
             if (response.success && response.user) {
                 sessionStorage.removeItem(ONBOARDING_STATE_KEY);
                 onComplete(response.user);
@@ -509,11 +514,13 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
     };
 
     return (
-        <div className={`min-h-screen flex items-center justify-center p-4 ${theme === 'dark' ? 'bg-[#070A12]' : 'bg-gray-100'}`}>
+        <div className="min-h-screen flex" style={{ background: 'linear-gradient(180deg, #FBF5EA 0%, #FFEBD6 100%)' }}>
+            <ShowcasePanel />
+            <div className="flex-1 min-w-0 flex items-start lg:items-center justify-center p-4 sm:p-6 lg:p-10">
             {/* Back to landing */}
             <button
                 onClick={handleBackToLanding}
-                className={`fixed top-4 left-4 z-50 flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all backdrop-blur ${
+                className={`fixed top-4 left-4 lg:left-[calc(38%+1rem)] xl:left-[calc(40%+1rem)] z-50 flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all backdrop-blur ${
                     theme === 'dark'
                         ? 'bg-[#ededed]/5 hover:bg-[#ededed]/10 text-[#ededed]/70 hover:text-[#ededed] border border-[#ededed]/10'
                         : 'bg-white/80 hover:bg-white text-gray-700 border border-gray-200 shadow-sm'
@@ -566,76 +573,51 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                 </div>
             )}
 
-            {/* Theme Toggle Button */}
-            <button
-                onClick={toggleTheme}
-                className={`fixed top-4 right-4 p-3 rounded-full transition-all duration-300 z-50 ${
-                    theme === 'dark' 
-                        ? 'bg-[#1a1f2e] hover:bg-[#252b3d] text-yellow-400' 
-                        : 'bg-white hover:bg-gray-100 text-gray-700 shadow-md'
-                }`}
-                title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
-            >
-                {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-            </button>
+            <div className="w-full max-w-xl pt-14 lg:pt-0">
+                <ShowcaseBanner />
 
-            <div className={"rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col md:flex-row min-h-[500px] bg-[#111111] border border-white/[0.08]"}>
-                
-                {/* Sidebar. Was a solid #F5A623 slab with dark text — the
-                    loudest surface in the product, and the first thing a new
-                    user saw. Dark with gold accents matches what it leads to. */}
-                <div className="relative p-8 md:w-1/3 flex flex-col justify-between bg-[#0E0D0B] border-r border-white/[0.06] overflow-hidden">
-                    <div
-                        className="pointer-events-none absolute inset-0"
-                        style={{ background: 'radial-gradient(70% 50% at 50% 0%, rgba(245,166,35,0.10) 0%, rgba(245,166,35,0) 65%)' }}
-                    />
-                    <div className="relative">
-                        <div className="flex items-center gap-3 mb-8">
-                            <img src="/assets/logo.png" alt="Nebulaa" className="w-10 h-10" />
-                            <div className="text-left">
-                                <div className="font-serif-display text-[19px] leading-tight text-[#F5F4F1]">Nebulaa</div>
-                            </div>
-                        </div>
-                        <h2 className="font-serif-display text-[26px] leading-tight mb-2 text-[#F5F4F1]">Let's build your agent.</h2>
-                        <p className="text-[13px] text-white/50 leading-relaxed">We need to understand your business to generate high-quality content.</p>
-                    </div>
+                <div className="flex items-center gap-3 mb-5">
+                    <img src="/assets/logo-nebulaa.png" alt="Nebulaa" className="h-[42px] w-auto" />
+                </div>
+                <h1 className="mb-1" style={{ fontFamily: "'Archivo', 'Arial Narrow', Arial, sans-serif", fontWeight: 800, textTransform: 'uppercase', lineHeight: 1.05, color: '#14203A', fontSize: 'clamp(28px, 4vw, 38px)' }}>
+                    Let's set up your business
+                </h1>
+                <p className="text-[14.5px] text-[#33405C] mb-5">A few simple questions. It takes about 2 minutes.</p>
 
-                    <div className="relative space-y-5 mt-8">
-                        {steps.map((s) => {
-                            const done = step > s.num;
-                            const current = step === s.num;
-                            return (
-                                <div key={s.num} className="flex items-center gap-3">
-                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[12px] font-semibold border transition-all ${
-                                        current
-                                            ? 'bg-[#F5A623] text-[#1A1208] border-[#F5A623] shadow-[0_0_14px_rgba(245,166,35,0.40)]'
-                                            : done
-                                                ? 'bg-[#F5A623]/85 text-[#1A1208] border-transparent'
-                                                : 'border-white/[0.12] text-white/30'
-                                    }`}>
-                                        {done ? <Check className="w-4 h-4" /> : s.num}
-                                    </div>
-                                    <span className={`text-[13px] font-medium ${current ? 'text-[#F5F4F1]' : done ? 'text-white/60' : 'text-white/30'}`}>{s.title}</span>
+                {/* Progress */}
+                <div className="flex items-center gap-2 mb-5" aria-label={`Step ${step} of ${steps.length}`}>
+                    {steps.map((s) => {
+                        const done = step > s.num;
+                        const current = step === s.num;
+                        return (
+                            <div key={s.num} className="flex-1">
+                                <div className={`h-1.5 rounded-full transition-all ${done || current ? 'bg-[#F5A623]' : 'bg-[#E5D8BF]'}`} />
+                                <div className={`mt-1.5 flex items-center gap-1.5 text-[12px] font-semibold ${current ? 'text-[#14203A]' : done ? 'text-[#6D6250]' : 'text-[#8F836E]'}`}>
+                                    {done ? <Check className="w-3.5 h-3.5 text-[#1FA855]" /> : <span>{s.num}</span>}
+                                    <span className="hidden sm:inline">{s.title}</span>
                                 </div>
-                            );
-                        })}
-                    </div>
+                            </div>
+                        );
+                    })}
                 </div>
 
+                <StepGuide step={step} />
+
+                <div className="rounded-2xl w-full overflow-hidden flex flex-col bg-[#FFFDF8] border border-[#E5D8BF] shadow-[0_14px_34px_rgba(20,32,58,0.08)]">
                 {/* Form Area */}
-                <div className={"p-8 md:w-2/3 flex flex-col text-[#F5F4F1]"}>
+                <div className="p-6 sm:p-8 flex flex-col text-[#14203A]">
                     <div className="flex-1">
                         {error && (
-                            <div className="bg-red-500/20 text-red-400 p-3 rounded-lg text-sm mb-4 flex items-center gap-2 animate-in fade-in border border-red-500/30">
+                            <div className="bg-red-50 text-red-700 p-3 rounded-lg text-sm mb-4 flex items-center gap-2 animate-in fade-in border border-red-200">
                                 <AlertCircle className="w-4 h-4" /> {error}
                             </div>
                         )}
 
                         {step === 1 && (
                             <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-500">
-                                <h3 className={`text-xl font-bold ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>Business Essentials</h3>
+                                <h3 className={`text-xl font-bold ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>About your business</h3>
                                 <div>
-                                    <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Company Name <span className="text-red-500">*</span></label>
+                                    <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Business name <span className="text-red-500">*</span></label>
                                     <input 
                                         type="text" 
                                         className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#F5A623] ${
@@ -663,7 +645,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                     />
                                 </div>
                                 <div>
-                                    <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Website</label>
+                                    <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Website <span className="text-xs font-normal text-gray-400">(optional)</span></label>
                                     <div className="flex gap-2">
                                         <div className="flex-1 relative">
                                             <input 
@@ -724,21 +706,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                     )}
                                 </div>
                                 <div>
-                                    <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Niche <span className="text-red-500">*</span></label>
-                                    <input
-                                        type="text"
-                                        className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#F5A623] ${
-                                            theme === 'dark'
-                                                ? 'bg-[#070A12] border-[#F5A623]/30 text-[#ededed] placeholder-[#ededed]/40'
-                                                : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
-                                        }`}
-                                        placeholder="e.g. Sustainable Fashion, AI SaaS, Organic Skincare"
-                                        value={formData.niche}
-                                        onChange={e => handleChange('niche', e.target.value)}
-                                    />
-                                </div>
-                                <div>
-                                    <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Business Vertical <span className="text-red-500">*</span></label>
+                                    <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Type of business <span className="text-red-500">*</span></label>
                                     <select
                                         className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#F5A623] ${
                                             theme === 'dark'
@@ -748,10 +716,15 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                         value={formData.industry || ''}
                                         onChange={e => handleChange('industry', e.target.value)}
                                     >
-                                        <option value="">— Select your vertical —</option>
+                                        <option value="">— Choose one —</option>
                                         <option value="Technology / SaaS">Technology / SaaS</option>
                                         <option value="E-commerce / Retail">E-commerce / Retail</option>
                                         <option value="Food & Beverage">Food &amp; Beverage</option>
+                                        <option value="Restaurants / Cafes / Bars">Restaurants, Cafés &amp; Bars</option>
+                                        <option value="Salon & Spa">Salon &amp; Spa</option>
+                                        <option value="Gym & Fitness">Gym &amp; Fitness</option>
+                                        <option value="Grocery & Supermarket">Grocery &amp; Supermarket</option>
+                                        <option value="Electronics & Mobile">Electronics &amp; Mobile</option>
                                         <option value="Fashion & Apparel">Fashion &amp; Apparel</option>
                                         <option value="Beauty & Wellness">Beauty &amp; Wellness</option>
                                         <option value="Healthcare">Healthcare</option>
@@ -773,47 +746,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                     </p>
                                 </div>
                                 <div>
-                                    <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Problem You Solve <span className="text-red-500">*</span></label>
-                                    <textarea
-                                        rows={3}
-                                        className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#F5A623] resize-none ${
-                                            theme === 'dark'
-                                                ? 'bg-[#070A12] border-[#F5A623]/30 text-[#ededed] placeholder-[#ededed]/40'
-                                                : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
-                                        }`}
-                                        placeholder="What pain point does your business solve for customers? e.g. Busy parents struggle to find healthy school lunches — we deliver fresh, dietitian-approved tiffins every morning."
-                                        value={formData.problemSolved || ''}
-                                        onChange={e => handleChange('problemSolved', e.target.value as any)}
-                                    />
-                                </div>
-                                <div>
-                                    <label className={`block text-sm font-bold mb-2 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Business Type <span className="text-red-500">*</span></label>
-                                    <div className="grid grid-cols-3 gap-3">
-                                        {[
-                                            { value: 'B2B', label: 'B2B', desc: 'Business to Business' },
-                                            { value: 'B2C', label: 'B2C', desc: 'Business to Consumer' },
-                                            { value: 'Both', label: 'Both', desc: 'B2B & B2C' }
-                                        ].map(option => (
-                                            <button
-                                                key={option.value}
-                                                type="button"
-                                                onClick={() => handleChange('businessType', option.value)}
-                                                className={`p-3 rounded-lg border text-center transition-all ${
-                                                    formData.businessType === option.value
-                                                    ? 'border-[#F5A623] bg-[#F5A623]/10 text-[#F5A623]'
-                                                    : theme === 'dark' 
-                                                        ? 'border-[#ededed]/20 hover:border-[#F5A623]/50 text-[#ededed]/70'
-                                                        : 'border-gray-200 hover:border-[#F5A623]/50 text-gray-600'
-                                                }`}
-                                            >
-                                                <div className="font-bold text-sm">{option.label}</div>
-                                                <div className="text-xs opacity-70">{option.desc}</div>
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Business Location <span className="text-red-500">*</span></label>
+                                    <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>City or town <span className="text-red-500">*</span></label>
                                     <input 
                                         type="text" 
                                         className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#F5A623] ${
@@ -821,7 +754,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                                 ? 'bg-[#070A12] border-[#F5A623]/30 text-[#ededed] placeholder-[#ededed]/40' 
                                                 : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
                                         }`}
-                                        placeholder="e.g. Chennai, Tamil Nadu or New York, USA"
+                                        placeholder="e.g. Cuddalore, Tamil Nadu"
                                         value={formData.businessLocation}
                                         onChange={e => handleChange('businessLocation', e.target.value)}
                                     />
@@ -829,128 +762,15 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                         Enter the city/region where your business primarily operates
                                     </p>
                                 </div>
-                                <div>
-                                    <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Years in Business <span className="text-red-500">*</span></label>
-                                    <input
-                                        type="number"
-                                        min={0}
-                                        step={1}
-                                        className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#F5A623] ${
-                                            theme === 'dark'
-                                                ? 'bg-[#070A12] border-[#F5A623]/30 text-[#ededed] placeholder-[#ededed]/40'
-                                                : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
-                                        }`}
-                                        placeholder="e.g. 12"
-                                        value={formData.yearsInBusiness ?? ''}
-                                        onChange={e => {
-                                            const v = e.target.value;
-                                            if (v === '') {
-                                                handleChange('yearsInBusiness', undefined as any);
-                                            } else {
-                                                const n = Math.max(0, Math.floor(Number(v)));
-                                                handleChange('yearsInBusiness', n as any);
-                                            }
-                                        }}
-                                    />
-                                </div>
-                                <div>
-                                    <label className={`block text-sm font-bold mb-2 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Brand Maturity <span className="text-red-500">*</span></label>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                        {[
-                                            { value: 'established', label: 'Established', desc: 'Well known locally' },
-                                            { value: 'growing', label: 'Growing', desc: 'Building our name' },
-                                        ].map(option => (
-                                            <button
-                                                key={option.value}
-                                                type="button"
-                                                onClick={() => handleChange('brandMaturity', option.value as any)}
-                                                className={`p-3 rounded-lg border text-left transition-all ${
-                                                    formData.brandMaturity === option.value
-                                                        ? 'border-[#F5A623] bg-[#F5A623]/10 text-[#F5A623]'
-                                                        : theme === 'dark'
-                                                            ? 'border-[#ededed]/20 hover:border-[#F5A623]/50 text-[#ededed]/70'
-                                                            : 'border-gray-200 hover:border-[#F5A623]/50 text-gray-600'
-                                                }`}
-                                            >
-                                                <div className="font-bold text-sm">{option.label}</div>
-                                                <div className="text-xs opacity-70">{option.desc}</div>
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>GST Number <span className={`text-xs font-normal ${theme === 'dark' ? 'text-[#ededed]/40' : 'text-gray-400'}`}>(optional)</span></label>
-                                    <div className="flex gap-2">
-                                        <div className="flex-1 relative">
-                                            <input 
-                                                type="text" 
-                                                maxLength={15}
-                                                className={`w-full p-3 pr-10 border rounded-lg outline-none focus:ring-2 focus:ring-[#F5A623] uppercase ${
-                                                    theme === 'dark' 
-                                                        ? 'bg-[#070A12] border-[#F5A623]/30 text-[#ededed] placeholder-[#ededed]/40' 
-                                                        : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
-                                                } ${gstStatus === 'invalid' ? 'border-red-500' : gstStatus === 'valid' ? 'border-emerald-500' : ''}`}
-                                                placeholder="e.g. 22AAAAA0000A1Z5"
-                                                value={formData.gstNumber}
-                                                onChange={e => handleChange('gstNumber', e.target.value.toUpperCase())}
-                                            />
-                                            <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                                                {verifyingGST && <Loader2 className="w-5 h-5 animate-spin text-[#F5A623]" />}
-                                                {!verifyingGST && gstStatus === 'valid' && <CheckCircle className="w-5 h-5 text-emerald-500" />}
-                                                {!verifyingGST && gstStatus === 'invalid' && <XCircle className="w-5 h-5 text-red-500" />}
-                                            </div>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={verifyGSTNumber}
-                                            disabled={!formData.gstNumber || formData.gstNumber.length !== 15 || verifyingGST}
-                                            className={`px-4 py-3 rounded-lg font-semibold text-sm flex items-center gap-2 transition-colors ${
-                                                !formData.gstNumber || formData.gstNumber.length !== 15 || verifyingGST
-                                                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                                    : 'bg-[#F5A623] text-[#070A12] hover:bg-[#ffb833]'
-                                            }`}
-                                        >
-                                            {verifyingGST ? <Loader2 className="w-4 h-4 animate-spin" /> : <>Verify</>}
-                                        </button>
-                                    </div>
-                                    {gstStatus === 'valid' && gstInfo?.legalName && (
-                                        <p className="text-xs text-emerald-600 mt-1 flex items-center gap-1">
-                                            <CheckCircle className="w-3 h-3" /> Registered: {gstInfo.tradeName || gstInfo.legalName}
-                                        </p>
-                                    )}
-                                    {gstError && (
-                                        <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
-                                            <AlertCircle className="w-3 h-3" /> {gstError}
-                                        </p>
-                                    )}
-                                    {gstStatus === 'idle' && !gstError && (
-                                        <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-[#ededed]/50' : 'text-gray-500'}`}>
-                                            Optional — enter your 15-character GST number for business verification
-                                        </p>
-                                    )}
-                                </div>
-                                <div>
-                                    <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Short Description</label>
-                                    <textarea 
-                                        className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#F5A623] h-24 resize-none ${
-                                            theme === 'dark' 
-                                                ? 'bg-[#070A12] border-[#F5A623]/30 text-[#ededed] placeholder-[#ededed]/40' 
-                                                : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
-                                        }`}
-                                        placeholder="What do you do?"
-                                        value={formData.description}
-                                        onChange={e => handleChange('description', e.target.value)}
-                                    />
-                                </div>
                             </div>
                         )}
 
                         {step === 2 && (
                             <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-500">
-                                <h3 className={`text-xl font-bold ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>Brand &amp; Audience</h3>
+                                <h3 className={`text-xl font-bold ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>Your customers</h3>
 
                                 <div>
-                                    <label className={`block text-sm font-bold mb-2 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Brand Voice <span className="text-xs font-normal opacity-60">(select multiple)</span></label>
+                                    <label className={`block text-sm font-bold mb-2 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>How should your posts sound? <span className="text-xs font-normal opacity-60">(pick any)</span></label>
                                     <div className="grid grid-cols-2 gap-3">
                                         {['Professional', 'Friendly', 'Witty', 'Empathetic', 'Bold', 'Educational'].map(voice => {
                                             const isSelected = Array.isArray(formData.brandVoice)
@@ -985,7 +805,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
 
                                 <div>
                                     <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>
-                                        Hero Product / Service <span className="text-red-500">*</span>
+                                        What do you sell most? <span className="text-red-500">*</span>
                                         <span className={`text-xs font-normal ml-2 ${theme === 'dark' ? 'text-[#ededed]/40' : 'text-gray-400'}`}>({(formData.heroProduct || '').length}/100)</span>
                                     </label>
                                     <input
@@ -996,17 +816,17 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                                 ? 'bg-[#070A12] border-[#F5A623]/30 text-[#ededed] placeholder-[#ededed]/40'
                                                 : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
                                         }`}
-                                        placeholder="e.g. Bridal gold sets, Custom sofas, Sunday biryani special"
+                                        placeholder="e.g. Masala powders, bridal gold sets, family meals"
                                         value={formData.heroProduct || ''}
                                         onChange={e => handleChange('heroProduct', e.target.value as any)}
                                     />
                                     <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-[#ededed]/50' : 'text-gray-500'}`}>
-                                        The one thing your business is most known for.
+                                        Your best-known product or service. Keep it short.
                                     </p>
                                 </div>
 
                                 <div>
-                                    <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Target Customer Profile <span className="text-red-500">*</span></label>
+                                    <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Who buys from you? <span className="text-red-500">*</span></label>
                                     <textarea
                                         rows={3}
                                         className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#F5A623] resize-none ${
@@ -1014,19 +834,19 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                                 ? 'bg-[#070A12] border-[#F5A623]/30 text-[#ededed] placeholder-[#ededed]/40'
                                                 : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
                                         }`}
-                                        placeholder="Describe the typical customer — age, gender, occasion. e.g. Women aged 25-40, local area, buying for weddings and festivals."
+                                        placeholder="e.g. Families in Cuddalore, women 25 to 45, small shop owners"
                                         value={formData.targetCustomerProfile || ''}
                                         onChange={e => handleChange('targetCustomerProfile', e.target.value as any)}
                                     />
                                 </div>
 
                                 <div>
-                                    <label className={`block text-sm font-bold mb-2 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Target Gender <span className="text-red-500">*</span></label>
+                                    <label className={`block text-sm font-bold mb-2 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Who buys more? <span className="text-xs font-normal text-gray-400">(optional)</span></label>
                                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                                         {[
                                             { value: 'mostly_men', label: 'Mostly men' },
                                             { value: 'mostly_women', label: 'Mostly women' },
-                                            { value: 'both_equally', label: 'Both equally' },
+                                            { value: 'both_equally', label: 'Everyone' },
                                             { value: 'families', label: 'Families' },
                                         ].map(option => (
                                             <button
@@ -1047,66 +867,14 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                     </div>
                                 </div>
 
-                                <div>
-                                    <label className={`block text-sm font-bold mb-2 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Geographic Reach <span className="text-red-500">*</span></label>
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                        {[
-                                            { value: 'hyperlocal', label: 'Hyperlocal', desc: 'Same street or area' },
-                                            { value: 'local_city', label: 'Local city', desc: 'City-wide reach' },
-                                            { value: 'regional', label: 'Regional', desc: 'Nearby towns too' },
-                                        ].map(option => (
-                                            <button
-                                                key={option.value}
-                                                type="button"
-                                                onClick={() => handleChange('geographicReach', option.value as any)}
-                                                className={`p-3 rounded-lg border text-left transition-all ${
-                                                    formData.geographicReach === option.value
-                                                        ? 'border-[#F5A623] bg-[#F5A623]/10 text-[#F5A623]'
-                                                        : theme === 'dark'
-                                                            ? 'border-[#ededed]/20 hover:border-[#F5A623]/50 text-[#ededed]/70'
-                                                            : 'border-gray-200 hover:border-[#F5A623]/50 text-gray-600'
-                                                }`}
-                                            >
-                                                <div className="font-bold text-sm">{option.label}</div>
-                                                <div className="text-xs opacity-70">{option.desc}</div>
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
 
-                                <div>
-                                    <label className={`block text-sm font-bold mb-2 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Customer Type <span className="text-red-500">*</span></label>
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                        {[
-                                            { value: 'mostly_new', label: 'Mostly new', desc: 'New customers' },
-                                            { value: 'mix_new_repeat', label: 'Mixed', desc: 'New + repeat' },
-                                            { value: 'mostly_loyal', label: 'Mostly loyal', desc: 'Regulars' },
-                                        ].map(option => (
-                                            <button
-                                                key={option.value}
-                                                type="button"
-                                                onClick={() => handleChange('customerType', option.value as any)}
-                                                className={`p-3 rounded-lg border text-left transition-all ${
-                                                    formData.customerType === option.value
-                                                        ? 'border-[#F5A623] bg-[#F5A623]/10 text-[#F5A623]'
-                                                        : theme === 'dark'
-                                                            ? 'border-[#ededed]/20 hover:border-[#F5A623]/50 text-[#ededed]/70'
-                                                            : 'border-gray-200 hover:border-[#F5A623]/50 text-gray-600'
-                                                }`}
-                                            >
-                                                <div className="font-bold text-sm">{option.label}</div>
-                                                <div className="text-xs opacity-70">{option.desc}</div>
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
                             </div>
                         )}
 
                         {step === 3 && (
                             <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-500">
-                                <h3 className={`text-xl font-bold ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>Marketing Goals</h3>
-                                <p className={`text-sm ${theme === 'dark' ? 'text-[#ededed]/60' : 'text-gray-500'}`}>Select all that apply. This helps us prioritize actions. <span className="text-red-500">*</span></p>
+                                <h3 className={`text-xl font-bold ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>What do you want most?</h3>
+                                <p className={`text-sm ${theme === 'dark' ? 'text-[#ededed]/60' : 'text-gray-500'}`}>Pick one or more. <span className="text-red-500">*</span></p>
                                 
                                 <div className="space-y-3">
                                     {[
@@ -1133,7 +901,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                                 }`}>
                                                     {formData.marketingGoals.includes(goal) && <Check className="w-3 h-3 text-[#070A12]" />}
                                                 </div>
-                                                <span className={`font-medium ${formData.marketingGoals.includes(goal) ? 'text-[#F5A623]' : theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>{goal}</span>
+                                                <span className={`font-medium ${formData.marketingGoals.includes(goal) ? 'text-[#F5A623]' : theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>{GOAL_LABELS[goal] || goal}</span>
                                             </div>
                                         </div>
                                     ))}
@@ -1214,37 +982,10 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                     )}
                                 </div>
 
-                                <div className={`pt-4 border-t ${theme === 'dark' ? 'border-[#ededed]/10' : 'border-gray-200'}`}>
-                                    <label className={`block text-sm font-bold mb-2 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Price Positioning <span className="text-red-500">*</span></label>
-                                    <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-                                        {[
-                                            { value: 'budget', label: 'Budget' },
-                                            { value: 'affordable', label: 'Affordable' },
-                                            { value: 'mid_range', label: 'Mid-range' },
-                                            { value: 'premium', label: 'Premium' },
-                                            { value: 'luxury', label: 'Luxury' },
-                                        ].map(option => (
-                                            <button
-                                                key={option.value}
-                                                type="button"
-                                                onClick={() => handleChange('pricePositioning', option.value as any)}
-                                                className={`p-2.5 rounded-lg border text-center text-sm font-medium transition-all ${
-                                                    formData.pricePositioning === option.value
-                                                        ? 'border-[#F5A623] bg-[#F5A623]/10 text-[#F5A623]'
-                                                        : theme === 'dark'
-                                                            ? 'border-[#ededed]/20 hover:border-[#F5A623]/50 text-[#ededed]/70'
-                                                            : 'border-gray-200 hover:border-[#F5A623]/50 text-gray-600'
-                                                }`}
-                                            >
-                                                {option.label}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
 
                                 <div>
                                     <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>
-                                        Key Differentiator <span className="text-red-500">*</span>
+                                        What makes you different? <span className="text-xs font-normal text-gray-400">(optional)</span>
                                         <span className={`text-xs font-normal ml-2 ${theme === 'dark' ? 'text-[#ededed]/40' : 'text-gray-400'}`}>({(formData.keyDifferentiator || '').length}/150)</span>
                                     </label>
                                     <input
@@ -1255,34 +996,18 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                                 ? 'bg-[#070A12] border-[#F5A623]/30 text-[#ededed] placeholder-[#ededed]/40'
                                                 : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
                                         }`}
-                                        placeholder="e.g. 25 years of family craftsmanship in gold jewellery."
+                                        placeholder="e.g. 25 years of family craftsmanship"
                                         value={formData.keyDifferentiator || ''}
                                         onChange={e => handleChange('keyDifferentiator', e.target.value as any)}
                                     />
                                     <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-[#ededed]/50' : 'text-gray-500'}`}>
-                                        One sentence — why choose your business over a competitor.
+                                        One line. Why should someone choose you?
                                     </p>
                                 </div>
 
-                                <div>
-                                    <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>
-                                        Brand Story <span className={`text-xs font-normal ${theme === 'dark' ? 'text-[#ededed]/40' : 'text-gray-400'}`}>(optional)</span>
-                                    </label>
-                                    <textarea
-                                        rows={4}
-                                        className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#F5A623] resize-none ${
-                                            theme === 'dark'
-                                                ? 'bg-[#070A12] border-[#F5A623]/30 text-[#ededed] placeholder-[#ededed]/40'
-                                                : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
-                                        }`}
-                                        placeholder="Founding story, family legacy, awards, unique specialty."
-                                        value={formData.brandStory || ''}
-                                        onChange={e => handleChange('brandStory', e.target.value as any)}
-                                    />
-                                </div>
 
                                 <div>
-                                    <label className={`block text-sm font-bold mb-2 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Content Language <span className="text-red-500">*</span></label>
+                                    <label className={`block text-sm font-bold mb-2 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Language for your posts <span className="text-red-500">*</span></label>
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                                         {CONTENT_LANGUAGES.map(option => (
                                             <button
@@ -1305,7 +1030,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
 
                                 <div>
                                     <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>
-                                        Content Restrictions <span className={`text-xs font-normal ${theme === 'dark' ? 'text-[#ededed]/40' : 'text-gray-400'}`}>(optional)</span>
+                                        Anything we should not post? <span className={`text-xs font-normal ${theme === 'dark' ? 'text-[#ededed]/40' : 'text-gray-400'}`}>(optional)</span>
                                     </label>
                                     <textarea
                                         rows={3}
@@ -1314,14 +1039,14 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                                 ? 'bg-[#070A12] border-[#F5A623]/30 text-[#ededed] placeholder-[#ededed]/40'
                                                 : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
                                         }`}
-                                        placeholder="Anything you do NOT want posted. e.g. No political content. No competitor mentions. No personal photos."
+                                        placeholder="e.g. No political posts. No photos of staff."
                                         value={formData.contentRestrictions || ''}
                                         onChange={e => handleChange('contentRestrictions', e.target.value as any)}
                                     />
                                 </div>
 
                                 <div>
-                                    <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>First Month Content Angles <span className="text-red-500">*</span></label>
+                                    <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>Anything coming up in the next 30 days? <span className="text-xs font-normal text-gray-400">(optional)</span></label>
                                     <textarea
                                         rows={3}
                                         className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#F5A623] resize-none ${
@@ -1329,12 +1054,12 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                                 ? 'bg-[#070A12] border-[#F5A623]/30 text-[#ededed] placeholder-[#ededed]/40'
                                                 : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
                                         }`}
-                                        placeholder="Festivals, offers, new products, or events in the next 30 days. e.g. Diwali sale, new collection launch, jewellery exhibition."
+                                        placeholder="e.g. Diwali sale, new collection, grand opening"
                                         value={formData.firstMonthContentAngles || ''}
                                         onChange={e => handleChange('firstMonthContentAngles', e.target.value as any)}
                                     />
                                     <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-[#ededed]/50' : 'text-gray-500'}`}>
-                                        Drives your first month content plan. Update monthly later.
+                                        A festival, an offer or a new product. We will plan posts around it.
                                     </p>
                                 </div>
                             </div>
@@ -1462,6 +1187,8 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                         )}
                     </div>
                 </div>
+            </div>
+            </div>
             </div>
         </div>
     );
