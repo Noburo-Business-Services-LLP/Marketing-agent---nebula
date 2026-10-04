@@ -367,7 +367,7 @@ const HeroVideo: React.FC = () => {
         keptSceneIds: cutTouched ? keptInOrder : undefined,
       });
       if (!mountedRef.current) return;
-      if (!r?.success || !r.plan) throw new Error(r?.message || 'Could not build a prompt. Please try again.');
+      if (!r?.success || !r.plan) throw new Error(r?.message || 'The prompt could not be built. Please try again.');
       const nextRefs = retag(r.references || refs);
       // The planner's hero cut becomes the scene selection, so the prompt and the toggles agree.
       const cutKept = r.plan.heroCut.filter((h) => h.keep).map((h) => h.sceneId);
@@ -380,7 +380,7 @@ const HeroVideo: React.FC = () => {
       setCutTouched(nextTouched);
       setPlanKey(JSON.stringify({ refs: nextRefs.map((x) => x.url), kept: nextTouched ? nextKept : null, audioMode, aspectRatio, style }));
     } catch (e: any) {
-      if (mountedRef.current) setPlanError(e?.message || 'Could not build a prompt. Please try again.');
+      if (mountedRef.current) setPlanError(e?.message || 'The prompt could not be built. Please try again.');
     } finally {
       if (mountedRef.current) setPlanning(false);
     }
@@ -422,7 +422,7 @@ const HeroVideo: React.FC = () => {
         beatSheet: plan.beatSheet,
         dialogue: plan.dialogue || undefined,
       });
-      if (!r?.success || !r.jobId) throw new Error(r?.message || 'Could not start your Hero video.');
+      if (!r?.success || !r.jobId) throw new Error(r?.message || 'Your Hero video could not be started.');
       setJobId(r.jobId);
       setJobStatus('queued');
       startPolling(r.jobId);
@@ -434,7 +434,7 @@ const HeroVideo: React.FC = () => {
       } else if (d?.creditsExhausted || outOfCredits || e?.status === 403) {
         setGenError("You don't have enough Quarks for a Hero video. Top up to make one.");
       } else {
-        setGenError(e?.message || 'Could not start your Hero video. Please try again.');
+        setGenError(e?.message || 'Your Hero video could not be started. Please try again.');
       }
     } finally {
       window.removeEventListener('trial-expired', onExpired);
@@ -519,10 +519,10 @@ const HeroVideo: React.FC = () => {
         <style>{LIGHT_FIX}</style>
         <GravityHero
           eyebrow="Hero Studio"
-          headline={prepError ? <>Let's go back to <GravityEmphasis>Reels</GravityEmphasis></> : <>Start from your <GravityEmphasis>Reels</GravityEmphasis> story</>}
+          headline={prepError ? <>We could not load this <GravityEmphasis>story</GravityEmphasis></> : <>Start from your <GravityEmphasis>Reels</GravityEmphasis> story</>}
           subcopy={
             prepError ||
-            'A Hero video is one premium 15-second clip made from the story you build in Reels: your concept, your cast and your place. Finish the cast and the script there, then press “Make this a Hero video”.'
+            'A Hero video is one 15-second clip made from the story you build in Reels: your concept, your cast and your place. Finish the cast and the script there, then press “Make this a Hero video”.'
           }
           className="!mb-0"
         />
@@ -558,7 +558,7 @@ const HeroVideo: React.FC = () => {
         align="left"
         eyebrow="Hero Studio"
         headline={<>Your <GravityEmphasis>Hero video</GravityEmphasis></>}
-        subcopy="One premium 15-second clip, cut from your story with your cast, your place and your brand. Check each part, build the prompt, then generate."
+        subcopy="One 15-second clip, cut from your story with your cast, your place and your brand. Check each part, build the prompt, then generate."
       />
 
       <div className="space-y-5">
@@ -702,7 +702,7 @@ const HeroVideo: React.FC = () => {
           {brandEmpty ? (
             <p className="text-[13px] text-[var(--gv-text-tertiary)] mb-4">
               No brand details on file yet. Add your logo and colours in{' '}
-              <Link to="/brand-assets" className="font-semibold text-[var(--gv-accent-text)] hover:underline">Brand Assets</Link>.
+              <Link to="/brand-assets" className="font-semibold text-[var(--gv-accent-text)] hover:underline">Brand assets</Link>.
             </p>
           ) : (
             <div className="flex flex-wrap items-start gap-5 mb-4">
@@ -752,7 +752,7 @@ const HeroVideo: React.FC = () => {
                 value={ctaValue}
                 maxLength={MAX_CTA}
                 onChange={(e) => { setCtaEdited(true); setCtaText(e.target.value); }}
-                placeholder="e.g. Book a free consultation"
+                placeholder="For example: Book a free consultation"
                 className={inputCls}
               />
             </label>
@@ -929,7 +929,7 @@ const HeroVideo: React.FC = () => {
           <SectionTitle n={8} title="Finish" />
           <div className="divide-y divide-[var(--gv-border-subtle)]">
             <Switch on={endCard} onChange={setEndCard} label="End card" hint="A closing card with your logo, call to action and website." />
-            <Switch on={captions} onChange={setCaptions} label="Captions" hint="Burn the spoken lines into the video." />
+            <Switch on={captions} onChange={setCaptions} label="Captions" hint="Add the spoken lines to the video as on-screen text." />
             <Switch on={realism} onChange={setRealism} label="Realism grade" hint="A natural film look: softer contrast and fine grain." />
             <label className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 py-2">
               <span className="min-w-0">
@@ -979,7 +979,7 @@ const HeroVideo: React.FC = () => {
           )}
           {quotaUsedUp && (
             <p role="alert" className="text-[12.5px] text-[var(--gv-text-primary)]">
-              You have used all your Hero videos for this month.{fmtDate(quota?.resetsOn) && ` More unlock on ${fmtDate(quota?.resetsOn)}.`}
+              You have used all your Hero videos for this month.{fmtDate(quota?.resetsOn) && ` More will be available on ${fmtDate(quota?.resetsOn)}.`}
             </p>
           )}
           {!plan && !cannotAfford && (

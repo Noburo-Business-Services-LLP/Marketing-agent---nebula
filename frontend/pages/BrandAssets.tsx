@@ -225,7 +225,7 @@ const BrandAssets: React.FC = () => {
         hydrateFormFromProfile(profileRes.profile);
       }
     } catch (err: any) {
-      setError(err?.message || 'Failed to load brand data');
+      setError(err?.message || 'Brand data could not be loaded.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -254,7 +254,7 @@ const BrandAssets: React.FC = () => {
       return;
     }
     if (file.size > 10 * 1024 * 1024) {
-      setError('Logo must be less than 10MB');
+      setError('The logo must be smaller than 10MB.');
       return;
     }
     const base64 = await fileToBase64(file);
@@ -270,7 +270,7 @@ const BrandAssets: React.FC = () => {
       if (!file) return;
       await handleLogoSelect(file);
     } catch (err: any) {
-      setError(err?.message || 'Failed to read logo');
+      setError(err?.message || 'The logo could not be read.');
     }
   };
 
@@ -282,7 +282,7 @@ const BrandAssets: React.FC = () => {
       if (!file) return;
       await handleLogoSelect(file);
     } catch (err: any) {
-      setError(err?.message || 'Failed to read logo');
+      setError(err?.message || 'The logo could not be read.');
     }
   };
 
@@ -303,7 +303,7 @@ const BrandAssets: React.FC = () => {
       });
 
       if (!response?.success) {
-        setError(response?.message || 'Logo upload failed');
+        setError(response?.message || 'The logo could not be uploaded.');
         return;
       }
 
@@ -313,7 +313,7 @@ const BrandAssets: React.FC = () => {
       setIsPrimaryLogo(false);
       await loadData(true);
     } catch (err: any) {
-      setError(err?.message || 'Logo upload failed');
+      setError(err?.message || 'The logo could not be uploaded.');
     } finally {
       setUploadingLogo(false);
     }
@@ -323,13 +323,13 @@ const BrandAssets: React.FC = () => {
     try {
       const response = await brandAssetsAPI.setPrimary(logoId);
       if (!response?.success) {
-        setError(response?.message || 'Failed to set primary logo');
+        setError(response?.message || 'The primary logo could not be set.');
         return;
       }
       setSuccess('Primary logo updated');
       await loadData(true);
     } catch (err: any) {
-      setError(err?.message || 'Failed to set primary logo');
+      setError(err?.message || 'The primary logo could not be set.');
     }
   };
 
@@ -338,13 +338,13 @@ const BrandAssets: React.FC = () => {
     try {
       const response = await brandAssetsAPI.delete(asset._id);
       if (!response?.success) {
-        setError(response?.message || 'Failed to delete logo');
+        setError(response?.message || 'The logo could not be deleted.');
         return;
       }
       setSuccess('Logo deleted');
       await loadData(true);
     } catch (err: any) {
-      setError(err?.message || 'Failed to delete logo');
+      setError(err?.message || 'The logo could not be deleted.');
     }
   };
 
@@ -362,11 +362,11 @@ const BrandAssets: React.FC = () => {
     try {
       const response = await brandAssetsAPI.update(logo._id, { defaultPosition: position });
       if (!response?.success) {
-        setError(response?.message || 'Failed to update logo position');
+        setError(response?.message || 'The logo position could not be updated.');
         await loadData(true);
       }
     } catch (err: any) {
-      setError(err?.message || 'Failed to update logo position');
+      setError(err?.message || 'The logo position could not be updated.');
       await loadData(true);
     } finally {
       setSavingPositionId(null);
@@ -393,7 +393,7 @@ const BrandAssets: React.FC = () => {
       });
 
       if (!response?.success) {
-        setError(response?.message || 'Failed to save brand profile');
+        setError(response?.message || 'The brand profile could not be saved.');
         return;
       }
 
@@ -401,7 +401,7 @@ const BrandAssets: React.FC = () => {
       hydrateFormFromProfile(response.profile || null);
       setSuccess('Brand profile saved');
     } catch (err: any) {
-      setError(err?.message || 'Failed to save brand profile');
+      setError(err?.message || 'The brand profile could not be saved.');
     } finally {
       setSavingProfile(false);
     }
@@ -420,7 +420,7 @@ const BrandAssets: React.FC = () => {
       });
 
       if (!response?.success) {
-        setError(response?.message || 'Failed to analyze brand profile');
+        setError(response?.message || 'The brand profile could not be analyzed.');
         return;
       }
 
@@ -428,7 +428,7 @@ const BrandAssets: React.FC = () => {
       hydrateFormFromProfile(response.profile || null);
       setSuccess(`Brand profile analyzed (${response.confidenceScore || 0}% confidence)`);
     } catch (err: any) {
-      setError(err?.message || 'Failed to analyze brand profile');
+      setError(err?.message || 'The brand profile could not be analyzed.');
     } finally {
       setAnalyzingProfile(false);
     }
@@ -444,19 +444,19 @@ const BrandAssets: React.FC = () => {
         return;
       }
       if (file.size > 10 * 1024 * 1024) {
-        setError('Past post image must be less than 10MB');
+        setError('The past post image must be smaller than 10MB.');
         return;
       }
       const base64 = await fileToBase64(file);
       setPastImagePreview(base64);
     } catch (err: any) {
-      setError(err?.message || 'Failed to read past post image');
+      setError(err?.message || 'The past post image could not be read.');
     }
   };
 
   const addPastPost = async () => {
     if (!pastCaption.trim() && !pastImagePreview) {
-      setError('Add a caption or image sample');
+      setError('Add a caption or an image sample.');
       return;
     }
     try {
@@ -468,7 +468,7 @@ const BrandAssets: React.FC = () => {
         platform: pastPlatform
       });
       if (!response?.success) {
-        setError(response?.message || 'Failed to add past post');
+        setError(response?.message || 'The past post could not be added.');
         return;
       }
       setProfile(response.profile || null);
@@ -477,7 +477,7 @@ const BrandAssets: React.FC = () => {
       setPastImagePreview(null);
       setSuccess('Past post sample added');
     } catch (err: any) {
-      setError(err?.message || 'Failed to add past post');
+      setError(err?.message || 'The past post could not be added.');
     } finally {
       setAddingPastPost(false);
     }
@@ -489,14 +489,14 @@ const BrandAssets: React.FC = () => {
     try {
       const response = await brandAssetsAPI.deletePastPostSample(postId);
       if (!response?.success) {
-        setError(response?.message || 'Failed to delete sample');
+        setError(response?.message || 'The sample could not be deleted.');
         return;
       }
       setProfile(response.profile || null);
       hydrateFormFromProfile(response.profile || null);
       setSuccess('Past post sample removed');
     } catch (err: any) {
-      setError(err?.message || 'Failed to delete sample');
+      setError(err?.message || 'The sample could not be deleted.');
     }
   };
 
@@ -525,9 +525,9 @@ const BrandAssets: React.FC = () => {
         <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
           <GravityHero
             align="left"
-            eyebrow="Brand Assets"
-            headline={<>Teach Nebulaa your <GravityEmphasis>look</GravityEmphasis></>}
-            subcopy="Save your brand identity once and auto-apply it in every campaign."
+            eyebrow="Brand assets"
+            headline={<>Set up your <GravityEmphasis>brand identity</GravityEmphasis></>}
+            subcopy="Save your brand identity once, and Nebulaa applies it automatically to every campaign."
             className="!mb-0"
           />
           <GravityButton variant="ghost" onClick={() => loadData(true)} disabled={refreshing} className="flex-shrink-0">
@@ -559,7 +559,7 @@ const BrandAssets: React.FC = () => {
           <div className="inline-flex items-center gap-1 p-1 rounded-full bg-white/[0.03] border border-white/[0.06]">
             {([
               { id: 'brand', label: 'Brand' },
-              { id: 'products', label: 'Products & Services' },
+              { id: 'products', label: 'Products and services' },
               { id: 'environment', label: 'Environment' },
               { id: 'voice', label: 'Voice' },
             ] as const).map((t) => (
@@ -583,7 +583,7 @@ const BrandAssets: React.FC = () => {
             <div className="flex items-center justify-between mb-4">
               <h2 className={"font-serif-display text-[20px] text-[#F5F4F1] flex items-center gap-2"}>
                 <ImageIcon className="w-5 h-5 text-[#F5A623]" />
-                Brand Logos
+                Brand logos
               </h2>
               <span className={`text-xs px-2 py-1 rounded-full ${isDarkMode ? 'bg-slate-800 text-gray-300' : 'bg-gray-100 text-gray-700'}`}>
                 {logos.length} saved
@@ -744,7 +744,7 @@ const BrandAssets: React.FC = () => {
             <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
               <h2 className={"font-serif-display text-[20px] text-[#F5F4F1] flex items-center gap-2"}>
                 <BrainCircuit className="w-5 h-5 text-[#F5A623]" />
-                Brand Profile
+                Brand profile
               </h2>
               <div className="flex items-center gap-2">
                 <button
@@ -762,7 +762,7 @@ const BrandAssets: React.FC = () => {
                   className="px-4 py-2 rounded-lg bg-[#F5A623] text-[#070A12] font-semibold hover:bg-[#F5A623]/90 disabled:opacity-60 flex items-center gap-2"
                 >
                   {savingProfile ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-                  Save Profile
+                  Save profile
                 </button>
               </div>
             </div>
@@ -852,7 +852,7 @@ const BrandAssets: React.FC = () => {
                 </select>
               </div>
               <div className={`rounded-lg border p-3 ${isDarkMode ? 'border-slate-700 bg-slate-800/40 text-gray-300' : 'border-gray-200 bg-gray-50 text-gray-700'}`}>
-                <div className="text-sm font-medium mb-1">Applied Campaign Identity</div>
+                <div className="text-sm font-medium mb-1">Applied campaign identity</div>
                 <div className="text-xs space-y-1">
                   <div>Logo: {primaryLogo ? primaryLogo.name : 'Not set'}</div>
                   <div>Tone: {profile?.effectiveProfile?.tone || customTone || 'professional'}</div>
@@ -863,7 +863,7 @@ const BrandAssets: React.FC = () => {
 
             <div className="mt-5">
               <h3 className={"gravity-label mb-3"}>
-                Profile Overrides
+                Profile overrides
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -947,7 +947,7 @@ const BrandAssets: React.FC = () => {
             <div>
               <h2 className={"font-serif-display text-[20px] text-[#F5F4F1] flex items-center gap-2"}>
                 <Sparkles className="w-5 h-5 text-[#F5A623]" />
-                Teach Nebulaa your voice
+                Add samples of your brand voice
               </h2>
               <p className="text-[12.5px] text-white/45 mt-1 max-w-[560px]">
                 Paste captions from posts you have already published. Nebulaa reads them for your
@@ -1021,7 +1021,7 @@ const BrandAssets: React.FC = () => {
             <div className="lg:col-span-2 space-y-4">
               <div className={`rounded-xl border p-4 ${isDarkMode ? 'border-slate-700 bg-slate-800/30' : 'border-gray-200 bg-gray-50'}`}>
                 <h3 className={"gravity-label mb-3"}>
-                  Detected Pattern Summary
+                  Detected pattern summary
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                   <div>
@@ -1079,7 +1079,7 @@ const BrandAssets: React.FC = () => {
 
               {(profile?.pastPosts || []).length === 0 && (
                 <p className={`text-sm text-center py-8 ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
-                  Add past posts to teach your preferred message format, CTA flow, and visual structure.
+                  Add past posts so that Nebulaa can learn your preferred message format, call-to-action flow and visual structure.
                 </p>
               )}
             </div>
@@ -1090,7 +1090,7 @@ const BrandAssets: React.FC = () => {
         {!profile?.hasBrandAssets && !profile?.hasPastPosts && (
           <section className={`rounded-2xl border p-4 ${isDarkMode ? 'border-slate-700 bg-slate-800/30 text-gray-300' : 'border-gray-200 bg-gray-50 text-gray-700'}`}>
             <p className="text-sm">
-              Campaign generation is currently in fallback mode. Add brand assets or past posts to enforce a consistent on-brand style.
+              Nebulaa does not have your brand details yet, so it is using general defaults for campaigns. Add brand assets or past posts so that every campaign follows your brand style.
             </p>
           </section>
         )}
